@@ -1,0 +1,25 @@
+# Normalise line endings: LF in the repository, whatever the OS wants on checkout.
+* text=auto eol=lf
+
+# Explicit for the file types in this project
+*.html   text eol=lf
+*.css    text eol=lf
+*.js     text eol=lf
+*.json   text eol=lf
+*.md     text eol=lf
+*.rules  text eol=lf
+*.webmanifest text eol=lf
+.gitignore    text eol=lf
+.gitattributes text eol=lf
+LICENSE  text eol=lf
+
+# Binaries — never touched
+*.png    binary
+*.jpg    binary
+*.jpeg   binary
+*.gif    binary
+*.webp   binary
+*.ico    binary
+*.woff   binary
+*.woff2  binary
+*.pdf    binary
