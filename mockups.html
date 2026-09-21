@@ -1,0 +1,847 @@
+<title>Rounds Design Directions</title>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;800&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans+Condensed:wght@400;600;700&family=Spectral:ital,wght@0,400;0,600;1,400&family=Archivo:wght@500;600&display=swap">
+<style>
+  /* ============ page chrome tokens (theme-aware) ============ */
+  :root{
+    --pg-bg:#F0F3F4;
+    --pg-panel:#FFFFFF;
+    --pg-ink:#131E22;
+    --pg-ink-2:#5A6E74;
+    --pg-line:#D6DFE1;
+    --pg-accent:#0E7C74;
+    --pg-shadow:0 1px 2px rgba(16,40,44,.06), 0 12px 32px rgba(16,40,44,.08);
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --pg-bg:#0D1315;
+      --pg-panel:#141C1F;
+      --pg-ink:#E4EDEF;
+      --pg-ink-2:#8DA2A8;
+      --pg-line:#242F33;
+      --pg-accent:#3FBFB2;
+      --pg-shadow:0 1px 2px rgba(0,0,0,.5), 0 14px 36px rgba(0,0,0,.45);
+    }
+  }
+  :root[data-theme="dark"]{
+    --pg-bg:#0D1315;
+    --pg-panel:#141C1F;
+    --pg-ink:#E4EDEF;
+    --pg-ink-2:#8DA2A8;
+    --pg-line:#242F33;
+    --pg-accent:#3FBFB2;
+    --pg-shadow:0 1px 2px rgba(0,0,0,.5), 0 14px 36px rgba(0,0,0,.45);
+  }
+
+  *{box-sizing:border-box}
+  body{
+    background:var(--pg-bg);
+    color:var(--pg-ink);
+    font-family:"Figtree", ui-sans-serif, system-ui, sans-serif;
+    font-size:15px;
+    line-height:1.55;
+    -webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:1180px;margin:0 auto;padding-inline:20px;padding-block:0 72px}
+
+  /* ---- masthead ---- */
+  .mast{padding-block:44px 8px}
+  .kicker{
+    font-family:"IBM Plex Mono", ui-monospace, monospace;
+    font-size:11.5px;letter-spacing:.14em;text-transform:uppercase;
+    color:var(--pg-accent);margin:0 0 14px;
+  }
+  h1.title{
+    font-size:clamp(30px,5.4vw,46px);line-height:1.05;letter-spacing:-.02em;
+    font-weight:800;margin:0;text-wrap:balance;
+  }
+  .lede{max-width:62ch;color:var(--pg-ink-2);margin:14px 0 0;font-size:16.5px}
+  .lede strong{color:var(--pg-ink);font-weight:600}
+
+  .jump{
+    display:flex;flex-wrap:wrap;gap:8px;margin-top:26px;padding-block:16px 0;
+    border-top:1px solid var(--pg-line);
+  }
+  .jump a{
+    font-size:13px;text-decoration:none;color:var(--pg-ink);
+    border:1px solid var(--pg-line);border-radius:999px;padding:6px 13px;
+    background:var(--pg-panel);
+  }
+  .jump a:hover{border-color:var(--pg-accent);color:var(--pg-accent)}
+  .jump a:focus-visible{outline:2px solid var(--pg-accent);outline-offset:2px}
+  .jump span{
+    font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:11.5px;
+    color:var(--pg-ink-2);align-self:center;margin-right:4px;
+    letter-spacing:.08em;text-transform:uppercase;
+  }
+
+  /* ---- option block ---- */
+  .option{margin-top:56px;scroll-margin-top:24px}
+  .opt-head{display:grid;grid-template-columns:1fr minmax(0,300px);gap:28px;align-items:end}
+  @media (max-width:820px){.opt-head{grid-template-columns:1fr;gap:18px;align-items:start}}
+  .opt-tag{
+    font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:11.5px;
+    letter-spacing:.14em;text-transform:uppercase;color:var(--pg-ink-2);margin:0 0 6px;
+  }
+  .opt-name{font-size:clamp(22px,3.4vw,30px);font-weight:700;letter-spacing:-.015em;margin:0}
+  .opt-pitch{color:var(--pg-ink-2);margin:8px 0 0;max-width:52ch}
+  .specs{display:grid;gap:9px;font-size:13px}
+  .spec{display:grid;grid-template-columns:52px 1fr;gap:10px;align-items:baseline}
+  .spec dt{
+    font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:10.5px;
+    letter-spacing:.1em;text-transform:uppercase;color:var(--pg-ink-2);
+  }
+  .spec dd{margin:0;color:var(--pg-ink)}
+  .swatches{display:flex;gap:6px;flex-wrap:wrap}
+  .sw{
+    width:26px;height:26px;border-radius:6px;border:1px solid rgba(0,0,0,.14);
+    position:relative;
+  }
+  .sw::after{
+    content:attr(data-hex);position:absolute;left:50%;bottom:calc(100% + 6px);
+    transform:translateX(-50%);opacity:0;pointer-events:none;transition:opacity .12s;
+    background:var(--pg-ink);color:var(--pg-bg);font-size:10px;padding:2px 6px;border-radius:4px;
+    font-family:"IBM Plex Mono",ui-monospace,monospace;white-space:nowrap;
+  }
+  .sw:hover::after{opacity:1}
+
+  /* ---- mock frame ---- */
+  .frame{
+    margin-top:22px;border-radius:14px;overflow:hidden;
+    border:1px solid var(--pg-line);box-shadow:var(--pg-shadow);background:var(--pg-panel);
+  }
+  .frame-bar{
+    display:flex;align-items:center;gap:8px;padding:9px 14px;
+    background:var(--pg-panel);border-bottom:1px solid var(--pg-line);
+  }
+  .dot{width:9px;height:9px;border-radius:50%;background:var(--pg-line)}
+  .frame-url{
+    margin-left:6px;font-family:"IBM Plex Mono",ui-monospace,monospace;
+    font-size:11px;color:var(--pg-ink-2);
+  }
+  .pick{
+    margin-left:auto;font:inherit;font-size:12px;cursor:pointer;
+    background:transparent;color:var(--pg-ink-2);border:1px solid var(--pg-line);
+    border-radius:999px;padding:4px 12px;
+  }
+  .pick:hover{color:var(--pg-accent);border-color:var(--pg-accent)}
+  .pick[aria-pressed="true"]{background:var(--pg-accent);border-color:var(--pg-accent);color:#fff}
+  .option[data-picked="true"] .frame{outline:2px solid var(--pg-accent);outline-offset:3px}
+
+  /* ============ shared mock skeleton ============ */
+  .mk{
+    display:grid;grid-template-columns:186px minmax(0,1fr);
+    min-height:520px;font-size:13px;
+  }
+  .mk-side{padding:16px 12px;display:flex;flex-direction:column;gap:18px}
+  .mk-brand{display:flex;align-items:center;gap:8px;font-weight:700;letter-spacing:-.01em}
+  .mk-mark{width:22px;height:22px;border-radius:6px;display:grid;place-items:center;font-size:11px;font-weight:700}
+  .mk-navgrp{display:flex;flex-direction:column;gap:2px}
+  .mk-navlabel{
+    font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;
+    padding:0 8px 6px;opacity:.65;
+  }
+  .mk-nav{
+    display:flex;align-items:center;gap:8px;padding:5px 8px;border-radius:6px;
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  }
+  .mk-nav .pip{width:7px;height:7px;border-radius:2px;flex:none}
+  .mk-nav .ct{margin-left:auto;font-size:10.5px;opacity:.6;font-variant-numeric:tabular-nums}
+  .mk-main{padding:16px 18px;display:flex;flex-direction:column;gap:14px;min-width:0}
+  .mk-top{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+  .mk-h{font-size:19px;font-weight:700;letter-spacing:-.015em;margin:0}
+  .mk-sub{font-size:11.5px;opacity:.7}
+  .mk-seg{display:flex;margin-left:auto;gap:2px;flex:none}
+  .mk-seg b{font-size:11px;font-weight:500;padding:4px 10px}
+  .mk-btn{font-size:11.5px;padding:5px 11px;font-weight:600;flex:none}
+  .mk-stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
+  @media (max-width:640px){.mk-stats{grid-template-columns:repeat(2,minmax(0,1fr))}}
+  .mk-stat{padding:10px 12px;min-width:0}
+  .mk-stat .lab{font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;opacity:.65}
+  .mk-stat .val{font-size:22px;font-weight:700;font-variant-numeric:tabular-nums;line-height:1.2}
+  .mk-stat .val small{font-size:11px;font-weight:500;opacity:.7}
+  .mk-cols{display:grid;grid-template-columns:minmax(0,1fr) 248px;gap:14px;align-items:start}
+  @media (max-width:860px){.mk-cols{grid-template-columns:minmax(0,1fr)}}
+  .mk-panel{padding:0;min-width:0}
+  .mk-ph{
+    display:flex;align-items:baseline;gap:8px;padding:11px 13px;
+    font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;font-weight:600;
+  }
+  .mk-ph em{font-style:normal;margin-left:auto;font-size:10px;opacity:.6;letter-spacing:.04em}
+  .mk-row{display:grid;grid-template-columns:54px 1fr auto;gap:11px;padding:9px 13px;align-items:baseline}
+  .mk-when{font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:11px;font-variant-numeric:tabular-nums;opacity:.75}
+  .mk-what{min-width:0}
+  .mk-what .t{font-weight:600;display:block;overflow-wrap:anywhere}
+  .mk-what .m{font-size:11px;opacity:.7;display:block;overflow-wrap:anywhere}
+  .chip{
+    font-size:9.5px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;
+    padding:2px 7px;white-space:nowrap;flex:none;
+  }
+  .mk-day{
+    padding:7px 13px 4px;font-size:10px;letter-spacing:.14em;text-transform:uppercase;
+    font-weight:600;opacity:.6;
+  }
+  .mk-oh{width:100%;border-collapse:collapse;font-size:11.5px}
+  .mk-oh th{
+    text-align:left;font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;
+    font-weight:600;opacity:.65;padding:7px 13px;
+  }
+  .mk-oh td{padding:7px 13px;vertical-align:top}
+  .mk-oh td.w{font-family:"IBM Plex Mono",ui-monospace,monospace;font-variant-numeric:tabular-nums;white-space:nowrap}
+  .mk-task{display:flex;gap:9px;padding:7px 13px;align-items:flex-start;font-size:12px}
+  .mk-box{width:13px;height:13px;flex:none;margin-top:2px;border-radius:3px}
+  .mk-task.done .tx{text-decoration:line-through;opacity:.5}
+
+  /* ============ A · WARD BOARD ============ */
+  .m-a{
+    --bg:#EEF4F3;--panel:#FFFFFF;--ink:#14302D;--ink2:#5D7B77;--line:#DBE6E4;
+    --accent:#0E7C74;--accent-soft:#D8EDEA;
+    --good:#2F8757;--warn:#B77505;--crit:#C0392B;
+    background:var(--bg);color:var(--ink);
+  }
+  .m-a .mk-side{background:var(--panel);border-right:1px solid var(--line)}
+  .m-a .mk-mark{background:var(--accent);color:#fff}
+  .m-a .mk-nav{color:var(--ink2)}
+  .m-a .mk-nav.on{background:var(--accent-soft);color:var(--accent);font-weight:600}
+  .m-a .mk-nav .pip{border-radius:50%}
+  .m-a .mk-seg{background:#E6EEEC;border-radius:8px;padding:2px}
+  .m-a .mk-seg b{border-radius:6px;color:var(--ink2)}
+  .m-a .mk-seg b.on{background:var(--panel);color:var(--ink);font-weight:600;box-shadow:0 1px 2px rgba(20,48,45,.12)}
+  .m-a .mk-btn{background:var(--accent);color:#fff;border-radius:8px}
+  .m-a .mk-stat,.m-a .mk-panel{background:var(--panel);border:1px solid var(--line);border-radius:12px}
+  .m-a .mk-stat.hot{border-color:#F0C9C4;background:#FEF6F5}
+  .m-a .mk-stat.hot .val{color:var(--crit)}
+  .m-a .mk-ph{border-bottom:1px solid var(--line);color:var(--ink2)}
+  .m-a .mk-row+.mk-row{border-top:1px solid #EDF3F2}
+  .m-a .mk-day{background:#F6FAF9;border-top:1px solid var(--line);border-bottom:1px solid var(--line);color:var(--ink2)}
+  .m-a .chip{border-radius:999px}
+  .m-a .chip.exam{background:#FBE9E7;color:var(--crit)}
+  .m-a .chip.lab{background:#E7F1FA;color:#1E628F}
+  .m-a .chip.due{background:#FCF2DF;color:var(--warn)}
+  .m-a .chip.done{background:#E6F3EB;color:var(--good)}
+  .m-a .chip.tutor{background:#EFEAFA;color:#5A46A8}
+  .m-a .mk-oh tr+tr td{border-top:1px solid #EDF3F2}
+  .m-a .mk-box{border:1.5px solid #B9CCC9}
+  .m-a .mk-task.done .mk-box{background:var(--good);border-color:var(--good)}
+
+  /* ============ B · TELEMETRY ============ */
+  .m-b{
+    --bg:#090E12;--panel:#0F171D;--panel2:#131D24;--ink:#D8E5EC;--ink2:#7C8F9C;--line:#1E2B34;
+    --hr:#3FE07F;--spo2:#3BB8F5;--resp:#F5A524;--crit:#FF4D5E;
+    background:var(--bg);color:var(--ink);
+    font-family:"IBM Plex Mono", ui-monospace, monospace;
+    font-variant-numeric:tabular-nums;
+  }
+  .m-b .mk-brand,.m-b .mk-h,.m-b .mk-navlabel,.m-b .chip,.m-b .mk-ph,.m-b .mk-stat .lab{
+    font-family:"IBM Plex Sans Condensed", ui-sans-serif, sans-serif;
+  }
+  .m-b .mk-side{background:#0B1216;border-right:1px solid var(--line)}
+  .m-b .mk-mark{background:var(--hr);color:#04120A;border-radius:3px}
+  .m-b .mk-nav{color:var(--ink2);border-radius:0;border-left:2px solid transparent}
+  .m-b .mk-nav.on{background:var(--panel2);color:var(--hr);border-left-color:var(--hr)}
+  .m-b .mk-nav .pip{border-radius:0}
+  .m-b .mk-h{text-transform:uppercase;letter-spacing:.06em;font-weight:700}
+  .m-b .mk-seg{border:1px solid var(--line)}
+  .m-b .mk-seg b{color:var(--ink2);font-family:"IBM Plex Sans Condensed",sans-serif;text-transform:uppercase;letter-spacing:.08em}
+  .m-b .mk-seg b.on{background:var(--panel2);color:var(--ink)}
+  .m-b .mk-btn{background:transparent;border:1px solid var(--hr);color:var(--hr);text-transform:uppercase;letter-spacing:.1em;font-size:10.5px}
+  .m-b .mk-stat{background:var(--panel);border:1px solid var(--line);border-left:3px solid var(--line)}
+  .m-b .mk-stat.ch-hr{border-left-color:var(--hr)} .m-b .mk-stat.ch-hr .val{color:var(--hr)}
+  .m-b .mk-stat.ch-o2{border-left-color:var(--spo2)} .m-b .mk-stat.ch-o2 .val{color:var(--spo2)}
+  .m-b .mk-stat.ch-rr{border-left-color:var(--resp)} .m-b .mk-stat.ch-rr .val{color:var(--resp)}
+  .m-b .mk-stat.ch-cr{border-left-color:var(--crit)} .m-b .mk-stat.ch-cr .val{color:var(--crit)}
+  .m-b .mk-panel{background:var(--panel);border:1px solid var(--line)}
+  .m-b .mk-ph{border-bottom:1px solid var(--line);color:var(--ink2);letter-spacing:.16em}
+  .m-b .mk-row{border-top:1px solid #16212A}
+  .m-b .mk-row.alarm{background:rgba(255,77,94,.07);box-shadow:inset 3px 0 0 var(--crit)}
+  .m-b .mk-day{background:#0C141A;border-top:1px solid var(--line);color:var(--ink2);letter-spacing:.2em}
+  .m-b .chip{border:1px solid currentColor;letter-spacing:.1em}
+  .m-b .chip.exam{color:var(--crit)} .m-b .chip.lab{color:var(--spo2)}
+  .m-b .chip.due{color:var(--resp)} .m-b .chip.done{color:var(--hr)}
+  .m-b .chip.tutor{color:#A98BF5}
+  .m-b .mk-oh tr+tr td{border-top:1px solid #16212A}
+  .m-b .mk-box{border:1px solid #2C3C47;border-radius:0}
+  .m-b .mk-task.done .mk-box{background:var(--hr);border-color:var(--hr)}
+  .m-b .trace{display:block;width:100%;height:56px;background:#0B1216;border-top:1px solid var(--line)}
+  .m-b .trace-cap{
+    display:flex;gap:14px;padding:6px 13px;font-size:9.5px;letter-spacing:.12em;
+    text-transform:uppercase;color:var(--ink2);font-family:"IBM Plex Sans Condensed",sans-serif;
+  }
+  .m-b .trace-cap i{font-style:normal;color:var(--hr)}
+
+  /* ============ C · ANATOMY PLATE ============ */
+  .m-c{
+    --bg:#E9E6DD;--panel:#F4F2EB;--ink:#1B2A3A;--ink2:#5E6E7C;--line:#C9C4B6;
+    --accent:#7A2230;--slate:#3C5A72;--good:#4A6B4F;
+    background:var(--bg);color:var(--ink);
+    font-family:"Spectral", Georgia, serif;
+  }
+  .m-c .mk-brand,.m-c .mk-navlabel,.m-c .mk-ph,.m-c .chip,.m-c .mk-stat .lab,
+  .m-c .mk-seg b,.m-c .mk-btn,.m-c .mk-day,.m-c .mk-oh th{
+    font-family:"Archivo", ui-sans-serif, sans-serif;
+  }
+  .m-c .mk-side{background:var(--panel);border-right:1px solid var(--line)}
+  .m-c .mk-mark{background:var(--accent);color:#F4F2EB;border-radius:2px;font-family:"Archivo",sans-serif}
+  .m-c .mk-brand{letter-spacing:.06em;text-transform:uppercase;font-size:12px;font-weight:600}
+  .m-c .mk-nav{color:var(--ink2);border-radius:0;padding-left:0}
+  .m-c .mk-nav .pip{width:14px;height:1px;background:var(--line);border-radius:0}
+  .m-c .mk-nav.on{color:var(--accent);font-weight:600}
+  .m-c .mk-nav.on .pip{background:var(--accent);height:2px}
+  .m-c .mk-h{font-family:"Spectral",Georgia,serif;font-weight:600;font-size:22px}
+  .m-c .mk-sub{font-style:italic}
+  .m-c .mk-seg b{text-transform:uppercase;letter-spacing:.1em;font-size:10px;color:var(--ink2);border-bottom:1px solid transparent}
+  .m-c .mk-seg b.on{color:var(--ink);border-bottom-color:var(--accent)}
+  .m-c .mk-btn{background:var(--ink);color:var(--panel);border-radius:2px;text-transform:uppercase;letter-spacing:.1em;font-size:10px}
+  .m-c .mk-stat{background:transparent;border-left:1px solid var(--line);padding-left:12px}
+  .m-c .mk-stat:first-child{border-left:0;padding-left:0}
+  .m-c .mk-stat .val{font-family:"Spectral",Georgia,serif}
+  .m-c .mk-stat.hot .val{color:var(--accent)}
+  .m-c .mk-panel{background:var(--panel);border:1px solid var(--line)}
+  .m-c .mk-ph{border-bottom:1px solid var(--ink);letter-spacing:.16em;color:var(--ink)}
+  .m-c .mk-row{grid-template-columns:22px 54px 1fr auto;border-top:1px solid var(--line)}
+  .m-c .plate{
+    font-family:"Archivo",sans-serif;font-size:10px;color:var(--accent);
+    letter-spacing:.04em;padding-top:2px;
+  }
+  .m-c .mk-day{border-top:1px solid var(--ink);letter-spacing:.2em;color:var(--ink)}
+  .m-c .chip{border-radius:2px;letter-spacing:.1em;border:1px solid currentColor;background:transparent}
+  .m-c .chip.exam{color:var(--accent)} .m-c .chip.lab{color:var(--slate)}
+  .m-c .chip.due{color:#8A6A1E} .m-c .chip.done{color:var(--good)}
+  .m-c .chip.tutor{color:#55507A}
+  .m-c .mk-oh th{border-bottom:1px solid var(--ink)}
+  .m-c .mk-oh tr+tr td{border-top:1px solid var(--line)}
+  .m-c .mk-box{border:1px solid var(--ink2);border-radius:0}
+  .m-c .mk-task.done .mk-box{background:var(--ink2)}
+  .m-c .note{
+    padding:10px 13px;font-style:italic;font-size:11.5px;color:var(--ink2);
+    border-top:1px solid var(--line);
+  }
+
+  /* ---- closing ---- */
+  .outro{
+    margin-top:64px;padding:24px;border:1px solid var(--pg-line);border-radius:14px;
+    background:var(--pg-panel);
+  }
+  .outro h2{margin:0 0 8px;font-size:20px;font-weight:700;letter-spacing:-.015em}
+  .outro p{margin:0 0 12px;color:var(--pg-ink-2);max-width:64ch}
+  .outro ul{margin:0;padding-left:20px;color:var(--pg-ink-2);font-size:14px}
+  .outro li{margin-bottom:5px}
+  .outro li b{color:var(--pg-ink);font-weight:600}
+  #choice{
+    margin-top:14px;font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:12.5px;
+    color:var(--pg-accent);
+  }
+  @media (prefers-reduced-motion: reduce){*{transition:none!important;animation:none!important}}
+</style>
+
+<div class="wrap">
+
+  <header class="mast">
+    <p class="kicker">Three directions · pick one to build</p>
+    <h1 class="title">Rounds Design Directions</h1>
+    <p class="lede">One tracker for <strong>assignments, exams, labs, office hours, tutoring and loose tasks</strong> — Notion-style pages and databases underneath, but built for a block-based med curriculum. Same data and same week in all three mockups (week of 21–27 Sep, Cardiovascular Block), so only the design changes.</p>
+    <nav class="jump">
+      <span>Jump</span>
+      <a href="#opt-a">A · Ward Board</a>
+      <a href="#opt-b">B · Telemetry</a>
+      <a href="#opt-c">C · Anatomy Plate</a>
+    </nav>
+  </header>
+
+  <!-- ══════════════════ OPTION A ══════════════════ -->
+  <section class="option" id="opt-a" data-opt="A">
+    <div class="opt-head">
+      <div>
+        <p class="opt-tag">Direction A</p>
+        <h2 class="opt-name">Ward Board</h2>
+        <p class="opt-pitch">The handoff whiteboard, cleaned up. Scrub teal on cool mint paper, soft cards, generous air — calm to look at for four hours straight. Closest to Notion, easiest to live in daily.</p>
+      </div>
+      <dl class="specs">
+        <div class="spec"><dt>Color</dt><dd><div class="swatches">
+          <i class="sw" style="background:#EEF4F3" data-hex="#EEF4F3"></i>
+          <i class="sw" style="background:#0E7C74" data-hex="#0E7C74"></i>
+          <i class="sw" style="background:#14302D" data-hex="#14302D"></i>
+          <i class="sw" style="background:#C0392B" data-hex="#C0392B"></i>
+          <i class="sw" style="background:#B77505" data-hex="#B77505"></i>
+          <i class="sw" style="background:#2F8757" data-hex="#2F8757"></i>
+        </div></dd></div>
+        <div class="spec"><dt>Type</dt><dd>Figtree · IBM Plex Mono for clock times</dd></div>
+        <div class="spec"><dt>Feel</dt><dd>Airy cards, 12px radius, pill status chips</dd></div>
+      </dl>
+    </div>
+
+    <div class="frame">
+      <div class="frame-bar">
+        <i class="dot"></i><i class="dot"></i><i class="dot"></i>
+        <span class="frame-url">rounds.app/week</span>
+        <button class="pick" type="button" aria-pressed="false">Pick A</button>
+      </div>
+
+      <div class="mk m-a">
+        <aside class="mk-side">
+          <div class="mk-brand"><span class="mk-mark">R</span> Rounds</div>
+          <div class="mk-navgrp">
+            <div class="mk-navlabel">This block</div>
+            <div class="mk-nav on"><i class="pip" style="background:#0E7C74"></i> Week board <span class="ct">14</span></div>
+            <div class="mk-nav"><i class="pip" style="background:#C0392B"></i> Exams <span class="ct">3</span></div>
+            <div class="mk-nav"><i class="pip" style="background:#B77505"></i> Assignments <span class="ct">4</span></div>
+            <div class="mk-nav"><i class="pip" style="background:#1E628F"></i> Labs <span class="ct">2</span></div>
+            <div class="mk-nav"><i class="pip" style="background:#5A46A8"></i> Tutoring <span class="ct">1</span></div>
+            <div class="mk-nav"><i class="pip" style="background:#5D7B77"></i> Office hours <span class="ct">5</span></div>
+          </div>
+          <div class="mk-navgrp">
+            <div class="mk-navlabel">Courses</div>
+            <div class="mk-nav">Cardiovascular Block</div>
+            <div class="mk-nav">Gross Anatomy</div>
+            <div class="mk-nav">Pharmacology II</div>
+            <div class="mk-nav">Histology</div>
+          </div>
+        </aside>
+
+        <main class="mk-main">
+          <div class="mk-top">
+            <div>
+              <h3 class="mk-h">Week board</h3>
+              <div class="mk-sub">Mon 21 – Sun 27 Sep · Cardiovascular Block, week 4 of 6</div>
+            </div>
+            <div class="mk-seg"><b class="on">Week</b><b>Month</b><b>Table</b></div>
+            <button class="mk-btn" type="button">New item</button>
+          </div>
+
+          <div class="mk-stats">
+            <div class="mk-stat hot"><div class="lab">Block exam I in</div><div class="val">5 <small>days</small></div></div>
+            <div class="mk-stat"><div class="lab">Open assignments</div><div class="val">4</div></div>
+            <div class="mk-stat"><div class="lab">Lab hours</div><div class="val">12<small>/18</small></div></div>
+            <div class="mk-stat"><div class="lab">UWorld avg</div><div class="val">71<small>%</small></div></div>
+          </div>
+
+          <div class="mk-cols">
+            <div class="mk-panel">
+              <div class="mk-ph">Schedule <em>14 items</em></div>
+
+              <div class="mk-day">Mon 21 Sep</div>
+              <div class="mk-row">
+                <div class="mk-when">0800</div>
+                <div class="mk-what"><span class="t">Gross Anatomy lab — thorax dissection</span><span class="m">Lab 3B · table 7 · pericardium &amp; great vessels</span></div>
+                <span class="chip lab">Lab</span>
+              </div>
+              <div class="mk-row">
+                <div class="mk-when">2359</div>
+                <div class="mk-what"><span class="t">Cardio lecture 12 annotation set</span><span class="m">Cardiovascular Block · submitted 2 h early</span></div>
+                <span class="chip done">Submitted</span>
+              </div>
+
+              <div class="mk-day">Tue 22 Sep</div>
+              <div class="mk-row">
+                <div class="mk-when">1500</div>
+                <div class="mk-what"><span class="t">Dr. Alvarez — office hours</span><span class="m">Rm 214 · bring preload/afterload questions</span></div>
+                <span class="chip">Office</span>
+              </div>
+              <div class="mk-row">
+                <div class="mk-when">2359</div>
+                <div class="mk-what"><span class="t">Pharmacology problem set 4</span><span class="m">Antiarrhythmics · 18 of 24 questions done</span></div>
+                <span class="chip due">Due</span>
+              </div>
+
+              <div class="mk-day">Wed 23 Sep</div>
+              <div class="mk-row">
+                <div class="mk-when">1300</div>
+                <div class="mk-what"><span class="t">Histology lab — cardiac &amp; smooth muscle</span><span class="m">Slide box 14 · intercalated discs, Purkinje fibres</span></div>
+                <span class="chip lab">Lab</span>
+              </div>
+
+              <div class="mk-day">Thu 24 Sep</div>
+              <div class="mk-row">
+                <div class="mk-when">1800</div>
+                <div class="mk-what"><span class="t">Peer tutoring — ECG axis &amp; intervals</span><span class="m">Library 4 · with Priya, 60 min</span></div>
+                <span class="chip tutor">Tutoring</span>
+              </div>
+
+              <div class="mk-day">Fri 25 Sep</div>
+              <div class="mk-row">
+                <div class="mk-when">0900</div>
+                <div class="mk-what"><span class="t">Cardiovascular Block Exam I</span><span class="m">Hall A · 150 min · lectures 1–14 + ECG workshop</span></div>
+                <span class="chip exam">Exam</span>
+              </div>
+
+              <div class="mk-day">Sat 26 Sep</div>
+              <div class="mk-row">
+                <div class="mk-when">1000</div>
+                <div class="mk-what"><span class="t">OSCE practice — cardiac exam</span><span class="m">Sim centre · standardized patient, 3 stations</span></div>
+                <span class="chip lab">Practical</span>
+              </div>
+            </div>
+
+            <div style="display:grid;gap:14px">
+              <div class="mk-panel">
+                <div class="mk-ph">Office hours</div>
+                <table class="mk-oh">
+                  <tr><th>Who</th><th>When</th></tr>
+                  <tr><td>Dr. Alvarez <span style="opacity:.6">Physio</span></td><td class="w">Tue 1500</td></tr>
+                  <tr><td>Dr. Okonkwo <span style="opacity:.6">Pharm</span></td><td class="w">Wed 1130</td></tr>
+                  <tr><td>Prof. Meier <span style="opacity:.6">Anat</span></td><td class="w">Thu 0930</td></tr>
+                  <tr><td>Dr. Haddad <span style="opacity:.6">Histo</span></td><td class="w">Fri 1400</td></tr>
+                </table>
+              </div>
+              <div class="mk-panel">
+                <div class="mk-ph">Tasks</div>
+                <div class="mk-task done"><i class="mk-box"></i><span class="tx">Print ECG practice strips</span></div>
+                <div class="mk-task"><i class="mk-box"></i><span class="tx">Anki: 120 cardio cards due</span></div>
+                <div class="mk-task"><i class="mk-box"></i><span class="tx">Email Dr. Haddad re: slide 14-C</span></div>
+                <div class="mk-task"><i class="mk-box"></i><span class="tx">Book sim centre slot for OSCE</span></div>
+              </div>
+            </div>
+          </div>
+        </main>
+      </div>
+    </div>
+  </section>
+
+  <!-- ══════════════════ OPTION B ══════════════════ -->
+  <section class="option" id="opt-b" data-opt="B">
+    <div class="opt-head">
+      <div>
+        <p class="opt-tag">Direction B</p>
+        <h2 class="opt-name">Telemetry</h2>
+        <p class="opt-pitch">Your semester as a patient monitor. Dark ward-at-night ground, one channel colour per commitment type, a workload trace across the week, and anything overdue alarming in red. Dense, fast to scan, unmistakably med.</p>
+      </div>
+      <dl class="specs">
+        <div class="spec"><dt>Color</dt><dd><div class="swatches">
+          <i class="sw" style="background:#090E12" data-hex="#090E12"></i>
+          <i class="sw" style="background:#3FE07F" data-hex="#3FE07F"></i>
+          <i class="sw" style="background:#3BB8F5" data-hex="#3BB8F5"></i>
+          <i class="sw" style="background:#F5A524" data-hex="#F5A524"></i>
+          <i class="sw" style="background:#FF4D5E" data-hex="#FF4D5E"></i>
+          <i class="sw" style="background:#D8E5EC" data-hex="#D8E5EC"></i>
+        </div></dd></div>
+        <div class="spec"><dt>Type</dt><dd>IBM Plex Mono · Plex Sans Condensed labels</dd></div>
+        <div class="spec"><dt>Feel</dt><dd>Zero radius, channel stripes, tabular figures</dd></div>
+      </dl>
+    </div>
+
+    <div class="frame">
+      <div class="frame-bar">
+        <i class="dot"></i><i class="dot"></i><i class="dot"></i>
+        <span class="frame-url">rounds.app/week</span>
+        <button class="pick" type="button" aria-pressed="false">Pick B</button>
+      </div>
+
+      <div class="mk m-b">
+        <aside class="mk-side">
+          <div class="mk-brand"><span class="mk-mark">R</span> ROUNDS</div>
+          <div class="mk-navgrp">
+            <div class="mk-navlabel">Channels</div>
+            <div class="mk-nav on"><i class="pip" style="background:#3FE07F"></i> WEEK <span class="ct">14</span></div>
+            <div class="mk-nav"><i class="pip" style="background:#FF4D5E"></i> EXAMS <span class="ct">3</span></div>
+            <div class="mk-nav"><i class="pip" style="background:#F5A524"></i> ASSIGN <span class="ct">4</span></div>
+            <div class="mk-nav"><i class="pip" style="background:#3BB8F5"></i> LABS <span class="ct">2</span></div>
+            <div class="mk-nav"><i class="pip" style="background:#A98BF5"></i> TUTOR <span class="ct">1</span></div>
+            <div class="mk-nav"><i class="pip" style="background:#7C8F9C"></i> OFFICE <span class="ct">5</span></div>
+          </div>
+          <div class="mk-navgrp">
+            <div class="mk-navlabel">Courses</div>
+            <div class="mk-nav">CVS BLOCK</div>
+            <div class="mk-nav">ANAT-201</div>
+            <div class="mk-nav">PHARM-II</div>
+            <div class="mk-nav">HISTO-140</div>
+          </div>
+        </aside>
+
+        <main class="mk-main">
+          <div class="mk-top">
+            <div>
+              <h3 class="mk-h">Week 21–27 Sep</h3>
+              <div class="mk-sub">CVS BLOCK · WK 04/06 · 14 events · 1 alarm</div>
+            </div>
+            <div class="mk-seg"><b class="on">Week</b><b>Month</b><b>Table</b></div>
+            <button class="mk-btn" type="button">+ Log</button>
+          </div>
+
+          <div class="mk-stats">
+            <div class="mk-stat ch-cr"><div class="lab">Exam I T-minus</div><div class="val">05<small>d</small></div></div>
+            <div class="mk-stat ch-rr"><div class="lab">Assignments open</div><div class="val">04</div></div>
+            <div class="mk-stat ch-o2"><div class="lab">Lab hours</div><div class="val">12<small>/18</small></div></div>
+            <div class="mk-stat ch-hr"><div class="lab">UWorld avg</div><div class="val">71<small>%</small></div></div>
+          </div>
+
+          <div class="mk-cols">
+            <div class="mk-panel">
+              <div class="mk-ph">Workload trace <em>Mon → Sun</em></div>
+              <svg class="trace" viewBox="0 0 560 56" preserveAspectRatio="none" role="img" aria-label="Workload trace across the week, peaking Friday at the block exam">
+                <g stroke="#16212A" stroke-width="1">
+                  <line x1="0" y1="14" x2="560" y2="14"/><line x1="0" y1="28" x2="560" y2="28"/><line x1="0" y1="42" x2="560" y2="42"/>
+                </g>
+                <polyline fill="none" stroke="#3FE07F" stroke-width="1.6"
+                  points="0,40 26,40 34,34 42,40 56,40 64,8 72,50 80,40 110,40 128,26 150,40 180,40 196,18 214,40 250,40 266,30 286,40 320,40 336,12 344,46 352,40 380,40 396,4 404,52 412,40 452,40 470,24 492,40 530,40 546,32 560,40"/>
+                <circle cx="396" cy="4" r="3" fill="#FF4D5E"/>
+              </svg>
+              <div class="trace-cap"><span><i>—</i> Contact + deadline load</span><span style="color:#FF4D5E">◆ Fri 25 · Exam I peak</span></div>
+
+              <div class="mk-day">MON 21</div>
+              <div class="mk-row">
+                <div class="mk-when">0800</div>
+                <div class="mk-what"><span class="t">GROSS ANATOMY LAB · THORAX</span><span class="m">LAB 3B / TABLE 7 · pericardium, great vessels</span></div>
+                <span class="chip lab">LAB</span>
+              </div>
+              <div class="mk-row">
+                <div class="mk-when">2359</div>
+                <div class="mk-what"><span class="t">CARDIO LECTURE 12 ANNOTATIONS</span><span class="m">SUBMITTED 21 SEP 2141</span></div>
+                <span class="chip done">SUBMIT</span>
+              </div>
+
+              <div class="mk-day">TUE 22</div>
+              <div class="mk-row alarm">
+                <div class="mk-when">2359</div>
+                <div class="mk-what"><span class="t">PHARM PROBLEM SET 4</span><span class="m">ANTIARRHYTHMICS · 18/24 · &lt; 36 H REMAINING</span></div>
+                <span class="chip exam">DUE</span>
+              </div>
+              <div class="mk-row">
+                <div class="mk-when">1500</div>
+                <div class="mk-what"><span class="t">DR. ALVAREZ · OFFICE HOURS</span><span class="m">RM 214 · preload / afterload</span></div>
+                <span class="chip">OFFICE</span>
+              </div>
+
+              <div class="mk-day">WED 23</div>
+              <div class="mk-row">
+                <div class="mk-when">1300</div>
+                <div class="mk-what"><span class="t">HISTOLOGY LAB · MUSCLE</span><span class="m">SLIDE BOX 14 · intercalated discs, Purkinje</span></div>
+                <span class="chip lab">LAB</span>
+              </div>
+
+              <div class="mk-day">THU 24</div>
+              <div class="mk-row">
+                <div class="mk-when">1800</div>
+                <div class="mk-what"><span class="t">PEER TUTORING · ECG AXIS</span><span class="m">LIBRARY 4 · with Priya · 60 MIN</span></div>
+                <span class="chip tutor">TUTOR</span>
+              </div>
+
+              <div class="mk-day">FRI 25</div>
+              <div class="mk-row">
+                <div class="mk-when">0900</div>
+                <div class="mk-what"><span class="t">CVS BLOCK EXAM I</span><span class="m">HALL A · 150 MIN · LEC 1–14 + ECG WORKSHOP</span></div>
+                <span class="chip exam">EXAM</span>
+              </div>
+            </div>
+
+            <div style="display:grid;gap:14px">
+              <div class="mk-panel">
+                <div class="mk-ph">Office hours</div>
+                <table class="mk-oh">
+                  <tr><th>Faculty</th><th>Slot</th></tr>
+                  <tr><td>ALVAREZ · PHYSIO</td><td class="w">TUE 1500</td></tr>
+                  <tr><td>OKONKWO · PHARM</td><td class="w">WED 1130</td></tr>
+                  <tr><td>MEIER · ANAT</td><td class="w">THU 0930</td></tr>
+                  <tr><td>HADDAD · HISTO</td><td class="w">FRI 1400</td></tr>
+                </table>
+              </div>
+              <div class="mk-panel">
+                <div class="mk-ph">Task queue</div>
+                <div class="mk-task done"><i class="mk-box"></i><span class="tx">Print ECG practice strips</span></div>
+                <div class="mk-task"><i class="mk-box"></i><span class="tx">Anki 120 cardio cards</span></div>
+                <div class="mk-task"><i class="mk-box"></i><span class="tx">Email Haddad re slide 14-C</span></div>
+                <div class="mk-task"><i class="mk-box"></i><span class="tx">Book sim centre slot</span></div>
+              </div>
+            </div>
+          </div>
+        </main>
+      </div>
+    </div>
+  </section>
+
+  <!-- ══════════════════ OPTION C ══════════════════ -->
+  <section class="option" id="opt-c" data-opt="C">
+    <div class="opt-head">
+      <div>
+        <p class="opt-tag">Direction C</p>
+        <h2 class="opt-name">Anatomy Plate</h2>
+        <p class="opt-pitch">An engraved atlas page. Cool paper, ink navy and oxblood, hairline rules instead of boxes, and every entry numbered in the margin like a labelled plate. The quietest of the three and the nicest to read long notes in.</p>
+      </div>
+      <dl class="specs">
+        <div class="spec"><dt>Color</dt><dd><div class="swatches">
+          <i class="sw" style="background:#E9E6DD" data-hex="#E9E6DD"></i>
+          <i class="sw" style="background:#F4F2EB" data-hex="#F4F2EB"></i>
+          <i class="sw" style="background:#1B2A3A" data-hex="#1B2A3A"></i>
+          <i class="sw" style="background:#7A2230" data-hex="#7A2230"></i>
+          <i class="sw" style="background:#3C5A72" data-hex="#3C5A72"></i>
+          <i class="sw" style="background:#4A6B4F" data-hex="#4A6B4F"></i>
+        </div></dd></div>
+        <div class="spec"><dt>Type</dt><dd>Spectral · Archivo for labels and figures</dd></div>
+        <div class="spec"><dt>Feel</dt><dd>Hairlines, margin plate numbers, no fills</dd></div>
+      </dl>
+    </div>
+
+    <div class="frame">
+      <div class="frame-bar">
+        <i class="dot"></i><i class="dot"></i><i class="dot"></i>
+        <span class="frame-url">rounds.app/week</span>
+        <button class="pick" type="button" aria-pressed="false">Pick C</button>
+      </div>
+
+      <div class="mk m-c">
+        <aside class="mk-side">
+          <div class="mk-brand"><span class="mk-mark">R</span> Rounds</div>
+          <div class="mk-navgrp">
+            <div class="mk-navlabel">Plates</div>
+            <div class="mk-nav on"><i class="pip"></i> Week <span class="ct">14</span></div>
+            <div class="mk-nav"><i class="pip"></i> Examinations <span class="ct">3</span></div>
+            <div class="mk-nav"><i class="pip"></i> Assignments <span class="ct">4</span></div>
+            <div class="mk-nav"><i class="pip"></i> Laboratories <span class="ct">2</span></div>
+            <div class="mk-nav"><i class="pip"></i> Tutorials <span class="ct">1</span></div>
+            <div class="mk-nav"><i class="pip"></i> Office hours <span class="ct">5</span></div>
+          </div>
+          <div class="mk-navgrp">
+            <div class="mk-navlabel">Courses</div>
+            <div class="mk-nav">Cardiovascular</div>
+            <div class="mk-nav">Gross Anatomy</div>
+            <div class="mk-nav">Pharmacology II</div>
+            <div class="mk-nav">Histology</div>
+          </div>
+        </aside>
+
+        <main class="mk-main">
+          <div class="mk-top">
+            <div>
+              <h3 class="mk-h">Week of 21 September</h3>
+              <div class="mk-sub">Cardiovascular block, fourth week of six</div>
+            </div>
+            <div class="mk-seg"><b class="on">Week</b><b>Month</b><b>Table</b></div>
+            <button class="mk-btn" type="button">New entry</button>
+          </div>
+
+          <div class="mk-stats">
+            <div class="mk-stat hot"><div class="lab">Exam I in</div><div class="val">5 <small>days</small></div></div>
+            <div class="mk-stat"><div class="lab">Assignments</div><div class="val">4 <small>open</small></div></div>
+            <div class="mk-stat"><div class="lab">Lab hours</div><div class="val">12<small>/18</small></div></div>
+            <div class="mk-stat"><div class="lab">UWorld</div><div class="val">71<small>%</small></div></div>
+          </div>
+
+          <div class="mk-cols">
+            <div class="mk-panel">
+              <div class="mk-ph">Schedule <em>Plate 4 · fourteen entries</em></div>
+
+              <div class="mk-day">Monday 21</div>
+              <div class="mk-row">
+                <div class="plate">1.</div>
+                <div class="mk-when">0800</div>
+                <div class="mk-what"><span class="t">Gross anatomy lab — thorax dissection</span><span class="m">Lab 3B, table 7 · pericardium and great vessels</span></div>
+                <span class="chip lab">Lab</span>
+              </div>
+              <div class="mk-row">
+                <div class="plate">2.</div>
+                <div class="mk-when">2359</div>
+                <div class="mk-what"><span class="t">Cardio lecture 12 annotation set</span><span class="m">Submitted two hours early</span></div>
+                <span class="chip done">Submitted</span>
+              </div>
+
+              <div class="mk-day">Tuesday 22</div>
+              <div class="mk-row">
+                <div class="plate">3.</div>
+                <div class="mk-when">1500</div>
+                <div class="mk-what"><span class="t">Dr. Alvarez — office hours</span><span class="m">Room 214 · preload and afterload questions</span></div>
+                <span class="chip">Office</span>
+              </div>
+              <div class="mk-row">
+                <div class="plate">4.</div>
+                <div class="mk-when">2359</div>
+                <div class="mk-what"><span class="t">Pharmacology problem set IV</span><span class="m">Antiarrhythmics · eighteen of twenty-four done</span></div>
+                <span class="chip due">Due</span>
+              </div>
+
+              <div class="mk-day">Wednesday 23</div>
+              <div class="mk-row">
+                <div class="plate">5.</div>
+                <div class="mk-when">1300</div>
+                <div class="mk-what"><span class="t">Histology lab — cardiac &amp; smooth muscle</span><span class="m">Slide box 14 · intercalated discs, Purkinje fibres</span></div>
+                <span class="chip lab">Lab</span>
+              </div>
+
+              <div class="mk-day">Thursday 24</div>
+              <div class="mk-row">
+                <div class="plate">6.</div>
+                <div class="mk-when">1800</div>
+                <div class="mk-what"><span class="t">Peer tutorial — ECG axis &amp; intervals</span><span class="m">Library 4 · with Priya · sixty minutes</span></div>
+                <span class="chip tutor">Tutorial</span>
+              </div>
+
+              <div class="mk-day">Friday 25</div>
+              <div class="mk-row">
+                <div class="plate">7.</div>
+                <div class="mk-when">0900</div>
+                <div class="mk-what"><span class="t">Cardiovascular block examination I</span><span class="m">Hall A · 150 minutes · lectures 1–14 with ECG workshop</span></div>
+                <span class="chip exam">Exam</span>
+              </div>
+              <div class="note">Entries 8–14 continue on Saturday and Sunday: OSCE practice at the sim centre, and one UWorld block of forty questions.</div>
+            </div>
+
+            <div style="display:grid;gap:14px">
+              <div class="mk-panel">
+                <div class="mk-ph">Office hours</div>
+                <table class="mk-oh">
+                  <tr><th>Faculty</th><th>When</th></tr>
+                  <tr><td>Dr. Alvarez, physiology</td><td class="w">Tue 1500</td></tr>
+                  <tr><td>Dr. Okonkwo, pharmacology</td><td class="w">Wed 1130</td></tr>
+                  <tr><td>Prof. Meier, anatomy</td><td class="w">Thu 0930</td></tr>
+                  <tr><td>Dr. Haddad, histology</td><td class="w">Fri 1400</td></tr>
+                </table>
+              </div>
+              <div class="mk-panel">
+                <div class="mk-ph">Tasks</div>
+                <div class="mk-task done"><i class="mk-box"></i><span class="tx">Print ECG practice strips</span></div>
+                <div class="mk-task"><i class="mk-box"></i><span class="tx">Anki — 120 cardio cards due</span></div>
+                <div class="mk-task"><i class="mk-box"></i><span class="tx">Email Dr. Haddad re: slide 14-C</span></div>
+                <div class="mk-task"><i class="mk-box"></i><span class="tx">Book sim centre slot for OSCE</span></div>
+              </div>
+            </div>
+          </div>
+        </main>
+      </div>
+    </div>
+  </section>
+
+  <section class="outro">
+    <h2>What gets built once you pick</h2>
+    <p>All three directions run on the same structure, so the choice is purely visual — nothing below changes.</p>
+    <ul>
+      <li><b>Six linked databases</b> — assignments, exams, labs, tutoring, office hours, loose tasks — each with course, date/time, location, status and notes.</li>
+      <li><b>Week board, month calendar and a filterable table</b> view over all of them at once.</li>
+      <li><b>Notion-style pages</b> under every item for notes, checklists and links.</li>
+      <li><b>Countdowns and status</b> — days to the next exam, overdue flagged, submitted and graded tracked.</li>
+      <li><b>Saved in your browser</b> to start; say the word and I'll wire it to real storage so it follows you across devices.</li>
+    </ul>
+    <p id="choice">Tell me “build A”, “build B” or “build C” — or mix them: A's layout with B's dark mode is a normal request.</p>
+  </section>
+</div>
+
+<script>
+  (function () {
+    var KEY = 'rounds-direction';
+    var opts = Array.prototype.slice.call(document.querySelectorAll('.option'));
+    var choice = document.getElementById('choice');
+    var defaultMsg = choice.textContent;
+
+    function apply(letter) {
+      opts.forEach(function (sec) {
+        var on = sec.dataset.opt === letter;
+        sec.dataset.picked = on ? 'true' : 'false';
+        sec.querySelector('.pick').setAttribute('aria-pressed', on ? 'true' : 'false');
+        sec.querySelector('.pick').textContent = on ? 'Picked ' + sec.dataset.opt : 'Pick ' + sec.dataset.opt;
+      });
+      choice.textContent = letter
+        ? 'Direction ' + letter + ' marked. Tell me “build ' + letter + '” and I’ll make the real thing.'
+        : defaultMsg;
+    }
+
+    opts.forEach(function (sec) {
+      sec.querySelector('.pick').addEventListener('click', function () {
+        var next = sec.dataset.picked === 'true' ? null : sec.dataset.opt;
+        apply(next);
+        try { next ? localStorage.setItem(KEY, next) : localStorage.removeItem(KEY); } catch (e) {}
+      });
+    });
+
+    try {
+      var saved = localStorage.getItem(KEY);
+      if (saved) apply(saved);
+    } catch (e) {}
+  })();
+</script>

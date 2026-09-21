@@ -1,0 +1,184 @@
+rules_version = '2';
+
+// Rounds — med school tracker.
+// Single user: everything lives under users/{uid} and only that uid can touch it.
+// Writes are validated for shape as well as ownership, so a client bug cannot
+// corrupt the collection or write a document large enough to cost money.
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ── who ────────────────────────────────────────────────────────────────
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(uid) {
+      return signedIn() && request.auth.uid == uid;
+    }
+
+    // Single-user lock. Uncomment and put your own address in to pin the whole
+    // database to one Google account, whatever uid it signs in with.
+    // function allowedAccount() {
+    //   return request.auth.token.email_verified == true
+    //     && request.auth.token.email in ['you@example.com'];
+    // }
+
+    // ── shared field checks ────────────────────────────────────────────────
+    function d() { return request.resource.data; }
+
+    function isDate(v) {
+      return v is string && v.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$');
+    }
+
+    function isTime(v) {
+      return v is string && (v == '' || v.matches('^[0-9]{2}:[0-9]{2}$'));
+    }
+
+    function isWeekday(v) {
+      return v is int && v >= 0 && v <= 6;
+    }
+
+    function str(v, max) {
+      return v is string && v.size() <= max;
+    }
+
+    function optStr(v, max) {
+      return v == null || str(v, max);
+    }
+
+    function optNum(v, lo, hi) {
+      return v == null || (v is number && v >= lo && v <= hi);
+    }
+
+    function optTime(v) {
+      return v == null || isTime(v);
+    }
+
+    function colours() {
+      return ['#E4749B', '#8B5CC7', '#17B3AE', '#79B6EA', '#BCA6E6'];
+    }
+
+    // Timestamps: created once, touched on every write.
+    function hasStamps() {
+      return d().updatedAt == request.time
+        && (d().createdAt == request.time || d().createdAt is timestamp);
+    }
+
+    // ── profile ───────────────────────────────────────────────────────────
+    function validProfile() {
+      return d().keys().hasOnly([
+               'schemaVersion', 'displayName', 'coat', 'theme',
+               'termStart', 'importedAt', 'createdAt', 'updatedAt'
+             ])
+        && d().schemaVersion == 1
+        && optStr(d().get('displayName', null), 60)
+        && d().coat.keys().hasOnly(['name', 'role', 'color'])
+        && str(d().coat.name, 28)
+        && str(d().coat.role, 34)
+        && d().coat.color in colours()
+        && d().theme in ['light', 'dark', 'system']
+        && isDate(d().termStart)
+        && (d().get('importedAt', null) == null || d().importedAt is timestamp)
+        && hasStamps();
+    }
+
+    // ── course ────────────────────────────────────────────────────────────
+    function validMeeting(m) {
+      return m.keys().hasOnly(['id', 'kind', 'weekday', 'start', 'end', 'room'])
+        && str(m.id, 24)
+        && m.kind in ['Lecture', 'Lab', 'Seminar', 'Tutorial', 'PBL', 'Clinical']
+        && isWeekday(m.weekday)
+        && isTime(m.start) && isTime(m.end)
+        && m.start != '' && m.end != '' && m.end > m.start
+        && str(m.room, 40);
+    }
+
+    // Firestore rules cannot loop, so the array is size-capped here and each row
+    // is validated in the client. Every entry is still read back and re-validated
+    // on the next write, which keeps a corrupt row from spreading.
+    function validCourse() {
+      return d().keys().hasOnly([
+               'code', 'name', 'color', 'instructor', 'term',
+               'archived', 'meetings', 'createdAt', 'updatedAt'
+             ])
+        && str(d().code, 8) && d().code.size() >= 1
+        && str(d().name, 80) && d().name.size() >= 1
+        && d().color in colours()
+        && optStr(d().get('instructor', null), 60)
+        && optStr(d().get('term', null), 40)
+        && d().archived is bool
+        && d().meetings is list && d().meetings.size() <= 12
+        && hasStamps();
+    }
+
+    // ── item ──────────────────────────────────────────────────────────────
+    function validItem() {
+      return d().keys().hasOnly([
+               'type', 'title', 'courseId', 'date', 'start', 'end', 'where',
+               'status', 'grade', 'weight', 'notes', 'checklist', 'links',
+               'recur', 'weekday', 'recurUntil', 'dept', 'completedAt',
+               'createdAt', 'updatedAt'
+             ])
+        && d().type in ['exam', 'assignment', 'lab', 'tutoring', 'office', 'task']
+        && str(d().title, 140) && d().title.size() >= 1
+        && optStr(d().get('courseId', null), 40)
+        && isDate(d().date)
+        && optTime(d().get('start', null)) && optTime(d().get('end', null))
+        && optStr(d().get('where', null), 80)
+        && d().status in ['todo', 'submitted', 'graded', 'done', 'missed']
+        && optNum(d().get('grade', null), 0, 100)
+        && optNum(d().get('weight', null), 0, 100)
+        && optStr(d().get('notes', null), 5000)
+        && d().checklist is list && d().checklist.size() <= 50
+        && d().links is list && d().links.size() <= 20
+        && d().recur in ['weekly', null]
+        && (d().get('recur', null) != 'weekly' || isWeekday(d().get('weekday', -1)))
+        && (d().get('recurUntil', null) == null || isDate(d().recurUntil))
+        && optStr(d().get('dept', null), 40)
+        && (d().get('completedAt', null) == null || d().completedAt is timestamp)
+        && hasStamps();
+    }
+
+    // ── quote ─────────────────────────────────────────────────────────────
+    function validQuote() {
+      return d().keys().hasOnly(['text', 'source', 'createdAt', 'updatedAt'])
+        && str(d().text, 300) && d().text.size() >= 1
+        && optStr(d().get('source', null), 80)
+        && d().createdAt is timestamp;
+    }
+
+    // ── paths ─────────────────────────────────────────────────────────────
+    // Note: no recursive wildcard. A subcollection added later is denied until
+    // it is given its own rule on purpose.
+
+    match /users/{uid} {
+      allow get, list: if isOwner(uid);
+      allow create, update: if isOwner(uid) && validProfile();
+      allow delete: if false;                      // the profile is not deleted
+
+      match /courses/{courseId} {
+        allow read: if isOwner(uid);
+        allow create, update: if isOwner(uid) && validCourse();
+        allow delete: if isOwner(uid);
+      }
+
+      match /items/{itemId} {
+        allow read: if isOwner(uid);
+        allow create, update: if isOwner(uid) && validItem();
+        allow delete: if isOwner(uid);
+      }
+
+      match /quotes/{quoteId} {
+        allow read: if isOwner(uid);
+        allow create, update: if isOwner(uid) && validQuote();
+        allow delete: if isOwner(uid);
+      }
+    }
+
+    // Everything else, including any collection not named above.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

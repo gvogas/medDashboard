@@ -1,0 +1,610 @@
+<title>Ward Board Ornament Study</title>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;800&family=IBM+Plex+Mono:wght@400;500;600&family=Spectral:ital,wght@0,600;1,400;1,600&display=swap">
+<style>
+  /* ═════════ page chrome (theme-aware) ═════════ */
+  :root{
+    --pg-bg:#F0F3F4; --pg-panel:#FFFFFF; --pg-ink:#131E22; --pg-ink-2:#5A6E74;
+    --pg-line:#D6DFE1; --pg-accent:#0E7C74;
+    --pg-shadow:0 1px 2px rgba(16,40,44,.06), 0 14px 36px rgba(16,40,44,.09);
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --pg-bg:#0D1315; --pg-panel:#141C1F; --pg-ink:#E4EDEF; --pg-ink-2:#8DA2A8;
+      --pg-line:#242F33; --pg-accent:#3FBFB2;
+      --pg-shadow:0 1px 2px rgba(0,0,0,.5), 0 16px 40px rgba(0,0,0,.45);
+    }
+  }
+  :root[data-theme="dark"]{
+    --pg-bg:#0D1315; --pg-panel:#141C1F; --pg-ink:#E4EDEF; --pg-ink-2:#8DA2A8;
+    --pg-line:#242F33; --pg-accent:#3FBFB2;
+    --pg-shadow:0 1px 2px rgba(0,0,0,.5), 0 16px 40px rgba(0,0,0,.45);
+  }
+
+  *{box-sizing:border-box}
+  body{
+    background:var(--pg-bg); color:var(--pg-ink); font-size:15px; line-height:1.55;
+    font-family:"Figtree", ui-sans-serif, system-ui, sans-serif; -webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:1180px;margin:0 auto;padding-inline:20px;padding-block:0 72px}
+
+  .mast{padding-block:40px 0}
+  .kicker{
+    font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:11.5px;letter-spacing:.14em;
+    text-transform:uppercase;color:var(--pg-accent);margin:0 0 12px;
+  }
+  h1.title{font-size:clamp(28px,5vw,42px);line-height:1.06;letter-spacing:-.02em;font-weight:800;margin:0;text-wrap:balance}
+  .lede{max-width:60ch;color:var(--pg-ink-2);margin:13px 0 0;font-size:16px}
+
+  /* ═════════ control bar ═════════ */
+  .controls{
+    position:sticky; top:env(safe-area-inset-top, 0px); z-index:20;
+    margin-top:26px; display:flex; flex-wrap:wrap; gap:18px 26px; align-items:center;
+    background:var(--pg-panel); border:1px solid var(--pg-line); border-radius:12px;
+    padding:12px 16px; box-shadow:0 2px 10px rgba(16,40,44,.05);
+  }
+  .cgroup{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+  .clabel{
+    font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:10.5px;letter-spacing:.12em;
+    text-transform:uppercase;color:var(--pg-ink-2);
+  }
+  .seg{display:flex;gap:2px;background:var(--pg-bg);border-radius:8px;padding:2px}
+  .seg button{
+    font:inherit;font-size:12.5px;padding:5px 13px;border:0;border-radius:6px;cursor:pointer;
+    background:transparent;color:var(--pg-ink-2);
+  }
+  .seg button[aria-pressed="true"]{background:var(--pg-panel);color:var(--pg-ink);font-weight:600;box-shadow:0 1px 2px rgba(16,40,44,.14)}
+  .seg button:focus-visible,.toggle input:focus-visible{outline:2px solid var(--pg-accent);outline-offset:2px}
+  .toggle{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;color:var(--pg-ink);cursor:pointer}
+  .toggle input{accent-color:var(--pg-accent);width:15px;height:15px;margin:0}
+
+  /* ═════════ frame ═════════ */
+  .frame{
+    margin-top:18px;border-radius:14px;overflow:hidden;border:1px solid var(--pg-line);
+    box-shadow:var(--pg-shadow);background:var(--pg-panel);
+  }
+  .frame-bar{display:flex;align-items:center;gap:8px;padding:9px 14px;border-bottom:1px solid var(--pg-line)}
+  .dot{width:9px;height:9px;border-radius:50%;background:var(--pg-line)}
+  .frame-url{margin-left:6px;font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:11px;color:var(--pg-ink-2)}
+
+  /* ═════════════════════════════════════════════
+     WARD BOARD  ·  clinical light, single-theme UI
+     ═════════════════════════════════════════════ */
+  .m-a{
+    --bg:#EEF4F3; --panel:#FFFFFF; --ink:#14302D; --ink2:#5D7B77; --line:#DBE6E4;
+    --accent:#0E7C74; --accent-soft:#D8EDEA; --slate:#3C6E8F;
+    --good:#2F8757; --warn:#B77505; --crit:#C0392B;
+    /* ornament dials — overwritten by the presets below */
+    --orn-bg:.10; --orn-art:.22; --orn-weave:.55;
+    position:relative; isolation:isolate;
+    display:grid; grid-template-columns:200px minmax(0,1fr);
+    min-height:620px; font-size:13px; background:var(--bg); color:var(--ink);
+  }
+  .m-a[data-preset="subtle"]  {--orn-bg:.05; --orn-art:.10; --orn-weave:.3}
+  .m-a[data-preset="balanced"]{--orn-bg:.10; --orn-art:.22; --orn-weave:.55}
+  .m-a[data-preset="full"]    {--orn-bg:.20; --orn-art:.42; --orn-weave:1}
+
+  /* --- background biomolecule canvas --- */
+  .orn-canvas{
+    position:absolute; inset:0; width:100%; height:100%; z-index:0;
+    opacity:var(--orn-bg); pointer-events:none;
+  }
+  .m-a[data-dna="off"] .orn-canvas{display:none}
+  .m-a > .mk-side, .m-a > .mk-main{position:relative; z-index:1}
+
+  /* --- sidebar: white-coat panel --- */
+  .mk-side{
+    padding:16px 12px; display:flex; flex-direction:column; gap:16px;
+    background:var(--panel); border-right:1px solid var(--line);
+  }
+  .m-a[data-coat="on"] .mk-side{
+    background-image:
+      repeating-linear-gradient(90deg, rgba(20,48,45,.035) 0 1px, transparent 1px 4px),
+      repeating-linear-gradient(0deg, rgba(20,48,45,.025) 0 1px, transparent 1px 4px);
+    background-blend-mode:normal;
+  }
+  .m-a[data-coat="on"] .mk-side::before{
+    content:""; position:absolute; inset:0 0 0 auto; width:1px; right:6px;
+    border-right:1px dashed rgba(14,124,116,calc(.45 * var(--orn-weave)));
+    pointer-events:none;
+  }
+  .mk-brand{display:flex;align-items:center;gap:9px;font-weight:700;letter-spacing:-.01em;font-size:15px}
+  .mk-mark{
+    width:24px;height:24px;border-radius:7px;background:var(--accent);color:#fff;
+    display:grid;place-items:center;font-size:11px;font-weight:700;flex:none;
+  }
+  .mk-navgrp{display:flex;flex-direction:column;gap:2px}
+  .mk-navlabel{font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;padding:0 8px 6px;color:var(--ink2);opacity:.9}
+  .mk-nav{
+    display:flex;align-items:center;gap:8px;padding:5px 8px;border-radius:6px;color:var(--ink2);
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  }
+  .mk-nav .pip{width:7px;height:7px;border-radius:50%;flex:none}
+  .mk-nav .ct{margin-left:auto;font-size:10.5px;opacity:.65;font-variant-numeric:tabular-nums}
+  .mk-nav.on{background:var(--accent-soft);color:var(--accent);font-weight:600}
+
+  /* coat pocket at the foot of the sidebar */
+  .pocket{
+    margin-top:auto; position:relative; border:1px solid var(--line);
+    border-top-width:2px; border-radius:3px 3px 7px 7px; padding:11px 11px 13px;
+    background:linear-gradient(#FBFDFC,#F3F8F7);
+  }
+  .m-a[data-coat="off"] .pocket{display:none}
+  .pocket::before{
+    content:""; position:absolute; left:7px; right:7px; top:4px; height:0;
+    border-top:1px dashed rgba(14,124,116,calc(.55 * var(--orn-weave)));
+  }
+  .pocket .embroidery{
+    font-family:"Spectral",Georgia,serif; font-style:italic; font-weight:600; font-size:13px;
+    color:var(--accent); letter-spacing:.01em; line-height:1.25;
+    text-shadow:0 1px 0 rgba(255,255,255,.9);
+  }
+  .pocket .role{
+    font-size:9.5px;letter-spacing:.13em;text-transform:uppercase;color:var(--ink2);margin-top:2px;
+  }
+  .pocket .pen{position:absolute;right:13px;top:-7px;width:9px;height:42px;border-radius:2px 2px 4px 4px;background:var(--slate)}
+  .pocket .pen::after{content:"";position:absolute;left:1px;right:1px;top:-6px;height:14px;border-radius:3px;background:#B9C7CC}
+  .pocket .scope-tuck{position:absolute;right:28px;bottom:6px;width:54px;height:30px;color:var(--accent);opacity:var(--orn-art)}
+  .m-a[data-scope="off"] .pocket .scope-tuck{display:none}
+
+  /* --- main --- */
+  .mk-main{padding:16px 18px 20px;display:flex;flex-direction:column;gap:14px;min-width:0}
+  .mk-top{display:flex;align-items:flex-start;gap:12px;flex-wrap:wrap;position:relative}
+  .mk-h{font-size:20px;font-weight:700;letter-spacing:-.015em;margin:0}
+  .mk-sub{font-size:11.5px;color:var(--ink2)}
+  .mk-seg{display:flex;margin-left:auto;gap:2px;flex:none;background:#E6EEEC;border-radius:8px;padding:2px}
+  .mk-seg b{font-size:11px;font-weight:500;padding:4px 10px;border-radius:6px;color:var(--ink2)}
+  .mk-seg b.on{background:var(--panel);color:var(--ink);font-weight:600;box-shadow:0 1px 2px rgba(20,48,45,.12)}
+  .mk-btn{font-size:11.5px;padding:6px 12px;font-weight:600;flex:none;background:var(--accent);color:#fff;border:0;border-radius:8px;font-family:inherit}
+
+  /* stethoscope draped across the header */
+  .drape{
+    position:absolute; right:0; top:-14px; width:300px; max-width:58%; height:auto;
+    color:var(--accent); opacity:var(--orn-art); pointer-events:none; z-index:0;
+  }
+  .m-a[data-scope="off"] .drape{display:none}
+  .mk-top > div,.mk-top > .mk-seg,.mk-top > .mk-btn{position:relative;z-index:1}
+
+  /* --- stat strip --- */
+  .mk-stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
+  @media (max-width:680px){.mk-stats{grid-template-columns:repeat(2,minmax(0,1fr))}}
+  .mk-stat{
+    padding:10px 12px;min-width:0;background:var(--panel);border:1px solid var(--line);
+    border-radius:12px;position:relative;overflow:hidden;
+  }
+  .mk-stat .lab{font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink2)}
+  .mk-stat .val{font-size:23px;font-weight:700;font-variant-numeric:tabular-nums;line-height:1.2}
+  .mk-stat .val small{font-size:11px;font-weight:500;color:var(--ink2)}
+  .mk-stat.hot{border-color:#F0C9C4;background:#FEF7F6}
+  .mk-stat.hot .val{color:var(--crit)}
+  .ecg{display:block;width:100%;height:20px;margin-top:2px;color:var(--crit)}
+  .mol-mark{position:absolute;right:-10px;bottom:-14px;width:76px;height:76px;color:var(--accent);opacity:calc(.6 * var(--orn-art))}
+  .m-a[data-mol="off"] .mol-mark{display:none}
+
+  /* --- panels --- */
+  .mk-cols{display:grid;grid-template-columns:minmax(0,1fr) 250px;gap:14px;align-items:start}
+  @media (max-width:880px){.mk-cols{grid-template-columns:minmax(0,1fr)}}
+  .mk-panel{
+    background:var(--panel);border:1px solid var(--line);border-radius:12px;min-width:0;
+    position:relative;overflow:hidden;
+  }
+  .mk-ph{
+    display:flex;align-items:baseline;gap:8px;padding:11px 13px;border-bottom:1px solid var(--line);
+    font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;font-weight:600;color:var(--ink2);
+  }
+  .mk-ph em{font-style:normal;margin-left:auto;font-size:10px;opacity:.75;letter-spacing:.04em}
+  .helix-rule{height:12px;display:block;width:100%;color:var(--accent);opacity:calc(.8 * var(--orn-art))}
+  .m-a[data-dna="off"] .helix-rule{display:none}
+  .mk-day{
+    padding:7px 13px 5px;font-size:10px;letter-spacing:.14em;text-transform:uppercase;font-weight:600;
+    color:var(--ink2);background:#F6FAF9;border-top:1px solid var(--line);border-bottom:1px solid var(--line);
+  }
+  .mk-row{display:grid;grid-template-columns:52px 1fr auto;gap:11px;padding:9px 13px;align-items:baseline}
+  .mk-row+.mk-row{border-top:1px solid #EDF3F2}
+  .mk-when{font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:11px;font-variant-numeric:tabular-nums;color:var(--ink2)}
+  .mk-what{min-width:0}
+  .mk-what .t{font-weight:600;display:block;overflow-wrap:anywhere}
+  .mk-what .m{font-size:11px;color:var(--ink2);display:block;overflow-wrap:anywhere}
+  .chip{
+    font-size:9.5px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;
+    padding:2px 8px;border-radius:999px;white-space:nowrap;flex:none;background:#EDF3F2;color:var(--ink2);
+  }
+  .chip.exam{background:#FBE9E7;color:var(--crit)}
+  .chip.lab{background:#E7F1FA;color:#1E628F}
+  .chip.due{background:#FCF2DF;color:var(--warn)}
+  .chip.done{background:#E6F3EB;color:var(--good)}
+  .chip.tutor{background:#EFEAFA;color:#5A46A8}
+
+  .mk-oh{width:100%;border-collapse:collapse;font-size:11.5px}
+  .mk-oh th{text-align:left;font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;font-weight:600;color:var(--ink2);padding:7px 13px}
+  .mk-oh td{padding:7px 13px;vertical-align:top}
+  .mk-oh tr+tr td{border-top:1px solid #EDF3F2}
+  .mk-oh td.w{font-family:"IBM Plex Mono",ui-monospace,monospace;font-variant-numeric:tabular-nums;white-space:nowrap}
+  .mk-oh td .dept{color:var(--ink2)}
+  .scope-row td:first-child{position:relative;padding-left:32px}
+  .scope-row .mini-scope{position:absolute;left:11px;top:6px;width:15px;height:15px;color:var(--accent);opacity:calc(var(--orn-art) + .35)}
+  .m-a[data-scope="off"] .scope-row td:first-child{padding-left:13px}
+  .m-a[data-scope="off"] .scope-row .mini-scope{display:none}
+
+  .mk-task{display:flex;gap:9px;padding:7px 13px;align-items:flex-start;font-size:12px}
+  .mk-box{width:13px;height:13px;flex:none;margin-top:2px;border-radius:3px;border:1.5px solid #B9CCC9}
+  .mk-task.done .tx{text-decoration:line-through;color:var(--ink2)}
+  .mk-task.done .mk-box{background:var(--good);border-color:var(--good)}
+  .steroid-mark{position:absolute;right:8px;bottom:6px;width:92px;height:62px;color:var(--accent);opacity:calc(.55 * var(--orn-art));pointer-events:none}
+  .m-a[data-mol="off"] .steroid-mark{display:none}
+
+  /* ═════════ notes ═════════ */
+  .notes{margin-top:34px;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+  @media (max-width:760px){.notes{grid-template-columns:minmax(0,1fr)}}
+  .note{background:var(--pg-panel);border:1px solid var(--pg-line);border-radius:12px;padding:16px 18px}
+  .note h3{margin:0 0 6px;font-size:14px;font-weight:700;letter-spacing:-.01em}
+  .note p{margin:0;color:var(--pg-ink-2);font-size:13.5px}
+  .note p+p{margin-top:8px}
+  .outro{margin-top:14px;background:var(--pg-panel);border:1px solid var(--pg-line);border-radius:12px;padding:18px}
+  .outro p{margin:0;color:var(--pg-ink-2);max-width:66ch}
+  .outro p b{color:var(--pg-ink);font-weight:600}
+  @media (prefers-reduced-motion: reduce){*{transition:none!important;animation:none!important}}
+</style>
+
+<div class="wrap">
+  <header class="mast">
+    <p class="kicker">Direction A · ornament study</p>
+    <h1 class="title">Ward Board Ornament Study</h1>
+    <p class="lede">Same Ward Board layout, now wearing the coat. Four motifs — a DNA and biomolecule background, a draped stethoscope, molecular line marks, and white-coat fabric with an embroidered pocket. Dial each one in or out below; the board underneath never changes.</p>
+  </header>
+
+  <div class="controls">
+    <div class="cgroup">
+      <span class="clabel">Intensity</span>
+      <div class="seg" id="presets">
+        <button type="button" data-preset="subtle" aria-pressed="false">Subtle</button>
+        <button type="button" data-preset="balanced" aria-pressed="true">Balanced</button>
+        <button type="button" data-preset="full" aria-pressed="false">Full</button>
+      </div>
+    </div>
+    <div class="cgroup">
+      <span class="clabel">Motifs</span>
+      <label class="toggle"><input type="checkbox" id="t-dna" checked> DNA &amp; molecules behind</label>
+      <label class="toggle"><input type="checkbox" id="t-scope" checked> Stethoscope</label>
+      <label class="toggle"><input type="checkbox" id="t-mol" checked> Molecular marks</label>
+      <label class="toggle"><input type="checkbox" id="t-coat" checked> White coat</label>
+    </div>
+  </div>
+
+  <div class="frame">
+    <div class="frame-bar">
+      <i class="dot"></i><i class="dot"></i><i class="dot"></i>
+      <span class="frame-url">rounds.app/week</span>
+    </div>
+
+    <div class="m-a" id="board" data-preset="balanced" data-dna="on" data-scope="on" data-mol="on" data-coat="on">
+      <canvas class="orn-canvas" id="orn" aria-hidden="true"></canvas>
+
+      <!-- ───── sidebar / white coat ───── -->
+      <aside class="mk-side">
+        <div class="mk-brand"><span class="mk-mark">R</span> Rounds</div>
+
+        <div class="mk-navgrp">
+          <div class="mk-navlabel">This block</div>
+          <div class="mk-nav on"><i class="pip" style="background:#0E7C74"></i> Week board <span class="ct">14</span></div>
+          <div class="mk-nav"><i class="pip" style="background:#C0392B"></i> Exams <span class="ct">3</span></div>
+          <div class="mk-nav"><i class="pip" style="background:#B77505"></i> Assignments <span class="ct">4</span></div>
+          <div class="mk-nav"><i class="pip" style="background:#1E628F"></i> Labs <span class="ct">2</span></div>
+          <div class="mk-nav"><i class="pip" style="background:#5A46A8"></i> Tutoring <span class="ct">1</span></div>
+          <div class="mk-nav"><i class="pip" style="background:#5D7B77"></i> Office hours <span class="ct">5</span></div>
+        </div>
+
+        <div class="mk-navgrp">
+          <div class="mk-navlabel">Courses</div>
+          <div class="mk-nav">Cardiovascular Block</div>
+          <div class="mk-nav">Gross Anatomy</div>
+          <div class="mk-nav">Pharmacology II</div>
+          <div class="mk-nav">Histology</div>
+        </div>
+
+        <div class="pocket">
+          <i class="pen" aria-hidden="true"></i>
+          <div class="embroidery">G. Vogas</div>
+          <div class="role">MS II · Cardio block</div>
+          <svg class="scope-tuck" viewBox="0 0 60 34" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true">
+            <path d="M4 6c0 9 7 8 9 14s7 9 14 8 12-6 18-6"/>
+            <path d="M11 4c0 7 4 8 6 12"/>
+            <circle cx="50" cy="20" r="6"/><circle cx="50" cy="20" r="2.6"/>
+            <path d="M44.6 21.6 42 23"/>
+          </svg>
+        </div>
+      </aside>
+
+      <!-- ───── main ───── -->
+      <main class="mk-main">
+        <div class="mk-top">
+          <svg class="drape" viewBox="0 0 300 118" fill="none" stroke="currentColor" stroke-width="2.4"
+               stroke-linecap="round" aria-hidden="true">
+            <path d="M18 8c0 26 6 30 14 40"/>
+            <path d="M52 8c0 24-5 28-11 38"/>
+            <path d="M8 10h20M42 10h20" stroke-width="5"/>
+            <path d="M32 48c7 10 3 24 16 32 16 10 40 6 58-2 22-10 38-24 60-28 20-4 36 2 44 14"/>
+            <circle cx="242" cy="86" r="17"/><circle cx="242" cy="86" r="8.5"/>
+            <path d="M228 74l-8-7"/>
+          </svg>
+          <div>
+            <h3 class="mk-h">Week board</h3>
+            <div class="mk-sub">Mon 21 – Sun 27 Sep · Cardiovascular Block, week 4 of 6</div>
+          </div>
+          <div class="mk-seg"><b class="on">Week</b><b>Month</b><b>Table</b></div>
+          <button class="mk-btn" type="button">New item</button>
+        </div>
+
+        <div class="mk-stats">
+          <div class="mk-stat hot">
+            <div class="lab">Block exam I in</div>
+            <div class="val">5 <small>days</small></div>
+            <svg class="ecg" viewBox="0 0 120 20" preserveAspectRatio="none" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true">
+              <path d="M0 14h14l3-3 3 6 4-3h10l3-9 3 16 4-7h12l3-3 3 6 4-3h12l3-9 3 16 4-7h16l3-3 3 6 3-3h10"/>
+            </svg>
+          </div>
+          <div class="mk-stat">
+            <div class="lab">Open assignments</div><div class="val">4</div>
+            <svg class="mol-mark" viewBox="0 0 60 60" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+              <path d="M30 6l14 8v16l-14 8-14-8V14z"/><circle cx="30" cy="22" r="7"/>
+              <path d="M44 30l12 7M16 30L4 37M30 38v14"/>
+            </svg>
+          </div>
+          <div class="mk-stat"><div class="lab">Lab hours</div><div class="val">12<small>/18</small></div></div>
+          <div class="mk-stat"><div class="lab">UWorld avg</div><div class="val">71<small>%</small></div></div>
+        </div>
+
+        <div class="mk-cols">
+          <div class="mk-panel">
+            <div class="mk-ph">Schedule <em>14 items</em></div>
+            <svg class="helix-rule" viewBox="0 0 400 12" preserveAspectRatio="none" fill="none" stroke="currentColor" stroke-width="1.1" aria-hidden="true">
+              <path d="M0 6c12-6 24-6 36 0s24 6 36 0 24-6 36 0 24 6 36 0 24-6 36 0 24 6 36 0 24-6 36 0 24 6 36 0 24-6 36 0 24 6 36 0"/>
+              <path d="M0 6c12 6 24 6 36 0s24-6 36 0 24 6 36 0 24-6 36 0 24 6 36 0 24-6 36 0 24 6 36 0 24-6 36 0 24 6 36 0 24-6 36 0"/>
+              <path d="M18 2.2v7.6M54 2.2v7.6M90 2.2v7.6M126 2.2v7.6M162 2.2v7.6M198 2.2v7.6M234 2.2v7.6M270 2.2v7.6M306 2.2v7.6M342 2.2v7.6M378 2.2v7.6"/>
+            </svg>
+
+            <div class="mk-day">Mon 21 Sep</div>
+            <div class="mk-row">
+              <div class="mk-when">0800</div>
+              <div class="mk-what"><span class="t">Gross Anatomy lab — thorax dissection</span><span class="m">Lab 3B · table 7 · pericardium &amp; great vessels</span></div>
+              <span class="chip lab">Lab</span>
+            </div>
+            <div class="mk-row">
+              <div class="mk-when">2359</div>
+              <div class="mk-what"><span class="t">Cardio lecture 12 annotation set</span><span class="m">Submitted 2 h early · awaiting grade</span></div>
+              <span class="chip done">Submitted</span>
+            </div>
+
+            <div class="mk-day">Tue 22 Sep</div>
+            <div class="mk-row">
+              <div class="mk-when">1500</div>
+              <div class="mk-what"><span class="t">Dr. Alvarez — office hours</span><span class="m">Rm 214 · bring preload/afterload questions</span></div>
+              <span class="chip">Office</span>
+            </div>
+            <div class="mk-row">
+              <div class="mk-when">2359</div>
+              <div class="mk-what"><span class="t">Pharmacology problem set 4</span><span class="m">Antiarrhythmics · 18 of 24 questions done</span></div>
+              <span class="chip due">Due</span>
+            </div>
+
+            <div class="mk-day">Wed 23 Sep</div>
+            <div class="mk-row">
+              <div class="mk-when">1300</div>
+              <div class="mk-what"><span class="t">Histology lab — cardiac &amp; smooth muscle</span><span class="m">Slide box 14 · intercalated discs, Purkinje fibres</span></div>
+              <span class="chip lab">Lab</span>
+            </div>
+
+            <div class="mk-day">Thu 24 Sep</div>
+            <div class="mk-row">
+              <div class="mk-when">1800</div>
+              <div class="mk-what"><span class="t">Peer tutoring — ECG axis &amp; intervals</span><span class="m">Library 4 · with Priya · 60 min</span></div>
+              <span class="chip tutor">Tutoring</span>
+            </div>
+
+            <div class="mk-day">Fri 25 Sep</div>
+            <div class="mk-row">
+              <div class="mk-when">0900</div>
+              <div class="mk-what"><span class="t">Cardiovascular Block Exam I</span><span class="m">Hall A · 150 min · lectures 1–14 + ECG workshop</span></div>
+              <span class="chip exam">Exam</span>
+            </div>
+
+            <div class="mk-day">Sat 26 Sep</div>
+            <div class="mk-row">
+              <div class="mk-when">1000</div>
+              <div class="mk-what"><span class="t">OSCE practice — cardiac exam</span><span class="m">Sim centre · standardized patient · 3 stations</span></div>
+              <span class="chip lab">Practical</span>
+            </div>
+          </div>
+
+          <div style="display:grid;gap:14px">
+            <div class="mk-panel">
+              <div class="mk-ph">Office hours</div>
+              <table class="mk-oh">
+                <tr><th>Who</th><th>When</th></tr>
+                <tr class="scope-row">
+                  <td>
+                    <svg class="mini-scope" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true">
+                      <path d="M4 3c0 6 2 7 4 9s6 3 8 1"/><circle cx="16" cy="14" r="3.4"/>
+                    </svg>
+                    Dr. Alvarez <span class="dept">Physio</span>
+                  </td>
+                  <td class="w">Tue 1500</td>
+                </tr>
+                <tr><td>Dr. Okonkwo <span class="dept">Pharm</span></td><td class="w">Wed 1130</td></tr>
+                <tr><td>Prof. Meier <span class="dept">Anat</span></td><td class="w">Thu 0930</td></tr>
+                <tr><td>Dr. Haddad <span class="dept">Histo</span></td><td class="w">Fri 1400</td></tr>
+              </table>
+            </div>
+
+            <div class="mk-panel">
+              <div class="mk-ph">Tasks</div>
+              <div class="mk-task done"><i class="mk-box"></i><span class="tx">Print ECG practice strips</span></div>
+              <div class="mk-task"><i class="mk-box"></i><span class="tx">Anki: 120 cardio cards due</span></div>
+              <div class="mk-task"><i class="mk-box"></i><span class="tx">Email Dr. Haddad re: slide 14-C</span></div>
+              <div class="mk-task"><i class="mk-box"></i><span class="tx">Book sim centre slot for OSCE</span></div>
+              <svg class="steroid-mark" viewBox="0 0 120 80" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true">
+                <path d="M14 46l-9-16 9-16 18 1 8 15-8 16z"/>
+                <path d="M32 31l18 1 8 15-8 16-18-1-8-15"/>
+                <path d="M50 32l17-8 13 11-5 17-17 3-8-15"/>
+                <path d="M80 35l16-4 8 12-11 11-13-5z"/>
+              </svg>
+            </div>
+          </div>
+        </div>
+      </main>
+    </div>
+  </div>
+
+  <div class="notes">
+    <div class="note">
+      <h3>Where each motif sits</h3>
+      <p><b>DNA &amp; molecules</b> — a drawn layer behind the whole board: two helices running on the diagonal, a steroid nucleus, a benzene ring and a lipid tail, all in teal at 5–20% depending on intensity. Never under body text at more than a whisper.</p>
+      <p><b>Stethoscope</b> — draped across the header, tucked into the coat pocket, and a 15px one marking the next office-hours slot.</p>
+    </div>
+    <div class="note">
+      <h3>The white coat</h3>
+      <p>The sidebar is the coat: a faint fabric weave, a dashed stitch line down the seam, and a real chest pocket at the foot with your name embroidered, a pen clipped over the edge and the scope tucked in.</p>
+      <p>A helix hairline also runs under the schedule header, and the countdown card carries a live ECG trace instead of a plain sparkline.</p>
+    </div>
+  </div>
+
+  <div class="outro">
+    <p>Set the dials where you like them and tell me what you landed on — <b>“build it at Balanced, no steroid mark”</b> is a perfectly good instruction. Then I build the working tracker: six item types, week/month/table views, notes pages, exam countdowns and overdue flags, all saved for you.</p>
+  </div>
+</div>
+
+<script>
+  (function () {
+    var board = document.getElementById('board');
+    var canvas = document.getElementById('orn');
+    var ctx = canvas.getContext('2d');
+    var KEY = 'rounds-ornament';
+
+    /* ─── background biomolecules, drawn to fit the board ─── */
+    function hex(cx, cy, r, rot) {
+      var p = [];
+      for (var i = 0; i < 6; i++) {
+        var a = rot + i * Math.PI / 3;
+        p.push([cx + r * Math.cos(a), cy + r * Math.sin(a)]);
+      }
+      return p;
+    }
+    function poly(pts, close) {
+      ctx.beginPath();
+      pts.forEach(function (pt, i) { i ? ctx.lineTo(pt[0], pt[1]) : ctx.moveTo(pt[0], pt[1]); });
+      if (close) ctx.closePath();
+      ctx.stroke();
+    }
+    function helix(x, y, len, amp, turns, angle) {
+      var steps = 220, i, t, px, py, s;
+      var ca = Math.cos(angle), sa = Math.sin(angle);
+      function pt(t, phase) {
+        var along = t * len, off = amp * Math.sin(t * turns * Math.PI * 2 + phase);
+        return [x + along * ca - off * sa, y + along * sa + off * ca];
+      }
+      [0, Math.PI].forEach(function (phase) {
+        ctx.beginPath();
+        for (i = 0; i <= steps; i++) {
+          t = i / steps; s = pt(t, phase);
+          i ? ctx.lineTo(s[0], s[1]) : ctx.moveTo(s[0], s[1]);
+        }
+        ctx.stroke();
+      });
+      for (i = 0; i <= 44; i++) {
+        t = i / 44;
+        px = pt(t, 0); py = pt(t, Math.PI);
+        ctx.beginPath(); ctx.moveTo(px[0], px[1]); ctx.lineTo(py[0], py[1]); ctx.stroke();
+      }
+    }
+    function steroid(x, y, r) {
+      var d = r * Math.sqrt(3);
+      poly(hex(x, y, r, Math.PI / 6), true);
+      poly(hex(x + d, y - r * 0.5, r, Math.PI / 6), true);
+      poly(hex(x + 2 * d, y - r, r, Math.PI / 6), true);
+      var p = [], i;
+      for (i = 0; i < 5; i++) {
+        var a = -Math.PI / 2 + i * 2 * Math.PI / 5;
+        p.push([x + 2 * d + d * 0.92 + r * 0.86 * Math.cos(a), y - r * 1.4 + r * 0.86 * Math.sin(a)]);
+      }
+      poly(p, true);
+    }
+    function lipid(x, y, n, step) {
+      var pts = [], i;
+      for (i = 0; i <= n; i++) pts.push([x + i * step, y + (i % 2 ? -step * 0.55 : step * 0.55)]);
+      poly(pts, false);
+      ctx.beginPath(); ctx.arc(x - step * 0.5, y + step * 0.2, step * 0.42, 0, Math.PI * 2); ctx.stroke();
+    }
+    function benzene(x, y, r) {
+      poly(hex(x, y, r, Math.PI / 6), true);
+      ctx.beginPath(); ctx.arc(x, y, r * 0.58, 0, Math.PI * 2); ctx.stroke();
+    }
+
+    function draw() {
+      var w = board.clientWidth, h = board.clientHeight;
+      if (!w || !h) return;
+      var dpr = Math.min(window.devicePixelRatio || 1, 2);
+      canvas.width = Math.round(w * dpr);
+      canvas.height = Math.round(h * dpr);
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      ctx.clearRect(0, 0, w, h);
+      ctx.strokeStyle = '#0E7C74';
+      ctx.lineWidth = 1.15;
+      ctx.lineJoin = 'round';
+
+      helix(-40, h * 0.18, Math.hypot(w + 120, h * 0.7), 26, 7.5, Math.atan2(h * 0.66, w + 120));
+      helix(w * 0.34, h + 30, Math.hypot(w * 0.8, h * 0.9), 18, 6, Math.atan2(-h * 0.9, w * 0.8));
+
+      steroid(w * 0.58, h * 0.20, 20);
+      benzene(w * 0.16, h * 0.74, 22);
+      benzene(w * 0.22, h * 0.80, 15);
+      lipid(w * 0.70, h * 0.80, 9, 15);
+      steroid(w * 0.06, h * 0.40, 13);
+    }
+
+    var raf = null;
+    function schedule() { if (raf) cancelAnimationFrame(raf); raf = requestAnimationFrame(draw); }
+    if (window.ResizeObserver) new ResizeObserver(schedule).observe(board);
+    window.addEventListener('resize', schedule);
+    if (document.fonts && document.fonts.ready) document.fonts.ready.then(schedule);
+    draw();
+
+    /* ─── controls ─── */
+    var toggles = { dna: 't-dna', scope: 't-scope', mol: 't-mol', coat: 't-coat' };
+    var segBtns = Array.prototype.slice.call(document.querySelectorAll('#presets button'));
+
+    function save() {
+      var state = { preset: board.dataset.preset };
+      Object.keys(toggles).forEach(function (k) { state[k] = board.dataset[k]; });
+      try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) {}
+    }
+    function setPreset(name) {
+      board.dataset.preset = name;
+      segBtns.forEach(function (b) { b.setAttribute('aria-pressed', b.dataset.preset === name ? 'true' : 'false'); });
+    }
+    segBtns.forEach(function (b) {
+      b.addEventListener('click', function () { setPreset(b.dataset.preset); save(); });
+    });
+    Object.keys(toggles).forEach(function (k) {
+      var input = document.getElementById(toggles[k]);
+      input.addEventListener('change', function () {
+        board.dataset[k] = input.checked ? 'on' : 'off';
+        save();
+        if (k === 'dna' && input.checked) schedule();
+      });
+    });
+
+    try {
+      var saved = JSON.parse(localStorage.getItem(KEY) || 'null');
+      if (saved) {
+        if (saved.preset) setPreset(saved.preset);
+        Object.keys(toggles).forEach(function (k) {
+          if (saved[k]) {
+            board.dataset[k] = saved[k];
+            document.getElementById(toggles[k]).checked = saved[k] === 'on';
+          }
+        });
+        schedule();
+      }
+    } catch (e) {}
+  })();
+</script>

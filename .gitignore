@@ -1,0 +1,28 @@
+# Firebase local artefacts
+.firebase/
+firebase-debug.log
+firestore-debug.log
+database-debug.log
+ui-debug.log
+pubsub-debug.log
+.runtimeconfig.json
+
+# Credentials — never commit these.
+# Note: js/firebase-config.js is NOT secret (the web API key is an identifier,
+# the Firestore rules are the security boundary), so it stays in the repo.
+.env
+.env.*
+*serviceAccount*.json
+*-service-account*.json
+
+# Node, if tooling is added later
+node_modules/
+npm-debug.log*
+
+# Editors and OS
+.vscode/
+.idea/
+*.swp
+.DS_Store
+Thumbs.db
+Desktop.ini
