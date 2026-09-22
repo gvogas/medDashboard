@@ -75,8 +75,7 @@ npm run user:add -- yourname --name "Your Name"
 2. **Database and deploy.**
 
 ```sh
-npm run db:remote       # schema into the production D1, once per migration
-npm run deploy          # static files + Worker, one command
+npm run deploy          # pending migrations into the production D1, then static files + Worker
 ```
 
 3. **Accounts.** One command per person, on the production database. It asks for the

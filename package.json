@@ -5,7 +5,7 @@
   "description": "Med-school tracker: static front end + Cloudflare Worker API on D1",
   "scripts": {
     "dev": "wrangler dev",
-    "deploy": "wrangler deploy",
+    "deploy": "wrangler d1 migrations apply rounds --remote && wrangler deploy",
     "test": "vitest run",
     "test:watch": "vitest",
     "db:local": "wrangler d1 migrations apply rounds --local",
