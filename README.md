@@ -96,6 +96,13 @@ To change someone's password, the same command with `--reset`:
 npm run user:add -- yourname --reset --remote
 ```
 
+To remove an account together with everything it owns, `--delete`. It asks you to
+type the username to confirm:
+
+```sh
+npm run user:add -- yourname --delete --remote
+```
+
 Passwords are hashed with PBKDF2-SHA256 at 100,000 iterations and a random salt,
 the most the Workers runtime allows per call. Usernames are 3–32 characters of
 letters, digits, dot, dash or underscore, and are not case-sensitive.

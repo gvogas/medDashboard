@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 // Create an account: `npm run user:add -- <username> [--remote] [--name "Display Name"]`
 // Change a password:  `npm run user:add -- <username> --reset [--remote]`
+// Delete an account:  `npm run user:add -- <username> --delete [--remote]` (and all its data)
 // Prompts for the password without echoing it, hashes it exactly as the Worker does,
 // and inserts the row with wrangler. --remote targets production; otherwise the
 // local dev database.
@@ -12,6 +13,7 @@ import { hashPassword, normalizeUsername } from '../worker/password.js';
 const args = process.argv.slice(2);
 const remote = args.includes('--remote');
 const reset = args.includes('--reset');
+const remove = args.includes('--delete');
 const nameIx = args.indexOf('--name');
 const displayName = nameIx >= 0 ? args[nameIx + 1] || '' : '';
 const rawUser = args.find((a, i) => !a.startsWith('--') && (nameIx < 0 || i !== nameIx + 1));
@@ -20,6 +22,7 @@ const username = normalizeUsername(rawUser);
 if (!username) {
   console.error('Usage: npm run user:add -- <username> [--remote] [--name "Display Name"]');
   console.error('       npm run user:add -- <username> --reset [--remote]   (change the password)');
+  console.error('       npm run user:add -- <username> --delete [--remote]  (remove the account and its data)');
   console.error('Usernames: 3–32 characters, letters, digits, dot, dash, underscore.');
   process.exit(1);
 }
@@ -58,16 +61,25 @@ async function ask(prompt) {
   });
 }
 
-const password = await ask(`Password for ${username}: `);
-if (password.length < 8) { console.error('Use at least 8 characters.'); process.exit(1); }
-if (password !== await ask('Again: ')) { console.error('They did not match.'); process.exit(1); }
-
-const hash = await hashPassword(password);
-const now = Date.now();
-const id = crypto.randomUUID();
-const sql = reset
-  ? `UPDATE users SET password_hash = '${hash}', updated_at = ${now} WHERE username = '${username}';`
-  : `INSERT INTO users (id, username, password_hash, display_name, created_at, updated_at) VALUES ('${id}', '${username}', '${hash}', '${displayName.replace(/'/g, "''")}', ${now}, ${now});`;
+let sql;
+if (remove) {
+  const typed = await ask(`This deletes ${username} and every course, item and quote it owns. Type the username to confirm: `);
+  if (typed.trim().toLowerCase() !== username) { console.error('Not deleted.'); process.exit(1); }
+  sql = `DELETE FROM items WHERE user_id IN (SELECT id FROM users WHERE username = '${username}');
+         DELETE FROM quotes WHERE user_id IN (SELECT id FROM users WHERE username = '${username}');
+         DELETE FROM courses WHERE user_id IN (SELECT id FROM users WHERE username = '${username}');
+         DELETE FROM users WHERE username = '${username}';`;
+} else {
+  const password = await ask(`Password for ${username}: `);
+  if (password.length < 8) { console.error('Use at least 8 characters.'); process.exit(1); }
+  if (password !== await ask('Again: ')) { console.error('They did not match.'); process.exit(1); }
+  const hash = await hashPassword(password);
+  const now = Date.now();
+  const id = crypto.randomUUID();
+  sql = reset
+    ? `UPDATE users SET password_hash = '${hash}', updated_at = ${now} WHERE username = '${username}';`
+    : `INSERT INTO users (id, username, password_hash, display_name, created_at, updated_at) VALUES ('${id}', '${username}', '${hash}', '${displayName.replace(/'/g, "''")}', ${now}, ${now});`;
+}
 
 // Judge by wrangler's JSON result, not its exit code: on Windows it sometimes trips an
 // assertion while shutting down, after the statement has already run.
@@ -88,13 +100,13 @@ function run(statement) {
   return null;
 }
 
-if (reset) {
+if (reset || remove) {
   const found = run(`SELECT 1 AS x FROM users WHERE username = '${username}';`);
   if (!found || found[0].results.length !== 1) { console.error(`No account called ${username}.`); process.exit(1); }
 }
 const ok = run(sql);
 if (!ok) {
-  console.error(reset ? 'Could not change the password.' : 'Could not create the account. If the username already exists, pick another.');
+  console.error(remove ? 'Could not delete the account.' : reset ? 'Could not change the password.' : 'Could not create the account. If the username already exists, pick another.');
   process.exit(1);
 }
-console.log(`${reset ? 'Password changed for' : 'Created'} ${username} on the ${remote ? 'production' : 'local'} database.`);
+console.log(`${remove ? 'Deleted' : reset ? 'Password changed for' : 'Created'} ${username} on the ${remote ? 'production' : 'local'} database.`);
