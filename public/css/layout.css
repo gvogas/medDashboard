@@ -112,8 +112,8 @@ button{cursor:pointer}
 .player[data-mode="connect"]{border:0;background:transparent;padding:2px 8px}
 .player .spmark{width:14px;height:14px;flex:none;color:#1DB954}
 .player-now{display:flex;align-items:center;gap:8px;min-width:0}
-.player-art{flex:none;line-height:0}
-.player-art img{width:36px;height:36px;border-radius:3px}
+.player-art{flex:none;width:36px;height:36px;overflow:hidden;border-radius:3px;background:var(--line);line-height:0;font-size:0}
+.player-art img{width:36px;height:36px}
 .player-meta{min-width:0;flex:1}
 .player-title{display:block;color:var(--ink);font-weight:600;text-decoration:none;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 a.player-title:hover{text-decoration:underline}
