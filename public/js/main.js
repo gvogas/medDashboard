@@ -5,7 +5,7 @@ import * as store from './store.js';
 import { data, course } from './store.js';
 import * as sync from './sync.js';
 import { ui, rememberUi } from './state.js';
-import { ORDER, uid, isOpen, normalizeItem } from './model.js';
+import { ORDER, uid, isOpen, isComplete, normalizeItem } from './model.js';
 import { iso, parse, addDays, today } from './dates.js';
 import { esc, $, autoGrow } from './dom.js';
 import { render, renderView } from './views/render.js';
@@ -164,7 +164,12 @@ document.addEventListener('click', async (e) => {
   if ((el = e.target.closest('[data-add]'))) { e.stopPropagation(); newItem(el.dataset.add); return; }
   if ((el = e.target.closest('[data-toggle]'))) {
     const it = store.item(el.dataset.toggle);
-    if (it) { setStatus(it, isOpen(it) ? 'done' : 'todo'); await touch(it); }
+    if (it) {
+      const finishing = isOpen(it);
+      if (finishing) celebrate(el);
+      setStatus(it, finishing ? 'done' : 'todo');
+      await touch(it);
+    }
     render(); return;
   }
   if ((el = e.target.closest('.row, tbody tr[data-id], .task .tx, .oh tbody tr'))) {
@@ -246,6 +251,12 @@ function autoOfficeTitle(it, prevCourseId) {
   }
 }
 
+/* A small show from an element, for finishing something. */
+function celebrate(el) {
+  const r = el.getBoundingClientRect();
+  fireworks(r.left + r.width / 2, r.top + r.height / 2, { rockets: 2 });
+}
+
 function setStatus(it, status) {
   it.status = status;
   it.completedAt = status === 'todo' ? null : (it.completedAt || Date.now());
@@ -318,7 +329,9 @@ document.addEventListener('input', async (e) => {
       it[d.f] = e.target.value || null;
       if (d.f === 'courseId') autoOfficeTitle(it, before);
     } else if (d.f === 'status') {
+      const wasDone = isComplete(it);
       setStatus(it, e.target.value);
+      if (!wasDone && isComplete(it)) celebrate(e.target);
     } else if (d.f === 'start' || d.f === 'end') {
       it[d.f] = parseTime(e.target.value) || '';      /* half-typed stays out of the model until it parses */
     } else {
