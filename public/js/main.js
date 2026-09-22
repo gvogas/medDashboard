@@ -8,7 +8,7 @@ import { ui, rememberUi } from './state.js';
 import { ORDER, uid, isOpen, isComplete, normalizeItem } from './model.js';
 import { iso, parse, addDays, today } from './dates.js';
 import { $, autoGrow } from './dom.js';
-import { render, renderView } from './views/render.js';
+import { render, renderView, renderHeader } from './views/render.js';
 import { renderSidebar } from './views/sidebar.js';
 import { renderStats, renderQuote, nextQuote } from './views/stats.js';
 import { drawer, scrim, closeDrawer, drawerHasFocus } from './views/drawer-base.js';
@@ -54,7 +54,7 @@ spotify.onState((s, kind) => {
   if (kind !== 'state') return;
   if (s.connected) web.start(); else if (s.loaded) web.stop();     /* the tab is a device only while connected */
   if (ui.settings && !drawerHasFocus()) refreshSpotifyGroup();
-  if (ui.view === 'spotify') { spotView.onPlayerState(); renderHeaderSub(); }
+  if (ui.view === 'spotify') { spotView.onPlayerState(); renderHeader(); }
 });
 web.onChange(() => {
   renderPlayer(spotify.state);
@@ -71,10 +71,6 @@ spotView.onChange(() => {
     if (n) { n.value = val; n.focus({ preventScroll: true }); try { n.setSelectionRange(pos, pos); } catch {} }
   }
 });
-function renderHeaderSub() {
-  if (ui.view !== 'spotify') return;
-  $('viewSub').textContent = !spotify.state.loaded ? '' : !spotify.state.connected ? 'Not connected' : spotify.state.device ? 'Playing on ' + spotify.state.device : 'No active device';
-}
 spotify.onUnauthenticated(() => showSignIn('Your session has ended. Sign in again.'));
 
 /* Spotify's consent page sends the browser back to /#spotify=connected or =error. */
@@ -406,7 +402,11 @@ document.addEventListener('input', async (e) => {
         if (h) h.textContent = it.title.trim() ? 'Ready to save' : 'Give it a name to save';
       }
     }
-    if (!ui.draft) { await touch(it); renderStats(); renderSidebar(); renderView(); }
+    if (!ui.draft) {
+      await touch(it);
+      /* notes show nowhere on the board except through the search, so typing them redraws nothing */
+      if (d.f !== 'notes' || ui.search) { renderStats(); renderSidebar(); renderView(); }
+    }
     if (d.f === 'type' || d.f === 'status' || d.f === 'recur') renderItemDrawer();
     return;
   }

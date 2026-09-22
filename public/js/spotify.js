@@ -106,11 +106,6 @@ export function stop() {
   Object.assign(state, { connected: false, playing: false, track: null, device: null, deviceId: null, volume: null, supportsVolume: false, stale: false, error: null, loaded: false });
 }
 
-/** After the OAuth round trip or a disconnect: poll again now, from a clean slate. */
-export function refresh() {
-  if (active) poll();
-}
-
 export function disconnected() {
   apply({ connected: false });
   emit('state');

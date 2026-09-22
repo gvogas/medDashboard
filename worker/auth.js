@@ -9,14 +9,15 @@ const COOKIE = 'rounds_session';
 export const SESSION_MS = 30 * 24 * 60 * 60 * 1000;
 export const RENEW_WITHIN_MS = 7 * 24 * 60 * 60 * 1000;
 
+// Imported once per isolate rather than on every request; keyed by the secret so a
+// rotated SESSION_SECRET is picked up.
+let cachedKey = null;
 async function hmacKey(secret) {
-  return crypto.subtle.importKey(
-    'raw',
-    new TextEncoder().encode(secret),
-    { name: 'HMAC', hash: 'SHA-256' },
-    false,
-    ['sign', 'verify'],
-  );
+  if (cachedKey?.secret !== secret) {
+    const key = crypto.subtle.importKey('raw', new TextEncoder().encode(secret), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
+    cachedKey = { secret, key };
+  }
+  return cachedKey.key;
 }
 
 function hex(buf) {

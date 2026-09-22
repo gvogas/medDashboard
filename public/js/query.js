@@ -16,8 +16,8 @@ export function passFilters(it) {
 }
 
 export function instances(from, to) {
-  let out = [];
-  data.items.forEach((it) => { if (passFilters(it)) out = out.concat(occurrences(it, from, to)); });
+  const out = [];
+  data.items.forEach((it) => { if (passFilters(it)) out.push(...occurrences(it, from, to)); });
   out.sort((a, b) => {
     if (a.date !== b.date) return a.date < b.date ? -1 : 1;
     const as = a.item.start || a.item.end || 'zz', bs = b.item.start || b.item.end || 'zz';
@@ -49,8 +49,4 @@ export function classes() {
     return da - db || (a.mtg.start < b.mtg.start ? -1 : a.mtg.start > b.mtg.start ? 1 : 0);
   });
   return out;
-}
-
-export function classesOn(weekday) {
-  return classes().filter((x) => x.mtg.weekday === weekday);
 }

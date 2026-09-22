@@ -11,7 +11,7 @@ import { renderTable } from './table.js';
 import { renderSpotifyView } from './spotify-view.js';
 import { state as spotify } from '../spotify.js';
 
-function renderHeader() {
+export function renderHeader() {
   const a = parse(ui.anchor), t = $('viewTitle'), s = $('viewSub');
   if (ui.view === 'week') {
     const st = monday(a), en = addDays(st, 6);

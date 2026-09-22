@@ -50,11 +50,12 @@ async function token(request) {
   return json({ error: 'unsupported_grant_type' }, 400);
 }
 
+// Since February 2026 a playlist's count is under `items`, not `tracks`.
 const PLAYLISTS = [
-  { id: 'pl1', uri: 'spotify:playlist:pl1', name: 'Study mix', owner: { display_name: 'George' }, images: [{ url: 'https://i.scdn.co/image/pl1', width: 300 }], tracks: { total: 3 } },
-  { id: 'pl2', uri: 'spotify:playlist:pl2', name: 'Ward rounds', owner: { display_name: 'Sam' }, images: [], tracks: { total: 0 } },
+  { id: 'pl1', uri: 'spotify:playlist:pl1', name: 'Study mix', owner: { display_name: 'George' }, images: [{ url: 'https://i.scdn.co/image/pl1', width: 300 }], items: { total: 3 } },
+  { id: 'pl2', uri: 'spotify:playlist:pl2', name: 'Ward rounds', owner: { display_name: 'Sam' }, images: [], items: { total: 0 } },
   // Enough more that the list needs a second page.
-  ...[3, 4, 5, 6, 7].map((n) => ({ id: `pl${n}`, uri: `spotify:playlist:pl${n}`, name: `Mix ${n}`, owner: { display_name: 'George' }, images: [], tracks: { total: 1 } })),
+  ...[3, 4, 5, 6, 7].map((n) => ({ id: `pl${n}`, uri: `spotify:playlist:pl${n}`, name: `Mix ${n}`, owner: { display_name: 'George' }, images: [], items: { total: 1 } })),
 ];
 
 const uri = (item, id) => ({ ...item, uri: `spotify:track:${id}`, id, type: 'track' });
@@ -94,13 +95,27 @@ async function player(request, url) {
       const items = PLAYLISTS.slice(offset, offset + limit);
       return json({ items, total: PLAYLISTS.length, next: offset + limit < PLAYLISTS.length ? 'more' : null });
     }
-    if (path === '/v1/me/tracks') return json({ items: [{ track: T2 }], total: 1, next: null });
-    const m = path.match(/^\/v1\/playlists\/([^/]+)\/tracks$/);
+    if (path === '/v1/me/tracks') {
+      // A token granted before user-library-read was asked for.
+      if (tok === 'tok-noscope') return json({ error: { status: 403, message: 'Insufficient client scope' } }, 403);
+      return json({ items: [{ track: T2 }], total: 1, next: null });
+    }
+    // February 2026: /playlists/{id}/tracks is gone; /items answers, each entry's track
+    // under `item` (`track` is kept, deprecated), and in development mode only for
+    // playlists the user owns or collaborates on.
+    const m = path.match(/^\/v1\/playlists\/([^/]+)\/items$/);
     if (m) {
+      if (m[1] === 'plx') return json({ error: { status: 403, message: 'Forbidden' } }, 403);
       if (m[1] !== 'pl1') return json({ error: { status: 404, message: 'Not found' } }, 404);
       const offset = Number(q.get('offset') || 0);
-      if (offset > 0) return json({ items: [{ track: T2 }], total: 3, next: null });
-      return json({ items: [{ track: T1 }, { track: null }, { track: { ...T2, type: 'episode' } }, { track: { ...T2, is_local: true } }, { track: T2 }], total: 3, next: 'more' });
+      if (offset > 0) return json({ items: [{ item: T2, is_local: false }], total: 3, next: null });
+      return json({
+        items: [
+          { item: T1, is_local: false }, { item: null, is_local: false }, { item: { ...T2, type: 'episode' }, is_local: false },
+          { item: { ...T2 }, is_local: true }, { item: T2, is_local: false },
+        ],
+        total: 3, next: 'more',
+      });
     }
     return json({ error: { status: 404, message: 'unknown route' } }, 404);
   }

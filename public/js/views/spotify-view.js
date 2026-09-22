@@ -29,6 +29,8 @@ const MESSAGES = {
   rate_limited: 'Spotify asked us to slow down. Try again in a moment.',
   not_connected: 'Spotify is not connected. Connect it in Settings.',
   not_found: 'That playlist is not there any more.',
+  reconnect_needed: 'Spotify needs a fresh connection for this. Reconnect in Settings › Spotify.',
+  playlist_forbidden: 'Spotify only lets Rounds open playlists you made or collaborate on.',
   offline: 'You seem to be offline.',
 };
 
@@ -293,9 +295,10 @@ export function onPlayerState() {
   syncVolume();
   const dev = root.querySelector('.spot-vol em');
   if (dev && player.device && dev.textContent !== player.device) rerender();
-  /* the "now" marker moves with the track */
-  root.querySelectorAll('.trk').forEach((row) => {
+  /* the "now" marker moves with the track: one redraw however many rows changed */
+  const moved = [...root.querySelectorAll('.trk')].some((row) => {
     const now = !!(player.track && player.track.uri && row.dataset.uri === player.track.uri);
-    if (row.classList.contains('now') !== now) rerender();
+    return row.classList.contains('now') !== now;
   });
+  if (moved) rerender();
 }

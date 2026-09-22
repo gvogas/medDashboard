@@ -1,7 +1,7 @@
 import { json, readJson, HttpError } from './http.js';
 import { requireUser, requireSession, signSession, sessionCookie, clearCookie, parseCookies, secureFlag, RENEW_WITHIN_MS } from './auth.js';
 import { verifyPassword, normalizeUsername } from './password.js';
-import { lockedFor, recordFailure, recordSuccess } from './throttle.js';
+import { claimAttempt, recordSuccess } from './throttle.js';
 import { validateProfile, validateCourse, validateItem, validateQuote, validateId } from './validate.js';
 import { getUserForLogin, getProfile, updateProfile, getRow, upsertRow, deleteRow, courseExists, syncSince, bumpPasswordGen, saveSpotifyTokens, deleteSpotifyTokens } from './db.js';
 import * as spotify from './spotify.js';
@@ -103,12 +103,13 @@ const routes = [
     const bad = () => new HttpError(401, { error: 'bad_login' });
     const username = normalizeUsername(body.username);
     if (!username) throw bad();
-    const wait = await lockedFor(env.DB, username);
+    // Counted before the password is checked; see worker/throttle.js.
+    const wait = await claimAttempt(env.DB, username);
     if (wait) throw new HttpError(429, { error: 'too_many_attempts', retryAfter: wait }, { 'retry-after': String(wait) });
     const user = await getUserForLogin(env.DB, username);
     // Verify even when the user is unknown, so timing does not reveal which usernames exist.
     const ok = await verifyPassword(body.password, user ? user.password_hash : 'pbkdf2$100000$AAAAAAAAAAAAAAAAAAAAAA$AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA');
-    if (!user || !ok) { await recordFailure(env.DB, username); throw bad(); }
+    if (!user || !ok) throw bad();
     await recordSuccess(env.DB, username);
     const profile = await getProfile(env.DB, user.id);
     const token = await signSession(profile.id, user.pw_gen, env.SESSION_SECRET);

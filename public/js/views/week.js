@@ -2,7 +2,7 @@ import { data, course } from '../store.js';
 import { ui } from '../state.js';
 import { tmeta, isOpen, isComplete, isOverdue, dueSoon } from '../model.js';
 import { iso, parse, addDays, monday, diffDays, today, hhmm, DOW, MON } from '../dates.js';
-import { instances, classesOn, matchSearch } from '../query.js';
+import { instances, classes, matchSearch } from '../query.js';
 import { esc } from '../dom.js';
 import { stepsHtml, statusChip, CHECK_SVG } from './bits.js';
 
@@ -41,12 +41,15 @@ export function renderWeek() {
     + '<path d="M0 5.5c12 5.5 24 5.5 36 0s24-5.5 36 0 24 5.5 36 0 24-5.5 36 0 24 5.5 36 0 24-5.5 36 0 24 5.5 36 0 24-5.5 36 0 24 5.5 36 0 24-5.5 36 0"/>'
     + '<path d="M18 1.8v7.4M54 1.8v7.4M90 1.8v7.4M126 1.8v7.4M162 1.8v7.4M198 1.8v7.4M234 1.8v7.4M270 1.8v7.4M306 1.8v7.4M342 1.8v7.4M378 1.8v7.4"/></svg>';
 
+  const classesByDow = {};
+  classes().forEach((x) => { (classesByDow[x.mtg.weekday] = classesByDow[x.mtg.weekday] || []).push(x); });
+
   let any = false;
   for (let i = 0; i < 7; i++) {
     const d = addDays(start, i), key = iso(d), rows = byDay[key] || [];
     if (!rows.length && ui.search) continue;
     any = any || rows.length > 0;
-    const cls = classesOn(d.getDay());
+    const cls = classesByDow[d.getDay()] || [];
     sched += '<div class="day' + (key === TODAY ? ' is-today' : '') + '">'
       + DOW[d.getDay()] + ' ' + d.getDate() + ' ' + MON[d.getMonth()].slice(0, 3)
       + (key === TODAY ? '<span class="today-tag">Today</span>' : '')

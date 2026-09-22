@@ -23,8 +23,7 @@ export async function getUserForLogin(db, username) {
 
 /** Invalidate every session of this user; returns the new generation. */
 export async function bumpPasswordGen(db, userId) {
-  await db.prepare('UPDATE users SET pw_gen = pw_gen + 1 WHERE id = ?').bind(userId).run();
-  return (await db.prepare('SELECT pw_gen FROM users WHERE id = ?').bind(userId).first())?.pw_gen;
+  return (await db.prepare('UPDATE users SET pw_gen = pw_gen + 1 WHERE id = ? RETURNING pw_gen').bind(userId).first())?.pw_gen;
 }
 
 export async function getProfile(db, userId) {
@@ -102,14 +101,15 @@ function upsertStmt(db, table, userId, id, fields, now) {
   return db
     .prepare(
       `INSERT INTO ${table} (${names.join(', ')}) VALUES (${names.map(() => '?').join(', ')})
-       ON CONFLICT (user_id, id) DO UPDATE SET ${updates.join(', ')}`,
+       ON CONFLICT (user_id, id) DO UPDATE SET ${updates.join(', ')}
+       RETURNING ${selectCols(table)}`,
     )
     .bind(...values);
 }
 
+/** The saved row in API shape, read back in the same statement. */
 export async function upsertRow(db, table, userId, id, fields, now = Date.now()) {
-  await upsertStmt(db, table, userId, id, fields, now).run();
-  return getRow(db, table, userId, id);
+  return rowToApi(table, await upsertStmt(db, table, userId, id, fields, now).first());
 }
 
 /** Hard-delete rows soft-deleted before `before`. Items first, so course rows go last. */
@@ -142,17 +142,19 @@ export async function courseExists(db, userId, id) {
   return !!r;
 }
 
-/** Every row changed after `since`; deleted rows collapse to {id, deletedAt}. */
+/** Every row changed after `since`; deleted rows collapse to {id, deletedAt}. One round trip. */
 export async function syncSince(db, userId, since) {
   const now = Date.now();
+  const tables = Object.keys(TABLES);
+  const pages = await db.batch(
+    tables.map((table) =>
+      db.prepare(`SELECT ${selectCols(table)} FROM ${table} WHERE user_id = ? AND updated_at > ? ORDER BY updated_at, id`).bind(userId, since),
+    ),
+  );
   const out = { now };
-  for (const table of Object.keys(TABLES)) {
-    const { results } = await db
-      .prepare(`SELECT ${selectCols(table)} FROM ${table} WHERE user_id = ? AND updated_at > ? ORDER BY updated_at, id`)
-      .bind(userId, since)
-      .all();
-    out[table] = results.map((r) => (r.deleted_at ? { id: r.id, deletedAt: r.deleted_at } : rowToApi(table, r)));
-  }
+  tables.forEach((table, i) => {
+    out[table] = pages[i].results.map((r) => (r.deleted_at ? { id: r.id, deletedAt: r.deleted_at } : rowToApi(table, r)));
+  });
   return out;
 }
 

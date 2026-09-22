@@ -364,6 +364,22 @@ describe('the Spotify view', () => {
     expect((await api('/api/spotify/playlists/bad%20id/tracks')).status).toBe(404);
   });
 
+  it("says so when Spotify will not open someone else's playlist", async () => {
+    const { api, id } = await user('v-notmine');
+    await connect(id, 'tok-playing');
+    const res = await api('/api/spotify/playlists/plx/tracks');
+    expect(res.status).toBe(403);
+    expect(await res.json()).toEqual({ error: 'playlist_forbidden' });
+  });
+
+  it('asks for a reconnect when the token predates a scope, instead of blaming Spotify', async () => {
+    const { api, id } = await user('v-noscope');
+    await connect(id, 'tok-noscope');
+    const res = await api('/api/spotify/playlists/liked/tracks');
+    expect(res.status).toBe(403);
+    expect(await res.json()).toEqual({ error: 'reconnect_needed' });
+  });
+
   it('shows the queue', async () => {
     const { api, id } = await user('v-queue');
     await connect(id, 'tok-playing');

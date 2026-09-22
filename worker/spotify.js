@@ -176,6 +176,11 @@ function pickArt(images, size) {
   return (list.find((i) => i.width === size) || (size <= 64 ? list[list.length - 1] : list[1]) || list[0] || {}).url || null;
 }
 
+/* The badge renders this as a link, so only a Spotify web address gets through. */
+function spotifyLink(url) {
+  return typeof url === 'string' && url.startsWith('https://open.spotify.com/') ? url : null;
+}
+
 function compactTrack(item, progressMs, artSize = 300) {
   if (!item) return null;
   const art = pickArt(item.album?.images, artSize);
@@ -185,7 +190,7 @@ function compactTrack(item, progressMs, artSize = 300) {
     artists: (item.artists || []).map((a) => a.name).filter(Boolean).join(', '),
     album: item.album?.name || '',
     art,
-    url: item.external_urls?.spotify || null,
+    url: spotifyLink(item.external_urls?.spotify),
     durationMs: Number(item.duration_ms) || 0,
     progressMs: Number(progressMs) || 0,
   };
@@ -258,21 +263,34 @@ function compactPlaylist(p) {
   return {
     uri: p.uri, id: p.id, name: p.name || '',
     owner: p.owner?.display_name || '',
-    art: pickArt(p.images, 64), count: Number(p.tracks?.total) || 0,
+    art: pickArt(p.images, 64), count: Number((p.items || p.tracks)?.total) || 0,   /* `tracks` before February 2026 */
   };
 }
 
 const page = (body, offset, mapped) => ({ items: mapped, total: Number(body.total) || mapped.length, next: !!body.next, offset });
 
-async function readJson(res) {
+async function bodyOf(res) {
   return res.json().catch(() => ({}));
+}
+
+/**
+ * A read Spotify refused. A token granted before a scope was added to SCOPES is told
+ * to reconnect; anything else is logged with Spotify's own words and reported as
+ * Spotify being unavailable. `forbidden` is the error for any other 403.
+ */
+async function readFailure(res, what, forbidden = null) {
+  const message = String((await bodyOf(res)).error?.message || '');
+  if (res.status === 403 && /scope/i.test(message)) return new HttpError(403, { error: 'reconnect_needed' });
+  if (res.status === 403 && forbidden) return new HttpError(403, { error: forbidden });
+  console.error('spotify refused', what, res.status, message);
+  return unavailable();
 }
 
 /** Tracks, albums and playlists matching `q`, ten of each. */
 export async function search(env, userId, q) {
   const res = await spotifyFetch(env, userId, 'GET', `/search?type=track,album,playlist&limit=10&q=${encodeURIComponent(q)}`);
-  if (!res.ok) throw unavailable();
-  const b = await readJson(res);
+  if (!res.ok) throw await readFailure(res, 'search');
+  const b = await bodyOf(res);
   return {
     tracks: (b.tracks?.items || []).filter(Boolean).map((t) => compactTrack(t, 0, 64)),
     albums: (b.albums?.items || []).filter(Boolean).map(compactAlbum),
@@ -283,27 +301,35 @@ export async function search(env, userId, q) {
 /** The user's playlists, a page at a time. */
 export async function playlists(env, userId, offset = 0) {
   const res = await spotifyFetch(env, userId, 'GET', `/me/playlists?limit=${PLAYLIST_LIMIT}&offset=${offset}`);
-  if (!res.ok) throw unavailable();
-  const b = await readJson(res);
+  if (!res.ok) throw await readFailure(res, 'playlists');
+  const b = await bodyOf(res);
   return page(b, offset, (b.items || []).filter(Boolean).map(compactPlaylist));
 }
 
-/** A playlist's tracks, or the user's Liked Songs for id `liked`. Local files and episodes are skipped. */
+/**
+ * A playlist's tracks, or the user's Liked Songs for id `liked`. Local files and episodes
+ * are skipped. Since February 2026 a playlist's entries come from /items with the track
+ * under `item`, and a development-mode app may only open playlists the user owns or
+ * collaborates on (a 403 otherwise). Liked Songs entries still carry `track`.
+ */
 export async function playlistTracks(env, userId, id, offset = 0) {
-  const path = id === 'liked' ? `/me/tracks?limit=${LIST_LIMIT}&offset=${offset}` : `/playlists/${id}/tracks?limit=${LIST_LIMIT}&offset=${offset}`;
+  const path = id === 'liked' ? `/me/tracks?limit=${LIST_LIMIT}&offset=${offset}` : `/playlists/${id}/items?limit=${LIST_LIMIT}&offset=${offset}`;
   const res = await spotifyFetch(env, userId, 'GET', path);
   if (res.status === 404) throw new HttpError(404, { error: 'not_found' });
-  if (!res.ok) throw unavailable();
-  const b = await readJson(res);
-  const tracks = (b.items || []).map((i) => i && i.track).filter((t) => t && t.type !== 'episode' && !t.is_local && t.uri);
+  if (!res.ok) throw await readFailure(res, id === 'liked' ? 'liked' : 'playlist items', id === 'liked' ? null : 'playlist_forbidden');
+  const b = await bodyOf(res);
+  const tracks = (b.items || [])
+    .filter((i) => i && !i.is_local)
+    .map((i) => i.item || i.track)
+    .filter((t) => t && t.type !== 'episode' && !t.is_local && t.uri);
   return page(b, offset, tracks.map((t) => compactTrack(t, 0, 64)));
 }
 
 /** What is playing and what comes next. Spotify offers no way to remove from or reorder the queue. */
 export async function queue(env, userId) {
   const res = await spotifyFetch(env, userId, 'GET', '/me/player/queue');
-  if (!res.ok) throw unavailable();
-  const b = await readJson(res);
+  if (!res.ok) throw await readFailure(res, 'queue');
+  const b = await bodyOf(res);
   return {
     current: compactTrack(b.currently_playing, 0, 64),
     queue: (b.queue || []).filter(Boolean).map((t) => compactTrack(t, 0, 64)),

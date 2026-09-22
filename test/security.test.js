@@ -24,10 +24,28 @@ describe('login throttling', () => {
     expect((await login('steady', PASSWORD)).status).toBe(200);
   });
 
+  it('parallel guesses cannot outrun the lock', { timeout: 30000 }, async () => {
+    await createUser('burst');
+    const results = await Promise.all(Array.from({ length: 12 }, () => login('burst', 'wrong')));
+    const statuses = results.map((r) => r.status);
+    expect(statuses.filter((s) => s === 401).length).toBe(5);
+    expect(statuses.filter((s) => s === 429).length).toBe(7);
+  });
+
   it('does not lock other usernames', { timeout: 20000 }, async () => {
     await createUser('bystander');
     for (let i = 0; i < 6; i++) await login('someone-else', 'wrong');
     expect((await login('bystander', PASSWORD)).status).toBe(200);
+  });
+});
+
+describe('request bodies', () => {
+  it('a JSON body that is not an object is a 400, not a 500', async () => {
+    const api = await signIn();
+    for (const [method, path] of [['POST', '/api/login'], ['PUT', '/api/me'], ['PUT', '/api/quotes/q9'], ['POST', '/api/spotify/queue']]) {
+      const res = await api(path, { method, body: 'null' });
+      expect(res.status, `${method} ${path}`).toBe(400);
+    }
   });
 });
 
