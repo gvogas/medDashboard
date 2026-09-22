@@ -174,3 +174,23 @@ export async function playerState(env, userId) {
       : null,
   };
 }
+
+/** Each control the strip can send, as Spotify's method and path. */
+const CONTROLS = {
+  play: ['PUT', '/me/player/play'],
+  pause: ['PUT', '/me/player/pause'],
+  next: ['POST', '/me/player/next'],
+  previous: ['POST', '/me/player/previous'],
+  restart: ['PUT', '/me/player/seek?position_ms=0'],
+};
+export const ACTIONS = Object.keys(CONTROLS);
+
+/** Send a control; throws the mapped error unless Spotify took it. */
+export async function control(env, userId, action) {
+  const [method, path] = CONTROLS[action];
+  const res = await call(env, userId, method, path);
+  if (res.ok) return;
+  if (res.status === 404) throw new HttpError(404, { error: 'no_device' });
+  if (res.status === 403) throw new HttpError(403, { error: 'premium_required' });
+  throw failure(res);
+}

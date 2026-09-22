@@ -155,6 +155,16 @@ const routes = [
       throw e;
     }
   }],
+  ['POST', /^\/api\/spotify\/player\/([a-z]+)$/, async ({ request, env, params: [action] }) => {
+    const userId = await requireUser(request, env);
+    if (!spotify.ACTIONS.includes(action)) throw new HttpError(404, { error: 'not_found' });
+    await spotify.control(env, userId, action);
+    return new Response(null, { status: 204 });
+  }],
+  ['DELETE', /^\/api\/spotify$/, async ({ request, env }) => {
+    await deleteSpotifyTokens(env.DB, await requireUser(request, env));
+    return new Response(null, { status: 204 });
+  }],
 
 ];
 

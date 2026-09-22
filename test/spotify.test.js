@@ -208,3 +208,72 @@ describe('player', () => {
     expect(res.headers.get('retry-after')).toBe('7');
   });
 });
+
+const control = (action, cookie) => get(`/api/spotify/player/${action}`, cookie, { method: 'POST' });
+
+describe('controls', () => {
+  for (const action of ['play', 'pause', 'next', 'previous', 'restart']) {
+    it(`${action} reaches Spotify`, async () => {
+      const { userId, cookie } = await session();
+      await seed(userId);
+      expect((await control(action, cookie)).status).toBe(204);
+    });
+  }
+
+  it('explains a missing device', async () => {
+    const { userId, cookie } = await session();
+    await seed(userId, { access: 'tok-nodevice' });
+    const res = await control('play', cookie);
+    expect(res.status).toBe(404);
+    expect(await res.json()).toEqual({ error: 'no_device' });
+  });
+
+  it('explains that controls need Premium', async () => {
+    const { userId, cookie } = await session();
+    await seed(userId, { access: 'tok-free' });
+    const res = await control('next', cookie);
+    expect(res.status).toBe(403);
+    expect(await res.json()).toEqual({ error: 'premium_required' });
+  });
+
+  it('is 409 with no connection', async () => {
+    const { cookie } = await session();
+    const res = await control('play', cookie);
+    expect(res.status).toBe(409);
+    expect(await res.json()).toEqual({ error: 'not_connected' });
+  });
+
+  it('is 409 and forgets a revoked connection', async () => {
+    const { userId, cookie } = await session();
+    await seed(userId, { access: 'tok-expired', refresh: 'revoked', expiresAt: 0 });
+    expect((await control('pause', cookie)).status).toBe(409);
+    expect(await getSpotifyTokens(env.DB, userId)).toBeNull();
+  });
+
+  it('is 404 for an action it does not know', async () => {
+    const { userId, cookie } = await session();
+    await seed(userId);
+    const res = await control('shuffle', cookie);
+    expect(res.status).toBe(404);
+    expect(await res.json()).toEqual({ error: 'not_found' });
+  });
+});
+
+describe('isolation', () => {
+  it("never uses one user's Spotify for another", async () => {
+    const a = await session(), b = await session();
+    await seed(a.userId);
+    expect((await player(b.cookie)).body).toEqual({ connected: false });
+    expect((await control('pause', b.cookie)).status).toBe(409);
+  });
+});
+
+describe('disconnect', () => {
+  it('deletes the row, and a second call is still fine', async () => {
+    const { userId, cookie } = await session();
+    await seed(userId);
+    expect((await get('/api/spotify', cookie, { method: 'DELETE' })).status).toBe(204);
+    expect(await getSpotifyTokens(env.DB, userId)).toBeNull();
+    expect((await get('/api/spotify', cookie, { method: 'DELETE' })).status).toBe(204);
+  });
+});
