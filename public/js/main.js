@@ -211,18 +211,19 @@ document.addEventListener('click', async (e) => {
 scrim.addEventListener('click', closeDrawer);
 
 /* Some items name themselves from the course: office hours after the teacher, exams
-   after the class. Picking a course (or switching type) fills the title in, unless
+   and tutorials after the class. Picking a course (or switching type) fills the title in, unless
    the title was typed by hand. */
 function autoTitleFor(type, c) {
   if (!c) return '';
   if (type === 'office') return c.instructor ? c.instructor + ' — office hours' : '';
   if (type === 'exam') return c.name ? 'Exam — ' + c.name : '';
+  if (type === 'tutoring') return c.name ? c.name + ' — tutorial' : '';
   return '';
 }
 function autoOfficeTitle(it, prevCourseId) {
   const next = autoTitleFor(it.type, course(it.courseId));
   if (!next) return;
-  const wasAuto = ['office', 'exam'].some((t) => it.title === autoTitleFor(t, course(prevCourseId)) || it.title === autoTitleFor(t, course(it.courseId)));
+  const wasAuto = ['office', 'exam', 'tutoring'].some((t) => it.title === autoTitleFor(t, course(prevCourseId)) || it.title === autoTitleFor(t, course(it.courseId)));
   if (it.title.trim() && !wasAuto) return;
   it.title = next;
   const ta = drawer.querySelector('.dtitle');
