@@ -169,6 +169,20 @@ Storing any of these would mean a write every midnight. They cost nothing to com
 
 ---
 
+## `spotify_tokens`
+
+One row per user who has connected Spotify. Not synced to the browser; the Worker
+reads it to call Spotify on the user's behalf.
+
+| Column | Type | Rules |
+| --- | --- | --- |
+| `user_id` | text, PK | |
+| `refresh_token` | text | AES-GCM ciphertext, base64 of iv and ciphertext. The key is derived from `SESSION_SECRET` (HKDF, info `spotify-refresh`), so rotating the secret disconnects everyone. |
+| `access_token` | text | lives an hour, kept in clear |
+| `expires_at`, `updated_at` | int | ms since the epoch |
+
+---
+
 ## Indexes
 
 | Index | Serves |
@@ -202,6 +216,11 @@ All routes are under `/api`, speak JSON, and require the session cookie except
 | `DELETE /api/courses/:id` | → `204`. Soft-deletes and nulls `courseId` on the user's items. |
 | `PUT /api/items/:id` · `DELETE /api/items/:id` | as above |
 | `PUT /api/quotes/:id` · `DELETE /api/quotes/:id` | as above |
+| `GET /api/spotify/connect` | → `302` to Spotify's consent page, with a state cookie. `503 spotify_not_configured` without the client id and secret. |
+| `GET /api/spotify/callback` | Spotify's redirect. Stores the tokens and sends you to `/#spotify=connected`, or to `/#spotify=error` on any failure. |
+| `GET /api/spotify/player` | → `{connected: false}`, or `{connected: true, playing, device, track}` where `track` is `null` or `{title, artists, album, art, url, durationMs, progressMs}`. |
+| `POST /api/spotify/player/:action` | `play`, `pause`, `next`, `previous` or `restart` → `204`. `404 no_device`, `403 premium_required`, `409 not_connected`, `429 rate_limited`, `502 spotify_unavailable`. |
+| `DELETE /api/spotify` | → `204`, forgets the connection. |
 
 Errors are `{error, field?}`: `400` bad shape (with the field), `401` no session,
 `404` a row that isn't yours, `413` body over 1 MB.

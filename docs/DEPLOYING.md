@@ -58,11 +58,11 @@ different passwords.
 
 Make and try every change locally first. Nothing you do locally affects the live site.
 
-1. Start the local server with `npm run dev`, then open http://localhost:8787 and sign
+1. Start the local server with `npm run dev`, then open http://127.0.0.1:8787 and sign
    in with your local account. Leave the command running. It picks up most edits when
    you save; press Ctrl+C to stop it.
 2. Edit files in `public/` (what you see) or `worker/` (the API).
-3. Run `npm test`. All tests should pass (53 today). A failing test means something
+3. Run `npm test`. All tests should pass (93 today). A failing test means something
    broke, so fix it before deploying.
 4. Save the change in Git:
     ```

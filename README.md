@@ -26,7 +26,7 @@ biomolecule layer behind the board.
 public/                   the app: index.html, css/, js/, manifest, service worker, icons
 worker/                   the API: index.js, api.js, auth.js, password.js, validate.js, db.js
 scripts/add-user.mjs      creates an account, locally or in production
-migrations/0001_init.sql  the D1 schema
+migrations/               the D1 schema, one numbered file per change
 test/                     vitest, running inside the Workers runtime against a local D1
 wrangler.jsonc            Workers config: static assets, D1 binding, vars, cron
 design/                   the original prototype and the mockups it was chosen from
@@ -49,6 +49,8 @@ docs/DEPLOYING.md         running, deploying, accounts and troubleshooting, step
 - **Local-first** — the app renders from IndexedDB, works offline, and syncs to D1 on
   load, on focus and after every edit. The pill in the top bar shows where it stands.
 - **Several people** — each has a username and password and sees only their own data.
+- **Spotify** — a strip under the lab coat shows what is playing on your own Spotify,
+  with previous, play/pause and next. Each person connects from Settings.
 
 ## Running it locally
 
@@ -57,8 +59,8 @@ Needs Node and Wrangler (`npm i -g wrangler`, then `wrangler login` once).
 ```sh
 npm install
 npm run db:local        # apply the schema to the local D1
-npm run dev             # http://localhost:8787
-npm test                # 53 tests against the Worker and a local D1
+npm run dev             # http://127.0.0.1:8787 (Spotify only accepts 127.0.0.1)
+npm test                # 93 tests against the Worker and a local D1
 ```
 
 Local sessions need a `.dev.vars` file (git-ignored): copy `.dev.vars.example` and set
@@ -106,6 +108,15 @@ Passwords are hashed with PBKDF2-SHA256 at 100,000 iterations and a random salt,
 the most the Workers runtime allows per call. Five wrong guesses lock a username for
 a minute, doubling per further guess up to an hour. Usernames are 3–32 characters of
 letters, digits, dot, dash or underscore, and are not case-sensitive.
+
+4. **Spotify (optional).** The app at developer.spotify.com belongs to George, who
+   needs Premium for it to keep working. Its redirect URIs are
+   `https://rounds.termanitor07.workers.dev/api/spotify/callback` and
+   `http://127.0.0.1:8787/api/spotify/callback`. The client id is in `wrangler.jsonc`;
+   the secret goes in with `wrangler secret put SPOTIFY_CLIENT_SECRET`. Spotify caps
+   the app at five people, each added by their Spotify email under the app's User
+   Management, before they can connect from Settings. Playback controls need Premium;
+   free accounts still see what is playing.
 
 If you ever edit the inline script in `public/index.html`, run `node scripts/csp-hash.mjs`
 and paste the new hash into `public/_headers`, or the page's security policy will block it.
