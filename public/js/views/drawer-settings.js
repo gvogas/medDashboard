@@ -5,11 +5,13 @@ import { esc, $ } from '../dom.js';
 import { showDrawer, resetDrawerState } from './drawer-base.js';
 import { TUCK_SVG } from './bits.js';
 import { status } from '../sync.js';
+import { current as spotifyState } from '../spotify.js';
 
-export function openSettings(focus) {
+export function openSettings(focus, spotifyFlash = null) {
   resetDrawerState();
   ui.settings = true;
   ui.focusField = focus || null;
+  ui.spotifyFlash = spotifyFlash;
   renderSettings();
 }
 
@@ -35,6 +37,20 @@ function syncLine() {
   if (status.state === 'error') return 'Sync problem: ' + esc(status.message || 'unknown') + '.';
   if (status.state === 'syncing' || status.state === 'pending') return 'Syncing…';
   return status.lastPull ? 'Synced ' + Math.max(0, Math.round((Date.now() - status.lastPull) / 60000)) + ' min ago.' : 'Synced.';
+}
+
+function spotifyGroup() {
+  const s = spotifyState();
+  let h = '<div class="setgrp"><h4>Spotify<em>' + (!s ? 'checking…' : s.connected ? 'connected' : 'not connected') + '</em></h4>';
+  if (ui.spotifyFlash === 'connected') h += '<span class="note ok">Connected. What is playing shows under your coat.</span>';
+  if (ui.spotifyFlash === 'error') h += '<span class="note err">Spotify did not connect. Try again; if it keeps failing, George has to add your Spotify email first.</span>';
+  if (s) {
+    h += s.connected
+      ? '<span><button class="btn ghost" type="button" id="spDisconnect" data-act="spotify-disconnect">Disconnect</button></span>'
+      : '<span><a class="btn" id="spConnect" href="/api/spotify/connect">Connect Spotify</a></span>';
+  }
+  return h + '<span class="note">Shows what is playing in the sidebar. Play, pause and skip need Spotify Premium. '
+    + 'George has to add your Spotify email to the app before you can connect.</span></div>';
 }
 
 export function renderSettings() {
@@ -88,6 +104,8 @@ export function renderSettings() {
     + '<input type="text" id="qText" placeholder="Quote — press Enter to add" aria-label="Quote" maxlength="300">'
     + '<span style="display:flex;gap:6px"><input type="text" id="qSrc" placeholder="Who said it (optional)" aria-label="Source" maxlength="80">'
     + '<button class="btn ghost" type="button" data-act="addquote">Add</button></span></div></div>';
+
+  body += spotifyGroup();
 
   // ── data: sync, import, account ──
   body += '<div class="setgrp"><h4>Data<em>' + data.items.length + ' items · ' + data.courses.length + ' courses</em></h4>'

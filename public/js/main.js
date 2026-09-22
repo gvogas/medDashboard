@@ -19,6 +19,8 @@ import { renderSignIn, hideSignIn } from './views/signin.js';
 import { schedule as drawOrnament } from './ornament.js';
 import { parseTime } from './timepicker.js';
 import { launch as fireworks } from './fireworks.js';
+import * as spotify from './spotify.js';
+import { renderPlayer, renderProgress, showPlayerNote } from './views/player.js';
 
 /* ═════════ theme ═════════ */
 function setTheme(choice, { persist = true } = {}) {
@@ -43,6 +45,34 @@ sync.onStatus((s) => {
 });
 sync.onPulled(() => { if (!drawerHasFocus()) { render(); if (ui.sel) renderItemDrawer(); if (ui.settings) renderSettings(); } });
 sync.onUnauthenticated(() => showSignIn('Your session has ended. Sign in again.'));
+
+/* ═════════ Spotify strip ═════════ */
+let spotifyConnected = null;
+spotify.onState((s, tick) => {
+  if (tick) { renderProgress(s); return; }
+  renderPlayer(s);
+  if (s && s.connected !== spotifyConnected) { spotifyConnected = s.connected; if (ui.settings) renderSettings(); }
+});
+spotify.onUnauthenticated(() => showSignIn('Your session has ended. Sign in again.'));
+
+/* Back from Spotify's consent page: the Worker put the result in the hash. */
+function spotifyReturn(started) {
+  const m = /^#spotify=(connected|error)$/.exec(location.hash);
+  if (!m) return;
+  history.replaceState(null, '', location.pathname + location.search);
+  started.then(() => openSettings(m[1] === 'connected' ? 'spDisconnect' : 'spConnect', m[1]));
+}
+
+async function spotifyButton(which) {
+  const s = spotify.current();
+  const action = which === 'toggle' ? (s?.playing ? 'pause' : 'play') : which === 'previous' ? spotify.previousAction(s) : which;
+  try {
+    await spotify.control(action);
+  } catch (err) {
+    const code = err instanceof ApiError ? err.body?.error : 'spotify_unavailable';
+    if (code !== 'not_connected') showPlayerNote(code);
+  }
+}
 
 /* ═════════ the quote tile turns its own page ═════════ */
 const QUOTE_EVERY_MS = 25000;
@@ -79,6 +109,7 @@ async function start(profile) {
   drawOrnament();
   sync.init();
   sync.syncNow();
+  spotifyReturn(spotify.start());
 }
 
 function showSignIn(error, username = '') {
@@ -91,6 +122,7 @@ async function signOut({ everywhere = false } = {}) {
   closeDrawer();
   await store.close();
   if (id) { try { await store.wipe(id); } catch {} }
+  spotify.stop(); renderPlayer(null); spotifyConnected = null;
   showSignIn();
 }
 
@@ -143,6 +175,8 @@ document.addEventListener('click', async (e) => {
     ui.anchor = ui.view === 'month' ? iso(new Date(a.getFullYear(), a.getMonth() + dir, 1)) : iso(addDays(a, 7 * dir));
     render(); return;
   }
+  if ((el = e.target.closest('[data-spotify]'))) { spotifyButton(el.dataset.spotify); return; }
+  if (e.target.closest('[data-spotify-connect]')) { $('side').classList.remove('on'); openSettings('spConnect'); return; }
   if (e.target.closest('#syncPill')) { sync.syncNow(); return; }
   if (e.target.closest('#setBtn')) { ui.settings ? closeDrawer() : openSettings(); return; }
   if ((el = e.target.closest('[data-setopen]'))) { openSettings('o-name'); return; }
@@ -202,6 +236,11 @@ document.addEventListener('click', async (e) => {
     else if (act === 'course-delete-yes' && ui.courseDraft) deleteCourseDraft();
     else if (act === 'signout') signOut();
     else if (act === 'signout-all') signOut({ everywhere: true });
+    else if (act === 'spotify-disconnect') {
+      try { await api.spotifyDisconnect(); } catch {}
+      await spotify.poll();
+      renderSettings();
+    }
     return;
   }
   if ((el = e.target.closest('[data-cl]'))) {

@@ -11,7 +11,7 @@ export const ui = {
   sel: null, draft: null, courseDraft: null, courseMode: null, confirm: null,
   settings: false, focusField: null, sort: { key: 'date', dir: 1 },
   theme: (typeof window !== 'undefined' && window.__roundsTheme) || 'system',
-  quoteIx: 0,
+  quoteIx: 0, spotifyFlash: null,
 };
 ORDER.forEach((t) => { ui.types[t] = true; });
 

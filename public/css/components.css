@@ -295,6 +295,9 @@ td .steps{margin-top:3px}
 }
 .setgrp h4 em{font-style:normal;margin-left:auto;font-size:10.5px;letter-spacing:0;text-transform:none}
 .setgrp .note{font-size:11.5px;color:var(--ink-3)}
+.setgrp .note.ok{color:var(--good)}
+.setgrp .note.err{color:var(--crit)}
+a.btn{display:inline-block;text-decoration:none}
 .themeseg{display:flex;gap:6px}
 .themeseg button{
   flex:1;border:1px solid var(--line);background:var(--panel-2);border-radius:9px;padding:9px 6px;
