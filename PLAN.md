@@ -74,13 +74,12 @@ worker/api.js        the handlers below
 | `GET /api/sync?since=<ms>` | Every row of yours changed after `since`, tombstones included, plus the server's `now`. |
 | `PUT /api/{courses,items,quotes}/:id` | Upsert. The id is yours; the server stamps `updated_at`. |
 | `DELETE /api/{courses,items,quotes}/:id` | Soft delete: sets `deleted_at`. Deleting a course clears `course_id` on its items. |
-| `POST /api/import` | The prototype's whole `localStorage` blob in one transaction. Refused if `imported_at` is already set. |
 
 - Every handler starts with `requireUser()` and every query has `user_id = ?` in it.
   There is no route that takes a `user_id` from the client.
 - Tests with `vitest` and `@cloudflare/vitest-pool-workers` against a local D1:
   unauthenticated request → 401, another user's row → 404, bad shape → 400 with the
-  field named, import twice → 409.
+  field named.
 - A daily cron (`0 3 * * *`) hard-deletes tombstones older than 30 days.
 
 ### 3 — Storage layer in the browser — done
@@ -104,14 +103,14 @@ of `localStorage`:
 public/
   index.html  manifest.webmanifest  sw.js
   css/  tokens.css  layout.css  components.css
-  js/   main.js  api.js  db.js  sync.js  store.js  state.js  query.js  import.js
+  js/   main.js  api.js  db.js  sync.js  store.js  state.js  query.js
         model.js  dates.js  dom.js  ornament.js
         views/  render.js  bits.js  signin.js  sidebar.js  stats.js  week.js  month.js
                 table.js  drawer-base.js  drawer-item.js  drawer-course.js  drawer-settings.js
 worker/       index.js  api.js  auth.js  password.js  validate.js  db.js  http.js
 scripts/      add-user.mjs
 migrations/   0001_init.sql
-test/         api  rows  import  password  timepicker  (vitest, Workers runtime)
+test/         api  rows  purge  password  security  sessions  timepicker  (vitest)
 wrangler.jsonc
 docs/DATA-MODEL.md
 ```
@@ -122,14 +121,6 @@ docs/DATA-MODEL.md
 - Views stay dumb: given state, return HTML. One delegated click listener, as now.
 - `views/signin.js`: the coat pocket, a username and a password. A 401 anywhere shows
   the screen again.
-
-### 5 — Bring your data across — done
-- The prototype's info panel gains **Copy data**, which puts its saved blob on the
-  clipboard. Settings › Data has a box to paste it into; if the prototype was opened on
-  the same origin its `localStorage` copy is filled in automatically.
-- The import maps it onto the schema (`course` becomes `courseId`), posts it to
-  `/api/import`, and the server records `imported_at` so it can't run twice by accident.
-- Whatever you've typed into the prototype survives the move. Ids are kept.
 
 ### 6 — Get it on your phone
 - `wrangler deploy`. Static files and the Worker ship together; D1 migrations are

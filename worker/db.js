@@ -1,7 +1,7 @@
 // Every query here takes a userId and scopes to it. No exceptions.
 
 const PROFILE_COLS =
-  'id, username, display_name, coat_name, coat_role, coat_color, theme, term_start, imported_at, created_at, updated_at';
+  'id, username, display_name, coat_name, coat_role, coat_color, theme, term_start, created_at, updated_at';
 
 function profileFromRow(r) {
   return {
@@ -11,7 +11,6 @@ function profileFromRow(r) {
     coat: { name: r.coat_name, role: r.coat_role, color: r.coat_color },
     theme: r.theme,
     termStart: r.term_start,
-    importedAt: r.imported_at,
     createdAt: r.created_at,
     updatedAt: r.updated_at,
   };
@@ -92,7 +91,7 @@ export async function getRow(db, table, userId, id) {
   return r ? rowToApi(table, r) : null;
 }
 
-/** A prepared insert-or-update. createdAt is kept on update; a deleted row is revived. */
+/** Insert or update. createdAt is kept on update; a deleted row is revived. */
 function upsertStmt(db, table, userId, id, fields, now) {
   const t = TABLES[table];
   const row = t.toRow(fields);
@@ -111,27 +110,6 @@ function upsertStmt(db, table, userId, id, fields, now) {
 export async function upsertRow(db, table, userId, id, fields, now = Date.now()) {
   await upsertStmt(db, table, userId, id, fields, now).run();
   return getRow(db, table, userId, id);
-}
-
-/**
- * The prototype's data in one transaction: profile, courses, items, quotes.
- * Returns false if this user has already imported.
- */
-export async function importAll(db, userId, { profile, courses, items, quotes }, now = Date.now()) {
-  const me = await db.prepare('SELECT imported_at FROM users WHERE id = ?').bind(userId).first();
-  if (!me || me.imported_at !== null) return false;
-  const stmts = [
-    db
-      .prepare(
-        'UPDATE users SET display_name = ?, coat_name = ?, coat_role = ?, coat_color = ?, theme = ?, term_start = ?, imported_at = ?, updated_at = ? WHERE id = ? AND imported_at IS NULL',
-      )
-      .bind(profile.displayName, profile.coatName, profile.coatRole, profile.coatColor, profile.theme, profile.termStart, now, now, userId),
-    ...courses.map(({ id, ...fields }) => upsertStmt(db, 'courses', userId, id, fields, now)),
-    ...items.map(({ id, ...fields }) => upsertStmt(db, 'items', userId, id, fields, now)),
-    ...quotes.map(({ id, ...fields }) => upsertStmt(db, 'quotes', userId, id, fields, now)),
-  ];
-  await db.batch(stmts);
-  return true;
 }
 
 /** Hard-delete rows soft-deleted before `before`. Items first, so course rows go last. */

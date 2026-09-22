@@ -25,8 +25,8 @@ Conventions used throughout:
   timezone, and ISO strings sort chronologically, so `date >= ?` works.
 - **Times** are `HH:MM` 24-hour strings, or `''` for none. Displayed as `0800`.
 - **Weekdays** are `0`–`6`, Sunday = 0, matching `Date.prototype.getDay()`.
-- **Timestamps** (`created_at`, `updated_at`, `deleted_at`, `completed_at`,
-  `imported_at`) are integers, milliseconds since the epoch, the same unit as
+- **Timestamps** (`created_at`, `updated_at`, `deleted_at`, `completed_at`)
+  are integers, milliseconds since the epoch, the same unit as
   `Date.now()`. The server sets `updated_at` on every write.
 - **Deletes are soft.** `deleted_at` is set, the row stays, and the next `sync` pull
   tells other devices to drop it. A daily cron hard-deletes tombstones after 30 days.
@@ -50,7 +50,6 @@ Conventions used throughout:
 | `coat_color` | text | one of the five | Tints the sidebar fabric, pocket and embroidery. |
 | `theme` | text | `light` \| `dark` \| `system` | |
 | `term_start` | text \| null | `YYYY-MM-DD` | The week board's default start. Null means today. |
-| `imported_at` | int \| null | | Set once the prototype's browser data is imported, so it can't run twice. |
 | `created_at`, `updated_at` | int | | |
 
 A row is created by `npm run user:add`, with the defaults. The API
@@ -203,10 +202,9 @@ All routes are under `/api`, speak JSON, and require the session cookie except
 | `DELETE /api/courses/:id` | → `204`. Soft-deletes and nulls `courseId` on the user's items. |
 | `PUT /api/items/:id` · `DELETE /api/items/:id` | as above |
 | `PUT /api/quotes/:id` · `DELETE /api/quotes/:id` | as above |
-| `POST /api/import` | `{profile, courses, items, quotes}` → `{imported: {courses, items, quotes}}`. One transaction. `409` if already imported. |
 
 Errors are `{error, field?}`: `400` bad shape (with the field), `401` no session,
-`404` a row that isn't yours, `409` import twice, `413` body over 1 MB.
+`404` a row that isn't yours, `413` body over 1 MB.
 
 ### Session
 
@@ -268,19 +266,3 @@ and D1 converged:
    this origin plus a hash of the inline theme script; no framing; no inline event
    handlers), HSTS, `nosniff` and a same-origin referrer policy. Every view builds its
    HTML through `esc()`; ids and colours are validated before they reach an attribute.
-
-## Migration from the prototype
-
-`localStorage['rounds.proto.v2']` holds `{data: {courses, items, quotes, owner}, ui}`.
-The import maps it straight across:
-
-| Prototype | D1 |
-| --- | --- |
-| `data.owner.name / role / coat` | `users.coat_name / coat_role / coat_color` |
-| `ui.theme` | `users.theme` |
-| `data.courses[]` (incl. `meetings[]`) | `courses` rows, `meetings` as JSON |
-| `data.items[]` | `items` rows; `course` → `courseId` (`''` becomes null), `where` → `location` |
-| `data.quotes[]` | `quotes` rows |
-
-Field names already line up; the import only adds timestamps, fills `term`,
-`archived: 0`, `weight: null`, `completed_at`, and keeps the existing ids.

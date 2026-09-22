@@ -36,7 +36,6 @@ describe('profile', () => {
       coat: { name: '', role: '', color: '#17B3AE' },
       theme: 'system',
       termStart: null,
-      importedAt: null,
     });
     expect(profile).not.toHaveProperty('passwordHash');
     expect(profile).not.toHaveProperty('password_hash');

@@ -31,5 +31,4 @@ export const api = {
   put: (kind, id, row) => request('PUT', `/api/${kind}/${encodeURIComponent(id)}`, row),
   revokeAll: () => request('POST', '/api/session/revoke-all'),
   del: (kind, id) => request('DELETE', `/api/${kind}/${encodeURIComponent(id)}`),
-  importAll: (payload) => request('POST', '/api/import', payload),
 };

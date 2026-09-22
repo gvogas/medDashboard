@@ -351,9 +351,6 @@ td .steps{margin-top:3px}
 .pill.sync[data-state="offline"]::before{background:var(--ink-3)}
 .pill.sync[data-state="error"]::before,.pill.sync[data-state="signed-out"]::before{background:var(--crit)}
 
-/* ═════════ settings: import ═════════ */
-.importbox{display:flex;flex-direction:column;gap:6px;padding:10px;border:1px dashed var(--line);border-radius:10px;background:var(--panel-2)}
-.importbox textarea{width:100%;font:12px/1.4 "IBM Plex Mono",monospace;resize:vertical}
 
 /* ═════════ time picker ═════════ */
 .tp{font-family:"IBM Plex Mono",ui-monospace,monospace;font-variant-numeric:tabular-nums;letter-spacing:.02em;text-align:center;width:72px}

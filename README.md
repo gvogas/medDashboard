@@ -15,8 +15,8 @@ biomolecule layer behind the board.
 | Design | **Approved.** Three directions explored, one chosen and refined. |
 | Prototype | **Working**, every feature clickable, data in browser storage. |
 | Plan and schema | **Written** — see [`PLAN.md`](PLAN.md) and [`docs/DATA-MODEL.md`](docs/DATA-MODEL.md). |
-| Worker API | **Built and tested** — sessions, profile, rows, sync, import, nightly purge. |
-| Front end | **Ported** — local-first store, sync, sign-in screen, settings import, PWA shell. |
+| Worker API | **Built and tested** — sessions, profile, rows, sync, nightly purge. |
+| Front end | **Ported** — local-first store, sync, sign-in screen, PWA shell. |
 | Accounts | **Built** — username and password, created with `npm run user:add`. |
 | Live | **Deployed** at https://rounds.termanitor07.workers.dev; `npm run deploy` releases a change. |
 
@@ -31,7 +31,7 @@ test/                     vitest, running inside the Workers runtime against a l
 wrangler.jsonc            Workers config: static assets, D1 binding, vars, cron
 design/                   the original prototype and the mockups it was chosen from
 PLAN.md                   decisions, phases, file layout, backlog
-docs/DATA-MODEL.md        the schema explained: tables, API, sync, migration
+docs/DATA-MODEL.md        the schema explained: tables, API, sync
 ```
 
 ## Features
@@ -44,8 +44,7 @@ docs/DATA-MODEL.md        the schema explained: tables, API, sync, migration
   timetable only, and a sortable table of everything.
 - **Live status** — overdue flags, next-exam countdown, class hours per week, lab hours.
 - **Settings** — light / dark / follow-the-device, the name embroidered on the lab coat
-  and its colour, your own quotes shown in a tile beside the stats, and an import of
-  the prototype's data.
+  and its colour, and your own quotes shown in a tile beside the stats.
 - **Local-first** — the app renders from IndexedDB, works offline, and syncs to D1 on
   load, on focus and after every edit. The pill in the top bar shows where it stands.
 - **Several people** — each has a username and password and sees only their own data.

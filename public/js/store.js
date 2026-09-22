@@ -65,7 +65,6 @@ function normalizeProfile(p) {
     coat: { name: p.coat?.name || '', role: p.coat?.role || '', color: p.coat?.color || DEFAULT_COAT },
     theme: p.theme || 'system',
     termStart: p.termStart || null,
-    importedAt: p.importedAt ?? null,
     updatedAt: p.updatedAt ?? null,
   };
 }

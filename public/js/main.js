@@ -16,7 +16,6 @@ import { openItem, newItem, current, saveDraft, touch, renderItemDrawer } from '
 import { openCourse, renderCourseDrawer, saveCourseDraft, deleteCourseDraft } from './views/drawer-course.js';
 import { openSettings, renderSettings, applyCoat, refreshSyncNote } from './views/drawer-settings.js';
 import { renderSignIn, hideSignIn } from './views/signin.js';
-import { importText } from './import.js';
 import { schedule as drawOrnament } from './ornament.js';
 import { parseTime } from './timepicker.js';
 import { launch as fireworks } from './fireworks.js';
@@ -203,7 +202,6 @@ document.addEventListener('click', async (e) => {
     else if (act === 'course-delete-yes' && ui.courseDraft) deleteCourseDraft();
     else if (act === 'signout') signOut();
     else if (act === 'signout-all') signOut({ everywhere: true });
-    else if (act === 'import') runImport();
     return;
   }
   if ((el = e.target.closest('[data-cl]'))) {
@@ -272,23 +270,6 @@ async function addQuote() {
   ui.quoteIx = data.quotes.length - 1;
   ui.focusField = 'qText';
   renderSettings(); renderQuote();
-}
-
-async function runImport() {
-  const box = $('importText'), note = $('importNote');
-  if (!box || !box.value.trim()) { if (note) note.textContent = 'Paste the prototype’s data first.'; return; }
-  note.textContent = 'Importing…';
-  try {
-    const n = await importText(box.value);
-    ui.importText = '';
-    render(); applyCoat(); renderSettings();
-    const done = $('importNote'); if (done) done.textContent = '';
-    $('syncNote').textContent = 'Imported ' + n.courses + ' courses, ' + n.items + ' items and ' + n.quotes + ' quotes.';
-  } catch (err) {
-    note.textContent = err instanceof ApiError
-      ? (err.status === 409 ? 'Already imported.' : 'Rejected: ' + (err.body?.field || err.body?.error || err.status))
-      : err.message;
-  }
 }
 
 document.addEventListener('input', async (e) => {
@@ -360,7 +341,6 @@ document.addEventListener('input', async (e) => {
     await touch(s);
     return;
   }
-  if (e.target.id === 'importText') { ui.importText = e.target.value; return; }
   if (e.target.id === 'search') { ui.search = e.target.value; renderView(); return; }
 });
 

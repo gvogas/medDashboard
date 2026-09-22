@@ -5,7 +5,6 @@ import { esc, $ } from '../dom.js';
 import { showDrawer, resetDrawerState } from './drawer-base.js';
 import { TUCK_SVG } from './bits.js';
 import { status } from '../sync.js';
-import { localPrototypeData } from '../import.js';
 
 export function openSettings(focus) {
   resetDrawerState();
@@ -93,17 +92,6 @@ export function renderSettings() {
   // ── data: sync, import, account ──
   body += '<div class="setgrp"><h4>Data<em>' + data.items.length + ' items · ' + data.courses.length + ' courses</em></h4>'
     + '<span class="note" id="syncNote">' + syncLine() + '</span>';
-  if (!p.importedAt) {
-    const local = localPrototypeData();
-    body += '<div class="importbox">'
-      + '<span class="note">Bring your prototype data across. In the old prototype, open <b>Prototype</b> in the top bar and press <b>Copy data</b>, then paste it here.'
-      + (local ? ' This browser also has a copy saved by the prototype, already filled in below.' : '') + '</span>'
-      + '<textarea id="importText" rows="3" placeholder="{&quot;data&quot;:{…}}" spellcheck="false">' + esc(local ? JSON.stringify(local) : ui.importText || '') + '</textarea>'
-      + '<span style="display:flex;gap:6px;align-items:center"><button class="btn ghost" type="button" data-act="import">Import</button>'
-      + '<span class="note" id="importNote"></span></span></div>';
-  } else {
-    body += '<span class="note">Prototype data imported ' + new Date(p.importedAt).toLocaleDateString() + '.</span>';
-  }
   body += '<span class="note">Signed in as <b>' + esc(p.username) + '</b>.</span>'
     + '<span style="display:flex;gap:6px;flex-wrap:wrap"><button class="btn ghost" type="button" data-act="signout">Sign out</button>'
     + '<button class="btn ghost" type="button" data-act="signout-all" title="Every phone and laptop signed in as you will need the password again">Sign out everywhere</button></span></div>'
