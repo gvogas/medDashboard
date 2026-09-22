@@ -28,6 +28,7 @@ button{cursor:pointer}
 .mono{font-family:"IBM Plex Mono",ui-monospace,monospace;font-variant-numeric:tabular-nums}
 
 /* ═════════ shell ═════════ */
+.app[hidden]{display:none}
 .app{height:100%;display:grid;grid-template-columns:222px minmax(0,1fr)}
 @media (max-width:900px){.app{grid-template-columns:minmax(0,1fr)}}
 

@@ -172,7 +172,7 @@ export async function applyServerProfile(p) {
 
 /** After a successful push: clear the flag if nothing changed meanwhile. */
 export async function settle(key, v, serverRow) {
-  if (versions[key] !== v) return false;
+  if (version(key) !== v) return false;
   delete dirty[key];
   if (serverRow) {
     if (key === 'profile') {
