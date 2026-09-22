@@ -244,11 +244,21 @@ and D1 converged:
    belongs to someone else is a `404`, indistinguishable from a row that doesn't exist.
 2. **Shape** — `CHECK` constraints in the schema enforce enums, lengths, date and
    time formats, JSON validity and array caps. `validate.js` runs the same rules first
-   so the client gets a `400` naming the field instead of a raw SQLite error. A bug
-   in the client cannot corrupt the tables or write a document large enough to matter.
-3. **Cookies** — `HttpOnly` keeps the session away from scripts, `SameSite=Lax` keeps
-   other sites from posting with it, and the body limit keeps a runaway request from
-   eating the daily write quota.
+   so the client gets a `400` naming the field instead of a raw SQLite error. Link URLs
+   must be `http(s)`. A bug in the client cannot corrupt the tables or write a document
+   large enough to matter; bodies over 1 MB are refused.
+3. **Passwords** — PBKDF2-SHA256, 100,000 iterations, a 16-byte salt per user, a
+   constant-time compare, and the same work done for unknown usernames. After five
+   failures a username is locked, for one minute doubling up to an hour per further
+   failure (`login_throttle`, cleared on success, swept nightly).
+4. **Sessions** — `HttpOnly` keeps the cookie away from scripts, `SameSite=Lax` keeps
+   other sites from posting with it, and every state-changing request must also carry
+   a same-origin `Origin` / `Sec-Fetch-Site`, or none at all, else `403 cross_site`.
+   API responses are `Cache-Control: no-store`.
+5. **The page** — `public/_headers` sets a Content Security Policy (scripts only from
+   this origin plus a hash of the inline theme script; no framing; no inline event
+   handlers), HSTS, `nosniff` and a same-origin referrer policy. Every view builds its
+   HTML through `esc()`; ids and colours are validated before they reach an attribute.
 
 ## Migration from the prototype
 

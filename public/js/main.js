@@ -105,6 +105,8 @@ $('signin').addEventListener('submit', async (e) => {
   } catch (err) {
     showSignIn(!(err instanceof ApiError) ? 'You seem to be offline.'
       : err.status === 401 ? 'Wrong username or password.'
+      : err.status === 429 ? 'Too many attempts. Try again in ' + Math.max(1, Math.ceil((err.body?.retryAfter || 60) / 60)) + ' min.'
+      : err.status === 403 ? 'Sign in from the app itself, not from another site.'
       : 'Sign-in failed (' + (err.body?.error || err.status) + ').', username);
   }
 });

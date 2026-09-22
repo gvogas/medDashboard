@@ -15,7 +15,7 @@ const remote = args.includes('--remote');
 const reset = args.includes('--reset');
 const remove = args.includes('--delete');
 const nameIx = args.indexOf('--name');
-const displayName = nameIx >= 0 ? args[nameIx + 1] || '' : '';
+const displayName = (nameIx >= 0 ? args[nameIx + 1] || '' : '').replace(/[\x00-\x1f\x7f]/g, '').trim().slice(0, 60);
 const rawUser = args.find((a, i) => !a.startsWith('--') && (nameIx < 0 || i !== nameIx + 1));
 
 const username = normalizeUsername(rawUser);

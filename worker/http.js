@@ -8,10 +8,11 @@ export function json(body, status = 200, headers = {}) {
 }
 
 export class HttpError extends Error {
-  constructor(status, body) {
+  constructor(status, body, headers = {}) {
     super(body.error || 'error');
     this.status = status;
     this.body = body;
+    this.headers = headers;
   }
 }
 

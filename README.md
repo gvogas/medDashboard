@@ -58,7 +58,7 @@ Needs Node and Wrangler (`npm i -g wrangler`, then `wrangler login` once).
 npm install
 npm run db:local        # apply the schema to the local D1
 npm run dev             # http://localhost:8787
-npm test                # 44 tests against the Worker and a local D1
+npm test                # 51 tests against the Worker and a local D1
 ```
 
 Local sessions need a `.dev.vars` file (git-ignored): copy `.dev.vars.example` and set
@@ -102,8 +102,12 @@ npm run user:add -- yourname --delete --remote
 ```
 
 Passwords are hashed with PBKDF2-SHA256 at 100,000 iterations and a random salt,
-the most the Workers runtime allows per call. Usernames are 3–32 characters of
+the most the Workers runtime allows per call. Five wrong guesses lock a username for
+a minute, doubling per further guess up to an hour. Usernames are 3–32 characters of
 letters, digits, dot, dash or underscore, and are not case-sensitive.
+
+If you ever edit the inline script in `public/index.html`, run `node scripts/csp-hash.mjs`
+and paste the new hash into `public/_headers`, or the page's security policy will block it.
 
 On a phone, open the site and choose *Add to Home Screen*; it installs as an app and
 opens offline.

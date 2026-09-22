@@ -1,6 +1,7 @@
 import { json, readJson, HttpError } from './http.js';
 import { requireUser, signSession, sessionCookie, clearCookie } from './auth.js';
 import { verifyPassword, normalizeUsername } from './password.js';
+import { lockedFor, recordFailure, recordSuccess } from './throttle.js';
 import { validateProfile, validateCourse, validateItem, validateQuote, validateId } from './validate.js';
 import { getUserForLogin, getProfile, updateProfile, upsertRow, deleteRow, courseExists, syncSince, importAll } from './db.js';
 
@@ -70,10 +71,13 @@ const routes = [
     const bad = () => new HttpError(401, { error: 'bad_login' });
     const username = normalizeUsername(body.username);
     if (!username) throw bad();
+    const wait = await lockedFor(env.DB, username);
+    if (wait) throw new HttpError(429, { error: 'too_many_attempts', retryAfter: wait }, { 'retry-after': String(wait) });
     const user = await getUserForLogin(env.DB, username);
     // Verify even when the user is unknown, so timing does not reveal which usernames exist.
     const ok = await verifyPassword(body.password, user ? user.password_hash : 'pbkdf2$100000$AAAAAAAAAAAAAAAAAAAAAA$AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA');
-    if (!user || !ok) throw bad();
+    if (!user || !ok) { await recordFailure(env.DB, username); throw bad(); }
+    await recordSuccess(env.DB, username);
     const profile = await getProfile(env.DB, user.id);
     const token = await signSession(profile.id, env.SESSION_SECRET);
     return json(profile, 200, { 'set-cookie': sessionCookie(token, url) });
@@ -108,17 +112,36 @@ const routes = [
   ['POST', /^\/api\/import$/, importRoute],
 ];
 
+/**
+ * A browser tells us where a request came from. Anything that changes state must
+ * come from this site itself: the cookie is SameSite=Lax, and this closes the rest.
+ */
+function assertSameOrigin(request, url) {
+  if (request.method === 'GET' || request.method === 'HEAD') return;
+  const site = request.headers.get('sec-fetch-site');
+  if (site && site !== 'same-origin' && site !== 'none') throw new HttpError(403, { error: 'cross_site' });
+  const origin = request.headers.get('origin');
+  if (origin && origin !== url.origin) throw new HttpError(403, { error: 'cross_site' });
+}
+
+const API_HEADERS = { 'cache-control': 'no-store', 'x-content-type-options': 'nosniff' };
+
 export async function handleApi(request, env, url) {
+  let res = null;
   try {
+    assertSameOrigin(request, url);
     for (const [method, pattern, handler] of routes) {
       const m = url.pathname.match(pattern);
-      if (m && request.method === method) return await handler({ request, env, url, params: m.slice(1) });
+      if (m && request.method === method) { res = await handler({ request, env, url, params: m.slice(1) }); break; }
     }
-    const known = routes.some(([, pattern]) => pattern.test(url.pathname));
-    throw new HttpError(known ? 405 : 404, { error: known ? 'method_not_allowed' : 'not_found' });
+    if (!res) {
+      const known = routes.some(([, pattern]) => pattern.test(url.pathname));
+      throw new HttpError(known ? 405 : 404, { error: known ? 'method_not_allowed' : 'not_found' });
+    }
   } catch (e) {
-    if (e instanceof HttpError) return json(e.body, e.status);
-    console.error(e);
-    return json({ error: 'internal' }, 500);
+    if (e instanceof HttpError) res = json(e.body, e.status, e.headers);
+    else { console.error(e); res = json({ error: 'internal' }, 500); }
   }
+  for (const [k, v] of Object.entries(API_HEADERS)) res.headers.set(k, v);
+  return res;
 }
