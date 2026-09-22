@@ -2,6 +2,7 @@ import { json, readJson, isLocalhost, HttpError } from './http.js';
 import { requireUser, signSession, sessionCookie, clearCookie } from './auth.js';
 import { validateProfile, validateCourse, validateItem, validateQuote, validateId } from './validate.js';
 import { findOrCreateUser, getProfile, updateProfile, upsertRow, deleteRow, courseExists, syncSince, importAll } from './db.js';
+import { verifyGoogleToken, emailAllowed } from './google.js';
 
 async function startSession(env, url, email, displayName) {
   const profile = await findOrCreateUser(env.DB, email.trim().toLowerCase(), displayName);
@@ -80,6 +81,16 @@ const routes = [
       throw new HttpError(400, { error: 'invalid', field: 'email' });
     }
     return startSession(env, url, body.email, body.displayName || '');
+  }],
+
+  // Sign in with Google: the button hands the page an ID token; we verify it here.
+  ['POST', /^\/api\/session$/, async ({ request, env, url }) => {
+    const body = await readJson(request);
+    if (typeof body.credential !== 'string' || !body.credential) throw new HttpError(400, { error: 'invalid', field: 'credential' });
+    if (!env.GOOGLE_CLIENT_ID) throw new HttpError(503, { error: 'google_not_configured' });
+    const g = await verifyGoogleToken(body.credential, env.GOOGLE_CLIENT_ID);
+    if (!emailAllowed(g.email, env.ALLOWED_EMAILS)) throw new HttpError(403, { error: 'not_allowed' });
+    return startSession(env, url, g.email, g.name);
   }],
 
   ['DELETE', /^\/api\/session$/, async ({ url }) =>

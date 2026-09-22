@@ -28,3 +28,38 @@ export function hideSignIn() {
   $('signin').hidden = true;
   $('app').hidden = false;
 }
+
+function loadGoogleScript() {
+  return new Promise((resolve, reject) => {
+    if (window.google && window.google.accounts && window.google.accounts.id) return resolve();
+    const s = document.createElement('script');
+    s.src = 'https://accounts.google.com/gsi/client';
+    s.async = true;
+    s.defer = true;
+    s.onload = resolve;
+    s.onerror = () => reject(new Error('Could not load Google sign-in.'));
+    document.head.appendChild(s);
+  });
+}
+
+/** Render Google's button into the sign-in card. `onCredential` gets the ID token. */
+export async function mountGoogleButton(config, onCredential) {
+  const host = $('gsi');
+  if (!host || !config.googleClientId) return;
+  try {
+    await loadGoogleScript();
+  } catch (e) {
+    host.outerHTML = '<span class="note err">' + esc(e.message) + ' Check your connection and reload.</span>';
+    return;
+  }
+  window.google.accounts.id.initialize({
+    client_id: config.googleClientId,
+    callback: (response) => onCredential(response.credential),
+    ux_mode: 'popup',
+    auto_select: false,
+  });
+  const dark = document.documentElement.getAttribute('data-app') === 'dark';
+  window.google.accounts.id.renderButton(host, {
+    theme: dark ? 'filled_black' : 'outline', size: 'large', shape: 'pill', text: 'signin_with', width: 280,
+  });
+}

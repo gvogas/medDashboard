@@ -34,7 +34,10 @@ ID token in the Worker costs about a hundred lines and removes Access's 50-user 
 
 ## Phases
 
-### 0 — Accounts and keys (needs your go-ahead)
+Status, as of 22 September 2026: phases 0–5 are built and tested locally. Phase 6
+needs the Google client id and a `wrangler deploy`.
+
+### 0 — Accounts and keys — done except the Google client id
 - Cloudflare account, `npm i -g wrangler`, `wrangler login`. Pick the account's
   `workers.dev` subdomain in the dashboard; the app will live at
   `https://rounds.<subdomain>.workers.dev`.
@@ -49,7 +52,7 @@ ID token in the Worker costs about a hundred lines and removes Access's 50-user 
 - `ALLOWED_EMAILS` in `vars`: leave empty for open sign-up, or a comma-separated list
   to pin the app to specific accounts. Changing it is a redeploy, not a code change.
 
-### 1 — Database
+### 1 — Database — done
 - `wrangler d1 migrations apply rounds --local` then `--remote`.
 - The schema enforces ownership and shape: composite primary keys `(user_id, id)`,
   enums and lengths as `CHECK` constraints, dates as `GLOB` patterns, JSON columns
@@ -58,7 +61,7 @@ ID token in the Worker costs about a hundred lines and removes Access's 50-user 
 - Verify with `wrangler d1 execute --local`: a bad `status` is rejected, a 141-char
   title is rejected, a 13th meeting is rejected.
 
-### 2 — Worker API
+### 2 — Worker API — done
 ```
 worker/index.js      routes /api/*; everything else falls through to static assets
 worker/auth.js       verifyGoogleToken(), signSession(), readSession(), requireUser()
@@ -67,7 +70,9 @@ worker/api.js        the handlers below
 ```
 | Route | Does |
 | --- | --- |
+| `GET /api/config` | What the sign-in screen may offer: the Google client id, and whether dev login is on. |
 | `POST /api/session` | Body `{credential}` from Google's button. Verify, find-or-create the user, set the cookie. |
+| `POST /api/dev-session` | Localhost only, with `DEV_LOGIN=1` in `.dev.vars`: sign in as any email, for development. |
 | `DELETE /api/session` | Clear the cookie. |
 | `GET /api/me` · `PUT /api/me` | Profile: coat, theme, term start. |
 | `GET /api/sync?since=<ms>` | Every row of yours changed after `since`, tombstones included, plus the server's `now`. |
@@ -82,7 +87,7 @@ worker/api.js        the handlers below
   field named, import twice → 409.
 - A daily cron (`0 3 * * *`) hard-deletes tombstones older than 30 days.
 
-### 3 — Storage layer in the browser
+### 3 — Storage layer in the browser — done
 - `js/db.js` — a 40-line IndexedDB wrapper: three object stores (`courses`, `items`,
   `quotes`), a `meta` store for the profile, `lastSyncAt` and the dirty set.
 - `js/store.js` — the only file the views know. Exposes `subscribe()`, `saveItem()`,
@@ -95,7 +100,7 @@ worker/api.js        the handlers below
 - Everything else — filters, search, overdue, countdowns, the week grid — is computed
   in memory from the local rows, exactly as the prototype does it.
 
-### 4 — Port the UI
+### 4 — Port the UI — done
 Split `prototype.html` into modules, same markup and CSS, wired to `store.js` instead
 of `localStorage`:
 
@@ -121,13 +126,15 @@ docs/DATA-MODEL.md
   script, posts the credential to `/api/session`, and on 401 anywhere shows the screen
   again.
 
-### 5 — Bring your data across
-- Settings gets **Import from this browser**: reads `rounds.proto.v2`, maps it onto the
-  schema, posts it to `/api/import`, and the server records `imported_at` so it can't
-  run twice by accident.
+### 5 — Bring your data across — done
+- The prototype's info panel gains **Copy data**, which puts its saved blob on the
+  clipboard. Settings › Data has a box to paste it into; if the prototype was opened on
+  the same origin its `localStorage` copy is filled in automatically.
+- The import maps it onto the schema (`course` becomes `courseId`), posts it to
+  `/api/import`, and the server records `imported_at` so it can't run twice by accident.
 - Whatever you've typed into the prototype survives the move. Ids are kept.
 
-### 6 — Get it on your phone
+### 6 — Get it on your phone — waiting on the client id
 - `wrangler deploy`. Static files and the Worker ship together; D1 migrations are
   applied separately and first.
 - `manifest.webmanifest` + a service worker that caches the shell, so it installs to

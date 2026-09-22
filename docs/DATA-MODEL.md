@@ -191,7 +191,9 @@ All routes are under `/api`, speak JSON, and require the session cookie except
 
 | Route | Body → Response |
 | --- | --- |
-| `POST /api/session` | `{credential}` (Google ID token) → `{profile}` and `Set-Cookie`. |
+| `GET /api/config` | → `{googleClientId, devLogin}` — what the sign-in screen may offer. |
+| `POST /api/session` | `{credential}` (Google ID token) → `{profile}` and `Set-Cookie`. `403` if `ALLOWED_EMAILS` is set and excludes the address. |
+| `POST /api/dev-session` | `{email}` → as above. Only when `DEV_LOGIN=1` **and** the host is localhost; `404` otherwise. |
 | `DELETE /api/session` | → clears the cookie. |
 | `GET /api/me` | → `{profile}` |
 | `PUT /api/me` | `{coat, theme, termStart, displayName}` → `{profile}` |
@@ -209,7 +211,8 @@ Errors are `{error, field?}`: `400` bad shape (with the field), `401` no session
 
 `POST /api/session` verifies the Google ID token: signature against Google's published
 keys, `iss` is Google, `aud` is our client id, not expired, `email_verified` is true.
-If `ALLOWED_EMAILS` is set, the email must be in it. Then find-or-create the `users`
+If `ALLOWED_EMAILS` is set, the email must be in it (`403`). Google's keys are fetched
+from its JWKS endpoint and cached for six hours; an unknown key id forces one refresh. Then find-or-create the `users`
 row and set `rounds_session`, an `HttpOnly; Secure; SameSite=Lax` cookie holding
 `userId.expiry.signature`, signed with `SESSION_SECRET`, valid 30 days. There is no
 sessions table; rotating the secret signs everyone out.
@@ -259,7 +262,7 @@ The import maps it straight across:
 | `data.owner.name / role / coat` | `users.coat_name / coat_role / coat_color` |
 | `ui.theme` | `users.theme` |
 | `data.courses[]` (incl. `meetings[]`) | `courses` rows, `meetings` as JSON |
-| `data.items[]` | `items` rows, `where` → `location` |
+| `data.items[]` | `items` rows; `course` → `courseId` (`''` becomes null), `where` → `location` |
 | `data.quotes[]` | `quotes` rows |
 
 Field names already line up; the import only adds timestamps, fills `term`,

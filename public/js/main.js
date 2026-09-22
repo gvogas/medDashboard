@@ -15,7 +15,7 @@ import { drawer, scrim, closeDrawer, drawerHasFocus } from './views/drawer-base.
 import { openItem, newItem, current, saveDraft, touch, renderItemDrawer } from './views/drawer-item.js';
 import { openCourse, renderCourseDrawer, saveCourseDraft, deleteCourseDraft } from './views/drawer-course.js';
 import { openSettings, renderSettings, applyCoat, refreshSyncNote } from './views/drawer-settings.js';
-import { renderSignIn, hideSignIn } from './views/signin.js';
+import { renderSignIn, hideSignIn, mountGoogleButton } from './views/signin.js';
 import { importText } from './import.js';
 import { schedule as drawOrnament } from './ornament.js';
 
@@ -76,10 +76,21 @@ async function start(profile) {
 
 function showSignIn(error) {
   renderSignIn(config, { error });
+  mountGoogleButton(config, async (credential) => {
+    try {
+      await start(await api.googleSession(credential));
+    } catch (err) {
+      const why = !(err instanceof ApiError) ? 'You seem to be offline.'
+        : err.status === 403 ? 'This account is not on the list for this app.'
+        : 'Google sign-in failed (' + (err.body?.error || err.status) + '). Try again.';
+      showSignIn(why);
+    }
+  });
 }
 
 async function signOut() {
   try { await api.signOut(); } catch {}
+  try { window.google?.accounts?.id?.disableAutoSelect(); } catch {}
   const id = data.profile?.id;
   closeDrawer();
   await store.close();

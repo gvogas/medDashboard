@@ -26,6 +26,7 @@ export const api = {
   me: () => request('GET', '/api/me'),
   saveMe: (profile) => request('PUT', '/api/me', profile),
   devSession: (email) => request('POST', '/api/dev-session', { email }),
+  googleSession: (credential) => request('POST', '/api/session', { credential }),
   signOut: () => request('DELETE', '/api/session'),
   sync: (since) => request('GET', `/api/sync?since=${since}`),
   put: (kind, id, row) => request('PUT', `/api/${kind}/${encodeURIComponent(id)}`, row),
