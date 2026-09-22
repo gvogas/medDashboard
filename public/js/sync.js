@@ -30,7 +30,7 @@ export function init() {
   setInterval(() => { if (document.visibilityState === 'visible') pull(); }, 5 * 60 * 1000);
 }
 
-export function schedulePush() {
+function schedulePush() {
   setStatus(status.state === 'offline' ? 'offline' : 'pending');
   clearTimeout(pushTimer);
   pushTimer = setTimeout(push, 600);

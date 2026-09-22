@@ -4,7 +4,7 @@ A med-school tracker for assignments, exams, labs, tutorials, office hours and t
 with courses that carry their own class timetable (day, time, room). Several people
 can use it, each with their own username and password, seeing only their own data.
 
-The design is approved and exists as a working prototype: `prototype.html`
+The design is approved and exists as a working prototype: `design/prototype.html`
 (published at https://claude.ai/artifact/TSz6cXXKMDCeuLeuXwFL9n). This plan turns
 that single file into a real site with real storage.
 
@@ -35,8 +35,8 @@ account and there is no OAuth client to configure.
 
 ## Phases
 
-Status, as of 22 September 2026: phases 0–5 are built and tested locally. Phase 6
-is a `wrangler deploy` and one `user:add` per person.
+Status, as of 22 September 2026: every phase is done and the app is live at
+https://rounds.termanitor07.workers.dev. Only the backlog remains.
 
 ### 0 — Accounts and keys — done
 - Cloudflare account, `npm i -g wrangler`, `wrangler login`. Pick the account's
@@ -97,7 +97,7 @@ worker/api.js        the handlers below
   in memory from the local rows, exactly as the prototype does it.
 
 ### 4 — Port the UI — done
-Split `prototype.html` into modules, same markup and CSS, wired to `store.js` instead
+Split `design/prototype.html` into modules, same markup and CSS, wired to `store.js` instead
 of `localStorage`:
 
 ```

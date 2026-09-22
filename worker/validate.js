@@ -4,9 +4,9 @@
 
 import { HttpError } from './http.js';
 
-export const COLOURS = ['#E4749B', '#8B5CC7', '#17B3AE', '#79B6EA', '#BCA6E6'];
+const COLOURS = ['#E4749B', '#8B5CC7', '#17B3AE', '#79B6EA', '#BCA6E6'];
 export const TYPES = ['exam', 'assignment', 'lab', 'tutoring', 'office', 'task'];
-export const STATUSES = ['todo', 'submitted', 'graded', 'done', 'missed'];
+const STATUSES = ['todo', 'submitted', 'graded', 'done', 'missed'];
 export const KINDS = ['Lecture', 'Lab', 'Seminar', 'Tutorial', 'PBL', 'Clinical'];
 const THEMES = ['light', 'dark', 'system'];
 const DATE = /^[0-9]{4}-[0-9]{2}-[0-9]{2}$/;

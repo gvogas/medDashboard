@@ -14,7 +14,7 @@ export function openSettings(focus) {
   renderSettings();
 }
 
-export function coatColour() {
+function coatColour() {
   return data.profile?.coat?.color || DEFAULT_COAT;
 }
 
@@ -96,7 +96,7 @@ export function renderSettings() {
   if (!p.importedAt) {
     const local = localPrototypeData();
     body += '<div class="importbox">'
-      + '<span class="note">Bring your prototype data across. In the prototype, open <b>Prototype</b> in the top bar and press <b>Copy data</b>, then paste it here.'
+      + '<span class="note">Bring your prototype data across. In the old prototype, open <b>Prototype</b> in the top bar and press <b>Copy data</b>, then paste it here.'
       + (local ? ' This browser also has a copy saved by the prototype, already filled in below.' : '') + '</span>'
       + '<textarea id="importText" rows="3" placeholder="{&quot;data&quot;:{…}}" spellcheck="false">' + esc(local ? JSON.stringify(local) : ui.importText || '') + '</textarea>'
       + '<span style="display:flex;gap:6px;align-items:center"><button class="btn ghost" type="button" data-act="import">Import</button>'

@@ -44,7 +44,7 @@ export async function updateProfile(db, userId, p, now = Date.now()) {
 const jsonIn = (v) => JSON.stringify(v ?? []);
 const jsonOut = (v) => (typeof v === 'string' ? JSON.parse(v) : v ?? []);
 
-export const TABLES = {
+const TABLES = {
   courses: {
     cols: { code: 'code', name: 'name', color: 'color', instructor: 'instructor', term: 'term', archived: 'archived', meetings: 'meetings' },
     toRow: (c) => ({ ...c, archived: c.archived ? 1 : 0, meetings: jsonIn(c.meetings) }),
@@ -81,13 +81,13 @@ function selectCols(table) {
   return ['id', ...Object.values(TABLES[table].cols), 'created_at', 'updated_at', 'deleted_at'].join(', ');
 }
 
-export async function getRow(db, table, userId, id) {
+async function getRow(db, table, userId, id) {
   const r = await db.prepare(`SELECT ${selectCols(table)} FROM ${table} WHERE user_id = ? AND id = ?`).bind(userId, id).first();
   return r ? rowToApi(table, r) : null;
 }
 
 /** A prepared insert-or-update. createdAt is kept on update; a deleted row is revived. */
-export function upsertStmt(db, table, userId, id, fields, now) {
+function upsertStmt(db, table, userId, id, fields, now) {
   const t = TABLES[table];
   const row = t.toRow(fields);
   const cols = Object.entries(t.cols);

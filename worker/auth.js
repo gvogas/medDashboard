@@ -3,7 +3,7 @@
 
 import { HttpError } from './http.js';
 
-export const COOKIE = 'rounds_session';
+const COOKIE = 'rounds_session';
 const SESSION_MS = 30 * 24 * 60 * 60 * 1000;
 
 async function hmacKey(secret) {
@@ -31,7 +31,7 @@ export async function signSession(userId, secret, now = Date.now()) {
 }
 
 /** Returns the userId for a valid, unexpired token, else null. */
-export async function readSession(token, secret, now = Date.now()) {
+async function readSession(token, secret, now = Date.now()) {
   if (!token) return null;
   const parts = token.split('.');
   if (parts.length !== 3) return null;
@@ -44,7 +44,7 @@ export async function readSession(token, secret, now = Date.now()) {
   return diff === 0 ? userId : null;
 }
 
-export function parseCookies(header) {
+function parseCookies(header) {
   const out = {};
   for (const part of (header || '').split(';')) {
     const i = part.indexOf('=');

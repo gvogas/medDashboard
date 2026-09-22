@@ -22,7 +22,7 @@ function notify(evt) {
   for (const fn of listeners) fn(evt);
 }
 
-export function dbName(userId) {
+function dbName(userId) {
   return `rounds:${userId}`;
 }
 

@@ -18,7 +18,7 @@ biomolecule layer behind the board.
 | Worker API | **Built and tested** — sessions, profile, rows, sync, import, nightly purge. |
 | Front end | **Ported** — local-first store, sync, sign-in screen, settings import, PWA shell. |
 | Accounts | **Built** — username and password, created with `npm run user:add`. |
-| Deployed | **Not yet.** The D1 database exists; nothing is deployed. |
+| Live | **Deployed** at https://rounds.termanitor07.workers.dev; `npm run deploy` releases a change. |
 
 ## What's here
 
@@ -29,9 +29,7 @@ scripts/add-user.mjs      creates an account, locally or in production
 migrations/0001_init.sql  the D1 schema
 test/                     vitest, running inside the Workers runtime against a local D1
 wrangler.jsonc            Workers config: static assets, D1 binding, vars, cron
-prototype.html            the original single-file prototype — open it, no build step
-mockups.html              the three design directions it was chosen from
-mockup-a-ornament.html    the ornament study: DNA, stethoscope, white coat
+design/                   the original prototype and the mockups it was chosen from
 PLAN.md                   decisions, phases, file layout, backlog
 docs/DATA-MODEL.md        the schema explained: tables, API, sync, migration
 ```

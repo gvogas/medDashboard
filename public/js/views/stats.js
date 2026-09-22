@@ -35,7 +35,7 @@ export function renderStats() {
 }
 
 /* the quote tile, beside the stats */
-export function quoteCardHtml() {
+function quoteCardHtml() {
   const qs = data.quotes || [];
   if (!qs.length) {
     return '<button class="stat qcard empty" type="button" data-quotenext>'

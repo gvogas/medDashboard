@@ -9,7 +9,7 @@ import { renderWeek } from './week.js';
 import { renderMonth } from './month.js';
 import { renderTable } from './table.js';
 
-export function renderHeader() {
+function renderHeader() {
   const a = parse(ui.anchor), t = $('viewTitle'), s = $('viewSub');
   if (ui.view === 'week') {
     const st = monday(a), en = addDays(st, 6);

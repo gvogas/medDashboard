@@ -7,7 +7,7 @@ import * as sync from './sync.js';
 import { ui, rememberUi } from './state.js';
 import { ORDER, uid, isOpen, isComplete, normalizeItem } from './model.js';
 import { iso, parse, addDays, today } from './dates.js';
-import { esc, $, autoGrow } from './dom.js';
+import { $, autoGrow } from './dom.js';
 import { render, renderView } from './views/render.js';
 import { renderSidebar } from './views/sidebar.js';
 import { renderStats, renderQuote, nextQuote } from './views/stats.js';
@@ -236,7 +236,7 @@ function autoTitleFor(type, c) {
   if (type === 'tutoring') return c.name ? c.name + ' — tutorial' : '';
   return '';
 }
-function autoOfficeTitle(it, prevCourseId) {
+function autoTitle(it, prevCourseId) {
   const next = autoTitleFor(it.type, course(it.courseId));
   if (!next) return;
   const wasAuto = ['office', 'exam', 'tutoring'].some((t) => it.title === autoTitleFor(t, course(prevCourseId)) || it.title === autoTitleFor(t, course(it.courseId)));
@@ -327,7 +327,7 @@ document.addEventListener('input', async (e) => {
     } else if (d.f === 'courseId' || d.f === 'recurUntil') {
       const before = it.courseId;
       it[d.f] = e.target.value || null;
-      if (d.f === 'courseId') autoOfficeTitle(it, before);
+      if (d.f === 'courseId') autoTitle(it, before);
     } else if (d.f === 'status') {
       const wasDone = isComplete(it);
       setStatus(it, e.target.value);
@@ -337,7 +337,7 @@ document.addEventListener('input', async (e) => {
     } else {
       it[d.f] = e.target.value;
       if (d.f === 'date' && it.recur === 'weekly') it.weekday = parse(it.date).getDay();
-      if (d.f === 'type') autoOfficeTitle(it, it.courseId);
+      if (d.f === 'type') autoTitle(it, it.courseId);
     }
     if (d.f === 'title') {
       autoGrow(e.target);

@@ -17,7 +17,7 @@ export function localPrototypeData() {
 }
 
 /** Map the prototype's shape onto the API's. Throws with a readable message. */
-export function toPayload(blob) {
+function toPayload(blob) {
   const d = blob && blob.data ? blob.data : blob;
   if (!d || !Array.isArray(d.items) || !Array.isArray(d.courses)) throw new Error('That does not look like the prototype’s data.');
   const owner = d.owner || {};

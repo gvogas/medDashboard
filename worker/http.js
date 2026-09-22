@@ -15,7 +15,7 @@ export class HttpError extends Error {
   }
 }
 
-export const BODY_LIMIT = 1024 * 1024; // 1 MB
+const BODY_LIMIT = 1024 * 1024; // 1 MB
 
 export async function readJson(request) {
   const length = Number(request.headers.get('content-length') || 0);
@@ -29,6 +29,3 @@ export async function readJson(request) {
   }
 }
 
-export function isLocalhost(url) {
-  return url.hostname === 'localhost' || url.hostname === '127.0.0.1';
-}
