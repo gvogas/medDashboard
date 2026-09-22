@@ -50,8 +50,8 @@ export function renderCourseDrawer(focus) {
       + '<select data-mf="weekday" aria-label="Day">'
         + [1, 2, 3, 4, 5, 6, 0].map((w) => '<option value="' + w + '"' + (w === m.weekday ? ' selected' : '') + '>' + DOW[w] + '</option>').join('')
       + '</select>'
-      + '<input class="time" type="time" data-mf="start" value="' + esc(m.start) + '" aria-label="Start">'
-      + '<input class="time" type="time" data-mf="end" value="' + esc(m.end) + '" aria-label="End">'
+      + '<input class="time tp" type="text" inputmode="numeric" autocomplete="off" placeholder="--:--" data-mf="start" value="' + esc(m.start) + '" aria-label="Start">'
+      + '<input class="time tp" type="text" inputmode="numeric" autocomplete="off" placeholder="--:--" data-mf="end" value="' + esc(m.end) + '" aria-label="End">'
       + '<input class="room" type="text" data-mf="room" value="' + esc(m.room || '') + '" placeholder="Room number" aria-label="Room" maxlength="40">'
       + '</div><button class="x" type="button" data-mx="' + esc(m.id) + '" aria-label="Remove class">✕</button></div>';
   });

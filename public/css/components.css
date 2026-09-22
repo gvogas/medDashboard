@@ -354,3 +354,13 @@ td .steps{margin-top:3px}
 /* ═════════ settings: import ═════════ */
 .importbox{display:flex;flex-direction:column;gap:6px;padding:10px;border:1px dashed var(--line);border-radius:10px;background:var(--panel-2)}
 .importbox textarea{width:100%;font:12px/1.4 "IBM Plex Mono",monospace;resize:vertical}
+
+/* ═════════ time picker ═════════ */
+.tp{font-family:"IBM Plex Mono",ui-monospace,monospace;font-variant-numeric:tabular-nums;letter-spacing:.02em;text-align:center;width:72px}
+.fields .pair .tp{flex:0 0 72px}
+.tp.bad{border-color:var(--crit);color:var(--crit)}
+.tp-pop{position:fixed;z-index:60;display:none;overflow:auto;padding:4px;background:var(--panel);border:1px solid var(--line);border-radius:10px;box-shadow:var(--shadow-2);scrollbar-width:thin}
+.tp-pop.on{display:block}
+.tp-pop button{display:block;width:100%;text-align:left;font:12.5px/1 "IBM Plex Mono",ui-monospace,monospace;padding:6px 12px;border:0;border-radius:6px;background:none;color:var(--ink);cursor:pointer}
+.tp-pop button:hover{background:var(--panel-2)}
+.tp-pop button.on{background:var(--accent-soft);color:var(--accent-ink);font-weight:600}

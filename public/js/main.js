@@ -18,6 +18,7 @@ import { openSettings, renderSettings, applyCoat, refreshSyncNote } from './view
 import { renderSignIn, hideSignIn, mountGoogleButton } from './views/signin.js';
 import { importText } from './import.js';
 import { schedule as drawOrnament } from './ornament.js';
+import { parseTime } from './timepicker.js';
 
 let config = { googleClientId: null, devLogin: false };
 
@@ -221,6 +222,26 @@ document.addEventListener('click', async (e) => {
 
 scrim.addEventListener('click', closeDrawer);
 
+/* Office hours are named after the teacher: picking a course fills the title in,
+   unless the title was typed by hand. */
+function officeTitle(c) {
+  return c && c.instructor ? c.instructor + ' — office hours' : '';
+}
+function autoOfficeTitle(it, prevCourseId) {
+  if (it.type !== 'office') return;
+  const next = officeTitle(course(it.courseId));
+  if (!next) return;
+  if (it.title.trim() && it.title !== officeTitle(course(prevCourseId))) return;
+  it.title = next;
+  const ta = drawer.querySelector('.dtitle');
+  if (ta) { ta.value = next; autoGrow(ta); }
+  if (ui.draft) {
+    const b = drawer.querySelector('[data-act="save"]'), h = drawer.querySelector('.dfoot .hint');
+    if (b) b.disabled = false;
+    if (h) h.textContent = 'Ready to save';
+  }
+}
+
 function setStatus(it, status) {
   it.status = status;
   it.completedAt = status === 'todo' ? null : (it.completedAt || Date.now());
@@ -274,7 +295,9 @@ document.addEventListener('input', async (e) => {
     const wrap = e.target.closest('[data-mid]'); if (!wrap) return;
     ui.courseDraft.meetings.forEach((m) => {
       if (m.id !== wrap.dataset.mid) return;
-      m[d.mf] = d.mf === 'weekday' ? +e.target.value : e.target.value;
+      m[d.mf] = d.mf === 'weekday' ? +e.target.value
+        : d.mf === 'start' || d.mf === 'end' ? (parseTime(e.target.value) || m[d.mf])
+        : e.target.value;
     });
     return;
   }
@@ -287,12 +310,17 @@ document.addEventListener('input', async (e) => {
     } else if (d.f === 'grade') {
       it.grade = e.target.value === '' ? null : Math.max(0, Math.min(100, +e.target.value));
     } else if (d.f === 'courseId' || d.f === 'recurUntil') {
+      const before = it.courseId;
       it[d.f] = e.target.value || null;
+      if (d.f === 'courseId') autoOfficeTitle(it, before);
     } else if (d.f === 'status') {
       setStatus(it, e.target.value);
+    } else if (d.f === 'start' || d.f === 'end') {
+      it[d.f] = parseTime(e.target.value) || '';      /* half-typed stays out of the model until it parses */
     } else {
       it[d.f] = e.target.value;
       if (d.f === 'date' && it.recur === 'weekly') it.weekday = parse(it.date).getDay();
+      if (d.f === 'type') autoOfficeTitle(it, it.courseId);
     }
     if (d.f === 'title') {
       autoGrow(e.target);

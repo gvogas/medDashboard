@@ -5,8 +5,7 @@ import { parse, diffDays, today, hhmm, DOW } from '../dates.js';
 import { activeCourses } from '../query.js';
 import { esc, autoGrow } from '../dom.js';
 import { CHECK_SVG } from './bits.js';
-import { drawer, showDrawer, hideDrawer, resetDrawerState } from './drawer-base.js';
-import { render } from './render.js';
+import { drawer, showDrawer, hideDrawer, resetDrawerState, closeDrawer } from './drawer-base.js';
 
 export function openItem(id) {
   resetDrawerState();
@@ -29,13 +28,11 @@ export function current() {
   return ui.sel ? item(ui.sel) : null;
 }
 
+/** Save the new item and close the drawer; the row appears on the board. */
 export async function saveDraft() {
   if (!ui.draft || !ui.draft.title.trim()) return;
-  const saved = await saveItem(ui.draft);
-  ui.draft = null;
-  ui.sel = saved.id;
-  render();
-  renderItemDrawer();
+  await saveItem(ui.draft);
+  closeDrawer();
 }
 
 /** Persist an edit to a stored item. Drafts are kept in memory until saved. */
@@ -78,7 +75,7 @@ export function renderItemDrawer(focusTitle) {
       + '<label for="f-type">Type</label><select id="f-type" data-f="type">' + typeOpts + '</select>'
       + '<label for="f-course">Course</label><select id="f-course" data-f="courseId">' + courseOpts + '</select>'
       + '<label for="f-date">Date</label><input id="f-date" type="date" data-f="date" value="' + esc(it.date) + '">'
-      + '<label for="f-start">Time</label><span class="pair"><input id="f-start" type="time" data-f="start" value="' + esc(it.start || '') + '"><span>to</span><input type="time" data-f="end" value="' + esc(it.end || '') + '" aria-label="End time"></span>'
+      + '<label for="f-start">Time</label><span class="pair"><input id="f-start" class="tp" type="text" inputmode="numeric" autocomplete="off" placeholder="--:--" data-f="start" value="' + esc(it.start || '') + '"><span>to</span><input class="tp" type="text" inputmode="numeric" autocomplete="off" placeholder="--:--" data-f="end" value="' + esc(it.end || '') + '" aria-label="End time"></span>'
       + '<label for="f-where">Room</label><input id="f-where" type="text" data-f="where" value="' + esc(it.where || '') + '" placeholder="Room, lab, platform" maxlength="80">'
       + '<label for="f-status">Status</label><select id="f-status" data-f="status">' + stOpts + '</select>'
       + (it.status === 'graded' ? '<label for="f-grade">Grade</label><input id="f-grade" type="number" min="0" max="100" data-f="grade" value="' + (typeof it.grade === 'number' ? it.grade : '') + '" placeholder="%">' : '')
