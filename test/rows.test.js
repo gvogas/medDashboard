@@ -133,6 +133,13 @@ describe('items', () => {
     expect(await res.json()).toEqual({ error: 'invalid', field: 'courseId' });
   });
 
+  it('rejects a link whose URL is not http or https', async () => {
+    const api = await signIn();
+    const res = await api('/api/items/i1', { method: 'PUT', body: item({ links: [{ label: 'x', url: 'javascript:alert(1)' }] }) });
+    expect(res.status).toBe(400);
+    expect(await res.json()).toEqual({ error: 'invalid', field: 'links[0].url' });
+  });
+
   it('rejects notes over 5000 characters', async () => {
     const api = await signIn();
     const res = await api('/api/items/i1', { method: 'PUT', body: item({ notes: 'x'.repeat(5001) }) });

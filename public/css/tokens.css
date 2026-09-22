@@ -1,0 +1,55 @@
+/* Rounds — palette tokens. Split from prototype.html; the look is unchanged. */
+/* ════════════════════════════════════════════════
+   ROUNDS · Ward Board palette, light and dark
+   The theme is resolved in script and stamped as
+   data-app="light|dark" on the root element.
+   ════════════════════════════════════════════════ */
+:root{
+  --bg:#EEF4F3; --panel:#FFFFFF; --panel-2:#F6FAF9;
+  --ink:#14302D; --ink-2:#5D7B77; --ink-3:#8AA5A1;
+  --line:#DBE6E4; --line-2:#EDF3F2;
+  --accent:#0E7C74; --accent-soft:#D8EDEA; --accent-ink:#0A5B55; --on-accent:#FFFFFF;
+  --good:#2F8757; --crit:#C0392B; --warn:#B77505;
+  --done:#FCEDF2; --done-2:#F8DFE8; --done-line:#F0CFDB; --done-ink:#8A5A6B; --done-track:#F3D3DE;
+  --chip-bg:#EDF3F2; --chip-ink:#5D7B77;
+  --pink-bg:#FBE3EC; --pink-ink:#9C4D66;
+  --red-bg:#FBE9E7; --red-ink:#C0392B; --red-line:#F0C9C4;
+  --amber-bg:#FCF2DF; --amber-ink:#B77505;
+  --hot-bg:#FEF7F6; --hot-lab:#A6584F;
+  --warn-bg:#FDF1EF; --warn-line:#F3D5CF; --warn-ink:#8A4A3E;
+  --bar-bg:rgba(255,255,255,.82);
+  --weave-1:rgba(20,48,45,.035); --weave-2:rgba(20,48,45,.025);
+  --pocket-a:#FBFDFC; --pocket-b:#F3F8F7;
+  --cell-out:#FAFCFC; --box-line:#B9CCC9; --disabled:#C3D6D3;
+  --scroll-track:#E4EDEB; --orn-stroke:#0E7C74;
+  --coat:#17B3AE;   /* the lab coat's colour, set from Settings */
+  --orn-bg:.20; --orn-art:.42; --orn-weave:1;
+  --shadow-1:0 1px 2px rgba(20,48,45,.08);
+  --shadow-2:0 2px 6px rgba(20,48,45,.08), 0 14px 34px rgba(20,48,45,.10);
+  color-scheme:light;
+}
+
+:root[data-app="dark"]{
+  --bg:#0A1214; --panel:#111D1E; --panel-2:#162425;
+  --ink:#DFEAE8; --ink-2:#94ABA8; --ink-3:#6E8683;
+  --line:#22322F; --line-2:#1B2A28;
+  --accent:#3FBFB2; --accent-soft:#11302D; --accent-ink:#7FD8CE; --on-accent:#04201D;
+  --good:#4FB37A; --crit:#EE7A68; --warn:#DCA23F;
+  --done:#2B1A22; --done-2:#35202A; --done-line:#4A2C38; --done-ink:#E2A7BA; --done-track:#4A2C38;
+  --chip-bg:#1C2B29; --chip-ink:#94ABA8;
+  --pink-bg:#3A2029; --pink-ink:#EFAFC3;
+  --red-bg:#3A1F1B; --red-ink:#F59485; --red-line:#5A2E27;
+  --amber-bg:#33270F; --amber-ink:#E4B462;
+  --hot-bg:#1E1414; --hot-lab:#E0968A;
+  --warn-bg:#2A1B17; --warn-line:#4A2D25; --warn-ink:#EDAE9F;
+  --bar-bg:rgba(10,18,20,.82);
+  --weave-1:rgba(255,255,255,.028); --weave-2:rgba(255,255,255,.020);
+  --pocket-a:#162526; --pocket-b:#101C1D;
+  --cell-out:#0D1718; --box-line:#3A4D4A; --disabled:#294240;
+  --scroll-track:#22322F; --orn-stroke:#3FBFB2;
+  --shadow-1:0 1px 2px rgba(0,0,0,.4);
+  --shadow-2:0 2px 8px rgba(0,0,0,.45), 0 16px 40px rgba(0,0,0,.5);
+  color-scheme:dark;
+}
+
+*{box-sizing:border-box}

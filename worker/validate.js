@@ -130,7 +130,9 @@ function checklistEntry(c, f) {
 }
 
 function linkEntry(l, f) {
-  return { label: str(l.label ?? '', `${f}.label`, 60), url: str(l.url, `${f}.url`, 500, 1) };
+  const url = str(l.url, `${f}.url`, 500, 1);
+  if (!/^https?:\/\//i.test(url)) fail(`${f}.url`);
+  return { label: str(l.label ?? '', `${f}.label`, 60), url };
 }
 
 export function validateItem(body) {

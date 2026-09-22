@@ -1,4 +1,104 @@
 <!doctype html>
+<html lang="en">
+<head>
 <meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Rounds</title>
-<p>Rounds — the app is built in phase 4 of PLAN.md.</p>
+<meta name="description" content="A med-school tracker: assignments, exams, labs, tutoring, office hours and tasks.">
+<meta name="theme-color" content="#0E7C74">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" href="/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&family=Spectral:ital,wght@1,400;1,600&display=swap">
+<link rel="stylesheet" href="/css/tokens.css">
+<link rel="stylesheet" href="/css/layout.css">
+<link rel="stylesheet" href="/css/components.css">
+<script>
+  /* Resolve the theme before the app paints, so there is no flash of the wrong one.
+     "system" follows the device. The last choice is remembered in this browser;
+     the signed-in profile's choice takes over once it loads. */
+  (function () {
+    var pref = 'system';
+    try { pref = localStorage.getItem('rounds.theme') || 'system'; } catch (e) {}
+    window.__roundsTheme = pref;
+    window.__roundsApplyTheme = function (choice) {
+      var dark = choice === 'dark' ? true
+        : choice === 'light' ? false
+        : !!(window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
+      document.documentElement.setAttribute('data-app', dark ? 'dark' : 'light');
+    };
+    window.__roundsApplyTheme(pref);
+  })();
+</script>
+</head>
+<body>
+
+<div class="signin" id="signin" hidden></div>
+
+<div class="app" id="app" hidden>
+
+  <aside class="side" id="side">
+    <div class="brand"><span class="mark">R</span> Rounds</div>
+    <div class="navgrp" id="typeNav"></div>
+    <div class="navgrp" id="courseNav"></div>
+
+    <div class="pocket">
+      <i class="pen" aria-hidden="true"></i>
+      <div class="embroidery"><span id="ownerName"></span><button class="editcoat" type="button" data-setopen="coat" aria-label="Edit the name on the coat">✎</button></div>
+      <div class="role" id="ownerRole"></div>
+      <svg class="tuck" viewBox="0 0 60 34" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true">
+        <path d="M4 6c0 9 7 8 9 14s7 9 14 8 12-6 18-6"/><path d="M11 4c0 7 4 8 6 12"/>
+        <circle cx="50" cy="20" r="6"/><circle cx="50" cy="20" r="2.6"/><path d="M44.6 21.6 42 23"/>
+      </svg>
+    </div>
+  </aside>
+
+  <div class="content">
+    <canvas id="orn" aria-hidden="true"></canvas>
+
+    <header class="bar">
+      <button class="menu-btn" type="button" id="menuBtn" aria-label="Show sidebar">☰</button>
+      <div class="title-grp">
+        <h1 class="h1" id="viewTitle">Week board</h1>
+        <div class="sub" id="viewSub">—</div>
+      </div>
+      <div class="navdate">
+        <button type="button" id="prev" aria-label="Previous">‹</button>
+        <button type="button" id="today">Today</button>
+        <button type="button" id="next" aria-label="Next">›</button>
+      </div>
+      <div class="seg" id="viewSeg" style="flex:none">
+        <button type="button" data-view="week" aria-pressed="true">Week</button>
+        <button type="button" data-view="month" aria-pressed="false">Month</button>
+        <button type="button" data-view="table" aria-pressed="false">Table</button>
+      </div>
+      <div class="grow"></div>
+      <div class="search">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="7" cy="7" r="4.5"/><path d="M10.5 10.5 14 14"/></svg>
+        <input type="search" id="search" placeholder="Search everything  /" aria-label="Search">
+      </div>
+      <button class="pill sync" type="button" id="syncPill" data-state="idle" title="Sync now">Synced</button>
+      <button class="pill" type="button" id="setBtn" title="Settings" aria-label="Settings">⚙ Settings</button>
+      <button class="btn" type="button" id="newBtn">New item</button>
+    </header>
+
+    <div class="scroll" id="scroll">
+      <svg class="drape" viewBox="0 0 300 118" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true">
+        <path d="M18 8c0 26 6 30 14 40"/><path d="M52 8c0 24-5 28-11 38"/>
+        <path d="M8 10h20M42 10h20" stroke-width="5"/>
+        <path d="M32 48c7 10 3 24 16 32 16 10 40 6 58-2 22-10 38-24 60-28 20-4 36 2 44 14"/>
+        <circle cx="242" cy="86" r="17"/><circle cx="242" cy="86" r="8.5"/><path d="M228 74l-8-7"/>
+      </svg>
+      <div class="stats" id="stats"></div>
+      <div id="viewRoot"></div>
+    </div>
+  </div>
+</div>
+
+<div class="scrim" id="scrim"></div>
+<aside class="drawer" id="drawer" aria-hidden="true"></aside>
+
+<script type="module" src="/js/main.js"></script>
+</body>
+</html>

@@ -65,10 +65,16 @@ async function importRoute({ request, env }) {
 
 const ROW = /^\/api\/(courses|items|quotes)\/([^/]+)$/;
 
+const devLoginEnabled = (env, url) => env.DEV_LOGIN === '1' && isLocalhost(url);
+
 const routes = [
+  // What the sign-in screen can offer. No session needed.
+  ['GET', /^\/api\/config$/, async ({ env, url }) =>
+    json({ googleClientId: env.GOOGLE_CLIENT_ID || null, devLogin: devLoginEnabled(env, url) })],
+
   // Development only: enabled by DEV_LOGIN=1 in .dev.vars, and only on localhost.
   ['POST', /^\/api\/dev-session$/, async ({ request, env, url }) => {
-    if (env.DEV_LOGIN !== '1' || !isLocalhost(url)) throw new HttpError(404, { error: 'not_found' });
+    if (!devLoginEnabled(env, url)) throw new HttpError(404, { error: 'not_found' });
     const body = await readJson(request);
     if (typeof body.email !== 'string' || !body.email.includes('@')) {
       throw new HttpError(400, { error: 'invalid', field: 'email' });

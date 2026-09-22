@@ -1665,9 +1665,16 @@
       + '<li><b>Settings</b> — theme, the coat’s embroidery, your quote list, and reset.</li>'
       + '<li><b>Shortcuts</b> — <b>/</b> to search, <b>Esc</b> to close.</li></ul>'
       + '<p style="margin:0">Saved in this browser only. The real build gets storage that follows you across devices.</p>'
-      + '<div class="foot"><button class="btn ghost" type="button" id="resetBtn">Reset demo data</button>'
+      + '<div class="foot"><button class="btn" type="button" id="copyBtn">Copy data</button><button class="btn ghost" type="button" id="resetBtn">Reset demo data</button>'
       + '<span style="font-size:11px;color:var(--ink-3)">'+data.items.length+' items · '+data.courses.length+' courses</span></div>';
     document.body.appendChild(n);
+    /* hand the saved data to the real app's Settings › Import */
+    document.getElementById('copyBtn').addEventListener('click', function(){
+      var text = JSON.stringify({ data:data, ui:{ view:ui.view, theme:ui.theme } }), btn = this;
+      function done(ok){ btn.textContent = ok ? 'Copied' : 'Copy failed'; setTimeout(function(){ btn.textContent = 'Copy data'; }, 1600); }
+      if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(function(){ done(true); }, function(){ window.prompt('Copy this:', text); done(true); });
+      else { window.prompt('Copy this:', text); done(true); }
+    });
     document.getElementById('resetBtn').addEventListener('click', function(){
       data = seed(); ui.sel=null; ui.draft=null; ui.courseDraft=null; ui.quoteIx=0; applyCoat(); save(); hideInfo(); render();
     });
