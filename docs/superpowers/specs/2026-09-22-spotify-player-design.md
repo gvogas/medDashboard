@@ -1,10 +1,13 @@
 # Spotify player — design
 
-Date: 22 September 2026. Status: approved.
+Date: 22 September 2026. Status: approved. Look chosen 22 September 2026: the badge,
+option B of [`design/mockup-spotify-options.html`](../../../design/mockup-spotify-options.html);
+the earlier strip is kept in [`design/mockup-spotify.html`](../../../design/mockup-spotify.html)
+for the states, phone overlay and Settings group, which are unchanged.
 
-A strip at the bottom of the sidebar that shows what is playing on the signed-in
-user's Spotify, with previous, play/pause and next. Each Rounds user connects their
-own Spotify account from Settings. The browser never talks to Spotify itself: the
+A badge clipped to the bottom of the sidebar, under the pocket, that shows what is
+playing on the signed-in user's Spotify, with previous, play/pause and next. Each
+Rounds user connects their own Spotify account from Settings. The browser never talks to Spotify itself: the
 Worker holds the tokens and proxies every call.
 
 ## Constraints that shaped it
@@ -121,23 +124,35 @@ last state.
   502 it keeps the last state, marks it `stale: true`, and waits the retry-after or
   30 s before trying again.
 
-### `public/js/views/player.js` — the strip
+### `public/js/views/player.js` — the badge
 
 `renderPlayer(state)` writes into `<div class="player" id="player">`, placed in
 `index.html` after the pocket in the sidebar, so it sits at the bottom of the coat.
 
+The look: a card in the panel colour with a 1px border tinted by the coat colour,
+rounded 9px, with a small clip over its top edge (a 34×8px bar in the coat colour,
+like the pen on the pocket) so it reads as an ID badge clipped to the coat next to
+the pocket. Inside, top to bottom: the now-playing row, a 3px progress line, three
+round controls centred, and a device line. It is about 120px tall when playing.
+
 States:
 
-- Not connected: a single quiet line, "Connect Spotify", which opens Settings at the
-  Spotify group.
-- Idle: the Spotify mark and "Nothing playing".
-- Playing or paused: 36px album art, the title as a link to `track.url` (opens in a
-  new tab), the artist line, a thin progress line, and three buttons: previous,
-  play/pause, next. The play/pause button reflects `playing`.
+- Not connected: the card holds a single quiet line, "Connect Spotify", with the
+  Spotify mark in grey, which opens Settings at the Spotify group. The mark turns
+  green on hover.
+- Idle: the Spotify mark and "Nothing playing". No line, controls or device line.
+- Playing or paused: 42px album art (rounded 7px, a soft shadow), the title as a link
+  to `track.url` (opens in a new tab), the artist line, and under it four equaliser
+  bars in Spotify green that animate while `playing` and stand still when paused
+  (no animation under `prefers-reduced-motion`). The Spotify mark sits at the right
+  of the row. The progress line fills from the accent to Spotify green. The controls
+  are previous and next as 28px outlined circles and play/pause as a 34px filled
+  circle in the ink colour, which reflects `playing`. The device line reads
+  "on <device>" in small type, or is hidden when `device` is null.
 - After a failed command: a short note under the controls for 4 s, "Open Spotify on a
   device first" for `no_device`, "Controls need Spotify Premium" for
   `premium_required`, "Spotify is not answering" for `spotify_unavailable`.
-- Stale: the strip is dimmed (`data-stale`) until a poll succeeds.
+- Stale: the badge is dimmed (`data-stale`) until a poll succeeds, and the bars stop.
 
 Previous behaves like the Spotify app: `restart` when `progressMs > 3000`, else
 `previous`.
@@ -146,7 +161,7 @@ The Spotify mark is inline SVG. Spotify's brand rules require it beside their
 metadata and that album art is shown unaltered and links back to Spotify; the title
 link satisfies the latter.
 
-On phones the sidebar is an overlay opened by the menu button, and the strip is at
+On phones the sidebar is an overlay opened by the menu button, and the badge is at
 its bottom there too. The sidebar already scrolls, so a long course list does not
 hide it.
 
@@ -162,12 +177,13 @@ email first.
 ### Small edits
 
 - `api.js`: `spotifyPlayer()`, `spotifyControl(action)`, `spotifyDisconnect()`.
-- `main.js`: start the poller in `start()`, stop it in `signOut()`; wire the strip's
+- `main.js`: start the poller in `start()`, stop it in `signOut()`; wire the badge's
   buttons and the disconnect action into the delegated click handler; on boot read
   `location.hash` for `#spotify=connected` (open Settings at the Spotify group) or
   `#spotify=error` (open Settings with an error line), then clear the hash.
-- `index.html`: the strip's container.
-- `layout.css` / `components.css`: `.player` styles in the Ward Board palette.
+- `index.html`: the badge's container.
+- `layout.css` / `components.css`: `.player` styles in the Ward Board palette, taken
+  from the `.badge` block in `design/mockup-spotify-options.html`.
 - `sw.js`: add the two scripts to the shell list, bump the cache name.
 - `_headers`: `img-src 'self' data: https://i.scdn.co`. Nothing else in the CSP
   changes; the connect link is a navigation and the consent page is Spotify's.
