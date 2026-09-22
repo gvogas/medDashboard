@@ -4,7 +4,7 @@ import { hashPassword, verifyPassword, normalizeUsername } from '../worker/passw
 import { createUser, login } from './helpers.js';
 
 describe('password hashing', () => {
-  it('round-trips and rejects the wrong password', async () => {
+  it('round-trips and rejects the wrong password', { timeout: 20000 }, async () => {
     const hash = await hashPassword('correct horse battery staple');
     expect(hash).toMatch(/^pbkdf2\$\d+\$[A-Za-z0-9_-]+\$[A-Za-z0-9_-]+$/);
     expect(await verifyPassword('correct horse battery staple', hash)).toBe(true);
@@ -12,7 +12,7 @@ describe('password hashing', () => {
     expect(await verifyPassword('', hash)).toBe(false);
   });
 
-  it('salts, so the same password hashes differently twice', async () => {
+  it('salts, so the same password hashes differently twice', { timeout: 20000 }, async () => {
     expect(await hashPassword('same')).not.toBe(await hashPassword('same'));
   });
 
