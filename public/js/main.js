@@ -86,8 +86,8 @@ function showSignIn(error, username = '') {
   renderSignIn({ error, username });
 }
 
-async function signOut() {
-  try { await api.signOut(); } catch {}
+async function signOut({ everywhere = false } = {}) {
+  try { await (everywhere ? api.revokeAll() : api.signOut()); } catch {}
   const id = data.profile?.id;
   closeDrawer();
   await store.close();
@@ -202,6 +202,7 @@ document.addEventListener('click', async (e) => {
     else if (act === 'course-delete') { ui.confirm = 'course'; renderCourseDrawer(); }
     else if (act === 'course-delete-yes' && ui.courseDraft) deleteCourseDraft();
     else if (act === 'signout') signOut();
+    else if (act === 'signout-all') signOut({ everywhere: true });
     else if (act === 'import') runImport();
     return;
   }

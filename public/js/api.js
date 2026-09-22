@@ -27,7 +27,9 @@ export const api = {
   login: (username, password) => request('POST', '/api/login', { username, password }),
   signOut: () => request('DELETE', '/api/session'),
   sync: (since) => request('GET', `/api/sync?since=${since}`),
+  get: (kind, id) => request('GET', `/api/${kind}/${encodeURIComponent(id)}`),
   put: (kind, id, row) => request('PUT', `/api/${kind}/${encodeURIComponent(id)}`, row),
+  revokeAll: () => request('POST', '/api/session/revoke-all'),
   del: (kind, id) => request('DELETE', `/api/${kind}/${encodeURIComponent(id)}`),
   importAll: (payload) => request('POST', '/api/import', payload),
 };

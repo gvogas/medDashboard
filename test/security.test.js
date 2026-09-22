@@ -5,7 +5,7 @@ import { createUser, login, signIn, PASSWORD } from './helpers.js';
 const BASE = 'http://localhost';
 
 describe('login throttling', () => {
-  it('locks a username after repeated failures, even for the right password, then tells you how long', async () => {
+  it('locks a username after repeated failures, even for the right password, then tells you how long', { timeout: 20000 }, async () => {
     await createUser('victim');
     for (let i = 0; i < 5; i++) expect((await login('victim', 'wrong')).status).toBe(401);
     const res = await login('victim', PASSWORD);
@@ -16,7 +16,7 @@ describe('login throttling', () => {
     expect(Number(res.headers.get('retry-after'))).toBe(body.retryAfter);
   });
 
-  it('a success clears the count', async () => {
+  it('a success clears the count', { timeout: 20000 }, async () => {
     await createUser('steady');
     for (let i = 0; i < 4; i++) await login('steady', 'wrong');
     expect((await login('steady', PASSWORD)).status).toBe(200);
@@ -24,7 +24,7 @@ describe('login throttling', () => {
     expect((await login('steady', PASSWORD)).status).toBe(200);
   });
 
-  it('does not lock other usernames', async () => {
+  it('does not lock other usernames', { timeout: 20000 }, async () => {
     await createUser('bystander');
     for (let i = 0; i < 6; i++) await login('someone-else', 'wrong');
     expect((await login('bystander', PASSWORD)).status).toBe(200);

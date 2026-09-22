@@ -1,10 +1,13 @@
-// Sessions: a signed cookie `userId.expiresAt.signature`, HMAC-SHA256 with SESSION_SECRET.
-// No sessions table; rotating the secret signs everyone out.
+// Sessions: a signed cookie `userId.gen.expiresAt.signature`, HMAC-SHA256 with
+// SESSION_SECRET. `gen` is the user's password generation: a reset or "sign out
+// everywhere" bumps it and every older cookie stops working. No sessions table;
+// rotating the secret signs everyone out.
 
 import { HttpError } from './http.js';
 
 const COOKIE = 'rounds_session';
-const SESSION_MS = 30 * 24 * 60 * 60 * 1000;
+export const SESSION_MS = 30 * 24 * 60 * 60 * 1000;
+export const RENEW_WITHIN_MS = 7 * 24 * 60 * 60 * 1000;
 
 async function hmacKey(secret) {
   return crypto.subtle.importKey(
@@ -24,24 +27,24 @@ async function signature(payload, secret) {
   return hex(await crypto.subtle.sign('HMAC', await hmacKey(secret), new TextEncoder().encode(payload)));
 }
 
-export async function signSession(userId, secret, now = Date.now()) {
+export async function signSession(userId, gen, secret, now = Date.now()) {
   const expiresAt = now + SESSION_MS;
-  const payload = `${userId}.${expiresAt}`;
+  const payload = `${userId}.${gen}.${expiresAt}`;
   return `${payload}.${await signature(payload, secret)}`;
 }
 
-/** Returns the userId for a valid, unexpired token, else null. */
+/** {userId, gen, expiresAt} for a valid, unexpired token, else null. */
 async function readSession(token, secret, now = Date.now()) {
   if (!token) return null;
   const parts = token.split('.');
-  if (parts.length !== 3) return null;
-  const [userId, expiresAt, sig] = parts;
-  if (!/^[0-9]+$/.test(expiresAt) || Number(expiresAt) < now) return null;
-  const expected = await signature(`${userId}.${expiresAt}`, secret);
+  if (parts.length !== 4) return null;
+  const [userId, gen, expiresAt, sig] = parts;
+  if (!/^[0-9]+$/.test(gen) || !/^[0-9]+$/.test(expiresAt) || Number(expiresAt) < now) return null;
+  const expected = await signature(`${userId}.${gen}.${expiresAt}`, secret);
   if (expected.length !== sig.length) return null;
   let diff = 0;
   for (let i = 0; i < expected.length; i++) diff |= expected.charCodeAt(i) ^ sig.charCodeAt(i);
-  return diff === 0 ? userId : null;
+  return diff === 0 ? { userId, gen: Number(gen), expiresAt: Number(expiresAt) } : null;
 }
 
 function parseCookies(header) {
@@ -65,10 +68,17 @@ export function clearCookie(url) {
   return `${COOKIE}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0${secureFlag(url)}`;
 }
 
+/** The session behind the request, checked against the user's current generation, or a 401. */
+export async function requireSession(request, env) {
+  const token = parseCookies(request.headers.get('cookie'))[COOKIE];
+  const session = await readSession(token, env.SESSION_SECRET);
+  if (!session) throw new HttpError(401, { error: 'unauthenticated' });
+  const row = await env.DB.prepare('SELECT pw_gen FROM users WHERE id = ?').bind(session.userId).first();
+  if (!row || row.pw_gen !== session.gen) throw new HttpError(401, { error: 'unauthenticated' });
+  return session;
+}
+
 /** The signed-in user id, or a 401. */
 export async function requireUser(request, env) {
-  const token = parseCookies(request.headers.get('cookie'))[COOKIE];
-  const userId = await readSession(token, env.SESSION_SECRET);
-  if (!userId) throw new HttpError(401, { error: 'unauthenticated' });
-  return userId;
+  return (await requireSession(request, env)).userId;
 }

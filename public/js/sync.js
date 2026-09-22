@@ -5,6 +5,7 @@ import { api, ApiError } from './api.js';
 import * as store from './store.js';
 
 export const status = { state: 'idle', pending: 0, lastPull: null, message: '' };
+const PULL_OVERLAP_MS = 5000;
 const statusListeners = new Set();
 let onSignedOut = () => {};
 let pushTimer = null;
@@ -82,20 +83,39 @@ async function pushAll() {
       }
     } catch (e) {
       if (handleFailure(e) === 'stop') return false;
-      // A 4xx on one row (a bug in the client) must not block the rest: drop it.
+      // The server refused this row. Do not keep a copy it will never accept:
+      // put the server's version back (or drop the row if it has none).
       console.error('push rejected', key, e);
       await store.settle(key, v);
+      if (key !== 'profile') await revertToServer(key, e);
     }
   }
   if (status.state !== 'error') setStatus('idle');
   return true;
 }
 
+/** Replace a rejected local row with the server's copy, or remove it. */
+async function revertToServer(key, err) {
+  const [kind, id] = key.split(/:(.*)/s);
+  const field = err?.body?.field ? ` (${err.body.field})` : '';
+  try {
+    const row = await api.get(kind, id);
+    await store.applyServer(kind, row);
+  } catch (e) {
+    if (e instanceof ApiError && e.status === 404) await store.applyServer(kind, { id, deletedAt: Date.now() });
+    else return;
+  }
+  setStatus('error', `A change was rejected${field} and undone`);
+  pulled();
+}
+
 /** Fetch rows changed since the last pull and apply the ones we have not edited. */
 export async function pull() {
   if (!store.data.profile) return false;
   try {
-    const since = (await store.meta.get('lastSyncAt')) || 0;
+    // Overlap the last pull by a few seconds: a write that landed while that pull ran
+    // may carry an earlier timestamp. Applying a row twice is harmless.
+    const since = Math.max(0, ((await store.meta.get('lastSyncAt')) || 0) - PULL_OVERLAP_MS);
     const [res, me] = await Promise.all([api.sync(since), api.me()]);
     let changed = await store.applyServerProfile(me);
     for (const kind of ['courses', 'items', 'quotes']) {

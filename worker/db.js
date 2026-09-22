@@ -19,7 +19,13 @@ function profileFromRow(r) {
 
 /** The id and stored hash for a username, or null. Only the login route reads the hash. */
 export async function getUserForLogin(db, username) {
-  return db.prepare('SELECT id, password_hash FROM users WHERE username = ?').bind(username).first();
+  return db.prepare('SELECT id, password_hash, pw_gen FROM users WHERE username = ?').bind(username).first();
+}
+
+/** Invalidate every session of this user; returns the new generation. */
+export async function bumpPasswordGen(db, userId) {
+  await db.prepare('UPDATE users SET pw_gen = pw_gen + 1 WHERE id = ?').bind(userId).run();
+  return (await db.prepare('SELECT pw_gen FROM users WHERE id = ?').bind(userId).first())?.pw_gen;
 }
 
 export async function getProfile(db, userId) {
@@ -81,7 +87,7 @@ function selectCols(table) {
   return ['id', ...Object.values(TABLES[table].cols), 'created_at', 'updated_at', 'deleted_at'].join(', ');
 }
 
-async function getRow(db, table, userId, id) {
+export async function getRow(db, table, userId, id) {
   const r = await db.prepare(`SELECT ${selectCols(table)} FROM ${table} WHERE user_id = ? AND id = ?`).bind(userId, id).first();
   return r ? rowToApi(table, r) : null;
 }

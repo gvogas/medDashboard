@@ -105,7 +105,8 @@ export function renderSettings() {
     body += '<span class="note">Prototype data imported ' + new Date(p.importedAt).toLocaleDateString() + '.</span>';
   }
   body += '<span class="note">Signed in as <b>' + esc(p.username) + '</b>.</span>'
-    + '<button class="btn ghost" type="button" data-act="signout" style="align-self:flex-start">Sign out</button></div>'
+    + '<span style="display:flex;gap:6px;flex-wrap:wrap"><button class="btn ghost" type="button" data-act="signout">Sign out</button>'
+    + '<button class="btn ghost" type="button" data-act="signout-all" title="Every phone and laptop signed in as you will need the password again">Sign out everywhere</button></span></div>'
     + '</div>';
 
   const foot = '<div class="dfoot"><span class="hint">Rounds</span>'

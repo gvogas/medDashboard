@@ -77,7 +77,7 @@ if (remove) {
   const now = Date.now();
   const id = crypto.randomUUID();
   sql = reset
-    ? `UPDATE users SET password_hash = '${hash}', updated_at = ${now} WHERE username = '${username}';`
+    ? `UPDATE users SET password_hash = '${hash}', pw_gen = pw_gen + 1, updated_at = ${now} WHERE username = '${username}';`
     : `INSERT INTO users (id, username, password_hash, display_name, created_at, updated_at) VALUES ('${id}', '${username}', '${hash}', '${displayName.replace(/'/g, "''")}', ${now}, ${now});`;
 }
 

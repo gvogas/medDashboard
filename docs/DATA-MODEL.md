@@ -194,9 +194,11 @@ All routes are under `/api`, speak JSON, and require the session cookie except
 | --- | --- |
 | `POST /api/login` | `{username, password}` → `{profile}` and `Set-Cookie`. `401 bad_login` for a wrong password or an unknown user alike. |
 | `DELETE /api/session` | → clears the cookie. |
+| `POST /api/session/revoke-all` | → `204`, clears the cookie and invalidates every other session of this user. |
 | `GET /api/me` | → `{profile}` |
 | `PUT /api/me` | `{coat, theme, termStart, displayName}` → `{profile}` |
 | `GET /api/sync?since=<ms>` | → `{now, courses: [...], items: [...], quotes: [...]}` — every row with `updatedAt > since`, tombstones included as `{id, deletedAt}`. `since=0` is a full load. |
+| `GET /api/{courses,items,quotes}/:id` | one live row of yours, or `404`. The client uses it to undo a rejected save. |
 | `PUT /api/courses/:id` | a course → the stored course, with server `updatedAt`. Upsert. |
 | `DELETE /api/courses/:id` | → `204`. Soft-deletes and nulls `courseId` on the user's items. |
 | `PUT /api/items/:id` · `DELETE /api/items/:id` | as above |
@@ -212,8 +214,12 @@ Errors are `{error, field?}`: `400` bad shape (with the field), `401` no session
 PBKDF2-SHA256 hash (100,000 iterations, 16-byte salt, constant-time compare), and
 runs the verification even for an unknown username so timing gives nothing away.
 On success it sets `rounds_session`, an `HttpOnly; Secure; SameSite=Lax` cookie
-holding `userId.expiry.signature`, signed with `SESSION_SECRET`, valid 30 days.
-There is no sessions table; rotating the secret signs everyone out.
+holding `userId.generation.expiry.signature`, signed with `SESSION_SECRET`, valid
+30 days and re-issued by `GET /api/me` once it is in its last week, so a regular
+user stays signed in. The generation is `users.pw_gen`: a password reset and
+`POST /api/session/revoke-all` ("sign out everywhere") bump it, and every older
+cookie for that user stops working. There is no sessions table; rotating the secret
+signs everyone out.
 
 ---
 
@@ -227,11 +233,14 @@ and D1 converged:
 2. **Push.** For each dirty row, `PUT` or `DELETE` it. On `2xx`, store the returned
    `updatedAt` and clear the flag. On a network error, keep it dirty and try again on
    `online`, on tab focus, or after the next save.
-3. **Pull.** `GET /api/sync?since=lastSyncAt`. Apply every row the server returns
+3. **Pull.** `GET /api/sync?since=lastSyncAt-5s` (a few seconds of overlap, since a
+   write that lands during a pull can carry an earlier timestamp; re-applying is harmless). Apply every row the server returns
    unless it is dirty locally (an unpushed local edit wins until it is pushed and the
    next pull reconciles). Rows with `deletedAt` are removed. Store the server's `now`
    as `lastSyncAt`. Runs on load, on `visibilitychange`, and after every push.
-4. **Conflicts.** Per row, the last write to reach the server wins. Two devices editing
+4. **Rejections.** If the server refuses a pushed row, the device fetches the server's
+   copy and puts it back (or drops the row if the server never had it), and says so.
+5. **Conflicts.** Per row, the last write to reach the server wins. Two devices editing
    the same item while both are offline is the only way to lose an edit, and the loser
    is one field-set on one row, not the collection.
 

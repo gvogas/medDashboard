@@ -1,9 +1,9 @@
 import { json, readJson, HttpError } from './http.js';
-import { requireUser, signSession, sessionCookie, clearCookie } from './auth.js';
+import { requireUser, requireSession, signSession, sessionCookie, clearCookie, RENEW_WITHIN_MS } from './auth.js';
 import { verifyPassword, normalizeUsername } from './password.js';
 import { lockedFor, recordFailure, recordSuccess } from './throttle.js';
 import { validateProfile, validateCourse, validateItem, validateQuote, validateId } from './validate.js';
-import { getUserForLogin, getProfile, updateProfile, upsertRow, deleteRow, courseExists, syncSince, importAll } from './db.js';
+import { getUserForLogin, getProfile, updateProfile, getRow, upsertRow, deleteRow, courseExists, syncSince, importAll, bumpPasswordGen } from './db.js';
 
 const VALIDATORS = { courses: validateCourse, items: validateItem, quotes: validateQuote };
 
@@ -15,6 +15,14 @@ async function putRow({ request, env, params: [table, id] }) {
     throw new HttpError(400, { error: 'invalid', field: 'courseId' });
   }
   return json(await upsertRow(env.DB, table, userId, id, fields));
+}
+
+async function readRow({ request, env, params: [table, id] }) {
+  const userId = await requireUser(request, env);
+  validateId(id);
+  const row = await getRow(env.DB, table, userId, id);
+  if (!row || row.deletedAt) throw new HttpError(404, { error: 'not_found' });
+  return json(row);
 }
 
 async function removeRow({ request, env, params: [table, id] }) {
@@ -79,18 +87,30 @@ const routes = [
     if (!user || !ok) { await recordFailure(env.DB, username); throw bad(); }
     await recordSuccess(env.DB, username);
     const profile = await getProfile(env.DB, user.id);
-    const token = await signSession(profile.id, env.SESSION_SECRET);
+    const token = await signSession(profile.id, user.pw_gen, env.SESSION_SECRET);
     return json(profile, 200, { 'set-cookie': sessionCookie(token, url) });
+  }],
+
+  // Sign out on every device: bump the generation, drop this cookie too.
+  ['POST', /^\/api\/session\/revoke-all$/, async ({ request, env, url }) => {
+    const { userId } = await requireSession(request, env);
+    await bumpPasswordGen(env.DB, userId);
+    return new Response(null, { status: 204, headers: { 'set-cookie': clearCookie(url) } });
   }],
 
   ['DELETE', /^\/api\/session$/, async ({ url }) =>
     new Response(null, { status: 204, headers: { 'set-cookie': clearCookie(url) } })],
 
-  ['GET', /^\/api\/me$/, async ({ request, env }) => {
-    const userId = await requireUser(request, env);
-    const profile = await getProfile(env.DB, userId);
+  ['GET', /^\/api\/me$/, async ({ request, env, url }) => {
+    const session = await requireSession(request, env);
+    const profile = await getProfile(env.DB, session.userId);
     if (!profile) throw new HttpError(401, { error: 'unauthenticated' });
-    return json(profile);
+    // Keep a regular user signed in: a cookie in its last week is re-issued.
+    const headers = {};
+    if (session.expiresAt - Date.now() < RENEW_WITHIN_MS) {
+      headers['set-cookie'] = sessionCookie(await signSession(session.userId, session.gen, env.SESSION_SECRET), url);
+    }
+    return json(profile, 200, headers);
   }],
 
   ['PUT', /^\/api\/me$/, async ({ request, env }) => {
@@ -106,6 +126,7 @@ const routes = [
     return json(await syncSince(env.DB, userId, Number(raw)));
   }],
 
+  ['GET', ROW, readRow],
   ['PUT', ROW, putRow],
   ['DELETE', ROW, removeRow],
 
