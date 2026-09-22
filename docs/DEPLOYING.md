@@ -172,7 +172,8 @@ with Premium (free listeners still see what is playing).
 7. In Rounds, open Settings, find **Spotify** and click **Connect**. Spotify asks you
    to allow Rounds to see and control playback, then sends you back. The badge at the
    bottom of the sidebar shows what is playing; start something in the Spotify app
-   on any device if it says *Nothing playing*.
+   on any device if it says *Nothing playing*. The **Spotify** view in the top bar
+   has search, your playlists, the queue and volume.
 
 Locally, open the dev server at `http://127.0.0.1:8787`, not `localhost`: Spotify no
 longer accepts `localhost` as a redirect.
@@ -186,7 +187,9 @@ refresh tokens are encrypted under it; they reconnect from Settings.
 If the badge says *Open Spotify on a device first*, Spotify has no active device:
 press play in the Spotify app once and the controls work from then on. *Controls need
 Spotify Premium* means the listener's account is free. *Spotify is not answering* is
-Spotify's side; the badge dims and tries again on its own.
+Spotify's side; the badge dims and tries again on its own. The volume slider is greyed
+out when the playing device does not take volume from the API, which is the case for
+phones; it works for the desktop app and web player.
 
 ## Managing accounts
 

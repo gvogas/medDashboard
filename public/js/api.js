@@ -35,4 +35,11 @@ export const api = {
   spotifyPlayer: () => request('GET', '/api/spotify/player'),
   spotifyControl: (action) => request('POST', `/api/spotify/player/${action}`),
   spotifyDisconnect: () => request('DELETE', '/api/spotify'),
+  spotifySearch: (q) => request('GET', `/api/spotify/search?q=${encodeURIComponent(q)}`),
+  spotifyPlaylists: (offset = 0) => request('GET', `/api/spotify/playlists?offset=${offset}`),
+  spotifyPlaylistTracks: (id, offset = 0) => request('GET', `/api/spotify/playlists/${encodeURIComponent(id)}/tracks?offset=${offset}`),
+  spotifyQueue: () => request('GET', '/api/spotify/queue'),
+  spotifyQueueAdd: (uri) => request('POST', '/api/spotify/queue', { uri }),
+  spotifyPlay: (what) => request('POST', '/api/spotify/play', what),
+  spotifyVolume: (percent) => request('PUT', '/api/spotify/volume', { percent }),
 };

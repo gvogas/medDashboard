@@ -50,30 +50,77 @@ async function token(request) {
   return json({ error: 'unsupported_grant_type' }, 400);
 }
 
-const CONTROLS = {
-  'PUT /v1/me/player/play': true,
-  'PUT /v1/me/player/pause': true,
-  'POST /v1/me/player/next': true,
-  'POST /v1/me/player/previous': true,
-  'PUT /v1/me/player/seek?position_ms=0': true,
-};
+const PLAYLISTS = [
+  { id: 'pl1', uri: 'spotify:playlist:pl1', name: 'Study mix', owner: { display_name: 'George' }, images: [{ url: 'https://i.scdn.co/image/pl1', width: 300 }], tracks: { total: 3 } },
+  { id: 'pl2', uri: 'spotify:playlist:pl2', name: 'Ward rounds', owner: { display_name: 'Sam' }, images: [], tracks: { total: 0 } },
+];
 
-function player(request, url) {
+const uri = (item, id) => ({ ...item, uri: `spotify:track:${id}`, id, type: 'track' });
+const T1 = uri(PLAYING.item, 't1');
+const T2 = uri(PAUSED.item, 't2');
+
+function isControl(method, pathname) {
+  return (method === 'PUT' && ['/v1/me/player/play', '/v1/me/player/pause', '/v1/me/player/seek', '/v1/me/player/volume'].includes(pathname))
+    || (method === 'POST' && ['/v1/me/player/next', '/v1/me/player/previous', '/v1/me/player/queue'].includes(pathname));
+}
+
+async function player(request, url) {
   const tok = (request.headers.get('authorization') || '').replace(/^Bearer /, '');
   if (tok === 'tok-expired') return json({ error: { status: 401, message: 'The access token expired' } }, 401);
   if (tok === 'tok-down') return new Response('Service Unavailable', { status: 503 });
   if (tok === 'tok-busy') return json({ error: { status: 429 } }, 429, { 'retry-after': '7' });
+  const { method } = request, path = url.pathname, q = url.searchParams;
 
-  if (url.pathname === '/v1/me/player') {
-    if (request.method !== 'GET') return json({ error: { status: 405 } }, 405);
-    if (tok === 'tok-paused') return json(PAUSED);
-    if (tok === 'tok-idle') return new Response(null, { status: 204 });
-    return json(PLAYING);   // tok-playing, tok-refreshed, tok-nodevice, tok-free
+  if (method === 'GET') {
+    if (path === '/v1/me/player') {
+      if (tok === 'tok-paused') return json(PAUSED);
+      if (tok === 'tok-idle') return new Response(null, { status: 204 });
+      return json(PLAYING);   // tok-playing, tok-refreshed, tok-nodevice, tok-free
+    }
+    if (path === '/v1/me/player/queue') return json({ currently_playing: T1, queue: [T2, T1] });
+    if (path === '/v1/search') {
+      if (!q.get('q') || !q.get('type')) return json({ error: { status: 400 } }, 400);
+      const hit = q.get('q').toLowerCase() === 'weightless';
+      return json({
+        tracks: { items: hit ? [T1] : [] },
+        albums: { items: hit ? [{ id: 'al1', uri: 'spotify:album:al1', name: 'Weightless', artists: artists('Marconi Union'), images: album('weightless').images, total_tracks: 6 }] : [] },
+        playlists: { items: hit ? [PLAYLISTS[0], null] : [] },
+      });
+    }
+    if (path === '/v1/me/playlists') {
+      const offset = Number(q.get('offset') || 0), limit = Number(q.get('limit') || 20);
+      const items = PLAYLISTS.slice(offset, offset + limit);
+      return json({ items, total: PLAYLISTS.length, next: offset + limit < PLAYLISTS.length ? 'more' : null });
+    }
+    if (path === '/v1/me/tracks') return json({ items: [{ track: T2 }], total: 1, next: null });
+    const m = path.match(/^\/v1\/playlists\/([^/]+)\/tracks$/);
+    if (m) {
+      if (m[1] !== 'pl1') return json({ error: { status: 404, message: 'Not found' } }, 404);
+      const offset = Number(q.get('offset') || 0);
+      if (offset > 0) return json({ items: [{ track: T2 }], total: 3, next: null });
+      return json({ items: [{ track: T1 }, { track: null }, { track: { ...T2, type: 'episode' } }, { track: { ...T2, is_local: true } }, { track: T2 }], total: 3, next: 'more' });
+    }
+    return json({ error: { status: 404, message: 'unknown route' } }, 404);
   }
 
-  if (!CONTROLS[`${request.method} ${url.pathname}${url.search}`]) return json({ error: { status: 405, message: 'not a control' } }, 405);
+  if (!isControl(method, path)) return json({ error: { status: 405, message: 'not a control' } }, 405);
   if (tok === 'tok-nodevice') return json({ error: { status: 404, reason: 'NO_ACTIVE_DEVICE' } }, 404);
   if (tok === 'tok-free') return json({ error: { status: 403, reason: 'PREMIUM_REQUIRED' } }, 403);
+  if (path === '/v1/me/player/seek' && q.get('position_ms') !== '0') return json({ error: { status: 400 } }, 400);
+  if (path === '/v1/me/player/volume') {
+    const v = Number(q.get('volume_percent'));
+    if (!Number.isInteger(v) || v < 0 || v > 100) return json({ error: { status: 400, message: 'bad volume' } }, 400);
+  }
+  if (path === '/v1/me/player/queue' && !/^spotify:(track|episode):/.test(q.get('uri') || '')) return json({ error: { status: 400, message: 'bad uri' } }, 400);
+  if (path === '/v1/me/player/play') {
+    const text = await request.text();
+    if (text) {
+      const body = JSON.parse(text);
+      const ok = (Array.isArray(body.uris) && body.uris.length === 1 && !body.context_uri)
+        || (typeof body.context_uri === 'string' && !body.uris && (!body.offset || typeof body.offset.uri === 'string'));
+      if (!ok) return json({ error: { status: 400, message: 'bad play body' } }, 400);
+    }
+  }
   return new Response(null, { status: 204 });
 }
 

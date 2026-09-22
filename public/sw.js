@@ -1,7 +1,7 @@
 // Rounds service worker: network first, cache as the fallback, so the shell opens
 // offline and a deploy is picked up on the next load. /api is never cached.
 
-const CACHE = 'rounds-shell-v5';
+const CACHE = 'rounds-shell-v6';
 const SHELL = [
   '/', '/index.html', '/manifest.webmanifest', '/icon.svg',
   '/css/tokens.css', '/css/layout.css', '/css/components.css',
@@ -9,7 +9,7 @@ const SHELL = [
   '/js/dates.js', '/js/dom.js', '/js/query.js', '/js/ornament.js', '/js/timepicker.js', '/js/fireworks.js', '/js/spotify.js',
   '/js/views/render.js', '/js/views/bits.js', '/js/views/sidebar.js', '/js/views/stats.js', '/js/views/week.js',
   '/js/views/month.js', '/js/views/table.js', '/js/views/drawer-base.js', '/js/views/drawer-item.js',
-  '/js/views/drawer-course.js', '/js/views/drawer-settings.js', '/js/views/signin.js', '/js/views/player.js',
+  '/js/views/drawer-course.js', '/js/views/drawer-settings.js', '/js/views/signin.js', '/js/views/player.js', '/js/views/spotify-view.js',
 ];
 
 self.addEventListener('install', (e) => {

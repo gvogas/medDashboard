@@ -41,8 +41,8 @@ docs/DEPLOYING.md         running, deploying, accounts and troubleshooting, step
   opens a page with notes, a checklist and links.
 - **Courses** you add and edit, each with a colour and a list of classes (kind, day,
   start, end, room). Courses can be archived without losing their items.
-- **Three views** — week board grouped by day, a month calendar showing the class
-  timetable only, and a sortable table of everything.
+- **Four views** — week board grouped by day, a month calendar showing the class
+  timetable only, a sortable table of everything, and Spotify.
 - **Live status** — overdue flags, next-exam countdown, class hours per week, lab hours.
 - **Settings** — light / dark / follow-the-device, the name embroidered on the lab coat
   and its colour, and your own quotes shown in a tile beside the stats.
@@ -50,7 +50,9 @@ docs/DEPLOYING.md         running, deploying, accounts and troubleshooting, step
   load, on focus and after every edit. The pill in the top bar shows where it stands.
 - **Several people** — each has a username and password and sees only their own data.
 - **Spotify** — a badge on the coat shows what you are listening to, with previous,
-  play/pause and next. Each person connects their own account from Settings.
+  play/pause and next, and a Spotify view lets you search, browse your playlists and
+  Liked Songs, see the queue and set the volume. Each person connects their own account
+  from Settings.
 
 ## Running it locally
 
@@ -60,7 +62,7 @@ Needs Node and Wrangler (`npm i -g wrangler`, then `wrangler login` once).
 npm install
 npm run db:local        # apply the schema to the local D1
 npm run dev             # http://localhost:8787
-npm test                # 74 tests against the Worker, a local D1 and a fake Spotify
+npm test                # 81 tests against the Worker, a local D1 and a fake Spotify
 ```
 
 Local sessions need a `.dev.vars` file (git-ignored): copy `.dev.vars.example` and set

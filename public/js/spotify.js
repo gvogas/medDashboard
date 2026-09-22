@@ -5,6 +5,7 @@ import { api, ApiError } from './api.js';
 
 export const state = {
   connected: false, playing: false, track: null, device: null,
+  volume: null, supportsVolume: false,
   stale: false, error: null, loaded: false,
 };
 
@@ -49,6 +50,8 @@ function apply(s) {
   state.playing = !!s.playing;
   state.track = s.track || null;
   state.device = s.device || null;
+  state.volume = typeof s.volume === 'number' ? s.volume : null;
+  state.supportsVolume = !!s.supportsVolume;
   state.stale = false;
   state.loaded = true;
   polledAt = Date.now();
@@ -100,7 +103,7 @@ export function stop() {
   clearTimeout(timer); timer = null;
   clearInterval(ticker); ticker = null;
   clearTimeout(errorTimer); errorTimer = null;
-  Object.assign(state, { connected: false, playing: false, track: null, device: null, stale: false, error: null, loaded: false });
+  Object.assign(state, { connected: false, playing: false, track: null, device: null, volume: null, supportsVolume: false, stale: false, error: null, loaded: false });
 }
 
 /** After the OAuth round trip or a disconnect: poll again now, from a clean slate. */

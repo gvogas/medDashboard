@@ -37,7 +37,7 @@ describe('GET /api/spotify/connect', () => {
     expect(to.origin + to.pathname).toBe('https://accounts.spotify.com/authorize');
     expect(to.searchParams.get('response_type')).toBe('code');
     expect(to.searchParams.get('client_id')).toBe('test-client-id');
-    expect(to.searchParams.get('scope')).toBe('user-read-playback-state user-modify-playback-state');
+    expect(to.searchParams.get('scope')).toBe('user-read-playback-state user-modify-playback-state playlist-read-private playlist-read-collaborative user-library-read');
     expect(to.searchParams.get('redirect_uri')).toBe(`${BASE}/api/spotify/callback`);
     const state = to.searchParams.get('state');
     expect(state).toMatch(/^[0-9a-f]{32}$/);
@@ -123,7 +123,10 @@ describe('GET /api/spotify/player', () => {
       connected: true,
       playing: true,
       device: "George's MacBook",
+      volume: null,
+      supportsVolume: true,
       track: {
+        uri: null,
         title: 'Weightless',
         artists: 'Marconi Union',
         album: 'weightless',
@@ -145,7 +148,7 @@ describe('GET /api/spotify/player', () => {
 
     const idle = await user('p-idle');
     await connect(idle.id, 'tok-idle');
-    expect(await (await idle.api('/api/spotify/player')).json()).toEqual({ connected: true, playing: false, track: null, device: null });
+    expect(await (await idle.api('/api/spotify/player')).json()).toEqual({ connected: true, playing: false, track: null, device: null, volume: null, supportsVolume: false });
   });
 
   it('refreshes an access token that is about to expire and stores the new one', async () => {
@@ -258,6 +261,100 @@ describe('isolation and disconnect', () => {
     expect(await tokenRow(id)).toBeNull();
     expect((await api('/api/spotify', { method: 'DELETE' })).status).toBe(204);
     expect(await (await api('/api/spotify/player')).json()).toEqual({ connected: false });
+  });
+});
+
+describe('the Spotify view', () => {
+  it('searches tracks, albums and playlists', async () => {
+    const { api, id } = await user('v-search');
+    await connect(id, 'tok-playing');
+    const res = await api('/api/spotify/search?q=Weightless');
+    expect(res.status).toBe(200);
+    const b = await res.json();
+    expect(b.tracks).toHaveLength(1);
+    expect(b.tracks[0]).toMatchObject({ uri: 'spotify:track:t1', title: 'Weightless', artists: 'Marconi Union', art: 'https://i.scdn.co/image/weightless-64', durationMs: 489000 });
+    expect(b.albums[0]).toEqual({ uri: 'spotify:album:al1', id: 'al1', name: 'Weightless', artists: 'Marconi Union', art: 'https://i.scdn.co/image/weightless-64', count: 6 });
+    expect(b.playlists).toEqual([{ uri: 'spotify:playlist:pl1', id: 'pl1', name: 'Study mix', owner: 'George', art: 'https://i.scdn.co/image/pl1', count: 3 }]);
+    expect(await (await api('/api/spotify/search?q=nothing')).json()).toEqual({ tracks: [], albums: [], playlists: [] });
+    expect((await api('/api/spotify/search?q=')).status).toBe(400);
+    expect((await api('/api/spotify/search')).status).toBe(400);
+  });
+
+  it('lists playlists a page at a time', async () => {
+    const { api, id } = await user('v-lists');
+    await connect(id, 'tok-playing');
+    const all = await (await api('/api/spotify/playlists')).json();
+    expect(all.items.map((p) => p.name)).toEqual(['Study mix', 'Ward rounds']);
+    expect(all).toMatchObject({ total: 2, next: false, offset: 0 });
+    expect(all.items[1]).toEqual({ uri: 'spotify:playlist:pl2', id: 'pl2', name: 'Ward rounds', owner: 'Sam', art: null, count: 0 });
+    const page2 = await (await api('/api/spotify/playlists?offset=1')).json();
+    expect(page2.items.map((p) => p.name)).toEqual(['Ward rounds']);
+    expect((await api('/api/spotify/playlists?offset=x')).status).toBe(400);
+  });
+
+  it("gives a playlist's tracks, skipping local files and episodes, plus Liked Songs", async () => {
+    const { api, id } = await user('v-tracks');
+    await connect(id, 'tok-playing');
+    const first = await (await api('/api/spotify/playlists/pl1/tracks')).json();
+    expect(first.items.map((t) => t.uri)).toEqual(['spotify:track:t1', 'spotify:track:t2']);
+    expect(first).toMatchObject({ total: 3, next: true, offset: 0 });
+    const more = await (await api('/api/spotify/playlists/pl1/tracks?offset=50')).json();
+    expect(more.items.map((t) => t.uri)).toEqual(['spotify:track:t2']);
+    expect(more.next).toBe(false);
+    const liked = await (await api('/api/spotify/playlists/liked/tracks')).json();
+    expect(liked.items[0].title).toBe('Clair de Lune, L. 32');
+    expect((await api('/api/spotify/playlists/nope/tracks')).status).toBe(404);
+    expect((await api('/api/spotify/playlists/bad%20id/tracks')).status).toBe(404);
+  });
+
+  it('shows the queue', async () => {
+    const { api, id } = await user('v-queue');
+    await connect(id, 'tok-playing');
+    const b = await (await api('/api/spotify/queue')).json();
+    expect(b.current.uri).toBe('spotify:track:t1');
+    expect(b.queue.map((t) => t.uri)).toEqual(['spotify:track:t2', 'spotify:track:t1']);
+  });
+
+  it('adds to the queue, plays a track, a track in context, a context, and sets the volume', async () => {
+    const { api, id } = await user('v-cmds');
+    await connect(id, 'tok-playing');
+    expect((await api('/api/spotify/queue', { method: 'POST', body: { uri: 'spotify:track:t2' } })).status).toBe(204);
+    expect((await api('/api/spotify/play', { method: 'POST', body: { uri: 'spotify:track:t2' } })).status).toBe(204);
+    expect((await api('/api/spotify/play', { method: 'POST', body: { uri: 'spotify:track:t2', contextUri: 'spotify:playlist:pl1' } })).status).toBe(204);
+    expect((await api('/api/spotify/play', { method: 'POST', body: { contextUri: 'spotify:album:al1' } })).status).toBe(204);
+    expect((await api('/api/spotify/volume', { method: 'PUT', body: { percent: 40 } })).status).toBe(204);
+    expect((await api('/api/spotify/volume', { method: 'PUT', body: { percent: 0 } })).status).toBe(204);
+  });
+
+  it('refuses bad uris and volumes before asking Spotify', async () => {
+    const { api, id } = await user('v-bad');
+    await connect(id, 'tok-playing');
+    const bad = async (path, method, body, field) => {
+      const res = await api(path, { method, body });
+      expect(res.status, `${path} ${JSON.stringify(body)}`).toBe(400);
+      expect(await res.json()).toEqual({ error: 'invalid', field });
+    };
+    await bad('/api/spotify/queue', 'POST', { uri: 'spotify:album:al1' }, 'uri');
+    await bad('/api/spotify/queue', 'POST', { uri: 'https://evil' }, 'uri');
+    await bad('/api/spotify/play', 'POST', {}, 'uri');
+    await bad('/api/spotify/play', 'POST', { uri: 'spotify:playlist:pl1' }, 'uri');
+    await bad('/api/spotify/play', 'POST', { contextUri: 'spotify:track:t1' }, 'contextUri');
+    await bad('/api/spotify/volume', 'PUT', { percent: 101 }, 'percent');
+    await bad('/api/spotify/volume', 'PUT', { percent: 1.5 }, 'percent');
+    await bad('/api/spotify/volume', 'PUT', { percent: '50' }, 'percent');
+  });
+
+  it('explains no device on the view commands too, and needs a connection', async () => {
+    const nodevice = await user('v-nodevice');
+    await connect(nodevice.id, 'tok-nodevice');
+    let res = await nodevice.api('/api/spotify/play', { method: 'POST', body: { uri: 'spotify:track:t1' } });
+    expect(res.status).toBe(404);
+    expect(await res.json()).toEqual({ error: 'no_device' });
+    res = await nodevice.api('/api/spotify/volume', { method: 'PUT', body: { percent: 10 } });
+    expect(res.status).toBe(404);
+    const none = await user('v-none');
+    expect((await none.api('/api/spotify/playlists')).status).toBe(409);
+    expect((await none.api('/api/spotify/queue', { method: 'POST', body: { uri: 'spotify:track:t1' } })).status).toBe(409);
   });
 });
 

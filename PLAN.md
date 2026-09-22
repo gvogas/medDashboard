@@ -135,6 +135,8 @@ docs/DATA-MODEL.md
   `docs/superpowers/specs/2026-09-22-spotify-player-design.md`, `design/mockup-spotify-options.html`.
 - The Worker holds the tokens (`spotify_tokens`, migration 0004) and proxies every call;
   the browser polls `/api/spotify/player` every 5 s while playing, 20 s otherwise.
+- A Spotify view beside Week, Month and Table: search, playlists and Liked Songs, the
+  queue (add and skip; Spotify's API cannot remove or reorder) and volume.
 - Needs a Spotify app: client id in `wrangler.jsonc`, secret via `wrangler secret put`,
   each listener's email added to the app. See `docs/DEPLOYING.md`.
 

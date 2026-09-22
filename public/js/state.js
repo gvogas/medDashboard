@@ -13,6 +13,7 @@ export const ui = {
   theme: (typeof window !== 'undefined' && window.__roundsTheme) || 'system',
   quoteIx: 0,
   spotifyNote: null,       /* 'connected' | 'error' after the Spotify round trip, shown once in Settings */
+  spotify: { pane: 'home', playlistId: null, q: '' },   /* the Spotify view: home | playlist | queue | search */
 };
 ORDER.forEach((t) => { ui.types[t] = true; });
 

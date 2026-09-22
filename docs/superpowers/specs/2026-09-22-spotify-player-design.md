@@ -38,7 +38,8 @@ secrets stay in the Worker, everything scoped by user id.
    `.dev.vars`. Set the secret with `wrangler secret put SPOTIFY_CLIENT_SECRET` and
    locally in `.dev.vars` (`.dev.vars.example` documents both).
 
-Scopes requested: `user-read-playback-state user-modify-playback-state`.
+Scopes requested: `user-read-playback-state user-modify-playback-state playlist-read-private
+playlist-read-collaborative user-library-read` (the last three for the Spotify view).
 
 ## Storage
 
@@ -88,6 +89,15 @@ Routes, added to the table in `worker/api.js`. Every one starts with
 | `GET /api/spotify/player` | `{ connected: false }` when there is no row. Otherwise `{ connected: true, playing, track, device }` where `track` is null when nothing is playing (Spotify 204) or `{ title, artists, album, art, url, durationMs, progressMs }`. `art` is the 300px image. `device` is the active device name or null. |
 | `POST /api/spotify/player/:action` | `action` is one of `play`, `pause`, `next`, `previous`, `restart`. Returns 204. `restart` is seek to 0. |
 | `DELETE /api/spotify` | Deletes the row, 204. |
+| `GET /api/spotify/search?q=` | Ten tracks, albums and playlists matching `q`, in compact shapes (art is the 64px image). |
+| `GET /api/spotify/playlists?offset=` | The user's playlists, 50 a page: `{ items, total, next, offset }`. |
+| `GET /api/spotify/playlists/:id/tracks?offset=` | A playlist's tracks, 50 a page; `liked` is the user's Liked Songs. Local files and episodes are skipped. |
+| `GET /api/spotify/queue` | `{ current, queue }`. Spotify's API cannot remove from or reorder the queue. |
+| `POST /api/spotify/queue` | `{ uri }` of a track or episode, added to the queue. 204. |
+| `POST /api/spotify/play` | `{ uri }` plays a track; `{ contextUri }` a playlist or album; both together the track inside that context. 204. |
+| `PUT /api/spotify/volume` | `{ percent }`, an integer 0–100. 204. Some devices (phones) refuse volume from the API. |
+
+The player route also carries `volume` (0–100 or null) and `supportsVolume`.
 
 Spotify errors are mapped so the UI can explain them:
 
@@ -164,6 +174,18 @@ link satisfies the latter.
 On phones the sidebar is an overlay opened by the menu button, and the badge is at
 its bottom there too. The sidebar already scrolls, so a long course list does not
 hide it.
+
+### `public/js/views/spotify-view.js` — the Spotify view
+
+A fourth entry in the view segment beside Week, Month and Table. The date buttons and
+the stats strip hide while it is open. Inside: a search box and a volume slider across
+the top; a left panel with Queue, Liked Songs and the user's playlists; a main panel
+that shows a playlist's tracks (with "Play all"), search results in three sections,
+or the queue ("Now playing", "Next up", a Skip button and a note that Spotify does not
+let apps remove or reorder). Every track row has play and add-to-queue; the playing
+track is marked. Data is cached for the session; a failed command shows a line under
+the top row. The volume slider is debounced 250 ms and follows the poller unless it is
+being held. Not connected shows one panel with a Connect button.
 
 ### Settings
 

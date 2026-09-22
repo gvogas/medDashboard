@@ -7,7 +7,7 @@ import { getSpotifyTokens, saveSpotifyTokens, deleteSpotifyTokens } from './db.j
 
 const ACCOUNTS = 'https://accounts.spotify.com';
 const API = 'https://api.spotify.com/v1';
-export const SCOPES = 'user-read-playback-state user-modify-playback-state';
+export const SCOPES = 'user-read-playback-state user-modify-playback-state playlist-read-private playlist-read-collaborative user-library-read';
 const REFRESH_WITHIN_MS = 60 * 1000;
 
 export const ACTIONS = {
@@ -146,11 +146,13 @@ export async function freshAccessToken(env, userId, now = Date.now()) {
  * 5xx are mapped so the UI can explain them. Returns the Response for the caller
  * to map 2xx/403/404 itself.
  */
-async function spotifyFetch(env, userId, method, path) {
+async function spotifyFetch(env, userId, method, path, body) {
   const { token, row } = await freshAccessToken(env, userId);
   const call = async (bearer) => {
+    const headers = { authorization: `Bearer ${bearer}` };
+    if (body !== undefined) headers['content-type'] = 'application/json';
     try {
-      return await fetch(`${API}${path}`, { method, headers: { authorization: `Bearer ${bearer}` } });
+      return await fetch(`${API}${path}`, { method, headers, body: body !== undefined ? JSON.stringify(body) : undefined });
     } catch {
       throw unavailable();
     }
@@ -168,15 +170,20 @@ async function spotifyFetch(env, userId, method, path) {
 
 // ── the player ──────────────────────────────────────────────────────────────
 
-function compactTrack(item, progressMs) {
+function pickArt(images, size) {
+  const list = images || [];
+  return (list.find((i) => i.width === size) || (size <= 64 ? list[list.length - 1] : list[1]) || list[0] || {}).url || null;
+}
+
+function compactTrack(item, progressMs, artSize = 300) {
   if (!item) return null;
-  const images = item.album?.images || [];
-  const art = images.find((i) => i.width === 300) || images[1] || images[0] || null;
+  const art = pickArt(item.album?.images, artSize);
   return {
+    uri: item.uri || null,
     title: item.name || '',
     artists: (item.artists || []).map((a) => a.name).filter(Boolean).join(', '),
     album: item.album?.name || '',
-    art: art ? art.url : null,
+    art,
     url: item.external_urls?.spotify || null,
     durationMs: Number(item.duration_ms) || 0,
     progressMs: Number(progressMs) || 0,
@@ -193,21 +200,113 @@ export async function playerState(env, userId) {
     if (e instanceof HttpError && e.body.error === 'not_connected') return { connected: false };
     throw e;
   }
-  if (res.status === 204) return { connected: true, playing: false, track: null, device: null };
+  if (res.status === 204) return { connected: true, playing: false, track: null, device: null, volume: null, supportsVolume: false };
   const body = await res.json().catch(() => ({}));
   return {
     connected: true,
     playing: !!body.is_playing,
     track: compactTrack(body.item, body.progress_ms),
     device: body.device?.name || null,
+    volume: typeof body.device?.volume_percent === 'number' ? body.device.volume_percent : null,
+    supportsVolume: !!body.device && body.device.supports_volume !== false,
   };
+}
+
+/** Mapped 403/404 from a command that needs an active device. */
+function controlError(res) {
+  if (res.status === 404) return new HttpError(404, { error: 'no_device' });
+  if (res.status === 403) return new HttpError(403, { error: 'premium_required' });
+  return unavailable();
 }
 
 /** One of ACTIONS. Resolves on success; throws a mapped HttpError otherwise. */
 export async function control(env, userId, action) {
   const [method, path] = ACTIONS[action];
   const res = await spotifyFetch(env, userId, method, path);
-  if (res.status === 404) throw new HttpError(404, { error: 'no_device' });
-  if (res.status === 403) throw new HttpError(403, { error: 'premium_required' });
+  if (!res.ok) throw controlError(res);
+}
+
+// ── the Spotify view: search, playlists, queue, volume ──────────────────────
+
+const LIST_LIMIT = 50;
+
+function compactAlbum(a) {
+  return {
+    uri: a.uri, id: a.id, name: a.name || '',
+    artists: (a.artists || []).map((x) => x.name).filter(Boolean).join(', '),
+    art: pickArt(a.images, 64), count: Number(a.total_tracks) || 0,
+  };
+}
+
+function compactPlaylist(p) {
+  return {
+    uri: p.uri, id: p.id, name: p.name || '',
+    owner: p.owner?.display_name || '',
+    art: pickArt(p.images, 64), count: Number(p.tracks?.total) || 0,
+  };
+}
+
+const page = (body, offset, mapped) => ({ items: mapped, total: Number(body.total) || mapped.length, next: !!body.next, offset });
+
+async function readJson(res) {
+  return res.json().catch(() => ({}));
+}
+
+/** Tracks, albums and playlists matching `q`, ten of each. */
+export async function search(env, userId, q) {
+  const res = await spotifyFetch(env, userId, 'GET', `/search?type=track,album,playlist&limit=10&q=${encodeURIComponent(q)}`);
   if (!res.ok) throw unavailable();
+  const b = await readJson(res);
+  return {
+    tracks: (b.tracks?.items || []).filter(Boolean).map((t) => compactTrack(t, 0, 64)),
+    albums: (b.albums?.items || []).filter(Boolean).map(compactAlbum),
+    playlists: (b.playlists?.items || []).filter(Boolean).map(compactPlaylist),
+  };
+}
+
+/** The user's playlists, a page at a time. */
+export async function playlists(env, userId, offset = 0) {
+  const res = await spotifyFetch(env, userId, 'GET', `/me/playlists?limit=${LIST_LIMIT}&offset=${offset}`);
+  if (!res.ok) throw unavailable();
+  const b = await readJson(res);
+  return page(b, offset, (b.items || []).filter(Boolean).map(compactPlaylist));
+}
+
+/** A playlist's tracks, or the user's Liked Songs for id `liked`. Local files and episodes are skipped. */
+export async function playlistTracks(env, userId, id, offset = 0) {
+  const path = id === 'liked' ? `/me/tracks?limit=${LIST_LIMIT}&offset=${offset}` : `/playlists/${id}/tracks?limit=${LIST_LIMIT}&offset=${offset}`;
+  const res = await spotifyFetch(env, userId, 'GET', path);
+  if (res.status === 404) throw new HttpError(404, { error: 'not_found' });
+  if (!res.ok) throw unavailable();
+  const b = await readJson(res);
+  const tracks = (b.items || []).map((i) => i && i.track).filter((t) => t && t.type !== 'episode' && !t.is_local && t.uri);
+  return page(b, offset, tracks.map((t) => compactTrack(t, 0, 64)));
+}
+
+/** What is playing and what comes next. Spotify offers no way to remove from or reorder the queue. */
+export async function queue(env, userId) {
+  const res = await spotifyFetch(env, userId, 'GET', '/me/player/queue');
+  if (!res.ok) throw unavailable();
+  const b = await readJson(res);
+  return {
+    current: compactTrack(b.currently_playing, 0, 64),
+    queue: (b.queue || []).filter(Boolean).map((t) => compactTrack(t, 0, 64)),
+  };
+}
+
+export async function addToQueue(env, userId, uri) {
+  const res = await spotifyFetch(env, userId, 'POST', `/me/player/queue?uri=${encodeURIComponent(uri)}`);
+  if (!res.ok) throw controlError(res);
+}
+
+/** Start a track, a track inside a playlist or album, or a whole playlist or album. */
+export async function play(env, userId, { uri, contextUri }) {
+  const body = contextUri ? { context_uri: contextUri, ...(uri ? { offset: { uri } } : {}) } : { uris: [uri] };
+  const res = await spotifyFetch(env, userId, 'PUT', '/me/player/play', body);
+  if (!res.ok) throw controlError(res);
+}
+
+export async function setVolume(env, userId, percent) {
+  const res = await spotifyFetch(env, userId, 'PUT', `/me/player/volume?volume_percent=${percent}`);
+  if (!res.ok) throw controlError(res);
 }
