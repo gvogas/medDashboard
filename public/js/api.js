@@ -1,10 +1,11 @@
 // The only file that knows the API's URLs. Same-origin, cookie session.
 
 export class ApiError extends Error {
-  constructor(status, body) {
+  constructor(status, body, retryAfter = null) {
     super(body?.error || `HTTP ${status}`);
     this.status = status;
     this.body = body;
+    this.retryAfter = retryAfter;     /* seconds, from a 429 */
   }
 }
 
@@ -17,7 +18,7 @@ export async function request(method, path, body) {
     body: body !== undefined ? JSON.stringify(body) : undefined,
   });
   const data = res.status === 204 ? null : await res.json().catch(() => null);
-  if (!res.ok) throw new ApiError(res.status, data);
+  if (!res.ok) throw new ApiError(res.status, data, Number(res.headers.get('retry-after')) || null);
   return data;
 }
 
@@ -31,4 +32,7 @@ export const api = {
   put: (kind, id, row) => request('PUT', `/api/${kind}/${encodeURIComponent(id)}`, row),
   revokeAll: () => request('POST', '/api/session/revoke-all'),
   del: (kind, id) => request('DELETE', `/api/${kind}/${encodeURIComponent(id)}`),
+  spotifyPlayer: () => request('GET', '/api/spotify/player'),
+  spotifyControl: (action) => request('POST', `/api/spotify/player/${action}`),
+  spotifyDisconnect: () => request('DELETE', '/api/spotify'),
 };

@@ -295,6 +295,13 @@ td .steps{margin-top:3px}
 }
 .setgrp h4 em{font-style:normal;margin-left:auto;font-size:10.5px;letter-spacing:0;text-transform:none}
 .setgrp .note{font-size:11.5px;color:var(--ink-3)}
+.spotrow{display:flex;align-items:center;gap:9px;font-size:12.5px}
+.spotrow .spot{width:16px;height:16px;color:#1DB954;flex:none}
+.spotrow .who{flex:1;min-width:0}
+.spotrow .who b{display:block;font-weight:600}
+.spotrow .who span{font-size:11px;color:var(--ink-3)}
+.spotrow .btn{padding:5px 10px;font-size:12px;text-decoration:none;flex:none}
+.setgrp .note.err{color:var(--crit)}
 .themeseg{display:flex;gap:6px}
 .themeseg button{
   flex:1;border:1px solid var(--line);background:var(--panel-2);border-radius:9px;padding:9px 6px;

@@ -1,9 +1,10 @@
 import { json, readJson, HttpError } from './http.js';
-import { requireUser, requireSession, signSession, sessionCookie, clearCookie, RENEW_WITHIN_MS } from './auth.js';
+import { requireUser, requireSession, signSession, sessionCookie, clearCookie, parseCookies, secureFlag, RENEW_WITHIN_MS } from './auth.js';
 import { verifyPassword, normalizeUsername } from './password.js';
 import { lockedFor, recordFailure, recordSuccess } from './throttle.js';
 import { validateProfile, validateCourse, validateItem, validateQuote, validateId } from './validate.js';
-import { getUserForLogin, getProfile, updateProfile, getRow, upsertRow, deleteRow, courseExists, syncSince, bumpPasswordGen } from './db.js';
+import { getUserForLogin, getProfile, updateProfile, getRow, upsertRow, deleteRow, courseExists, syncSince, bumpPasswordGen, saveSpotifyTokens, deleteSpotifyTokens } from './db.js';
+import * as spotify from './spotify.js';
 
 const VALIDATORS = { courses: validateCourse, items: validateItem, quotes: validateQuote };
 
@@ -33,6 +34,50 @@ async function removeRow({ request, env, params: [table, id] }) {
 }
 
 const ROW = /^\/api\/(courses|items|quotes)\/([^/]+)$/;
+
+// ── Spotify ─────────────────────────────────────────────────────────────────
+// The consent round trip is two browser navigations, so its failures are
+// redirects to the app with a hash, not JSON. The state cookie is the CSRF guard.
+
+const STATE_COOKIE = 'rounds_spotify_state';
+const stateCookie = (value, url, maxAge) =>
+  `${STATE_COOKIE}=${value}; Path=/api/spotify; HttpOnly; SameSite=Lax; Max-Age=${maxAge}${secureFlag(url)}`;
+const redirect = (url, hash, headers = {}) =>
+  new Response(null, { status: 302, headers: { location: `${url.origin}/#spotify=${hash}`, ...headers } });
+const callbackUri = (url) => `${url.origin}/api/spotify/callback`;
+
+async function spotifyConnect({ request, env, url }) {
+  await requireUser(request, env);
+  if (!spotify.configured(env)) throw new HttpError(503, { error: 'spotify_not_configured' });
+  const state = [...crypto.getRandomValues(new Uint8Array(16))].map((b) => b.toString(16).padStart(2, '0')).join('');
+  return new Response(null, {
+    status: 302,
+    headers: { location: spotify.authorizeUrl(env, callbackUri(url), state), 'set-cookie': stateCookie(state, url, 600) },
+  });
+}
+
+async function spotifyCallback({ request, env, url }) {
+  const clear = { 'set-cookie': stateCookie('', url, 0) };
+  let userId;
+  try { userId = await requireUser(request, env); } catch { return redirect(url, 'error', clear); }
+  const state = url.searchParams.get('state'), code = url.searchParams.get('code');
+  const expected = parseCookies(request.headers.get('cookie'))[STATE_COOKIE];
+  if (!state || !expected || state !== expected || !code || url.searchParams.get('error') || !spotify.configured(env)) {
+    return redirect(url, 'error', clear);
+  }
+  try {
+    const t = await spotify.exchangeCode(env, code, callbackUri(url));
+    await saveSpotifyTokens(env.DB, userId, {
+      refreshToken: await spotify.encryptToken(env.SESSION_SECRET, t.refreshToken),
+      accessToken: t.accessToken,
+      expiresAt: t.expiresAt,
+    });
+  } catch (e) {
+    if (!(e instanceof HttpError)) console.error(e);
+    return redirect(url, 'error', clear);
+  }
+  return redirect(url, 'connected', clear);
+}
 
 const routes = [
   // Username + password. Accounts are created with `npm run user:add`.
@@ -94,6 +139,23 @@ const routes = [
   ['GET', ROW, readRow],
   ['PUT', ROW, putRow],
   ['DELETE', ROW, removeRow],
+
+  ['GET', /^\/api\/spotify\/connect$/, spotifyConnect],
+  ['GET', /^\/api\/spotify\/callback$/, spotifyCallback],
+  ['GET', /^\/api\/spotify\/player$/, async ({ request, env }) => {
+    const userId = await requireUser(request, env);
+    return json(await spotify.playerState(env, userId));
+  }],
+  ['POST', /^\/api\/spotify\/player\/(play|pause|next|previous|restart)$/, async ({ request, env, params: [action] }) => {
+    const userId = await requireUser(request, env);
+    await spotify.control(env, userId, action);
+    return new Response(null, { status: 204 });
+  }],
+  ['DELETE', /^\/api\/spotify$/, async ({ request, env }) => {
+    const userId = await requireUser(request, env);
+    await deleteSpotifyTokens(env.DB, userId);
+    return new Response(null, { status: 204 });
+  }],
 
 ];
 

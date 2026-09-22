@@ -26,6 +26,10 @@
     }
   ],
 
+  // Spotify: the app's client id is public; the secret is set with
+  // `wrangler secret put SPOTIFY_CLIENT_SECRET`. Both empty means the player is off.
+  "vars": { "SPOTIFY_CLIENT_ID": "" },
+
   "triggers": {
     // Nightly: hard-delete tombstones older than 30 days.
     "crons": ["0 3 * * *"]

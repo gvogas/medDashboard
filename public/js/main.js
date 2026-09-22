@@ -14,7 +14,9 @@ import { renderStats, renderQuote, nextQuote } from './views/stats.js';
 import { drawer, scrim, closeDrawer, drawerHasFocus } from './views/drawer-base.js';
 import { openItem, newItem, current, saveDraft, touch, renderItemDrawer } from './views/drawer-item.js';
 import { openCourse, renderCourseDrawer, saveCourseDraft, deleteCourseDraft } from './views/drawer-course.js';
-import { openSettings, renderSettings, applyCoat, refreshSyncNote } from './views/drawer-settings.js';
+import { openSettings, renderSettings, applyCoat, refreshSyncNote, refreshSpotifyGroup } from './views/drawer-settings.js';
+import * as spotify from './spotify.js';
+import { renderPlayer } from './views/player.js';
 import { renderSignIn, hideSignIn } from './views/signin.js';
 import { schedule as drawOrnament } from './ornament.js';
 import { parseTime } from './timepicker.js';
@@ -43,6 +45,21 @@ sync.onStatus((s) => {
 });
 sync.onPulled(() => { if (!drawerHasFocus()) { render(); if (ui.sel) renderItemDrawer(); if (ui.settings) renderSettings(); } });
 sync.onUnauthenticated(() => showSignIn('Your session has ended. Sign in again.'));
+
+/* ═════════ the Spotify badge on the coat ═════════ */
+spotify.onState((s, kind) => {
+  renderPlayer(s, kind);
+  if (kind === 'state' && ui.settings && !drawerHasFocus()) refreshSpotifyGroup();
+});
+spotify.onUnauthenticated(() => showSignIn('Your session has ended. Sign in again.'));
+
+/* Spotify's consent page sends the browser back to /#spotify=connected or =error. */
+function spotifyReturn() {
+  const m = location.hash.match(/^#spotify=(connected|error)$/);
+  if (!m) return null;
+  history.replaceState(null, '', location.pathname + location.search);
+  return m[1];
+}
 
 /* ═════════ the quote tile turns its own page ═════════ */
 const QUOTE_EVERY_MS = 25000;
@@ -79,6 +96,9 @@ async function start(profile) {
   drawOrnament();
   sync.init();
   sync.syncNow();
+  spotify.start();
+  const back = spotifyReturn();
+  if (back) { ui.spotifyNote = back; openSettings('spotifyGrp'); }
 }
 
 function showSignIn(error, username = '') {
@@ -88,6 +108,7 @@ function showSignIn(error, username = '') {
 async function signOut({ everywhere = false } = {}) {
   try { await (everywhere ? api.revokeAll() : api.signOut()); } catch {}
   const id = data.profile?.id;
+  spotify.stop();
   closeDrawer();
   await store.close();
   if (id) { try { await store.wipe(id); } catch {} }
@@ -146,6 +167,13 @@ document.addEventListener('click', async (e) => {
   if (e.target.closest('#syncPill')) { sync.syncNow(); return; }
   if (e.target.closest('#setBtn')) { ui.settings ? closeDrawer() : openSettings(); return; }
   if ((el = e.target.closest('[data-setopen]'))) { openSettings('o-name'); return; }
+  if ((el = e.target.closest('[data-spotify]'))) {
+    const act = el.dataset.spotify;
+    if (act === 'connect') openSettings('spotifyGrp');
+    else if (act === 'previous') spotify.previous();
+    else spotify.control(act);
+    return;
+  }
   if ((el = e.target.closest('[data-quotenext]'))) {
     const r = el.getBoundingClientRect();
     fireworks(r.left + r.width / 2, r.top + 4);
@@ -202,6 +230,12 @@ document.addEventListener('click', async (e) => {
     else if (act === 'course-delete-yes' && ui.courseDraft) deleteCourseDraft();
     else if (act === 'signout') signOut();
     else if (act === 'signout-all') signOut({ everywhere: true });
+    else if (act === 'spotify-disconnect') {
+      try { await api.spotifyDisconnect(); } catch {}
+      ui.spotifyNote = null;
+      spotify.disconnected();
+      renderSettings();
+    }
     return;
   }
   if ((el = e.target.closest('[data-cl]'))) {

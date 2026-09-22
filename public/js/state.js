@@ -12,6 +12,7 @@ export const ui = {
   settings: false, focusField: null, sort: { key: 'date', dir: 1 },
   theme: (typeof window !== 'undefined' && window.__roundsTheme) || 'system',
   quoteIx: 0,
+  spotifyNote: null,       /* 'connected' | 'error' after the Spotify round trip, shown once in Settings */
 };
 ORDER.forEach((t) => { ui.types[t] = true; });
 

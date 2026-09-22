@@ -5,6 +5,8 @@ import { esc, $ } from '../dom.js';
 import { showDrawer, resetDrawerState } from './drawer-base.js';
 import { TUCK_SVG } from './bits.js';
 import { status } from '../sync.js';
+import { state as spotify } from '../spotify.js';
+import { SPOTIFY_MARK } from './player.js';
 
 export function openSettings(focus) {
   resetDrawerState();
@@ -35,6 +37,32 @@ function syncLine() {
   if (status.state === 'error') return 'Sync problem: ' + esc(status.message || 'unknown') + '.';
   if (status.state === 'syncing' || status.state === 'pending') return 'Syncing…';
   return status.lastPull ? 'Synced ' + Math.max(0, Math.round((Date.now() - status.lastPull) / 60000)) + ' min ago.' : 'Synced.';
+}
+
+function spotifyGroup() {
+  const on = spotify.connected;
+  let html = '<h4>Spotify<em>' + (on ? 'Connected' : 'Not connected') + '</em></h4>'
+    + '<div class="spotrow">' + SPOTIFY_MARK + '<div class="who">';
+  if (on) {
+    html += '<b>Connected</b><span>' + (spotify.device ? 'Playing on <b style="font-weight:500;display:inline">' + esc(spotify.device) + '</b>.'
+      : spotify.track ? 'Paused.' : 'Nothing playing right now.') + '</span></div>'
+      + '<button class="btn ghost" type="button" data-act="spotify-disconnect">Disconnect</button>';
+  } else {
+    html += '<b>Not connected</b><span>Show what you are listening to at the bottom of the sidebar.</span></div>'
+      + '<a class="btn" href="/api/spotify/connect">Connect</a>';
+  }
+  html += '</div>';
+  if (ui.spotifyNote === 'error') html += '<span class="note err">Spotify did not connect. Try again.</span>';
+  if (ui.spotifyNote === 'connected') html += '<span class="note" style="color:var(--good)">Connected. The badge on the coat shows what is playing.</span>';
+  html += '<span class="note">Controls need Spotify Premium; free accounts still see what is playing.'
+    + (on ? '' : ' The owner of the Rounds app has to add your Spotify email to it first, so ask before connecting.') + '</span>';
+  return html;
+}
+
+/** Redraw just the Spotify group, when the poller learns something while Settings is open. */
+export function refreshSpotifyGroup() {
+  const g = $('spotifyGrp');
+  if (g) g.innerHTML = spotifyGroup();
 }
 
 export function renderSettings() {
@@ -89,6 +117,9 @@ export function renderSettings() {
     + '<span style="display:flex;gap:6px"><input type="text" id="qSrc" placeholder="Who said it (optional)" aria-label="Source" maxlength="80">'
     + '<button class="btn ghost" type="button" data-act="addquote">Add</button></span></div></div>';
 
+  // ── Spotify ──
+  body += '<div class="setgrp" id="spotifyGrp" tabindex="-1">' + spotifyGroup() + '</div>';
+
   // ── data: sync, import, account ──
   body += '<div class="setgrp"><h4>Data<em>' + data.items.length + ' items · ' + data.courses.length + ' courses</em></h4>'
     + '<span class="note" id="syncNote">' + syncLine() + '</span>';
@@ -101,7 +132,11 @@ export function renderSettings() {
     + '<button class="btn" type="button" data-act="close">Done</button></div>';
 
   showDrawer(head + body + foot);
-  if (ui.focusField) { const f = $(ui.focusField); if (f) f.focus(); ui.focusField = null; }
+  if (ui.focusField) {
+    const f = $(ui.focusField);
+    if (f) { f.focus({ preventScroll: true }); f.scrollIntoView({ block: 'nearest' }); }
+    ui.focusField = null;
+  }
 }
 
 export function refreshSyncNote() {

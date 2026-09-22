@@ -129,7 +129,16 @@ docs/DATA-MODEL.md
   your home screen and opens offline like an app.
 - Optional, later: a custom domain, if you ever want one. Nothing above depends on it.
 
-### 7 — Backlog, in the order I'd do it
+### 7 — Spotify — built
+- A badge clipped to the coat under the pocket: album art, title, artists, a progress
+  line, previous / play-pause / next, and the device it is playing on. Spec and design:
+  `docs/superpowers/specs/2026-09-22-spotify-player-design.md`, `design/mockup-spotify-options.html`.
+- The Worker holds the tokens (`spotify_tokens`, migration 0004) and proxies every call;
+  the browser polls `/api/spotify/player` every 5 s while playing, 20 s otherwise.
+- Needs a Spotify app: client id in `wrangler.jsonc`, secret via `wrangler secret put`,
+  each listener's email added to the app. See `docs/DEPLOYING.md`.
+
+### 8 — Backlog, in the order I'd do it
 1. **Timetable import** — paste an `.ics` feed or a CSV and have courses, classes and
    exam dates created for you, instead of typing a semester in by hand.
 2. **Export / backup** — one button that hands you a JSON file of everything.
