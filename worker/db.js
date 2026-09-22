@@ -42,3 +42,105 @@ export async function updateProfile(db, userId, p, now = Date.now()) {
     .run();
   return getProfile(db, userId);
 }
+
+// ── user-owned rows ─────────────────────────────────────────────────────────
+// Each table: `cols` maps API field → column, `toRow`/`fromRow` convert values
+// (JSON columns, booleans, the where/location rename).
+
+const jsonIn = (v) => JSON.stringify(v ?? []);
+const jsonOut = (v) => (typeof v === 'string' ? JSON.parse(v) : v ?? []);
+
+export const TABLES = {
+  courses: {
+    cols: { code: 'code', name: 'name', color: 'color', instructor: 'instructor', term: 'term', archived: 'archived', meetings: 'meetings' },
+    toRow: (c) => ({ ...c, archived: c.archived ? 1 : 0, meetings: jsonIn(c.meetings) }),
+    fromRow: (r) => ({ archived: r.archived === 1, meetings: jsonOut(r.meetings) }),
+  },
+  items: {
+    cols: {
+      type: 'type', title: 'title', courseId: 'course_id', date: 'date', start: 'start', end: 'end', where: 'location',
+      status: 'status', grade: 'grade', weight: 'weight', notes: 'notes', checklist: 'checklist', links: 'links',
+      recur: 'recur', weekday: 'weekday', recurUntil: 'recur_until', dept: 'dept', completedAt: 'completed_at',
+    },
+    toRow: (i) => ({ ...i, checklist: jsonIn(i.checklist), links: jsonIn(i.links) }),
+    fromRow: (r) => ({ checklist: jsonOut(r.checklist), links: jsonOut(r.links) }),
+  },
+  quotes: {
+    cols: { text: 'text', source: 'source' },
+    toRow: (q) => q,
+    fromRow: () => ({}),
+  },
+};
+
+function rowToApi(table, r) {
+  const t = TABLES[table];
+  const out = { id: r.id };
+  for (const [field, col] of Object.entries(t.cols)) out[field] = r[col];
+  Object.assign(out, t.fromRow(r));
+  out.createdAt = r.created_at;
+  out.updatedAt = r.updated_at;
+  out.deletedAt = r.deleted_at ?? null;
+  return out;
+}
+
+function selectCols(table) {
+  return ['id', ...Object.values(TABLES[table].cols), 'created_at', 'updated_at', 'deleted_at'].join(', ');
+}
+
+export async function getRow(db, table, userId, id) {
+  const r = await db.prepare(`SELECT ${selectCols(table)} FROM ${table} WHERE user_id = ? AND id = ?`).bind(userId, id).first();
+  return r ? rowToApi(table, r) : null;
+}
+
+/** Insert or update. createdAt is kept on update; a deleted row is revived. */
+export async function upsertRow(db, table, userId, id, fields, now = Date.now()) {
+  const t = TABLES[table];
+  const row = t.toRow(fields);
+  const cols = Object.entries(t.cols);
+  const names = ['user_id', 'id', ...cols.map(([, col]) => col), 'created_at', 'updated_at', 'deleted_at'];
+  const values = [userId, id, ...cols.map(([field]) => row[field] ?? null), now, now, null];
+  const updates = [...cols.map(([, col]) => `${col} = excluded.${col}`), 'updated_at = excluded.updated_at', 'deleted_at = NULL'];
+  await db
+    .prepare(
+      `INSERT INTO ${table} (${names.join(', ')}) VALUES (${names.map(() => '?').join(', ')})
+       ON CONFLICT (user_id, id) DO UPDATE SET ${updates.join(', ')}`,
+    )
+    .bind(...values)
+    .run();
+  return getRow(db, table, userId, id);
+}
+
+/** Soft delete. Returns false if the row does not exist for this user. */
+export async function deleteRow(db, table, userId, id, now = Date.now()) {
+  const exists = await db.prepare(`SELECT 1 AS x FROM ${table} WHERE user_id = ? AND id = ?`).bind(userId, id).first();
+  if (!exists) return false;
+  const stmts = [
+    db.prepare(`UPDATE ${table} SET deleted_at = ?, updated_at = ? WHERE user_id = ? AND id = ? AND deleted_at IS NULL`).bind(now, now, userId, id),
+  ];
+  if (table === 'courses') {
+    stmts.push(
+      db.prepare('UPDATE items SET course_id = NULL, updated_at = ? WHERE user_id = ? AND course_id = ?').bind(now, userId, id),
+    );
+  }
+  await db.batch(stmts);
+  return true;
+}
+
+export async function courseExists(db, userId, id) {
+  const r = await db.prepare('SELECT 1 AS x FROM courses WHERE user_id = ? AND id = ? AND deleted_at IS NULL').bind(userId, id).first();
+  return !!r;
+}
+
+/** Every row changed after `since`; deleted rows collapse to {id, deletedAt}. */
+export async function syncSince(db, userId, since) {
+  const now = Date.now();
+  const out = { now };
+  for (const table of Object.keys(TABLES)) {
+    const { results } = await db
+      .prepare(`SELECT ${selectCols(table)} FROM ${table} WHERE user_id = ? AND updated_at > ? ORDER BY updated_at, id`)
+      .bind(userId, since)
+      .all();
+    out[table] = results.map((r) => (r.deleted_at ? { id: r.id, deletedAt: r.deleted_at } : rowToApi(table, r)));
+  }
+  return out;
+}
