@@ -60,7 +60,7 @@ const T1 = uri(PLAYING.item, 't1');
 const T2 = uri(PAUSED.item, 't2');
 
 function isControl(method, pathname) {
-  return (method === 'PUT' && ['/v1/me/player/play', '/v1/me/player/pause', '/v1/me/player/seek', '/v1/me/player/volume'].includes(pathname))
+  return (method === 'PUT' && ['/v1/me/player', '/v1/me/player/play', '/v1/me/player/pause', '/v1/me/player/seek', '/v1/me/player/volume'].includes(pathname))
     || (method === 'POST' && ['/v1/me/player/next', '/v1/me/player/previous', '/v1/me/player/queue'].includes(pathname));
 }
 
@@ -104,8 +104,17 @@ async function player(request, url) {
   }
 
   if (!isControl(method, path)) return json({ error: { status: 405, message: 'not a control' } }, 405);
-  if (tok === 'tok-nodevice') return json({ error: { status: 404, reason: 'NO_ACTIVE_DEVICE' } }, 404);
   if (tok === 'tok-free') return json({ error: { status: 403, reason: 'PREMIUM_REQUIRED' } }, 403);
+  /* The only device Spotify knows by id is `roundsdev`; naming it works even with nothing active. */
+  const unknownDevice = () => json({ error: { status: 404, reason: 'NO_ACTIVE_DEVICE' } }, 404);
+  if (path === '/v1/me/player') {
+    const body = JSON.parse((await request.text()) || '{}');
+    if (!Array.isArray(body.device_ids) || body.device_ids.length !== 1 || body.play !== true) return json({ error: { status: 400, message: 'bad transfer body' } }, 400);
+    return body.device_ids[0] === 'roundsdev' ? new Response(null, { status: 204 }) : unknownDevice();
+  }
+  const device = q.get('device_id');
+  if (device !== null && device !== 'roundsdev') return unknownDevice();
+  if (tok === 'tok-nodevice' && device === null) return unknownDevice();
   if (path === '/v1/me/player/seek' && q.get('position_ms') !== '0') return json({ error: { status: 400 } }, 400);
   if (path === '/v1/me/player/volume') {
     const v = Number(q.get('volume_percent'));

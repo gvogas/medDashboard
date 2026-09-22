@@ -7,7 +7,7 @@ import { getSpotifyTokens, saveSpotifyTokens, deleteSpotifyTokens } from './db.j
 
 const ACCOUNTS = 'https://accounts.spotify.com';
 const API = 'https://api.spotify.com/v1';
-export const SCOPES = 'user-read-playback-state user-modify-playback-state playlist-read-private playlist-read-collaborative user-library-read';
+export const SCOPES = 'user-read-playback-state user-modify-playback-state playlist-read-private playlist-read-collaborative user-library-read streaming user-read-email user-read-private';
 const REFRESH_WITHIN_MS = 60 * 1000;
 
 export const ACTIONS = {
@@ -114,7 +114,7 @@ export async function refreshAccessToken(env, refreshToken, now = Date.now()) {
 
 const notConnected = () => new HttpError(409, { error: 'not_connected' });
 
-/** Refresh, store, and return the new access token; drops the row if Spotify revoked it. */
+/** Refresh, store, and return `{ accessToken, expiresAt }`; drops the row if Spotify revoked it. */
 async function refreshFor(env, userId, row) {
   const refreshToken = await decryptToken(env.SESSION_SECRET, row.refresh_token);
   if (!refreshToken) { await deleteSpotifyTokens(env.DB, userId); throw notConnected(); }
@@ -130,15 +130,16 @@ async function refreshFor(env, userId, row) {
     accessToken: fresh.accessToken,
     expiresAt: fresh.expiresAt,
   });
-  return fresh.accessToken;
+  return fresh;
 }
 
-/** A usable access token for this user, refreshed when it is about to expire. */
+/** A usable access token for this user and when it expires, refreshed when it is about to. */
 export async function freshAccessToken(env, userId, now = Date.now()) {
   const row = await getSpotifyTokens(env.DB, userId);
   if (!row) throw notConnected();
-  if (row.expires_at - now > REFRESH_WITHIN_MS) return { token: row.access_token, row };
-  return { token: await refreshFor(env, userId, row), row };
+  if (row.expires_at - now > REFRESH_WITHIN_MS) return { token: row.access_token, expiresAt: row.expires_at, row };
+  const fresh = await refreshFor(env, userId, row);
+  return { token: fresh.accessToken, expiresAt: fresh.expiresAt, row };
 }
 
 /**
@@ -158,7 +159,7 @@ async function spotifyFetch(env, userId, method, path, body) {
     }
   };
   let res = await call(token);
-  if (res.status === 401) res = await call(await refreshFor(env, userId, row));
+  if (res.status === 401) res = await call((await refreshFor(env, userId, row)).accessToken);
   if (res.status === 401) throw notConnected();
   if (res.status === 429) {
     const wait = res.headers.get('retry-after') || '30';
@@ -190,7 +191,7 @@ function compactTrack(item, progressMs, artSize = 300) {
   };
 }
 
-/** `{ connected: false }`, or `{ connected: true, playing, track, device }`. */
+/** `{ connected: false }`, or `{ connected: true, playing, track, device, deviceId, volume, supportsVolume }`. */
 export async function playerState(env, userId) {
   if (!(await getSpotifyTokens(env.DB, userId))) return { connected: false };
   let res;
@@ -200,13 +201,14 @@ export async function playerState(env, userId) {
     if (e instanceof HttpError && e.body.error === 'not_connected') return { connected: false };
     throw e;
   }
-  if (res.status === 204) return { connected: true, playing: false, track: null, device: null, volume: null, supportsVolume: false };
+  if (res.status === 204) return { connected: true, playing: false, track: null, device: null, deviceId: null, volume: null, supportsVolume: false };
   const body = await res.json().catch(() => ({}));
   return {
     connected: true,
     playing: !!body.is_playing,
     track: compactTrack(body.item, body.progress_ms),
     device: body.device?.name || null,
+    deviceId: body.device?.id || null,
     volume: typeof body.device?.volume_percent === 'number' ? body.device.volume_percent : null,
     supportsVolume: !!body.device && body.device.supports_volume !== false,
   };
@@ -219,10 +221,21 @@ function controlError(res) {
   return unavailable();
 }
 
-/** One of ACTIONS. Resolves on success; throws a mapped HttpError otherwise. */
-export async function control(env, userId, action) {
+/** Append Spotify's device_id to a player path when one is given. */
+function withDevice(path, deviceId) {
+  return deviceId ? `${path}${path.includes('?') ? '&' : '?'}device_id=${encodeURIComponent(deviceId)}` : path;
+}
+
+/** One of ACTIONS, on the active device or the one named. Throws a mapped HttpError on failure. */
+export async function control(env, userId, action, deviceId = null) {
   const [method, path] = ACTIONS[action];
-  const res = await spotifyFetch(env, userId, method, path);
+  const res = await spotifyFetch(env, userId, method, withDevice(path, deviceId));
+  if (!res.ok) throw controlError(res);
+}
+
+/** Move playback to this device (the Rounds tab) and keep it playing. */
+export async function transfer(env, userId, deviceId) {
+  const res = await spotifyFetch(env, userId, 'PUT', '/me/player', { device_ids: [deviceId], play: true });
   if (!res.ok) throw controlError(res);
 }
 
@@ -300,9 +313,9 @@ export async function addToQueue(env, userId, uri) {
 }
 
 /** Start a track, a track inside a playlist or album, or a whole playlist or album. */
-export async function play(env, userId, { uri, contextUri }) {
+export async function play(env, userId, { uri, contextUri, deviceId = null }) {
   const body = contextUri ? { context_uri: contextUri, ...(uri ? { offset: { uri } } : {}) } : { uris: [uri] };
-  const res = await spotifyFetch(env, userId, 'PUT', '/me/player/play', body);
+  const res = await spotifyFetch(env, userId, 'PUT', withDevice('/me/player/play', deviceId), body);
   if (!res.ok) throw controlError(res);
 }
 

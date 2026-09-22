@@ -37,7 +37,7 @@ describe('GET /api/spotify/connect', () => {
     expect(to.origin + to.pathname).toBe('https://accounts.spotify.com/authorize');
     expect(to.searchParams.get('response_type')).toBe('code');
     expect(to.searchParams.get('client_id')).toBe('test-client-id');
-    expect(to.searchParams.get('scope')).toBe('user-read-playback-state user-modify-playback-state playlist-read-private playlist-read-collaborative user-library-read');
+    expect(to.searchParams.get('scope')).toBe('user-read-playback-state user-modify-playback-state playlist-read-private playlist-read-collaborative user-library-read streaming user-read-email user-read-private');
     expect(to.searchParams.get('redirect_uri')).toBe(`${BASE}/api/spotify/callback`);
     const state = to.searchParams.get('state');
     expect(state).toMatch(/^[0-9a-f]{32}$/);
@@ -123,6 +123,7 @@ describe('GET /api/spotify/player', () => {
       connected: true,
       playing: true,
       device: "George's MacBook",
+      deviceId: null,
       volume: null,
       supportsVolume: true,
       track: {
@@ -148,7 +149,7 @@ describe('GET /api/spotify/player', () => {
 
     const idle = await user('p-idle');
     await connect(idle.id, 'tok-idle');
-    expect(await (await idle.api('/api/spotify/player')).json()).toEqual({ connected: true, playing: false, track: null, device: null, volume: null, supportsVolume: false });
+    expect(await (await idle.api('/api/spotify/player')).json()).toEqual({ connected: true, playing: false, track: null, device: null, deviceId: null, volume: null, supportsVolume: false });
   });
 
   it('refreshes an access token that is about to expire and stores the new one', async () => {
@@ -238,6 +239,61 @@ describe('POST /api/spotify/player/:action', () => {
     expect((await api('/api/spotify/player/shuffle', { method: 'POST' })).status).toBe(404);
     const res = await api('/api/spotify/player/play', { method: 'POST', headers: { origin: 'https://evil.example' } });
     expect(res.status).toBe(403);
+  });
+});
+
+describe('the Rounds device', () => {
+  const postJson = (api, path, body, headers = {}) =>
+    api(path, { method: 'POST', headers: { 'content-type': 'application/json', ...headers }, body: JSON.stringify(body) });
+
+  it('hands the page a token, never cached, and 409 without a connection', async () => {
+    const none = await user('t-none');
+    expect((await none.api('/api/spotify/token')).status).toBe(409);
+    const { api, id } = await user('t-ok');
+    await connect(id, 'tok-playing');
+    const res = await api('/api/spotify/token');
+    expect(res.status).toBe(200);
+    expect(res.headers.get('cache-control')).toBe('no-store');
+    const body = await res.json();
+    expect(body.token).toBe('tok-playing');
+    expect(body.expiresAt).toBeGreaterThan(Date.now());
+  });
+
+  it('refreshes an expiring token before handing it over', async () => {
+    const { api, id } = await user('t-stale');
+    await connect(id, 'tok-playing', { expiresAt: Date.now() + 1000 });
+    const body = await (await api('/api/spotify/token')).json();
+    expect(body.token).toBe('tok-refreshed');
+    expect(body.expiresAt).toBeGreaterThan(Date.now() + 50 * 60 * 1000);
+  });
+
+  it('moves playback to a device', async () => {
+    const { api, id } = await user('x-ok');
+    await connect(id, 'tok-playing');
+    const post = (deviceId, headers) => postJson(api, '/api/spotify/transfer', { deviceId }, headers);
+    expect((await post('dev-rounds')).status).toBe(400);          /* dashes are not a device id */
+    expect((await post(undefined)).status).toBe(400);
+    const unknown = await post('devrounds');
+    expect(unknown.status).toBe(404);
+    expect(await unknown.json()).toEqual({ error: 'no_device' });
+    expect((await post('roundsdev')).status).toBe(204);
+    expect((await post('roundsdev', { origin: 'https://evil.example' })).status).toBe(403);
+    const free = await user('x-free');
+    await connect(free.id, 'tok-free');
+    expect((await postJson(free.api, '/api/spotify/transfer', { deviceId: 'roundsdev' })).status).toBe(403);
+  });
+
+  it('plays and controls on a named device when asked', async () => {
+    const { api, id } = await user('x-dev');
+    await connect(id, 'tok-nodevice');
+    const playOn = (deviceId) => postJson(api, '/api/spotify/play', { uri: 'spotify:track:t1', deviceId });
+    expect((await playOn(undefined)).status).toBe(404);
+    expect((await playOn('roundsdev')).status).toBe(204);
+    expect((await playOn('bad id')).status).toBe(400);
+    expect((await api('/api/spotify/player/play', { method: 'POST' })).status).toBe(404);
+    expect((await api('/api/spotify/player/play?deviceId=roundsdev', { method: 'POST' })).status).toBe(204);
+    expect((await api('/api/spotify/player/restart?deviceId=roundsdev', { method: 'POST' })).status).toBe(204);
+    expect((await api('/api/spotify/player/play?deviceId=bad-id', { method: 'POST' })).status).toBe(400);
   });
 });
 

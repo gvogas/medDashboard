@@ -47,6 +47,13 @@ const redirect = (url, hash, headers = {}) =>
 const callbackUri = (url) => `${url.origin}/api/spotify/callback`;
 const TRACK_URI = /^spotify:(track|episode):[A-Za-z0-9]{1,64}$/;
 const CONTEXT_URI = /^spotify:(album|playlist|artist):[A-Za-z0-9]{1,64}$/;
+const DEVICE_ID = /^[A-Za-z0-9]{1,64}$/;
+/** An optional Spotify device id: null when absent, 400 when malformed. */
+function deviceParam(value) {
+  if (value == null || value === '') return null;
+  if (typeof value !== 'string' || !DEVICE_ID.test(value)) throw new HttpError(400, { error: 'invalid', field: 'deviceId' });
+  return value;
+}
 function offsetParam(url) {
   const raw = url.searchParams.get('offset') ?? '0';
   if (!/^[0-9]{1,6}$/.test(raw)) throw new HttpError(400, { error: 'invalid', field: 'offset' });
@@ -153,9 +160,22 @@ const routes = [
     const userId = await requireUser(request, env);
     return json(await spotify.playerState(env, userId));
   }],
-  ['POST', /^\/api\/spotify\/player\/(play|pause|next|previous|restart)$/, async ({ request, env, params: [action] }) => {
+  ['POST', /^\/api\/spotify\/player\/(play|pause|next|previous|restart)$/, async ({ request, env, url, params: [action] }) => {
     const userId = await requireUser(request, env);
-    await spotify.control(env, userId, action);
+    await spotify.control(env, userId, action, deviceParam(url.searchParams.get('deviceId')));
+    return new Response(null, { status: 204 });
+  }],
+  /* The Web Playback SDK in the page needs a bearer token of its own; the refresh token stays here. */
+  ['GET', /^\/api\/spotify\/token$/, async ({ request, env }) => {
+    const userId = await requireUser(request, env);
+    const { token, expiresAt } = await spotify.freshAccessToken(env, userId);
+    return json({ token, expiresAt });
+  }],
+  ['POST', /^\/api\/spotify\/transfer$/, async ({ request, env }) => {
+    const userId = await requireUser(request, env);
+    const deviceId = deviceParam((await readJson(request)).deviceId);
+    if (!deviceId) throw new HttpError(400, { error: 'invalid', field: 'deviceId' });
+    await spotify.transfer(env, userId, deviceId);
     return new Response(null, { status: 204 });
   }],
   ['GET', /^\/api\/spotify\/search$/, async ({ request, env, url }) => {
@@ -190,7 +210,7 @@ const routes = [
     if (uri !== null && !TRACK_URI.test(uri)) throw new HttpError(400, { error: 'invalid', field: 'uri' });
     if (contextUri !== null && !CONTEXT_URI.test(contextUri)) throw new HttpError(400, { error: 'invalid', field: 'contextUri' });
     if (!uri && !contextUri) throw new HttpError(400, { error: 'invalid', field: 'uri' });
-    await spotify.play(env, userId, { uri, contextUri });
+    await spotify.play(env, userId, { uri, contextUri, deviceId: deviceParam(body.deviceId) });
     return new Response(null, { status: 204 });
   }],
   ['PUT', /^\/api\/spotify\/volume$/, async ({ request, env }) => {
