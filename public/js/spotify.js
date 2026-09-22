@@ -2,9 +2,10 @@
 // the controls. Owns one timer and the last state; the badge only renders it.
 
 import { api, ApiError } from './api.js';
+import * as web from './web-player.js';
 
 export const state = {
-  connected: false, playing: false, track: null, device: null,
+  connected: false, playing: false, track: null, device: null, deviceId: null,
   volume: null, supportsVolume: false,
   stale: false, error: null, loaded: false,
 };
@@ -50,6 +51,7 @@ function apply(s) {
   state.playing = !!s.playing;
   state.track = s.track || null;
   state.device = s.device || null;
+  state.deviceId = s.deviceId || null;
   state.volume = typeof s.volume === 'number' ? s.volume : null;
   state.supportsVolume = !!s.supportsVolume;
   state.stale = false;
@@ -103,7 +105,7 @@ export function stop() {
   clearTimeout(timer); timer = null;
   clearInterval(ticker); ticker = null;
   clearTimeout(errorTimer); errorTimer = null;
-  Object.assign(state, { connected: false, playing: false, track: null, device: null, volume: null, supportsVolume: false, stale: false, error: null, loaded: false });
+  Object.assign(state, { connected: false, playing: false, track: null, device: null, deviceId: null, volume: null, supportsVolume: false, stale: false, error: null, loaded: false });
 }
 
 /** After the OAuth round trip or a disconnect: poll again now, from a clean slate. */
@@ -124,6 +126,34 @@ function showError(code) {
   errorTimer = setTimeout(() => { state.error = null; emit('state'); }, ERROR_SHOWN_MS);
 }
 
+const noDevice = (e) => e instanceof ApiError && e.status === 404 && e.body?.error === 'no_device';
+
+/**
+ * Send a command with `send(deviceId)`. When Spotify has no active device and the
+ * Rounds tab can play, send it once more to the Rounds device. `nothing` is the
+ * error code for a second 404, when Rounds has nothing to play.
+ */
+export async function onRoundsIfIdle(send, nothing = 'no_device') {
+  try {
+    return await send(null);
+  } catch (e) {
+    if (!noDevice(e) || web.state.status !== 'ready' || !web.state.deviceId) throw e;
+  }
+  try {
+    return await send(web.state.deviceId);
+  } catch (e) {
+    throw e instanceof ApiError && e.status === 404 ? new ApiError(404, { error: nothing }) : e;
+  }
+}
+
+/* A command failed: sign out, forget the connection, or say why in the badge. False when there is nothing more to do. */
+function failed(e) {
+  if (e instanceof ApiError && e.status === 401) { stop(); onSignedOut(); return false; }
+  if (e instanceof ApiError && e.status === 409) { disconnected(); return false; }
+  showError(e instanceof ApiError ? (e.body?.error || 'spotify_unavailable') : 'offline');
+  return true;
+}
+
 /** One of play, pause, next, previous, restart. Never throws; failures show in the badge. */
 export async function control(action) {
   if (action === 'play' || action === 'pause') {          /* answer the click before Spotify does */
@@ -133,11 +163,21 @@ export async function control(action) {
     emit('state');
   }
   try {
-    await api.spotifyControl(action);
+    await onRoundsIfIdle((deviceId) => api.spotifyControl(action, deviceId), 'nothing_to_resume');
   } catch (e) {
-    if (e instanceof ApiError && e.status === 401) { stop(); onSignedOut(); return; }
-    if (e instanceof ApiError && e.status === 409) { disconnected(); return; }
-    showError(e instanceof ApiError ? (e.body?.error || 'spotify_unavailable') : 'offline');
+    if (!failed(e)) return;
+  }
+  schedule(AFTER_CONTROL_MS);
+}
+
+/** Move what is playing on another device into the Rounds tab. */
+export async function playHere() {
+  if (web.state.status !== 'ready') return;
+  web.activate();
+  try {
+    await api.spotifyTransfer(web.state.deviceId);
+  } catch (e) {
+    if (!failed(e)) return;
   }
   schedule(AFTER_CONTROL_MS);
 }

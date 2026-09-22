@@ -2,6 +2,7 @@
 // A tick only moves the progress line, so the buttons are not rebuilt under the cursor.
 
 import { esc, $ } from '../dom.js';
+import { state as web, playTarget } from '../web-player.js';
 
 export const SPOTIFY_MARK = '<svg class="spot" viewBox="0 0 24 24" aria-hidden="true">'
   + '<circle cx="12" cy="12" r="12" fill="currentColor"/>'
@@ -15,7 +16,8 @@ const ICON = {
 };
 
 const MESSAGES = {
-  no_device: 'Open Spotify on a device first',
+  no_device: 'Open Spotify somewhere, or use a desktop browser',
+  nothing_to_resume: 'Pick something in the Spotify view',
   premium_required: 'Controls need Spotify Premium',
   spotify_unavailable: 'Spotify is not answering',
   rate_limited: 'Spotify asked us to slow down',
@@ -24,13 +26,17 @@ const MESSAGES = {
 
 let lastKey = null;
 
+function message(s) {
+  return s.error ? '<div class="msg" role="status">' + esc(MESSAGES[s.error] || MESSAGES.spotify_unavailable) + '</div>' : '';
+}
+
 function pct(track) {
   return track && track.durationMs ? Math.min(100, (track.progressMs / track.durationMs) * 100) : 0;
 }
 
 /* What the badge looks like, apart from the moving line. Same key, no rebuild. */
 function shapeKey(s) {
-  return [s.loaded, s.connected, s.playing, s.stale, s.error, s.device, s.track && s.track.url, s.track && s.track.title].join('|');
+  return [s.loaded, s.connected, s.playing, s.stale, s.error, s.device, s.track && s.track.url, s.track && s.track.title, playTarget(s, web)].join('|');
 }
 
 export function renderPlayer(s, kind = 'state') {
@@ -52,8 +58,11 @@ export function renderPlayer(s, kind = 'state') {
     host.innerHTML = '<button class="connect" type="button" data-spotify="connect">' + SPOTIFY_MARK + 'Connect Spotify</button>';
     return;
   }
+  const target = playTarget(s, web);
   if (!s.track) {
-    host.innerHTML = '<div class="quiet">' + SPOTIFY_MARK + 'Nothing playing</div>';
+    host.innerHTML = '<div class="quiet">' + SPOTIFY_MARK + 'Nothing playing'
+      + (target === 'here' ? '<button class="pp" type="button" data-spotify="play" aria-label="Play in Rounds" title="Play in Rounds">' + ICON.play + '</button>' : '')
+      + '</div>' + message(s);
     return;
   }
   const t = s.track;
@@ -74,6 +83,8 @@ export function renderPlayer(s, kind = 'state') {
       + '<button class="pp" type="button" data-spotify="' + (s.playing ? 'pause' : 'play') + '" aria-label="' + (s.playing ? 'Pause' : 'Play') + '">' + (s.playing ? ICON.pause : ICON.play) + '</button>'
       + '<button type="button" data-spotify="next" aria-label="Next">' + ICON.next + '</button>'
     + '</div>'
-    + (s.error ? '<div class="msg" role="status">' + esc(MESSAGES[s.error] || MESSAGES.spotify_unavailable) + '</div>' : '')
-    + (s.device ? '<div class="device">on <b>' + esc(s.device) + '</b></div>' : '');
+    + message(s)
+    + (s.device ? '<div class="device">on <b>' + esc(s.device) + '</b>'
+      + (target === 'offer' ? ' · <button class="here" type="button" data-spotify="here" title="Move the music into this tab">Play here</button>' : '')
+      + '</div>' : '');
 }

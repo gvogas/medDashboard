@@ -6,6 +6,7 @@ import { showDrawer, resetDrawerState } from './drawer-base.js';
 import { TUCK_SVG } from './bits.js';
 import { status } from '../sync.js';
 import { state as spotify } from '../spotify.js';
+import { state as web } from '../web-player.js';
 import { SPOTIFY_MARK } from './player.js';
 
 export function openSettings(focus) {
@@ -52,6 +53,10 @@ function spotifyGroup() {
       + '<a class="btn" href="/api/spotify/connect">Connect</a>';
   }
   html += '</div>';
+  if (on && web.status === 'needs_reconnect') {
+    html += '<span class="note err">Reconnect Spotify to play in this browser. <a href="/api/spotify/connect">Reconnect</a></span>';
+  }
+  if (on && web.status === 'ready') html += '<span class="note">This tab is a Spotify device called <b>Rounds</b>: press play here and it plays here.</span>';
   if (ui.spotifyNote === 'error') html += '<span class="note err">Spotify did not connect. Try again.</span>';
   if (ui.spotifyNote === 'connected') html += '<span class="note" style="color:var(--good)">Connected. The badge on the coat shows what is playing.</span>';
   html += '<span class="note">Controls need Spotify Premium; free accounts still see what is playing.'

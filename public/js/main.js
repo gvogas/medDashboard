@@ -16,6 +16,7 @@ import { openItem, newItem, current, saveDraft, touch, renderItemDrawer } from '
 import { openCourse, renderCourseDrawer, saveCourseDraft, deleteCourseDraft } from './views/drawer-course.js';
 import { openSettings, renderSettings, applyCoat, refreshSyncNote, refreshSpotifyGroup } from './views/drawer-settings.js';
 import * as spotify from './spotify.js';
+import * as web from './web-player.js';
 import { renderPlayer } from './views/player.js';
 import * as spotView from './views/spotify-view.js';
 import { renderSignIn, hideSignIn } from './views/signin.js';
@@ -51,8 +52,13 @@ sync.onUnauthenticated(() => showSignIn('Your session has ended. Sign in again.'
 spotify.onState((s, kind) => {
   renderPlayer(s, kind);
   if (kind !== 'state') return;
+  if (s.connected) web.start(); else if (s.loaded) web.stop();     /* the tab is a device only while connected */
   if (ui.settings && !drawerHasFocus()) refreshSpotifyGroup();
   if (ui.view === 'spotify') { spotView.onPlayerState(); renderHeaderSub(); }
+});
+web.onChange(() => {
+  renderPlayer(spotify.state);
+  if (ui.settings && !drawerHasFocus()) refreshSpotifyGroup();
 });
 spotView.onChange(() => {
   if (ui.view !== 'spotify') return;
@@ -127,6 +133,7 @@ async function signOut({ everywhere = false } = {}) {
   try { await (everywhere ? api.revokeAll() : api.signOut()); } catch {}
   const id = data.profile?.id;
   spotify.stop();
+  web.stop();
   closeDrawer();
   await store.close();
   if (id) { try { await store.wipe(id); } catch {} }
@@ -193,7 +200,9 @@ document.addEventListener('click', async (e) => {
   if ((el = e.target.closest('[data-setopen]'))) { openSettings('o-name'); return; }
   if ((el = e.target.closest('[data-spotify]'))) {
     const act = el.dataset.spotify;
+    if (act !== 'connect') web.activate();          /* inside the click, so the tab may make sound */
     if (act === 'connect') openSettings('spotifyGrp');
+    else if (act === 'here') spotify.playHere();
     else if (act === 'previous') spotify.previous();
     else spotify.control(act);
     return;
@@ -202,7 +211,7 @@ document.addEventListener('click', async (e) => {
   if ((el = e.target.closest('[data-spot-pl]'))) { spotView.openPlaylist(el.dataset.spotPl, el.dataset.spotName); return; }
   if ((el = e.target.closest('[data-spot-refresh]'))) { spotView.openQueue(true); return; }
   if ((el = e.target.closest('[data-spot-more]'))) { el.dataset.spotMore === 'playlists' ? spotView.morePlaylists() : spotView.moreTracks(); return; }
-  if ((el = e.target.closest('[data-spot-play]')) !== null) { spotView.play(el.dataset.spotPlay, el.dataset.spotCtx); return; }
+  if ((el = e.target.closest('[data-spot-play]')) !== null) { web.activate(); spotView.play(el.dataset.spotPlay, el.dataset.spotCtx); return; }
   if ((el = e.target.closest('[data-spot-queue]'))) { spotView.queueAdd(el.dataset.spotQueue, el); return; }
   if ((el = e.target.closest('[data-quotenext]'))) {
     const r = el.getBoundingClientRect();

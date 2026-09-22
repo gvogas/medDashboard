@@ -153,6 +153,10 @@ button{cursor:pointer}
 .player .msg{font-size:10.5px;color:var(--warn-ink);background:var(--warn-bg);border:1px solid var(--warn-line);border-radius:6px;padding:3px 7px;line-height:1.35;text-align:center}
 .player .quiet{display:flex;align-items:center;gap:8px;color:var(--ink-3);font-size:12px;padding:1px 0}
 .player .quiet .spot{color:var(--ink-3)}
+.player .quiet .pp{margin-left:auto;width:26px;height:26px;flex:none;display:grid;place-items:center;border:0;border-radius:50%;background:var(--ink);color:var(--panel);cursor:pointer}
+.player .quiet .pp svg{width:11px;height:11px}
+.player .quiet .pp:hover{background:var(--accent);color:var(--on-accent)}
+.player .device .here{font:inherit;letter-spacing:inherit;color:var(--accent);background:none;border:0;padding:0;cursor:pointer;text-decoration:underline;text-underline-offset:2px}
 .player .connect{
   display:flex;align-items:center;gap:8px;border:0;background:transparent;color:var(--ink-3);font-size:12px;
   padding:1px 0;width:100%;text-align:left;border-radius:6px;

@@ -3,7 +3,7 @@
 
 import { api, ApiError } from '../api.js';
 import { ui } from '../state.js';
-import { state as player, poll } from '../spotify.js';
+import { state as player, poll, onRoundsIfIdle } from '../spotify.js';
 import { esc, $ } from '../dom.js';
 import { SPOTIFY_MARK } from './player.js';
 
@@ -22,7 +22,7 @@ let rerender = () => {};
 export function onChange(fn) { rerender = fn; }
 
 const MESSAGES = {
-  no_device: 'Open Spotify on a device first, then try again.',
+  no_device: 'Open Spotify somewhere, or use a desktop browser, then try again.',
   premium_required: 'That needs Spotify Premium.',
   spotify_unavailable: 'Spotify is not answering right now.',
   rate_limited: 'Spotify asked us to slow down. Try again in a moment.',
@@ -114,7 +114,7 @@ export function search(q) {
 
 export async function play(uri, contextUri) {
   try {
-    await api.spotifyPlay({ uri: uri || null, contextUri: contextUri || null });
+    await onRoundsIfIdle((deviceId) => api.spotifyPlay({ uri: uri || null, contextUri: contextUri || null, ...(deviceId ? { deviceId } : {}) }));
     say('Playing.', 1500, true);
     setTimeout(poll, 300);                       /* the badge catches up; Spotify lags a command */
   } catch (e) { say(explain(e)); }
