@@ -1,0 +1,495 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Spotify Player Mockup</title>
+<meta name="description" content="How the Spotify strip sits at the bottom of the Rounds sidebar, in every state, light and dark, desktop and phone, plus its Settings group.">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&family=Spectral:ital,wght@1,400;1,600&display=swap">
+<!-- The real app styles, so the sidebar here is the sidebar in the app. -->
+<link rel="stylesheet" href="../public/css/tokens.css">
+<link rel="stylesheet" href="../public/css/layout.css">
+<link rel="stylesheet" href="../public/css/components.css">
+<style>
+  /* ═════════ page chrome, same as the other design pages ═════════ */
+  :root{
+    --pg-bg:#F0F3F4; --pg-panel:#FFFFFF; --pg-ink:#131E22; --pg-ink-2:#5A6E74;
+    --pg-line:#D6DFE1; --pg-accent:#0E7C74;
+    --pg-shadow:0 1px 2px rgba(16,40,44,.06), 0 14px 36px rgba(16,40,44,.09);
+  }
+  :root[data-app="dark"]{
+    --pg-bg:#0D1315; --pg-panel:#141C1F; --pg-ink:#E4EDEF; --pg-ink-2:#8DA2A8;
+    --pg-line:#242F33; --pg-accent:#3FBFB2;
+    --pg-shadow:0 1px 2px rgba(0,0,0,.5), 0 16px 40px rgba(0,0,0,.45);
+  }
+  html,body{height:auto;overflow:auto}
+  body{background:var(--pg-bg);color:var(--pg-ink);font-size:15px;line-height:1.55}
+  .wrap{max-width:1180px;margin:0 auto;padding:0 20px 72px}
+  .mast{padding:44px 0 8px;display:flex;align-items:flex-end;gap:20px;flex-wrap:wrap}
+  .mast > div{flex:1 1 420px}
+  .kicker{font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:11.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--pg-accent);margin:0 0 14px}
+  h1.title{font-size:clamp(30px,5.4vw,46px);line-height:1.05;letter-spacing:-.02em;font-weight:800;margin:0;text-wrap:balance}
+  .lede{max-width:62ch;color:var(--pg-ink-2);margin:14px 0 0;font-size:16.5px}
+  .lede strong{color:var(--pg-ink);font-weight:600}
+  .lede a{color:var(--pg-accent)}
+  .themepick{display:flex;gap:2px;background:var(--pg-panel);border:1px solid var(--pg-line);border-radius:9px;padding:3px;flex:none}
+  .themepick button{border:0;background:transparent;border-radius:6px;padding:5px 11px;font-size:12.5px;color:var(--pg-ink-2)}
+  .themepick button[aria-pressed="true"]{background:var(--pg-accent);color:#fff;font-weight:600}
+  h2{font-size:22px;letter-spacing:-.015em;margin:56px 0 6px}
+  h2 + p{margin:0 0 18px;color:var(--pg-ink-2);max-width:70ch}
+  h2 + p code{font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:12.5px}
+
+  /* a framed screenshot of the app: the sidebar plus a hint of the board */
+  .shot{
+    display:grid;grid-template-columns:222px minmax(0,1fr);height:680px;border-radius:14px;overflow:hidden;
+    border:1px solid var(--pg-line);box-shadow:var(--pg-shadow);background:var(--bg);color:var(--ink);font-size:14px;
+  }
+  .shot .side{height:100%;transition:none}
+  .shot .board{padding:14px 16px;display:flex;flex-direction:column;gap:12px;opacity:.55;pointer-events:none;min-width:0}
+  .shot .board .bar{padding:0 0 10px;background:transparent;backdrop-filter:none}
+  .shot .ghost-row{height:54px;border:1px solid var(--line);border-radius:10px;background:var(--panel)}
+  .shot .ghost-row.short{width:70%}
+
+  /* the strip on its own, one per state */
+  .states{display:grid;grid-template-columns:repeat(auto-fill,minmax(222px,1fr));gap:18px}
+  .state{display:flex;flex-direction:column;gap:8px}
+  .state .cap{font-size:12px;color:var(--pg-ink-2);line-height:1.4}
+  .state .cap b{color:var(--pg-ink);font-weight:600;display:block;font-size:12.5px}
+  .state .side{
+    height:auto;border:1px solid var(--pg-line);border-right-width:1px;border-radius:10px;box-shadow:var(--pg-shadow);
+    padding:10px 10px 12px;gap:8px;overflow:visible;
+  }
+  .state .pocket{margin-top:0}
+
+  /* the phone: the sidebar as an overlay over the board */
+  .phone{
+    width:390px;height:760px;margin:0 auto;border-radius:34px;border:1px solid var(--pg-line);box-shadow:var(--pg-shadow);
+    background:var(--bg);color:var(--ink);position:relative;overflow:hidden;font-size:14px;
+  }
+  .phone .board{position:absolute;inset:0;padding:12px 14px;display:flex;flex-direction:column;gap:10px}
+  .phone .board .bar{padding:6px 0 10px;background:transparent;backdrop-filter:none}
+  .phone .menu-btn{display:block}
+  .phone .scrim{position:absolute;opacity:1;pointer-events:none}
+  .phone .side{position:absolute;top:0;bottom:0;left:0;width:252px;z-index:45;transform:none;transition:none;box-shadow:var(--shadow-2)}
+
+  /* the settings drawer, shown open and static */
+  .drawerframe{
+    width:406px;max-width:100%;margin:0 auto;background:var(--panel);color:var(--ink);border:1px solid var(--line);
+    border-radius:14px;box-shadow:var(--pg-shadow);display:flex;flex-direction:column;font-size:14px;overflow:hidden;
+  }
+  .drawerframe .dbody{max-height:none}
+  .drawerframe .faded{opacity:.42}
+
+  /* ═════════ the proposed styles: what would go into layout.css / components.css ═════════ */
+  .player{
+    margin-top:10px;padding:10px 4px 2px;border-top:1px solid color-mix(in srgb, var(--coat) 30%, var(--line));
+    display:flex;flex-direction:column;gap:7px;font-size:12.5px;color:var(--ink-2);
+  }
+  .player[data-stale]{opacity:.5}
+  .player .spot{width:14px;height:14px;flex:none;color:#1DB954}
+  .player .now{display:flex;align-items:center;gap:9px;min-width:0}
+  .player .art{
+    width:36px;height:36px;border-radius:6px;flex:none;object-fit:cover;background:var(--panel-2);
+    box-shadow:0 1px 2px rgba(20,48,45,.18), 0 0 0 1px rgba(20,48,45,.06);
+  }
+  .player .meta{min-width:0;flex:1;line-height:1.3}
+  .player .title{display:block;color:var(--ink);font-weight:600;text-decoration:none;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .player .title:hover{color:var(--accent);text-decoration:underline}
+  .player .artist{display:block;font-size:11px;color:var(--ink-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .player .line{display:block;height:2px;border-radius:999px;background:color-mix(in srgb, var(--ink-3) 35%, transparent);overflow:hidden}
+  .player .line i{display:block;height:100%;background:var(--accent);border-radius:999px}
+  .player .ctl{display:flex;align-items:center;gap:6px}
+  .player .ctl .t{font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:10px;color:var(--ink-3);font-variant-numeric:tabular-nums;flex:1}
+  .player .ctl .t:last-child{text-align:right}
+  .player .ctl button{
+    border:0;background:transparent;color:var(--ink-2);width:26px;height:26px;border-radius:50%;
+    display:grid;place-items:center;padding:0;flex:none;
+  }
+  .player .ctl button:hover{background:var(--panel-2);color:var(--accent)}
+  .player .ctl button svg{width:12px;height:12px}
+  .player .ctl .pp{width:30px;height:30px;background:var(--accent);color:var(--on-accent)}
+  .player .ctl .pp:hover{background:var(--accent-ink);color:var(--on-accent)}
+  .player .ctl .pp svg{width:13px;height:13px}
+  .player .quiet{display:flex;align-items:center;gap:8px;color:var(--ink-3);font-size:12px;padding:1px 0}
+  .player .quiet .spot{color:var(--ink-3)}
+  .player .connect{
+    display:flex;align-items:center;gap:8px;border:0;background:transparent;color:var(--ink-3);font-size:12px;
+    padding:1px 0;width:100%;text-align:left;border-radius:6px;
+  }
+  .player .connect:hover{color:var(--accent)}
+  .player .connect:hover .spot{color:#1DB954}
+  .player .msg{font-size:10.5px;color:var(--warn-ink);background:var(--warn-bg);border:1px solid var(--warn-line);border-radius:6px;padding:3px 7px;line-height:1.35}
+  .player .device{font-size:10px;color:var(--ink-3);letter-spacing:.04em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  /* the Spotify group in Settings */
+  .spotrow{display:flex;align-items:center;gap:9px;font-size:12.5px}
+  .spotrow .spot{width:16px;height:16px;color:#1DB954;flex:none}
+  .spotrow .who{flex:1;min-width:0}
+  .spotrow .who b{display:block;font-weight:600}
+  .spotrow .who span{font-size:11px;color:var(--ink-3)}
+  .spotrow .btn{padding:5px 10px;font-size:12px;text-decoration:none}
+  .setgrp .note.err{color:var(--crit)}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="mast">
+    <div>
+      <p class="kicker">Rounds · design · Spotify</p>
+      <h1 class="title">The Spotify strip on the coat</h1>
+      <p class="lede">
+        A quiet strip at the bottom of the sidebar, under the pocket, showing what is playing on the
+        signed-in user's Spotify with previous, play/pause and next. It sits <strong>inside the coat</strong>,
+        in the Ward Board palette, and the only green on the page is Spotify's own mark. Built to the
+        <a href="../docs/superpowers/specs/2026-09-22-spotify-player-design.md">approved spec</a>; this page
+        uses the app's real stylesheets, so what you see is what ships.
+      </p>
+    </div>
+    <div class="themepick" role="group" aria-label="Theme">
+      <button type="button" data-theme="light" aria-pressed="true">Light</button>
+      <button type="button" data-theme="dark" aria-pressed="false">Dark</button>
+    </div>
+  </header>
+
+  <!-- ══════════════════ 1. in place ══════════════════ -->
+  <h2>In place</h2>
+  <p>Desktop, something playing. The pocket keeps its spot; the strip hangs beneath it, separated by a hairline tinted with the coat colour. Album art is 36px, the title links to the track on Spotify, the artist line truncates, and the thin progress line moves once a second between polls.</p>
+
+  <div class="shot">
+    <aside class="side">
+      <div class="brand"><span class="mark">R</span> Rounds</div>
+      <div class="navgrp">
+        <div class="navlabel">Open items</div>
+        <button class="nav" type="button" aria-pressed="true" style="--c:#C0392B"><i class="pip"></i><span class="lbl">Exams</span><span class="ct">2</span></button>
+        <button class="nav" type="button" aria-pressed="true" style="--c:#B77505"><i class="pip"></i><span class="lbl">Assignments</span><span class="ct">5</span></button>
+        <button class="nav" type="button" aria-pressed="true" style="--c:#1E628F"><i class="pip"></i><span class="lbl">Labs</span><span class="ct">3</span></button>
+        <button class="nav dim" type="button" aria-pressed="false" style="--c:#5A46A8"><i class="pip"></i><span class="lbl">Tutorials</span><span class="ct">4</span></button>
+        <button class="nav" type="button" aria-pressed="true" style="--c:#4C7370"><i class="pip"></i><span class="lbl">Office hours</span><span class="ct">1</span></button>
+        <button class="nav" type="button" aria-pressed="true" style="--c:#0E7C74"><i class="pip"></i><span class="lbl">Tasks</span><span class="ct">7</span></button>
+      </div>
+      <div class="navgrp">
+        <div class="navlabel">Courses<button type="button">+ Add</button></div>
+        <button class="nav" type="button" aria-pressed="true"><span class="lbl">All courses</span></button>
+        <span class="course-line"><button class="nav" type="button" aria-pressed="false" style="--c:#C0392B"><i class="pip"></i><span class="lbl">Cardiology</span><span class="ct">4</span></button><button class="cog" type="button" aria-label="Edit Cardiology">✎</button></span>
+        <span class="course-line"><button class="nav" type="button" aria-pressed="false" style="--c:#1E628F"><i class="pip"></i><span class="lbl">Pharmacology</span><span class="ct">3</span></button><button class="cog" type="button" aria-label="Edit Pharmacology">✎</button></span>
+        <span class="course-line"><button class="nav" type="button" aria-pressed="false" style="--c:#5A46A8"><i class="pip"></i><span class="lbl">Anatomy lab</span><span class="ct">2</span></button><button class="cog" type="button" aria-label="Edit Anatomy lab">✎</button></span>
+        <button class="addcourse" type="button">+ New course</button>
+      </div>
+
+      <div class="pocket">
+        <i class="pen" aria-hidden="true"></i>
+        <div class="embroidery">Dr. G. Vogas<button class="editcoat" type="button" aria-label="Edit the name on the coat">✎</button></div>
+        <div class="role">MS II · Cardio block</div>
+        <svg class="tuck" viewBox="0 0 60 34" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><path d="M4 6c0 9 7 8 9 14s7 9 14 8 12-6 18-6"/><path d="M11 4c0 7 4 8 6 12"/><circle cx="50" cy="20" r="6"/><circle cx="50" cy="20" r="2.6"/><path d="M44.6 21.6 42 23"/></svg>
+      </div>
+
+      <!-- the strip -->
+      <div class="player" id="player">
+        <div class="now">
+          <svg class="art" viewBox="0 0 36 36" aria-hidden="true"><use href="#cover-a"/></svg>
+          <div class="meta">
+            <a class="title" href="#" title="Open in Spotify">Weightless</a>
+            <span class="artist">Marconi Union · Weightless</span>
+          </div>
+          <svg class="spot" aria-label="Spotify"><use href="#spotify-mark"/></svg>
+        </div>
+        <span class="line"><i style="width:38%"></i></span>
+        <div class="ctl">
+          <span class="t">3:06</span>
+          <button type="button" aria-label="Previous"><svg viewBox="0 0 12 12" fill="currentColor"><path d="M2 1h1.6v10H2zM10 1.5v9L4 6z"/></svg></button>
+          <button class="pp" type="button" aria-label="Pause"><svg viewBox="0 0 12 12" fill="currentColor"><path d="M2.5 1.5h2.6v9H2.5zM6.9 1.5h2.6v9H6.9z"/></svg></button>
+          <button type="button" aria-label="Next"><svg viewBox="0 0 12 12" fill="currentColor"><path d="M8.4 1H10v10H8.4zM2 1.5v9l6-4.5z"/></svg></button>
+          <span class="t">8:09</span>
+        </div>
+      </div>
+    </aside>
+
+    <div class="board">
+      <div class="bar">
+        <div class="title-grp"><h1 class="h1">Week board</h1><div class="sub">Mon 21 – Sun 27 Sep</div></div>
+        <div class="navdate"><button type="button">‹</button><button type="button">Today</button><button type="button">›</button></div>
+        <div class="seg" style="flex:none"><button type="button" aria-pressed="true">Week</button><button type="button" aria-pressed="false">Month</button><button type="button" aria-pressed="false">Table</button></div>
+        <div class="grow"></div>
+        <span class="pill sync" data-state="idle">Synced</span>
+        <span class="pill">⚙ Settings</span>
+        <span class="btn">New item</span>
+      </div>
+      <div class="ghost-row"></div><div class="ghost-row short"></div><div class="ghost-row"></div><div class="ghost-row short"></div><div class="ghost-row"></div>
+    </div>
+  </div>
+
+  <!-- ══════════════════ 2. states ══════════════════ -->
+  <h2>Every state</h2>
+  <p>The bottom of the coat, one per state the poller can be in. The pocket is shown above each so the strip's spacing against it is real. Messages after a failed command sit under the controls for four seconds.</p>
+
+  <div class="states">
+
+    <div class="state">
+      <aside class="side">
+        <div class="pocket"><i class="pen" aria-hidden="true"></i><div class="embroidery">Dr. G. Vogas</div><div class="role">MS II · Cardio block</div></div>
+        <div class="player">
+          <button class="connect" type="button"><svg class="spot"><use href="#spotify-mark"/></svg>Connect Spotify</button>
+        </div>
+      </aside>
+      <div class="cap"><b>Not connected</b>One quiet line. Clicking it opens Settings at the Spotify group. The mark is grey until hover.</div>
+    </div>
+
+    <div class="state">
+      <aside class="side">
+        <div class="pocket"><i class="pen" aria-hidden="true"></i><div class="embroidery">Dr. G. Vogas</div><div class="role">MS II · Cardio block</div></div>
+        <div class="player">
+          <div class="quiet"><svg class="spot"><use href="#spotify-mark"/></svg>Nothing playing</div>
+        </div>
+      </aside>
+      <div class="cap"><b>Idle</b>Connected, but Spotify answered 204. Polled every 20 s.</div>
+    </div>
+
+    <div class="state">
+      <aside class="side">
+        <div class="pocket"><i class="pen" aria-hidden="true"></i><div class="embroidery">Dr. G. Vogas</div><div class="role">MS II · Cardio block</div></div>
+        <div class="player">
+          <div class="now">
+            <svg class="art" viewBox="0 0 36 36" aria-hidden="true"><use href="#cover-a"/></svg>
+            <div class="meta"><a class="title" href="#">Weightless</a><span class="artist">Marconi Union · Weightless</span></div>
+            <svg class="spot" aria-label="Spotify"><use href="#spotify-mark"/></svg>
+          </div>
+          <span class="line"><i style="width:38%"></i></span>
+          <div class="ctl">
+            <span class="t">3:06</span>
+            <button type="button" aria-label="Previous"><svg viewBox="0 0 12 12" fill="currentColor"><path d="M2 1h1.6v10H2zM10 1.5v9L4 6z"/></svg></button>
+            <button class="pp" type="button" aria-label="Pause"><svg viewBox="0 0 12 12" fill="currentColor"><path d="M2.5 1.5h2.6v9H2.5zM6.9 1.5h2.6v9H6.9z"/></svg></button>
+            <button type="button" aria-label="Next"><svg viewBox="0 0 12 12" fill="currentColor"><path d="M8.4 1H10v10H8.4zM2 1.5v9l6-4.5z"/></svg></button>
+            <span class="t">8:09</span>
+          </div>
+        </div>
+      </aside>
+      <div class="cap"><b>Playing</b>Polled every 5 s; the line advances locally each second in between. Previous restarts the track after 3 s, like the Spotify app.</div>
+    </div>
+
+    <div class="state">
+      <aside class="side">
+        <div class="pocket"><i class="pen" aria-hidden="true"></i><div class="embroidery">Dr. G. Vogas</div><div class="role">MS II · Cardio block</div></div>
+        <div class="player">
+          <div class="now">
+            <svg class="art" viewBox="0 0 36 36" aria-hidden="true"><use href="#cover-b"/></svg>
+            <div class="meta"><a class="title" href="#">Clair de Lune, L. 32</a><span class="artist">Claude Debussy, Lang Lang · Piano Book</span></div>
+            <svg class="spot" aria-label="Spotify"><use href="#spotify-mark"/></svg>
+          </div>
+          <span class="line"><i style="width:71%"></i></span>
+          <div class="ctl">
+            <span class="t">3:41</span>
+            <button type="button" aria-label="Previous"><svg viewBox="0 0 12 12" fill="currentColor"><path d="M2 1h1.6v10H2zM10 1.5v9L4 6z"/></svg></button>
+            <button class="pp" type="button" aria-label="Play"><svg viewBox="0 0 12 12" fill="currentColor"><path d="M3.2 1.5v9l7-4.5z"/></svg></button>
+            <button type="button" aria-label="Next"><svg viewBox="0 0 12 12" fill="currentColor"><path d="M8.4 1H10v10H8.4zM2 1.5v9l6-4.5z"/></svg></button>
+            <span class="t">5:12</span>
+          </div>
+        </div>
+      </aside>
+      <div class="cap"><b>Paused</b>Same layout; the middle button shows play. A long title and artist line truncate with an ellipsis rather than wrapping.</div>
+    </div>
+
+    <div class="state">
+      <aside class="side">
+        <div class="pocket"><i class="pen" aria-hidden="true"></i><div class="embroidery">Dr. G. Vogas</div><div class="role">MS II · Cardio block</div></div>
+        <div class="player">
+          <div class="now">
+            <svg class="art" viewBox="0 0 36 36" aria-hidden="true"><use href="#cover-b"/></svg>
+            <div class="meta"><a class="title" href="#">Clair de Lune, L. 32</a><span class="artist">Claude Debussy, Lang Lang · Piano Book</span></div>
+            <svg class="spot" aria-label="Spotify"><use href="#spotify-mark"/></svg>
+          </div>
+          <span class="line"><i style="width:71%"></i></span>
+          <div class="ctl">
+            <span class="t">3:41</span>
+            <button type="button" aria-label="Previous"><svg viewBox="0 0 12 12" fill="currentColor"><path d="M2 1h1.6v10H2zM10 1.5v9L4 6z"/></svg></button>
+            <button class="pp" type="button" aria-label="Play"><svg viewBox="0 0 12 12" fill="currentColor"><path d="M3.2 1.5v9l7-4.5z"/></svg></button>
+            <button type="button" aria-label="Next"><svg viewBox="0 0 12 12" fill="currentColor"><path d="M8.4 1H10v10H8.4zM2 1.5v9l6-4.5z"/></svg></button>
+            <span class="t">5:12</span>
+          </div>
+          <div class="msg" role="status">Open Spotify on a device first</div>
+        </div>
+      </aside>
+      <div class="cap"><b>After a failed command</b>A note in the warn colours for 4 s. The other two read "Controls need Spotify Premium" and "Spotify is not answering".</div>
+    </div>
+
+    <div class="state">
+      <aside class="side">
+        <div class="pocket"><i class="pen" aria-hidden="true"></i><div class="embroidery">Dr. G. Vogas</div><div class="role">MS II · Cardio block</div></div>
+        <div class="player" data-stale>
+          <div class="now">
+            <svg class="art" viewBox="0 0 36 36" aria-hidden="true"><use href="#cover-a"/></svg>
+            <div class="meta"><a class="title" href="#">Weightless</a><span class="artist">Marconi Union · Weightless</span></div>
+            <svg class="spot" aria-label="Spotify"><use href="#spotify-mark"/></svg>
+          </div>
+          <span class="line"><i style="width:38%"></i></span>
+          <div class="ctl">
+            <span class="t">3:06</span>
+            <button type="button" aria-label="Previous"><svg viewBox="0 0 12 12" fill="currentColor"><path d="M2 1h1.6v10H2zM10 1.5v9L4 6z"/></svg></button>
+            <button class="pp" type="button" aria-label="Pause"><svg viewBox="0 0 12 12" fill="currentColor"><path d="M2.5 1.5h2.6v9H2.5zM6.9 1.5h2.6v9H6.9z"/></svg></button>
+            <button type="button" aria-label="Next"><svg viewBox="0 0 12 12" fill="currentColor"><path d="M8.4 1H10v10H8.4zM2 1.5v9l6-4.5z"/></svg></button>
+            <span class="t">8:09</span>
+          </div>
+        </div>
+      </aside>
+      <div class="cap"><b>Stale</b>Spotify rate-limited or down: the last state stays, dimmed, until a poll succeeds. Nothing else changes, so the strip does not jump.</div>
+    </div>
+
+  </div>
+
+  <!-- ══════════════════ 3. phone ══════════════════ -->
+  <h2>On a phone</h2>
+  <p>Under 900px the sidebar is an overlay opened by the menu button. The strip is at its bottom there too, and because the sidebar already scrolls a long course list never hides it.</p>
+
+  <div class="phone">
+    <div class="board">
+      <div class="bar">
+        <button class="menu-btn" type="button" aria-label="Show sidebar">☰</button>
+        <div class="title-grp"><h1 class="h1">Week board</h1><div class="sub">Mon 21 – Sun 27 Sep</div></div>
+        <div class="grow"></div>
+        <span class="btn">New item</span>
+      </div>
+      <div class="ghost-row" style="border:1px solid var(--line);border-radius:10px;background:var(--panel);height:54px"></div>
+      <div class="ghost-row" style="border:1px solid var(--line);border-radius:10px;background:var(--panel);height:54px;width:70%"></div>
+      <div class="ghost-row" style="border:1px solid var(--line);border-radius:10px;background:var(--panel);height:54px"></div>
+      <div class="ghost-row" style="border:1px solid var(--line);border-radius:10px;background:var(--panel);height:54px;width:70%"></div>
+      <div class="ghost-row" style="border:1px solid var(--line);border-radius:10px;background:var(--panel);height:54px"></div>
+    </div>
+    <div class="scrim"></div>
+    <aside class="side on">
+      <div class="brand"><span class="mark">R</span> Rounds</div>
+      <div class="navgrp">
+        <div class="navlabel">Open items</div>
+        <button class="nav" type="button" aria-pressed="true" style="--c:#C0392B"><i class="pip"></i><span class="lbl">Exams</span><span class="ct">2</span></button>
+        <button class="nav" type="button" aria-pressed="true" style="--c:#B77505"><i class="pip"></i><span class="lbl">Assignments</span><span class="ct">5</span></button>
+        <button class="nav" type="button" aria-pressed="true" style="--c:#1E628F"><i class="pip"></i><span class="lbl">Labs</span><span class="ct">3</span></button>
+        <button class="nav dim" type="button" aria-pressed="false" style="--c:#5A46A8"><i class="pip"></i><span class="lbl">Tutorials</span><span class="ct">4</span></button>
+        <button class="nav" type="button" aria-pressed="true" style="--c:#4C7370"><i class="pip"></i><span class="lbl">Office hours</span><span class="ct">1</span></button>
+        <button class="nav" type="button" aria-pressed="true" style="--c:#0E7C74"><i class="pip"></i><span class="lbl">Tasks</span><span class="ct">7</span></button>
+      </div>
+      <div class="navgrp">
+        <div class="navlabel">Courses<button type="button">+ Add</button></div>
+        <button class="nav" type="button" aria-pressed="true"><span class="lbl">All courses</span></button>
+        <span class="course-line"><button class="nav" type="button" aria-pressed="false" style="--c:#C0392B"><i class="pip"></i><span class="lbl">Cardiology</span><span class="ct">4</span></button></span>
+        <span class="course-line"><button class="nav" type="button" aria-pressed="false" style="--c:#1E628F"><i class="pip"></i><span class="lbl">Pharmacology</span><span class="ct">3</span></button></span>
+        <button class="addcourse" type="button">+ New course</button>
+      </div>
+      <div class="pocket">
+        <i class="pen" aria-hidden="true"></i>
+        <div class="embroidery">Dr. G. Vogas</div>
+        <div class="role">MS II · Cardio block</div>
+        <svg class="tuck" viewBox="0 0 60 34" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><path d="M4 6c0 9 7 8 9 14s7 9 14 8 12-6 18-6"/><path d="M11 4c0 7 4 8 6 12"/><circle cx="50" cy="20" r="6"/><circle cx="50" cy="20" r="2.6"/><path d="M44.6 21.6 42 23"/></svg>
+      </div>
+      <div class="player">
+        <div class="now">
+          <svg class="art" viewBox="0 0 36 36" aria-hidden="true"><use href="#cover-a"/></svg>
+          <div class="meta"><a class="title" href="#">Weightless</a><span class="artist">Marconi Union · Weightless</span></div>
+          <svg class="spot" aria-label="Spotify"><use href="#spotify-mark"/></svg>
+        </div>
+        <span class="line"><i style="width:38%"></i></span>
+        <div class="ctl">
+          <span class="t">3:06</span>
+          <button type="button" aria-label="Previous"><svg viewBox="0 0 12 12" fill="currentColor"><path d="M2 1h1.6v10H2zM10 1.5v9L4 6z"/></svg></button>
+          <button class="pp" type="button" aria-label="Pause"><svg viewBox="0 0 12 12" fill="currentColor"><path d="M2.5 1.5h2.6v9H2.5zM6.9 1.5h2.6v9H6.9z"/></svg></button>
+          <button type="button" aria-label="Next"><svg viewBox="0 0 12 12" fill="currentColor"><path d="M8.4 1H10v10H8.4zM2 1.5v9l6-4.5z"/></svg></button>
+          <span class="t">8:09</span>
+        </div>
+      </div>
+    </aside>
+  </div>
+
+  <!-- ══════════════════ 4. settings ══════════════════ -->
+  <h2>The Settings group</h2>
+  <p>A "Spotify" group between Quotes and Data. Connected shows the account and a Disconnect button; not connected shows a Connect link, which is a plain navigation to <code>/api/spotify/connect</code>. The note explains the two Spotify limits up front.</p>
+
+  <div class="states" style="grid-template-columns:repeat(auto-fit,minmax(320px,406px));justify-content:center">
+    <div class="state">
+      <div class="drawerframe">
+        <div class="dhead"><span class="kind">Settings</span><span style="margin-left:auto;font-size:11px;color:var(--ink-3)">saved as you type</span><button class="icon-btn" type="button" aria-label="Close">✕</button></div>
+        <div class="dbody">
+          <div class="setgrp faded"><h4>Quotes<em>3 saved</em></h4><span class="note">One sits in the tile beside your stats. Click it there for the next one.</span></div>
+          <div class="setgrp"><h4>Spotify<em>Not connected</em></h4>
+            <div class="spotrow">
+              <svg class="spot" aria-hidden="true"><use href="#spotify-mark"/></svg>
+              <div class="who"><b>Not connected</b><span>Show what you are listening to at the bottom of the sidebar.</span></div>
+              <a class="btn" href="#">Connect</a>
+            </div>
+            <span class="note">Controls need Spotify Premium; free accounts still see what is playing. George has to add your Spotify email to the app first, so ask him before connecting.</span>
+          </div>
+          <div class="setgrp faded"><h4>Data<em>24 items · 3 courses</em></h4><span class="note">Synced 2 min ago.</span></div>
+        </div>
+      </div>
+      <div class="cap"><b>Not connected</b>Also what opens when the strip's "Connect Spotify" line is clicked.</div>
+    </div>
+
+    <div class="state">
+      <div class="drawerframe">
+        <div class="dhead"><span class="kind">Settings</span><span style="margin-left:auto;font-size:11px;color:var(--ink-3)">saved as you type</span><button class="icon-btn" type="button" aria-label="Close">✕</button></div>
+        <div class="dbody">
+          <div class="setgrp faded"><h4>Quotes<em>3 saved</em></h4><span class="note">One sits in the tile beside your stats. Click it there for the next one.</span></div>
+          <div class="setgrp"><h4>Spotify<em>Connected</em></h4>
+            <div class="spotrow">
+              <svg class="spot" aria-hidden="true"><use href="#spotify-mark"/></svg>
+              <div class="who"><b>Connected</b><span>Playing on <b style="font-weight:500;display:inline">George's MacBook</b>.</span></div>
+              <button class="btn ghost" type="button">Disconnect</button>
+            </div>
+            <span class="note">Controls need Spotify Premium; free accounts still see what is playing.</span>
+          </div>
+          <div class="setgrp faded"><h4>Data<em>24 items · 3 courses</em></h4><span class="note">Synced 2 min ago.</span></div>
+        </div>
+      </div>
+      <div class="cap"><b>Connected</b>After the OAuth round trip lands on <code>#spotify=connected</code>, Settings opens here. On <code>#spotify=error</code> the same group shows a red note: "Spotify did not connect. Try again."</div>
+    </div>
+  </div>
+
+</div>
+
+<!-- shared drawings: the Spotify mark and two placeholder album covers -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <symbol id="spotify-mark" viewBox="0 0 24 24">
+      <circle cx="12" cy="12" r="12" fill="currentColor"/>
+      <path d="M6.2 9.4c3.9-1.1 8.4-.8 11.7 1.2M6.9 12.5c3.2-.9 6.9-.6 9.7 1M7.5 15.4c2.5-.7 5.3-.5 7.6.8" fill="none" stroke="#fff" stroke-width="1.7" stroke-linecap="round"/>
+    </symbol>
+    <symbol id="cover-a" viewBox="0 0 36 36">
+      <rect width="36" height="36" fill="#1F2A44"/>
+      <circle cx="26" cy="11" r="9" fill="#F2A65A"/>
+      <path d="M0 26c8-6 14-2 20-6s10-4 16 0v16H0z" fill="#3C5A8A"/>
+      <path d="M0 31c8-4 14 0 20-3s10-2 16 1v7H0z" fill="#12182B"/>
+    </symbol>
+    <symbol id="cover-b" viewBox="0 0 36 36">
+      <rect width="36" height="36" fill="#EFE7DA"/>
+      <rect x="6" y="8" width="24" height="20" rx="2" fill="#3B2F2F"/>
+      <rect x="8" y="10" width="20" height="16" fill="#F8F4EC"/>
+      <path d="M11 10v16M14 10v16M17 10v16M20 10v16M23 10v16M26 10v16" stroke="#3B2F2F" stroke-width=".6"/>
+      <path d="M12 10v9h2v-9zM15 10v9h2v-9zM21 10v9h2v-9zM24 10v9h2v-9z" fill="#3B2F2F"/>
+    </symbol>
+  </defs>
+</svg>
+
+<script>
+  /* Light or dark for the whole page, the same attribute the app stamps. */
+  (function () {
+    var root = document.documentElement;
+    var dark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+    function set(t) {
+      root.setAttribute('data-app', t);
+      document.querySelectorAll('.themepick button').forEach(function (b) { b.setAttribute('aria-pressed', b.dataset.theme === t ? 'true' : 'false'); });
+    }
+    set(dark ? 'dark' : 'light');
+    document.querySelectorAll('.themepick button').forEach(function (b) { b.addEventListener('click', function () { set(b.dataset.theme); }); });
+    /* the progress line creeps, so the "playing" frames feel alive */
+    var fills = Array.prototype.slice.call(document.querySelectorAll('.player:not([data-stale]) .line i'));
+    var starts = fills.map(function (i) { return parseFloat(i.style.width); });
+    var t0 = Date.now();
+    setInterval(function () {
+      var dt = (Date.now() - t0) / 1000;
+      fills.forEach(function (i, k) {
+        var paused = i.closest('.player').querySelector('.pp[aria-label="Play"]');
+        if (paused) return;
+        i.style.width = Math.min(100, starts[k] + dt * 0.2) + '%';
+      });
+    }, 1000);
+  })();
+</script>
+</body>
+</html>
