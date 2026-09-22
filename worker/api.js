@@ -1,9 +1,10 @@
 import { json, readJson, HttpError } from './http.js';
-import { requireUser, requireSession, signSession, sessionCookie, clearCookie, RENEW_WITHIN_MS } from './auth.js';
+import { requireUser, requireSession, signSession, sessionCookie, clearCookie, parseCookies, secureFlag, hex, RENEW_WITHIN_MS } from './auth.js';
 import { verifyPassword, normalizeUsername } from './password.js';
 import { lockedFor, recordFailure, recordSuccess } from './throttle.js';
 import { validateProfile, validateCourse, validateItem, validateQuote, validateId } from './validate.js';
-import { getUserForLogin, getProfile, updateProfile, getRow, upsertRow, deleteRow, courseExists, syncSince, bumpPasswordGen } from './db.js';
+import { getUserForLogin, getProfile, updateProfile, getRow, upsertRow, deleteRow, courseExists, syncSince, bumpPasswordGen, deleteSpotifyTokens } from './db.js';
+import * as spotify from './spotify.js';
 
 const VALIDATORS = { courses: validateCourse, items: validateItem, quotes: validateQuote };
 
@@ -30,6 +31,42 @@ async function removeRow({ request, env, params: [table, id] }) {
   validateId(id);
   if (!(await deleteRow(env.DB, table, userId, id))) throw new HttpError(404, { error: 'not_found' });
   return new Response(null, { status: 204 });
+}
+
+// ── Spotify: the OAuth round trip. The state cookie is its CSRF guard. ──
+const SPOTIFY_STATE = 'rounds_spotify_state';
+
+function spotifyStateCookie(value, url, maxAge) {
+  return `${SPOTIFY_STATE}=${value}; Path=/api/spotify; HttpOnly; SameSite=Lax; Max-Age=${maxAge}${secureFlag(url)}`;
+}
+
+/** Back to the app, with the result in the hash. The callback is a navigation, so never JSON. */
+function backToApp(url, result) {
+  return new Response(null, {
+    status: 302,
+    headers: { location: `${url.origin}/#spotify=${result}`, 'set-cookie': spotifyStateCookie('', url, 0) },
+  });
+}
+
+async function spotifyCallback({ request, env, url }) {
+  let userId;
+  try {
+    userId = await requireUser(request, env);
+  } catch {
+    return backToApp(url, 'error');
+  }
+  const expected = parseCookies(request.headers.get('cookie'))[SPOTIFY_STATE];
+  const code = url.searchParams.get('code');
+  if (!expected || url.searchParams.get('state') !== expected || url.searchParams.has('error') || !code) {
+    return backToApp(url, 'error');
+  }
+  try {
+    await spotify.storeTokens(env, userId, await spotify.exchangeCode(env, code, `${url.origin}/api/spotify/callback`));
+  } catch (e) {
+    console.error('spotify callback', e);
+    return backToApp(url, 'error');
+  }
+  return backToApp(url, 'connected');
 }
 
 const ROW = /^\/api\/(courses|items|quotes)\/([^/]+)$/;
@@ -94,6 +131,21 @@ const routes = [
   ['GET', ROW, readRow],
   ['PUT', ROW, putRow],
   ['DELETE', ROW, removeRow],
+
+  // Spotify, proxied: see worker/spotify.js.
+  ['GET', /^\/api\/spotify\/connect$/, async ({ request, env, url }) => {
+    await requireUser(request, env);
+    if (!spotify.isConfigured(env)) throw new HttpError(503, { error: 'spotify_not_configured' });
+    const state = hex(crypto.getRandomValues(new Uint8Array(16)));
+    return new Response(null, {
+      status: 302,
+      headers: {
+        location: spotify.authorizeUrl(env, `${url.origin}/api/spotify/callback`, state),
+        'set-cookie': spotifyStateCookie(state, url, 600),
+      },
+    });
+  }],
+  ['GET', /^\/api\/spotify\/callback$/, spotifyCallback],
 
 ];
 

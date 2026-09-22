@@ -60,3 +60,74 @@ describe('token rows', () => {
     expect(await getSpotifyTokens(env.DB, a)).toBeNull();
   });
 });
+
+describe('connect', () => {
+  it('needs a session', async () => {
+    expect((await get('/api/spotify/connect')).status).toBe(401);
+  });
+
+  it('sends you to Spotify with a state that matches the cookie', async () => {
+    const { cookie } = await session();
+    const res = await get('/api/spotify/connect', cookie);
+    expect(res.status).toBe(302);
+    const to = new URL(res.headers.get('location'));
+    expect(to.origin + to.pathname).toBe('https://accounts.spotify.com/authorize');
+    expect(to.searchParams.get('client_id')).toBe('test-client');
+    expect(to.searchParams.get('response_type')).toBe('code');
+    expect(to.searchParams.get('redirect_uri')).toBe(`${BASE}/api/spotify/callback`);
+    expect(to.searchParams.get('scope')).toBe('user-read-playback-state user-modify-playback-state');
+    const state = to.searchParams.get('state');
+    expect(state).toMatch(/^[0-9a-f]{32}$/);
+    const set = res.headers.get('set-cookie');
+    expect(set).toContain(`rounds_spotify_state=${state};`);
+    expect(set).toMatch(/HttpOnly/);
+    expect(set).toMatch(/SameSite=Lax/);
+    expect(set).toMatch(/Max-Age=600/);
+  });
+
+  it('is 503 when Spotify is not configured', async () => {
+    const { cookie } = await session();
+    const res = await worker.fetch(new Request(`${BASE}/api/spotify/connect`, { headers: { cookie } }), { ...env, SPOTIFY_CLIENT_SECRET: '' });
+    expect(res.status).toBe(503);
+    expect(await res.json()).toEqual({ error: 'spotify_not_configured' });
+  });
+});
+
+describe('callback', () => {
+  const callback = (query, cookie) => get(`/api/spotify/callback?${query}`, cookie);
+
+  it('stores encrypted tokens for a good code and goes back to the app', async () => {
+    const { userId, cookie } = await session();
+    const res = await callback('code=good&state=s1', `${cookie}; rounds_spotify_state=s1`);
+    expect(res.status).toBe(302);
+    expect(res.headers.get('location')).toBe(`${BASE}/#spotify=connected`);
+    expect(res.headers.get('set-cookie')).toMatch(/rounds_spotify_state=;.*Max-Age=0/);
+    const row = await getSpotifyTokens(env.DB, userId);
+    expect(row.accessToken).toBe('tok-playing');
+    expect(row.refreshToken).not.toBe('refresh-good');
+    expect(await decryptToken(env, row.refreshToken)).toBe('refresh-good');
+    expect(row.expiresAt).toBeGreaterThan(Date.now());
+  });
+
+  for (const [name, query, stateCookie] of [
+    ['a state that does not match', 'code=good&state=s1', 'rounds_spotify_state=s2'],
+    ['no state cookie', 'code=good&state=s1', ''],
+    ['no state in the query', 'code=good', 'rounds_spotify_state=s1'],
+    ['Spotify saying no', 'error=access_denied&state=s1', 'rounds_spotify_state=s1'],
+    ['a code Spotify refuses', 'code=bad&state=s1', 'rounds_spotify_state=s1'],
+  ]) {
+    it(`goes back with an error and stores nothing for ${name}`, async () => {
+      const { userId, cookie } = await session();
+      const res = await callback(query, stateCookie ? `${cookie}; ${stateCookie}` : cookie);
+      expect(res.status).toBe(302);
+      expect(res.headers.get('location')).toBe(`${BASE}/#spotify=error`);
+      expect(await getSpotifyTokens(env.DB, userId)).toBeNull();
+    });
+  }
+
+  it('goes back with an error without a session', async () => {
+    const res = await callback('code=good&state=s1', 'rounds_spotify_state=s1');
+    expect(res.status).toBe(302);
+    expect(res.headers.get('location')).toBe(`${BASE}/#spotify=error`);
+  });
+});

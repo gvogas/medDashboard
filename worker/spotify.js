@@ -33,3 +33,53 @@ export async function decryptToken(env, stored) {
   const plain = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: bytes.slice(0, 12) }, await tokenKey(env), bytes.slice(12));
   return new TextDecoder().decode(plain);
 }
+
+const ACCOUNTS = 'https://accounts.spotify.com';
+export const SCOPES = 'user-read-playback-state user-modify-playback-state';
+
+const notConnected = () => new HttpError(409, { error: 'not_connected' });
+const unavailable = () => new HttpError(502, { error: 'spotify_unavailable' });
+
+export function isConfigured(env) {
+  return Boolean(env.SPOTIFY_CLIENT_ID && env.SPOTIFY_CLIENT_SECRET);
+}
+
+export function authorizeUrl(env, redirectUri, state) {
+  const q = new URLSearchParams({ client_id: env.SPOTIFY_CLIENT_ID, response_type: 'code', redirect_uri: redirectUri, scope: SCOPES, state });
+  return `${ACCOUNTS}/authorize?${q}`;
+}
+
+/** POST to Spotify's token endpoint. Resolves to {status, body}; a network failure is a 502. */
+async function tokenRequest(env, params) {
+  let res;
+  try {
+    res = await fetch(`${ACCOUNTS}/api/token`, {
+      method: 'POST',
+      headers: {
+        authorization: 'Basic ' + btoa(`${env.SPOTIFY_CLIENT_ID}:${env.SPOTIFY_CLIENT_SECRET}`),
+        'content-type': 'application/x-www-form-urlencoded',
+      },
+      body: new URLSearchParams(params),
+    });
+  } catch {
+    throw unavailable();
+  }
+  return { status: res.status, body: await res.json().catch(() => ({})) };
+}
+
+function tokensFrom(body, now) {
+  return { accessToken: body.access_token, refreshToken: body.refresh_token, expiresAt: now + body.expires_in * 1000 };
+}
+
+/** Trade the callback's code for tokens. Throws on any refusal. */
+export async function exchangeCode(env, code, redirectUri, now = Date.now()) {
+  const { status, body } = await tokenRequest(env, { grant_type: 'authorization_code', code, redirect_uri: redirectUri });
+  if (status !== 200 || !body.access_token || !body.refresh_token) throw new Error(`Spotify refused the code (${status})`);
+  return tokensFrom(body, now);
+}
+
+/** Store tokens, encrypting the refresh token. */
+export async function storeTokens(env, userId, t, now = Date.now()) {
+  const refreshToken = await encryptToken(env, t.refreshToken);
+  await saveSpotifyTokens(env.DB, userId, { refreshToken, accessToken: t.accessToken, expiresAt: t.expiresAt }, now);
+}
