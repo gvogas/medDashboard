@@ -31,4 +31,7 @@ export const api = {
   put: (kind, id, row) => request('PUT', `/api/${kind}/${encodeURIComponent(id)}`, row),
   revokeAll: () => request('POST', '/api/session/revoke-all'),
   del: (kind, id) => request('DELETE', `/api/${kind}/${encodeURIComponent(id)}`),
+  spotifyPlayer: () => request('GET', '/api/spotify/player'),
+  spotifyControl: (action) => request('POST', `/api/spotify/player/${action}`),
+  spotifyDisconnect: () => request('DELETE', '/api/spotify'),
 };
