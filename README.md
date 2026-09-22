@@ -32,6 +32,7 @@ wrangler.jsonc            Workers config: static assets, D1 binding, vars, cron
 design/                   the original prototype and the mockups it was chosen from
 PLAN.md                   decisions, phases, file layout, backlog
 docs/DATA-MODEL.md        the schema explained: tables, API, sync
+docs/DEPLOYING.md         running, deploying, accounts and troubleshooting, step by step
 ```
 
 ## Features
@@ -69,6 +70,8 @@ npm run user:add -- yourname --name "Your Name"
 ```
 
 ## Going live
+
+The step-by-step guide is [`docs/DEPLOYING.md`](docs/DEPLOYING.md). In short:
 
 1. **Secret.** `wrangler secret put SESSION_SECRET` with a long random string.
    Rotating it signs everyone out.
