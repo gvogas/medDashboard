@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 // Create an account: `npm run user:add -- <username> [--remote] [--name "Display Name"]`
+// Change a password:  `npm run user:add -- <username> --reset [--remote]`
 // Prompts for the password without echoing it, hashes it exactly as the Worker does,
 // and inserts the row with wrangler. --remote targets production; otherwise the
 // local dev database.
@@ -10,6 +11,7 @@ import { hashPassword, normalizeUsername } from '../worker/password.js';
 
 const args = process.argv.slice(2);
 const remote = args.includes('--remote');
+const reset = args.includes('--reset');
 const nameIx = args.indexOf('--name');
 const displayName = nameIx >= 0 ? args[nameIx + 1] || '' : '';
 const rawUser = args.find((a, i) => !a.startsWith('--') && (nameIx < 0 || i !== nameIx + 1));
@@ -17,6 +19,7 @@ const rawUser = args.find((a, i) => !a.startsWith('--') && (nameIx < 0 || i !== 
 const username = normalizeUsername(rawUser);
 if (!username) {
   console.error('Usage: npm run user:add -- <username> [--remote] [--name "Display Name"]');
+  console.error('       npm run user:add -- <username> --reset [--remote]   (change the password)');
   console.error('Usernames: 3–32 characters, letters, digits, dot, dash, underscore.');
   process.exit(1);
 }
@@ -62,25 +65,36 @@ if (password !== await ask('Again: ')) { console.error('They did not match.'); p
 const hash = await hashPassword(password);
 const now = Date.now();
 const id = crypto.randomUUID();
-const sql = `INSERT INTO users (id, username, password_hash, display_name, created_at, updated_at) VALUES ('${id}', '${username}', '${hash}', '${displayName.replace(/'/g, "''")}', ${now}, ${now});`;
+const sql = reset
+  ? `UPDATE users SET password_hash = '${hash}', updated_at = ${now} WHERE username = '${username}';`
+  : `INSERT INTO users (id, username, password_hash, display_name, created_at, updated_at) VALUES ('${id}', '${username}', '${hash}', '${displayName.replace(/'/g, "''")}', ${now}, ${now});`;
 
 // Judge by wrangler's JSON result, not its exit code: on Windows it sometimes trips an
 // assertion while shutting down, after the statement has already run.
 // Run the local wrangler with this same Node, no shell, and without handing it our
 // stdin (a consumed pipe makes it crash on Windows).
 const wranglerBin = fileURLToPath(new URL('../node_modules/wrangler/bin/wrangler.js', import.meta.url));
-const result = spawnSync(
-  process.execPath, [wranglerBin, 'd1', 'execute', 'rounds', remote ? '--remote' : '--local', '--json', '--command', sql],
-  { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] },
-);
-let ok = false;
-try {
-  const start = result.stdout.indexOf('[');
-  ok = start >= 0 && JSON.parse(result.stdout.slice(start)).every((r) => r.success);
-} catch {}
-if (!ok) {
+function run(statement) {
+  const result = spawnSync(
+    process.execPath, [wranglerBin, 'd1', 'execute', 'rounds', remote ? '--remote' : '--local', '--json', '--command', statement],
+    { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] },
+  );
+  try {
+    const start = result.stdout.indexOf('[');
+    const rows = JSON.parse(result.stdout.slice(start));
+    if (rows.every((r) => r.success)) return rows;
+  } catch {}
   console.error(result.stderr || result.stdout);
-  console.error('Could not create the account. If the username already exists, pick another.');
+  return null;
+}
+
+if (reset) {
+  const found = run(`SELECT 1 AS x FROM users WHERE username = '${username}';`);
+  if (!found || found[0].results.length !== 1) { console.error(`No account called ${username}.`); process.exit(1); }
+}
+const ok = run(sql);
+if (!ok) {
+  console.error(reset ? 'Could not change the password.' : 'Could not create the account. If the username already exists, pick another.');
   process.exit(1);
 }
-console.log(`Created ${username} on the ${remote ? 'production' : 'local'} database.`);
+console.log(`${reset ? 'Password changed for' : 'Created'} ${username} on the ${remote ? 'production' : 'local'} database.`);

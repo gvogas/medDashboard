@@ -90,6 +90,12 @@ npm run deploy          # static files + Worker, one command
 npm run user:add -- yourname --remote --name "Your Name"
 ```
 
+To change someone's password, the same command with `--reset`:
+
+```sh
+npm run user:add -- yourname --reset --remote
+```
+
 Passwords are hashed with PBKDF2-SHA256 at 100,000 iterations and a random salt,
 the most the Workers runtime allows per call. Usernames are 3–32 characters of
 letters, digits, dot, dash or underscore, and are not case-sensitive.
