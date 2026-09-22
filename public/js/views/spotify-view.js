@@ -1,7 +1,7 @@
 // The Spotify view: search, playlists, the queue and volume. Data is fetched through
 // the Worker and cached here for the session; the badge's poller owns "now playing".
 
-import { api, ApiError } from '../api.js';
+import { api, ApiError, retryDelayMs } from '../api.js';
 import { ui } from '../state.js';
 import { state as player, poll, onRoundsIfIdle } from '../spotify.js';
 import { esc, $ } from '../dom.js';
@@ -14,6 +14,7 @@ const cache = {
   results: null,            /* { q, tracks, albums, playlists } */
   names: { liked: 'Liked Songs' },
 };
+const retryAt = {};         /* a load that failed is not retried by a redraw before this */
 let loading = null;         /* what is being fetched, for the empty state */
 let note = null;            /* a short line under the top row: { text, ok } */
 let noteTimer = null;
@@ -47,7 +48,11 @@ async function load(what, fn) {
   rerender();
   try {
     await fn();
+    delete retryAt[what];
   } catch (e) {
+    /* The redraw below would ask again at once; a refusal would then loop and keep
+       the app over Spotify's rate limit. Wait before a redraw may ask again. */
+    retryAt[what] = Date.now() + retryDelayMs(e);
     say(explain(e), 6000);
   } finally {
     loading = null;
@@ -58,7 +63,7 @@ async function load(what, fn) {
 /* ── loaders ── */
 
 export function ensurePlaylists() {
-  if (cache.playlists || loading === 'playlists') return;
+  if (cache.playlists || loading === 'playlists' || Date.now() < (retryAt.playlists || 0)) return;
   load('playlists', async () => {
     cache.playlists = await api.spotifyPlaylists(0);
     cache.playlists.items.forEach((p) => { cache.names[p.id] = p.name; });
@@ -275,7 +280,7 @@ export function renderSpotifyView() {
       + '<br><button class="btn" type="button" data-spotify="connect" style="margin-top:10px">Connect Spotify</button></div></div>';
   }
   ensurePlaylists();
-  if (ui.spotify.pane === 'queue' && !cache.queue && loading !== 'queue') openQueue();
+  if (ui.spotify.pane === 'queue' && !cache.queue && loading !== 'queue' && Date.now() >= (retryAt.queue || 0)) openQueue();
   return '<div class="spot-view">' + topHtml() + '<div class="spot-cols">' + navHtml() + mainHtml() + '</div></div>';
 }
 

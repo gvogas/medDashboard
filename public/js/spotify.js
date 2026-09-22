@@ -1,7 +1,7 @@
 // Polls the Worker for what is playing on the signed-in user's Spotify and sends
 // the controls. Owns one timer and the last state; the badge only renders it.
 
-import { api, ApiError } from './api.js';
+import { api, ApiError, retryDelayMs } from './api.js';
 import * as web from './web-player.js';
 
 export const state = {
@@ -12,7 +12,6 @@ export const state = {
 
 const ERROR_SHOWN_MS = 4000;
 const AFTER_CONTROL_MS = 300;
-const BACKOFF_MS = 30000;
 
 let active = false;
 let timer = null;
@@ -72,8 +71,7 @@ export async function poll() {
     state.stale = true;
     state.loaded = true;
     emit('state');
-    const wait = e instanceof ApiError && e.status === 429 && e.retryAfter ? e.retryAfter * 1000 : BACKOFF_MS;
-    schedule(wait);
+    schedule(retryDelayMs(e));
   }
 }
 

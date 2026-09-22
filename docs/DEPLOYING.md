@@ -65,7 +65,7 @@ Make and try every change locally first. Nothing you do locally affects the live
    in with your local account. Leave the command running. It picks up most edits when
    you save; press Ctrl+C to stop it.
 2. Edit files in `public/` (what you see) or `worker/` (the API).
-3. Run `npm test`. All tests should pass (88 today). A failing test means something
+3. Run `npm test`. All tests should pass (91 today). A failing test means something
    broke, so fix it before deploying.
 4. Save the change in Git:
     ```

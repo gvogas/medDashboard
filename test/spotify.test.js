@@ -336,15 +336,16 @@ describe('the Spotify view', () => {
     expect((await api('/api/spotify/search')).status).toBe(400);
   });
 
-  it('lists playlists a page at a time', async () => {
+  it('lists playlists five at a time, so opening the view asks Spotify for little', async () => {
     const { api, id } = await user('v-lists');
     await connect(id, 'tok-playing');
-    const all = await (await api('/api/spotify/playlists')).json();
-    expect(all.items.map((p) => p.name)).toEqual(['Study mix', 'Ward rounds']);
-    expect(all).toMatchObject({ total: 2, next: false, offset: 0 });
-    expect(all.items[1]).toEqual({ uri: 'spotify:playlist:pl2', id: 'pl2', name: 'Ward rounds', owner: 'Sam', art: null, count: 0 });
-    const page2 = await (await api('/api/spotify/playlists?offset=1')).json();
-    expect(page2.items.map((p) => p.name)).toEqual(['Ward rounds']);
+    const first = await (await api('/api/spotify/playlists')).json();
+    expect(first.items.map((p) => p.name)).toEqual(['Study mix', 'Ward rounds', 'Mix 3', 'Mix 4', 'Mix 5']);
+    expect(first).toMatchObject({ total: 7, next: true, offset: 0 });
+    expect(first.items[1]).toEqual({ uri: 'spotify:playlist:pl2', id: 'pl2', name: 'Ward rounds', owner: 'Sam', art: null, count: 0 });
+    const page2 = await (await api('/api/spotify/playlists?offset=5')).json();
+    expect(page2.items.map((p) => p.name)).toEqual(['Mix 6', 'Mix 7']);
+    expect(page2).toMatchObject({ total: 7, next: false, offset: 5 });
     expect((await api('/api/spotify/playlists?offset=x')).status).toBe(400);
   });
 

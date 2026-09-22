@@ -9,6 +9,13 @@ export class ApiError extends Error {
   }
 }
 
+/** How long to leave a failed request before trying it again by itself: what a rate
+    limit asked for, else 30 s. */
+export function retryDelayMs(e) {
+  const asked = e instanceof ApiError && e.status === 429 ? Number(e.body?.retryAfter) : 0;
+  return (asked > 0 ? asked : 30) * 1000;
+}
+
 /** Resolves to the parsed JSON (or null for 204). Throws ApiError on 4xx/5xx, TypeError offline. */
 export async function request(method, path, body) {
   const res = await fetch(path, {

@@ -242,6 +242,9 @@ export async function transfer(env, userId, deviceId) {
 // ── the Spotify view: search, playlists, queue, volume ──────────────────────
 
 const LIST_LIMIT = 50;
+// Playlists come five at a time, and More asks for the next five: opening the view
+// stays one small request, well inside a development-mode app's rate limit.
+const PLAYLIST_LIMIT = 5;
 
 function compactAlbum(a) {
   return {
@@ -279,7 +282,7 @@ export async function search(env, userId, q) {
 
 /** The user's playlists, a page at a time. */
 export async function playlists(env, userId, offset = 0) {
-  const res = await spotifyFetch(env, userId, 'GET', `/me/playlists?limit=${LIST_LIMIT}&offset=${offset}`);
+  const res = await spotifyFetch(env, userId, 'GET', `/me/playlists?limit=${PLAYLIST_LIMIT}&offset=${offset}`);
   if (!res.ok) throw unavailable();
   const b = await readJson(res);
   return page(b, offset, (b.items || []).filter(Boolean).map(compactPlaylist));

@@ -53,6 +53,8 @@ async function token(request) {
 const PLAYLISTS = [
   { id: 'pl1', uri: 'spotify:playlist:pl1', name: 'Study mix', owner: { display_name: 'George' }, images: [{ url: 'https://i.scdn.co/image/pl1', width: 300 }], tracks: { total: 3 } },
   { id: 'pl2', uri: 'spotify:playlist:pl2', name: 'Ward rounds', owner: { display_name: 'Sam' }, images: [], tracks: { total: 0 } },
+  // Enough more that the list needs a second page.
+  ...[3, 4, 5, 6, 7].map((n) => ({ id: `pl${n}`, uri: `spotify:playlist:pl${n}`, name: `Mix ${n}`, owner: { display_name: 'George' }, images: [], tracks: { total: 1 } })),
 ];
 
 const uri = (item, id) => ({ ...item, uri: `spotify:track:${id}`, id, type: 'track' });

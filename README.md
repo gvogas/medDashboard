@@ -62,7 +62,7 @@ Needs Node and Wrangler (`npm i -g wrangler`, then `wrangler login` once).
 npm install
 npm run db:local        # apply the schema to the local D1
 npm run dev             # http://localhost:8787
-npm test                # 88 tests against the Worker, a local D1 and a fake Spotify
+npm test                # 91 tests against the Worker, a local D1 and a fake Spotify
 ```
 
 Local sessions need a `.dev.vars` file (git-ignored): copy `.dev.vars.example` and set
