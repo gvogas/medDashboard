@@ -64,7 +64,9 @@ needs the Google client id and a `wrangler deploy`.
 ### 2 — Worker API — done
 ```
 worker/index.js      routes /api/*; everything else falls through to static assets
-worker/auth.js       verifyGoogleToken(), signSession(), readSession(), requireUser()
+worker/auth.js       signSession(), readSession(), requireUser()
+worker/google.js     verifyGoogleToken(), emailAllowed()
+worker/db.js         every query, all scoped by user_id
 worker/validate.js   the same shape rules as the schema, so errors are readable
 worker/api.js        the handlers below
 ```
@@ -108,12 +110,13 @@ of `localStorage`:
 public/
   index.html  manifest.webmanifest  sw.js
   css/  tokens.css  layout.css  components.css
-  js/   main.js  auth.js  db.js  sync.js  store.js  state.js  model.js  dates.js  dom.js
-        views/  signin.js  sidebar.js  stats.js  week.js  month.js  table.js
-                drawer-item.js  drawer-course.js  drawer-settings.js
-worker/       index.js  auth.js  validate.js  api.js
+  js/   main.js  api.js  db.js  sync.js  store.js  state.js  query.js  import.js
+        model.js  dates.js  dom.js  ornament.js
+        views/  render.js  bits.js  signin.js  sidebar.js  stats.js  week.js  month.js
+                table.js  drawer-base.js  drawer-item.js  drawer-course.js  drawer-settings.js
+worker/       index.js  api.js  auth.js  google.js  validate.js  db.js  http.js
 migrations/   0001_init.sql
-test/         api.test.js
+test/         api  rows  import  config  google  allowlist  (vitest, Workers runtime)
 wrangler.jsonc
 docs/DATA-MODEL.md
 ```
