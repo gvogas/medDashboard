@@ -1,7 +1,7 @@
 import { json, readJson, isLocalhost, HttpError } from './http.js';
 import { requireUser, signSession, sessionCookie, clearCookie } from './auth.js';
 import { validateProfile, validateCourse, validateItem, validateQuote, validateId } from './validate.js';
-import { findOrCreateUser, getProfile, updateProfile, upsertRow, deleteRow, courseExists, syncSince } from './db.js';
+import { findOrCreateUser, getProfile, updateProfile, upsertRow, deleteRow, courseExists, syncSince, importAll } from './db.js';
 
 async function startSession(env, url, email, displayName) {
   const profile = await findOrCreateUser(env.DB, email.trim().toLowerCase(), displayName);
@@ -26,6 +26,41 @@ async function removeRow({ request, env, params: [table, id] }) {
   validateId(id);
   if (!(await deleteRow(env.DB, table, userId, id))) throw new HttpError(404, { error: 'not_found' });
   return new Response(null, { status: 204 });
+}
+
+/** Run a validator, prefixing any field it names, so `items[3].status` is reported. */
+function at(prefix, fn) {
+  try {
+    return fn();
+  } catch (e) {
+    if (e instanceof HttpError && e.body.field) e.body.field = `${prefix}.${e.body.field}`;
+    throw e;
+  }
+}
+
+function validateRows(table, rows, validate) {
+  if (!Array.isArray(rows)) throw new HttpError(400, { error: 'invalid', field: table });
+  return rows.map((row, i) => at(`${table}[${i}]`, () => ({ id: validateId(row?.id), ...validate(row) })));
+}
+
+async function importRoute({ request, env }) {
+  const userId = await requireUser(request, env);
+  const body = await readJson(request);
+  if (!body || typeof body !== 'object') throw new HttpError(400, { error: 'invalid', field: 'body' });
+  const data = {
+    profile: at('profile', () => validateProfile(body.profile)),
+    courses: validateRows('courses', body.courses ?? [], validateCourse),
+    items: validateRows('items', body.items ?? [], validateItem),
+    quotes: validateRows('quotes', body.quotes ?? [], validateQuote),
+  };
+  const courseIds = new Set(data.courses.map((c) => c.id));
+  for (const [i, item] of data.items.entries()) {
+    if (item.courseId && !courseIds.has(item.courseId) && !(await courseExists(env.DB, userId, item.courseId))) {
+      throw new HttpError(400, { error: 'invalid', field: `items[${i}].courseId` });
+    }
+  }
+  if (!(await importAll(env.DB, userId, data))) throw new HttpError(409, { error: 'already_imported' });
+  return json({ imported: { courses: data.courses.length, items: data.items.length, quotes: data.quotes.length } });
 }
 
 const ROW = /^\/api\/(courses|items|quotes)\/([^/]+)$/;
@@ -66,6 +101,8 @@ const routes = [
 
   ['PUT', ROW, putRow],
   ['DELETE', ROW, removeRow],
+
+  ['POST', /^\/api\/import$/, importRoute],
 ];
 
 export async function handleApi(request, env, url) {

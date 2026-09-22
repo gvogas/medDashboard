@@ -2,8 +2,11 @@ import { SELF } from 'cloudflare:test';
 
 export const BASE = 'http://localhost';
 
+// Storage is shared within a test file, so every sign-in gets its own user by default.
+let n = 0;
+
 /** Sign in through the dev-only route and return a fetch bound to that session. */
-export async function signIn(email = 'george@example.com') {
+export async function signIn(email = `user${++n}@example.com`) {
   const res = await SELF.fetch(`${BASE}/api/dev-session`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },

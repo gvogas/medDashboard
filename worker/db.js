@@ -92,22 +92,55 @@ export async function getRow(db, table, userId, id) {
   return r ? rowToApi(table, r) : null;
 }
 
-/** Insert or update. createdAt is kept on update; a deleted row is revived. */
-export async function upsertRow(db, table, userId, id, fields, now = Date.now()) {
+/** A prepared insert-or-update. createdAt is kept on update; a deleted row is revived. */
+export function upsertStmt(db, table, userId, id, fields, now) {
   const t = TABLES[table];
   const row = t.toRow(fields);
   const cols = Object.entries(t.cols);
   const names = ['user_id', 'id', ...cols.map(([, col]) => col), 'created_at', 'updated_at', 'deleted_at'];
   const values = [userId, id, ...cols.map(([field]) => row[field] ?? null), now, now, null];
   const updates = [...cols.map(([, col]) => `${col} = excluded.${col}`), 'updated_at = excluded.updated_at', 'deleted_at = NULL'];
-  await db
+  return db
     .prepare(
       `INSERT INTO ${table} (${names.join(', ')}) VALUES (${names.map(() => '?').join(', ')})
        ON CONFLICT (user_id, id) DO UPDATE SET ${updates.join(', ')}`,
     )
-    .bind(...values)
-    .run();
+    .bind(...values);
+}
+
+export async function upsertRow(db, table, userId, id, fields, now = Date.now()) {
+  await upsertStmt(db, table, userId, id, fields, now).run();
   return getRow(db, table, userId, id);
+}
+
+/**
+ * The prototype's data in one transaction: profile, courses, items, quotes.
+ * Returns false if this user has already imported.
+ */
+export async function importAll(db, userId, { profile, courses, items, quotes }, now = Date.now()) {
+  const me = await db.prepare('SELECT imported_at FROM users WHERE id = ?').bind(userId).first();
+  if (!me || me.imported_at !== null) return false;
+  const stmts = [
+    db
+      .prepare(
+        'UPDATE users SET display_name = ?, coat_name = ?, coat_role = ?, coat_color = ?, theme = ?, term_start = ?, imported_at = ?, updated_at = ? WHERE id = ? AND imported_at IS NULL',
+      )
+      .bind(profile.displayName, profile.coatName, profile.coatRole, profile.coatColor, profile.theme, profile.termStart, now, now, userId),
+    ...courses.map(({ id, ...fields }) => upsertStmt(db, 'courses', userId, id, fields, now)),
+    ...items.map(({ id, ...fields }) => upsertStmt(db, 'items', userId, id, fields, now)),
+    ...quotes.map(({ id, ...fields }) => upsertStmt(db, 'quotes', userId, id, fields, now)),
+  ];
+  await db.batch(stmts);
+  return true;
+}
+
+/** Hard-delete rows soft-deleted before `before`. Items first, so course rows go last. */
+export async function purgeTombstones(db, before) {
+  await db.batch(
+    ['items', 'quotes', 'courses'].map((table) =>
+      db.prepare(`DELETE FROM ${table} WHERE deleted_at IS NOT NULL AND deleted_at < ?`).bind(before),
+    ),
+  );
 }
 
 /** Soft delete. Returns false if the row does not exist for this user. */

@@ -86,8 +86,8 @@ describe('courses', () => {
   });
 
   it('DELETE of a course you do not own is 404', async () => {
-    const alice = await signIn('alice@example.com');
-    const bob = await signIn('bob@example.com');
+    const alice = await signIn();
+    const bob = await signIn();
     await alice('/api/courses/cvs', { method: 'PUT', body: course() });
     expect((await bob('/api/courses/cvs', { method: 'DELETE' })).status).toBe(404);
     const sync = await (await alice('/api/sync?since=0')).json();
@@ -125,8 +125,8 @@ describe('items', () => {
   });
 
   it('rejects a courseId that is not one of your courses', async () => {
-    const alice = await signIn('alice@example.com');
-    const bob = await signIn('bob@example.com');
+    const alice = await signIn();
+    const bob = await signIn();
     await alice('/api/courses/cvs', { method: 'PUT', body: course() });
     const res = await bob('/api/items/i1', { method: 'PUT', body: item({ courseId: 'cvs' }) });
     expect(res.status).toBe(400);
@@ -172,8 +172,8 @@ describe('quotes', () => {
 
 describe('sync', () => {
   it('since=0 returns every live row of mine, and nothing of anyone else', async () => {
-    const alice = await signIn('alice@example.com');
-    const bob = await signIn('bob@example.com');
+    const alice = await signIn();
+    const bob = await signIn();
     await alice('/api/courses/cvs', { method: 'PUT', body: course() });
     await alice('/api/items/i1', { method: 'PUT', body: item() });
     await alice('/api/quotes/q1', { method: 'PUT', body: quote() });
