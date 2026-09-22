@@ -19,6 +19,7 @@ import { renderSignIn, hideSignIn } from './views/signin.js';
 import { importText } from './import.js';
 import { schedule as drawOrnament } from './ornament.js';
 import { parseTime } from './timepicker.js';
+import { launch as fireworks } from './fireworks.js';
 
 /* ═════════ theme ═════════ */
 function setTheme(choice, { persist = true } = {}) {
@@ -144,7 +145,9 @@ document.addEventListener('click', async (e) => {
   if (e.target.closest('#syncPill')) { sync.syncNow(); return; }
   if (e.target.closest('#setBtn')) { ui.settings ? closeDrawer() : openSettings(); return; }
   if ((el = e.target.closest('[data-setopen]'))) { openSettings('o-name'); return; }
-  if (e.target.closest('[data-quotenext]')) {
+  if ((el = e.target.closest('[data-quotenext]'))) {
+    const r = el.getBoundingClientRect();
+    fireworks(r.left + r.width / 2, r.top + 4);
     if (!nextQuote()) openSettings('qText');
     return;
   }

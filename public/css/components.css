@@ -391,3 +391,4 @@ td .steps{margin-top:3px}
 @media (prefers-reduced-motion:reduce){
   .stat.qcard::after,.stat.qcard .qm,.stat.qcard.swap .qt,.stat.qcard.swap .qs,.stat.qcard.swap .qm{animation:none}
 }
+.fx-canvas{position:fixed;inset:0;width:100vw;height:100vh;pointer-events:none;z-index:70}
