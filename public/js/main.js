@@ -10,7 +10,7 @@ import { iso, parse, addDays, today } from './dates.js';
 import { esc, $, autoGrow } from './dom.js';
 import { render, renderView } from './views/render.js';
 import { renderSidebar } from './views/sidebar.js';
-import { renderStats, renderQuote } from './views/stats.js';
+import { renderStats, renderQuote, nextQuote } from './views/stats.js';
 import { drawer, scrim, closeDrawer, drawerHasFocus } from './views/drawer-base.js';
 import { openItem, newItem, current, saveDraft, touch, renderItemDrawer } from './views/drawer-item.js';
 import { openCourse, renderCourseDrawer, saveCourseDraft, deleteCourseDraft } from './views/drawer-course.js';
@@ -43,6 +43,15 @@ sync.onStatus((s) => {
 });
 sync.onPulled(() => { if (!drawerHasFocus()) { render(); if (ui.sel) renderItemDrawer(); if (ui.settings) renderSettings(); } });
 sync.onUnauthenticated(() => showSignIn('Your session has ended. Sign in again.'));
+
+/* ═════════ the quote tile turns its own page ═════════ */
+const QUOTE_EVERY_MS = 25000;
+setInterval(() => {
+  if (document.visibilityState !== 'visible' || !data.profile) return;
+  if (document.querySelector('.qcard:hover')) return;                 /* being read: leave it */
+  if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return;
+  nextQuote();
+}, QUOTE_EVERY_MS);
 
 /* ═════════ boot ═════════ */
 function rememberedSession() {
@@ -136,8 +145,7 @@ document.addEventListener('click', async (e) => {
   if (e.target.closest('#setBtn')) { ui.settings ? closeDrawer() : openSettings(); return; }
   if ((el = e.target.closest('[data-setopen]'))) { openSettings('o-name'); return; }
   if (e.target.closest('[data-quotenext]')) {
-    const n = data.quotes.length;
-    if (n > 1) { ui.quoteIx = (ui.quoteIx + 1) % n; renderQuote(); } else openSettings('qText');
+    if (!nextQuote()) openSettings('qText');
     return;
   }
   if ((el = e.target.closest('[data-themeset]'))) { setTheme(el.dataset.themeset); return; }

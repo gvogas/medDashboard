@@ -51,8 +51,19 @@ export function quoteCardHtml() {
     + (qs.length > 1 ? '<em>' + (ui.quoteIx + 1) + ' / ' + qs.length + '</em>' : '') + '</span></button>';
 }
 
-export function renderQuote() {
+/** Redraw the tile. With `animate`, the new quote rises in (only on a real change). */
+export function renderQuote(animate = false) {
   const card = document.querySelector('.qcard');
   if (!card) { renderStats(); return; }
   card.outerHTML = quoteCardHtml();
+  if (animate) document.querySelector('.qcard')?.classList.add('swap');
+}
+
+/** Show the next quote, animated. Returns false if there is nothing to rotate to. */
+export function nextQuote() {
+  const n = data.quotes.length;
+  if (n < 2) return false;
+  ui.quoteIx = (ui.quoteIx + 1) % n;
+  renderQuote(true);
+  return true;
 }

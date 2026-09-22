@@ -368,3 +368,26 @@ td .steps{margin-top:3px}
 .signin-card .login label{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-3);margin-top:4px}
 .signin-card .login input{width:100%}
 .signin-card .login .btn{margin-top:8px;align-self:stretch;justify-content:center}
+
+/* ═════════ quote tile: a little life ═════════ */
+.stat.qcard{overflow:hidden}
+/* a faint band of light drifting across the paper — one compositor-only transform */
+.stat.qcard::after{
+  content:"";position:absolute;top:-60%;bottom:-60%;left:-40%;width:45%;pointer-events:none;
+  background:linear-gradient(100deg, transparent 0%, color-mix(in srgb, var(--accent) 9%, transparent) 50%, transparent 100%);
+  transform:translateX(-120%) rotate(8deg);animation:qSheen 11s ease-in-out infinite;
+}
+/* the big quotation mark breathes, slowly */
+.stat.qcard .qm{animation:qBreathe 7s ease-in-out infinite;transform-origin:center}
+.stat.qcard:hover .qm{color:color-mix(in srgb, var(--accent) 28%, transparent);transition:color .4s}
+/* when the quote changes: the words rise in and sharpen, the mark blooms */
+.stat.qcard.swap .qt,.stat.qcard.swap .qs{animation:qIn .6s cubic-bezier(.2,.7,.2,1) both}
+.stat.qcard.swap .qs{animation-delay:.12s}
+.stat.qcard.swap .qm{animation:qBloom .7s cubic-bezier(.2,.7,.2,1) both, qBreathe 7s ease-in-out .7s infinite}
+@keyframes qSheen{0%,55%{transform:translateX(-120%) rotate(8deg)}100%{transform:translateX(420%) rotate(8deg)}}
+@keyframes qBreathe{0%,100%{transform:translateY(0) scale(1)}50%{transform:translateY(-2px) scale(1.04)}}
+@keyframes qIn{from{opacity:0;transform:translateY(7px);filter:blur(3px)}to{opacity:1;transform:none;filter:blur(0)}}
+@keyframes qBloom{from{opacity:0;transform:scale(.6) rotate(-8deg)}to{opacity:1;transform:none}}
+@media (prefers-reduced-motion:reduce){
+  .stat.qcard::after,.stat.qcard .qm,.stat.qcard.swap .qt,.stat.qcard.swap .qs,.stat.qcard.swap .qm{animation:none}
+}
