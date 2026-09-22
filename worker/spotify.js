@@ -83,3 +83,94 @@ export async function storeTokens(env, userId, t, now = Date.now()) {
   const refreshToken = await encryptToken(env, t.refreshToken);
   await saveSpotifyTokens(env.DB, userId, { refreshToken, accessToken: t.accessToken, expiresAt: t.expiresAt }, now);
 }
+
+const API = 'https://api.spotify.com/v1';
+const REFRESH_WITHIN_MS = 60 * 1000;
+
+/** A new access token. A revoked refresh token is not_connected; Spotify may send a new refresh token too. */
+export async function refreshAccessToken(env, refreshToken, now = Date.now()) {
+  const { status, body } = await tokenRequest(env, { grant_type: 'refresh_token', refresh_token: refreshToken });
+  if (status === 400 && body.error === 'invalid_grant') throw notConnected();
+  if (status !== 200 || !body.access_token) throw unavailable();
+  return tokensFrom(body, now);
+}
+
+/** A usable access token for this user; `force` refreshes even one that looks fresh. */
+export async function freshAccessToken(env, userId, force = false, now = Date.now()) {
+  const row = await getSpotifyTokens(env.DB, userId);
+  if (!row) throw notConnected();
+  if (!force && row.expiresAt - now > REFRESH_WITHIN_MS) return row.accessToken;
+  let refreshToken;
+  try {
+    refreshToken = await decryptToken(env, row.refreshToken);
+  } catch {
+    await deleteSpotifyTokens(env.DB, userId);   // SESSION_SECRET was rotated
+    throw notConnected();
+  }
+  let t;
+  try {
+    t = await refreshAccessToken(env, refreshToken, now);
+  } catch (e) {
+    if (e instanceof HttpError && e.status === 409) await deleteSpotifyTokens(env.DB, userId);
+    throw e;
+  }
+  await storeTokens(env, userId, { ...t, refreshToken: t.refreshToken || refreshToken }, now);
+  return t.accessToken;
+}
+
+/** One Web API call as this user, refreshing and retrying once on a 401. */
+async function call(env, userId, method, path) {
+  const send = async (token) => {
+    try {
+      return await fetch(API + path, {
+        method,
+        headers: { authorization: `Bearer ${token}` },
+        body: method === 'GET' ? undefined : '',
+      });
+    } catch {
+      throw unavailable();
+    }
+  };
+  let res = await send(await freshAccessToken(env, userId));
+  if (res.status === 401) res = await send(await freshAccessToken(env, userId, true));
+  return res;
+}
+
+/** A rate limit passes through with its wait; anything else unexpected is Spotify's trouble. */
+function failure(res) {
+  if (res.status === 429) {
+    const wait = Number(res.headers.get('retry-after')) || 30;
+    return new HttpError(429, { error: 'rate_limited', retryAfter: wait }, { 'retry-after': String(wait) });
+  }
+  return unavailable();
+}
+
+function artOf(images = []) {
+  const img = images.find((i) => i.width === 300) || images[0];
+  return img ? img.url : null;
+}
+
+/** What is playing, in the compact shape the strip draws. */
+export async function playerState(env, userId) {
+  const res = await call(env, userId, 'GET', '/me/player');
+  if (res.status === 204) return { connected: true, playing: false, track: null, device: null };
+  if (res.status !== 200) throw failure(res);
+  const p = await res.json();
+  const it = p.item;
+  return {
+    connected: true,
+    playing: Boolean(p.is_playing),
+    device: p.device?.name ?? null,
+    track: it
+      ? {
+          title: it.name,
+          artists: (it.artists || []).map((a) => a.name).join(', ') || it.show?.name || '',
+          album: it.album?.name || it.show?.name || '',
+          art: artOf(it.album?.images || it.images),
+          url: it.external_urls?.spotify || null,
+          durationMs: it.duration_ms,
+          progressMs: p.progress_ms ?? 0,
+        }
+      : null,
+  };
+}

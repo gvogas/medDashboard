@@ -131,3 +131,80 @@ describe('callback', () => {
     expect(res.headers.get('location')).toBe(`${BASE}/#spotify=error`);
   });
 });
+
+async function player(cookie) {
+  const res = await get('/api/spotify/player', cookie);
+  return { status: res.status, headers: res.headers, body: await res.json() };
+}
+
+const EVERLONG = {
+  title: 'Everlong',
+  artists: 'Foo Fighters',
+  album: 'The Colour and the Shape',
+  art: 'https://i.scdn.co/image/300',
+  url: 'https://open.spotify.com/track/abc',
+  durationMs: 250000,
+  progressMs: 42000,
+};
+
+describe('player', () => {
+  it('is not connected without a row', async () => {
+    const { cookie } = await session();
+    expect(await player(cookie)).toMatchObject({ status: 200, body: { connected: false } });
+  });
+
+  it('maps a playing track', async () => {
+    const { userId, cookie } = await session();
+    await seed(userId);
+    expect((await player(cookie)).body).toEqual({ connected: true, playing: true, device: 'Laptop', track: EVERLONG });
+  });
+
+  it('maps a paused track', async () => {
+    const { userId, cookie } = await session();
+    await seed(userId, { access: 'tok-paused' });
+    expect((await player(cookie)).body).toEqual({ connected: true, playing: false, device: 'Laptop', track: EVERLONG });
+  });
+
+  it('is idle when Spotify has nothing playing', async () => {
+    const { userId, cookie } = await session();
+    await seed(userId, { access: 'tok-idle' });
+    expect((await player(cookie)).body).toEqual({ connected: true, playing: false, track: null, device: null });
+  });
+
+  it('refreshes an access token about to expire, and stores the new one', async () => {
+    const { userId, cookie } = await session();
+    await seed(userId, { access: 'tok-expired', expiresAt: Date.now() + 30_000 });
+    expect((await player(cookie)).body.track).toEqual(EVERLONG);
+    const row = await getSpotifyTokens(env.DB, userId);
+    expect(row.accessToken).toBe('tok-refreshed');
+    expect(await decryptToken(env, row.refreshToken)).toBe('refresh-good');
+  });
+
+  it('refreshes once when Spotify turns the token down', async () => {
+    const { userId, cookie } = await session();
+    await seed(userId, { access: 'tok-expired' });
+    expect((await player(cookie)).body.track).toEqual(EVERLONG);
+    expect((await getSpotifyTokens(env.DB, userId)).accessToken).toBe('tok-refreshed');
+  });
+
+  it('forgets a revoked connection', async () => {
+    const { userId, cookie } = await session();
+    await seed(userId, { access: 'tok-expired', refresh: 'revoked', expiresAt: 0 });
+    expect((await player(cookie)).body).toEqual({ connected: false });
+    expect(await getSpotifyTokens(env.DB, userId)).toBeNull();
+  });
+
+  it('says Spotify is unavailable when it is down', async () => {
+    const { userId, cookie } = await session();
+    await seed(userId, { access: 'tok-down' });
+    expect(await player(cookie)).toMatchObject({ status: 502, body: { error: 'spotify_unavailable' } });
+  });
+
+  it('passes a rate limit through', async () => {
+    const { userId, cookie } = await session();
+    await seed(userId, { access: 'tok-limited' });
+    const res = await player(cookie);
+    expect(res).toMatchObject({ status: 429, body: { error: 'rate_limited', retryAfter: 7 } });
+    expect(res.headers.get('retry-after')).toBe('7');
+  });
+});

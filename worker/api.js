@@ -146,6 +146,15 @@ const routes = [
     });
   }],
   ['GET', /^\/api\/spotify\/callback$/, spotifyCallback],
+  ['GET', /^\/api\/spotify\/player$/, async ({ request, env }) => {
+    const userId = await requireUser(request, env);
+    try {
+      return json(await spotify.playerState(env, userId));
+    } catch (e) {
+      if (e instanceof HttpError && e.body.error === 'not_connected') return json({ connected: false });
+      throw e;
+    }
+  }],
 
 ];
 
