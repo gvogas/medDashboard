@@ -7,7 +7,7 @@ export const TYPES = {
   exam:       { label: 'Exam',         plural: 'Exams',        color: '#C0392B' },
   assignment: { label: 'Assignment',   plural: 'Assignments',  color: '#B77505' },
   lab:        { label: 'Lab',          plural: 'Labs',         color: '#1E628F' },
-  tutoring:   { label: 'Tutoring',     plural: 'Tutoring',     color: '#5A46A8' },
+  tutoring:   { label: 'Tutorial',     plural: 'Tutorials',    color: '#5A46A8' },   /* key kept for stored rows */
   office:     { label: 'Office hours', plural: 'Office hours', color: '#4C7370' },
   task:       { label: 'Task',         plural: 'Tasks',        color: '#0E7C74' },
 };

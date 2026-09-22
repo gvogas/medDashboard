@@ -1,6 +1,6 @@
 # Rounds — build plan
 
-A med-school tracker for assignments, exams, labs, tutoring, office hours and tasks,
+A med-school tracker for assignments, exams, labs, tutorials, office hours and tasks,
 with courses that carry their own class timetable (day, time, room). Several people
 can use it, each signed in with their own Google account and seeing only their own data.
 

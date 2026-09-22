@@ -7,7 +7,7 @@ the user, and every query it runs has `user_id = ?` in it.
 ```
 users            one row per Google account: profile, coat, theme
 courses          a course + its weekly class meetings, as a JSON column
-items            exams, assignments, labs, tutoring, office hours, tasks
+items            exams, assignments, labs, tutorials, office hours, tasks
 quotes           the quote tile's list
 ```
 
@@ -135,7 +135,7 @@ already uses, so the front end's field names do not change.
 | `exam` | `todo` Upcoming · `done` Sat · `graded` Graded | `done`, `graded` |
 | `assignment` | `todo` Open · `submitted` Submitted · `graded` Graded | `submitted`, `graded` |
 | `lab` | `todo` Scheduled · `done` Attended · `missed` Missed | `done` |
-| `tutoring` | `todo` Scheduled · `done` Attended · `missed` Cancelled | `done` |
+| `tutoring` (shown as Tutorial) | `todo` Scheduled · `done` Attended · `missed` Cancelled | `done` |
 | `office` | `todo` Planned · `done` Went · `missed` Skipped | `done` |
 | `task` | `todo` To do · `done` Done | `done` |
 

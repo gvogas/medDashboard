@@ -1,6 +1,6 @@
 # medDashboard
 
-A med-school tracker — assignments, exams, labs, tutoring, office hours and tasks —
+A med-school tracker — assignments, exams, labs, tutorials, office hours and tasks —
 with courses that carry their own class timetable: day, time and room number.
 
 Built as a multi-user web app on Cloudflare: static files and a small Worker API in
@@ -37,7 +37,7 @@ docs/DATA-MODEL.md        the schema explained: tables, API, sync, migration
 
 ## Features
 
-- **Six item types** — exams, assignments, labs, tutoring, office hours, tasks. Each
+- **Six item types** — exams, assignments, labs, tutorials, office hours, tasks. Each
   opens a page with notes, a checklist and links.
 - **Courses** you add and edit, each with a colour and a list of classes (kind, day,
   start, end, room). Courses can be archived without losing their items.
