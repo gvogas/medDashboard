@@ -22,11 +22,11 @@ export function hideDrawer() {
 
 export function resetDrawerState() {
   ui.sel = null; ui.draft = null; ui.courseDraft = null; ui.courseMode = null; ui.confirm = null; ui.settings = false;
-  ui.spotifyFlash = null;
 }
 
 export function closeDrawer() {
   resetDrawerState();
+  ui.spotifyNote = null;
   hideDrawer();
   render();
 }

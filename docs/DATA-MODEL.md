@@ -216,11 +216,6 @@ All routes are under `/api`, speak JSON, and require the session cookie except
 | `DELETE /api/courses/:id` | → `204`. Soft-deletes and nulls `courseId` on the user's items. |
 | `PUT /api/items/:id` · `DELETE /api/items/:id` | as above |
 | `PUT /api/quotes/:id` · `DELETE /api/quotes/:id` | as above |
-| `GET /api/spotify/connect` | → `302` to Spotify's consent page, with a state cookie; without the client id and secret, back to `/#spotify=error&reason=not_configured`. |
-| `GET /api/spotify/callback` | Spotify's redirect. Stores the tokens and sends you to `/#spotify=connected`, or to `/#spotify=error&reason=<why>`: `signed_out`, `state`, `exchange`, `spotify`, or Spotify's own code such as `access_denied`. |
-| `GET /api/spotify/player` | → `{connected: false}`, or `{connected: true, playing, device, track}` where `track` is `null` or `{title, artists, album, art, url, durationMs, progressMs}`. |
-| `POST /api/spotify/player/:action` | `play`, `pause`, `next`, `previous` or `restart` → `204`. `404 no_device`, `403 premium_required`, `409 not_connected`, `429 rate_limited`, `502 spotify_unavailable`. |
-| `DELETE /api/spotify` | → `204`, forgets the connection. |
 
 Errors are `{error, field?}`: `400` bad shape (with the field), `401` no session,
 `404` a row that isn't yours, `413` body over 1 MB.

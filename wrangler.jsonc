@@ -10,9 +10,6 @@
   "workers_dev": true,
   "preview_urls": false,
 
-  // Spotify's public client id. The secret is `wrangler secret put SPOTIFY_CLIENT_SECRET`.
-  "vars": { "SPOTIFY_CLIENT_ID": "62b89b6543c947e194605aaa91ecce85" },
-
   "assets": {
     "directory": "./public",
     "binding": "ASSETS",
@@ -28,6 +25,10 @@
       "migrations_dir": "migrations"
     }
   ],
+
+  // Spotify: the app's client id is public; the secret is set with
+  // `wrangler secret put SPOTIFY_CLIENT_SECRET`. Both empty means the player is off.
+  "vars": { "SPOTIFY_CLIENT_ID": "62b89b6543c947e194605aaa91ecce85" },
 
   "triggers": {
     // Nightly: hard-delete tombstones older than 30 days.

@@ -33,10 +33,12 @@ export async function signIn(username = `user${++n}`) {
   const res = await login(username);
   if (res.status !== 200) throw new Error(`login failed: ${res.status} ${await res.text()}`);
   const cookie = res.headers.get('set-cookie').split(';')[0];
-  return (path, init = {}) =>
+  const call = (path, init = {}) =>
     SELF.fetch(`${BASE}${path}`, {
       ...init,
       headers: { 'content-type': 'application/json', cookie, ...(init.headers || {}) },
       body: init.body !== undefined && typeof init.body !== 'string' ? JSON.stringify(init.body) : init.body,
     });
+  call.cookie = cookie;   // for a test that has to send a second cookie alongside
+  return call;
 }

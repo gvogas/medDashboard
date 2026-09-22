@@ -1,7 +1,9 @@
-# Copy to .dev.vars (git-ignored) for `npm run dev`.
+# Local secrets for `npm run dev`. Copy to .dev.vars (git-ignored) and fill in.
+# Live values are set with `wrangler secret put <NAME>`; the client id lives in wrangler.jsonc.
+
+# Signs login cookies. Any long random string.
 SESSION_SECRET=change-me-locally
-# From the Spotify app's settings at developer.spotify.com. Without them the connect
-# route answers 503. Open the dev server at http://127.0.0.1:8787, not localhost:
-# Spotify only accepts the 127.0.0.1 redirect.
+
+# From the app at developer.spotify.com. Leave both empty to run without the player.
 SPOTIFY_CLIENT_ID=
 SPOTIFY_CLIENT_SECRET=

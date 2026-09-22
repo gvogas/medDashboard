@@ -5,14 +5,14 @@ import { esc, $ } from '../dom.js';
 import { showDrawer, resetDrawerState } from './drawer-base.js';
 import { TUCK_SVG } from './bits.js';
 import { status } from '../sync.js';
-import { current as spotifyState } from '../spotify.js';
+import { state as spotify } from '../spotify.js';
+import { state as web } from '../web-player.js';
+import { SPOTIFY_MARK } from './player.js';
 
-/** `spotifyFlash`: 'connected', or why a Spotify connect failed. */
-export function openSettings(focus, spotifyFlash = null) {
+export function openSettings(focus) {
   resetDrawerState();
   ui.settings = true;
   ui.focusField = focus || null;
-  ui.spotifyFlash = spotifyFlash;
   renderSettings();
 }
 
@@ -40,33 +40,34 @@ function syncLine() {
   return status.lastPull ? 'Synced ' + Math.max(0, Math.round((Date.now() - status.lastPull) / 60000)) + ' min ago.' : 'Synced.';
 }
 
-/* Why a connect attempt came back without a connection; the Worker names the reason. */
-const SPOTIFY_ERRORS = {
-  access_denied: 'You chose not to connect on Spotify’s page.',
-  state: 'That sign-in started too long ago or in another tab. Try again.',
-  signed_out: 'You were signed out of Rounds while on Spotify’s page. Sign in and try again.',
-  not_configured: 'Spotify is not set up on this server: its client id or client secret is missing.',
-  exchange: 'Spotify turned down the sign-in. The client secret may be wrong, or this address is not a registered redirect URI.',
-};
-
-function spotifyFlashNote(flash) {
-  if (flash === 'connected') return '<span class="note ok">Connected. What is playing shows under your coat.</span>';
-  const why = SPOTIFY_ERRORS[flash]
-    || 'Spotify reported “' + esc(flash) + '”. If it keeps happening, check that George has added your Spotify email to the app.';
-  return '<span class="note err">Spotify did not connect. ' + why + '</span>';
+function spotifyGroup() {
+  const on = spotify.connected;
+  let html = '<h4>Spotify<em>' + (on ? 'Connected' : 'Not connected') + '</em></h4>'
+    + '<div class="spotrow">' + SPOTIFY_MARK + '<div class="who">';
+  if (on) {
+    html += '<b>Connected</b><span>' + (spotify.device ? 'Playing on <b style="font-weight:500;display:inline">' + esc(spotify.device) + '</b>.'
+      : spotify.track ? 'Paused.' : 'Nothing playing right now.') + '</span></div>'
+      + '<button class="btn ghost" type="button" data-act="spotify-disconnect">Disconnect</button>';
+  } else {
+    html += '<b>Not connected</b><span>Show what you are listening to at the bottom of the sidebar.</span></div>'
+      + '<a class="btn" href="/api/spotify/connect">Connect</a>';
+  }
+  html += '</div>';
+  if (on && web.status === 'needs_reconnect') {
+    html += '<span class="note err">Reconnect Spotify to play in this browser. <a href="/api/spotify/connect">Reconnect</a></span>';
+  }
+  if (on && web.status === 'ready') html += '<span class="note">This tab is a Spotify device called <b>Rounds</b>: press play here and it plays here.</span>';
+  if (ui.spotifyNote === 'error') html += '<span class="note err">Spotify did not connect. Try again.</span>';
+  if (ui.spotifyNote === 'connected') html += '<span class="note" style="color:var(--good)">Connected. The badge on the coat shows what is playing.</span>';
+  html += '<span class="note">Controls need Spotify Premium; free accounts still see what is playing.'
+    + (on ? '' : ' The owner of the Rounds app has to add your Spotify email to it first, so ask before connecting.') + '</span>';
+  return html;
 }
 
-function spotifyGroup() {
-  const s = spotifyState();
-  let h = '<div class="setgrp"><h4>Spotify<em>' + (!s ? 'checking…' : s.connected ? 'connected' : 'not connected') + '</em></h4>';
-  if (ui.spotifyFlash) h += spotifyFlashNote(ui.spotifyFlash);
-  if (s) {
-    h += s.connected
-      ? '<span><button class="btn ghost" type="button" id="spDisconnect" data-act="spotify-disconnect">Disconnect</button></span>'
-      : '<span><a class="btn" id="spConnect" href="/api/spotify/connect">Connect Spotify</a></span>';
-  }
-  return h + '<span class="note">Shows what is playing in the sidebar. Play, pause and skip need Spotify Premium. '
-    + 'George has to add your Spotify email to the app before you can connect.</span></div>';
+/** Redraw just the Spotify group, when the poller learns something while Settings is open. */
+export function refreshSpotifyGroup() {
+  const g = $('spotifyGrp');
+  if (g) g.innerHTML = spotifyGroup();
 }
 
 export function renderSettings() {
@@ -121,7 +122,8 @@ export function renderSettings() {
     + '<span style="display:flex;gap:6px"><input type="text" id="qSrc" placeholder="Who said it (optional)" aria-label="Source" maxlength="80">'
     + '<button class="btn ghost" type="button" data-act="addquote">Add</button></span></div></div>';
 
-  body += spotifyGroup();
+  // ── Spotify ──
+  body += '<div class="setgrp" id="spotifyGrp" tabindex="-1">' + spotifyGroup() + '</div>';
 
   // ── data: sync, import, account ──
   body += '<div class="setgrp"><h4>Data<em>' + data.items.length + ' items · ' + data.courses.length + ' courses</em></h4>'
@@ -135,7 +137,11 @@ export function renderSettings() {
     + '<button class="btn" type="button" data-act="close">Done</button></div>';
 
   showDrawer(head + body + foot);
-  if (ui.focusField) { const f = $(ui.focusField); if (f) f.focus(); ui.focusField = null; }
+  if (ui.focusField) {
+    const f = $(ui.focusField);
+    if (f) { f.focus({ preventScroll: true }); f.scrollIntoView({ block: 'nearest' }); }
+    ui.focusField = null;
+  }
 }
 
 export function refreshSyncNote() {

@@ -1,15 +1,48 @@
-// Spotify, on behalf of one signed-in user. The browser never talks to Spotify: the
-// Worker holds each user's tokens and makes every call. The refresh token is encrypted
-// at rest under a key derived from SESSION_SECRET, so rotating that secret disconnects
-// everyone, the way it signs everyone out.
+// Spotify: the OAuth round trip, token storage, and a proxy for the player calls.
+// The browser never talks to Spotify; every call goes through here with the
+// signed-in user's own tokens. See docs/superpowers/specs/2026-09-22-spotify-player-design.md.
 
 import { HttpError } from './http.js';
 import { getSpotifyTokens, saveSpotifyTokens, deleteSpotifyTokens } from './db.js';
 
-async function tokenKey(env) {
-  const base = await crypto.subtle.importKey('raw', new TextEncoder().encode(env.SESSION_SECRET), 'HKDF', false, ['deriveKey']);
+const ACCOUNTS = 'https://accounts.spotify.com';
+const API = 'https://api.spotify.com/v1';
+export const SCOPES = 'user-read-playback-state user-modify-playback-state playlist-read-private playlist-read-collaborative user-library-read streaming user-read-email user-read-private';
+const REFRESH_WITHIN_MS = 60 * 1000;
+
+export const ACTIONS = {
+  play: ['PUT', '/me/player/play'],
+  pause: ['PUT', '/me/player/pause'],
+  next: ['POST', '/me/player/next'],
+  previous: ['POST', '/me/player/previous'],
+  restart: ['PUT', '/me/player/seek?position_ms=0'],
+};
+
+export function configured(env) {
+  return !!(env.SPOTIFY_CLIENT_ID && env.SPOTIFY_CLIENT_SECRET);
+}
+
+export function authorizeUrl(env, redirectUri, state) {
+  const u = new URL(`${ACCOUNTS}/authorize`);
+  u.searchParams.set('response_type', 'code');
+  u.searchParams.set('client_id', env.SPOTIFY_CLIENT_ID);
+  u.searchParams.set('scope', SCOPES);
+  u.searchParams.set('redirect_uri', redirectUri);
+  u.searchParams.set('state', state);
+  return u.toString();
+}
+
+// ── refresh tokens at rest ──────────────────────────────────────────────────
+// AES-GCM under a key derived from SESSION_SECRET. Rotating the secret makes every
+// stored refresh token unreadable, which the refresh path treats as "not connected".
+
+const enc = new TextEncoder();
+const dec = new TextDecoder();
+
+async function aesKey(secret) {
+  const base = await crypto.subtle.importKey('raw', enc.encode(secret), 'HKDF', false, ['deriveKey']);
   return crypto.subtle.deriveKey(
-    { name: 'HKDF', hash: 'SHA-256', salt: new Uint8Array(0), info: new TextEncoder().encode('spotify-refresh') },
+    { name: 'HKDF', hash: 'SHA-256', salt: enc.encode('rounds'), info: enc.encode('spotify-refresh') },
     base,
     { name: 'AES-GCM', length: 256 },
     false,
@@ -17,39 +50,32 @@ async function tokenKey(env) {
   );
 }
 
-/** base64(iv ‖ ciphertext), a fresh iv every time. */
-export async function encryptToken(env, plain) {
+const b64 = (bytes) => btoa(String.fromCharCode(...bytes));
+const unb64 = (s) => Uint8Array.from(atob(s), (c) => c.charCodeAt(0));
+
+export async function encryptToken(secret, plain) {
   const iv = crypto.getRandomValues(new Uint8Array(12));
-  const ct = new Uint8Array(await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, await tokenKey(env), new TextEncoder().encode(plain)));
+  const ct = new Uint8Array(await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, await aesKey(secret), enc.encode(plain)));
   const out = new Uint8Array(iv.length + ct.length);
-  out.set(iv);
-  out.set(ct, iv.length);
-  return btoa(String.fromCharCode(...out));
+  out.set(iv); out.set(ct, iv.length);
+  return b64(out);
 }
 
-/** Throws if the ciphertext was made under another secret or was altered. */
-export async function decryptToken(env, stored) {
-  const bytes = Uint8Array.from(atob(stored), (c) => c.charCodeAt(0));
-  const plain = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: bytes.slice(0, 12) }, await tokenKey(env), bytes.slice(12));
-  return new TextDecoder().decode(plain);
+/** The plaintext, or null when the ciphertext was made under another secret. */
+export async function decryptToken(secret, stored) {
+  try {
+    const bytes = unb64(stored);
+    const plain = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: bytes.slice(0, 12) }, await aesKey(secret), bytes.slice(12));
+    return dec.decode(plain);
+  } catch {
+    return null;
+  }
 }
 
-const ACCOUNTS = 'https://accounts.spotify.com';
-export const SCOPES = 'user-read-playback-state user-modify-playback-state';
+// ── accounts.spotify.com ────────────────────────────────────────────────────
 
-const notConnected = () => new HttpError(409, { error: 'not_connected' });
 const unavailable = () => new HttpError(502, { error: 'spotify_unavailable' });
 
-export function isConfigured(env) {
-  return Boolean(env.SPOTIFY_CLIENT_ID && env.SPOTIFY_CLIENT_SECRET);
-}
-
-export function authorizeUrl(env, redirectUri, state) {
-  const q = new URLSearchParams({ client_id: env.SPOTIFY_CLIENT_ID, response_type: 'code', redirect_uri: redirectUri, scope: SCOPES, state });
-  return `${ACCOUNTS}/authorize?${q}`;
-}
-
-/** POST to Spotify's token endpoint. Resolves to {status, body}; a network failure is a 502. */
 async function tokenRequest(env, params) {
   let res;
   try {
@@ -59,138 +85,241 @@ async function tokenRequest(env, params) {
         authorization: 'Basic ' + btoa(`${env.SPOTIFY_CLIENT_ID}:${env.SPOTIFY_CLIENT_SECRET}`),
         'content-type': 'application/x-www-form-urlencoded',
       },
-      body: new URLSearchParams(params),
+      body: new URLSearchParams(params).toString(),
     });
   } catch {
     throw unavailable();
   }
-  return { status: res.status, body: await res.json().catch(() => ({})) };
+  const body = await res.json().catch(() => ({}));
+  if (res.status >= 500) throw unavailable();
+  if (!res.ok) throw new HttpError(400, { error: body.error === 'invalid_grant' ? 'invalid_grant' : 'spotify_rejected' });
+  return body;
 }
 
-function tokensFrom(body, now) {
-  return { accessToken: body.access_token, refreshToken: body.refresh_token, expiresAt: now + body.expires_in * 1000 };
-}
+const fromTokenBody = (body, now) => ({
+  accessToken: body.access_token,
+  refreshToken: body.refresh_token,
+  expiresAt: now + (Number(body.expires_in) || 3600) * 1000,
+});
 
-/** Trade the callback's code for tokens. Throws on any refusal. */
 export async function exchangeCode(env, code, redirectUri, now = Date.now()) {
-  const { status, body } = await tokenRequest(env, { grant_type: 'authorization_code', code, redirect_uri: redirectUri });
-  if (status !== 200 || !body.access_token || !body.refresh_token) throw new Error(`Spotify refused the code (${status})`);
-  return tokensFrom(body, now);
+  return fromTokenBody(await tokenRequest(env, { grant_type: 'authorization_code', code, redirect_uri: redirectUri }), now);
 }
 
-/** Store tokens, encrypting the refresh token. */
-export async function storeTokens(env, userId, t, now = Date.now()) {
-  const refreshToken = await encryptToken(env, t.refreshToken);
-  await saveSpotifyTokens(env.DB, userId, { refreshToken, accessToken: t.accessToken, expiresAt: t.expiresAt }, now);
-}
-
-const API = 'https://api.spotify.com/v1';
-const REFRESH_WITHIN_MS = 60 * 1000;
-
-/** A new access token. A revoked refresh token is not_connected; Spotify may send a new refresh token too. */
 export async function refreshAccessToken(env, refreshToken, now = Date.now()) {
-  const { status, body } = await tokenRequest(env, { grant_type: 'refresh_token', refresh_token: refreshToken });
-  if (status === 400 && body.error === 'invalid_grant') throw notConnected();
-  if (status !== 200 || !body.access_token) throw unavailable();
-  return tokensFrom(body, now);
+  return fromTokenBody(await tokenRequest(env, { grant_type: 'refresh_token', refresh_token: refreshToken }), now);
 }
 
-/** A usable access token for this user; `force` refreshes even one that looks fresh. */
-export async function freshAccessToken(env, userId, force = false, now = Date.now()) {
-  const row = await getSpotifyTokens(env.DB, userId);
-  if (!row) throw notConnected();
-  if (!force && row.expiresAt - now > REFRESH_WITHIN_MS) return row.accessToken;
-  let refreshToken;
+// ── the user's access token ─────────────────────────────────────────────────
+
+const notConnected = () => new HttpError(409, { error: 'not_connected' });
+
+/** Refresh, store, and return `{ accessToken, expiresAt }`; drops the row if Spotify revoked it. */
+async function refreshFor(env, userId, row) {
+  const refreshToken = await decryptToken(env.SESSION_SECRET, row.refresh_token);
+  if (!refreshToken) { await deleteSpotifyTokens(env.DB, userId); throw notConnected(); }
+  let fresh;
   try {
-    refreshToken = await decryptToken(env, row.refreshToken);
-  } catch {
-    await deleteSpotifyTokens(env.DB, userId);   // SESSION_SECRET was rotated
-    throw notConnected();
-  }
-  let t;
-  try {
-    t = await refreshAccessToken(env, refreshToken, now);
+    fresh = await refreshAccessToken(env, refreshToken);
   } catch (e) {
-    if (e instanceof HttpError && e.status === 409) await deleteSpotifyTokens(env.DB, userId);
+    if (e instanceof HttpError && e.body.error === 'invalid_grant') { await deleteSpotifyTokens(env.DB, userId); throw notConnected(); }
     throw e;
   }
-  await storeTokens(env, userId, { ...t, refreshToken: t.refreshToken || refreshToken }, now);
-  return t.accessToken;
+  await saveSpotifyTokens(env.DB, userId, {
+    refreshToken: fresh.refreshToken ? await encryptToken(env.SESSION_SECRET, fresh.refreshToken) : row.refresh_token,
+    accessToken: fresh.accessToken,
+    expiresAt: fresh.expiresAt,
+  });
+  return fresh;
 }
 
-/** One Web API call as this user, refreshing and retrying once on a 401. */
-async function call(env, userId, method, path) {
-  const send = async (token) => {
+/** A usable access token for this user and when it expires, refreshed when it is about to. */
+export async function freshAccessToken(env, userId, now = Date.now()) {
+  const row = await getSpotifyTokens(env.DB, userId);
+  if (!row) throw notConnected();
+  if (row.expires_at - now > REFRESH_WITHIN_MS) return { token: row.access_token, expiresAt: row.expires_at, row };
+  const fresh = await refreshFor(env, userId, row);
+  return { token: fresh.accessToken, expiresAt: fresh.expiresAt, row };
+}
+
+/**
+ * Call api.spotify.com as this user. A 401 gets one refresh and one retry; 429 and
+ * 5xx are mapped so the UI can explain them. Returns the Response for the caller
+ * to map 2xx/403/404 itself.
+ */
+async function spotifyFetch(env, userId, method, path, body) {
+  const { token, row } = await freshAccessToken(env, userId);
+  const call = async (bearer) => {
+    const headers = { authorization: `Bearer ${bearer}` };
+    if (body !== undefined) headers['content-type'] = 'application/json';
     try {
-      return await fetch(API + path, {
-        method,
-        headers: { authorization: `Bearer ${token}` },
-        body: method === 'GET' ? undefined : '',
-      });
+      return await fetch(`${API}${path}`, { method, headers, body: body !== undefined ? JSON.stringify(body) : undefined });
     } catch {
       throw unavailable();
     }
   };
-  let res = await send(await freshAccessToken(env, userId));
-  if (res.status === 401) res = await send(await freshAccessToken(env, userId, true));
+  let res = await call(token);
+  if (res.status === 401) res = await call((await refreshFor(env, userId, row)).accessToken);
+  if (res.status === 401) throw notConnected();
+  if (res.status === 429) {
+    const wait = res.headers.get('retry-after') || '30';
+    throw new HttpError(429, { error: 'rate_limited', retryAfter: Number(wait) || 30 }, { 'retry-after': wait });
+  }
+  if (res.status >= 500) throw unavailable();
   return res;
 }
 
-/** A rate limit passes through with its wait; anything else unexpected is Spotify's trouble. */
-function failure(res) {
-  if (res.status === 429) {
-    const wait = Number(res.headers.get('retry-after')) || 30;
-    return new HttpError(429, { error: 'rate_limited', retryAfter: wait }, { 'retry-after': String(wait) });
-  }
-  return unavailable();
+// ── the player ──────────────────────────────────────────────────────────────
+
+function pickArt(images, size) {
+  const list = images || [];
+  return (list.find((i) => i.width === size) || (size <= 64 ? list[list.length - 1] : list[1]) || list[0] || {}).url || null;
 }
 
-function artOf(images = []) {
-  const img = images.find((i) => i.width === 300) || images[0];
-  return img ? img.url : null;
-}
-
-/** What is playing, in the compact shape the strip draws. */
-export async function playerState(env, userId) {
-  const res = await call(env, userId, 'GET', '/me/player');
-  if (res.status === 204) return { connected: true, playing: false, track: null, device: null };
-  if (res.status !== 200) throw failure(res);
-  const p = await res.json();
-  const it = p.item;
+function compactTrack(item, progressMs, artSize = 300) {
+  if (!item) return null;
+  const art = pickArt(item.album?.images, artSize);
   return {
-    connected: true,
-    playing: Boolean(p.is_playing),
-    device: p.device?.name ?? null,
-    track: it
-      ? {
-          title: it.name,
-          artists: (it.artists || []).map((a) => a.name).join(', ') || it.show?.name || '',
-          album: it.album?.name || it.show?.name || '',
-          art: artOf(it.album?.images || it.images),
-          url: it.external_urls?.spotify || null,
-          durationMs: it.duration_ms,
-          progressMs: p.progress_ms ?? 0,
-        }
-      : null,
+    uri: item.uri || null,
+    title: item.name || '',
+    artists: (item.artists || []).map((a) => a.name).filter(Boolean).join(', '),
+    album: item.album?.name || '',
+    art,
+    url: item.external_urls?.spotify || null,
+    durationMs: Number(item.duration_ms) || 0,
+    progressMs: Number(progressMs) || 0,
   };
 }
 
-/** Each control the strip can send, as Spotify's method and path. */
-const CONTROLS = {
-  play: ['PUT', '/me/player/play'],
-  pause: ['PUT', '/me/player/pause'],
-  next: ['POST', '/me/player/next'],
-  previous: ['POST', '/me/player/previous'],
-  restart: ['PUT', '/me/player/seek?position_ms=0'],
-};
-export const ACTIONS = Object.keys(CONTROLS);
+/** `{ connected: false }`, or `{ connected: true, playing, track, device, deviceId, volume, supportsVolume }`. */
+export async function playerState(env, userId) {
+  if (!(await getSpotifyTokens(env.DB, userId))) return { connected: false };
+  let res;
+  try {
+    res = await spotifyFetch(env, userId, 'GET', '/me/player');
+  } catch (e) {
+    if (e instanceof HttpError && e.body.error === 'not_connected') return { connected: false };
+    throw e;
+  }
+  if (res.status === 204) return { connected: true, playing: false, track: null, device: null, deviceId: null, volume: null, supportsVolume: false };
+  const body = await res.json().catch(() => ({}));
+  return {
+    connected: true,
+    playing: !!body.is_playing,
+    track: compactTrack(body.item, body.progress_ms),
+    device: body.device?.name || null,
+    deviceId: body.device?.id || null,
+    volume: typeof body.device?.volume_percent === 'number' ? body.device.volume_percent : null,
+    supportsVolume: !!body.device && body.device.supports_volume !== false,
+  };
+}
 
-/** Send a control; throws the mapped error unless Spotify took it. */
-export async function control(env, userId, action) {
-  const [method, path] = CONTROLS[action];
-  const res = await call(env, userId, method, path);
-  if (res.ok) return;
-  if (res.status === 404) throw new HttpError(404, { error: 'no_device' });
-  if (res.status === 403) throw new HttpError(403, { error: 'premium_required' });
-  throw failure(res);
+/** Mapped 403/404 from a command that needs an active device. */
+function controlError(res) {
+  if (res.status === 404) return new HttpError(404, { error: 'no_device' });
+  if (res.status === 403) return new HttpError(403, { error: 'premium_required' });
+  return unavailable();
+}
+
+/** Append Spotify's device_id to a player path when one is given. */
+function withDevice(path, deviceId) {
+  return deviceId ? `${path}${path.includes('?') ? '&' : '?'}device_id=${encodeURIComponent(deviceId)}` : path;
+}
+
+/** One of ACTIONS, on the active device or the one named. Throws a mapped HttpError on failure. */
+export async function control(env, userId, action, deviceId = null) {
+  const [method, path] = ACTIONS[action];
+  const res = await spotifyFetch(env, userId, method, withDevice(path, deviceId));
+  if (!res.ok) throw controlError(res);
+}
+
+/** Move playback to this device (the Rounds tab) and keep it playing. */
+export async function transfer(env, userId, deviceId) {
+  const res = await spotifyFetch(env, userId, 'PUT', '/me/player', { device_ids: [deviceId], play: true });
+  if (!res.ok) throw controlError(res);
+}
+
+// ── the Spotify view: search, playlists, queue, volume ──────────────────────
+
+const LIST_LIMIT = 50;
+
+function compactAlbum(a) {
+  return {
+    uri: a.uri, id: a.id, name: a.name || '',
+    artists: (a.artists || []).map((x) => x.name).filter(Boolean).join(', '),
+    art: pickArt(a.images, 64), count: Number(a.total_tracks) || 0,
+  };
+}
+
+function compactPlaylist(p) {
+  return {
+    uri: p.uri, id: p.id, name: p.name || '',
+    owner: p.owner?.display_name || '',
+    art: pickArt(p.images, 64), count: Number(p.tracks?.total) || 0,
+  };
+}
+
+const page = (body, offset, mapped) => ({ items: mapped, total: Number(body.total) || mapped.length, next: !!body.next, offset });
+
+async function readJson(res) {
+  return res.json().catch(() => ({}));
+}
+
+/** Tracks, albums and playlists matching `q`, ten of each. */
+export async function search(env, userId, q) {
+  const res = await spotifyFetch(env, userId, 'GET', `/search?type=track,album,playlist&limit=10&q=${encodeURIComponent(q)}`);
+  if (!res.ok) throw unavailable();
+  const b = await readJson(res);
+  return {
+    tracks: (b.tracks?.items || []).filter(Boolean).map((t) => compactTrack(t, 0, 64)),
+    albums: (b.albums?.items || []).filter(Boolean).map(compactAlbum),
+    playlists: (b.playlists?.items || []).filter(Boolean).map(compactPlaylist),
+  };
+}
+
+/** The user's playlists, a page at a time. */
+export async function playlists(env, userId, offset = 0) {
+  const res = await spotifyFetch(env, userId, 'GET', `/me/playlists?limit=${LIST_LIMIT}&offset=${offset}`);
+  if (!res.ok) throw unavailable();
+  const b = await readJson(res);
+  return page(b, offset, (b.items || []).filter(Boolean).map(compactPlaylist));
+}
+
+/** A playlist's tracks, or the user's Liked Songs for id `liked`. Local files and episodes are skipped. */
+export async function playlistTracks(env, userId, id, offset = 0) {
+  const path = id === 'liked' ? `/me/tracks?limit=${LIST_LIMIT}&offset=${offset}` : `/playlists/${id}/tracks?limit=${LIST_LIMIT}&offset=${offset}`;
+  const res = await spotifyFetch(env, userId, 'GET', path);
+  if (res.status === 404) throw new HttpError(404, { error: 'not_found' });
+  if (!res.ok) throw unavailable();
+  const b = await readJson(res);
+  const tracks = (b.items || []).map((i) => i && i.track).filter((t) => t && t.type !== 'episode' && !t.is_local && t.uri);
+  return page(b, offset, tracks.map((t) => compactTrack(t, 0, 64)));
+}
+
+/** What is playing and what comes next. Spotify offers no way to remove from or reorder the queue. */
+export async function queue(env, userId) {
+  const res = await spotifyFetch(env, userId, 'GET', '/me/player/queue');
+  if (!res.ok) throw unavailable();
+  const b = await readJson(res);
+  return {
+    current: compactTrack(b.currently_playing, 0, 64),
+    queue: (b.queue || []).filter(Boolean).map((t) => compactTrack(t, 0, 64)),
+  };
+}
+
+export async function addToQueue(env, userId, uri) {
+  const res = await spotifyFetch(env, userId, 'POST', `/me/player/queue?uri=${encodeURIComponent(uri)}`);
+  if (!res.ok) throw controlError(res);
+}
+
+/** Start a track, a track inside a playlist or album, or a whole playlist or album. */
+export async function play(env, userId, { uri, contextUri, deviceId = null }) {
+  const body = contextUri ? { context_uri: contextUri, ...(uri ? { offset: { uri } } : {}) } : { uris: [uri] };
+  const res = await spotifyFetch(env, userId, 'PUT', withDevice('/me/player/play', deviceId), body);
+  if (!res.ok) throw controlError(res);
+}
+
+export async function setVolume(env, userId, percent) {
+  const res = await spotifyFetch(env, userId, 'PUT', `/me/player/volume?volume_percent=${percent}`);
+  if (!res.ok) throw controlError(res);
 }

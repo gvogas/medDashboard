@@ -13,10 +13,11 @@ export default defineConfig(async () => {
           bindings: {
             TEST_MIGRATIONS: migrations,
             SESSION_SECRET: 'test-secret-not-for-production',
-            SPOTIFY_CLIENT_ID: 'test-client',
-            SPOTIFY_CLIENT_SECRET: 'test-secret',
+            SPOTIFY_CLIENT_ID: 'test-client-id',
+            SPOTIFY_CLIENT_SECRET: 'test-client-secret',
           },
-          // The only outbound calls are to Spotify, answered by a fake; anything else is refused.
+          // The only outbound calls are to Spotify, answered by the fake in
+          // test/spotify-stub.js; anything else gets a 502, so tests never touch the network.
           outboundService: spotifyStub,
         },
       }),

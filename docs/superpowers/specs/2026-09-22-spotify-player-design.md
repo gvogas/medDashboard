@@ -1,10 +1,13 @@
 # Spotify player — design
 
-Date: 22 September 2026. Status: approved.
+Date: 22 September 2026. Status: approved. Look chosen 22 September 2026: the badge,
+option B of [`design/mockup-spotify-options.html`](../../../design/mockup-spotify-options.html);
+the earlier strip is kept in [`design/mockup-spotify.html`](../../../design/mockup-spotify.html)
+for the states, phone overlay and Settings group, which are unchanged.
 
-A strip at the bottom of the sidebar that shows what is playing on the signed-in
-user's Spotify, with previous, play/pause and next. Each Rounds user connects their
-own Spotify account from Settings. The browser never talks to Spotify itself: the
+A badge clipped to the bottom of the sidebar, under the pocket, that shows what is
+playing on the signed-in user's Spotify, with previous, play/pause and next. Each
+Rounds user connects their own Spotify account from Settings. The browser never talks to Spotify itself: the
 Worker holds the tokens and proxies every call.
 
 ## Constraints that shaped it
@@ -35,7 +38,8 @@ secrets stay in the Worker, everything scoped by user id.
    `.dev.vars`. Set the secret with `wrangler secret put SPOTIFY_CLIENT_SECRET` and
    locally in `.dev.vars` (`.dev.vars.example` documents both).
 
-Scopes requested: `user-read-playback-state user-modify-playback-state`.
+Scopes requested: `user-read-playback-state user-modify-playback-state playlist-read-private
+playlist-read-collaborative user-library-read` (the last three for the Spotify view).
 
 ## Storage
 
@@ -85,6 +89,15 @@ Routes, added to the table in `worker/api.js`. Every one starts with
 | `GET /api/spotify/player` | `{ connected: false }` when there is no row. Otherwise `{ connected: true, playing, track, device }` where `track` is null when nothing is playing (Spotify 204) or `{ title, artists, album, art, url, durationMs, progressMs }`. `art` is the 300px image. `device` is the active device name or null. |
 | `POST /api/spotify/player/:action` | `action` is one of `play`, `pause`, `next`, `previous`, `restart`. Returns 204. `restart` is seek to 0. |
 | `DELETE /api/spotify` | Deletes the row, 204. |
+| `GET /api/spotify/search?q=` | Ten tracks, albums and playlists matching `q`, in compact shapes (art is the 64px image). |
+| `GET /api/spotify/playlists?offset=` | The user's playlists, 50 a page: `{ items, total, next, offset }`. |
+| `GET /api/spotify/playlists/:id/tracks?offset=` | A playlist's tracks, 50 a page; `liked` is the user's Liked Songs. Local files and episodes are skipped. |
+| `GET /api/spotify/queue` | `{ current, queue }`. Spotify's API cannot remove from or reorder the queue. |
+| `POST /api/spotify/queue` | `{ uri }` of a track or episode, added to the queue. 204. |
+| `POST /api/spotify/play` | `{ uri }` plays a track; `{ contextUri }` a playlist or album; both together the track inside that context. 204. |
+| `PUT /api/spotify/volume` | `{ percent }`, an integer 0–100. 204. Some devices (phones) refuse volume from the API. |
+
+The player route also carries `volume` (0–100 or null) and `supportsVolume`.
 
 Spotify errors are mapped so the UI can explain them:
 
@@ -121,23 +134,35 @@ last state.
   502 it keeps the last state, marks it `stale: true`, and waits the retry-after or
   30 s before trying again.
 
-### `public/js/views/player.js` — the strip
+### `public/js/views/player.js` — the badge
 
 `renderPlayer(state)` writes into `<div class="player" id="player">`, placed in
 `index.html` after the pocket in the sidebar, so it sits at the bottom of the coat.
 
+The look: a card in the panel colour with a 1px border tinted by the coat colour,
+rounded 9px, with a small clip over its top edge (a 34×8px bar in the coat colour,
+like the pen on the pocket) so it reads as an ID badge clipped to the coat next to
+the pocket. Inside, top to bottom: the now-playing row, a 3px progress line, three
+round controls centred, and a device line. It is about 120px tall when playing.
+
 States:
 
-- Not connected: a single quiet line, "Connect Spotify", which opens Settings at the
-  Spotify group.
-- Idle: the Spotify mark and "Nothing playing".
-- Playing or paused: 36px album art, the title as a link to `track.url` (opens in a
-  new tab), the artist line, a thin progress line, and three buttons: previous,
-  play/pause, next. The play/pause button reflects `playing`.
+- Not connected: the card holds a single quiet line, "Connect Spotify", with the
+  Spotify mark in grey, which opens Settings at the Spotify group. The mark turns
+  green on hover.
+- Idle: the Spotify mark and "Nothing playing". No line, controls or device line.
+- Playing or paused: 42px album art (rounded 7px, a soft shadow), the title as a link
+  to `track.url` (opens in a new tab), the artist line, and under it four equaliser
+  bars in Spotify green that animate while `playing` and stand still when paused
+  (no animation under `prefers-reduced-motion`). The Spotify mark sits at the right
+  of the row. The progress line fills from the accent to Spotify green. The controls
+  are previous and next as 28px outlined circles and play/pause as a 34px filled
+  circle in the ink colour, which reflects `playing`. The device line reads
+  "on <device>" in small type, or is hidden when `device` is null.
 - After a failed command: a short note under the controls for 4 s, "Open Spotify on a
   device first" for `no_device`, "Controls need Spotify Premium" for
   `premium_required`, "Spotify is not answering" for `spotify_unavailable`.
-- Stale: the strip is dimmed (`data-stale`) until a poll succeeds.
+- Stale: the badge is dimmed (`data-stale`) until a poll succeeds, and the bars stop.
 
 Previous behaves like the Spotify app: `restart` when `progressMs > 3000`, else
 `previous`.
@@ -146,9 +171,21 @@ The Spotify mark is inline SVG. Spotify's brand rules require it beside their
 metadata and that album art is shown unaltered and links back to Spotify; the title
 link satisfies the latter.
 
-On phones the sidebar is an overlay opened by the menu button, and the strip is at
+On phones the sidebar is an overlay opened by the menu button, and the badge is at
 its bottom there too. The sidebar already scrolls, so a long course list does not
 hide it.
+
+### `public/js/views/spotify-view.js` — the Spotify view
+
+A fourth entry in the view segment beside Week, Month and Table. The date buttons and
+the stats strip hide while it is open. Inside: a search box and a volume slider across
+the top; a left panel with Queue, Liked Songs and the user's playlists; a main panel
+that shows a playlist's tracks (with "Play all"), search results in three sections,
+or the queue ("Now playing", "Next up", a Skip button and a note that Spotify does not
+let apps remove or reorder). Every track row has play and add-to-queue; the playing
+track is marked. Data is cached for the session; a failed command shows a line under
+the top row. The volume slider is debounced 250 ms and follows the poller unless it is
+being held. Not connected shows one panel with a Connect button.
 
 ### Settings
 
@@ -162,12 +199,13 @@ email first.
 ### Small edits
 
 - `api.js`: `spotifyPlayer()`, `spotifyControl(action)`, `spotifyDisconnect()`.
-- `main.js`: start the poller in `start()`, stop it in `signOut()`; wire the strip's
+- `main.js`: start the poller in `start()`, stop it in `signOut()`; wire the badge's
   buttons and the disconnect action into the delegated click handler; on boot read
   `location.hash` for `#spotify=connected` (open Settings at the Spotify group) or
   `#spotify=error` (open Settings with an error line), then clear the hash.
-- `index.html`: the strip's container.
-- `layout.css` / `components.css`: `.player` styles in the Ward Board palette.
+- `index.html`: the badge's container.
+- `layout.css` / `components.css`: `.player` styles in the Ward Board palette, taken
+  from the `.badge` block in `design/mockup-spotify-options.html`.
 - `sw.js`: add the two scripts to the shell list, bump the cache name.
 - `_headers`: `img-src 'self' data: https://i.scdn.co`. Nothing else in the CSP
   changes; the connect link is a navigation and the consent page is Spotify's.

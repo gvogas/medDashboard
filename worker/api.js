@@ -1,9 +1,9 @@
 import { json, readJson, HttpError } from './http.js';
-import { requireUser, requireSession, signSession, sessionCookie, clearCookie, parseCookies, secureFlag, hex, RENEW_WITHIN_MS } from './auth.js';
+import { requireUser, requireSession, signSession, sessionCookie, clearCookie, parseCookies, secureFlag, RENEW_WITHIN_MS } from './auth.js';
 import { verifyPassword, normalizeUsername } from './password.js';
 import { lockedFor, recordFailure, recordSuccess } from './throttle.js';
 import { validateProfile, validateCourse, validateItem, validateQuote, validateId } from './validate.js';
-import { getUserForLogin, getProfile, updateProfile, getRow, upsertRow, deleteRow, courseExists, syncSince, bumpPasswordGen, deleteSpotifyTokens } from './db.js';
+import { getUserForLogin, getProfile, updateProfile, getRow, upsertRow, deleteRow, courseExists, syncSince, bumpPasswordGen, saveSpotifyTokens, deleteSpotifyTokens } from './db.js';
 import * as spotify from './spotify.js';
 
 const VALIDATORS = { courses: validateCourse, items: validateItem, quotes: validateQuote };
@@ -33,49 +33,65 @@ async function removeRow({ request, env, params: [table, id] }) {
   return new Response(null, { status: 204 });
 }
 
-// ── Spotify: the OAuth round trip. The state cookie is its CSRF guard. ──
-const SPOTIFY_STATE = 'rounds_spotify_state';
+const ROW = /^\/api\/(courses|items|quotes)\/([^/]+)$/;
 
-function spotifyStateCookie(value, url, maxAge) {
-  return `${SPOTIFY_STATE}=${value}; Path=/api/spotify; HttpOnly; SameSite=Lax; Max-Age=${maxAge}${secureFlag(url)}`;
+// ── Spotify ─────────────────────────────────────────────────────────────────
+// The consent round trip is two browser navigations, so its failures are
+// redirects to the app with a hash, not JSON. The state cookie is the CSRF guard.
+
+const STATE_COOKIE = 'rounds_spotify_state';
+const stateCookie = (value, url, maxAge) =>
+  `${STATE_COOKIE}=${value}; Path=/api/spotify; HttpOnly; SameSite=Lax; Max-Age=${maxAge}${secureFlag(url)}`;
+const redirect = (url, hash, headers = {}) =>
+  new Response(null, { status: 302, headers: { location: `${url.origin}/#spotify=${hash}`, ...headers } });
+const callbackUri = (url) => `${url.origin}/api/spotify/callback`;
+const TRACK_URI = /^spotify:(track|episode):[A-Za-z0-9]{1,64}$/;
+const CONTEXT_URI = /^spotify:(album|playlist|artist):[A-Za-z0-9]{1,64}$/;
+const DEVICE_ID = /^[A-Za-z0-9]{1,64}$/;
+/** An optional Spotify device id: null when absent, 400 when malformed. */
+function deviceParam(value) {
+  if (value == null || value === '') return null;
+  if (typeof value !== 'string' || !DEVICE_ID.test(value)) throw new HttpError(400, { error: 'invalid', field: 'deviceId' });
+  return value;
+}
+function offsetParam(url) {
+  const raw = url.searchParams.get('offset') ?? '0';
+  if (!/^[0-9]{1,6}$/.test(raw)) throw new HttpError(400, { error: 'invalid', field: 'offset' });
+  return Number(raw);
 }
 
-/**
- * Back to the app, with the result in the hash: `connected`, or `error&reason=<why>` so
- * Settings can say what went wrong. Connect and callback are navigations, so never JSON.
- */
-function backToApp(url, result, reason) {
-  const hash = reason ? `${result}&reason=${reason}` : result;
+async function spotifyConnect({ request, env, url }) {
+  await requireUser(request, env);
+  if (!spotify.configured(env)) throw new HttpError(503, { error: 'spotify_not_configured' });
+  const state = [...crypto.getRandomValues(new Uint8Array(16))].map((b) => b.toString(16).padStart(2, '0')).join('');
   return new Response(null, {
     status: 302,
-    headers: { location: `${url.origin}/#spotify=${hash}`, 'set-cookie': spotifyStateCookie('', url, 0) },
+    headers: { location: spotify.authorizeUrl(env, callbackUri(url), state), 'set-cookie': stateCookie(state, url, 600) },
   });
 }
 
 async function spotifyCallback({ request, env, url }) {
+  const clear = { 'set-cookie': stateCookie('', url, 0) };
   let userId;
-  try {
-    userId = await requireUser(request, env);
-  } catch {
-    return backToApp(url, 'error', 'signed_out');
+  try { userId = await requireUser(request, env); } catch { return redirect(url, 'error', clear); }
+  const state = url.searchParams.get('state'), code = url.searchParams.get('code');
+  const expected = parseCookies(request.headers.get('cookie'))[STATE_COOKIE];
+  if (!state || !expected || state !== expected || !code || url.searchParams.get('error') || !spotify.configured(env)) {
+    return redirect(url, 'error', clear);
   }
-  const expected = parseCookies(request.headers.get('cookie'))[SPOTIFY_STATE];
-  if (!expected || url.searchParams.get('state') !== expected) return backToApp(url, 'error', 'state');
-  // Spotify's own error code (access_denied, server_error, …), passed on only if it looks like one.
-  const refused = url.searchParams.get('error');
-  if (refused !== null) return backToApp(url, 'error', /^[a-z_]{1,40}$/.test(refused) ? refused : 'spotify');
-  const code = url.searchParams.get('code');
-  if (!code) return backToApp(url, 'error', 'spotify');
   try {
-    await spotify.storeTokens(env, userId, await spotify.exchangeCode(env, code, `${url.origin}/api/spotify/callback`));
+    const t = await spotify.exchangeCode(env, code, callbackUri(url));
+    await saveSpotifyTokens(env.DB, userId, {
+      refreshToken: await spotify.encryptToken(env.SESSION_SECRET, t.refreshToken),
+      accessToken: t.accessToken,
+      expiresAt: t.expiresAt,
+    });
   } catch (e) {
-    console.error('spotify callback', e);
-    return backToApp(url, 'error', 'exchange');
+    if (!(e instanceof HttpError)) console.error(e);
+    return redirect(url, 'error', clear);
   }
-  return backToApp(url, 'connected');
+  return redirect(url, 'connected', clear);
 }
-
-const ROW = /^\/api\/(courses|items|quotes)\/([^/]+)$/;
 
 const routes = [
   // Username + password. Accounts are created with `npm run user:add`.
@@ -138,37 +154,75 @@ const routes = [
   ['PUT', ROW, putRow],
   ['DELETE', ROW, removeRow],
 
-  // Spotify, proxied: see worker/spotify.js.
-  ['GET', /^\/api\/spotify\/connect$/, async ({ request, env, url }) => {
-    await requireUser(request, env);
-    if (!spotify.isConfigured(env)) return backToApp(url, 'error', 'not_configured');
-    const state = hex(crypto.getRandomValues(new Uint8Array(16)));
-    return new Response(null, {
-      status: 302,
-      headers: {
-        location: spotify.authorizeUrl(env, `${url.origin}/api/spotify/callback`, state),
-        'set-cookie': spotifyStateCookie(state, url, 600),
-      },
-    });
-  }],
+  ['GET', /^\/api\/spotify\/connect$/, spotifyConnect],
   ['GET', /^\/api\/spotify\/callback$/, spotifyCallback],
   ['GET', /^\/api\/spotify\/player$/, async ({ request, env }) => {
     const userId = await requireUser(request, env);
-    try {
-      return json(await spotify.playerState(env, userId));
-    } catch (e) {
-      if (e instanceof HttpError && e.body.error === 'not_connected') return json({ connected: false });
-      throw e;
-    }
+    return json(await spotify.playerState(env, userId));
   }],
-  ['POST', /^\/api\/spotify\/player\/([a-z]+)$/, async ({ request, env, params: [action] }) => {
+  ['POST', /^\/api\/spotify\/player\/(play|pause|next|previous|restart)$/, async ({ request, env, url, params: [action] }) => {
     const userId = await requireUser(request, env);
-    if (!spotify.ACTIONS.includes(action)) throw new HttpError(404, { error: 'not_found' });
-    await spotify.control(env, userId, action);
+    await spotify.control(env, userId, action, deviceParam(url.searchParams.get('deviceId')));
+    return new Response(null, { status: 204 });
+  }],
+  /* The Web Playback SDK in the page needs a bearer token of its own; the refresh token stays here. */
+  ['GET', /^\/api\/spotify\/token$/, async ({ request, env }) => {
+    const userId = await requireUser(request, env);
+    const { token, expiresAt } = await spotify.freshAccessToken(env, userId);
+    return json({ token, expiresAt });
+  }],
+  ['POST', /^\/api\/spotify\/transfer$/, async ({ request, env }) => {
+    const userId = await requireUser(request, env);
+    const deviceId = deviceParam((await readJson(request)).deviceId);
+    if (!deviceId) throw new HttpError(400, { error: 'invalid', field: 'deviceId' });
+    await spotify.transfer(env, userId, deviceId);
+    return new Response(null, { status: 204 });
+  }],
+  ['GET', /^\/api\/spotify\/search$/, async ({ request, env, url }) => {
+    const userId = await requireUser(request, env);
+    const q = (url.searchParams.get('q') || '').trim();
+    if (!q || q.length > 200) throw new HttpError(400, { error: 'invalid', field: 'q' });
+    return json(await spotify.search(env, userId, q));
+  }],
+  ['GET', /^\/api\/spotify\/playlists$/, async ({ request, env, url }) => {
+    const userId = await requireUser(request, env);
+    return json(await spotify.playlists(env, userId, offsetParam(url)));
+  }],
+  ['GET', /^\/api\/spotify\/playlists\/(liked|[A-Za-z0-9]{1,64})\/tracks$/, async ({ request, env, url, params: [id] }) => {
+    const userId = await requireUser(request, env);
+    return json(await spotify.playlistTracks(env, userId, id, offsetParam(url)));
+  }],
+  ['GET', /^\/api\/spotify\/queue$/, async ({ request, env }) => {
+    const userId = await requireUser(request, env);
+    return json(await spotify.queue(env, userId));
+  }],
+  ['POST', /^\/api\/spotify\/queue$/, async ({ request, env }) => {
+    const userId = await requireUser(request, env);
+    const body = await readJson(request);
+    if (!TRACK_URI.test(body.uri)) throw new HttpError(400, { error: 'invalid', field: 'uri' });
+    await spotify.addToQueue(env, userId, body.uri);
+    return new Response(null, { status: 204 });
+  }],
+  ['POST', /^\/api\/spotify\/play$/, async ({ request, env }) => {
+    const userId = await requireUser(request, env);
+    const body = await readJson(request);
+    const uri = body.uri == null ? null : body.uri, contextUri = body.contextUri == null ? null : body.contextUri;
+    if (uri !== null && !TRACK_URI.test(uri)) throw new HttpError(400, { error: 'invalid', field: 'uri' });
+    if (contextUri !== null && !CONTEXT_URI.test(contextUri)) throw new HttpError(400, { error: 'invalid', field: 'contextUri' });
+    if (!uri && !contextUri) throw new HttpError(400, { error: 'invalid', field: 'uri' });
+    await spotify.play(env, userId, { uri, contextUri, deviceId: deviceParam(body.deviceId) });
+    return new Response(null, { status: 204 });
+  }],
+  ['PUT', /^\/api\/spotify\/volume$/, async ({ request, env }) => {
+    const userId = await requireUser(request, env);
+    const body = await readJson(request);
+    if (!Number.isInteger(body.percent) || body.percent < 0 || body.percent > 100) throw new HttpError(400, { error: 'invalid', field: 'percent' });
+    await spotify.setVolume(env, userId, body.percent);
     return new Response(null, { status: 204 });
   }],
   ['DELETE', /^\/api\/spotify$/, async ({ request, env }) => {
-    await deleteSpotifyTokens(env.DB, await requireUser(request, env));
+    const userId = await requireUser(request, env);
+    await deleteSpotifyTokens(env.DB, userId);
     return new Response(null, { status: 204 });
   }],
 

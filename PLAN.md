@@ -129,7 +129,18 @@ docs/DATA-MODEL.md
   your home screen and opens offline like an app.
 - Optional, later: a custom domain, if you ever want one. Nothing above depends on it.
 
-### 7 — Backlog, in the order I'd do it
+### 7 — Spotify — built
+- A badge clipped to the coat under the pocket: album art, title, artists, a progress
+  line, previous / play-pause / next, and the device it is playing on. Spec and design:
+  `docs/superpowers/specs/2026-09-22-spotify-player-design.md`, `design/mockup-spotify-options.html`.
+- The Worker holds the tokens (`spotify_tokens`, migration 0004) and proxies every call;
+  the browser polls `/api/spotify/player` every 5 s while playing, 20 s otherwise.
+- A Spotify view beside Week, Month and Table: search, playlists and Liked Songs, the
+  queue (add and skip; Spotify's API cannot remove or reorder) and volume.
+- Needs a Spotify app: client id in `wrangler.jsonc`, secret via `wrangler secret put`,
+  each listener's email added to the app. See `docs/DEPLOYING.md`.
+
+### 8 — Backlog, in the order I'd do it
 1. **Timetable import** — paste an `.ics` feed or a CSV and have courses, classes and
    exam dates created for you, instead of typing a semester in by hand.
 2. **Export / backup** — one button that hands you a JSON file of everything.
@@ -139,13 +150,6 @@ docs/DATA-MODEL.md
 5. **Attachments** — slide decks and lab sheets on an item, via Cloudflare R2
    (10 GB free).
 6. **Term archiving** — roll a finished block out of the week board without deleting it.
-
-### 8 — Spotify in the sidebar — done
-A strip under the coat pocket shows what is playing on each person's own Spotify, with
-previous, play/pause and next. The Worker holds the tokens (refresh token encrypted)
-and proxies every call; the browser polls every 5 s while playing, 20 s otherwise.
-Design: `docs/superpowers/specs/2026-09-22-spotify-player-design.md`; plan:
-`docs/superpowers/plans/2026-09-22-spotify-player.md`.
 
 ## What stays exactly as designed
 

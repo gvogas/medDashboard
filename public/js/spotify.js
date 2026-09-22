@@ -1,109 +1,188 @@
-// The Spotify strip's data. Polls the Worker while the tab is visible and online:
-// every 5 s while something plays, every 20 s otherwise, and not at all once we know
-// there is no connection (connecting reloads the page, which starts it again).
-// Between polls the progress is advanced locally so the line moves.
+// Polls the Worker for what is playing on the signed-in user's Spotify and sends
+// the controls. Owns one timer and the last state; the badge only renders it.
 
 import { api, ApiError } from './api.js';
+import * as web from './web-player.js';
 
-const PLAYING_MS = 5000;
-const IDLE_MS = 20000;
+export const state = {
+  connected: false, playing: false, track: null, device: null, deviceId: null,
+  volume: null, supportsVolume: false,
+  stale: false, error: null, loaded: false,
+};
+
+const ERROR_SHOWN_MS = 4000;
+const AFTER_CONTROL_MS = 300;
 const BACKOFF_MS = 30000;
-const SETTLE_MS = 300;        // Spotify's state lags a command by a moment
 
-/** How long until the next poll; null stops polling. */
-export function nextDelayMs(state) {
-  if (!state || !state.connected) return null;
-  return state.playing ? PLAYING_MS : IDLE_MS;
-}
-
-/** Previous, the way Spotify's own apps do it: a few seconds in, it restarts the track. */
-export function previousAction(state) {
-  return (state?.track?.progressMs ?? 0) > 3000 ? 'restart' : 'previous';
-}
-
-let state = null;             // the Worker's last answer, plus `stale`
-let polledAt = 0;
+let active = false;
 let timer = null;
 let ticker = null;
-let running = false;
-let wired = false;
+let errorTimer = null;
+let polledAt = 0;
+let baseProgress = 0;
 let listener = () => {};
-let signedOut = () => {};
+let onSignedOut = () => {};
+let wired = false;
 
-/** fn(state, tick): tick is true for the once-a-second progress update. */
+/** 5 s while playing, 20 s when connected but quiet, null when not connected. */
+export function nextDelayMs(s) {
+  if (!s.connected) return null;
+  return s.playing ? 5000 : 20000;
+}
+
 export function onState(fn) { listener = fn; }
-export function onUnauthenticated(fn) { signedOut = fn; }
+export function onUnauthenticated(fn) { onSignedOut = fn; }
 
-/** The last state, its progress advanced to now while playing. */
-export function current() {
-  if (!state?.track || !state.playing) return state;
-  const progressMs = Math.min(state.track.durationMs, state.track.progressMs + (Date.now() - polledAt));
-  return { ...state, track: { ...state.track, progressMs } };
+function emit(kind) { listener(state, kind); }
+
+function canPoll() {
+  return active && document.visibilityState === 'visible' && navigator.onLine !== false;
 }
 
-function wake(ms) {
-  clearTimeout(timer);
-  timer = ms == null ? null : setTimeout(poll, ms);
-}
-
-/** Ask the Worker now. Hidden or offline, it waits for the tab or network to come back. */
-export async function poll() {
+function schedule(ms) {
   clearTimeout(timer);
   timer = null;
-  if (!running || document.visibilityState !== 'visible' || navigator.onLine === false) return;
+  if (ms == null || !active) return;
+  timer = setTimeout(poll, ms);
+}
+
+function apply(s) {
+  state.connected = !!s.connected;
+  state.playing = !!s.playing;
+  state.track = s.track || null;
+  state.device = s.device || null;
+  state.deviceId = s.deviceId || null;
+  state.volume = typeof s.volume === 'number' ? s.volume : null;
+  state.supportsVolume = !!s.supportsVolume;
+  state.stale = false;
+  state.loaded = true;
+  polledAt = Date.now();
+  baseProgress = state.track ? state.track.progressMs : 0;
+}
+
+export async function poll() {
+  clearTimeout(timer);
+  if (!canPoll()) return;
   try {
-    const next = await api.spotifyPlayer();
-    if (!running) return;
-    state = { ...next, stale: false };
-    polledAt = Date.now();
-    listener(current(), false);
-    wake(nextDelayMs(state));
+    apply(await api.spotifyPlayer());
+    emit('state');
+    schedule(nextDelayMs(state));
   } catch (e) {
-    if (!running) return;
-    if (e instanceof ApiError && e.status === 401) { stop(); signedOut(); return; }
-    if (state) { state = { ...state, stale: true }; listener(current(), false); }
-    wake(e instanceof ApiError && e.status === 429 ? (Number(e.body?.retryAfter) || 30) * 1000 : BACKOFF_MS);
+    if (e instanceof ApiError && e.status === 401) { stop(); onSignedOut(); return; }
+    state.stale = true;
+    state.loaded = true;
+    emit('state');
+    const wait = e instanceof ApiError && e.status === 429 && e.retryAfter ? e.retryAfter * 1000 : BACKOFF_MS;
+    schedule(wait);
   }
 }
 
-function resume() {
-  if (running && (!state || state.connected)) poll();
+/* Between polls the progress line keeps moving on its own. */
+function tick() {
+  if (!state.playing || !state.track || state.stale) return;
+  state.track.progressMs = Math.min(state.track.durationMs, baseProgress + (Date.now() - polledAt));
+  emit('tick');
 }
 
-/** Start polling; resolves once the first answer is in. */
+function wire() {
+  if (wired) return;
+  wired = true;
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') poll(); });
+  window.addEventListener('online', poll);
+}
+
 export function start() {
-  if (running) return Promise.resolve();
-  running = true;
-  if (!wired) {
-    wired = true;
-    document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') resume(); });
-    window.addEventListener('online', resume);
-  }
-  ticker = setInterval(() => {
-    if (state?.playing && document.visibilityState === 'visible') listener(current(), true);
-  }, 1000);
-  return poll();
+  if (active) return;
+  active = true;
+  wire();
+  clearInterval(ticker);
+  ticker = setInterval(tick, 1000);
+  poll();
 }
 
 export function stop() {
-  running = false;
-  clearTimeout(timer);
-  timer = null;
-  clearInterval(ticker);
-  ticker = null;
-  state = null;
+  active = false;
+  clearTimeout(timer); timer = null;
+  clearInterval(ticker); ticker = null;
+  clearTimeout(errorTimer); errorTimer = null;
+  Object.assign(state, { connected: false, playing: false, track: null, device: null, deviceId: null, volume: null, supportsVolume: false, stale: false, error: null, loaded: false });
 }
 
-/** Send a control, then look again shortly after. Throws for the caller to explain. */
-export async function control(action) {
+/** After the OAuth round trip or a disconnect: poll again now, from a clean slate. */
+export function refresh() {
+  if (active) poll();
+}
+
+export function disconnected() {
+  apply({ connected: false });
+  emit('state');
+  schedule(null);
+}
+
+function showError(code) {
+  state.error = code;
+  emit('state');
+  clearTimeout(errorTimer);
+  errorTimer = setTimeout(() => { state.error = null; emit('state'); }, ERROR_SHOWN_MS);
+}
+
+const noDevice = (e) => e instanceof ApiError && e.status === 404 && e.body?.error === 'no_device';
+
+/**
+ * Send a command with `send(deviceId)`. When Spotify has no active device and the
+ * Rounds tab can play, send it once more to the Rounds device. `nothing` is the
+ * error code for a second 404, when Rounds has nothing to play.
+ */
+export async function onRoundsIfIdle(send, nothing = 'no_device') {
   try {
-    await api.spotifyControl(action);
-    if (state && (action === 'play' || action === 'pause')) {
-      state = { ...current(), playing: action === 'play' };
-      polledAt = Date.now();
-      listener(current(), false);
-    }
-  } finally {
-    wake(SETTLE_MS);
+    return await send(null);
+  } catch (e) {
+    if (!noDevice(e) || web.state.status !== 'ready' || !web.state.deviceId) throw e;
   }
+  try {
+    return await send(web.state.deviceId);
+  } catch (e) {
+    throw e instanceof ApiError && e.status === 404 ? new ApiError(404, { error: nothing }) : e;
+  }
+}
+
+/* A command failed: sign out, forget the connection, or say why in the badge. False when there is nothing more to do. */
+function failed(e) {
+  if (e instanceof ApiError && e.status === 401) { stop(); onSignedOut(); return false; }
+  if (e instanceof ApiError && e.status === 409) { disconnected(); return false; }
+  showError(e instanceof ApiError ? (e.body?.error || 'spotify_unavailable') : 'offline');
+  return true;
+}
+
+/** One of play, pause, next, previous, restart. Never throws; failures show in the badge. */
+export async function control(action) {
+  if (action === 'play' || action === 'pause') {          /* answer the click before Spotify does */
+    state.playing = action === 'play';
+    polledAt = Date.now();
+    baseProgress = state.track ? state.track.progressMs : 0;
+    emit('state');
+  }
+  try {
+    await onRoundsIfIdle((deviceId) => api.spotifyControl(action, deviceId), 'nothing_to_resume');
+  } catch (e) {
+    if (!failed(e)) return;
+  }
+  schedule(AFTER_CONTROL_MS);
+}
+
+/** Move what is playing on another device into the Rounds tab. */
+export async function playHere() {
+  if (web.state.status !== 'ready') return;
+  web.activate();
+  try {
+    await api.spotifyTransfer(web.state.deviceId);
+  } catch (e) {
+    if (!failed(e)) return;
+  }
+  schedule(AFTER_CONTROL_MS);
+}
+
+/** Like the Spotify app: previous restarts the track once it is a few seconds in. */
+export function previous() {
+  return control(state.track && state.track.progressMs > 3000 ? 'restart' : 'previous');
 }
