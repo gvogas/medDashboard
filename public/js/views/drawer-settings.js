@@ -104,7 +104,7 @@ export function renderSettings() {
   } else {
     body += '<span class="note">Prototype data imported ' + new Date(p.importedAt).toLocaleDateString() + '.</span>';
   }
-  body += '<span class="note">Signed in as ' + esc(p.email) + '.</span>'
+  body += '<span class="note">Signed in as <b>' + esc(p.username) + '</b>.</span>'
     + '<button class="btn ghost" type="button" data-act="signout" style="align-self:flex-start">Sign out</button></div>'
     + '</div>';
 

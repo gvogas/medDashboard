@@ -1,12 +1,12 @@
 // Every query here takes a userId and scopes to it. No exceptions.
 
 const PROFILE_COLS =
-  'id, email, display_name, coat_name, coat_role, coat_color, theme, term_start, imported_at, created_at, updated_at';
+  'id, username, display_name, coat_name, coat_role, coat_color, theme, term_start, imported_at, created_at, updated_at';
 
 function profileFromRow(r) {
   return {
     id: r.id,
-    email: r.email,
+    username: r.username,
     displayName: r.display_name,
     coat: { name: r.coat_name, role: r.coat_role, color: r.coat_color },
     theme: r.theme,
@@ -17,15 +17,9 @@ function profileFromRow(r) {
   };
 }
 
-export async function findOrCreateUser(db, email, displayName = '', now = Date.now()) {
-  const found = await db.prepare(`SELECT ${PROFILE_COLS} FROM users WHERE email = ?`).bind(email).first();
-  if (found) return profileFromRow(found);
-  const id = crypto.randomUUID();
-  await db
-    .prepare('INSERT INTO users (id, email, display_name, created_at, updated_at) VALUES (?, ?, ?, ?, ?)')
-    .bind(id, email, displayName, now, now)
-    .run();
-  return getProfile(db, id);
+/** The id and stored hash for a username, or null. Only the login route reads the hash. */
+export async function getUserForLogin(db, username) {
+  return db.prepare('SELECT id, password_hash FROM users WHERE username = ?').bind(username).first();
 }
 
 export async function getProfile(db, userId) {

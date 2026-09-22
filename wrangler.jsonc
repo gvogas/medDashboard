@@ -1,6 +1,7 @@
 // Rounds — Cloudflare Workers config.
 // Static files in public/ are served for free; /api/* goes to the Worker.
-// GOOGLE_CLIENT_ID comes from the Google Cloud OAuth client (phase 0 of PLAN.md).
+// SESSION_SECRET is set with `wrangler secret put SESSION_SECRET`, never here.
+// Accounts are created with `npm run user:add -- <username> --remote`.
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "rounds",
@@ -22,15 +23,6 @@
       "migrations_dir": "migrations"
     }
   ],
-
-  "vars": {
-    // Public identifier of the Google OAuth web client. Not a secret.
-    "GOOGLE_CLIENT_ID": "",
-    // Comma-separated list to pin the app to specific accounts. Empty = open sign-up.
-    "ALLOWED_EMAILS": ""
-  },
-
-  // SESSION_SECRET is set with `wrangler secret put SESSION_SECRET`, never here.
 
   "triggers": {
     // Nightly: hard-delete tombstones older than 30 days.

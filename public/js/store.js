@@ -37,7 +37,7 @@ export async function open(profile) {
   const localProfile = (await db.get('meta', 'profile'))?.value;
   data.profile = dirty.profile && localProfile ? localProfile : normalizeProfile(profile);
   await db.put('meta', { key: 'profile', value: data.profile });
-  try { localStorage.setItem('rounds.session', JSON.stringify({ id: profile.id, email: profile.email })); } catch {}
+  try { localStorage.setItem('rounds.session', JSON.stringify({ id: profile.id, username: profile.username })); } catch {}
 }
 
 export async function close() {
@@ -60,7 +60,7 @@ export async function wipe(userId) {
 function normalizeProfile(p) {
   return {
     id: p.id,
-    email: p.email || '',
+    username: p.username || '',
     displayName: p.displayName || '',
     coat: { name: p.coat?.name || '', role: p.coat?.role || '', color: p.coat?.color || DEFAULT_COAT },
     theme: p.theme || 'system',

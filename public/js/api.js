@@ -22,11 +22,9 @@ export async function request(method, path, body) {
 }
 
 export const api = {
-  config: () => request('GET', '/api/config'),
   me: () => request('GET', '/api/me'),
   saveMe: (profile) => request('PUT', '/api/me', profile),
-  devSession: (email) => request('POST', '/api/dev-session', { email }),
-  googleSession: (credential) => request('POST', '/api/session', { credential }),
+  login: (username, password) => request('POST', '/api/login', { username, password }),
   signOut: () => request('DELETE', '/api/session'),
   sync: (since) => request('GET', `/api/sync?since=${since}`),
   put: (kind, id, row) => request('PUT', `/api/${kind}/${encodeURIComponent(id)}`, row),

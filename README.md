@@ -4,7 +4,7 @@ A med-school tracker — assignments, exams, labs, tutorials, office hours and t
 with courses that carry their own class timetable: day, time and room number.
 
 Built as a multi-user web app on Cloudflare: static files and a small Worker API in
-front of a D1 (SQLite) database, with Google sign-in. The look is the "Ward Board":
+front of a D1 (SQLite) database. Accounts are usernames and passwords, created by you. The look is the "Ward Board":
 clinical teal on cool paper, a white coat you pick the colour of, and a DNA and
 biomolecule layer behind the board.
 
@@ -17,14 +17,15 @@ biomolecule layer behind the board.
 | Plan and schema | **Written** — see [`PLAN.md`](PLAN.md) and [`docs/DATA-MODEL.md`](docs/DATA-MODEL.md). |
 | Worker API | **Built and tested** — sessions, profile, rows, sync, import, nightly purge. |
 | Front end | **Ported** — local-first store, sync, sign-in screen, settings import, PWA shell. |
-| Google sign-in | **Built**, waiting on a client id in `wrangler.jsonc`. |
+| Accounts | **Built** — username and password, created with `npm run user:add`. |
 | Deployed | **Not yet.** The D1 database exists; nothing is deployed. |
 
 ## What's here
 
 ```
 public/                   the app: index.html, css/, js/, manifest, service worker, icons
-worker/                   the API: index.js, api.js, auth.js, google.js, validate.js, db.js
+worker/                   the API: index.js, api.js, auth.js, password.js, validate.js, db.js
+scripts/add-user.mjs      creates an account, locally or in production
 migrations/0001_init.sql  the D1 schema
 test/                     vitest, running inside the Workers runtime against a local D1
 wrangler.jsonc            Workers config: static assets, D1 binding, vars, cron
@@ -49,7 +50,7 @@ docs/DATA-MODEL.md        the schema explained: tables, API, sync, migration
   the prototype's data.
 - **Local-first** — the app renders from IndexedDB, works offline, and syncs to D1 on
   load, on focus and after every edit. The pill in the top bar shows where it stands.
-- **Several people** — each signs in with Google and sees only their own data.
+- **Several people** — each has a username and password and sees only their own data.
 
 ## Running it locally
 
@@ -59,29 +60,39 @@ Needs Node and Wrangler (`npm i -g wrangler`, then `wrangler login` once).
 npm install
 npm run db:local        # apply the schema to the local D1
 npm run dev             # http://localhost:8787
-npm test                # 47 tests against the Worker and a local D1
+npm test                # 44 tests against the Worker and a local D1
 ```
 
-Local sign-in needs a `.dev.vars` file (git-ignored). Copy `.dev.vars.example` and
-set any long random `SESSION_SECRET`. With `DEV_LOGIN=1` the sign-in screen shows an
-email box that works on localhost only; production never has it.
+Local sessions need a `.dev.vars` file (git-ignored): copy `.dev.vars.example` and set
+any long random `SESSION_SECRET`. Then create an account on the local database and
+sign in with it:
+
+```sh
+npm run user:add -- yourname --name "Your Name"
+```
 
 ## Going live
 
-1. **Google sign-in.** In Google Cloud (free, no billing): create a project, publish an
-   External OAuth consent screen, then create an OAuth client of type *Web application*
-   with authorised JavaScript origins `https://rounds.<your-subdomain>.workers.dev`
-   and `http://localhost:8787`. Put the client id in `wrangler.jsonc` under
-   `GOOGLE_CLIENT_ID`. Optionally set `ALLOWED_EMAILS` to a comma-separated list to
-   pin the app to specific accounts; empty means anyone with a Google account.
-2. **Secret.** `wrangler secret put SESSION_SECRET` with a long random string.
+1. **Secret.** `wrangler secret put SESSION_SECRET` with a long random string.
    Rotating it signs everyone out.
-3. **Database and deploy.**
+2. **Database and deploy.**
 
 ```sh
 npm run db:remote       # schema into the production D1, once per migration
 npm run deploy          # static files + Worker, one command
 ```
+
+3. **Accounts.** One command per person, on the production database. It asks for the
+   password twice and never shows it. There is no sign-up page: only accounts you
+   create this way can sign in.
+
+```sh
+npm run user:add -- yourname --remote --name "Your Name"
+```
+
+Passwords are hashed with PBKDF2-SHA256 at 100,000 iterations and a random salt,
+the most the Workers runtime allows per call. Usernames are 3–32 characters of
+letters, digits, dot, dash or underscore, and are not case-sensitive.
 
 On a phone, open the site and choose *Add to Home Screen*; it installs as an app and
 opens offline.

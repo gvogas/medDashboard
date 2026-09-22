@@ -5,7 +5,7 @@ The browser never talks to the database. A Worker reads the session cookie, reso
 the user, and every query it runs has `user_id = ?` in it.
 
 ```
-users            one row per Google account: profile, coat, theme
+users            one row per account: username, password hash, profile, coat, theme
 courses          a course + its weekly class meetings, as a JSON column
 items            exams, assignments, labs, tutorials, office hours, tasks
 quotes           the quote tile's list
@@ -41,9 +41,10 @@ Conventions used throughout:
 
 | Column | Type | Rules | Notes |
 | --- | --- | --- | --- |
-| `id` | text, PK | random | Never the email, so an address change is one `UPDATE`. |
-| `email` | text, unique | lower-cased | From the verified Google token. |
-| `display_name` | text | ≤ 60 | From the Google account, editable. |
+| `id` | text, PK | random | Never the username, so a rename is one `UPDATE`. |
+| `username` | text, unique | 3–32, `[a-z0-9._-]`, lower-cased | What you sign in with. |
+| `password_hash` | text | | `pbkdf2$iterations$salt$hash`, see `worker/password.js`. Never leaves the Worker. |
+| `display_name` | text | ≤ 60 | Editable. |
 | `coat_name` | text | ≤ 28 | Embroidered on the pocket. |
 | `coat_role` | text | ≤ 34 | The line under it, e.g. `MS II · Cardio block`. |
 | `coat_color` | text | one of the five | Tints the sidebar fabric, pocket and embroidery. |
@@ -52,7 +53,7 @@ Conventions used throughout:
 | `imported_at` | int \| null | | Set once the prototype's browser data is imported, so it can't run twice. |
 | `created_at`, `updated_at` | int | | |
 
-A row is created on first sign-in with the Google name and the defaults. The API
+A row is created by `npm run user:add`, with the defaults. The API
 exposes it as the **profile**, with the coat fields nested: `{coat: {name, role,
 color}, theme, termStart, ...}`.
 
@@ -187,13 +188,11 @@ filters, search and view switches are in-memory. A semester is a few hundred row
 ## API
 
 All routes are under `/api`, speak JSON, and require the session cookie except
-`POST /api/session`. Rows are camelCase on the wire.
+`POST /api/login`. Rows are camelCase on the wire.
 
 | Route | Body → Response |
 | --- | --- |
-| `GET /api/config` | → `{googleClientId, devLogin}` — what the sign-in screen may offer. |
-| `POST /api/session` | `{credential}` (Google ID token) → `{profile}` and `Set-Cookie`. `403` if `ALLOWED_EMAILS` is set and excludes the address. |
-| `POST /api/dev-session` | `{email}` → as above. Only when `DEV_LOGIN=1` **and** the host is localhost; `404` otherwise. |
+| `POST /api/login` | `{username, password}` → `{profile}` and `Set-Cookie`. `401 bad_login` for a wrong password or an unknown user alike. |
 | `DELETE /api/session` | → clears the cookie. |
 | `GET /api/me` | → `{profile}` |
 | `PUT /api/me` | `{coat, theme, termStart, displayName}` → `{profile}` |
@@ -209,13 +208,12 @@ Errors are `{error, field?}`: `400` bad shape (with the field), `401` no session
 
 ### Session
 
-`POST /api/session` verifies the Google ID token: signature against Google's published
-keys, `iss` is Google, `aud` is our client id, not expired, `email_verified` is true.
-If `ALLOWED_EMAILS` is set, the email must be in it (`403`). Google's keys are fetched
-from its JWKS endpoint and cached for six hours; an unknown key id forces one refresh. Then find-or-create the `users`
-row and set `rounds_session`, an `HttpOnly; Secure; SameSite=Lax` cookie holding
-`userId.expiry.signature`, signed with `SESSION_SECRET`, valid 30 days. There is no
-sessions table; rotating the secret signs everyone out.
+`POST /api/login` looks the username up, verifies the password against its stored
+PBKDF2-SHA256 hash (100,000 iterations, 16-byte salt, constant-time compare), and
+runs the verification even for an unknown username so timing gives nothing away.
+On success it sets `rounds_session`, an `HttpOnly; Secure; SameSite=Lax` cookie
+holding `userId.expiry.signature`, signed with `SESSION_SECRET`, valid 30 days.
+There is no sessions table; rotating the secret signs everyone out.
 
 ---
 

@@ -7,19 +7,20 @@
 -- Deletes are soft (deleted_at); a nightly cron purges tombstones after 30 days.
 
 CREATE TABLE users (
-  id            TEXT PRIMARY KEY,
-  email         TEXT NOT NULL UNIQUE,
-  display_name  TEXT NOT NULL DEFAULT '' CHECK (length(display_name) <= 60),
-  coat_name     TEXT NOT NULL DEFAULT '' CHECK (length(coat_name) <= 28),
-  coat_role     TEXT NOT NULL DEFAULT '' CHECK (length(coat_role) <= 34),
-  coat_color    TEXT NOT NULL DEFAULT '#17B3AE'
-                CHECK (coat_color IN ('#E4749B', '#8B5CC7', '#17B3AE', '#79B6EA', '#BCA6E6')),
-  theme         TEXT NOT NULL DEFAULT 'system' CHECK (theme IN ('light', 'dark', 'system')),
-  term_start    TEXT CHECK (term_start IS NULL
-                            OR term_start GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]'),
-  imported_at   INTEGER,
-  created_at    INTEGER NOT NULL,
-  updated_at    INTEGER NOT NULL
+  id             TEXT PRIMARY KEY,
+  username       TEXT NOT NULL UNIQUE CHECK (username GLOB '[a-z0-9]*' AND length(username) BETWEEN 3 AND 32),
+  password_hash  TEXT NOT NULL,                 -- see worker/password.js
+  display_name   TEXT NOT NULL DEFAULT '' CHECK (length(display_name) <= 60),
+  coat_name      TEXT NOT NULL DEFAULT '' CHECK (length(coat_name) <= 28),
+  coat_role      TEXT NOT NULL DEFAULT '' CHECK (length(coat_role) <= 34),
+  coat_color     TEXT NOT NULL DEFAULT '#17B3AE'
+                 CHECK (coat_color IN ('#E4749B', '#8B5CC7', '#17B3AE', '#79B6EA', '#BCA6E6')),
+  theme          TEXT NOT NULL DEFAULT 'system' CHECK (theme IN ('light', 'dark', 'system')),
+  term_start     TEXT CHECK (term_start IS NULL
+                             OR term_start GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]'),
+  imported_at    INTEGER,
+  created_at     INTEGER NOT NULL,
+  updated_at     INTEGER NOT NULL
 );
 
 CREATE TABLE courses (

@@ -9,7 +9,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "db:local": "wrangler d1 migrations apply rounds --local",
-    "db:remote": "wrangler d1 migrations apply rounds --remote"
+    "db:remote": "wrangler d1 migrations apply rounds --remote",
+    "user:add": "node scripts/add-user.mjs"
   },
   "devDependencies": {
     "@cloudflare/vitest-pool-workers": "^0.22.0",

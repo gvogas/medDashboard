@@ -15,12 +15,10 @@ import { drawer, scrim, closeDrawer, drawerHasFocus } from './views/drawer-base.
 import { openItem, newItem, current, saveDraft, touch, renderItemDrawer } from './views/drawer-item.js';
 import { openCourse, renderCourseDrawer, saveCourseDraft, deleteCourseDraft } from './views/drawer-course.js';
 import { openSettings, renderSettings, applyCoat, refreshSyncNote } from './views/drawer-settings.js';
-import { renderSignIn, hideSignIn, mountGoogleButton } from './views/signin.js';
+import { renderSignIn, hideSignIn } from './views/signin.js';
 import { importText } from './import.js';
 import { schedule as drawOrnament } from './ornament.js';
 import { parseTime } from './timepicker.js';
-
-let config = { googleClientId: null, devLogin: false };
 
 /* ═════════ theme ═════════ */
 function setTheme(choice, { persist = true } = {}) {
@@ -53,7 +51,6 @@ function rememberedSession() {
 
 async function boot() {
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(() => {});
-  config = await api.config().catch(() => config);
   let profile = null;
   try {
     profile = await api.me();
@@ -75,23 +72,12 @@ async function start(profile) {
   sync.syncNow();
 }
 
-function showSignIn(error) {
-  renderSignIn(config, { error });
-  mountGoogleButton(config, async (credential) => {
-    try {
-      await start(await api.googleSession(credential));
-    } catch (err) {
-      const why = !(err instanceof ApiError) ? 'You seem to be offline.'
-        : err.status === 403 ? 'This account is not on the list for this app.'
-        : 'Google sign-in failed (' + (err.body?.error || err.status) + '). Try again.';
-      showSignIn(why);
-    }
-  });
+function showSignIn(error, username = '') {
+  renderSignIn({ error, username });
 }
 
 async function signOut() {
   try { await api.signOut(); } catch {}
-  try { window.google?.accounts?.id?.disableAutoSelect(); } catch {}
   const id = data.profile?.id;
   closeDrawer();
   await store.close();
@@ -100,14 +86,16 @@ async function signOut() {
 }
 
 $('signin').addEventListener('submit', async (e) => {
-  if (e.target.id !== 'devLogin') return;
+  if (e.target.id !== 'loginForm') return;
   e.preventDefault();
-  const email = $('devEmail').value.trim();
+  const username = $('loginUser').value.trim(), password = $('loginPass').value;
+  const btn = $('loginBtn'); btn.disabled = true; btn.textContent = 'Signing in…';
   try {
-    const profile = await api.devSession(email);
-    await start(profile);
+    await start(await api.login(username, password));
   } catch (err) {
-    showSignIn(err instanceof ApiError ? 'Sign-in failed: ' + (err.body?.error || err.status) : 'You seem to be offline.');
+    showSignIn(!(err instanceof ApiError) ? 'You seem to be offline.'
+      : err.status === 401 ? 'Wrong username or password.'
+      : 'Sign-in failed (' + (err.body?.error || err.status) + ').', username);
   }
 });
 

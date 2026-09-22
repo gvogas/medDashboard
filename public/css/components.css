@@ -364,3 +364,7 @@ td .steps{margin-top:3px}
 .tp-pop button{display:block;width:100%;text-align:left;font:12.5px/1 "IBM Plex Mono",ui-monospace,monospace;padding:6px 12px;border:0;border-radius:6px;background:none;color:var(--ink);cursor:pointer}
 .tp-pop button:hover{background:var(--panel-2)}
 .tp-pop button.on{background:var(--accent-soft);color:var(--accent-ink);font-weight:600}
+.signin-card .login{display:flex;flex-direction:column;gap:6px}
+.signin-card .login label{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-3);margin-top:4px}
+.signin-card .login input{width:100%}
+.signin-card .login .btn{margin-top:8px;align-self:stretch;justify-content:center}

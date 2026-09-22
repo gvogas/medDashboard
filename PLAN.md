@@ -2,7 +2,7 @@
 
 A med-school tracker for assignments, exams, labs, tutorials, office hours and tasks,
 with courses that carry their own class timetable (day, time, room). Several people
-can use it, each signed in with their own Google account and seeing only their own data.
+can use it, each with their own username and password, seeing only their own data.
 
 The design is approved and exists as a working prototype: `prototype.html`
 (published at https://claude.ai/artifact/TSz6cXXKMDCeuLeuXwFL9n). This plan turns
@@ -15,7 +15,7 @@ that single file into a real site with real storage.
 | Platform | **Cloudflare Workers**, free plan | Hosting, API, database and cron in one account. Nothing sleeps, nothing pauses, no card. |
 | Database | **Cloudflare D1** (SQLite) | Real tables with real `CHECK` constraints. A term is a few hundred rows; D1's free tier is millions of reads a day. Exportable as one file. |
 | Hosting | **Workers static assets** at `rounds.<account>.workers.dev` | Static files are free and unlimited. HTTPS out of the box, no domain needed. |
-| Auth | **Sign in with Google**, verified in the Worker | Google's button gives the browser an ID token. The Worker checks its signature, then issues its own session cookie. No passwords, no user cap, open to anyone or pinned to a list. |
+| Auth | **Username + password**, accounts created by a command | No sign-up page and no third party: only accounts you create can sign in. The Worker checks a salted PBKDF2 hash and issues a signed session cookie. |
 | Front end | **Vanilla JS, ES modules, no build step** | The prototype already works this way. The only tool is `wrangler`, and that is for deploying. |
 | Offline | **Local-first** — IndexedDB is what the UI renders from, a sync layer talks to the API | The prototype already renders from a local store. The app opens instantly, works with no signal, and queues writes until it is back. |
 | Sync | **Per row, last write wins**, tombstones for deletes | You are one person on two devices, never editing the same row at the same second. A pull on load and on tab focus is all the "real-time" this needs. |
@@ -26,31 +26,27 @@ The full schema, API, sync protocol and migration are in
 [`docs/DATA-MODEL.md`](docs/DATA-MODEL.md). The schema itself is
 [`migrations/0001_init.sql`](migrations/0001_init.sql).
 
-### Why not Cloudflare Access
+### Why not Cloudflare Access or Google
 
 Access would have handled login with zero code, but it can only protect a domain
-hosted in your Cloudflare account, and this project has no domain. Verifying Google's
-ID token in the Worker costs about a hundred lines and removes Access's 50-user limit.
+hosted in your Cloudflare account, and this project has no domain. Google sign-in
+was built and then dropped in favour of plain accounts, so nobody needs a Google
+account and there is no OAuth client to configure.
 
 ## Phases
 
 Status, as of 22 September 2026: phases 0–5 are built and tested locally. Phase 6
-needs the Google client id and a `wrangler deploy`.
+is a `wrangler deploy` and one `user:add` per person.
 
-### 0 — Accounts and keys — done except the Google client id
+### 0 — Accounts and keys — done
 - Cloudflare account, `npm i -g wrangler`, `wrangler login`. Pick the account's
   `workers.dev` subdomain in the dashboard; the app will live at
   `https://rounds.<subdomain>.workers.dev`.
-- Google Cloud project (free, no billing). OAuth consent screen: external, publish it
-  (email and profile scopes need no verification; leaving it in "Testing" caps you at
-  100 named testers). Create a **Web** OAuth client with authorised JavaScript origins
-  `https://rounds.<subdomain>.workers.dev` and `http://localhost:8787`. The client ID
-  goes in `wrangler.jsonc` under `vars` — it is public, not a secret.
 - `wrangler d1 create rounds` and paste the database id into `wrangler.jsonc`.
 - `wrangler secret put SESSION_SECRET` with 32 random bytes. This signs session
   cookies; rotating it signs everyone out.
-- `ALLOWED_EMAILS` in `vars`: leave empty for open sign-up, or a comma-separated list
-  to pin the app to specific accounts. Changing it is a redeploy, not a code change.
+- Accounts: `npm run user:add -- <username> [--remote]` hashes a password and inserts
+  the row. There is no sign-up page.
 
 ### 1 — Database — done
 - `wrangler d1 migrations apply rounds --local` then `--remote`.
@@ -65,16 +61,14 @@ needs the Google client id and a `wrangler deploy`.
 ```
 worker/index.js      routes /api/*; everything else falls through to static assets
 worker/auth.js       signSession(), readSession(), requireUser()
-worker/google.js     verifyGoogleToken(), emailAllowed()
+worker/password.js   hashPassword(), verifyPassword(), normalizeUsername()
 worker/db.js         every query, all scoped by user_id
 worker/validate.js   the same shape rules as the schema, so errors are readable
 worker/api.js        the handlers below
 ```
 | Route | Does |
 | --- | --- |
-| `GET /api/config` | What the sign-in screen may offer: the Google client id, and whether dev login is on. |
-| `POST /api/session` | Body `{credential}` from Google's button. Verify, find-or-create the user, set the cookie. |
-| `POST /api/dev-session` | Localhost only, with `DEV_LOGIN=1` in `.dev.vars`: sign in as any email, for development. |
+| `POST /api/login` | Body `{username, password}`. Verify the hash, set the cookie. Unknown user and wrong password fail identically. |
 | `DELETE /api/session` | Clear the cookie. |
 | `GET /api/me` · `PUT /api/me` | Profile: coat, theme, term start. |
 | `GET /api/sync?since=<ms>` | Every row of yours changed after `since`, tombstones included, plus the server's `now`. |
@@ -114,9 +108,10 @@ public/
         model.js  dates.js  dom.js  ornament.js
         views/  render.js  bits.js  signin.js  sidebar.js  stats.js  week.js  month.js
                 table.js  drawer-base.js  drawer-item.js  drawer-course.js  drawer-settings.js
-worker/       index.js  api.js  auth.js  google.js  validate.js  db.js  http.js
+worker/       index.js  api.js  auth.js  password.js  validate.js  db.js  http.js
+scripts/      add-user.mjs
 migrations/   0001_init.sql
-test/         api  rows  import  config  google  allowlist  (vitest, Workers runtime)
+test/         api  rows  import  password  timepicker  (vitest, Workers runtime)
 wrangler.jsonc
 docs/DATA-MODEL.md
 ```
@@ -125,9 +120,8 @@ docs/DATA-MODEL.md
   the five course colours, `isOverdue`, `isComplete`, `occurrences`.
 - `dates.js` holds the date helpers, unchanged from the prototype.
 - Views stay dumb: given state, return HTML. One delegated click listener, as now.
-- `views/signin.js`: the coat pocket, one Google button. `js/auth.js` loads Google's
-  script, posts the credential to `/api/session`, and on 401 anywhere shows the screen
-  again.
+- `views/signin.js`: the coat pocket, a username and a password. A 401 anywhere shows
+  the screen again.
 
 ### 5 — Bring your data across — done
 - The prototype's info panel gains **Copy data**, which puts its saved blob on the
@@ -137,7 +131,7 @@ docs/DATA-MODEL.md
   `/api/import`, and the server records `imported_at` so it can't run twice by accident.
 - Whatever you've typed into the prototype survives the move. Ids are kept.
 
-### 6 — Get it on your phone — waiting on the client id
+### 6 — Get it on your phone
 - `wrangler deploy`. Static files and the Worker ship together; D1 migrations are
   applied separately and first.
 - `manifest.webmanifest` + a service worker that caches the shell, so it installs to
@@ -177,4 +171,3 @@ and nothing is paused for inactivity.
 | D1 storage | 5 GB | a few MB |
 | Cron triggers | included | 1 / day |
 
-Google's sign-in and OAuth client are free and need no billing account.

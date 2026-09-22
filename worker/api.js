@@ -1,14 +1,8 @@
-import { json, readJson, isLocalhost, HttpError } from './http.js';
+import { json, readJson, HttpError } from './http.js';
 import { requireUser, signSession, sessionCookie, clearCookie } from './auth.js';
+import { verifyPassword, normalizeUsername } from './password.js';
 import { validateProfile, validateCourse, validateItem, validateQuote, validateId } from './validate.js';
-import { findOrCreateUser, getProfile, updateProfile, upsertRow, deleteRow, courseExists, syncSince, importAll } from './db.js';
-import { verifyGoogleToken, emailAllowed } from './google.js';
-
-async function startSession(env, url, email, displayName) {
-  const profile = await findOrCreateUser(env.DB, email.trim().toLowerCase(), displayName);
-  const token = await signSession(profile.id, env.SESSION_SECRET);
-  return json(profile, 200, { 'set-cookie': sessionCookie(token, url) });
-}
+import { getUserForLogin, getProfile, updateProfile, upsertRow, deleteRow, courseExists, syncSince, importAll } from './db.js';
 
 const VALIDATORS = { courses: validateCourse, items: validateItem, quotes: validateQuote };
 
@@ -66,31 +60,23 @@ async function importRoute({ request, env }) {
 
 const ROW = /^\/api\/(courses|items|quotes)\/([^/]+)$/;
 
-const devLoginEnabled = (env, url) => env.DEV_LOGIN === '1' && isLocalhost(url);
-
 const routes = [
-  // What the sign-in screen can offer. No session needed.
-  ['GET', /^\/api\/config$/, async ({ env, url }) =>
-    json({ googleClientId: env.GOOGLE_CLIENT_ID || null, devLogin: devLoginEnabled(env, url) })],
-
-  // Development only: enabled by DEV_LOGIN=1 in .dev.vars, and only on localhost.
-  ['POST', /^\/api\/dev-session$/, async ({ request, env, url }) => {
-    if (!devLoginEnabled(env, url)) throw new HttpError(404, { error: 'not_found' });
+  // Username + password. Accounts are created with `npm run user:add`.
+  ['POST', /^\/api\/login$/, async ({ request, env, url }) => {
     const body = await readJson(request);
-    if (typeof body.email !== 'string' || !body.email.includes('@')) {
-      throw new HttpError(400, { error: 'invalid', field: 'email' });
+    if (typeof body.username !== 'string' || typeof body.password !== 'string') {
+      throw new HttpError(400, { error: 'invalid', field: 'username' });
     }
-    return startSession(env, url, body.email, body.displayName || '');
-  }],
-
-  // Sign in with Google: the button hands the page an ID token; we verify it here.
-  ['POST', /^\/api\/session$/, async ({ request, env, url }) => {
-    const body = await readJson(request);
-    if (typeof body.credential !== 'string' || !body.credential) throw new HttpError(400, { error: 'invalid', field: 'credential' });
-    if (!env.GOOGLE_CLIENT_ID) throw new HttpError(503, { error: 'google_not_configured' });
-    const g = await verifyGoogleToken(body.credential, env.GOOGLE_CLIENT_ID);
-    if (!emailAllowed(g.email, env.ALLOWED_EMAILS)) throw new HttpError(403, { error: 'not_allowed' });
-    return startSession(env, url, g.email, g.name);
+    const bad = () => new HttpError(401, { error: 'bad_login' });
+    const username = normalizeUsername(body.username);
+    if (!username) throw bad();
+    const user = await getUserForLogin(env.DB, username);
+    // Verify even when the user is unknown, so timing does not reveal which usernames exist.
+    const ok = await verifyPassword(body.password, user ? user.password_hash : 'pbkdf2$100000$AAAAAAAAAAAAAAAAAAAAAA$AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA');
+    if (!user || !ok) throw bad();
+    const profile = await getProfile(env.DB, user.id);
+    const token = await signSession(profile.id, env.SESSION_SECRET);
+    return json(profile, 200, { 'set-cookie': sessionCookie(token, url) });
   }],
 
   ['DELETE', /^\/api\/session$/, async ({ url }) =>
