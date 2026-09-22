@@ -1,21 +1,15 @@
-# Firebase local artefacts
-.firebase/
-firebase-debug.log
-firestore-debug.log
-database-debug.log
-ui-debug.log
-pubsub-debug.log
-.runtimeconfig.json
+# Wrangler local state and dev secrets
+.wrangler/
+.dev.vars
+.dev.vars.*
 
 # Credentials — never commit these.
-# Note: js/firebase-config.js is NOT secret (the web API key is an identifier,
-# the Firestore rules are the security boundary), so it stays in the repo.
+# Note: GOOGLE_CLIENT_ID in wrangler.jsonc is a public identifier, not a secret.
+# SESSION_SECRET is set with `wrangler secret put` and never lives in a file.
 .env
 .env.*
-*serviceAccount*.json
-*-service-account*.json
 
-# Node, if tooling is added later
+# Node
 node_modules/
 npm-debug.log*
 

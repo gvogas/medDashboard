@@ -1,42 +1,60 @@
 # Rounds — data model
 
-Firestore, single user, everything nested under the signed-in uid so ownership is one
-comparison and no query ever needs a `userId` filter.
+Cloudflare D1 (SQLite), several users, every row stamped with the owner's `user_id`.
+The browser never talks to the database. A Worker reads the session cookie, resolves
+the user, and every query it runs has `user_id = ?` in it.
 
 ```
-users/{uid}                      profile: coat, theme
-users/{uid}/courses/{courseId}   a course + its weekly class meetings
-users/{uid}/items/{itemId}       exams, assignments, labs, tutoring, office hours, tasks
-users/{uid}/quotes/{quoteId}     the quote tile's list
+users            one row per Google account: profile, coat, theme
+courses          a course + its weekly class meetings, as a JSON column
+items            exams, assignments, labs, tutoring, office hours, tasks
+quotes           the quote tile's list
 ```
+
+The schema is [`migrations/0001_init.sql`](../migrations/0001_init.sql). This document
+explains it.
 
 Conventions used throughout:
 
-- **Dates** are `YYYY-MM-DD` strings in *your* local calendar. Never a `Timestamp`.
+- **Ids** are client-generated strings, up to 24 chars (the prototype's are 7). The
+  primary key of every user-owned table is `(user_id, id)`, so two people can hold the
+  same id without colliding and ownership is part of the key, not a filter you might
+  forget.
+- **Dates** are `YYYY-MM-DD` strings in *your* local calendar, never a timestamp.
   A deadline of "Friday 23:59" must not shift because you opened the app in another
-  timezone, and ISO strings sort chronologically, so `where('date','>=',from)` works.
+  timezone, and ISO strings sort chronologically, so `date >= ?` works.
 - **Times** are `HH:MM` 24-hour strings, or `''` for none. Displayed as `0800`.
 - **Weekdays** are `0`–`6`, Sunday = 0, matching `Date.prototype.getDay()`.
-- `createdAt` / `updatedAt` are server timestamps, written on every save.
-- Small, always-read-together lists (class meetings, checklists, links) are **embedded
-  arrays**, not subcollections. They are read with their parent every time and never
-  queried on their own, so a subcollection would only add reads.
+- **Timestamps** (`created_at`, `updated_at`, `deleted_at`, `completed_at`,
+  `imported_at`) are integers, milliseconds since the epoch, the same unit as
+  `Date.now()`. The server sets `updated_at` on every write.
+- **Deletes are soft.** `deleted_at` is set, the row stays, and the next `sync` pull
+  tells other devices to drop it. A daily cron hard-deletes tombstones after 30 days.
+- Small, always-read-together lists (class meetings, checklists, links) are **JSON
+  columns**, not tables. They are read with their parent every time and never queried
+  on their own. The schema checks they are valid JSON arrays and caps their length;
+  the Worker validates each entry.
 
 ---
 
-## `users/{uid}` — profile
+## `users`
 
-| Field | Type | Rules | Notes |
+| Column | Type | Rules | Notes |
 | --- | --- | --- | --- |
-| `schemaVersion` | number | `== 1` | Lets a future migration recognise old docs. |
-| `displayName` | string | ≤ 60 | From the Google account, editable. |
-| `coat.name` | string | ≤ 28 | Embroidered on the pocket. |
-| `coat.role` | string | ≤ 34 | The line under it, e.g. `MS II · Cardio block`. |
-| `coat.color` | string | one of the five | Tints the sidebar fabric, pocket and embroidery. |
-| `theme` | string | `light` \| `dark` \| `system` | |
-| `termStart` | string | `YYYY-MM-DD` | The items listener starts here. |
-| `importedAt` | timestamp \| null | | Set once the prototype's browser data is imported, so it can't run twice. |
-| `createdAt`, `updatedAt` | timestamp | | |
+| `id` | text, PK | random | Never the email, so an address change is one `UPDATE`. |
+| `email` | text, unique | lower-cased | From the verified Google token. |
+| `display_name` | text | ≤ 60 | From the Google account, editable. |
+| `coat_name` | text | ≤ 28 | Embroidered on the pocket. |
+| `coat_role` | text | ≤ 34 | The line under it, e.g. `MS II · Cardio block`. |
+| `coat_color` | text | one of the five | Tints the sidebar fabric, pocket and embroidery. |
+| `theme` | text | `light` \| `dark` \| `system` | |
+| `term_start` | text \| null | `YYYY-MM-DD` | The week board's default start. Null means today. |
+| `imported_at` | int \| null | | Set once the prototype's browser data is imported, so it can't run twice. |
+| `created_at`, `updated_at` | int | | |
+
+A row is created on first sign-in with the Google name and the defaults. The API
+exposes it as the **profile**, with the coat fields nested: `{coat: {name, role,
+color}, theme, termStart, ...}`.
 
 The five course colours, which are also the coat colours:
 
@@ -50,24 +68,25 @@ The five course colours, which are also the coat colours:
 
 ---
 
-## `users/{uid}/courses/{courseId}`
+## `courses`
 
-| Field | Type | Rules | Notes |
+| Column | Type | Rules | Notes |
 | --- | --- | --- | --- |
-| `code` | string | 1–8 | `CVS`, `ANAT`. Shown in the table and month chips. |
-| `name` | string | 1–80 | `Cardiovascular Block`. |
-| `color` | string | one of the five | Drives every chip, pip and card for this course. |
-| `instructor` | string | ≤ 60 | `Dr. Alvarez`. |
-| `term` | string | ≤ 40 | `2026 Autumn`. Used later for archiving. |
-| `archived` | bool | | Hidden from the sidebar, kept for the record. |
-| `meetings` | array\<map\> | ≤ 12 | The class timetable. |
-| `createdAt`, `updatedAt` | timestamp | | |
+| `user_id`, `id` | text, PK | | |
+| `code` | text | 1–8 | `CVS`, `ANAT`. Shown in the table and month chips. |
+| `name` | text | 1–80 | `Cardiovascular Block`. |
+| `color` | text | one of the five | Drives every chip, pip and card for this course. |
+| `instructor` | text | ≤ 60 | `Dr. Alvarez`. |
+| `term` | text | ≤ 40 | `2026 Autumn`. Used later for archiving. |
+| `archived` | int 0/1 | | Hidden from the sidebar, kept for the record. |
+| `meetings` | JSON array | ≤ 12 | The class timetable. |
+| `created_at`, `updated_at`, `deleted_at` | int | | |
 
 ### `meetings[]` — one weekly class
 
 | Field | Type | Rules | Notes |
 | --- | --- | --- | --- |
-| `id` | string | 7 chars | Client-generated, stable across edits. |
+| `id` | string | ≤ 24 | Client-generated, stable across edits. |
 | `kind` | string | `Lecture` \| `Lab` \| `Seminar` \| `Tutorial` \| `PBL` \| `Clinical` | |
 | `weekday` | number | 0–6 | |
 | `start`, `end` | string | `HH:MM` | `end` after `start`. |
@@ -79,32 +98,35 @@ client.
 
 ---
 
-## `users/{uid}/items/{itemId}`
+## `items`
 
-One collection for all six types. They share every field, differ only in which
-`status` values apply, and the week board and table need them interleaved by date —
-separate collections would mean six queries and a client-side merge for every view.
+One table for all six types. They share every column, differ only in which `status`
+values apply, and the week board and table need them interleaved by date.
 
-| Field | Type | Rules | Notes |
-| --- | --- | --- | --- |
-| `type` | string | see below | Fixed at creation, editable in the drawer. |
-| `title` | string | 1–140 | |
-| `courseId` | string \| null | ≤ 40 | The course doc id. Firestore has no foreign keys: resolved in the client, and cleared on every matching item when a course is deleted. |
-| `date` | string | `YYYY-MM-DD` | For a deadline, the day it's due. For a recurring slot, the first occurrence. |
-| `start`, `end` | string | `HH:MM` or `''` | A deadline usually has `end` only (`23:59`). |
-| `where` | string | ≤ 80 | Room, lab, platform. |
-| `status` | string | see below | |
-| `grade` | number \| null | 0–100 | Only meaningful when `status == 'graded'`. |
-| `weight` | number \| null | 0–100 | Reserved for grade projection (backlog item 3). |
-| `notes` | string | ≤ 5000 | The item's page. |
-| `checklist` | array\<map\> | ≤ 50 | `{id, text ≤140, done}`. Drives the pink progress bars. |
-| `links` | array\<map\> | ≤ 20 | `{label ≤60, url ≤500}`. |
-| `recur` | string \| null | `weekly` \| null | Office hours and standing tutorials. |
-| `weekday` | number \| null | 0–6 | Required when `recur == 'weekly'`. |
-| `recurUntil` | string \| null | `YYYY-MM-DD` | End of term; blank means open-ended. |
-| `dept` | string | ≤ 40 | Office hours only: the faculty's department, shown greyed. |
-| `completedAt` | timestamp \| null | | Stamped when status leaves `todo`. |
-| `createdAt`, `updatedAt` | timestamp | | |
+| Column | API field | Type | Rules | Notes |
+| --- | --- | --- | --- | --- |
+| `user_id`, `id` | `id` | text, PK | | |
+| `type` | | text | see below | Fixed at creation, editable in the drawer. |
+| `title` | | text | 1–140 | |
+| `course_id` | `courseId` | text \| null | FK to `courses` | Cleared on every matching item when a course is deleted. The FK is composite, so it cannot point at another user's course. |
+| `date` | | text | `YYYY-MM-DD` | For a deadline, the day it's due. For a recurring slot, the first occurrence. |
+| `start`, `end` | | text | `HH:MM` or `''` | A deadline usually has `end` only (`23:59`). |
+| `location` | `where` | text | ≤ 80 | Room, lab, platform. `where` is a SQL keyword, hence the rename. |
+| `status` | | text | see below | |
+| `grade` | | real \| null | 0–100 | Only meaningful when `status == 'graded'`. |
+| `weight` | | real \| null | 0–100 | Reserved for grade projection (backlog item 3). |
+| `notes` | | text | ≤ 5000 | The item's page. |
+| `checklist` | | JSON array | ≤ 50 | `{id, text ≤140, done}`. Drives the pink progress bars. |
+| `links` | | JSON array | ≤ 20 | `{label ≤60, url ≤500}`. |
+| `recur` | | text \| null | `weekly` \| null | Office hours and standing tutorials. |
+| `weekday` | | int \| null | 0–6 | Required when `recur == 'weekly'`, enforced by a table-level `CHECK`. |
+| `recur_until` | `recurUntil` | text \| null | `YYYY-MM-DD` | End of term; null means open-ended. |
+| `dept` | | text | ≤ 40 | Office hours only: the faculty's department, shown greyed. |
+| `completed_at` | `completedAt` | int \| null | | Stamped when status leaves `todo`. |
+| `created_at`, `updated_at`, `deleted_at` | camelCase | int | | |
+
+The Worker converts between `snake_case` columns and the camelCase the prototype
+already uses, so the front end's field names do not change.
 
 ### `type` and its `status` set
 
@@ -117,9 +139,9 @@ separate collections would mean six queries and a client-side merge for every vi
 | `office` | `todo` Planned · `done` Went · `missed` Skipped | `done` |
 | `task` | `todo` To do · `done` Done | `done` |
 
-Rules validate `status` against the whole set (`todo`, `submitted`, `graded`, `done`,
-`missed`); the per-type restriction is the client's job, since it's a UI affordance
-rather than a data guarantee.
+The schema validates `status` against the whole set (`todo`, `submitted`, `graded`,
+`done`, `missed`); the per-type restriction is the client's job, since it's a UI
+affordance rather than a data guarantee.
 
 ### Derived, never stored
 
@@ -136,79 +158,109 @@ Storing any of these would mean a write every midnight. They cost nothing to com
 
 ---
 
-## `users/{uid}/quotes/{quoteId}`
+## `quotes`
 
-| Field | Type | Rules |
+| Column | Type | Rules |
 | --- | --- | --- |
-| `text` | string | 1–300 |
-| `source` | string | ≤ 80, may be empty |
-| `createdAt` | timestamp | |
+| `user_id`, `id` | text, PK | |
+| `text` | text | 1–300 |
+| `source` | text | ≤ 80, may be empty |
+| `created_at`, `updated_at`, `deleted_at` | int | |
 
 ---
 
-## Query patterns
+## Indexes
 
-The app is a read-everything-once app. A term is a few hundred documents, so it loads
-what it needs and filters in memory — the same thing the prototype does, which is why
-filters, search and view switches are instant.
-
-```js
-// courses: all of them, live
-onSnapshot(query(coursesRef, orderBy('name')))
-
-// quotes: all of them, live
-onSnapshot(query(quotesRef, orderBy('createdAt')))
-
-// items: this term onward, live
-onSnapshot(query(itemsRef, where('date', '>=', profile.termStart), orderBy('date')))
-```
-
-Everything else is a client-side filter over that array: the week's seven days, the
-month grid, the table's sort, the type and course filters, the search box, overdue,
-countdowns.
-
-If it ever grows past a few thousand items, these are the queries that would replace
-the single listener, and the indexes in `firestore.indexes.json` already cover them:
-
-| Query | Index |
+| Index | Serves |
 | --- | --- |
-| One type, by date | `type ASC, date ASC` |
-| One course, by date | `courseId ASC, date ASC` |
-| Open or overdue work | `status ASC, date ASC` |
-| A course's exams | `courseId ASC, type ASC, date ASC` |
+| `courses (user_id, updated_at)` | the `sync` pull |
+| `items (user_id, updated_at)` | the `sync` pull |
+| `quotes (user_id, updated_at)` | the `sync` pull |
+| `items (user_id, date)` | any future "this term only" query |
+| `*_deleted (deleted_at)` | the nightly tombstone purge |
 
-Writes are single-document `setDoc(..., {merge: true})` with `updatedAt:
-serverTimestamp()`, so two devices editing different fields of the same item don't
-clobber each other. The import is the only batched write.
+The app is a read-everything-once app: one pull returns every live row you own, and
+filters, search and view switches are in-memory. A semester is a few hundred rows.
+
+---
+
+## API
+
+All routes are under `/api`, speak JSON, and require the session cookie except
+`POST /api/session`. Rows are camelCase on the wire.
+
+| Route | Body → Response |
+| --- | --- |
+| `POST /api/session` | `{credential}` (Google ID token) → `{profile}` and `Set-Cookie`. |
+| `DELETE /api/session` | → clears the cookie. |
+| `GET /api/me` | → `{profile}` |
+| `PUT /api/me` | `{coat, theme, termStart, displayName}` → `{profile}` |
+| `GET /api/sync?since=<ms>` | → `{now, courses: [...], items: [...], quotes: [...]}` — every row with `updatedAt > since`, tombstones included as `{id, deletedAt}`. `since=0` is a full load. |
+| `PUT /api/courses/:id` | a course → the stored course, with server `updatedAt`. Upsert. |
+| `DELETE /api/courses/:id` | → `204`. Soft-deletes and nulls `courseId` on the user's items. |
+| `PUT /api/items/:id` · `DELETE /api/items/:id` | as above |
+| `PUT /api/quotes/:id` · `DELETE /api/quotes/:id` | as above |
+| `POST /api/import` | `{profile, courses, items, quotes}` → `{imported: {courses, items, quotes}}`. One transaction. `409` if already imported. |
+
+Errors are `{error, field?}`: `400` bad shape (with the field), `401` no session,
+`404` a row that isn't yours, `409` import twice, `413` body over 1 MB.
+
+### Session
+
+`POST /api/session` verifies the Google ID token: signature against Google's published
+keys, `iss` is Google, `aud` is our client id, not expired, `email_verified` is true.
+If `ALLOWED_EMAILS` is set, the email must be in it. Then find-or-create the `users`
+row and set `rounds_session`, an `HttpOnly; Secure; SameSite=Lax` cookie holding
+`userId.expiry.signature`, signed with `SESSION_SECRET`, valid 30 days. There is no
+sessions table; rotating the secret signs everyone out.
+
+---
+
+## Sync
+
+The browser keeps the rows in IndexedDB and renders from there. `sync.js` keeps it
+and D1 converged:
+
+1. **Write locally first.** Every save writes IndexedDB, adds the row to the dirty
+   set, notifies the views, then schedules a push.
+2. **Push.** For each dirty row, `PUT` or `DELETE` it. On `2xx`, store the returned
+   `updatedAt` and clear the flag. On a network error, keep it dirty and try again on
+   `online`, on tab focus, or after the next save.
+3. **Pull.** `GET /api/sync?since=lastSyncAt`. Apply every row the server returns
+   unless it is dirty locally (an unpushed local edit wins until it is pushed and the
+   next pull reconciles). Rows with `deletedAt` are removed. Store the server's `now`
+   as `lastSyncAt`. Runs on load, on `visibilitychange`, and after every push.
+4. **Conflicts.** Per row, the last write to reach the server wins. Two devices editing
+   the same item while both are offline is the only way to lose an edit, and the loser
+   is one field-set on one row, not the collection.
 
 ---
 
 ## Security model
 
-`firestore.rules` enforces two things:
-
-1. **Ownership** — `request.auth.uid == uid`, on every path. There is no recursive
-   wildcard, so a subcollection added later is denied until it's given a rule.
-2. **Shape** — every write is checked for known keys, correct types, enum membership,
-   string lengths, array sizes and a date that matches `^\d{4}-\d{2}-\d{2}$`. A bug in
-   the client can't corrupt the collection or run up a bill with a huge document.
-
-The web API key in `firebase-config.js` is an identifier, not a secret — the rules are
-the security boundary. Since this is a single-user app, `firestore.rules` also carries a
-commented-out email allowlist you can switch on to pin access to exactly one account.
+1. **Ownership** — `requireUser()` runs first in every handler and every SQL statement
+   filters on that `user_id`. No route accepts a `user_id` from the client. A row that
+   belongs to someone else is a `404`, indistinguishable from a row that doesn't exist.
+2. **Shape** — `CHECK` constraints in the schema enforce enums, lengths, date and
+   time formats, JSON validity and array caps. `validate.js` runs the same rules first
+   so the client gets a `400` naming the field instead of a raw SQLite error. A bug
+   in the client cannot corrupt the tables or write a document large enough to matter.
+3. **Cookies** — `HttpOnly` keeps the session away from scripts, `SameSite=Lax` keeps
+   other sites from posting with it, and the body limit keeps a runaway request from
+   eating the daily write quota.
 
 ## Migration from the prototype
 
 `localStorage['rounds.proto.v2']` holds `{data: {courses, items, quotes, owner}, ui}`.
 The import maps it straight across:
 
-| Prototype | Firestore |
+| Prototype | D1 |
 | --- | --- |
-| `data.owner.name / role / coat` | `users/{uid}.coat.name / role / color` |
-| `ui.theme` | `users/{uid}.theme` |
-| `data.courses[]` (incl. `meetings[]`) | `users/{uid}/courses/{id}` |
-| `data.items[]` | `users/{uid}/items/{id}` |
-| `data.quotes[]` | `users/{uid}/quotes/{id}` |
+| `data.owner.name / role / coat` | `users.coat_name / coat_role / coat_color` |
+| `ui.theme` | `users.theme` |
+| `data.courses[]` (incl. `meetings[]`) | `courses` rows, `meetings` as JSON |
+| `data.items[]` | `items` rows, `where` → `location` |
+| `data.quotes[]` | `quotes` rows |
 
-Field names already line up; the import only adds `createdAt`/`updatedAt`, fills
-`term`, `archived: false`, `weight: null`, `completedAt`, and keeps the existing ids.
+Field names already line up; the import only adds timestamps, fills `term`,
+`archived: 0`, `weight: null`, `completed_at`, and keeps the existing ids.

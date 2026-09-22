@@ -1,7 +1,8 @@
 # Rounds — build plan
 
 A med-school tracker for assignments, exams, labs, tutoring, office hours and tasks,
-with courses that carry their own class timetable (day, time, room).
+with courses that carry their own class timetable (day, time, room). Several people
+can use it, each signed in with their own Google account and seeing only their own data.
 
 The design is approved and exists as a working prototype: `prototype.html`
 (published at https://claude.ai/artifact/TSz6cXXKMDCeuLeuXwFL9n). This plan turns
@@ -11,61 +12,104 @@ that single file into a real site with real storage.
 
 | Decision | Choice | Why |
 | --- | --- | --- |
-| Storage | **Firebase Firestore** | Real-time sync between laptop and phone, offline cache built in, free at this scale. |
-| Auth | **Google sign-in, single user** | One click, no passwords to manage. Every row lives under your own uid. |
-| Front end | **Vanilla JS, ES modules, no build step** | The prototype already works this way. Nothing to compile, nothing to keep upgrading. |
-| Hosting | **Firebase Hosting** (free Spark plan) | Same CLI as the database, HTTPS and a URL you can open on your phone. |
-| Dates | **`YYYY-MM-DD` strings, local** | "Due Friday" must mean Friday wherever you are. ISO strings also sort chronologically, so no `Timestamp` gymnastics for range queries. |
+| Platform | **Cloudflare Workers**, free plan | Hosting, API, database and cron in one account. Nothing sleeps, nothing pauses, no card. |
+| Database | **Cloudflare D1** (SQLite) | Real tables with real `CHECK` constraints. A term is a few hundred rows; D1's free tier is millions of reads a day. Exportable as one file. |
+| Hosting | **Workers static assets** at `rounds.<account>.workers.dev` | Static files are free and unlimited. HTTPS out of the box, no domain needed. |
+| Auth | **Sign in with Google**, verified in the Worker | Google's button gives the browser an ID token. The Worker checks its signature, then issues its own session cookie. No passwords, no user cap, open to anyone or pinned to a list. |
+| Front end | **Vanilla JS, ES modules, no build step** | The prototype already works this way. The only tool is `wrangler`, and that is for deploying. |
+| Offline | **Local-first** — IndexedDB is what the UI renders from, a sync layer talks to the API | The prototype already renders from a local store. The app opens instantly, works with no signal, and queues writes until it is back. |
+| Sync | **Per row, last write wins**, tombstones for deletes | You are one person on two devices, never editing the same row at the same second. A pull on load and on tab focus is all the "real-time" this needs. |
+| Dates | **`YYYY-MM-DD` strings, local** | "Due Friday" must mean Friday wherever you are. ISO strings also sort chronologically. |
 | Recurrence | **Stored once, expanded in the client** | Weekly office hours and class meetings are one row each, not 40 rows a term. |
 
-The full schema, field limits, query patterns and index list are in
-[`docs/DATA-MODEL.md`](docs/DATA-MODEL.md). The rules are in
-[`firestore.rules`](firestore.rules).
+The full schema, API, sync protocol and migration are in
+[`docs/DATA-MODEL.md`](docs/DATA-MODEL.md). The schema itself is
+[`migrations/0001_init.sql`](migrations/0001_init.sql).
+
+### Why not Cloudflare Access
+
+Access would have handled login with zero code, but it can only protect a domain
+hosted in your Cloudflare account, and this project has no domain. Verifying Google's
+ID token in the Worker costs about a hundred lines and removes Access's 50-user limit.
 
 ## Phases
 
-### 0 — Firebase project (needs your go-ahead)
-- Create the project (suggested id `rounds-tracker`), enable Firestore in native mode
-  in a region near you (`europe-west3` or `europe-west1`), enable Hosting.
-- Enable **Google** as a sign-in provider. This one has to be clicked in the Firebase
-  console — the CLI can't turn providers on.
-- `firebase init` for Firestore + Hosting, writing `firebase.json`, `.firebaserc`.
-- Register a web app and drop its config into `js/firebase-config.js`.
-  The web API key is not a secret; the rules are what protect the data.
-
-**Open question:** the Firebase CLI here is signed in as `termanitor07@gmail.com`,
-but you're `george@vogas.net` in Claude. Tell me which Google account should own the
-project and sign in to the app — the choice is hard to undo later.
+### 0 — Accounts and keys (needs your go-ahead)
+- Cloudflare account, `npm i -g wrangler`, `wrangler login`. Pick the account's
+  `workers.dev` subdomain in the dashboard; the app will live at
+  `https://rounds.<subdomain>.workers.dev`.
+- Google Cloud project (free, no billing). OAuth consent screen: external, publish it
+  (email and profile scopes need no verification; leaving it in "Testing" caps you at
+  100 named testers). Create a **Web** OAuth client with authorised JavaScript origins
+  `https://rounds.<subdomain>.workers.dev` and `http://localhost:8787`. The client ID
+  goes in `wrangler.jsonc` under `vars` — it is public, not a secret.
+- `wrangler d1 create rounds` and paste the database id into `wrangler.jsonc`.
+- `wrangler secret put SESSION_SECRET` with 32 random bytes. This signs session
+  cookies; rotating it signs everyone out.
+- `ALLOWED_EMAILS` in `vars`: leave empty for open sign-up, or a comma-separated list
+  to pin the app to specific accounts. Changing it is a redeploy, not a code change.
 
 ### 1 — Database
-- Deploy `firestore.rules` and `firestore.indexes.json`.
-- Rules check ownership **and** shape: a bug can't write an unknown `type`, a
-  malformed date or a 10MB note.
-- Verify with the rules emulator: a signed-out read is denied, another uid's read is
-  denied, a bad `status` write is denied.
+- `wrangler d1 migrations apply rounds --local` then `--remote`.
+- The schema enforces ownership and shape: composite primary keys `(user_id, id)`,
+  enums and lengths as `CHECK` constraints, dates as `GLOB` patterns, JSON columns
+  checked with `json_valid` and capped with `json_array_length`. A client bug cannot
+  write an unknown `type`, a malformed date or a 10 MB note.
+- Verify with `wrangler d1 execute --local`: a bad `status` is rejected, a 141-char
+  title is rejected, a 13th meeting is rejected.
 
-### 2 — Storage layer
-- `js/store.js` — the only file that knows Firestore exists. Exposes
-  `subscribe()`, `saveItem()`, `deleteItem()`, `saveCourse()`, `saveProfile()`, and
-  nothing else.
-- `persistentLocalCache` on, so the app opens instantly, works in a lecture hall with
-  no signal, and queues writes until you're back.
-- Three live listeners: courses, quotes, and items from the start of the term.
-  Everything else — filters, search, overdue, countdowns, the week grid — is computed
-  in memory, exactly as the prototype does it. A semester is a few hundred rows.
+### 2 — Worker API
+```
+worker/index.js      routes /api/*; everything else falls through to static assets
+worker/auth.js       verifyGoogleToken(), signSession(), readSession(), requireUser()
+worker/validate.js   the same shape rules as the schema, so errors are readable
+worker/api.js        the handlers below
+```
+| Route | Does |
+| --- | --- |
+| `POST /api/session` | Body `{credential}` from Google's button. Verify, find-or-create the user, set the cookie. |
+| `DELETE /api/session` | Clear the cookie. |
+| `GET /api/me` · `PUT /api/me` | Profile: coat, theme, term start. |
+| `GET /api/sync?since=<ms>` | Every row of yours changed after `since`, tombstones included, plus the server's `now`. |
+| `PUT /api/{courses,items,quotes}/:id` | Upsert. The id is yours; the server stamps `updated_at`. |
+| `DELETE /api/{courses,items,quotes}/:id` | Soft delete: sets `deleted_at`. Deleting a course clears `course_id` on its items. |
+| `POST /api/import` | The prototype's whole `localStorage` blob in one transaction. Refused if `imported_at` is already set. |
 
-### 3 — Port the UI
-Split `prototype.html` into modules, same markup and CSS, wired to the store instead
+- Every handler starts with `requireUser()` and every query has `user_id = ?` in it.
+  There is no route that takes a `user_id` from the client.
+- Tests with `vitest` and `@cloudflare/vitest-pool-workers` against a local D1:
+  unauthenticated request → 401, another user's row → 404, bad shape → 400 with the
+  field named, import twice → 409.
+- A daily cron (`0 3 * * *`) hard-deletes tombstones older than 30 days.
+
+### 3 — Storage layer in the browser
+- `js/db.js` — a 40-line IndexedDB wrapper: three object stores (`courses`, `items`,
+  `quotes`), a `meta` store for the profile, `lastSyncAt` and the dirty set.
+- `js/store.js` — the only file the views know. Exposes `subscribe()`, `saveItem()`,
+  `deleteItem()`, `saveCourse()`, `deleteCourse()`, `saveQuote()`, `deleteQuote()`,
+  `saveProfile()`, and nothing else. Every save writes IndexedDB, marks the row dirty,
+  notifies subscribers, then asks `sync.js` to push.
+- `js/sync.js` — `push()` sends dirty rows and clears the flag on 2xx; `pull(since)`
+  applies the server's changes, skipping rows that are dirty locally. Runs on load, on
+  `visibilitychange`, on `online`, and after every push. Failures are silent and retried.
+- Everything else — filters, search, overdue, countdowns, the week grid — is computed
+  in memory from the local rows, exactly as the prototype does it.
+
+### 4 — Port the UI
+Split `prototype.html` into modules, same markup and CSS, wired to `store.js` instead
 of `localStorage`:
 
 ```
-index.html
-css/  tokens.css  layout.css  components.css
-js/   main.js  auth.js  store.js  state.js  model.js  dates.js  dom.js
-      firebase-config.js
-      views/  sidebar.js  stats.js  week.js  month.js  table.js
-              drawer-item.js  drawer-course.js  drawer-settings.js
-firestore.rules   firestore.indexes.json   firebase.json
+public/
+  index.html  manifest.webmanifest  sw.js
+  css/  tokens.css  layout.css  components.css
+  js/   main.js  auth.js  db.js  sync.js  store.js  state.js  model.js  dates.js  dom.js
+        views/  signin.js  sidebar.js  stats.js  week.js  month.js  table.js
+                drawer-item.js  drawer-course.js  drawer-settings.js
+worker/       index.js  auth.js  validate.js  api.js
+migrations/   0001_init.sql
+test/         api.test.js
+wrangler.jsonc
 docs/DATA-MODEL.md
 ```
 
@@ -73,27 +117,32 @@ docs/DATA-MODEL.md
   the five course colours, `isOverdue`, `isComplete`, `occurrences`.
 - `dates.js` holds the date helpers, unchanged from the prototype.
 - Views stay dumb: given state, return HTML. One delegated click listener, as now.
-- A sign-in screen in the same visual language: the coat pocket, one Google button.
+- `views/signin.js`: the coat pocket, one Google button. `js/auth.js` loads Google's
+  script, posts the credential to `/api/session`, and on 401 anywhere shows the screen
+  again.
 
-### 4 — Bring your data across
+### 5 — Bring your data across
 - Settings gets **Import from this browser**: reads `rounds.proto.v2`, maps it onto the
-  schema, writes it in batches of 500, and records `importedAt` so it can't run twice
-  by accident.
-- Whatever you've typed into the prototype survives the move.
+  schema, posts it to `/api/import`, and the server records `imported_at` so it can't
+  run twice by accident.
+- Whatever you've typed into the prototype survives the move. Ids are kept.
 
-### 5 — Get it on your phone
-- Deploy to Hosting.
+### 6 — Get it on your phone
+- `wrangler deploy`. Static files and the Worker ship together; D1 migrations are
+  applied separately and first.
 - `manifest.webmanifest` + a service worker that caches the shell, so it installs to
   your home screen and opens offline like an app.
-- Optional: `rounds.vogas.net` as a custom domain.
+- Optional, later: a custom domain, if you ever want one. Nothing above depends on it.
 
-### 6 — Backlog, in the order I'd do it
+### 7 — Backlog, in the order I'd do it
 1. **Timetable import** — paste an `.ics` feed or a CSV and have courses, classes and
    exam dates created for you, instead of typing a semester in by hand.
 2. **Export / backup** — one button that hands you a JSON file of everything.
 3. **Grade weighting** — a weight per assessment so the app can project a block grade.
-4. **Reminders** — "problem set due in 12 hours" as a browser notification.
-5. **Attachments** — slide decks and lab sheets on an item, via Cloud Storage.
+4. **Reminders** — "problem set due in 12 hours" as a browser notification, sent by a
+   Worker cron and Web Push.
+5. **Attachments** — slide decks and lab sheets on an item, via Cloudflare R2
+   (10 GB free).
 6. **Term archiving** — roll a finished block out of the week board without deleting it.
 
 ## What stays exactly as designed
@@ -106,5 +155,16 @@ scrolls.
 
 ## Cost
 
-Spark (free) covers this comfortably: a term is roughly 400 item reads on a cold load,
-cached afterwards, against a 50,000 reads/day allowance. Nothing here needs Blaze.
+The Workers free plan covers this with room for a whole cohort. No card is required
+and nothing is paused for inactivity.
+
+| Resource | Free allowance | 50 people, rough daily use |
+| --- | --- | --- |
+| Worker requests | 100,000 / day | ~10,000 |
+| Static asset requests | unlimited | — |
+| D1 rows read | 5,000,000 / day | ~50,000 |
+| D1 rows written | 100,000 / day | ~2,000 |
+| D1 storage | 5 GB | a few MB |
+| Cron triggers | included | 1 / day |
+
+Google's sign-in and OAuth client are free and need no billing account.
