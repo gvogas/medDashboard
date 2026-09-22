@@ -7,6 +7,7 @@ import { TUCK_SVG } from './bits.js';
 import { status } from '../sync.js';
 import { current as spotifyState } from '../spotify.js';
 
+/** `spotifyFlash`: 'connected', or why a Spotify connect failed. */
 export function openSettings(focus, spotifyFlash = null) {
   resetDrawerState();
   ui.settings = true;
@@ -39,11 +40,26 @@ function syncLine() {
   return status.lastPull ? 'Synced ' + Math.max(0, Math.round((Date.now() - status.lastPull) / 60000)) + ' min ago.' : 'Synced.';
 }
 
+/* Why a connect attempt came back without a connection; the Worker names the reason. */
+const SPOTIFY_ERRORS = {
+  access_denied: 'You chose not to connect on Spotify’s page.',
+  state: 'That sign-in started too long ago or in another tab. Try again.',
+  signed_out: 'You were signed out of Rounds while on Spotify’s page. Sign in and try again.',
+  not_configured: 'Spotify is not set up on this server: its client id or client secret is missing.',
+  exchange: 'Spotify turned down the sign-in. The client secret may be wrong, or this address is not a registered redirect URI.',
+};
+
+function spotifyFlashNote(flash) {
+  if (flash === 'connected') return '<span class="note ok">Connected. What is playing shows under your coat.</span>';
+  const why = SPOTIFY_ERRORS[flash]
+    || 'Spotify reported “' + esc(flash) + '”. If it keeps happening, check that George has added your Spotify email to the app.';
+  return '<span class="note err">Spotify did not connect. ' + why + '</span>';
+}
+
 function spotifyGroup() {
   const s = spotifyState();
   let h = '<div class="setgrp"><h4>Spotify<em>' + (!s ? 'checking…' : s.connected ? 'connected' : 'not connected') + '</em></h4>';
-  if (ui.spotifyFlash === 'connected') h += '<span class="note ok">Connected. What is playing shows under your coat.</span>';
-  if (ui.spotifyFlash === 'error') h += '<span class="note err">Spotify did not connect. Try again; if it keeps failing, George has to add your Spotify email first.</span>';
+  if (ui.spotifyFlash) h += spotifyFlashNote(ui.spotifyFlash);
   if (s) {
     h += s.connected
       ? '<span><button class="btn ghost" type="button" id="spDisconnect" data-act="spotify-disconnect">Disconnect</button></span>'

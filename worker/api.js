@@ -40,11 +40,15 @@ function spotifyStateCookie(value, url, maxAge) {
   return `${SPOTIFY_STATE}=${value}; Path=/api/spotify; HttpOnly; SameSite=Lax; Max-Age=${maxAge}${secureFlag(url)}`;
 }
 
-/** Back to the app, with the result in the hash. The callback is a navigation, so never JSON. */
-function backToApp(url, result) {
+/**
+ * Back to the app, with the result in the hash: `connected`, or `error&reason=<why>` so
+ * Settings can say what went wrong. Connect and callback are navigations, so never JSON.
+ */
+function backToApp(url, result, reason) {
+  const hash = reason ? `${result}&reason=${reason}` : result;
   return new Response(null, {
     status: 302,
-    headers: { location: `${url.origin}/#spotify=${result}`, 'set-cookie': spotifyStateCookie('', url, 0) },
+    headers: { location: `${url.origin}/#spotify=${hash}`, 'set-cookie': spotifyStateCookie('', url, 0) },
   });
 }
 
@@ -53,18 +57,20 @@ async function spotifyCallback({ request, env, url }) {
   try {
     userId = await requireUser(request, env);
   } catch {
-    return backToApp(url, 'error');
+    return backToApp(url, 'error', 'signed_out');
   }
   const expected = parseCookies(request.headers.get('cookie'))[SPOTIFY_STATE];
+  if (!expected || url.searchParams.get('state') !== expected) return backToApp(url, 'error', 'state');
+  // Spotify's own error code (access_denied, server_error, …), passed on only if it looks like one.
+  const refused = url.searchParams.get('error');
+  if (refused !== null) return backToApp(url, 'error', /^[a-z_]{1,40}$/.test(refused) ? refused : 'spotify');
   const code = url.searchParams.get('code');
-  if (!expected || url.searchParams.get('state') !== expected || url.searchParams.has('error') || !code) {
-    return backToApp(url, 'error');
-  }
+  if (!code) return backToApp(url, 'error', 'spotify');
   try {
     await spotify.storeTokens(env, userId, await spotify.exchangeCode(env, code, `${url.origin}/api/spotify/callback`));
   } catch (e) {
     console.error('spotify callback', e);
-    return backToApp(url, 'error');
+    return backToApp(url, 'error', 'exchange');
   }
   return backToApp(url, 'connected');
 }
@@ -135,7 +141,7 @@ const routes = [
   // Spotify, proxied: see worker/spotify.js.
   ['GET', /^\/api\/spotify\/connect$/, async ({ request, env, url }) => {
     await requireUser(request, env);
-    if (!spotify.isConfigured(env)) throw new HttpError(503, { error: 'spotify_not_configured' });
+    if (!spotify.isConfigured(env)) return backToApp(url, 'error', 'not_configured');
     const state = hex(crypto.getRandomValues(new Uint8Array(16)));
     return new Response(null, {
       status: 302,

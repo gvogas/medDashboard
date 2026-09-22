@@ -62,7 +62,7 @@ Make and try every change locally first. Nothing you do locally affects the live
    in with your local account. Leave the command running. It picks up most edits when
    you save; press Ctrl+C to stop it.
 2. Edit files in `public/` (what you see) or `worker/` (the API).
-3. Run `npm test`. All tests should pass (93 today). A failing test means something
+3. Run `npm test`. All tests should pass (95 today). A failing test means something
    broke, so fix it before deploying.
 4. Save the change in Git:
     ```
@@ -170,6 +170,10 @@ the right-hand column says.
 | Too many attempts. Try again in N min. | 5 or more wrong passwords | Wait it out, or reset the password |
 | You seem to be offline. | The browser couldn't reach the server | Check your internet. Locally, make sure `npm run dev` is still running |
 | Sign in from the app itself, not from another site. | The request came from a different web address | Open the site directly at its own address |
+| `npm run dev` stops with `bind()` … `os error 10013` | Another server already holds port 8787. It is pinned there because it's the address registered with Spotify | Close the other `npm run dev` window, or run `Get-NetTCPConnection -LocalPort 8787` in PowerShell to find the process |
+| Settings: Spotify … client id or client secret is missing | The server has no `SPOTIFY_CLIENT_ID` or `SPOTIFY_CLIENT_SECRET`, or the secret is empty | Live: `npx wrangler secret put SPOTIFY_CLIENT_SECRET`, paste, Enter. Locally: fill both in `.dev.vars` |
+| Settings: Spotify turned down the sign-in | The client secret is wrong, or this address isn't a registered redirect URI | Check the secret, and that the Spotify app lists `…/api/spotify/callback` for this exact address and port |
+| Spotify's own page says "Too many requests" | Spotify rate-limits its sign-in page after several tries | Wait 15–30 minutes, then click Connect once |
 | Page loads but a script is blocked | The inline script changed without its security hash | Run `node scripts/csp-hash.mjs` and update `public/_headers` |
 
 To see the live server's errors as they happen, run `npx wrangler tail`, then

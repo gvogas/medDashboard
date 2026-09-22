@@ -60,7 +60,7 @@ Needs Node and Wrangler (`npm i -g wrangler`, then `wrangler login` once).
 npm install
 npm run db:local        # apply the schema to the local D1
 npm run dev             # http://127.0.0.1:8787 (Spotify only accepts 127.0.0.1)
-npm test                # 93 tests against the Worker and a local D1
+npm test                # 95 tests against the Worker and a local D1
 ```
 
 Local sessions need a `.dev.vars` file (git-ignored): copy `.dev.vars.example` and set

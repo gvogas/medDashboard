@@ -85,11 +85,11 @@ describe('connect', () => {
     expect(set).toMatch(/Max-Age=600/);
   });
 
-  it('is 503 when Spotify is not configured', async () => {
+  it('goes back to the app saying so when Spotify is not configured', async () => {
     const { cookie } = await session();
     const res = await worker.fetch(new Request(`${BASE}/api/spotify/connect`, { headers: { cookie } }), { ...env, SPOTIFY_CLIENT_SECRET: '' });
-    expect(res.status).toBe(503);
-    expect(await res.json()).toEqual({ error: 'spotify_not_configured' });
+    expect(res.status).toBe(302);
+    expect(res.headers.get('location')).toBe(`${BASE}/#spotify=error&reason=not_configured`);
   });
 });
 
@@ -109,18 +109,20 @@ describe('callback', () => {
     expect(row.expiresAt).toBeGreaterThan(Date.now());
   });
 
-  for (const [name, query, stateCookie] of [
-    ['a state that does not match', 'code=good&state=s1', 'rounds_spotify_state=s2'],
-    ['no state cookie', 'code=good&state=s1', ''],
-    ['no state in the query', 'code=good', 'rounds_spotify_state=s1'],
-    ['Spotify saying no', 'error=access_denied&state=s1', 'rounds_spotify_state=s1'],
-    ['a code Spotify refuses', 'code=bad&state=s1', 'rounds_spotify_state=s1'],
+  for (const [name, query, stateCookie, reason] of [
+    ['a state that does not match', 'code=good&state=s1', 'rounds_spotify_state=s2', 'state'],
+    ['no state cookie', 'code=good&state=s1', '', 'state'],
+    ['no state in the query', 'code=good', 'rounds_spotify_state=s1', 'state'],
+    ['Spotify saying no', 'error=access_denied&state=s1', 'rounds_spotify_state=s1', 'access_denied'],
+    ['an error Spotify words oddly', 'error=Weird%20<b>&state=s1', 'rounds_spotify_state=s1', 'spotify'],
+    ['no code', 'state=s1', 'rounds_spotify_state=s1', 'spotify'],
+    ['a code Spotify refuses', 'code=bad&state=s1', 'rounds_spotify_state=s1', 'exchange'],
   ]) {
     it(`goes back with an error and stores nothing for ${name}`, async () => {
       const { userId, cookie } = await session();
       const res = await callback(query, stateCookie ? `${cookie}; ${stateCookie}` : cookie);
       expect(res.status).toBe(302);
-      expect(res.headers.get('location')).toBe(`${BASE}/#spotify=error`);
+      expect(res.headers.get('location')).toBe(`${BASE}/#spotify=error&reason=${reason}`);
       expect(await getSpotifyTokens(env.DB, userId)).toBeNull();
     });
   }
@@ -128,7 +130,7 @@ describe('callback', () => {
   it('goes back with an error without a session', async () => {
     const res = await callback('code=good&state=s1', 'rounds_spotify_state=s1');
     expect(res.status).toBe(302);
-    expect(res.headers.get('location')).toBe(`${BASE}/#spotify=error`);
+    expect(res.headers.get('location')).toBe(`${BASE}/#spotify=error&reason=signed_out`);
   });
 });
 

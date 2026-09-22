@@ -57,10 +57,11 @@ spotify.onUnauthenticated(() => showSignIn('Your session has ended. Sign in agai
 
 /* Back from Spotify's consent page: the Worker put the result in the hash. */
 function spotifyReturn(started) {
-  const m = /^#spotify=(connected|error)$/.exec(location.hash);
+  const m = /^#spotify=(connected|error)(?:&reason=([a-z_]{1,40}))?$/.exec(location.hash);
   if (!m) return;
   history.replaceState(null, '', location.pathname + location.search);
-  started.then(() => openSettings(m[1] === 'connected' ? 'spDisconnect' : 'spConnect', m[1]));
+  const connected = m[1] === 'connected';
+  started.then(() => openSettings(connected ? 'spDisconnect' : 'spConnect', connected ? 'connected' : m[2] || 'spotify'));
 }
 
 async function spotifyButton(which) {

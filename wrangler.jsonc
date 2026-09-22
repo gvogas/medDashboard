@@ -34,5 +34,9 @@
     "crons": ["0 3 * * *"]
   },
 
-  "observability": { "enabled": true }
+  "observability": { "enabled": true },
+
+  // `npm run dev` always serves http://127.0.0.1:8787, the redirect URI registered with
+  // Spotify. If the port is taken it fails rather than moving to another one.
+  "dev": { "ip": "127.0.0.1", "port": 8787 }
 }
