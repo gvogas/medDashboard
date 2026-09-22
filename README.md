@@ -115,7 +115,8 @@ letters, digits, dot, dash or underscore, and are not case-sensitive.
 
 The player is off until the app has a Spotify client id and secret. Setting it up is
 about ten minutes, once, and is walked through in [`docs/DEPLOYING.md`](docs/DEPLOYING.md#spotify).
-In short: create an app at developer.spotify.com with the two callback URLs, add each
+In short: create an app at developer.spotify.com with the two callback URLs and the
+Web API and Web Playback SDK ticked (the tab itself can play, as a device called Rounds), add each
 listener's Spotify email to it (five at most, a Spotify limit), put the client id in
 `wrangler.jsonc` and `.dev.vars`, and set the secret:
 

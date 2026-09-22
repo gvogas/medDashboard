@@ -153,7 +153,7 @@ with Premium (free listeners still see what is playing).
     https://rounds.termanitor07.workers.dev/api/spotify/callback
     http://127.0.0.1:8787/api/spotify/callback
     ```
-   Tick *Web API* under the APIs used. Save.
+   Tick *Web API* and *Web Playback SDK* under the APIs used. Save.
 3. In the app's **User Management** tab add the name and Spotify email of each person
    who wants the player, yourself included. Spotify allows five.
 4. Copy the **Client ID** from the app's settings into `wrangler.jsonc`:
@@ -174,6 +174,15 @@ with Premium (free listeners still see what is playing).
    bottom of the sidebar shows what is playing; start something in the Spotify app
    on any device if it says *Nothing playing*. The **Spotify** view in the top bar
    has search, your playlists, the queue and volume.
+8. The Rounds tab is itself a Spotify device, called **Rounds**, in desktop Chrome,
+   Edge or Firefox. With no Spotify app open anywhere, press play (or pick something
+   in the Spotify view) and it plays in the tab. If music is on another device, the
+   badge shows **Play here** to move it into the tab. It never takes over on its own,
+   and the music stops when the tab closes. Phone browsers are not supported by
+   Spotify, so there Rounds only controls another device.
+
+If you connected before the in-tab player existed, Settings says *Reconnect Spotify to
+play in this browser*: click **Reconnect** once to grant the new permission.
 
 Locally, open the dev server at `http://127.0.0.1:8787`, not `localhost`: Spotify no
 longer accepts `localhost` as a redirect.
