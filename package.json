@@ -1,0 +1,19 @@
+{
+  "name": "rounds",
+  "private": true,
+  "type": "module",
+  "description": "Med-school tracker: static front end + Cloudflare Worker API on D1",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "db:local": "wrangler d1 migrations apply rounds --local",
+    "db:remote": "wrangler d1 migrations apply rounds --remote"
+  },
+  "devDependencies": {
+    "@cloudflare/vitest-pool-workers": "^0.22.0",
+    "vitest": "^4.1.0",
+    "wrangler": "^4.0.0"
+  }
+}
