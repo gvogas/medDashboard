@@ -1,7 +1,6 @@
 // Rounds — Cloudflare Workers config.
 // Static files in public/ are served for free; /api/* goes to the Worker.
-// Fill in database_id after `wrangler d1 create rounds`, and GOOGLE_CLIENT_ID
-// from the Google Cloud OAuth client (phase 0 of PLAN.md).
+// GOOGLE_CLIENT_ID comes from the Google Cloud OAuth client (phase 0 of PLAN.md).
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "rounds",
@@ -19,7 +18,7 @@
     {
       "binding": "DB",
       "database_name": "rounds",
-      "database_id": "",
+      "database_id": "61d75810-5015-41f5-8b3e-fc2339d4acf1",
       "migrations_dir": "migrations"
     }
   ],
