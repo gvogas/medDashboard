@@ -105,6 +105,66 @@ button{cursor:pointer}
 .pocket .pen::after{content:"";position:absolute;left:1px;right:1px;top:-6px;height:13px;border-radius:3px;background:#B9C7CC}
 .pocket .tuck{position:absolute;right:27px;bottom:5px;width:50px;height:28px;color:var(--accent);opacity:var(--orn-art)}
 
+/* ─── the Spotify badge, clipped to the coat under the pocket ─── */
+.player{
+  position:relative;border-radius:9px;padding:9px 10px 10px;margin-top:3px;
+  background:var(--panel);border:1px solid color-mix(in srgb, var(--coat) 22%, var(--line));
+  box-shadow:0 1px 2px rgba(20,48,45,.10), 0 6px 16px rgba(20,48,45,.08);
+  display:flex;flex-direction:column;gap:8px;font-size:12.5px;color:var(--ink-2);
+}
+:root[data-app="dark"] .player{box-shadow:0 1px 2px rgba(0,0,0,.4), 0 6px 16px rgba(0,0,0,.35)}
+.player[hidden]{display:none}
+/* the clip: a short bar of the coat colour over the top edge, like the pen on the pocket */
+.player::before{
+  content:"";position:absolute;left:50%;top:-5px;width:34px;height:8px;margin-left:-17px;border-radius:3px;
+  background:color-mix(in srgb, var(--coat) 70%, var(--ink));box-shadow:0 1px 1px rgba(20,48,45,.2);
+}
+.player[data-stale]{opacity:.5}
+.player .spot{width:14px;height:14px;flex:none;color:#1DB954}
+.player .now{display:flex;align-items:center;gap:9px;min-width:0}
+.player .art{width:42px;height:42px;border-radius:7px;flex:none;object-fit:cover;background:var(--panel-2);box-shadow:0 1px 3px rgba(20,48,45,.22)}
+.player .meta{min-width:0;flex:1;line-height:1.3}
+.player .title{display:block;color:var(--ink);font-weight:600;text-decoration:none;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.player a.title:hover{color:var(--accent);text-decoration:underline}
+.player .artist{display:block;font-size:11px;color:var(--ink-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.player .eq{display:flex;align-items:flex-end;gap:2px;height:12px;margin-top:3px}
+.player .eq i{width:3px;height:6px;background:#1DB954;border-radius:1px}
+.player[data-state="playing"] .eq i{animation:eq 1s ease-in-out infinite}
+.player[data-state="playing"] .eq i:nth-child(2){animation-delay:.2s}
+.player[data-state="playing"] .eq i:nth-child(3){animation-delay:.45s}
+.player[data-state="playing"] .eq i:nth-child(4){animation-delay:.1s}
+.player[data-stale] .eq i{animation:none}
+@keyframes eq{0%,100%{height:3px}50%{height:12px}}
+@media (prefers-reduced-motion:reduce){.player .eq i{animation:none!important;height:6px}}
+.player .line{display:block;height:3px;border-radius:999px;background:var(--line-2);overflow:hidden}
+.player .line i{display:block;height:100%;background:linear-gradient(90deg,var(--accent),#1DB954);border-radius:999px}
+.player .ctl{display:flex;align-items:center;justify-content:center;gap:10px}
+.player .ctl button{
+  border:1px solid var(--line);background:var(--panel);color:var(--ink-2);width:28px;height:28px;border-radius:50%;
+  display:grid;place-items:center;padding:0;flex:none;
+}
+.player .ctl button svg{width:12px;height:12px}
+.player .ctl button:hover{border-color:var(--accent);color:var(--accent)}
+.player .ctl .pp{width:34px;height:34px;border:0;background:var(--ink);color:var(--panel)}
+.player .ctl .pp svg{width:13px;height:13px}
+.player .ctl .pp:hover{background:var(--accent);color:var(--on-accent)}
+.player .device{font-size:10px;color:var(--ink-3);text-align:center;letter-spacing:.04em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.player .device b{font-weight:500;color:var(--ink-2)}
+.player .msg{font-size:10.5px;color:var(--warn-ink);background:var(--warn-bg);border:1px solid var(--warn-line);border-radius:6px;padding:3px 7px;line-height:1.35;text-align:center}
+.player .quiet{display:flex;align-items:center;gap:8px;color:var(--ink-3);font-size:12px;padding:1px 0}
+.player .quiet .spot{color:var(--ink-3)}
+.player .quiet .pp{margin-left:auto;width:26px;height:26px;flex:none;display:grid;place-items:center;border:0;border-radius:50%;background:var(--ink);color:var(--panel);cursor:pointer}
+.player .quiet .pp svg{width:11px;height:11px}
+.player .quiet .pp:hover{background:var(--accent);color:var(--on-accent)}
+.player .device .here{font:inherit;letter-spacing:inherit;color:var(--accent);background:none;border:0;padding:0;cursor:pointer;text-decoration:underline;text-underline-offset:2px}
+.player .connect{
+  display:flex;align-items:center;gap:8px;border:0;background:transparent;color:var(--ink-3);font-size:12px;
+  padding:1px 0;width:100%;text-align:left;border-radius:6px;
+}
+.player .connect .spot{color:var(--ink-3)}
+.player .connect:hover{color:var(--accent)}
+.player .connect:hover .spot{color:#1DB954}
+
 /* ─── content ─── */
 /* min-height:0 matters — without it a grid item refuses to shrink below its
    content, the scroll area never gets a height, and tall views can't scroll. */
@@ -122,6 +182,7 @@ button{cursor:pointer}
 .sub{font-size:11.5px;color:var(--ink-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .sub:empty{display:none}
 .navdate{display:flex;gap:2px;align-items:center}
+.navdate[hidden]{display:none}
 .navdate button{border:1px solid var(--line);background:var(--panel);border-radius:7px;padding:4px 9px;font-size:12px;color:var(--ink-2)}
 .navdate button:hover{border-color:var(--accent);color:var(--accent)}
 .grow{flex:1 1 20px}

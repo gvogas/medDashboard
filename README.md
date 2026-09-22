@@ -24,9 +24,9 @@ biomolecule layer behind the board.
 
 ```
 public/                   the app: index.html, css/, js/, manifest, service worker, icons
-worker/                   the API: index.js, api.js, auth.js, password.js, validate.js, db.js
+worker/                   the API: index.js, api.js, auth.js, password.js, validate.js, db.js, spotify.js
 scripts/add-user.mjs      creates an account, locally or in production
-migrations/0001_init.sql  the D1 schema
+migrations/               the D1 schema, one file per change
 test/                     vitest, running inside the Workers runtime against a local D1
 wrangler.jsonc            Workers config: static assets, D1 binding, vars, cron
 design/                   the original prototype and the mockups it was chosen from
@@ -41,14 +41,18 @@ docs/DEPLOYING.md         running, deploying, accounts and troubleshooting, step
   opens a page with notes, a checklist and links.
 - **Courses** you add and edit, each with a colour and a list of classes (kind, day,
   start, end, room). Courses can be archived without losing their items.
-- **Three views** — week board grouped by day, a month calendar showing the class
-  timetable only, and a sortable table of everything.
+- **Four views** — week board grouped by day, a month calendar showing the class
+  timetable only, a sortable table of everything, and Spotify.
 - **Live status** — overdue flags, next-exam countdown, class hours per week, lab hours.
 - **Settings** — light / dark / follow-the-device, the name embroidered on the lab coat
   and its colour, and your own quotes shown in a tile beside the stats.
 - **Local-first** — the app renders from IndexedDB, works offline, and syncs to D1 on
   load, on focus and after every edit. The pill in the top bar shows where it stands.
 - **Several people** — each has a username and password and sees only their own data.
+- **Spotify** — a badge on the coat shows what you are listening to, with previous,
+  play/pause and next, and a Spotify view lets you search, browse your playlists and
+  Liked Songs, see the queue and set the volume. Each person connects their own account
+  from Settings.
 
 ## Running it locally
 
@@ -58,12 +62,12 @@ Needs Node and Wrangler (`npm i -g wrangler`, then `wrangler login` once).
 npm install
 npm run db:local        # apply the schema to the local D1
 npm run dev             # http://localhost:8787
-npm test                # 53 tests against the Worker and a local D1
+npm test                # 81 tests against the Worker, a local D1 and a fake Spotify
 ```
 
 Local sessions need a `.dev.vars` file (git-ignored): copy `.dev.vars.example` and set
-any long random `SESSION_SECRET`. Then create an account on the local database and
-sign in with it:
+any long random `SESSION_SECRET`. The two Spotify values can stay empty until you set
+the player up. Then create an account on the local database and sign in with it:
 
 ```sh
 npm run user:add -- yourname --name "Your Name"
@@ -106,6 +110,25 @@ Passwords are hashed with PBKDF2-SHA256 at 100,000 iterations and a random salt,
 the most the Workers runtime allows per call. Five wrong guesses lock a username for
 a minute, doubling per further guess up to an hour. Usernames are 3–32 characters of
 letters, digits, dot, dash or underscore, and are not case-sensitive.
+
+### Spotify
+
+The player is off until the app has a Spotify client id and secret. Setting it up is
+about ten minutes, once, and is walked through in [`docs/DEPLOYING.md`](docs/DEPLOYING.md#spotify).
+In short: create an app at developer.spotify.com with the two callback URLs and the
+Web API and Web Playback SDK ticked (the tab itself can play, as a device called Rounds), add each
+listener's Spotify email to it (five at most, a Spotify limit), put the client id in
+`wrangler.jsonc` and `.dev.vars`, and set the secret:
+
+```sh
+wrangler secret put SPOTIFY_CLIENT_SECRET
+npm run deploy
+```
+
+Then everyone connects their own account from Settings. Controls need Spotify Premium;
+free accounts still see what is playing. Tokens live in D1, the refresh token
+encrypted under `SESSION_SECRET`, so rotating that secret disconnects Spotify for
+everyone as well as signing them out.
 
 If you ever edit the inline script in `public/index.html`, run `node scripts/csp-hash.mjs`
 and paste the new hash into `public/_headers`, or the page's security policy will block it.

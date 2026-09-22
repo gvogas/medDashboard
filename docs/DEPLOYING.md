@@ -26,6 +26,7 @@ item, runs the code in `worker/`, which reads and writes the D1 database.
 | Schema changes | `migrations/` | Numbered SQL files that build and change the database |
 | Settings | `wrangler.jsonc` | Tells Cloudflare the app name, the database and the nightly cleanup job |
 | Secret | `SESSION_SECRET` | Signs login cookies. Locally it's in `.dev.vars`; live it's stored in Cloudflare |
+| Secret | `SPOTIFY_CLIENT_SECRET` | Lets the Worker talk to Spotify for the player. Same two places. The matching client id is in `wrangler.jsonc` |
 
 There are two copies of everything. **Local** is what `npm run dev` runs on your
 computer, with its own test database. **Live** (also called remote or production) is
@@ -46,6 +47,8 @@ You do this once per computer. After that, the everyday commands just work.
    with the Cloudflare account that owns Rounds.
 4. Make the local secret file. Copy `.dev.vars.example` to `.dev.vars`, then replace
    `change-me-locally` with any long random string. This file is never committed to Git.
+   The two Spotify lines can stay empty unless you want the player locally (see
+   [Spotify](#spotify) below).
 5. Build the local database with `npm run db:local`.
 6. Make yourself a local account with `npm run user:add -- yourname --name "Your Name"`.
    It asks for a password twice and doesn't show what you type.
@@ -134,6 +137,68 @@ To see what the live database is missing, run
 `npx wrangler d1 migrations list rounds --remote`. "No migrations to apply!" means
 it's up to date. To apply migrations to live without deploying code, use
 `npm run db:remote`.
+
+## Spotify
+
+The player on the coat is off until Rounds has a Spotify app of its own. Setting one up
+is done once, by whoever owns the Cloudflare account, and takes about ten minutes.
+Spotify's rules, as of 2026: the app's owner needs Spotify Premium; up to five people
+can use the app, each added by email; and playback controls only work for listeners
+with Premium (free listeners still see what is playing).
+
+1. Go to [developer.spotify.com/dashboard](https://developer.spotify.com/dashboard),
+   sign in with your Spotify account and create an app. Any name and description.
+2. Under **Redirect URIs** add both of these, exactly:
+    ```
+    https://rounds.termanitor07.workers.dev/api/spotify/callback
+    http://127.0.0.1:8787/api/spotify/callback
+    ```
+   Tick *Web API* and *Web Playback SDK* under the APIs used. Save.
+3. In the app's **User Management** tab add the name and Spotify email of each person
+   who wants the player, yourself included. Spotify allows five.
+4. Copy the **Client ID** from the app's settings into `wrangler.jsonc`:
+    ```jsonc
+    "vars": { "SPOTIFY_CLIENT_ID": "paste it here" },
+    ```
+   and into `.dev.vars` as `SPOTIFY_CLIENT_ID=...` for local runs.
+5. Show the **Client secret** and store it. Live, in Cloudflare:
+    ```
+    npx wrangler secret put SPOTIFY_CLIENT_SECRET
+    ```
+   It asks for the value and hides what you paste. Locally, put it in `.dev.vars` as
+   `SPOTIFY_CLIENT_SECRET=...`.
+6. Deploy: `npm run deploy`. It applies the `spotify_tokens` migration and ships the
+   Worker with the new id.
+7. In Rounds, open Settings, find **Spotify** and click **Connect**. Spotify asks you
+   to allow Rounds to see and control playback, then sends you back. The badge at the
+   bottom of the sidebar shows what is playing; start something in the Spotify app
+   on any device if it says *Nothing playing*. The **Spotify** view in the top bar
+   has search, your playlists, the queue and volume.
+8. The Rounds tab is itself a Spotify device, called **Rounds**, in desktop Chrome,
+   Edge or Firefox. With no Spotify app open anywhere, press play (or pick something
+   in the Spotify view) and it plays in the tab. If music is on another device, the
+   badge shows **Play here** to move it into the tab. It never takes over on its own,
+   and the music stops when the tab closes. Phone browsers are not supported by
+   Spotify, so there Rounds only controls another device.
+
+If you connected before the in-tab player existed, Settings says *Reconnect Spotify to
+play in this browser*: click **Reconnect** once to grant the new permission.
+
+Locally, open the dev server at `http://127.0.0.1:8787`, not `localhost`: Spotify no
+longer accepts `localhost` as a redirect.
+
+Each person connects their own account from their own Settings; nobody sees anyone
+else's. **Disconnect** in Settings forgets the connection on the Rounds side; to
+revoke it on Spotify's side too, remove Rounds under *Manage apps* in the Spotify
+account settings. Rotating `SESSION_SECRET` disconnects everyone, because the stored
+refresh tokens are encrypted under it; they reconnect from Settings.
+
+If the badge says *Open Spotify on a device first*, Spotify has no active device:
+press play in the Spotify app once and the controls work from then on. *Controls need
+Spotify Premium* means the listener's account is free. *Spotify is not answering* is
+Spotify's side; the badge dims and tries again on its own. The volume slider is greyed
+out when the playing device does not take volume from the API, which is the case for
+phones; it works for the desktop app and web player.
 
 ## Managing accounts
 

@@ -14,7 +14,11 @@ import { renderStats, renderQuote, nextQuote } from './views/stats.js';
 import { drawer, scrim, closeDrawer, drawerHasFocus } from './views/drawer-base.js';
 import { openItem, newItem, current, saveDraft, touch, renderItemDrawer } from './views/drawer-item.js';
 import { openCourse, renderCourseDrawer, saveCourseDraft, deleteCourseDraft } from './views/drawer-course.js';
-import { openSettings, renderSettings, applyCoat, refreshSyncNote } from './views/drawer-settings.js';
+import { openSettings, renderSettings, applyCoat, refreshSyncNote, refreshSpotifyGroup } from './views/drawer-settings.js';
+import * as spotify from './spotify.js';
+import * as web from './web-player.js';
+import { renderPlayer } from './views/player.js';
+import * as spotView from './views/spotify-view.js';
 import { renderSignIn, hideSignIn } from './views/signin.js';
 import { schedule as drawOrnament } from './ornament.js';
 import { parseTime } from './timepicker.js';
@@ -43,6 +47,43 @@ sync.onStatus((s) => {
 });
 sync.onPulled(() => { if (!drawerHasFocus()) { render(); if (ui.sel) renderItemDrawer(); if (ui.settings) renderSettings(); } });
 sync.onUnauthenticated(() => showSignIn('Your session has ended. Sign in again.'));
+
+/* ═════════ the Spotify badge on the coat ═════════ */
+spotify.onState((s, kind) => {
+  renderPlayer(s, kind);
+  if (kind !== 'state') return;
+  if (s.connected) web.start(); else if (s.loaded) web.stop();     /* the tab is a device only while connected */
+  if (ui.settings && !drawerHasFocus()) refreshSpotifyGroup();
+  if (ui.view === 'spotify') { spotView.onPlayerState(); renderHeaderSub(); }
+});
+web.onChange(() => {
+  renderPlayer(spotify.state);
+  if (ui.settings && !drawerHasFocus()) refreshSpotifyGroup();
+});
+spotView.onChange(() => {
+  if (ui.view !== 'spotify') return;
+  /* keep the search box as it was: the results arrive while it still has focus */
+  const q = document.querySelector('[data-spot-q]'), had = q && document.activeElement === q;
+  const val = q ? q.value : '', pos = q ? q.selectionStart : 0;
+  renderView();
+  if (had) {
+    const n = document.querySelector('[data-spot-q]');
+    if (n) { n.value = val; n.focus({ preventScroll: true }); try { n.setSelectionRange(pos, pos); } catch {} }
+  }
+});
+function renderHeaderSub() {
+  if (ui.view !== 'spotify') return;
+  $('viewSub').textContent = !spotify.state.loaded ? '' : !spotify.state.connected ? 'Not connected' : spotify.state.device ? 'Playing on ' + spotify.state.device : 'No active device';
+}
+spotify.onUnauthenticated(() => showSignIn('Your session has ended. Sign in again.'));
+
+/* Spotify's consent page sends the browser back to /#spotify=connected or =error. */
+function spotifyReturn() {
+  const m = location.hash.match(/^#spotify=(connected|error)$/);
+  if (!m) return null;
+  history.replaceState(null, '', location.pathname + location.search);
+  return m[1];
+}
 
 /* ═════════ the quote tile turns its own page ═════════ */
 const QUOTE_EVERY_MS = 25000;
@@ -79,6 +120,9 @@ async function start(profile) {
   drawOrnament();
   sync.init();
   sync.syncNow();
+  spotify.start();
+  const back = spotifyReturn();
+  if (back) { ui.spotifyNote = back; openSettings('spotifyGrp'); }
 }
 
 function showSignIn(error, username = '') {
@@ -88,11 +132,19 @@ function showSignIn(error, username = '') {
 async function signOut({ everywhere = false } = {}) {
   try { await (everywhere ? api.revokeAll() : api.signOut()); } catch {}
   const id = data.profile?.id;
+  spotify.stop();
+  web.stop();
   closeDrawer();
   await store.close();
   if (id) { try { await store.wipe(id); } catch {} }
   showSignIn();
 }
+
+document.addEventListener('submit', (e) => {
+  if (!e.target.matches('[data-spot-form]')) return;
+  e.preventDefault();
+  spotView.search(e.target.querySelector('[data-spot-q]').value);
+});
 
 $('signin').addEventListener('submit', async (e) => {
   if (e.target.id !== 'loginForm') return;
@@ -146,6 +198,21 @@ document.addEventListener('click', async (e) => {
   if (e.target.closest('#syncPill')) { sync.syncNow(); return; }
   if (e.target.closest('#setBtn')) { ui.settings ? closeDrawer() : openSettings(); return; }
   if ((el = e.target.closest('[data-setopen]'))) { openSettings('o-name'); return; }
+  if ((el = e.target.closest('[data-spotify]'))) {
+    const act = el.dataset.spotify;
+    if (act !== 'connect') web.activate();          /* inside the click, so the tab may make sound */
+    if (act === 'connect') openSettings('spotifyGrp');
+    else if (act === 'here') spotify.playHere();
+    else if (act === 'previous') spotify.previous();
+    else spotify.control(act);
+    return;
+  }
+  if ((el = e.target.closest('[data-spot-pane]'))) { if (el.dataset.spotPane === 'queue') spotView.openQueue(true); return; }
+  if ((el = e.target.closest('[data-spot-pl]'))) { spotView.openPlaylist(el.dataset.spotPl, el.dataset.spotName); return; }
+  if ((el = e.target.closest('[data-spot-refresh]'))) { spotView.openQueue(true); return; }
+  if ((el = e.target.closest('[data-spot-more]'))) { el.dataset.spotMore === 'playlists' ? spotView.morePlaylists() : spotView.moreTracks(); return; }
+  if ((el = e.target.closest('[data-spot-play]')) !== null) { web.activate(); spotView.play(el.dataset.spotPlay, el.dataset.spotCtx); return; }
+  if ((el = e.target.closest('[data-spot-queue]'))) { spotView.queueAdd(el.dataset.spotQueue, el); return; }
   if ((el = e.target.closest('[data-quotenext]'))) {
     const r = el.getBoundingClientRect();
     fireworks(r.left + r.width / 2, r.top + 4);
@@ -202,6 +269,12 @@ document.addEventListener('click', async (e) => {
     else if (act === 'course-delete-yes' && ui.courseDraft) deleteCourseDraft();
     else if (act === 'signout') signOut();
     else if (act === 'signout-all') signOut({ everywhere: true });
+    else if (act === 'spotify-disconnect') {
+      try { await api.spotifyDisconnect(); } catch {}
+      ui.spotifyNote = null;
+      spotify.disconnected();
+      renderSettings();
+    }
     return;
   }
   if ((el = e.target.closest('[data-cl]'))) {
@@ -274,6 +347,8 @@ async function addQuote() {
 
 document.addEventListener('input', async (e) => {
   const d = e.target.dataset || {};
+
+  if ('spotVol' in d) { spotView.setVolume(+e.target.value); return; }
 
   if (d.of) {                             /* what the coat says */
     await store.saveProfile({ coat: { [d.of]: e.target.value } });

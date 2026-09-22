@@ -26,6 +26,7 @@ export function resetDrawerState() {
 
 export function closeDrawer() {
   resetDrawerState();
+  ui.spotifyNote = null;
   hideDrawer();
   render();
 }

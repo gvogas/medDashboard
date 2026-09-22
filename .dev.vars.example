@@ -1,0 +1,9 @@
+# Local secrets for `npm run dev`. Copy to .dev.vars (git-ignored) and fill in.
+# Live values are set with `wrangler secret put <NAME>`; the client id lives in wrangler.jsonc.
+
+# Signs login cookies. Any long random string.
+SESSION_SECRET=change-me-locally
+
+# From the app at developer.spotify.com. Leave both empty to run without the player.
+SPOTIFY_CLIENT_ID=
+SPOTIFY_CLIENT_SECRET=
