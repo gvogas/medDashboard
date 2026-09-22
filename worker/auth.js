@@ -19,7 +19,7 @@ async function hmacKey(secret) {
   );
 }
 
-function hex(buf) {
+export function hex(buf) {
   return [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, '0')).join('');
 }
 
@@ -47,7 +47,7 @@ async function readSession(token, secret, now = Date.now()) {
   return diff === 0 ? { userId, gen: Number(gen), expiresAt: Number(expiresAt) } : null;
 }
 
-function parseCookies(header) {
+export function parseCookies(header) {
   const out = {};
   for (const part of (header || '').split(';')) {
     const i = part.indexOf('=');
@@ -56,7 +56,7 @@ function parseCookies(header) {
   return out;
 }
 
-function secureFlag(url) {
+export function secureFlag(url) {
   return url.protocol === 'https:' ? '; Secure' : '';
 }
 

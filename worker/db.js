@@ -155,3 +155,26 @@ export async function syncSince(db, userId, since) {
   }
   return out;
 }
+
+// ── Spotify: one connection per user; see worker/spotify.js ────────────────
+
+export async function getSpotifyTokens(db, userId) {
+  const r = await db.prepare('SELECT refresh_token, access_token, expires_at FROM spotify_tokens WHERE user_id = ?').bind(userId).first();
+  return r ? { refreshToken: r.refresh_token, accessToken: r.access_token, expiresAt: r.expires_at } : null;
+}
+
+/** `refreshToken` arrives already encrypted. */
+export async function saveSpotifyTokens(db, userId, t, now = Date.now()) {
+  await db
+    .prepare(
+      `INSERT INTO spotify_tokens (user_id, refresh_token, access_token, expires_at, updated_at) VALUES (?, ?, ?, ?, ?)
+       ON CONFLICT (user_id) DO UPDATE SET refresh_token = excluded.refresh_token, access_token = excluded.access_token,
+         expires_at = excluded.expires_at, updated_at = excluded.updated_at`,
+    )
+    .bind(userId, t.refreshToken, t.accessToken, t.expiresAt, now)
+    .run();
+}
+
+export async function deleteSpotifyTokens(db, userId) {
+  await db.prepare('DELETE FROM spotify_tokens WHERE user_id = ?').bind(userId).run();
+}
