@@ -55,7 +55,9 @@ const PLAYLISTS = [
   { id: 'pl1', uri: 'spotify:playlist:pl1', name: 'Study mix', owner: { display_name: 'George' }, images: [{ url: 'https://i.scdn.co/image/pl1', width: 300 }], items: { total: 3 } },
   { id: 'pl2', uri: 'spotify:playlist:pl2', name: 'Ward rounds', owner: { display_name: 'Sam' }, images: [], items: { total: 0 } },
   // Enough more that the list needs a second page.
-  ...[3, 4, 5, 6, 7].map((n) => ({ id: `pl${n}`, uri: `spotify:playlist:pl${n}`, name: `Mix ${n}`, owner: { display_name: 'George' }, images: [], items: { total: 1 } })),
+  ...[3, 4, 5, 6].map((n) => ({ id: `pl${n}`, uri: `spotify:playlist:pl${n}`, name: `Mix ${n}`, owner: { display_name: 'George' }, images: [], items: { total: 1 } })),
+  // Someone else's: Spotify leaves `items` out, so how long it is is not known.
+  { id: 'pl7', uri: 'spotify:playlist:pl7', name: 'Mix 7', owner: { display_name: 'Sam' }, images: [] },
 ];
 
 const uri = (item, id) => ({ ...item, uri: `spotify:track:${id}`, id, type: 'track' });
@@ -122,6 +124,8 @@ async function player(request, url) {
 
   if (!isControl(method, path)) return json({ error: { status: 405, message: 'not a control' } }, 405);
   if (tok === 'tok-free') return json({ error: { status: 403, reason: 'PREMIUM_REQUIRED' } }, 403);
+  // Premium, but the command makes no sense right now (pausing what is already paused).
+  if (tok === 'tok-restricted') return json({ error: { status: 403, message: 'Player command failed: Restriction violated', reason: 'UNKNOWN' } }, 403);
   /* The only device Spotify knows by id is `roundsdev`; naming it works even with nothing active. */
   const unknownDevice = () => json({ error: { status: 404, reason: 'NO_ACTIVE_DEVICE' } }, 404);
   if (path === '/v1/me/player') {

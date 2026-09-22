@@ -25,6 +25,7 @@ export function onChange(fn) { rerender = fn; }
 const MESSAGES = {
   no_device: 'Open Spotify somewhere, or use a desktop browser, then try again.',
   premium_required: 'That needs Spotify Premium.',
+  not_allowed: 'Spotify would not do that right now.',
   spotify_unavailable: 'Spotify is not answering right now.',
   rate_limited: 'Spotify asked us to slow down. Try again in a moment.',
   not_connected: 'Spotify is not connected. Connect it in Settings.',
@@ -35,7 +36,14 @@ const MESSAGES = {
 };
 
 function explain(e) {
-  return e instanceof ApiError ? (MESSAGES[e.body?.error] || MESSAGES.spotify_unavailable) : MESSAGES.offline;
+  if (!(e instanceof ApiError)) return MESSAGES.offline;
+  /* Spotify sometimes pauses one endpoint for most of a day; "a moment" would be wrong. */
+  const wait = e.body?.error === 'rate_limited' ? Number(e.body.retryAfter) : 0;
+  if (wait > 120) {
+    const later = wait >= 5400 ? 'about ' + Math.round(wait / 3600) + ' hours' : 'about ' + Math.round(wait / 60) + ' minutes';
+    return 'Spotify has paused this for ' + later + '. Try again then.';
+  }
+  return MESSAGES[e.body?.error] || MESSAGES.spotify_unavailable;
 }
 
 function say(text, ms = 4000, ok = false) {
@@ -199,7 +207,7 @@ function navHtml() {
   else {
     pl.items.forEach((p) => {
       h += item('data-spot-pl="' + esc(p.id) + '"', cur === 'playlist' && id === p.id,
-        art(p.art, 'pa') + '<span class="nm">' + esc(p.name) + '<small>' + p.count + (p.owner ? ' · ' + esc(p.owner) : '') + '</small></span>');
+        art(p.art, 'pa') + '<span class="nm">' + esc(p.name) + '<small>' + [p.count == null ? '' : p.count, p.owner ? esc(p.owner) : ''].filter((x) => x !== '').join(' · ') + '</small></span>');
     });
     if (pl.next) h += moreButton('playlists', pl.total - pl.items.length);
   }
@@ -236,7 +244,7 @@ function mainHtml() {
       }
       if (r.playlists.length) {
         body += '<div class="ph sub">Playlists</div>' + r.playlists.map((p) =>
-          '<div class="trk">' + art(p.art) + '<div class="what"><b>' + esc(p.name) + '</b><span>' + (p.owner ? esc(p.owner) + ' · ' : '') + p.count + ' tracks</span></div>'
+          '<div class="trk">' + art(p.art) + '<div class="what"><b>' + esc(p.name) + '</b><span>' + [p.owner ? esc(p.owner) : '', p.count == null ? '' : p.count + ' tracks'].filter(Boolean).join(' · ') + '</span></div>'
           + '<span class="acts"><button type="button" data-spot-play="" data-spot-ctx="' + esc(p.uri) + '" title="Play playlist" aria-label="Play ' + esc(p.name) + '">▶</button>'
           + '<button type="button" data-spot-pl="' + esc(p.id) + '" data-spot-name="' + esc(p.name) + '" title="Open" aria-label="Open ' + esc(p.name) + '">›</button></span></div>').join('');
       }

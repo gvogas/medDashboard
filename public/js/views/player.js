@@ -19,6 +19,7 @@ const MESSAGES = {
   no_device: 'Open Spotify somewhere, or use a desktop browser',
   nothing_to_resume: 'Pick something in the Spotify view',
   premium_required: 'Controls need Spotify Premium',
+  not_allowed: 'Spotify would not do that right now',
   spotify_unavailable: 'Spotify is not answering',
   rate_limited: 'Spotify asked us to slow down',
   offline: 'You seem to be offline',

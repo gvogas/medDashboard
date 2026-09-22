@@ -227,6 +227,12 @@ describe('POST /api/spotify/player/:action', () => {
     expect(res.status).toBe(403);
     expect(await res.json()).toEqual({ error: 'premium_required' });
 
+    const restricted = await user('c-restricted');
+    await connect(restricted.id, 'tok-restricted');
+    res = await restricted.api('/api/spotify/player/pause', { method: 'POST' });
+    expect(res.status).toBe(403);
+    expect(await res.json()).toEqual({ error: 'not_allowed' });
+
     const none = await user('c-none');
     res = await none.api('/api/spotify/player/pause', { method: 'POST' });
     expect(res.status).toBe(409);
@@ -345,6 +351,7 @@ describe('the Spotify view', () => {
     expect(first.items[1]).toEqual({ uri: 'spotify:playlist:pl2', id: 'pl2', name: 'Ward rounds', owner: 'Sam', art: null, count: 0 });
     const page2 = await (await api('/api/spotify/playlists?offset=5')).json();
     expect(page2.items.map((p) => p.name)).toEqual(['Mix 6', 'Mix 7']);
+    expect(page2.items[1].count).toBeNull();     /* someone else's playlist: Spotify does not say */
     expect(page2).toMatchObject({ total: 7, next: false, offset: 5 });
     expect((await api('/api/spotify/playlists?offset=x')).status).toBe(400);
   });

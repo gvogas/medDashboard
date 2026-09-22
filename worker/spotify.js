@@ -219,10 +219,15 @@ export async function playerState(env, userId) {
   };
 }
 
-/** Mapped 403/404 from a command that needs an active device. */
-function controlError(res) {
+/**
+ * A refused player command. 404 is no active device. A 403 is Premium only when Spotify
+ * says so; otherwise the command did not fit the moment (pausing what is paused).
+ */
+async function controlError(res) {
   if (res.status === 404) return new HttpError(404, { error: 'no_device' });
-  if (res.status === 403) return new HttpError(403, { error: 'premium_required' });
+  const err = (await res.json().catch(() => ({}))).error || {};
+  if (res.status === 403) return new HttpError(403, { error: err.reason === 'PREMIUM_REQUIRED' ? 'premium_required' : 'not_allowed' });
+  console.error('spotify refused a command', res.status, err.message || '');
   return unavailable();
 }
 
@@ -235,13 +240,13 @@ function withDevice(path, deviceId) {
 export async function control(env, userId, action, deviceId = null) {
   const [method, path] = ACTIONS[action];
   const res = await spotifyFetch(env, userId, method, withDevice(path, deviceId));
-  if (!res.ok) throw controlError(res);
+  if (!res.ok) throw await controlError(res);
 }
 
 /** Move playback to this device (the Rounds tab) and keep it playing. */
 export async function transfer(env, userId, deviceId) {
   const res = await spotifyFetch(env, userId, 'PUT', '/me/player', { device_ids: [deviceId], play: true });
-  if (!res.ok) throw controlError(res);
+  if (!res.ok) throw await controlError(res);
 }
 
 // ── the Spotify view: search, playlists, queue, volume ──────────────────────
@@ -263,7 +268,8 @@ function compactPlaylist(p) {
   return {
     uri: p.uri, id: p.id, name: p.name || '',
     owner: p.owner?.display_name || '',
-    art: pickArt(p.images, 64), count: Number((p.items || p.tracks)?.total) || 0,   /* `tracks` before February 2026 */
+    /* `tracks` before February 2026; neither for a playlist the user does not own, so unknown */
+    art: pickArt(p.images, 64), count: typeof (p.items || p.tracks)?.total === 'number' ? (p.items || p.tracks).total : null,
   };
 }
 
@@ -338,17 +344,17 @@ export async function queue(env, userId) {
 
 export async function addToQueue(env, userId, uri) {
   const res = await spotifyFetch(env, userId, 'POST', `/me/player/queue?uri=${encodeURIComponent(uri)}`);
-  if (!res.ok) throw controlError(res);
+  if (!res.ok) throw await controlError(res);
 }
 
 /** Start a track, a track inside a playlist or album, or a whole playlist or album. */
 export async function play(env, userId, { uri, contextUri, deviceId = null }) {
   const body = contextUri ? { context_uri: contextUri, ...(uri ? { offset: { uri } } : {}) } : { uris: [uri] };
   const res = await spotifyFetch(env, userId, 'PUT', withDevice('/me/player/play', deviceId), body);
-  if (!res.ok) throw controlError(res);
+  if (!res.ok) throw await controlError(res);
 }
 
 export async function setVolume(env, userId, percent) {
   const res = await spotifyFetch(env, userId, 'PUT', `/me/player/volume?volume_percent=${percent}`);
-  if (!res.ok) throw controlError(res);
+  if (!res.ok) throw await controlError(res);
 }

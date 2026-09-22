@@ -1,7 +1,7 @@
 // Rounds service worker: network first, cache as the fallback, so the shell opens
 // offline and a deploy is picked up on the next load. /api is never cached.
 
-const CACHE = 'rounds-shell-v7';
+const CACHE = 'rounds-shell-v8';
 const SHELL = [
   '/', '/index.html', '/manifest.webmanifest', '/icon.svg',
   '/css/tokens.css', '/css/layout.css', '/css/components.css',
@@ -26,7 +26,11 @@ self.addEventListener('fetch', (e) => {
   e.respondWith(
     fetch(e.request)
       .then((res) => {
-        if (res.ok) caches.open(CACHE).then((c) => c.put(e.request, res.clone()));
+        /* Copy it now: once `res` is returned the page reads the body, and a later clone fails. */
+        if (res.ok) {
+          const copy = res.clone();
+          e.waitUntil(caches.open(CACHE).then((c) => c.put(e.request, copy)));
+        }
         return res;
       })
       .catch(() => caches.match(e.request).then((hit) => hit || (e.request.mode === 'navigate' ? caches.match('/index.html') : undefined))),
