@@ -10,6 +10,9 @@
   "workers_dev": true,
   "preview_urls": false,
 
+  // Spotify's public client id. The secret is `wrangler secret put SPOTIFY_CLIENT_SECRET`.
+  "vars": { "SPOTIFY_CLIENT_ID": "62b89b6543c947e194605aaa91ecce85" },
+
   "assets": {
     "directory": "./public",
     "binding": "ASSETS",

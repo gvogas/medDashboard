@@ -1,0 +1,7 @@
+# Copy to .dev.vars (git-ignored) for `npm run dev`.
+SESSION_SECRET=any-long-random-string
+# From the Spotify app's settings at developer.spotify.com. Without them the connect
+# route answers 503. Open the dev server at http://127.0.0.1:8787, not localhost:
+# Spotify only accepts the 127.0.0.1 redirect.
+SPOTIFY_CLIENT_ID=
+SPOTIFY_CLIENT_SECRET=
