@@ -60,17 +60,7 @@ web.onChange(() => {
   renderPlayer(spotify.state);
   if (ui.settings && !drawerHasFocus()) refreshSpotifyGroup();
 });
-spotView.onChange(() => {
-  if (ui.view !== 'spotify') return;
-  /* keep the search box as it was: the results arrive while it still has focus */
-  const q = document.querySelector('[data-spot-q]'), had = q && document.activeElement === q;
-  const val = q ? q.value : '', pos = q ? q.selectionStart : 0;
-  renderView();
-  if (had) {
-    const n = document.querySelector('[data-spot-q]');
-    if (n) { n.value = val; n.focus({ preventScroll: true }); try { n.setSelectionRange(pos, pos); } catch {} }
-  }
-});
+spotView.onChange(() => { if (ui.view === 'spotify') renderView(); });   /* the view keeps its own scroll and caret */
 spotify.onUnauthenticated(() => showSignIn('Your session has ended. Sign in again.'));
 
 /* Spotify's consent page sends the browser back to /#spotify=connected or =error. */
@@ -139,6 +129,7 @@ async function signOut({ everywhere = false } = {}) {
 document.addEventListener('submit', (e) => {
   if (!e.target.matches('[data-spot-form]')) return;
   e.preventDefault();
+  spotView.typed('');                               /* no delayed search after this one */
   spotView.search(e.target.querySelector('[data-spot-q]').value);
 });
 
@@ -203,12 +194,19 @@ document.addEventListener('click', async (e) => {
     else spotify.control(act);
     return;
   }
-  if ((el = e.target.closest('[data-spot-pane]'))) { if (el.dataset.spotPane === 'queue') spotView.openQueue(true); return; }
+  if (spotView.devicesOpen() && !e.target.closest('.spot-devs, [data-spot-devices]')) spotView.closeDevices();
+  if ((el = e.target.closest('[data-spot-pane]'))) { el.dataset.spotPane === 'queue' ? spotView.openQueue(true) : spotView.openHome(); return; }
   if ((el = e.target.closest('[data-spot-pl]'))) { spotView.openPlaylist(el.dataset.spotPl, el.dataset.spotName); return; }
-  if ((el = e.target.closest('[data-spot-refresh]'))) { spotView.openQueue(true); return; }
-  if ((el = e.target.closest('[data-spot-more]'))) { el.dataset.spotMore === 'playlists' ? spotView.morePlaylists() : spotView.moreTracks(); return; }
-  if ((el = e.target.closest('[data-spot-play]')) !== null) { web.activate(); spotView.play(el.dataset.spotPlay, el.dataset.spotCtx); return; }
+  if ((el = e.target.closest('[data-spot-album]'))) { spotView.openAlbum(el.dataset.spotAlbum); return; }
+  if ((el = e.target.closest('[data-spot-artist]'))) { spotView.openArtist(el.dataset.spotArtist); return; }
+  if ((el = e.target.closest('[data-spot-refresh]'))) { spotView.refresh(el.dataset.spotRefresh); return; }
+  if ((el = e.target.closest('[data-spot-more]'))) { spotView.more(el.dataset.spotMore); return; }
+  if ((el = e.target.closest('[data-spot-play]'))) { web.activate(); spotView.play(el.dataset.spotPlay, el.dataset.spotCtx, el.dataset.spotList); return; }
   if ((el = e.target.closest('[data-spot-queue]'))) { spotView.queueAdd(el.dataset.spotQueue, el); return; }
+  if (e.target.closest('[data-spot-shuffle]')) { spotView.toggleShuffle(); return; }
+  if (e.target.closest('[data-spot-repeat]')) { spotView.cycleRepeat(); return; }
+  if (e.target.closest('[data-spot-devices]')) { spotView.toggleDevices(); return; }
+  if ((el = e.target.closest('[data-spot-device]'))) { web.activate(); spotView.pickDevice(el.dataset.spotDevice); return; }
   if ((el = e.target.closest('[data-quotenext]'))) {
     const r = el.getBoundingClientRect();
     fireworks(r.left + r.width / 2, r.top + 4);
@@ -345,6 +343,8 @@ document.addEventListener('input', async (e) => {
   const d = e.target.dataset || {};
 
   if ('spotVol' in d) { spotView.setVolume(+e.target.value); return; }
+  if ('spotQ' in d) { spotView.typed(e.target.value); return; }
+  if ('spotFilter' in d) { spotView.setFilter(e.target.value); return; }
 
   if (d.of) {                             /* what the coat says */
     await store.saveProfile({ coat: { [d.of]: e.target.value } });
@@ -421,8 +421,23 @@ document.addEventListener('input', async (e) => {
 
 document.addEventListener('keydown', async (e) => {
   if (e.key === 'Escape') {
+    if (ui.view === 'spotify' && spotView.devicesOpen()) { spotView.closeDevices(); return; }
     if (ui.sel || ui.draft || ui.courseDraft || ui.settings) closeDrawer();
     return;
+  }
+  /* The Spotify view: / to search, space to play or pause, when not typing or on a button. */
+  if (ui.view === 'spotify' && !e.ctrlKey && !e.metaKey && !e.altKey && !/^(input|textarea|select|button|a)$/i.test(e.target.tagName)
+      && !e.target.isContentEditable && !ui.sel && !ui.draft && !ui.courseDraft && !ui.settings) {
+    if (e.key === '/') {
+      const box = document.querySelector('[data-spot-q]');
+      if (box) { e.preventDefault(); box.focus(); box.select(); return; }
+    }
+    if (e.key === ' ' && spotify.state.connected && !e.repeat) {
+      e.preventDefault();
+      web.activate();
+      spotify.control(spotify.state.playing ? 'pause' : 'play');
+      return;
+    }
   }
   if (e.key === '/' && !/input|textarea|select/i.test(e.target.tagName)) {
     e.preventDefault(); $('search').focus(); return;

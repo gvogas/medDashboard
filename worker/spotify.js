@@ -7,7 +7,7 @@ import { getSpotifyTokens, saveSpotifyTokens, deleteSpotifyTokens } from './db.j
 
 const ACCOUNTS = 'https://accounts.spotify.com';
 const API = 'https://api.spotify.com/v1';
-export const SCOPES = 'user-read-playback-state user-modify-playback-state playlist-read-private playlist-read-collaborative user-library-read streaming user-read-email user-read-private';
+export const SCOPES = 'user-read-playback-state user-modify-playback-state playlist-read-private playlist-read-collaborative user-library-read streaming user-read-email user-read-private user-read-recently-played';
 const REFRESH_WITHIN_MS = 60 * 1000;
 
 export const ACTIONS = {
@@ -196,7 +196,9 @@ function compactTrack(item, progressMs, artSize = 300) {
   };
 }
 
-/** `{ connected: false }`, or `{ connected: true, playing, track, device, deviceId, volume, supportsVolume }`. */
+const REPEAT = ['off', 'context', 'track'];
+
+/** `{ connected: false }`, or `{ connected: true, playing, track, device, deviceId, volume, supportsVolume, shuffle, repeat }`. */
 export async function playerState(env, userId) {
   if (!(await getSpotifyTokens(env.DB, userId))) return { connected: false };
   let res;
@@ -206,7 +208,7 @@ export async function playerState(env, userId) {
     if (e instanceof HttpError && e.body.error === 'not_connected') return { connected: false };
     throw e;
   }
-  if (res.status === 204) return { connected: true, playing: false, track: null, device: null, deviceId: null, volume: null, supportsVolume: false };
+  if (res.status === 204) return { connected: true, playing: false, track: null, device: null, deviceId: null, volume: null, supportsVolume: false, shuffle: false, repeat: 'off' };
   const body = await res.json().catch(() => ({}));
   return {
     connected: true,
@@ -216,6 +218,8 @@ export async function playerState(env, userId) {
     deviceId: body.device?.id || null,
     volume: typeof body.device?.volume_percent === 'number' ? body.device.volume_percent : null,
     supportsVolume: !!body.device && body.device.supports_volume !== false,
+    shuffle: !!body.shuffle_state,
+    repeat: REPEAT.includes(body.repeat_state) ? body.repeat_state : 'off',
   };
 }
 
@@ -243,9 +247,31 @@ export async function control(env, userId, action, deviceId = null) {
   if (!res.ok) throw await controlError(res);
 }
 
-/** Move playback to this device (the Rounds tab) and keep it playing. */
-export async function transfer(env, userId, deviceId) {
-  const res = await spotifyFetch(env, userId, 'PUT', '/me/player', { device_ids: [deviceId], play: true });
+/** Move playback to this device; `play` false leaves it paused there. */
+export async function transfer(env, userId, deviceId, play = true) {
+  const res = await spotifyFetch(env, userId, 'PUT', '/me/player', { device_ids: [deviceId], play });
+  if (!res.ok) throw await controlError(res);
+}
+
+/** The devices Spotify can play on right now. A restricted one takes no commands. */
+export async function devices(env, userId) {
+  const res = await spotifyFetch(env, userId, 'GET', '/me/player/devices');
+  if (!res.ok) throw await readFailure(res, 'devices');
+  const b = await bodyOf(res);
+  return (b.devices || []).filter((d) => d && d.id).map((d) => ({
+    id: d.id, name: d.name || 'Unnamed device', type: d.type || '',
+    active: !!d.is_active, restricted: !!d.is_restricted,
+  }));
+}
+
+export async function setShuffle(env, userId, on) {
+  const res = await spotifyFetch(env, userId, 'PUT', `/me/player/shuffle?state=${on ? 'true' : 'false'}`);
+  if (!res.ok) throw await controlError(res);
+}
+
+/** One of off, context (the playlist or album), track. */
+export async function setRepeat(env, userId, mode) {
+  const res = await spotifyFetch(env, userId, 'PUT', `/me/player/repeat?state=${mode}`);
   if (!res.ok) throw await controlError(res);
 }
 
@@ -264,10 +290,14 @@ function compactAlbum(a) {
   };
 }
 
+function compactArtist(a) {
+  return { uri: a.uri, id: a.id, name: a.name || '', art: pickArt(a.images, 64) };
+}
+
 function compactPlaylist(p) {
   return {
     uri: p.uri, id: p.id, name: p.name || '',
-    owner: p.owner?.display_name || '',
+    owner: p.owner?.display_name || '', ownerId: p.owner?.id || null, collaborative: !!p.collaborative,
     /* `tracks` before February 2026; neither for a playlist the user does not own, so unknown */
     art: pickArt(p.images, 64), count: typeof (p.items || p.tracks)?.total === 'number' ? (p.items || p.tracks).total : null,
   };
@@ -292,16 +322,62 @@ async function readFailure(res, what, forbidden = null) {
   return unavailable();
 }
 
-/** Tracks, albums and playlists matching `q`, ten of each. */
-export async function search(env, userId, q) {
-  const res = await spotifyFetch(env, userId, 'GET', `/search?type=track,album,playlist&limit=10&q=${encodeURIComponent(q)}`);
+export const SEARCH_TYPES = ['track', 'artist', 'album', 'playlist'];
+const SEARCH_LIMIT = 10;       /* Spotify's most for a development-mode app */
+
+/**
+ * Tracks, artists, albums and playlists matching `q`, ten of each; or, with `type`, the
+ * next ten of that one kind from `offset`. `more` says which kinds have further pages.
+ */
+export async function search(env, userId, q, type = null, offset = 0) {
+  const types = type ? [type] : SEARCH_TYPES;
+  const res = await spotifyFetch(env, userId, 'GET', `/search?type=${types.join(',')}&limit=${SEARCH_LIMIT}&offset=${offset}&q=${encodeURIComponent(q)}`);
   if (!res.ok) throw await readFailure(res, 'search');
   const b = await bodyOf(res);
+  const list = (key, map) => (b[key]?.items || []).filter(Boolean).map(map);
   return {
-    tracks: (b.tracks?.items || []).filter(Boolean).map((t) => compactTrack(t, 0, 64)),
-    albums: (b.albums?.items || []).filter(Boolean).map(compactAlbum),
-    playlists: (b.playlists?.items || []).filter(Boolean).map(compactPlaylist),
+    tracks: list('tracks', (t) => compactTrack(t, 0, 64)),
+    artists: list('artists', compactArtist),
+    albums: list('albums', compactAlbum),
+    playlists: list('playlists', compactPlaylist),
+    more: Object.fromEntries(['tracks', 'artists', 'albums', 'playlists'].map((k) => [k, !!b[k]?.next])),
   };
+}
+
+/** Who the connected account is, so the view can tell the user's own playlists from others'. */
+export async function me(env, userId) {
+  const res = await spotifyFetch(env, userId, 'GET', '/me');
+  if (!res.ok) throw await readFailure(res, 'me');
+  const b = await bodyOf(res);
+  return { id: b.id || null, name: b.display_name || '' };
+}
+
+/** An album's tracks. Spotify leaves the album off each one; the view already knows it. */
+export async function albumTracks(env, userId, id, offset = 0) {
+  const res = await spotifyFetch(env, userId, 'GET', `/albums/${id}/tracks?limit=${LIST_LIMIT}&offset=${offset}`);
+  if (res.status === 404 || res.status === 400) throw new HttpError(404, { error: 'not_found' });
+  if (!res.ok) throw await readFailure(res, 'album tracks');
+  const b = await bodyOf(res);
+  return page(b, offset, (b.items || []).filter((t) => t && t.uri && !t.is_local).map((t) => compactTrack(t, 0, 64)));
+}
+
+/** An artist's albums and singles, newest first as Spotify gives them. */
+export async function artistAlbums(env, userId, id, offset = 0) {
+  const res = await spotifyFetch(env, userId, 'GET', `/artists/${id}/albums?include_groups=album,single&limit=${SEARCH_LIMIT}&offset=${offset}`);
+  if (res.status === 404 || res.status === 400) throw new HttpError(404, { error: 'not_found' });
+  if (!res.ok) throw await readFailure(res, 'artist albums');
+  const b = await bodyOf(res);
+  return page(b, offset, (b.items || []).filter(Boolean).map(compactAlbum));
+}
+
+/** What the user played lately, each track once, most recent first. */
+export async function recent(env, userId) {
+  const res = await spotifyFetch(env, userId, 'GET', '/me/player/recently-played?limit=50');
+  if (!res.ok) throw await readFailure(res, 'recently played');
+  const b = await bodyOf(res);
+  const seen = new Set();
+  const tracks = (b.items || []).map((i) => i && i.track).filter((t) => t && t.uri && !seen.has(t.uri) && seen.add(t.uri));
+  return { items: tracks.slice(0, 20).map((t) => compactTrack(t, 0, 64)) };
 }
 
 /** The user's playlists, a page at a time. */
@@ -347,9 +423,14 @@ export async function addToQueue(env, userId, uri) {
   if (!res.ok) throw await controlError(res);
 }
 
-/** Start a track, a track inside a playlist or album, or a whole playlist or album. */
-export async function play(env, userId, { uri, contextUri, deviceId = null }) {
-  const body = contextUri ? { context_uri: contextUri, ...(uri ? { offset: { uri } } : {}) } : { uris: [uri] };
+/**
+ * Start a track, a track inside a playlist or album, a whole playlist or album, or a
+ * list of tracks (Liked Songs has no context Spotify will play) from `uri` in it.
+ */
+export async function play(env, userId, { uri, contextUri, uris = null, deviceId = null }) {
+  const body = contextUri ? { context_uri: contextUri, ...(uri ? { offset: { uri } } : {}) }
+    : uris ? { uris, ...(uri ? { offset: { uri } } : {}) }
+    : { uris: [uri] };
   const res = await spotifyFetch(env, userId, 'PUT', withDevice('/me/player/play', deviceId), body);
   if (!res.ok) throw await controlError(res);
 }

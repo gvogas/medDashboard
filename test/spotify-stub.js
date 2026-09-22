@@ -32,6 +32,8 @@ export const PAUSED = {
   ...PLAYING,
   is_playing: false,
   progress_ms: 221000,
+  shuffle_state: true,
+  repeat_state: 'context',
   item: { ...PLAYING.item, name: 'Clair de Lune, L. 32', artists: artists('Claude Debussy', 'Lang Lang'), album: album('piano-book'), duration_ms: 312000 },
 };
 
@@ -52,12 +54,12 @@ async function token(request) {
 
 // Since February 2026 a playlist's count is under `items`, not `tracks`.
 const PLAYLISTS = [
-  { id: 'pl1', uri: 'spotify:playlist:pl1', name: 'Study mix', owner: { display_name: 'George' }, images: [{ url: 'https://i.scdn.co/image/pl1', width: 300 }], items: { total: 3 } },
-  { id: 'pl2', uri: 'spotify:playlist:pl2', name: 'Ward rounds', owner: { display_name: 'Sam' }, images: [], items: { total: 0 } },
+  { id: 'pl1', uri: 'spotify:playlist:pl1', name: 'Study mix', owner: { id: 'george', display_name: 'George' }, images: [{ url: 'https://i.scdn.co/image/pl1', width: 300 }], items: { total: 3 } },
+  { id: 'pl2', uri: 'spotify:playlist:pl2', name: 'Ward rounds', owner: { id: 'sam', display_name: 'Sam' }, collaborative: true, images: [], items: { total: 0 } },
   // Enough more that the list needs a second page.
-  ...[3, 4, 5, 6].map((n) => ({ id: `pl${n}`, uri: `spotify:playlist:pl${n}`, name: `Mix ${n}`, owner: { display_name: 'George' }, images: [], items: { total: 1 } })),
+  ...[3, 4, 5, 6].map((n) => ({ id: `pl${n}`, uri: `spotify:playlist:pl${n}`, name: `Mix ${n}`, owner: { id: 'george', display_name: 'George' }, images: [], items: { total: 1 } })),
   // Someone else's: Spotify leaves `items` out, so how long it is is not known.
-  { id: 'pl7', uri: 'spotify:playlist:pl7', name: 'Mix 7', owner: { display_name: 'Sam' }, images: [] },
+  { id: 'pl7', uri: 'spotify:playlist:pl7', name: 'Mix 7', owner: { id: 'sam', display_name: 'Sam' }, images: [] },
 ];
 
 const uri = (item, id) => ({ ...item, uri: `spotify:track:${id}`, id, type: 'track' });
@@ -65,7 +67,7 @@ const T1 = uri(PLAYING.item, 't1');
 const T2 = uri(PAUSED.item, 't2');
 
 function isControl(method, pathname) {
-  return (method === 'PUT' && ['/v1/me/player', '/v1/me/player/play', '/v1/me/player/pause', '/v1/me/player/seek', '/v1/me/player/volume'].includes(pathname))
+  return (method === 'PUT' && ['/v1/me/player', '/v1/me/player/play', '/v1/me/player/pause', '/v1/me/player/seek', '/v1/me/player/volume', '/v1/me/player/shuffle', '/v1/me/player/repeat'].includes(pathname))
     || (method === 'POST' && ['/v1/me/player/next', '/v1/me/player/previous', '/v1/me/player/queue'].includes(pathname));
 }
 
@@ -83,14 +85,41 @@ async function player(request, url) {
       return json(PLAYING);   // tok-playing, tok-refreshed, tok-nodevice, tok-free
     }
     if (path === '/v1/me/player/queue') return json({ currently_playing: T1, queue: [T2, T1] });
+    if (path === '/v1/me/player/devices') {
+      return json({ devices: [
+        { id: 'roundsdev', name: 'Rounds', type: 'Computer', is_active: false, is_restricted: false },
+        { id: 'phone1', name: "George's iPhone", type: 'Smartphone', is_active: true, is_restricted: false },
+        { id: null, name: 'Ghost', type: 'Speaker' },
+      ] });
+    }
+    if (path === '/v1/me') return json({ id: 'george', display_name: 'George' });
+    if (path === '/v1/me/player/recently-played') {
+      if (tok === 'tok-noscope') return json({ error: { status: 403, message: 'Insufficient client scope' } }, 403);
+      return json({ items: [{ track: T2 }, { track: T1 }, { track: T2 }, { track: null }] });
+    }
     if (path === '/v1/search') {
-      if (!q.get('q') || !q.get('type')) return json({ error: { status: 400 } }, 400);
-      const hit = q.get('q').toLowerCase() === 'weightless';
+      const limit = Number(q.get('limit'));
+      if (!q.get('q') || !q.get('type') || !(limit >= 1 && limit <= 10)) return json({ error: { status: 400, message: 'Invalid limit' } }, 400);
+      const hit = q.get('q').toLowerCase() === 'weightless', types = q.get('type').split(','), offset = Number(q.get('offset') || 0);
+      const kind = (t, items, next = null) => (types.includes(t) ? { [t + 's']: { items: hit ? items : [], next: hit ? next : null } } : {});
       return json({
-        tracks: { items: hit ? [T1] : [] },
-        albums: { items: hit ? [{ id: 'al1', uri: 'spotify:album:al1', name: 'Weightless', artists: artists('Marconi Union'), images: album('weightless').images, total_tracks: 6 }] : [] },
-        playlists: { items: hit ? [PLAYLISTS[0], null] : [] },
+        ...kind('track', offset ? [T2] : [T1], offset ? null : 'more'),
+        ...kind('artist', [{ id: 'ar1', uri: 'spotify:artist:ar1', name: 'Marconi Union', images: album('mu').images }]),
+        ...kind('album', [{ id: 'al1', uri: 'spotify:album:al1', name: 'Weightless', artists: artists('Marconi Union'), images: album('weightless').images, total_tracks: 6 }]),
+        ...kind('playlist', [PLAYLISTS[0], null]),
       });
+    }
+    const al = path.match(/^\/v1\/albums\/([^/]+)\/tracks$/);
+    if (al) {
+      if (al[1] !== 'al1') return json({ error: { status: 404, message: 'Not found' } }, 404);
+      const { album: _, ...bare } = T1;   /* Spotify leaves the album off an album's tracks */
+      return json({ items: [bare, { ...bare, is_local: true }], total: 1, next: null });
+    }
+    const ar = path.match(/^\/v1\/artists\/([^/]+)\/albums$/);
+    if (ar) {
+      if (ar[1] !== 'ar1') return json({ error: { status: 404, message: 'Not found' } }, 404);
+      if (Number(q.get('limit')) > 10) return json({ error: { status: 400, message: 'Invalid limit' } }, 400);
+      return json({ items: [{ id: 'al1', uri: 'spotify:album:al1', name: 'Weightless', artists: artists('Marconi Union'), images: [], total_tracks: 6 }], total: 1, next: null });
     }
     if (path === '/v1/me/playlists') {
       const offset = Number(q.get('offset') || 0), limit = Number(q.get('limit') || 20);
@@ -126,17 +155,19 @@ async function player(request, url) {
   if (tok === 'tok-free') return json({ error: { status: 403, reason: 'PREMIUM_REQUIRED' } }, 403);
   // Premium, but the command makes no sense right now (pausing what is already paused).
   if (tok === 'tok-restricted') return json({ error: { status: 403, message: 'Player command failed: Restriction violated', reason: 'UNKNOWN' } }, 403);
-  /* The only device Spotify knows by id is `roundsdev`; naming it works even with nothing active. */
+  /* Commands know one device by id, `roundsdev`, which works even with nothing active; transfer also knows `phone1`. */
   const unknownDevice = () => json({ error: { status: 404, reason: 'NO_ACTIVE_DEVICE' } }, 404);
   if (path === '/v1/me/player') {
     const body = JSON.parse((await request.text()) || '{}');
-    if (!Array.isArray(body.device_ids) || body.device_ids.length !== 1 || body.play !== true) return json({ error: { status: 400, message: 'bad transfer body' } }, 400);
-    return body.device_ids[0] === 'roundsdev' ? new Response(null, { status: 204 }) : unknownDevice();
+    if (!Array.isArray(body.device_ids) || body.device_ids.length !== 1 || typeof body.play !== 'boolean') return json({ error: { status: 400, message: 'bad transfer body' } }, 400);
+    return ['roundsdev', 'phone1'].includes(body.device_ids[0]) ? new Response(null, { status: 204 }) : unknownDevice();
   }
   const device = q.get('device_id');
   if (device !== null && device !== 'roundsdev') return unknownDevice();
   if (tok === 'tok-nodevice' && device === null) return unknownDevice();
   if (path === '/v1/me/player/seek' && q.get('position_ms') !== '0') return json({ error: { status: 400 } }, 400);
+  if (path === '/v1/me/player/shuffle' && !['true', 'false'].includes(q.get('state'))) return json({ error: { status: 400 } }, 400);
+  if (path === '/v1/me/player/repeat' && !['off', 'context', 'track'].includes(q.get('state'))) return json({ error: { status: 400 } }, 400);
   if (path === '/v1/me/player/volume') {
     const v = Number(q.get('volume_percent'));
     if (!Number.isInteger(v) || v < 0 || v > 100) return json({ error: { status: 400, message: 'bad volume' } }, 400);
@@ -146,7 +177,7 @@ async function player(request, url) {
     const text = await request.text();
     if (text) {
       const body = JSON.parse(text);
-      const ok = (Array.isArray(body.uris) && body.uris.length === 1 && !body.context_uri)
+      const ok = (Array.isArray(body.uris) && body.uris.length >= 1 && !body.context_uri && (!body.offset || body.uris.includes(body.offset.uri)))
         || (typeof body.context_uri === 'string' && !body.uris && (!body.offset || typeof body.offset.uri === 'string'));
       if (!ok) return json({ error: { status: 400, message: 'bad play body' } }, 400);
     }

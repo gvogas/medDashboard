@@ -6,7 +6,7 @@ import * as web from './web-player.js';
 
 export const state = {
   connected: false, playing: false, track: null, device: null, deviceId: null,
-  volume: null, supportsVolume: false,
+  volume: null, supportsVolume: false, shuffle: false, repeat: 'off',
   stale: false, error: null, loaded: false,
 };
 
@@ -53,6 +53,8 @@ function apply(s) {
   state.deviceId = s.deviceId || null;
   state.volume = typeof s.volume === 'number' ? s.volume : null;
   state.supportsVolume = !!s.supportsVolume;
+  state.shuffle = !!s.shuffle;
+  state.repeat = s.repeat || 'off';
   state.stale = false;
   state.loaded = true;
   polledAt = Date.now();
@@ -103,7 +105,7 @@ export function stop() {
   clearTimeout(timer); timer = null;
   clearInterval(ticker); ticker = null;
   clearTimeout(errorTimer); errorTimer = null;
-  Object.assign(state, { connected: false, playing: false, track: null, device: null, deviceId: null, volume: null, supportsVolume: false, stale: false, error: null, loaded: false });
+  Object.assign(state, { connected: false, playing: false, track: null, device: null, deviceId: null, volume: null, supportsVolume: false, shuffle: false, repeat: 'off', stale: false, error: null, loaded: false });
 }
 
 export function disconnected() {

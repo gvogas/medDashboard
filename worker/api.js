@@ -174,16 +174,54 @@ const routes = [
   }],
   ['POST', /^\/api\/spotify\/transfer$/, async ({ request, env }) => {
     const userId = await requireUser(request, env);
-    const deviceId = deviceParam((await readJson(request)).deviceId);
+    const body = await readJson(request);
+    const deviceId = deviceParam(body.deviceId);
     if (!deviceId) throw new HttpError(400, { error: 'invalid', field: 'deviceId' });
-    await spotify.transfer(env, userId, deviceId);
+    if (body.play != null && typeof body.play !== 'boolean') throw new HttpError(400, { error: 'invalid', field: 'play' });
+    await spotify.transfer(env, userId, deviceId, body.play !== false);
     return new Response(null, { status: 204 });
+  }],
+  ['GET', /^\/api\/spotify\/devices$/, async ({ request, env }) => {
+    const userId = await requireUser(request, env);
+    return json({ devices: await spotify.devices(env, userId) });
+  }],
+  ['PUT', /^\/api\/spotify\/shuffle$/, async ({ request, env }) => {
+    const userId = await requireUser(request, env);
+    const { state } = await readJson(request);
+    if (typeof state !== 'boolean') throw new HttpError(400, { error: 'invalid', field: 'state' });
+    await spotify.setShuffle(env, userId, state);
+    return new Response(null, { status: 204 });
+  }],
+  ['PUT', /^\/api\/spotify\/repeat$/, async ({ request, env }) => {
+    const userId = await requireUser(request, env);
+    const { state } = await readJson(request);
+    if (!['off', 'context', 'track'].includes(state)) throw new HttpError(400, { error: 'invalid', field: 'state' });
+    await spotify.setRepeat(env, userId, state);
+    return new Response(null, { status: 204 });
+  }],
+  ['GET', /^\/api\/spotify\/me$/, async ({ request, env }) => {
+    const userId = await requireUser(request, env);
+    return json(await spotify.me(env, userId));
+  }],
+  ['GET', /^\/api\/spotify\/recent$/, async ({ request, env }) => {
+    const userId = await requireUser(request, env);
+    return json(await spotify.recent(env, userId));
   }],
   ['GET', /^\/api\/spotify\/search$/, async ({ request, env, url }) => {
     const userId = await requireUser(request, env);
     const q = (url.searchParams.get('q') || '').trim();
     if (!q || q.length > 200) throw new HttpError(400, { error: 'invalid', field: 'q' });
-    return json(await spotify.search(env, userId, q));
+    const type = url.searchParams.get('type') || null;
+    if (type !== null && !spotify.SEARCH_TYPES.includes(type)) throw new HttpError(400, { error: 'invalid', field: 'type' });
+    return json(await spotify.search(env, userId, q, type, type ? offsetParam(url) : 0));
+  }],
+  ['GET', /^\/api\/spotify\/albums\/([A-Za-z0-9]{1,64})\/tracks$/, async ({ request, env, url, params: [id] }) => {
+    const userId = await requireUser(request, env);
+    return json(await spotify.albumTracks(env, userId, id, offsetParam(url)));
+  }],
+  ['GET', /^\/api\/spotify\/artists\/([A-Za-z0-9]{1,64})\/albums$/, async ({ request, env, url, params: [id] }) => {
+    const userId = await requireUser(request, env);
+    return json(await spotify.artistAlbums(env, userId, id, offsetParam(url)));
   }],
   ['GET', /^\/api\/spotify\/playlists$/, async ({ request, env, url }) => {
     const userId = await requireUser(request, env);
@@ -210,8 +248,12 @@ const routes = [
     const uri = body.uri == null ? null : body.uri, contextUri = body.contextUri == null ? null : body.contextUri;
     if (uri !== null && !TRACK_URI.test(uri)) throw new HttpError(400, { error: 'invalid', field: 'uri' });
     if (contextUri !== null && !CONTEXT_URI.test(contextUri)) throw new HttpError(400, { error: 'invalid', field: 'contextUri' });
-    if (!uri && !contextUri) throw new HttpError(400, { error: 'invalid', field: 'uri' });
-    await spotify.play(env, userId, { uri, contextUri, deviceId: deviceParam(body.deviceId) });
+    const uris = body.uris == null ? null : body.uris;
+    if (uris !== null && (contextUri || !Array.isArray(uris) || !uris.length || uris.length > 100 || !uris.every((u) => TRACK_URI.test(u)) || (uri && !uris.includes(uri)))) {
+      throw new HttpError(400, { error: 'invalid', field: 'uris' });
+    }
+    if (!uri && !contextUri && !uris) throw new HttpError(400, { error: 'invalid', field: 'uri' });
+    await spotify.play(env, userId, { uri, contextUri, uris, deviceId: deviceParam(body.deviceId) });
     return new Response(null, { status: 204 });
   }],
   ['PUT', /^\/api\/spotify\/volume$/, async ({ request, env }) => {

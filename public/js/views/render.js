@@ -8,7 +8,7 @@ import { renderStats } from './stats.js';
 import { renderWeek } from './week.js';
 import { renderMonth } from './month.js';
 import { renderTable } from './table.js';
-import { renderSpotifyView } from './spotify-view.js';
+import { renderSpotifyInto } from './spotify-view.js';
 import { state as spotify } from '../spotify.js';
 
 export function renderHeader() {
@@ -38,7 +38,8 @@ export function renderHeader() {
 export function renderView() {
   const root = $('viewRoot');
   root.className = ui.view === 'table' || ui.view === 'spotify' ? 'fixed' : '';   /* these scroll their own rows */
-  root.innerHTML = ui.view === 'week' ? renderWeek() : ui.view === 'month' ? renderMonth() : ui.view === 'spotify' ? renderSpotifyView() : renderTable();
+  if (ui.view === 'spotify') { renderSpotifyInto(root); return; }
+  root.innerHTML = ui.view === 'week' ? renderWeek() : ui.view === 'month' ? renderMonth() : renderTable();
 }
 
 export function render() {

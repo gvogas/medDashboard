@@ -37,7 +37,7 @@ describe('GET /api/spotify/connect', () => {
     expect(to.origin + to.pathname).toBe('https://accounts.spotify.com/authorize');
     expect(to.searchParams.get('response_type')).toBe('code');
     expect(to.searchParams.get('client_id')).toBe('test-client-id');
-    expect(to.searchParams.get('scope')).toBe('user-read-playback-state user-modify-playback-state playlist-read-private playlist-read-collaborative user-library-read streaming user-read-email user-read-private');
+    expect(to.searchParams.get('scope')).toBe('user-read-playback-state user-modify-playback-state playlist-read-private playlist-read-collaborative user-library-read streaming user-read-email user-read-private user-read-recently-played');
     expect(to.searchParams.get('redirect_uri')).toBe(`${BASE}/api/spotify/callback`);
     const state = to.searchParams.get('state');
     expect(state).toMatch(/^[0-9a-f]{32}$/);
@@ -126,6 +126,8 @@ describe('GET /api/spotify/player', () => {
       deviceId: null,
       volume: null,
       supportsVolume: true,
+      shuffle: false,
+      repeat: 'off',
       track: {
         uri: null,
         title: 'Weightless',
@@ -146,10 +148,11 @@ describe('GET /api/spotify/player', () => {
     expect(paused.playing).toBe(false);
     expect(paused.track.title).toBe('Clair de Lune, L. 32');
     expect(paused.track.artists).toBe('Claude Debussy, Lang Lang');
+    expect(paused).toMatchObject({ shuffle: true, repeat: 'context' });
 
     const idle = await user('p-idle');
     await connect(idle.id, 'tok-idle');
-    expect(await (await idle.api('/api/spotify/player')).json()).toEqual({ connected: true, playing: false, track: null, device: null, deviceId: null, volume: null, supportsVolume: false });
+    expect(await (await idle.api('/api/spotify/player')).json()).toEqual({ connected: true, playing: false, track: null, device: null, deviceId: null, volume: null, supportsVolume: false, shuffle: false, repeat: 'off' });
   });
 
   it('refreshes an access token that is about to expire and stores the new one', async () => {
@@ -327,7 +330,7 @@ describe('isolation and disconnect', () => {
 });
 
 describe('the Spotify view', () => {
-  it('searches tracks, albums and playlists', async () => {
+  it('searches tracks, artists, albums and playlists', async () => {
     const { api, id } = await user('v-search');
     await connect(id, 'tok-playing');
     const res = await api('/api/spotify/search?q=Weightless');
@@ -336,10 +339,69 @@ describe('the Spotify view', () => {
     expect(b.tracks).toHaveLength(1);
     expect(b.tracks[0]).toMatchObject({ uri: 'spotify:track:t1', title: 'Weightless', artists: 'Marconi Union', art: 'https://i.scdn.co/image/weightless-64', durationMs: 489000 });
     expect(b.albums[0]).toEqual({ uri: 'spotify:album:al1', id: 'al1', name: 'Weightless', artists: 'Marconi Union', art: 'https://i.scdn.co/image/weightless-64', count: 6 });
-    expect(b.playlists).toEqual([{ uri: 'spotify:playlist:pl1', id: 'pl1', name: 'Study mix', owner: 'George', art: 'https://i.scdn.co/image/pl1', count: 3 }]);
-    expect(await (await api('/api/spotify/search?q=nothing')).json()).toEqual({ tracks: [], albums: [], playlists: [] });
+    expect(b.artists).toEqual([{ uri: 'spotify:artist:ar1', id: 'ar1', name: 'Marconi Union', art: 'https://i.scdn.co/image/mu-64' }]);
+    expect(b.playlists).toEqual([{ uri: 'spotify:playlist:pl1', id: 'pl1', name: 'Study mix', owner: 'George', ownerId: 'george', collaborative: false, art: 'https://i.scdn.co/image/pl1', count: 3 }]);
+    expect(b.more).toEqual({ tracks: true, artists: false, albums: false, playlists: false });
+    expect(await (await api('/api/spotify/search?q=nothing')).json()).toEqual({ tracks: [], artists: [], albums: [], playlists: [], more: { tracks: false, artists: false, albums: false, playlists: false } });
     expect((await api('/api/spotify/search?q=')).status).toBe(400);
     expect((await api('/api/spotify/search')).status).toBe(400);
+  });
+
+  it('pages one kind of search result at a time', async () => {
+    const { api, id } = await user('v-search2');
+    await connect(id, 'tok-playing');
+    const b = await (await api('/api/spotify/search?q=Weightless&type=track&offset=10')).json();
+    expect(b.tracks.map((t) => t.uri)).toEqual(['spotify:track:t2']);
+    expect(b.albums).toEqual([]);
+    expect(b.more.tracks).toBe(false);
+    expect((await api('/api/spotify/search?q=Weightless&type=show')).status).toBe(400);
+    expect((await api('/api/spotify/search?q=Weightless&type=track&offset=x')).status).toBe(400);
+  });
+
+  it("opens an album's tracks and an artist's albums", async () => {
+    const { api, id } = await user('v-album');
+    await connect(id, 'tok-playing');
+    const tracks = await (await api('/api/spotify/albums/al1/tracks')).json();
+    expect(tracks.items).toHaveLength(1);
+    expect(tracks.items[0]).toMatchObject({ uri: 'spotify:track:t1', title: 'Weightless', album: '', art: null });
+    expect((await api('/api/spotify/albums/nope/tracks')).status).toBe(404);
+    const albums = await (await api('/api/spotify/artists/ar1/albums')).json();
+    expect(albums).toMatchObject({ total: 1, next: false, offset: 0 });
+    expect(albums.items[0]).toMatchObject({ uri: 'spotify:album:al1', name: 'Weightless', count: 6 });
+    expect((await api('/api/spotify/artists/nope/albums')).status).toBe(404);
+  });
+
+  it('says who the account is, and lists recently played once per track', async () => {
+    const { api, id } = await user('v-me');
+    await connect(id, 'tok-playing');
+    expect(await (await api('/api/spotify/me')).json()).toEqual({ id: 'george', name: 'George' });
+    const recent = await (await api('/api/spotify/recent')).json();
+    expect(recent.items.map((t) => t.uri)).toEqual(['spotify:track:t2', 'spotify:track:t1']);
+    const old = await user('v-me-old');
+    await connect(old.id, 'tok-noscope');
+    const res = await old.api('/api/spotify/recent');
+    expect(res.status).toBe(403);
+    expect(await res.json()).toEqual({ error: 'reconnect_needed' });
+  });
+
+  it('lists devices, sets shuffle and repeat, and moves playback without starting it', async () => {
+    const { api, id } = await user('v-dev');
+    await connect(id, 'tok-playing');
+    expect(await (await api('/api/spotify/devices')).json()).toEqual({ devices: [
+      { id: 'roundsdev', name: 'Rounds', type: 'Computer', active: false, restricted: false },
+      { id: 'phone1', name: "George's iPhone", type: 'Smartphone', active: true, restricted: false },
+    ] });
+    expect((await api('/api/spotify/shuffle', { method: 'PUT', body: { state: true } })).status).toBe(204);
+    expect((await api('/api/spotify/shuffle', { method: 'PUT', body: { state: 'yes' } })).status).toBe(400);
+    for (const state of ['off', 'context', 'track']) expect((await api('/api/spotify/repeat', { method: 'PUT', body: { state } })).status).toBe(204);
+    expect((await api('/api/spotify/repeat', { method: 'PUT', body: { state: 'all' } })).status).toBe(400);
+    expect((await api('/api/spotify/transfer', { method: 'POST', body: { deviceId: 'phone1', play: false } })).status).toBe(204);
+    expect((await api('/api/spotify/transfer', { method: 'POST', body: { deviceId: 'phone1', play: 'no' } })).status).toBe(400);
+    const free = await user('v-dev-free');
+    await connect(free.id, 'tok-free');
+    const res = await free.api('/api/spotify/shuffle', { method: 'PUT', body: { state: false } });
+    expect(res.status).toBe(403);
+    expect(await res.json()).toEqual({ error: 'premium_required' });
   });
 
   it('lists playlists five at a time, so opening the view asks Spotify for little', async () => {
@@ -348,7 +410,7 @@ describe('the Spotify view', () => {
     const first = await (await api('/api/spotify/playlists')).json();
     expect(first.items.map((p) => p.name)).toEqual(['Study mix', 'Ward rounds', 'Mix 3', 'Mix 4', 'Mix 5']);
     expect(first).toMatchObject({ total: 7, next: true, offset: 0 });
-    expect(first.items[1]).toEqual({ uri: 'spotify:playlist:pl2', id: 'pl2', name: 'Ward rounds', owner: 'Sam', art: null, count: 0 });
+    expect(first.items[1]).toEqual({ uri: 'spotify:playlist:pl2', id: 'pl2', name: 'Ward rounds', owner: 'Sam', ownerId: 'sam', collaborative: true, art: null, count: 0 });
     const page2 = await (await api('/api/spotify/playlists?offset=5')).json();
     expect(page2.items.map((p) => p.name)).toEqual(['Mix 6', 'Mix 7']);
     expect(page2.items[1].count).toBeNull();     /* someone else's playlist: Spotify does not say */
@@ -402,6 +464,8 @@ describe('the Spotify view', () => {
     expect((await api('/api/spotify/play', { method: 'POST', body: { uri: 'spotify:track:t2' } })).status).toBe(204);
     expect((await api('/api/spotify/play', { method: 'POST', body: { uri: 'spotify:track:t2', contextUri: 'spotify:playlist:pl1' } })).status).toBe(204);
     expect((await api('/api/spotify/play', { method: 'POST', body: { contextUri: 'spotify:album:al1' } })).status).toBe(204);
+    expect((await api('/api/spotify/play', { method: 'POST', body: { uris: ['spotify:track:t1', 'spotify:track:t2'] } })).status).toBe(204);
+    expect((await api('/api/spotify/play', { method: 'POST', body: { uri: 'spotify:track:t2', uris: ['spotify:track:t1', 'spotify:track:t2'] } })).status).toBe(204);
     expect((await api('/api/spotify/volume', { method: 'PUT', body: { percent: 40 } })).status).toBe(204);
     expect((await api('/api/spotify/volume', { method: 'PUT', body: { percent: 0 } })).status).toBe(204);
   });
@@ -419,6 +483,11 @@ describe('the Spotify view', () => {
     await bad('/api/spotify/play', 'POST', {}, 'uri');
     await bad('/api/spotify/play', 'POST', { uri: 'spotify:playlist:pl1' }, 'uri');
     await bad('/api/spotify/play', 'POST', { contextUri: 'spotify:track:t1' }, 'contextUri');
+    await bad('/api/spotify/play', 'POST', { uris: [] }, 'uris');
+    await bad('/api/spotify/play', 'POST', { uris: ['spotify:album:al1'] }, 'uris');
+    await bad('/api/spotify/play', 'POST', { uri: 'spotify:track:t9', uris: ['spotify:track:t1'] }, 'uris');
+    await bad('/api/spotify/play', 'POST', { uris: ['spotify:track:t1'], contextUri: 'spotify:album:al1' }, 'uris');
+    await bad('/api/spotify/play', 'POST', { uris: Array(101).fill('spotify:track:t1') }, 'uris');
     await bad('/api/spotify/volume', 'PUT', { percent: 101 }, 'percent');
     await bad('/api/spotify/volume', 'PUT', { percent: 1.5 }, 'percent');
     await bad('/api/spotify/volume', 'PUT', { percent: '50' }, 'percent');
