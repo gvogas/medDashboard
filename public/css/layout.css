@@ -105,6 +105,31 @@ button{cursor:pointer}
 .pocket .pen::after{content:"";position:absolute;left:1px;right:1px;top:-6px;height:13px;border-radius:3px;background:#B9C7CC}
 .pocket .tuck{position:absolute;right:27px;bottom:5px;width:50px;height:28px;color:var(--accent);opacity:var(--orn-art)}
 
+/* ─── Spotify strip, under the pocket ─── */
+.player{display:flex;flex-direction:column;gap:6px;padding:8px 9px;border:1px solid var(--line);border-radius:9px;background:var(--panel);font-size:12px}
+.player[hidden]{display:none}
+.player[data-stale]{opacity:.55}
+.player[data-mode="connect"]{border:0;background:transparent;padding:2px 8px}
+.player .spmark{width:14px;height:14px;flex:none;color:#1DB954}
+.player-now{display:flex;align-items:center;gap:8px;min-width:0}
+.player-art{flex:none;line-height:0}
+.player-art img{width:36px;height:36px;border-radius:3px}
+.player-meta{min-width:0;flex:1}
+.player-title{display:block;color:var(--ink);font-weight:600;text-decoration:none;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+a.player-title:hover{text-decoration:underline}
+.player-artist{color:var(--ink-3);font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.player-bar{height:2px;border-radius:2px;background:var(--line)}
+.player-bar i{display:block;height:100%;width:0;border-radius:inherit;background:var(--accent)}
+.player-ctl{display:flex;justify-content:center;gap:4px}
+.player-ctl button{border:0;background:transparent;color:var(--ink-2);border-radius:6px;padding:4px 8px;line-height:0}
+.player-ctl button:hover{background:var(--panel-2);color:var(--accent)}
+.player-ctl svg{width:14px;height:14px}
+.player-ctl [data-spotify="toggle"] svg{width:17px;height:17px}
+.player-idle,.player-connect{display:flex;align-items:center;gap:8px;color:var(--ink-3)}
+.player-connect{border:0;background:transparent;padding:0;font-size:12px;text-align:left}
+.player-connect:hover{color:var(--accent)}
+.player-note{font-size:11px;color:var(--warn);text-align:center}
+
 /* ─── content ─── */
 /* min-height:0 matters — without it a grid item refuses to shrink below its
    content, the scroll area never gets a height, and tall views can't scroll. */

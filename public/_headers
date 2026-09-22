@@ -2,7 +2,7 @@
 # The script-src hash is the inline theme script in index.html; regenerate it if
 # that script changes: `node scripts/csp-hash.mjs` prints it.
 /*
-  Content-Security-Policy: default-src 'self'; script-src 'self' 'sha256-JLf3ufColssusE0SVsAeLq+LC/Nqrzfed6eQYKwO0uc='; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self'; worker-src 'self'; manifest-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'; object-src 'none'
+  Content-Security-Policy: default-src 'self'; script-src 'self' 'sha256-JLf3ufColssusE0SVsAeLq+LC/Nqrzfed6eQYKwO0uc='; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https://i.scdn.co; connect-src 'self'; worker-src 'self'; manifest-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'; object-src 'none'
   X-Content-Type-Options: nosniff
   Referrer-Policy: same-origin
   Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=()
