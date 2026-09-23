@@ -1,3 +1,4 @@
+import { setHTML } from './dom.js';
 // A time field you can type into or pick from: `<input class="tp">` holding HH:MM.
 // Typing "830", "8:30", "8pm" all land on a valid time; a popover lists quarter
 // hours; ↑/↓ nudge by fifteen minutes. Sets the input's value and fires `input`,
@@ -47,7 +48,7 @@ function ensurePop() {
   pop = document.createElement('div');
   pop.className = 'tp-pop';
   pop.setAttribute('role', 'listbox');
-  pop.innerHTML = SLOTS.map((t) => '<button type="button" role="option" data-tp="' + t + '">' + t + '</button>').join('');
+  setHTML(pop, SLOTS.map((t) => '<button type="button" role="option" data-tp="' + t + '">' + t + '</button>').join(''));
   pop.addEventListener('mousedown', (e) => e.preventDefault());   /* keep the input focused */
   pop.addEventListener('click', (e) => {
     const b = e.target.closest('[data-tp]');

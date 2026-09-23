@@ -33,6 +33,7 @@ design/                   the original prototype and the mockups it was chosen f
 PLAN.md                   decisions, phases, file layout, backlog
 docs/DATA-MODEL.md        the schema explained: tables, API, sync
 docs/DEPLOYING.md         running, deploying, accounts and troubleshooting, step by step
+docs/API-REVIEW.md        endpoint inventory, rate limits, caching and review findings
 ```
 
 ## Features
@@ -62,7 +63,7 @@ Needs Node and Wrangler (`npm i -g wrangler`, then `wrangler login` once).
 npm install
 npm run db:local        # apply the schema to the local D1
 npm run dev             # http://localhost:8787
-npm test                # 91 tests against the Worker, a local D1 and a fake Spotify
+npm test                # regression tests against the Worker, a local D1 and a fake Spotify
 ```
 
 Local sessions need a `.dev.vars` file (git-ignored): copy `.dev.vars.example` and set

@@ -1,0 +1,97 @@
+import { test, afterEach } from 'node:test';
+import assert from 'node:assert/strict';
+import { indexedDB, IDBKeyRange } from 'fake-indexeddb';
+import { openDb, deleteDb } from '../public/js/db.js';
+globalThis.indexedDB = indexedDB;
+globalThis.IDBKeyRange = IDBKeyRange;
+const storage = new Map();
+globalThis.localStorage = { getItem: (k) => storage.get(k) || null, setItem: (k,v) => storage.set(k,v), removeItem: (k) => storage.delete(k) };
+// Connections, rather than broadcasts, exercise the shared transaction boundary.
+globalThis.BroadcastChannel = undefined;
+const first = await import('../public/js/store.js?first');
+const second = await import('../public/js/store.js?second');
+let counter = 0;
+const p = () => ({ id: 'test-' + ++counter, username: 'tester', revision: 1, coat: {} });
+afterEach(async () => { await first.close(); await second.close(); });
+
+test('row and pending operation roll back together', async () => {
+ const db = await openDb('rollback');
+ await assert.rejects(db.transaction(['items', 'pending'], 'readwrite', async (a) => {
+   await a('items').put({ id: 'x', title: 'Never committed' });
+   await a('pending').put({ key: 'items:x' });
+   throw new Error('simulated interruption');
+ }));
+ assert.equal(await db.get('items', 'x'), undefined);
+ assert.equal(await db.get('pending', 'items:x'), undefined);
+ db.close();
+});
+test('two connections preserve independent queued edits', async () => {
+ const user = p(); await first.open(user); await second.open(user);
+ await Promise.all([first.saveItem({ id: 'a', title: 'A' }), second.saveItem({ id: 'b', title: 'B' })]);
+ assert.deepEqual((await first.pending()).map((op) => op.key).sort(), ['items:a','items:b']);
+ await first.reload(); assert.equal(first.data.items.length, 2);
+});
+test('an edit made during upload survives acknowledgement and gets the new revision', async () => {
+ await first.open(p());
+ await first.saveItem({ id: 'a', title: 'First', revision: 1 });
+ const [sent] = await first.pending();
+ await first.saveItem({ id: 'a', title: 'Second', revision: 1 });
+ await first.settleOperation(sent, { ...sent.body, revision: 2 });
+ const [pending] = await first.pending();
+ assert.equal(pending.body.title, 'Second'); assert.equal(pending.revision, 2);
+ assert.equal(first.item('a').title, 'Second');
+});
+test('another tab editing the same pending record preserves the first copy', async () => {
+ const user = p(); await first.open(user); await second.open(user);
+ await first.saveItem({ id: 'a', title: 'First' });
+ await second.saveItem({ id: 'a', title: 'Second' });
+ assert.equal(second.conflicts[0].body.title, 'First');
+ assert.equal((await second.pending())[0].body.title, 'Second');
+});
+test('full reconciliation removes stale clean rows but preserves pending work', async () => {
+ await first.open(p());
+ await first.applyPage({ changes: [{ kind: 'items', row: { id:'old', title:'Deleted remotely', revision:1 } }], cursor:1 });
+ await first.saveItem({ id:'pending', title:'Offline work' });
+ await first.applyPage({ changes: [], cursor: 50 }, true);
+ assert.equal(first.item('old'), null); assert.equal(first.item('pending').title, 'Offline work');
+});
+test('conflict remains recoverable after closing and reopening', async () => {
+ const user = p(); await first.open(user);
+ await first.saveItem({ id:'a', title:'My work', revision:1 });
+ const [op] = await first.pending();
+ await first.rejectOperation(op, { id:'a', title:'Other device', revision:2 }, 'Conflict');
+ await first.close(); await first.open(user);
+ assert.equal(first.conflicts[0].body.title, 'My work');
+ await first.resolveConflict(first.conflicts[0].id, true);
+ const [retry] = await first.pending(); assert.equal(retry.revision, 2); assert.equal(retry.body.title, 'My work');
+});
+test('version 1 migration keeps the old dirty map and row in the new queue', async () => {
+ const user=p(), name=`rounds:${user.id}`;
+ await new Promise((resolve,reject) => {
+  const request=indexedDB.open(name,1);
+  request.onupgradeneeded=()=>{ for(const kind of ['items','courses','quotes','meta']) request.result.createObjectStore(kind,{keyPath:kind==='meta'?'key':'id'}); };
+  request.onerror=()=>reject(request.error);
+  request.onsuccess=()=>{
+   const db=request.result, tx=db.transaction(['items','meta'],'readwrite');
+   tx.objectStore('items').put({id:'a',title:'Old unsynced edit'});
+   tx.objectStore('meta').put({key:'dirty',value:{'items:a':'put'}});
+   tx.oncomplete=()=>{db.close();resolve();};
+  };
+ });
+ await first.open(user);
+ const [op]=await first.pending(); assert.equal(op.body.title,'Old unsynced edit'); assert.equal(op.revision,0);
+});
+test('versionchange closes another connection before wipe resolves', async () => {
+ const user=p(); await first.open(user); await second.open(user);
+ await first.saveItem({id:'a',title:'Private'});
+ await first.wipe(user.id);
+ const db=await openDb(`rounds:${user.id}`);
+ assert.deepEqual(await db.all('items'),[]); db.close();
+});
+
+test('blocked database deletion is reported as a failure, not success', async () => {
+ const name='blocked-wipe';
+ const connection=await new Promise((resolve,reject)=>{const r=indexedDB.open(name,1);r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error);});
+ try { await assert.rejects(deleteDb(name), /Close other Rounds tabs/); }
+ finally { connection.close(); }
+});

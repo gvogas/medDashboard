@@ -33,12 +33,22 @@ export async function signIn(username = `user${++n}`) {
   const res = await login(username);
   if (res.status !== 200) throw new Error(`login failed: ${res.status} ${await res.text()}`);
   const cookie = res.headers.get('set-cookie').split(';')[0];
-  const call = (path, init = {}) =>
-    SELF.fetch(`${BASE}${path}`, {
+  const revisions = new Map([['/api/me', (await res.clone().json()).revision]]);
+  const call = async (path, init = {}) => {
+    const conditional = ['PUT', 'DELETE'].includes(init.method) && (/^\/api\/(courses|items|quotes)\//.test(path) || path === '/api/me');
+    const response = await SELF.fetch(`${BASE}${path}`, {
       ...init,
-      headers: { 'content-type': 'application/json', cookie, ...(init.headers || {}) },
+      headers: { 'content-type': 'application/json', cookie,
+        ...(conditional ? { 'if-match': `"${revisions.get(path) || 0}"` } : {}), ...(init.headers || {}) },
       body: init.body !== undefined && typeof init.body !== 'string' ? JSON.stringify(init.body) : init.body,
     });
+    if (response.ok && response.status !== 204) {
+      const body = await response.clone().json();
+      if (body.revision) revisions.set(path, body.revision);
+    }
+    if (response.status === 204 && conditional && init.method === 'DELETE') revisions.set(path, (revisions.get(path) || 0) + 1);
+    return response;
+  };
   call.cookie = cookie;   // for a test that has to send a second cookie alongside
   return call;
 }

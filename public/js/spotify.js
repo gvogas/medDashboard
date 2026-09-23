@@ -22,6 +22,7 @@ let baseProgress = 0;
 let listener = () => {};
 let onSignedOut = () => {};
 let wired = false;
+let generation = 0;
 
 /** 5 s while playing, 20 s when connected but quiet, null when not connected. */
 export function nextDelayMs(s) {
@@ -64,11 +65,15 @@ function apply(s) {
 export async function poll() {
   clearTimeout(timer);
   if (!canPoll()) return;
+  const started = generation;
   try {
-    apply(await api.spotifyPlayer());
+    const result = await api.spotifyPlayer();
+    if (started !== generation || !active) return;
+    apply(result);
     emit('state');
     schedule(nextDelayMs(state));
   } catch (e) {
+    if (started !== generation || !active) return;
     if (e instanceof ApiError && e.status === 401) { stop(); onSignedOut(); return; }
     state.stale = true;
     state.loaded = true;
@@ -101,6 +106,7 @@ export function start() {
 }
 
 export function stop() {
+  generation++;
   active = false;
   clearTimeout(timer); timer = null;
   clearInterval(ticker); ticker = null;

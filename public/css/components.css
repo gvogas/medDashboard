@@ -476,3 +476,27 @@ td .steps{margin-top:3px}
   .stat.qcard::after,.stat.qcard .qm,.stat.qcard.swap .qt,.stat.qcard.swap .qs,.stat.qcard.swap .qm{animation:none}
 }
 .fx-canvas{position:fixed;inset:0;width:100vw;height:100vh;pointer-events:none;z-index:70}
+
+/* Shared presentation rules extracted from view markup. */
+[data-layout="06525a50"] { padding:1px 6px;font-size:11px; }
+[data-layout="08628ee7"] { padding:11px 13px;text-align:left; }
+[data-layout="0fd943ff"] { align-self:flex-start; }
+[data-layout="35eecf3e"] { padding:0; }
+[data-layout="4fb706c9"] { flex-direction:column;gap:6px; }
+[data-layout="544c3831"] { font-size:11.5px;color:var(--ink-3); }
+[data-layout="69374f35"] { display:flex;gap:6px; }
+[data-layout="6e8bcfac"] { font-weight:600; }
+[data-layout="798c9fe1"] { flex:0 0 96px; }
+[data-layout="ae860f94"] { color:var(--ink-3); }
+[data-layout="b282c623"] { color:var(--good); }
+[data-layout="c75d1a93"] { font-weight:500;display:inline; }
+[data-layout="d5cb2920"] { width:14px;height:14px;accent-color:var(--accent); }
+[data-layout="df928149"] { margin-top:10px; }
+[data-layout="ed524873"] { display:flex;gap:6px;flex-wrap:wrap; }
+[data-layout="f7add123"] { margin-left:auto;font-size:11px;color:var(--ink-3); }
+[data-layout="f87fcd11"] { flex:none; }
+
+.saved-copy { margin-block: 10px; }
+.saved-copy dl { overflow-wrap: anywhere; max-height: 240px; overflow: auto; font-size: 12px; }
+.saved-copy dt { font-weight: 600; margin-top: 6px; }
+.saved-copy dd { margin-left: 0; white-space: pre-wrap; }

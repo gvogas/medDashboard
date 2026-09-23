@@ -58,14 +58,14 @@ export function renderItemDrawer(focusTitle) {
   let mtgLine = '';
   if (c && (c.meetings || []).length) {
     const next = c.meetings.slice().sort((a, b) => ((a.weekday + 6) % 7) - ((b.weekday + 6) % 7))[0];
-    mtgLine = '<div style="font-size:11.5px;color:var(--ink-3)">' + esc(c.code) + ' meets ' + DOW[next.weekday] + ' ' + hhmm(next.start) + ' · ' + esc(next.room || 'room not set')
-      + ' <button class="icon-btn" type="button" data-editcourse="' + esc(c.id) + '" style="padding:1px 6px;font-size:11px">Edit course</button></div>';
+    mtgLine = '<div data-layout="544c3831">' + esc(c.code) + ' meets ' + DOW[next.weekday] + ' ' + hhmm(next.start) + ' · ' + esc(next.room || 'room not set')
+      + ' <button class="icon-btn" type="button" data-editcourse="' + esc(c.id) + '" data-layout="06525a50">Edit course</button></div>';
   }
 
-  const head = '<div class="dhead" style="--c:' + m.color + '">'
+  const head = '<div class="dhead" data-accent="' + m.color + '">'
     + '<span class="kind">' + (isNew ? 'New ' + m.label.toLowerCase() : esc(m.label)) + '</span>'
     + (isNew ? '' : (isOverdue(it) ? '<span class="chip overdue">Overdue</span>' : '<span class="chip st-' + it.status + '">' + esc(statusLabel(it)) + '</span>'))
-    + '<span style="margin-left:auto;font-size:11px;color:var(--ink-3)" class="mono">' + esc(countdown) + '</span>'
+    + '<span data-layout="f7add123" class="mono">' + esc(countdown) + '</span>'
     + '<button class="icon-btn" type="button" data-act="close" aria-label="Close">✕</button></div>';
 
   let body = '<div class="dbody">'
@@ -80,7 +80,7 @@ export function renderItemDrawer(focusTitle) {
       + '<label for="f-status">Status</label><select id="f-status" data-f="status">' + stOpts + '</select>'
       + (it.status === 'graded' ? '<label for="f-grade">Grade</label><input id="f-grade" type="number" min="0" max="100" data-f="grade" value="' + (typeof it.grade === 'number' ? it.grade : '') + '" placeholder="%">' : '')
       + ((it.type === 'office' || it.type === 'tutoring')
-          ? '<label for="f-recur">Repeats</label><span class="pair"><input id="f-recur" type="checkbox" data-f="recur" ' + (it.recur === 'weekly' ? 'checked' : '') + ' style="width:14px;height:14px;accent-color:var(--accent)"><span>every week on ' + DOW[it.recur === 'weekly' ? it.weekday : parse(it.date).getDay()] + '</span></span>'
+          ? '<label for="f-recur">Repeats</label><span class="pair"><input id="f-recur" type="checkbox" data-f="recur" ' + (it.recur === 'weekly' ? 'checked' : '') + ' data-layout="d5cb2920"><span>every week on ' + DOW[it.recur === 'weekly' ? it.weekday : parse(it.date).getDay()] + '</span></span>'
             + (it.recur === 'weekly' ? '<label for="f-until">Until</label><input id="f-until" type="date" data-f="recurUntil" value="' + esc(it.recurUntil || '') + '">' : '')
             + (it.type === 'office' ? '<label for="f-dept">Dept</label><input id="f-dept" type="text" data-f="dept" value="' + esc(it.dept || '') + '" placeholder="Cardiology" maxlength="40">' : '')
           : '')
@@ -88,7 +88,7 @@ export function renderItemDrawer(focusTitle) {
     + '<div class="dsec"><h4>Notes</h4><textarea class="notes" data-f="notes" maxlength="5000" placeholder="What to revise, what the lecturer said, page numbers.">' + esc(it.notes || '') + '</textarea></div>'
     + '<div class="dsec"><h4>Checklist' + (cl.length ? '<em>' + clDone + ' of ' + cl.length + ' done</em>' : '') + '</h4>';
   if (cl.length) {
-    body += '<div class="meterwrap"><span class="meter pink' + (clDone === cl.length ? ' full' : '') + '" style="width:' + Math.round(clDone / cl.length * 100) + '%"></span></div><div class="cl">';
+    body += '<div class="meterwrap"><span class="meter pink' + (clDone === cl.length ? ' full' : '') + '" data-width="' + Math.round(clDone / cl.length * 100) + '"></span></div><div class="cl">';
     cl.forEach((s) => {
       body += '<div class="cl-item' + (s.done ? ' done' : '') + '">'
         + '<button class="box" type="button" data-cl="' + esc(s.id) + '" aria-pressed="' + (s.done ? 'true' : 'false') + '" aria-label="Toggle step">' + CHECK_SVG + '</button>'
@@ -100,10 +100,10 @@ export function renderItemDrawer(focusTitle) {
   body += '<div class="addline"><input type="text" id="clAdd" placeholder="Add a step, press Enter" aria-label="Add a step" maxlength="140"></div></div>'
     + '<div class="dsec"><h4>Links</h4><div class="links">';
   (it.links || []).forEach((l, i) => {
-    body += '<div class="linkrow"><span style="color:var(--ink-3)">↗</span><a href="' + esc(l.url) + '" target="_blank" rel="noopener noreferrer">' + esc(l.label || l.url) + '</a>'
+    body += '<div class="linkrow"><span data-layout="ae860f94">↗</span><a href="' + esc(l.url) + '" target="_blank" rel="noopener noreferrer">' + esc(l.label || l.url) + '</a>'
       + '<button class="x" type="button" data-linkx="' + i + '" aria-label="Remove link">✕</button></div>';
   });
-  body += '</div><div class="addline"><input type="text" id="linkLabel" placeholder="Label" aria-label="Link label" style="flex:0 0 96px" maxlength="60">'
+  body += '</div><div class="addline"><input type="text" id="linkLabel" placeholder="Label" aria-label="Link label" data-layout="798c9fe1" maxlength="60">'
     + '<input type="url" id="linkUrl" placeholder="https://…" aria-label="Link URL" maxlength="500"></div></div></div>';
 
   let foot;

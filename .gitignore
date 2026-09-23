@@ -21,3 +21,6 @@ npm-debug.log*
 .DS_Store
 Thumbs.db
 Desktop.ini
+
+# Generated release assets
+.build/

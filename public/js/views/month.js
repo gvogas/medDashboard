@@ -19,7 +19,7 @@ export function renderMonth() {
     html += '<button class="cell' + (out ? ' out' : '') + (key === TODAY ? ' is-today' : '') + '" type="button" data-day="' + key + '">'
       + '<span class="dnum">' + d.getDate() + '</span>';
     rows.slice(0, 3).forEach((x) => {
-      html += '<span class="mchip" style="--c:' + x.course.color + '"><b>' + hhmm(x.mtg.start) + '</b> ' + esc(x.course.code)
+      html += '<span class="mchip" data-accent="' + x.course.color + '"><b>' + hhmm(x.mtg.start) + '</b> ' + esc(x.course.code)
         + ' <span class="rm">' + esc(x.mtg.room || '') + '</span></span>';
     });
     if (rows.length > 3) html += '<span class="more">+' + (rows.length - 3) + ' more</span>';
@@ -36,7 +36,7 @@ export function renderMonth() {
     tt += '<div class="ttcol"><div class="ttday">' + DOW[w] + '<em>' + (hrs ? Math.round(hrs * 10) / 10 + ' h' : '—') + '</em></div>';
     if (!rows.length) tt += '<div class="ttnone">No classes</div>';
     rows.forEach((x) => {
-      tt += '<button class="ttcard" type="button" data-editcourse="' + esc(x.course.id) + '" style="--c:' + x.course.color + '">'
+      tt += '<button class="ttcard" type="button" data-editcourse="' + esc(x.course.id) + '" data-accent="' + x.course.color + '">'
         + '<span class="tm">' + hhmm(x.mtg.start) + '–' + hhmm(x.mtg.end) + '</span> <span class="kd">' + esc(x.mtg.kind || 'Class') + '</span>'
         + '<span class="nm">' + esc(x.course.name) + '</span>'
         + '<span class="rm">' + esc(x.mtg.room || 'Room not set') + (x.course.instructor ? ' · ' + esc(x.course.instructor) : '') + '</span></button>';

@@ -8,8 +8,8 @@ export function stepsHtml(it) {
   const cl = it.checklist || [];
   if (!cl.length) return '';
   const done = cl.filter((x) => x.done).length;
-  return '<span class="steps"><span class="stepbar"><i class="' + (done === cl.length ? 'full' : '') + '" style="width:'
-    + Math.round(done / cl.length * 100) + '%"></i></span>'
+  return '<span class="steps"><span class="stepbar"><i class="' + (done === cl.length ? 'full' : '') + '" data-width="'
+    + Math.round(done / cl.length * 100) + '"></i></span>'
     + (done === cl.length ? 'all ' + cl.length + ' steps done' : done + ' of ' + cl.length + ' steps') + '</span>';
 }
 

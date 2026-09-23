@@ -1,3 +1,4 @@
+import { setHTML } from '../dom.js';
 // The Spotify view: search, playlists, albums, artists, the queue, devices and volume.
 // Data is fetched through the Worker and cached here for the session; the badge's
 // poller owns "now playing", and this view follows it without redrawing the page.
@@ -131,10 +132,10 @@ function ensureRecent() {
 
 export function morePlaylists() {
   const pl = cache.playlists;
-  if (!pl || !pl.next) return;
+  if (!pl || !pl.next || busy.has('playlists') || !due('playlists')) return;
   load('playlists', async () => {
-    const page = await api.spotifyPlaylists(pl.items.length);
-    pl.items.push(...page.items); pl.next = page.next; pl.total = page.total;
+    const page = await api.spotifyPlaylists(pl.nextOffset);
+    pl.items.push(...page.items); pl.next = page.next; pl.nextOffset = page.nextOffset; pl.total = page.total;
     page.items.forEach((p) => { cache.names[p.id] = p.name; });
   });
 }
@@ -153,7 +154,7 @@ function fetchList(key, offset) {
 function loadList(key) {
   load('tracks', async () => {
     const page = await fetchList(key, 0);
-    cache.tracks[key] = { items: page.items, total: page.total, next: page.next };
+    cache.tracks[key] = page;
   });
 }
 
@@ -195,18 +196,18 @@ export function more(what) {
   if (what.startsWith('search:')) return searchMore(what.slice(7));
   if (what === 'artist') {
     const id = ui.spotify.artistId, a = cache.artistAlbums[id];
-    if (!a || !a.next) return;
+    if (!a || !a.next || busy.has('artist') || !due('artist')) return;
     return load('artist', async () => {
-      const page = await api.spotifyArtistAlbums(id, a.items.length);
+      const page = await api.spotifyArtistAlbums(id, a.nextOffset);
       page.items.forEach((x) => { cache.albums[x.id] = x; });
-      a.items.push(...page.items); a.next = page.next; a.total = page.total;
+      a.items.push(...page.items); a.next = page.next; a.nextOffset = page.nextOffset; a.total = page.total;
     });
   }
   const key = listKey(), t = key && cache.tracks[key];
-  if (!t || !t.next) return;
+  if (!t || !t.next || busy.has('tracks') || !due('tracks')) return;
   load('tracks', async () => {
-    const page = await fetchList(key, t.items.length);
-    t.items.push(...page.items); t.next = page.next; t.total = page.total;
+    const page = await fetchList(key, t.nextOffset);
+    t.items.push(...page.items); t.next = page.next; t.nextOffset = page.nextOffset; t.total = page.total;
   });
 }
 
@@ -257,12 +258,13 @@ const SEARCH_TYPE = { tracks: 'track', artists: 'artist', albums: 'album', playl
 
 function searchMore(kind) {
   const r = cache.results;
-  if (!r || !r.more[kind] || !SEARCH_TYPE[kind]) return;
+  if (!r || !r.more[kind] || !SEARCH_TYPE[kind] || busy.has('search') || !due('search')) return;
   load('search', async () => {
-    const page = await api.spotifySearch(r.q, SEARCH_TYPE[kind], r[kind].length);
+    const page = await api.spotifySearch(r.q, SEARCH_TYPE[kind], r.nextOffsets[kind]);
     remember(page);
     r[kind].push(...page[kind]);
     r.more[kind] = page.more[kind];
+    r.nextOffsets[kind] = page.nextOffsets[kind];
   });
 }
 
@@ -532,7 +534,7 @@ function mainHtml() {
     head = 'Recently played' + (cache.recent ? refreshBtn('recent', 'Refresh recently played') : '');
     if (cache.recentBlocked) {
       body = '<div class="empty"><b>Reconnect to see what you played lately</b>Rounds needs one more permission from Spotify for this.'
-        + '<br><a class="btn" href="/api/spotify/connect" style="margin-top:10px">Reconnect Spotify</a></div>';
+        + '<br><a class="btn" href="/api/spotify/connect" data-layout="df928149">Reconnect Spotify</a></div>';
     } else if (!cache.recent) body = busy.has('recent') ? loadingRow('Recently played') : '<div class="empty"><b>Pick a playlist, open the queue, or search</b>Play anything from here on whichever device Spotify is open on.</div>';
     else if (!cache.recent.items.length) body = '<div class="empty"><b>Nothing played lately</b>Pick a playlist or search to start.</div>';
     else body = cache.recent.items.map((t) => trackRow(t, { list: 'recent' })).join('');
@@ -589,7 +591,7 @@ export function renderSpotifyView() {
   if (!player.connected) {
     return '<div class="panel spot-off"><div class="empty">' + SPOTIFY_MARK + '<b>Spotify is not connected</b>'
       + 'Connect your account to search, browse your playlists, see the queue and set the volume from here.'
-      + '<br><button class="btn" type="button" data-spotify="connect" style="margin-top:10px">Connect Spotify</button></div></div>';
+      + '<br><button class="btn" type="button" data-spotify="connect" data-layout="df928149">Connect Spotify</button></div></div>';
   }
   ensurePlaylists();
   ensureMe();
@@ -611,7 +613,7 @@ export function renderSpotifyInto(root) {
     ? ['data-spot-q', 'data-spot-filter'].find((a) => document.activeElement.hasAttribute(a)) : null;
   const val = box ? document.activeElement.value : '', pos = box ? document.activeElement.selectionStart : 0;
   const key = paneKey(), same = key === drawnKey;
-  root.innerHTML = renderSpotifyView();
+  setHTML(root, renderSpotifyView());
   drawnKey = key;
   const n = root.querySelector('.spot-nav'), m = root.querySelector('.spot-main');
   if (n) n.scrollTop = keep.nav;
@@ -654,7 +656,7 @@ function markNow(root) {
     const dur = row.querySelector('.dur');
     if (!dur) return;
     const eq = now && player.playing;
-    if (eq !== !!dur.querySelector('.eqs')) dur.innerHTML = eq ? EQ : mmss(Number(row.dataset.dur) || 0);
+    if (eq !== !!dur.querySelector('.eqs')) setHTML(dur, eq ? EQ : mmss(Number(row.dataset.dur) || 0));
   });
 }
 

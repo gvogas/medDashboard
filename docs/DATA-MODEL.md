@@ -237,24 +237,37 @@ signs everyone out.
 
 ## Sync
 
-The browser keeps the rows in IndexedDB and renders from there. `sync.js` keeps it
-and D1 converged:
+Migration `0006_sync_revisions.sql` adds `revision` to profiles and tracker rows,
+`changes` for the latest change to each record, and `sync_state.floor` for the oldest
+supported incremental cursor.
 
-1. **Write locally first.** Every save writes IndexedDB, adds the row to the dirty
-   set, notifies the views, then schedules a push.
-2. **Push.** For each dirty row, `PUT` or `DELETE` it. On `2xx`, store the returned
-   `updatedAt` and clear the flag. On a network error, keep it dirty and try again on
-   `online`, on tab focus, or after the next save.
-3. **Pull.** `GET /api/sync?since=lastSyncAt-5s` (a few seconds of overlap, since a
-   write that lands during a pull can carry an earlier timestamp; re-applying is harmless). Apply every row the server returns
-   unless it is dirty locally (an unpushed local edit wins until it is pushed and the
-   next pull reconciles). Rows with `deletedAt` are removed. Store the server's `now`
-   as `lastSyncAt`. Runs on load, on `visibilitychange`, and after every push.
-4. **Rejections.** If the server refuses a pushed row, the device fetches the server's
-   copy and puts it back (or drops the row if the server never had it), and says so.
-5. **Conflicts.** Per row, the last write to reach the server wins. Two devices editing
-   the same item while both are offline is the only way to lose an edit, and the loser
-   is one field-set on one row, not the collection.
+1. A local IndexedDB transaction saves a row and an individual `pending` operation
+   together. The UI only announces the change after commit. IndexedDB version 2
+   migrates the old dirty map without deleting unsent work.
+2. Web Locks permit one sync cycle per account across tabs. IndexedDB transactions
+   and persisted operation tokens remain the correctness boundary if Web Locks are
+   unavailable. BroadcastChannel refreshes other tabs' render caches.
+3. Writes require `If-Match: "revision"`; new records use `"0"`. The server compares
+   and increments the revision within the write statement. A stale write returns
+   `409 {error: "conflict", current}`; a missing precondition returns 428 so an old
+   client cannot overwrite current data. Deletes use the same precondition.
+4. `GET /api/sync?v=2&cursor=0` starts reconciliation. Pages contain at most 100
+   `{kind, row}` changes, `cursor`, `more`, and `reset`. SQLite triggers capture each
+   write transaction in an increasing sequence; repeated updates retain the latest
+   change for that entity. Profile reads use `/api/me` and revisions separately.
+5. The nightly purge advances the cursor floor before deleting old tombstones and
+   their change entries, in one transaction. An expired cursor receives `reset:true`.
+   The client clears only clean local rows and rebuilds them from cursor zero;
+   pending edits and saved conflict copies remain. Each page and its cursor commit
+   together. The timestamp endpoint remains read-only compatibility for old clients.
+6. A rejected edit is preserved in the `conflicts` store with the server's version.
+   Settings lets the user inspect, export, restore, or discard that copy. Restoring
+   uses a revision precondition again, so another intervening edit stays protected.
+   Legacy queued edits to existing rows need review because their base revision is
+   unknown; newly created offline records can upload normally.
+7. Sign-out broadcasts connection closure and waits for database deletion. A durable
+   cleanup marker prevents reopening data when cleanup was blocked. Account-bound
+   request headers prevent an old tab uploading data under a newly changed cookie.
 
 ---
 
@@ -277,6 +290,6 @@ and D1 converged:
    a same-origin `Origin` / `Sec-Fetch-Site`, or none at all, else `403 cross_site`.
    API responses are `Cache-Control: no-store`.
 5. **The page** — `public/_headers` sets a Content Security Policy (scripts only from
-   this origin plus a hash of the inline theme script; no framing; no inline event
-   handlers), HSTS, `nosniff` and a same-origin referrer policy. Every view builds its
-   HTML through `esc()`; ids and colours are validated before they reach an attribute.
+   this origin, the Spotify SDK, and a hash of the inline theme script; no framing; no inline event
+   handlers), HSTS, `nosniff` and a same-origin referrer policy. Dynamic text is escaped through `esc()`; inline style attributes are blocked.
+   Presentation values are applied through validated CSS properties; ids and colours are validated before they reach an attribute.

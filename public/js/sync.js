@@ -1,137 +1,112 @@
-// Keeps the local store and D1 converged. Push dirty rows, pull what changed.
-// Runs on load, on tab focus, when the network comes back, and after every save.
-
-import { api, ApiError } from './api.js';
+// One sync cycle per account across tabs. Every uploaded operation is persisted.
+import { api, ApiError, retryDelayMs } from './api.js';
 import * as store from './store.js';
-
 export const status = { state: 'idle', pending: 0, lastPull: null, message: '' };
-const PULL_OVERLAP_MS = 5000;
-const statusListeners = new Set();
-let onSignedOut = () => {};
-let pushTimer = null;
-let running = null;
-let pulled = () => {};
-
-export function onStatus(fn) { statusListeners.add(fn); }
-export function onPulled(fn) { pulled = fn; }
-export function onUnauthenticated(fn) { onSignedOut = fn; }
-
-function setStatus(state, message = '') {
-  status.state = state;
-  status.message = message;
-  status.pending = store.pendingCount();
-  for (const fn of statusListeners) fn(status);
+const listeners = new Set();
+let initialized = false, paused = false, running = null, timer;
+let signedOut = () => {}, pulled = () => {};
+export const onStatus = (fn) => listeners.add(fn);
+export const onPulled = (fn) => { pulled = fn; };
+export const onUnauthenticated = (fn) => { signedOut = fn; };
+function state(value, message = '') {
+  Object.assign(status, { state: value, message, pending: store.pendingCount() });
+  for (const fn of listeners) fn(status);
 }
-
+function schedule(ms = 600) {
+  if (paused) return;
+  clearTimeout(timer);
+  timer = setTimeout(syncNow, ms);
+}
 export function init() {
-  store.subscribe((evt) => { if (evt.type === 'change') schedulePush(); });
+  paused = false;
+  if (initialized) return;
+  initialized = true;
+  store.subscribe((evt) => {
+    if (evt.type === 'signed-out') { stop(); signedOut(); return; }
+    if (evt.type === 'change' || evt.type === 'remote') { state('pending'); schedule(); }
+  });
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') syncNow(); });
   window.addEventListener('online', syncNow);
-  window.addEventListener('offline', () => setStatus('offline'));
-  setInterval(() => { if (document.visibilityState === 'visible') pull(); }, 5 * 60 * 1000);
+  window.addEventListener('offline', () => state('offline'));
+  setInterval(() => { if (document.visibilityState === 'visible') syncNow(); }, 300000);
 }
-
-function schedulePush() {
-  setStatus(status.state === 'offline' ? 'offline' : 'pending');
-  clearTimeout(pushTimer);
-  pushTimer = setTimeout(push, 600);
-}
-
-function handleFailure(e) {
-  if (e instanceof ApiError) {
-    if (e.status === 401) { setStatus('signed-out'); onSignedOut(); return 'stop'; }
-    setStatus('error', e.body?.field ? `${e.body.error}: ${e.body.field}` : e.message);
-    return 'continue';
-  }
-  setStatus('offline');
-  return 'stop';
-}
-
-/** Send every dirty row. Stops at the first network failure; retried later. */
-export async function push() {
-  if (running) return running;
-  running = pushAll();
-  try {
-    return await running;
-  } finally {
-    running = null;
-  }
-}
-
+export function stop() { paused = true; clearTimeout(timer); }
+export async function drain() { await running; }
 async function pushAll() {
-  setStatus('syncing');
-  for (const key of Object.keys(store.dirty)) {
-    const op = store.dirty[key];
-    const v = store.version(key);
+  const operations = await store.pending();
+  // New courses before items; course deletion after pending item writes.
+  operations.sort((a, b) => rank(a) - rank(b));
+  for (const op of operations) {
+    if (paused) return false;
     try {
-      if (key === 'profile') {
-        const p = store.data.profile;
-        const saved = await api.saveMe({ displayName: p.displayName, coat: p.coat, theme: p.theme, termStart: p.termStart });
-        await store.settle(key, v, saved);
-      } else {
-        const [kind, id] = key.split(/:(.*)/s);
-        if (op === 'delete') {
-          try { await api.del(kind, id); } catch (e) { if (!(e instanceof ApiError && e.status === 404)) throw e; }
-          await store.settle(key, v);
-        } else {
-          const row = store.data[kind].find((r) => r.id === id);
-          if (!row) { await store.settle(key, v); continue; }
-          const { createdAt, updatedAt, deletedAt, ...body } = row;
-          const saved = await api.put(kind, id, body);
-          await store.settle(key, v, saved);
-        }
+      if (op.reviewRequired) throw new ApiError(409, { error: 'legacy_edit' });
+      let saved;
+      if (op.key === 'profile') saved = await api.saveMe({ ...op.body, revision: op.revision });
+      else {
+        const [kind, id] = op.key.split(/:(.*)/s);
+        if (op.op === 'delete') {
+          try { await api.del(kind, id, op.revision); }
+          catch (e) { if (!(e instanceof ApiError && e.status === 404)) throw e; }
+        } else saved = await api.put(kind, id, { ...op.body, revision: op.revision });
       }
+      await store.settleOperation(op, saved);
     } catch (e) {
-      if (handleFailure(e) === 'stop') return false;
-      // The server refused this row. Do not keep a copy it will never accept:
-      // put the server's version back (or drop the row if it has none).
-      console.error('push rejected', key, e);
-      await store.settle(key, v);
-      if (key !== 'profile') await revertToServer(key, e);
+      if (e instanceof ApiError && [400, 404, 409, 413, 422].includes(e.status)) {
+        let current = e.body?.current;
+        if (current === undefined) {
+          try {
+            const [kind, id] = op.key.split(/:(.*)/s);
+            current = op.key === 'profile' ? await api.me() : await api.get(kind, id);
+          } catch (readError) {
+            if (!(readError instanceof ApiError && readError.status === 404)) throw readError;
+            current = null;
+          }
+        }
+        await store.rejectOperation(op, current, e.body?.error === 'legacy_edit' ? 'This edit was saved before conflict protection. Review it before restoring.' : e.body?.error === 'conflict' ? 'A newer version was saved on another device.' : 'The server could not accept this edit.');
+      } else throw e;
     }
   }
-  if (status.state !== 'error') setStatus('idle');
   return true;
 }
-
-/** Replace a rejected local row with the server's copy, or remove it. */
-async function revertToServer(key, err) {
-  const [kind, id] = key.split(/:(.*)/s);
-  const field = err?.body?.field ? ` (${err.body.field})` : '';
-  try {
-    const row = await api.get(kind, id);
-    await store.applyServer(kind, row);
-  } catch (e) {
-    if (e instanceof ApiError && e.status === 404) await store.applyServer(kind, { id, deletedAt: Date.now() });
-    else return;
+function rank(op) { return op.key.startsWith('courses:') ? (op.op === 'put' ? 0 : 3) : 1; }
+async function pullAll() {
+  let cursor = (await store.meta.get('syncCursor')) || 0;
+  let reset = cursor === 0;
+  let pages = 0;
+  while (!paused) {
+    const page = await api.sync(cursor);
+    if (page.reset) { cursor = 0; reset = true; continue; }
+    await store.applyPage(page, reset);
+    reset = false; cursor = page.cursor;
+    if (!page.more) break;
+    if (++pages >= 20) { schedule(1000); break; }
   }
-  setStatus('error', `A change was rejected${field} and undone`);
+  if (!paused) await store.applyServerProfile(await api.me());
+  status.lastPull = Date.now();
   pulled();
 }
-
-/** Fetch rows changed since the last pull and apply the ones we have not edited. */
-export async function pull() {
-  if (!store.data.profile) return false;
-  try {
-    // Overlap the last pull by a few seconds: a write that landed while that pull ran
-    // may carry an earlier timestamp. Applying a row twice is harmless.
-    const since = Math.max(0, ((await store.meta.get('lastSyncAt')) || 0) - PULL_OVERLAP_MS);
-    const [res, me] = await Promise.all([api.sync(since), api.me()]);
-    let changed = await store.applyServerProfile(me);
-    for (const kind of ['courses', 'items', 'quotes']) {
-      for (const row of res[kind]) if (await store.applyServer(kind, row)) changed = true;
-    }
-    await store.meta.set('lastSyncAt', res.now);
-    status.lastPull = Date.now();
-    if (status.state !== 'error' && status.state !== 'pending') setStatus(navigator.onLine === false ? 'offline' : 'idle');
-    if (changed) pulled();
-    return changed;
-  } catch (e) {
-    handleFailure(e);
-    return false;
-  }
-}
-
 export async function syncNow() {
-  if (await push()) await pull();
+  if (paused || !store.data.profile) return false;
+  if (running) return running;
+  running = store.withSyncLock(async () => {
+    if (paused) return false;
+    state('syncing');
+    try {
+      if (!(await pushAll())) return false;
+      await pullAll();
+      if (paused) return false;
+      state(store.conflicts.length ? 'error' : store.pendingCount() ? 'pending' : 'idle', store.conflicts.length ? 'Saved copies need review in Settings.' : '');
+      if (store.pendingCount()) schedule();
+      return true;
+    } catch (e) {
+      if (paused) return false;
+      if (e instanceof ApiError && e.status === 401) { stop(); state('signed-out'); signedOut(); }
+      else if (e instanceof ApiError && e.status === 428) { state('error', 'Reload Rounds to finish the update. Your edits are saved.'); }
+      else { state(e instanceof ApiError ? 'error' : 'offline', e.message); schedule(retryDelayMs(e)); }
+      return false;
+    }
+  });
+  try { return await running; } finally { running = null; }
 }
+export const push = syncNow;
+export const pull = syncNow;

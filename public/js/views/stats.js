@@ -1,3 +1,4 @@
+import { setHTML } from '../dom.js';
 import { data } from '../store.js';
 import { ui } from '../state.js';
 import { isOpen, isOverdue } from '../model.js';
@@ -24,14 +25,14 @@ export function renderStats() {
   const mol = '<svg class="mol" viewBox="0 0 60 60" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">'
     + '<path d="M30 6l14 8v16l-14 8-14-8V14z"/><circle cx="30" cy="22" r="7"/><path d="M44 30l12 7M16 30L4 37M30 38v14"/></svg>';
 
-  $('stats').innerHTML = ''
+  setHTML($('stats'), ''
     + '<div class="stat hot"><div class="lab">Next exam</div><div class="val">' + ddText + '</div><div class="foot">' + (nextExam ? esc(nextExam.title) : 'nothing scheduled') + '</div>' + ecg + '</div>'
     + '<div class="stat"><div class="lab">Open assignments</div><div class="val">' + openAssign + '</div><div class="foot">across ' + courses.length + ' course' + (courses.length === 1 ? '' : 's') + '</div>' + mol + '</div>'
     + '<div class="stat' + (overdue ? ' hot' : '') + '"><div class="lab">Overdue</div><div class="val">' + overdue + '</div><div class="foot">' + (overdue ? 'needs attention today' : 'all clear') + '</div></div>'
     + '<div class="stat"><div class="lab">Class hours / week</div><div class="val">' + (Math.round(classH * 10) / 10) + '<small> h</small></div><div class="foot">' + classN + ' timetabled class' + (classN === 1 ? '' : 'es') + '</div></div>'
     + '<div class="stat"><div class="lab">Lab hours</div><div class="val">' + labDone.toFixed(0) + '<small>/' + labAll.toFixed(0) + ' h</small></div>'
-      + '<div class="foot"><span class="meterwrap"><span class="meter" style="width:' + (labAll ? Math.round(labDone / labAll * 100) : 0) + '%"></span></span></div></div>'
-    + quoteCardHtml();
+      + '<div class="foot"><span class="meterwrap"><span class="meter" data-width="' + (labAll ? Math.round(labDone / labAll * 100) : 0) + '"></span></span></div></div>'
+    + quoteCardHtml());
 }
 
 /* the quote tile, beside the stats */

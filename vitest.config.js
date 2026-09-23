@@ -13,6 +13,7 @@ export default defineConfig(async () => {
           bindings: {
             TEST_MIGRATIONS: migrations,
             SESSION_SECRET: 'test-secret-not-for-production',
+            SPOTIFY_TOKEN_KEYS: JSON.stringify({ current: 'v1', keys: { v1: 'test-spotify-encryption-key-at-least-32-characters' } }),
             SPOTIFY_CLIENT_ID: 'test-client-id',
             SPOTIFY_CLIENT_SECRET: 'test-client-secret',
           },

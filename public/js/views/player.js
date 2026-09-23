@@ -1,3 +1,4 @@
+import { setHTML } from '../dom.js';
 // The Spotify badge at the bottom of the coat. Given the poller's state, draws it.
 // A tick only moves the progress line, so the buttons are not rebuilt under the cursor.
 
@@ -53,21 +54,21 @@ export function renderPlayer(s, kind = 'state') {
   host.toggleAttribute('data-stale', !!s.stale);
   host.dataset.state = !s.loaded ? 'loading' : !s.connected ? 'off' : !s.track ? 'idle' : s.playing ? 'playing' : 'paused';
   host.hidden = !s.loaded;
-  if (!s.loaded) { host.innerHTML = ''; return; }
+  if (!s.loaded) { setHTML(host, ''); return; }
 
   if (!s.connected) {
-    host.innerHTML = '<button class="connect" type="button" data-spotify="connect">' + SPOTIFY_MARK + 'Connect Spotify</button>';
+    setHTML(host, '<button class="connect" type="button" data-spotify="connect">' + SPOTIFY_MARK + 'Connect Spotify</button>');
     return;
   }
   const target = playTarget(s, web);
   if (!s.track) {
-    host.innerHTML = '<div class="quiet">' + SPOTIFY_MARK + 'Nothing playing'
+    setHTML(host, '<div class="quiet">' + SPOTIFY_MARK + 'Nothing playing'
       + (target === 'here' ? '<button class="pp" type="button" data-spotify="play" aria-label="Play in Rounds" title="Play in Rounds">' + ICON.play + '</button>' : '')
-      + '</div>' + message(s);
+      + '</div>' + message(s));
     return;
   }
   const t = s.track;
-  host.innerHTML =
+  setHTML(host,
     '<div class="now">'
       + (t.art ? '<img class="art" src="' + esc(t.art) + '" alt="" width="42" height="42">' : '<span class="art"></span>')
       + '<div class="meta">'
@@ -78,7 +79,7 @@ export function renderPlayer(s, kind = 'state') {
       + '</div>'
       + SPOTIFY_MARK
     + '</div>'
-    + '<span class="line"><i style="width:' + pct(t) + '%"></i></span>'
+    + '<span class="line"><i data-width="' + pct(t) + '"></i></span>'
     + '<div class="ctl">'
       + '<button type="button" data-spotify="previous" aria-label="Previous">' + ICON.prev + '</button>'
       + '<button class="pp" type="button" data-spotify="' + (s.playing ? 'pause' : 'play') + '" aria-label="' + (s.playing ? 'Pause' : 'Play') + '">' + (s.playing ? ICON.pause : ICON.play) + '</button>'
@@ -87,5 +88,5 @@ export function renderPlayer(s, kind = 'state') {
     + message(s)
     + (s.device ? '<div class="device">on <b>' + esc(s.device) + '</b>'
       + (target === 'offer' ? ' · <button class="here" type="button" data-spotify="here" title="Move the music into this tab">Play here</button>' : '')
-      + '</div>' : '');
+      + '</div>' : ''));
 }

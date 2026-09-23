@@ -1,6 +1,6 @@
 // Boot, sign-in, and every event handler. Views render; this file decides what happens.
 
-import { api, ApiError } from './api.js';
+import { api, ApiError, resetRequests, bindAccount } from './api.js';
 import * as store from './store.js';
 import { data, course } from './store.js';
 import * as sync from './sync.js';
@@ -93,10 +93,11 @@ async function boot() {
   } catch (e) {
     if (!(e instanceof ApiError)) profile = rememberedSession();   /* offline: open what we have */
   }
-  if (profile) await start(profile); else showSignIn();
+  if (profile) { try { await start(profile); } catch (e) { showSignIn(e.message); } } else showSignIn();
 }
 
 async function start(profile) {
+  bindAccount(profile.id);
   await store.open(profile);
   hideSignIn();
   setTheme(data.profile.theme || ui.theme, { persist: false });
@@ -111,19 +112,48 @@ async function start(profile) {
   if (back) { ui.spotifyNote = back; openSettings('spotifyGrp'); }
 }
 
+store.subscribe((evt) => {
+  if (evt.type === 'save-error') alert('The change could not be saved on this device. ' + evt.message);
+  if (evt.type === 'signed-out') { sync.stop(); spotify.stop(); web.stop(); resetRequests(); location.reload(); }
+  if (evt.type === 'remote' && data.profile && !drawerHasFocus()) render();
+});
+window.addEventListener('storage', (event) => {
+  if (event.key !== 'rounds.session' || !data.profile) return;
+  let id;
+  try { id = JSON.parse(event.newValue || 'null')?.id; } catch {}
+  if (id !== data.profile.id) {
+    sync.stop(); spotify.stop(); web.stop(); resetRequests();
+    store.close().finally(() => location.reload());
+  }
+});
+
 function showSignIn(error, username = '') {
   renderSignIn({ error, username });
 }
 
 async function signOut({ everywhere = false } = {}) {
-  try { await (everywhere ? api.revokeAll() : api.signOut()); } catch {}
+  await store.reload();
+  if ((store.pendingCount() || store.conflicts.length) && !confirm('There are unsynced edits or saved conflict copies on this device. Export them from Settings before signing out. Sign out and erase them anyway?')) return;
+  sync.stop();
+  spotify.stop();
+  resetRequests();
+  try { await (everywhere ? api.revokeAll() : api.signOut()); }
+  catch {
+    sync.init();
+    spotify.start();
+    alert('Sign-out failed. Check your connection and try again.');
+    return;
+  }
+  await sync.drain();
   const id = data.profile?.id;
   spotify.stop();
   web.stop();
   closeDrawer();
-  await store.close();
-  if (id) { try { await store.wipe(id); } catch {} }
-  showSignIn();
+  if (id) {
+    try { await store.wipe(id); }
+    catch (e) { alert('You are signed out, but local cleanup is still pending. ' + e.message); }
+  } else await store.close();
+  location.reload(); // Clear every in-memory account cache at the session boundary.
 }
 
 document.addEventListener('submit', (e) => {
@@ -139,7 +169,11 @@ $('signin').addEventListener('submit', async (e) => {
   const username = $('loginUser').value.trim(), password = $('loginPass').value;
   const btn = $('loginBtn'); btn.disabled = true; btn.textContent = 'Signing in…';
   try {
-    await start(await api.login(username, password));
+    sync.stop();
+    spotify.stop();
+    resetRequests();
+    await api.login(username, password);
+    location.reload();
   } catch (err) {
     showSignIn(!(err instanceof ApiError) ? 'You seem to be offline.'
       : err.status === 401 ? 'Wrong username or password.'
@@ -261,13 +295,23 @@ document.addEventListener('click', async (e) => {
     else if (act === 'course-save') saveCourseDraft();
     else if (act === 'course-delete') { ui.confirm = 'course'; renderCourseDrawer(); }
     else if (act === 'course-delete-yes' && ui.courseDraft) deleteCourseDraft();
+    else if (act === 'export-data') {
+      await store.reload();
+      const blob = new Blob([JSON.stringify({ ...store.data, pending: await store.pending(), conflicts: store.conflicts }, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob), link = document.createElement('a');
+      link.href = url; link.download = 'rounds-backup.json'; link.click();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    }
+    else if (act === 'conflict-restore' || act === 'conflict-dismiss') {
+      try { await store.resolveConflict(el.dataset.conflict, act === 'conflict-restore'); renderSettings(); }
+      catch (error) { alert(error.message); }
+    }
     else if (act === 'signout') signOut();
     else if (act === 'signout-all') signOut({ everywhere: true });
     else if (act === 'spotify-disconnect') {
-      try { await api.spotifyDisconnect(); } catch {}
-      ui.spotifyNote = null;
-      spotify.disconnected();
-      renderSettings();
+      try { await api.spotifyDisconnect(); }
+      catch { alert('Spotify could not be disconnected. Try again when you are online.'); return; }
+      location.reload();
     }
     return;
   }

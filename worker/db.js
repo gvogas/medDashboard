@@ -1,7 +1,8 @@
 // Every query here takes a userId and scopes to it. No exceptions.
+import { HttpError } from './http.js';
 
 const PROFILE_COLS =
-  'id, username, display_name, coat_name, coat_role, coat_color, theme, term_start, created_at, updated_at';
+  'id, username, display_name, coat_name, coat_role, coat_color, theme, term_start, created_at, updated_at, revision';
 
 function profileFromRow(r) {
   return {
@@ -13,6 +14,7 @@ function profileFromRow(r) {
     termStart: r.term_start,
     createdAt: r.created_at,
     updatedAt: r.updated_at,
+    revision: r.revision,
   };
 }
 
@@ -31,14 +33,15 @@ export async function getProfile(db, userId) {
   return row ? profileFromRow(row) : null;
 }
 
-export async function updateProfile(db, userId, p, now = Date.now()) {
-  await db
+export async function updateProfile(db, userId, p, now = Date.now(), revision) {
+  const saved = await db
     .prepare(
-      'UPDATE users SET display_name = ?, coat_name = ?, coat_role = ?, coat_color = ?, theme = ?, term_start = ?, updated_at = ? WHERE id = ?',
+      `UPDATE users SET display_name = ?, coat_name = ?, coat_role = ?, coat_color = ?, theme = ?, term_start = ?, updated_at = ?, revision = revision + 1 WHERE id = ? AND revision = ? RETURNING ${PROFILE_COLS}`,
     )
-    .bind(p.displayName, p.coatName, p.coatRole, p.coatColor, p.theme, p.termStart, now, userId)
-    .run();
-  return getProfile(db, userId);
+    .bind(p.displayName, p.coatName, p.coatRole, p.coatColor, p.theme, p.termStart, now, userId, revision ?? -1)
+    .first();
+  if (!saved) throw new HttpError(409, { error: 'conflict', current: await getProfile(db, userId) });
+  return profileFromRow(saved);
 }
 
 // ── user-owned rows ─────────────────────────────────────────────────────────
@@ -78,11 +81,12 @@ function rowToApi(table, r) {
   out.createdAt = r.created_at;
   out.updatedAt = r.updated_at;
   out.deletedAt = r.deleted_at ?? null;
+  out.revision = r.revision;
   return out;
 }
 
 function selectCols(table) {
-  return ['id', ...Object.values(TABLES[table].cols), 'created_at', 'updated_at', 'deleted_at'].join(', ');
+  return ['id', ...Object.values(TABLES[table].cols), 'created_at', 'updated_at', 'deleted_at', 'revision'].join(', ');
 }
 
 export async function getRow(db, table, userId, id) {
@@ -91,49 +95,57 @@ export async function getRow(db, table, userId, id) {
 }
 
 /** Insert or update. createdAt is kept on update; a deleted row is revived. */
-function upsertStmt(db, table, userId, id, fields, now) {
+function upsertStmt(db, table, userId, id, fields, now, revision) {
   const t = TABLES[table];
   const row = t.toRow(fields);
   const cols = Object.entries(t.cols);
   const names = ['user_id', 'id', ...cols.map(([, col]) => col), 'created_at', 'updated_at', 'deleted_at'];
   const values = [userId, id, ...cols.map(([field]) => row[field] ?? null), now, now, null];
-  const updates = [...cols.map(([, col]) => `${col} = excluded.${col}`), 'updated_at = excluded.updated_at', 'deleted_at = NULL'];
+  const updates = [...cols.map(([, col]) => `${col} = excluded.${col}`), 'updated_at = excluded.updated_at', 'deleted_at = NULL', 'revision = revision + 1'];
+  const courseGuard = table === 'items' ? ' AND (? IS NULL OR EXISTS (SELECT 1 FROM courses WHERE user_id = ? AND id = ? AND deleted_at IS NULL))' : '';
+  const courseBindings = table === 'items' ? [fields.courseId ?? null, userId, fields.courseId ?? null] : [];
   return db
     .prepare(
-      `INSERT INTO ${table} (${names.join(', ')}) VALUES (${names.map(() => '?').join(', ')})
-       ON CONFLICT (user_id, id) DO UPDATE SET ${updates.join(', ')}
+      `INSERT INTO ${table} (${names.join(', ')}, revision) SELECT ${names.map(() => '?').join(', ')}, COALESCE((SELECT seq FROM sqlite_sequence WHERE name = 'changes'), 0) + 1 WHERE (? = 0 OR EXISTS (SELECT 1 FROM ${table} WHERE user_id = ? AND id = ?))${courseGuard}
+       ON CONFLICT (user_id, id) DO UPDATE SET ${updates.join(', ')} WHERE revision = ?
        RETURNING ${selectCols(table)}`,
     )
-    .bind(...values);
+    .bind(...values, revision, userId, id, ...courseBindings, revision);
 }
 
 /** The saved row in API shape, read back in the same statement. */
-export async function upsertRow(db, table, userId, id, fields, now = Date.now()) {
-  return rowToApi(table, await upsertStmt(db, table, userId, id, fields, now).first());
+export async function upsertRow(db, table, userId, id, fields, now = Date.now(), revision = 0) {
+  const saved = await upsertStmt(db, table, userId, id, fields, now, revision).first();
+  if (!saved) throw new HttpError(409, { error: 'conflict', current: await getRow(db, table, userId, id) });
+  return rowToApi(table, saved);
 }
 
 /** Hard-delete rows soft-deleted before `before`. Items first, so course rows go last. */
 export async function purgeTombstones(db, before) {
   await db.batch(
-    ['items', 'quotes', 'courses'].map((table) =>
+    [db.prepare('UPDATE sync_state SET floor = MAX(floor, COALESCE((SELECT MAX(seq) FROM changes WHERE deleted_at < ?), 0)) WHERE id = 1').bind(before),
+    db.prepare('DELETE FROM changes WHERE deleted_at < ?').bind(before),
+    ...['items', 'quotes', 'courses'].map((table) =>
       db.prepare(`DELETE FROM ${table} WHERE deleted_at IS NOT NULL AND deleted_at < ?`).bind(before),
-    ),
+    )],
   );
 }
 
 /** Soft delete. Returns false if the row does not exist for this user. */
-export async function deleteRow(db, table, userId, id, now = Date.now()) {
-  const exists = await db.prepare(`SELECT 1 AS x FROM ${table} WHERE user_id = ? AND id = ?`).bind(userId, id).first();
+export async function deleteRow(db, table, userId, id, now = Date.now(), revision = 0) {
+  const exists = await getRow(db, table, userId, id);
   if (!exists) return false;
+  if (exists.deletedAt) return true;
   const stmts = [
-    db.prepare(`UPDATE ${table} SET deleted_at = ?, updated_at = ? WHERE user_id = ? AND id = ? AND deleted_at IS NULL`).bind(now, now, userId, id),
+    db.prepare(`UPDATE ${table} SET deleted_at = ?, updated_at = ?, revision = revision + 1 WHERE user_id = ? AND id = ? AND deleted_at IS NULL AND revision = ? RETURNING id`).bind(now, now, userId, id, revision),
   ];
   if (table === 'courses') {
     stmts.push(
-      db.prepare('UPDATE items SET course_id = NULL, updated_at = ? WHERE user_id = ? AND course_id = ?').bind(now, userId, id),
+      db.prepare('UPDATE items SET course_id = NULL, updated_at = ?, revision = revision + 1 WHERE user_id = ? AND course_id = ? AND changes() > 0').bind(now, userId, id),
     );
   }
-  await db.batch(stmts);
+  const results = await db.batch(stmts);
+  if (!results[0].results.length) throw new HttpError(409, { error: 'conflict', current: await getRow(db, table, userId, id) });
   return true;
 }
 
@@ -158,6 +170,26 @@ export async function syncSince(db, userId, since) {
   return out;
 }
 
+/** A bounded page, ordered by commit sequence rather than wall-clock timestamps.
+ * The metadata and page share a D1 batch transaction, including during pruning.
+ * cursor=0 starts reconciliation; an expired cursor requires the same reset.
+ */
+export async function syncPage(db, userId, cursor, limit = 100) {
+  const [state, page] = await db.batch([
+    db.prepare("SELECT floor, COALESCE((SELECT seq FROM sqlite_sequence WHERE name = 'changes'), 0) AS head FROM sync_state WHERE id = 1"),
+    db.prepare('SELECT seq, kind, payload FROM changes WHERE user_id = ? AND seq > ? ORDER BY seq LIMIT ?').bind(userId, cursor, limit + 1),
+  ]);
+  const { floor, head } = state.results[0];
+  if (cursor && (cursor < floor || cursor > head)) return { reset: true, cursor: 0, changes: [], more: false };
+  const rows = page.results.slice(0, limit);
+  return {
+    reset: false,
+    cursor: page.results.length > limit ? rows.at(-1).seq : head,
+    more: page.results.length > limit,
+    changes: rows.map((r) => ({ kind: r.kind, row: rowToApi(r.kind, JSON.parse(r.payload)) })),
+  };
+}
+
 // ── Spotify ─────────────────────────────────────────────────────────────────
 
 export async function getSpotifyTokens(db, userId) {
@@ -177,4 +209,17 @@ export async function saveSpotifyTokens(db, userId, { refreshToken, accessToken,
 
 export async function deleteSpotifyTokens(db, userId) {
   await db.prepare('DELETE FROM spotify_tokens WHERE user_id = ?').bind(userId).run();
+}
+
+/** A delayed refresh must not recreate a disconnected account or overwrite a reconnect. */
+export async function replaceSpotifyTokens(db, userId, previous, fresh) {
+  return db.prepare(`UPDATE spotify_tokens SET refresh_token = ?, access_token = ?, expires_at = ?, updated_at = ?
+    WHERE user_id = ? AND refresh_token = ? AND access_token = ? AND expires_at = ? RETURNING user_id`)
+    .bind(fresh.refreshToken, fresh.accessToken, fresh.expiresAt, Date.now(), userId,
+      previous.refresh_token, previous.access_token, previous.expires_at).first();
+}
+
+export async function discardSpotifyTokens(db, userId, previous) {
+  await db.prepare('DELETE FROM spotify_tokens WHERE user_id = ? AND refresh_token = ? AND access_token = ? AND expires_at = ?')
+    .bind(userId, previous.refresh_token, previous.access_token, previous.expires_at).run();
 }

@@ -4,9 +4,10 @@
 # sdk.scdn.co is Spotify's Web Playback SDK and the frame it plays in; the frame
 # streams under its own origin, so nothing else of Spotify's is needed here.
 /*
-  Content-Security-Policy: default-src 'self'; script-src 'self' 'sha256-JLf3ufColssusE0SVsAeLq+LC/Nqrzfed6eQYKwO0uc=' https://sdk.scdn.co; frame-src https://sdk.scdn.co; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https://i.scdn.co; connect-src 'self'; worker-src 'self'; manifest-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'; object-src 'none'
+  Content-Security-Policy: default-src 'self'; script-src 'self' 'sha256-JLf3ufColssusE0SVsAeLq+LC/Nqrzfed6eQYKwO0uc=' https://sdk.scdn.co; frame-src https://sdk.scdn.co; style-src 'self' https://fonts.googleapis.com; style-src-attr 'none'; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https://i.scdn.co; connect-src 'self'; worker-src 'self'; manifest-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'; object-src 'none'
   X-Content-Type-Options: nosniff
   Referrer-Policy: same-origin
   Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=()
   Strict-Transport-Security: max-age=31536000; includeSubDomains
   Cross-Origin-Opener-Policy: same-origin
+  Cache-Control: no-cache

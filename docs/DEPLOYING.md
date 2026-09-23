@@ -2,6 +2,10 @@
 
 How the app fits together, how to work on it, and how to put changes live.
 
+Before the first deployment of the reliability update, follow
+[the upgrade instructions](RELIABILITY-UPGRADE.md), including the separate Spotify
+encryption secret.
+
 ## How Rounds fits together
 
 Rounds runs entirely on Cloudflare. One command, `npm run deploy`, puts the website
@@ -65,7 +69,7 @@ Make and try every change locally first. Nothing you do locally affects the live
    in with your local account. Leave the command running. It picks up most edits when
    you save; press Ctrl+C to stop it.
 2. Edit files in `public/` (what you see) or `worker/` (the API).
-3. Run `npm test`. All tests should pass (91 today). A failing test means something
+3. Run `npm test`. Both the Worker tests and local-storage regression tests should pass. A failing test means something
    broke, so fix it before deploying.
 4. Save the change in Git:
     ```
@@ -75,14 +79,12 @@ Make and try every change locally first. Nothing you do locally affects the live
     ```
 
 One catch: if you edit the small inline script inside `public/index.html`, run
-`node scripts/csp-hash.mjs` and paste the hash it prints into `public/_headers`. If
-you skip this, the browser's security policy blocks that script on the live site.
+`npm run csp:update` to update `public/_headers`. The release build stops if the hash is stale.
 
 ## Deploying
 
-To put your changes live, run `npm run deploy` from the project folder. It first
-applies any new database changes to the live database, then uploads the website and
-API. It takes under a minute.
+To put your changes live, run `npm run deploy` from the project folder. It runs the test suites, builds versioned assets, verifies the CSP hash and required
+secret names, applies database migrations, then uploads the website and API. It takes under a minute.
 
 ```mermaid
 flowchart LR

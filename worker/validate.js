@@ -10,7 +10,7 @@ const STATUSES = ['todo', 'submitted', 'graded', 'done', 'missed'];
 export const KINDS = ['Lecture', 'Lab', 'Seminar', 'Tutorial', 'PBL', 'Clinical'];
 const THEMES = ['light', 'dark', 'system'];
 const DATE = /^[0-9]{4}-[0-9]{2}-[0-9]{2}$/;
-const TIME = /^[0-2][0-9]:[0-5][0-9]$/;
+const TIME = /^(?:[01][0-9]|2[0-3]):[0-5][0-9]$/;
 
 function fail(field) {
   throw new HttpError(400, { error: 'invalid', field });
@@ -22,7 +22,7 @@ function obj(v, field) {
 }
 
 function str(v, field, max, min = 0) {
-  if (typeof v !== 'string' || v.length < min || v.length > max) fail(field);
+  if (typeof v !== 'string' || v.length < min || v.length > max || v.includes('\0')) fail(field);
   return v;
 }
 
@@ -53,12 +53,14 @@ function optNum(v, field, lo, hi) {
 
 function optInt(v, field) {
   if (v === null || v === undefined) return null;
-  if (!Number.isInteger(v) || v < 0) fail(field);
+  if (!Number.isSafeInteger(v) || v < 0) fail(field);
   return v;
 }
 
 function date(v, field) {
   if (typeof v !== 'string' || !DATE.test(v)) fail(field);
+  const parsed = new Date(`${v}T00:00:00.000Z`);
+  if (!Number.isFinite(parsed.getTime()) || parsed.toISOString().slice(0, 10) !== v) fail(field);
   return v;
 }
 
@@ -82,7 +84,7 @@ function list(v, field, max, each) {
 }
 
 export function validateId(id) {
-  if (typeof id !== 'string' || id.length < 1 || id.length > 24) fail('id');
+  if (typeof id !== 'string' || id.length < 1 || id.length > 24 || /[\u0000-\u001f\u007f]/.test(id)) fail('id');
   return id;
 }
 
@@ -132,6 +134,7 @@ function checklistEntry(c, f) {
 function linkEntry(l, f) {
   const url = str(l.url, `${f}.url`, 500, 1);
   if (!/^https?:\/\//i.test(url)) fail(`${f}.url`);
+  try { new URL(url); } catch { fail(`${f}.url`); }
   return { label: str(l.label ?? '', `${f}.label`, 60), url };
 }
 

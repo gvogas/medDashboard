@@ -1,4 +1,5 @@
-import { data } from '../store.js';
+import { setHTML } from '../dom.js';
+import { data, conflicts } from '../store.js';
 import { ui } from '../state.js';
 import { PALETTE, colourName, DEFAULT_COAT } from '../model.js';
 import { esc, $ } from '../dom.js';
@@ -35,7 +36,7 @@ function themeLabel() {
 function syncLine() {
   const n = status.pending;
   if (status.state === 'offline') return 'Offline — ' + (n ? n + ' change' + (n === 1 ? '' : 's') + ' waiting to sync.' : 'everything is saved on this device.');
-  if (status.state === 'error') return 'Sync problem: ' + esc(status.message || 'unknown') + '.';
+  if (status.state === 'error') return 'Sync problem: ' + (status.message || 'unknown') + '.';
   if (status.state === 'syncing' || status.state === 'pending') return 'Syncing…';
   return status.lastPull ? 'Synced ' + Math.max(0, Math.round((Date.now() - status.lastPull) / 60000)) + ' min ago.' : 'Synced.';
 }
@@ -45,7 +46,7 @@ function spotifyGroup() {
   let html = '<h4>Spotify<em>' + (on ? 'Connected' : 'Not connected') + '</em></h4>'
     + '<div class="spotrow">' + SPOTIFY_MARK + '<div class="who">';
   if (on) {
-    html += '<b>Connected</b><span>' + (spotify.device ? 'Playing on <b style="font-weight:500;display:inline">' + esc(spotify.device) + '</b>.'
+    html += '<b>Connected</b><span>' + (spotify.device ? 'Playing on <b data-layout="c75d1a93">' + esc(spotify.device) + '</b>.'
       : spotify.track ? 'Paused.' : 'Nothing playing right now.') + '</span></div>'
       + '<button class="btn ghost" type="button" data-act="spotify-disconnect">Disconnect</button>';
   } else {
@@ -58,7 +59,7 @@ function spotifyGroup() {
   }
   if (on && web.status === 'ready') html += '<span class="note">This tab is a Spotify device called <b>Rounds</b>: press play here and it plays here.</span>';
   if (ui.spotifyNote === 'error') html += '<span class="note err">Spotify did not connect. Try again.</span>';
-  if (ui.spotifyNote === 'connected') html += '<span class="note" style="color:var(--good)">Connected. The badge on the coat shows what is playing.</span>';
+  if (ui.spotifyNote === 'connected') html += '<span class="note" data-layout="b282c623">Connected. The badge on the coat shows what is playing.</span>';
   html += '<span class="note">Controls need Spotify Premium; free accounts still see what is playing.'
     + (on ? '' : ' The owner of the Rounds app has to add your Spotify email to it first, so ask before connecting.') + '</span>';
   return html;
@@ -67,14 +68,25 @@ function spotifyGroup() {
 /** Redraw just the Spotify group, when the poller learns something while Settings is open. */
 export function refreshSpotifyGroup() {
   const g = $('spotifyGrp');
-  if (g) g.innerHTML = spotifyGroup();
+  if (g) setHTML(g, spotifyGroup());
+}
+
+function savedValues(row = {}) {
+  const labels = { title: 'Title', text: 'Quote', source: 'Source', name: 'Course', code: 'Code', instructor: 'Instructor', term: 'Term', date: 'Date', start: 'Start', end: 'End', where: 'Location', status: 'Status', grade: 'Grade', weight: 'Weight', notes: 'Notes', dept: 'Department', displayName: 'Name', theme: 'Theme', termStart: 'Term start' };
+  let html = '<dl>';
+  for (const [key, label] of Object.entries(labels)) if (row[key] !== undefined && row[key] !== null && row[key] !== '') html += '<dt>' + label + '</dt><dd>' + esc(row[key]) + '</dd>';
+  for (const entry of row.checklist || []) html += '<dt>Checklist</dt><dd>' + (entry.done ? 'Done: ' : 'To do: ') + esc(entry.text) + '</dd>';
+  for (const link of row.links || []) html += '<dt>Link</dt><dd>' + esc(link.label || link.url) + ' ' + esc(link.url) + '</dd>';
+  for (const meeting of row.meetings || []) html += '<dt>Class</dt><dd>' + esc(meeting.kind) + ' ' + esc(meeting.start) + '-' + esc(meeting.end) + ' ' + esc(meeting.room) + '</dd>';
+  if (row.coat) html += '<dt>Coat</dt><dd>' + esc(row.coat.name) + ' ' + esc(row.coat.role) + '</dd>';
+  return html + '</dl>';
 }
 
 export function renderSettings() {
   const p = data.profile, coat = p.coat, qs = data.quotes || [];
 
   const head = '<div class="dhead"><span class="kind">Settings</span>'
-    + '<span style="margin-left:auto;font-size:11px;color:var(--ink-3)">saved as you type</span>'
+    + '<span data-layout="f7add123">saved as you type</span>'
     + '<button class="icon-btn" type="button" data-act="close" aria-label="Close">✕</button></div>';
 
   const themes = [
@@ -86,7 +98,7 @@ export function renderSettings() {
     + '<div class="setgrp"><h4>Appearance<em>' + esc(themeLabel()) + '</em></h4><div class="themeseg">'
     + themes.map((t) =>
         '<button type="button" data-themeset="' + t[0] + '" aria-pressed="' + (ui.theme === t[0] ? 'true' : 'false') + '">'
-          + '<span class="sw"><i style="background:' + t[2] + '"></i><i style="background:' + t[3] + '"></i><i style="background:' + t[4] + '"></i></span>'
+          + '<span class="sw"><i data-swatch="' + t[2] + '"></i><i data-swatch="' + t[3] + '"></i><i data-swatch="' + t[4] + '"></i></span>'
           + t[1] + '</button>').join('')
     + '</div></div>'
 
@@ -97,7 +109,7 @@ export function renderSettings() {
       + '<label>Coat</label><span class="swatchrow">'
       + PALETTE.map((pal) =>
           '<button class="swatch" type="button" data-coatcolor="' + pal.hex + '" aria-pressed="' + (pal.hex === coatColour() ? 'true' : 'false')
-            + '" style="--c:' + pal.hex + '" title="' + pal.name + '" aria-label="' + pal.name + ' coat"></button>').join('')
+            + '" data-accent="' + pal.hex + '" title="' + pal.name + '" aria-label="' + pal.name + ' coat"></button>').join('')
       + '</span>'
       + '<span class="swatchname">' + esc(colourName(coatColour())) + '</span>'
     + '</div>'
@@ -117,9 +129,9 @@ export function renderSettings() {
       + '</div><button class="x" type="button" data-qx="' + esc(q.id) + '" aria-label="Remove quote">✕</button></div>';
   });
   body += '</div>'
-    + '<div class="addline" style="flex-direction:column;gap:6px">'
+    + '<div class="addline" data-layout="4fb706c9">'
     + '<input type="text" id="qText" placeholder="Quote — press Enter to add" aria-label="Quote" maxlength="300">'
-    + '<span style="display:flex;gap:6px"><input type="text" id="qSrc" placeholder="Who said it (optional)" aria-label="Source" maxlength="80">'
+    + '<span data-layout="69374f35"><input type="text" id="qSrc" placeholder="Who said it (optional)" aria-label="Source" maxlength="80">'
     + '<button class="btn ghost" type="button" data-act="addquote">Add</button></span></div></div>';
 
   // ── Spotify ──
@@ -127,9 +139,16 @@ export function renderSettings() {
 
   // ── data: sync, import, account ──
   body += '<div class="setgrp"><h4>Data<em>' + data.items.length + ' items · ' + data.courses.length + ' courses</em></h4>'
-    + '<span class="note" id="syncNote">' + syncLine() + '</span>';
+    + '<span class="note" id="syncNote">' + esc(syncLine()) + '</span>'
+    + '<button class="btn ghost" type="button" data-act="export-data">Export data and saved copies</button>';
+  for (const copy of conflicts) {
+    body += '<details class="saved-copy"><summary>Saved copy: ' + esc(copy.body?.title || copy.body?.name || copy.body?.text || copy.key) + '</summary>'
+      + '<p>' + esc(copy.reason) + '</p>' + (copy.op === 'delete' ? '<p>Your saved action: delete this record.</p>' : '') + savedValues(copy.body)
+      + '<button class="btn ghost" type="button" data-act="conflict-restore" data-conflict="' + esc(copy.id) + '">Restore my edit</button> '
+      + '<button class="btn ghost" type="button" data-act="conflict-dismiss" data-conflict="' + esc(copy.id) + '">Discard saved copy</button></details>';
+  }
   body += '<span class="note">Signed in as <b>' + esc(p.username) + '</b>.</span>'
-    + '<span style="display:flex;gap:6px;flex-wrap:wrap"><button class="btn ghost" type="button" data-act="signout">Sign out</button>'
+    + '<span data-layout="ed524873"><button class="btn ghost" type="button" data-act="signout">Sign out</button>'
     + '<button class="btn ghost" type="button" data-act="signout-all" title="Every phone and laptop signed in as you will need the password again">Sign out everywhere</button></span></div>'
     + '</div>';
 
@@ -146,5 +165,5 @@ export function renderSettings() {
 
 export function refreshSyncNote() {
   const n = $('syncNote');
-  if (n) n.innerHTML = syncLine();
+  if (n) n.textContent = syncLine();
 }

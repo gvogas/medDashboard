@@ -4,6 +4,7 @@
 // rotating the secret signs everyone out.
 
 import { HttpError } from './http.js';
+import { limitUser } from './limits.js';
 
 const COOKIE = 'rounds_session';
 export const SESSION_MS = 30 * 24 * 60 * 60 * 1000;
@@ -74,8 +75,11 @@ export async function requireSession(request, env) {
   const token = parseCookies(request.headers.get('cookie'))[COOKIE];
   const session = await readSession(token, env.SESSION_SECRET);
   if (!session) throw new HttpError(401, { error: 'unauthenticated' });
+  const expectedUser = request.headers.get('x-rounds-user');
+  if (expectedUser && expectedUser !== session.userId) throw new HttpError(401, { error: 'account_changed' });
   const row = await env.DB.prepare('SELECT pw_gen FROM users WHERE id = ?').bind(session.userId).first();
   if (!row || row.pw_gen !== session.gen) throw new HttpError(401, { error: 'unauthenticated' });
+  await limitUser(request, env, session.userId);
   return session;
 }
 

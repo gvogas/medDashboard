@@ -46,4 +46,18 @@ describe('spotify request gate', () => {
     expect(calls).toHaveLength(3);
     expect(Date.now() - t0).toBeLessThan(500);
   });
+
+  it('cancels queued requests before another account can inherit them', async () => {
+    let finish;
+    stubFetch(() => new Promise((resolve) => { finish = resolve; }));
+    const { api, resetRequests } = await freshApi();
+    const first = api.spotifyPlayer().catch((error) => error);
+    const queued = api.spotifyControl('next').catch((error) => error);
+    await vi.waitFor(() => expect(calls).toHaveLength(1));
+    resetRequests();
+    finish(new Response('{}'));
+    expect((await first).name).toBe('AbortError');
+    expect((await queued).name).toBe('AbortError');
+    expect(calls).toHaveLength(1);
+  });
 });

@@ -1,3 +1,4 @@
+import { setHTML } from '../dom.js';
 // The page: header, sidebar, stats and whichever view is chosen.
 
 import { ui } from '../state.js';
@@ -39,7 +40,7 @@ export function renderView() {
   const root = $('viewRoot');
   root.className = ui.view === 'table' || ui.view === 'spotify' ? 'fixed' : '';   /* these scroll their own rows */
   if (ui.view === 'spotify') { renderSpotifyInto(root); return; }
-  root.innerHTML = ui.view === 'week' ? renderWeek() : ui.view === 'month' ? renderMonth() : renderTable();
+  setHTML(root, ui.view === 'week' ? renderWeek() : ui.view === 'month' ? renderMonth() : renderTable());
 }
 
 export function render() {

@@ -46,6 +46,9 @@ async function token(request) {
     return json({ access_token: 'tok-playing', refresh_token: 'ref-good', token_type: 'Bearer', expires_in: 3600, scope: 'user-read-playback-state user-modify-playback-state' });
   }
   if (grant === 'refresh_token') {
+    if (form.get('refresh_token') === 'rate-limited') return json({ error: 'slow_down' }, 429, { 'retry-after': '11' });
+    if (form.get('refresh_token') === 'malformed') return json({ token_type: 'Bearer' });
+    if (form.get('refresh_token') === 'null-body') return json(null);
     if (form.get('refresh_token') === 'revoked') return json({ error: 'invalid_grant', error_description: 'Refresh token revoked' }, 400);
     return json({ access_token: 'tok-refreshed', token_type: 'Bearer', expires_in: 3600 });
   }
@@ -80,6 +83,8 @@ async function player(request, url) {
 
   if (method === 'GET') {
     if (path === '/v1/me/player') {
+      if (tok === 'tok-noscope') return json({ error: { status: 403, message: 'Insufficient client scope' } }, 403);
+      if (tok === 'tok-malformed') return new Response('invalid json');
       if (tok === 'tok-paused') return json(PAUSED);
       if (tok === 'tok-idle') return new Response(null, { status: 204 });
       return json(PLAYING);   // tok-playing, tok-refreshed, tok-nodevice, tok-free

@@ -2,9 +2,18 @@ import { json, readJson, HttpError } from './http.js';
 import { requireUser, requireSession, signSession, sessionCookie, clearCookie, parseCookies, secureFlag, RENEW_WITHIN_MS } from './auth.js';
 import { verifyPassword, normalizeUsername } from './password.js';
 import { claimAttempt, recordSuccess } from './throttle.js';
+import { limitLogin } from './limits.js';
 import { validateProfile, validateCourse, validateItem, validateQuote, validateId } from './validate.js';
 import { getUserForLogin, getProfile, updateProfile, getRow, upsertRow, deleteRow, courseExists, syncSince, bumpPasswordGen, saveSpotifyTokens, deleteSpotifyTokens } from './db.js';
 import * as spotify from './spotify.js';
+import { syncPage } from './db.js';
+
+function revisionOf(request) {
+  const raw = request.headers.get('if-match');
+  if (raw === null) throw new HttpError(428, { error: 'reload_required' });
+  if (!/^"\d{1,16}"$/.test(raw) || !Number.isSafeInteger(Number(raw.slice(1, -1)))) throw new HttpError(400, { error: 'invalid', field: 'revision' });
+  return Number(raw.slice(1, -1));
+}
 
 const VALIDATORS = { courses: validateCourse, items: validateItem, quotes: validateQuote };
 
@@ -15,7 +24,7 @@ async function putRow({ request, env, params: [table, id] }) {
   if (table === 'items' && fields.courseId && !(await courseExists(env.DB, userId, fields.courseId))) {
     throw new HttpError(400, { error: 'invalid', field: 'courseId' });
   }
-  return json(await upsertRow(env.DB, table, userId, id, fields));
+  return json(await upsertRow(env.DB, table, userId, id, fields, Date.now(), revisionOf(request)));
 }
 
 async function readRow({ request, env, params: [table, id] }) {
@@ -29,7 +38,7 @@ async function readRow({ request, env, params: [table, id] }) {
 async function removeRow({ request, env, params: [table, id] }) {
   const userId = await requireUser(request, env);
   validateId(id);
-  if (!(await deleteRow(env.DB, table, userId, id))) throw new HttpError(404, { error: 'not_found' });
+  if (!(await deleteRow(env.DB, table, userId, id, Date.now(), revisionOf(request)))) throw new HttpError(404, { error: 'not_found' });
   return new Response(null, { status: 204 });
 }
 
@@ -48,6 +57,7 @@ const callbackUri = (url) => `${url.origin}/api/spotify/callback`;
 const TRACK_URI = /^spotify:(track|episode):[A-Za-z0-9]{1,64}$/;
 const CONTEXT_URI = /^spotify:(album|playlist|artist):[A-Za-z0-9]{1,64}$/;
 const DEVICE_ID = /^[A-Za-z0-9]{1,64}$/;
+const matches = (pattern, value) => typeof value === 'string' && pattern.test(value);
 /** An optional Spotify device id: null when absent, 400 when malformed. */
 function deviceParam(value) {
   if (value == null || value === '') return null;
@@ -61,9 +71,12 @@ function offsetParam(url) {
 }
 
 async function spotifyConnect({ request, env, url }) {
-  await requireUser(request, env);
+  const userId = await requireUser(request, env);
   if (!spotify.configured(env)) throw new HttpError(503, { error: 'spotify_not_configured' });
   const state = [...crypto.getRandomValues(new Uint8Array(16))].map((b) => b.toString(16).padStart(2, '0')).join('');
+  await env.DB.prepare(`INSERT INTO spotify_oauth_states (user_id, state, expires_at) VALUES (?, ?, ?)
+    ON CONFLICT (user_id) DO UPDATE SET state = excluded.state, expires_at = excluded.expires_at`)
+    .bind(userId, state, Date.now() + 600_000).run();
   return new Response(null, {
     status: 302,
     headers: { location: spotify.authorizeUrl(env, callbackUri(url), state), 'set-cookie': stateCookie(state, url, 600) },
@@ -80,9 +93,12 @@ async function spotifyCallback({ request, env, url }) {
     return redirect(url, 'error', clear);
   }
   try {
+    const attempt = await env.DB.prepare('DELETE FROM spotify_oauth_states WHERE user_id = ? AND state = ? AND expires_at > ? RETURNING user_id')
+      .bind(userId, state, Date.now()).first();
+    if (!attempt) return redirect(url, 'error', clear);
     const t = await spotify.exchangeCode(env, code, callbackUri(url));
     await saveSpotifyTokens(env.DB, userId, {
-      refreshToken: await spotify.encryptToken(env.SESSION_SECRET, t.refreshToken),
+      refreshToken: await spotify.sealToken(env, t.refreshToken),
       accessToken: t.accessToken,
       expiresAt: t.expiresAt,
     });
@@ -96,6 +112,7 @@ async function spotifyCallback({ request, env, url }) {
 const routes = [
   // Username + password. Accounts are created with `npm run user:add`.
   ['POST', /^\/api\/login$/, async ({ request, env, url }) => {
+    await limitLogin(request, env);
     const body = await readJson(request);
     if (typeof body.username !== 'string' || typeof body.password !== 'string') {
       throw new HttpError(400, { error: 'invalid', field: 'username' });
@@ -141,13 +158,18 @@ const routes = [
   ['PUT', /^\/api\/me$/, async ({ request, env }) => {
     const userId = await requireUser(request, env);
     const fields = validateProfile(await readJson(request));
-    return json(await updateProfile(env.DB, userId, fields));
+    return json(await updateProfile(env.DB, userId, fields, Date.now(), revisionOf(request)));
   }],
 
   ['GET', /^\/api\/sync$/, async ({ request, env, url }) => {
     const userId = await requireUser(request, env);
+    if (url.searchParams.get('v') === '2') {
+      const cursor = url.searchParams.get('cursor') || '0';
+      if (!/^\d{1,16}$/.test(cursor) || !Number.isSafeInteger(Number(cursor))) throw new HttpError(400, { error: 'invalid', field: 'cursor' });
+      return json(await syncPage(env.DB, userId, Number(cursor)));
+    }
     const raw = url.searchParams.get('since') ?? '0';
-    if (!/^[0-9]+$/.test(raw)) throw new HttpError(400, { error: 'invalid', field: 'since' });
+    if (!/^[0-9]{1,16}$/.test(raw) || !Number.isSafeInteger(Number(raw))) throw new HttpError(400, { error: 'invalid', field: 'since' });
     return json(await syncSince(env.DB, userId, Number(raw)));
   }],
 
@@ -213,7 +235,8 @@ const routes = [
     if (!q || q.length > 200) throw new HttpError(400, { error: 'invalid', field: 'q' });
     const type = url.searchParams.get('type') || null;
     if (type !== null && !spotify.SEARCH_TYPES.includes(type)) throw new HttpError(400, { error: 'invalid', field: 'type' });
-    return json(await spotify.search(env, userId, q, type, type ? offsetParam(url) : 0));
+    const offset = offsetParam(url);
+    return json(await spotify.search(env, userId, q, type, type ? offset : 0));
   }],
   ['GET', /^\/api\/spotify\/albums\/([A-Za-z0-9]{1,64})\/tracks$/, async ({ request, env, url, params: [id] }) => {
     const userId = await requireUser(request, env);
@@ -238,7 +261,7 @@ const routes = [
   ['POST', /^\/api\/spotify\/queue$/, async ({ request, env }) => {
     const userId = await requireUser(request, env);
     const body = await readJson(request);
-    if (!TRACK_URI.test(body.uri)) throw new HttpError(400, { error: 'invalid', field: 'uri' });
+    if (!matches(TRACK_URI, body.uri)) throw new HttpError(400, { error: 'invalid', field: 'uri' });
     await spotify.addToQueue(env, userId, body.uri);
     return new Response(null, { status: 204 });
   }],
@@ -246,10 +269,10 @@ const routes = [
     const userId = await requireUser(request, env);
     const body = await readJson(request);
     const uri = body.uri == null ? null : body.uri, contextUri = body.contextUri == null ? null : body.contextUri;
-    if (uri !== null && !TRACK_URI.test(uri)) throw new HttpError(400, { error: 'invalid', field: 'uri' });
-    if (contextUri !== null && !CONTEXT_URI.test(contextUri)) throw new HttpError(400, { error: 'invalid', field: 'contextUri' });
+    if (uri !== null && !matches(TRACK_URI, uri)) throw new HttpError(400, { error: 'invalid', field: 'uri' });
+    if (contextUri !== null && !matches(CONTEXT_URI, contextUri)) throw new HttpError(400, { error: 'invalid', field: 'contextUri' });
     const uris = body.uris == null ? null : body.uris;
-    if (uris !== null && (contextUri || !Array.isArray(uris) || !uris.length || uris.length > 100 || !uris.every((u) => TRACK_URI.test(u)) || (uri && !uris.includes(uri)))) {
+    if (uris !== null && (contextUri || !Array.isArray(uris) || !uris.length || uris.length > 100 || !uris.every((u) => matches(TRACK_URI, u)) || (uri && !uris.includes(uri)))) {
       throw new HttpError(400, { error: 'invalid', field: 'uris' });
     }
     if (!uri && !contextUri && !uris) throw new HttpError(400, { error: 'invalid', field: 'uri' });
@@ -291,11 +314,19 @@ export async function handleApi(request, env, url) {
     assertSameOrigin(request, url);
     for (const [method, pattern, handler] of routes) {
       const m = url.pathname.match(pattern);
-      if (m && request.method === method) { res = await handler({ request, env, url, params: m.slice(1) }); break; }
+      if (m && request.method === method) {
+        let params;
+        try { params = m.slice(1).map(decodeURIComponent); }
+        catch { throw new HttpError(400, { error: 'invalid', field: 'path' }); }
+        res = await handler({ request, env, url, params });
+        break;
+      }
     }
     if (!res) {
-      const known = routes.some(([, pattern]) => pattern.test(url.pathname));
-      throw new HttpError(known ? 405 : 404, { error: known ? 'method_not_allowed' : 'not_found' });
+      const allowed = routes.filter(([, pattern]) => pattern.test(url.pathname)).map(([method]) => method);
+      throw new HttpError(allowed.length ? 405 : 404,
+        { error: allowed.length ? 'method_not_allowed' : 'not_found' },
+        allowed.length ? { allow: allowed.join(', ') } : {});
     }
   } catch (e) {
     if (e instanceof HttpError) res = json(e.body, e.status, e.headers);

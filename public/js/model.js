@@ -104,7 +104,7 @@ export function normalizeItem(raw) {
     dept: raw.dept || '',
     completedAt: typeof raw.completedAt === 'number' ? raw.completedAt : null,
     createdAt: raw.createdAt ?? null,
-    updatedAt: raw.updatedAt ?? null,
+    revision: raw.revision ?? 0, updatedAt: raw.updatedAt ?? null,
   };
 }
 
@@ -128,10 +128,10 @@ export function normalizeCourse(raw, index = 0) {
         }))
       : [],
     createdAt: raw.createdAt ?? null,
-    updatedAt: raw.updatedAt ?? null,
+    revision: raw.revision ?? 0, updatedAt: raw.updatedAt ?? null,
   };
 }
 
 export function normalizeQuote(raw) {
-  return { id: raw.id || uid(), text: raw.text || '', source: raw.source || '', createdAt: raw.createdAt ?? null, updatedAt: raw.updatedAt ?? null };
+  return { id: raw.id || uid(), text: raw.text || '', source: raw.source || '', createdAt: raw.createdAt ?? null, revision: raw.revision ?? 0, updatedAt: raw.updatedAt ?? null };
 }

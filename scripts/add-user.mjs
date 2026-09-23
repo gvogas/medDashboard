@@ -68,6 +68,7 @@ if (remove) {
   sql = `DELETE FROM items WHERE user_id IN (SELECT id FROM users WHERE username = '${username}');
          DELETE FROM quotes WHERE user_id IN (SELECT id FROM users WHERE username = '${username}');
          DELETE FROM courses WHERE user_id IN (SELECT id FROM users WHERE username = '${username}');
+         DELETE FROM spotify_tokens WHERE user_id IN (SELECT id FROM users WHERE username = '${username}');
          DELETE FROM users WHERE username = '${username}';`;
 } else {
   const password = await ask(`Password for ${username}: `);

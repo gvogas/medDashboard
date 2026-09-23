@@ -12,8 +12,13 @@ export class ApiError extends Error {
 /** How long to leave a failed request before trying it again by itself: what a rate
     limit asked for, else 30 s. */
 export function retryDelayMs(e) {
-  const asked = e instanceof ApiError && e.status === 429 ? Number(e.body?.retryAfter) : 0;
-  return (asked > 0 ? asked : 30) * 1000;
+  if (e instanceof ApiError && e.status === 429) {
+    for (const value of [e.retryAfter, e.body?.retryAfter]) {
+      const seconds = Number(value);
+      if (Number.isFinite(seconds) && seconds > 0) return seconds * 1000;
+    }
+  }
+  return 30000;
 }
 
 /* Spotify rate-limits the app as a whole, so every call to it goes through one gate:
@@ -24,11 +29,24 @@ let spotifyTail = Promise.resolve();
 let spotifyLastAt = 0;
 let spotifyBlockedUntil = 0;
 const spotifyInFlight = new Map();
+let sessionRequests = new AbortController();
+let accountId = null;
+export function bindAccount(id) { accountId = id; }
+
+/** Cancel in-flight and queued calls before changing accounts. */
+export function resetRequests() {
+  sessionRequests.abort();
+  sessionRequests = new AbortController();
+  spotifyInFlight.clear();
+  spotifyTail = Promise.resolve();
+}
 
 function spotifyRequest(method, path, body) {
+  const signal = sessionRequests.signal;
   const shared = method === 'GET' ? spotifyInFlight.get(path) : null;
   if (shared) return shared;
   const run = spotifyTail.then(async () => {
+    signal.throwIfAborted();
     const wait = spotifyBlockedUntil - Date.now();
     if (wait > 0) {
       const secs = Math.ceil(wait / 1000);
@@ -36,6 +54,7 @@ function spotifyRequest(method, path, body) {
     }
     const gap = spotifyLastAt + SPOTIFY_GAP_MS - Date.now();
     if (gap > 0) await new Promise((r) => setTimeout(r, gap));
+    signal.throwIfAborted();
     spotifyLastAt = Date.now();
     try {
       return await send(method, path, body);
@@ -47,40 +66,46 @@ function spotifyRequest(method, path, body) {
   spotifyTail = run.catch(() => {});
   if (method === 'GET') {
     spotifyInFlight.set(path, run);
-    run.finally(() => spotifyInFlight.delete(path)).catch(() => {});
+    run.finally(() => { if (spotifyInFlight.get(path) === run) spotifyInFlight.delete(path); }).catch(() => {});
   }
   return run;
 }
 
 /** Resolves to the parsed JSON (or null for 204). Throws ApiError on 4xx/5xx, TypeError offline. */
-export function request(method, path, body) {
+export function request(method, path, body, headers) {
   /* the token comes from Spotify's accounts service, not its API: the Web Playback SDK must always get one */
   if (path.startsWith('/api/spotify') && path !== '/api/spotify/token') return spotifyRequest(method, path, body);
-  return send(method, path, body);
+  return send(method, path, body, headers);
 }
 
-async function send(method, path, body) {
+async function send(method, path, body, extraHeaders = {}) {
+  const signal = sessionRequests.signal;
   const res = await fetch(path, {
     method,
     credentials: 'same-origin',
-    headers: body !== undefined ? { 'content-type': 'application/json' } : {},
+    cache: 'no-store',
+    signal,
+    headers: { ...(body !== undefined ? { 'content-type': 'application/json' } : {}), ...(accountId && path !== '/api/login' ? { 'x-rounds-user': accountId } : {}), ...extraHeaders },
     body: body !== undefined ? JSON.stringify(body) : undefined,
   });
   const data = res.status === 204 ? null : await res.json().catch(() => null);
+  signal.throwIfAborted();
   if (!res.ok) throw new ApiError(res.status, data, Number(res.headers.get('retry-after')) || null);
   return data;
 }
 
+const match = (revision = 0) => ({ 'if-match': `"${revision}"` });
+
 export const api = {
   me: () => request('GET', '/api/me'),
-  saveMe: (profile) => request('PUT', '/api/me', profile),
+  saveMe: (profile) => request('PUT', '/api/me', profile, match(profile.revision)),
   login: (username, password) => request('POST', '/api/login', { username, password }),
   signOut: () => request('DELETE', '/api/session'),
-  sync: (since) => request('GET', `/api/sync?since=${since}`),
+  sync: (cursor) => request('GET', `/api/sync?v=2&cursor=${cursor}`),
   get: (kind, id) => request('GET', `/api/${kind}/${encodeURIComponent(id)}`),
-  put: (kind, id, row) => request('PUT', `/api/${kind}/${encodeURIComponent(id)}`, row),
+  put: (kind, id, row) => request('PUT', `/api/${kind}/${encodeURIComponent(id)}`, row, match(row.revision)),
   revokeAll: () => request('POST', '/api/session/revoke-all'),
-  del: (kind, id) => request('DELETE', `/api/${kind}/${encodeURIComponent(id)}`),
+  del: (kind, id, revision = 0) => request('DELETE', `/api/${kind}/${encodeURIComponent(id)}`, undefined, match(revision)),
   spotifyPlayer: () => request('GET', '/api/spotify/player'),
   spotifyControl: (action, deviceId) => request('POST', `/api/spotify/player/${action}` + (deviceId ? `?deviceId=${encodeURIComponent(deviceId)}` : '')),
   spotifyToken: () => request('GET', '/api/spotify/token'),

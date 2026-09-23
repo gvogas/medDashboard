@@ -22,8 +22,26 @@ const BODY_LIMIT = 1024 * 1024; // 1 MB
 export async function readJson(request) {
   const length = Number(request.headers.get('content-length') || 0);
   if (length > BODY_LIMIT) throw new HttpError(413, { error: 'too_large' });
-  const text = await request.text();
-  if (text.length > BODY_LIMIT) throw new HttpError(413, { error: 'too_large' });
+  const reader = request.body?.getReader();
+  const decoder = new TextDecoder();
+  let text = '', bytes = 0;
+  if (reader) {
+    try {
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        bytes += value.byteLength;
+        if (bytes > BODY_LIMIT) {
+          await reader.cancel().catch(() => {});
+          throw new HttpError(413, { error: 'too_large' });
+        }
+        text += decoder.decode(value, { stream: true });
+      }
+      text += decoder.decode();
+    } finally {
+      reader.releaseLock();
+    }
+  }
   let body;
   try {
     body = JSON.parse(text);
@@ -34,4 +52,3 @@ export async function readJson(request) {
   if (!body || typeof body !== 'object' || Array.isArray(body)) throw new HttpError(400, { error: 'invalid', field: 'body' });
   return body;
 }
-

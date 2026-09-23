@@ -1,11 +1,13 @@
 import { SELF, env } from 'cloudflare:test';
-import { describe, it, expect } from 'vitest';
+import { beforeEach, describe, it, expect } from 'vitest';
 import { BASE, signIn, createUser, login } from './helpers.js';
-import { encryptToken, decryptToken } from '../worker/spotify.js';
+import { openToken, encryptToken, decryptToken } from '../worker/spotify.js';
 import { handleApi } from '../worker/api.js';
 import { nextDelayMs } from '../public/js/spotify.js';
 
 const HOUR = 60 * 60 * 1000;
+// Storage is shared within this file; an upstream cooldown intentionally affects all users.
+beforeEach(async () => { await env.DB.prepare("DELETE FROM request_limits WHERE key LIKE 'upstream:%'").run(); });
 
 /** Seed a connection directly, the way the callback would, with the given access token. */
 async function connect(userId, accessToken, { refreshToken = 'ref-good', expiresAt = Date.now() + HOUR } = {}) {
@@ -78,7 +80,7 @@ describe('GET /api/spotify/callback', () => {
     const row = await tokenRow(id);
     expect(row.access_token).toBe('tok-playing');
     expect(row.refresh_token).not.toBe('ref-good');
-    expect(await decryptToken(env.SESSION_SECRET, row.refresh_token)).toBe('ref-good');
+    expect(await openToken(env, row.refresh_token)).toBe('ref-good');
     expect(await decryptToken('another-secret', row.refresh_token)).toBeNull();
     expect(row.expires_at).toBeGreaterThan(Date.now() + 50 * 60 * 1000);
   });
@@ -163,7 +165,7 @@ describe('GET /api/spotify/player', () => {
     const row = await tokenRow(id);
     expect(row.access_token).toBe('tok-refreshed');
     expect(row.expires_at).toBeGreaterThan(Date.now() + 50 * 60 * 1000);
-    expect(await decryptToken(env.SESSION_SECRET, row.refresh_token)).toBe('ref-good');
+    expect(await openToken(env, row.refresh_token)).toBe('ref-good');
   });
 
   it('refreshes once more when Spotify still says 401, then retries', async () => {
@@ -342,7 +344,7 @@ describe('the Spotify view', () => {
     expect(b.artists).toEqual([{ uri: 'spotify:artist:ar1', id: 'ar1', name: 'Marconi Union', art: 'https://i.scdn.co/image/mu-64' }]);
     expect(b.playlists).toEqual([{ uri: 'spotify:playlist:pl1', id: 'pl1', name: 'Study mix', owner: 'George', ownerId: 'george', collaborative: false, art: 'https://i.scdn.co/image/pl1', count: 3 }]);
     expect(b.more).toEqual({ tracks: true, artists: false, albums: false, playlists: false });
-    expect(await (await api('/api/spotify/search?q=nothing')).json()).toEqual({ tracks: [], artists: [], albums: [], playlists: [], more: { tracks: false, artists: false, albums: false, playlists: false } });
+    expect(await (await api('/api/spotify/search?q=nothing')).json()).toEqual({ tracks: [], artists: [], albums: [], playlists: [], more: { tracks: false, artists: false, albums: false, playlists: false }, nextOffsets: { tracks: null, artists: null, albums: null, playlists: null } });
     expect((await api('/api/spotify/search?q=')).status).toBe(400);
     expect((await api('/api/spotify/search')).status).toBe(400);
   });

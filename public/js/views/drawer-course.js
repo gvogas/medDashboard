@@ -20,10 +20,10 @@ export function renderCourseDrawer(focus) {
   data.items.forEach((it) => { if (it.courseId === c.id) used++; });
   const hrs = (c.meetings || []).reduce((s, m) => s + dur(m.start, m.end), 0);
 
-  const head = '<div class="dhead" style="--c:' + c.color + '">'
+  const head = '<div class="dhead" data-accent="' + c.color + '">'
     + '<span class="kind">' + (isNew ? 'New course' : 'Course') + '</span>'
-    + '<span class="chip type" style="--c:' + c.color + '">' + esc(c.code || 'code') + '</span>'
-    + '<span style="margin-left:auto;font-size:11px;color:var(--ink-3)" class="mono">' + (Math.round(hrs * 10) / 10) + ' h/week</span>'
+    + '<span class="chip type" data-accent="' + c.color + '">' + esc(c.code || 'code') + '</span>'
+    + '<span data-layout="f7add123" class="mono">' + (Math.round(hrs * 10) / 10) + ' h/week</span>'
     + '<button class="icon-btn" type="button" data-act="close" aria-label="Close">✕</button></div>';
 
   let body = '<div class="dbody">'
@@ -35,13 +35,13 @@ export function renderCourseDrawer(focus) {
       + '<label>Colour</label><span class="swatchrow">'
       + PALETTE.map((p) =>
           '<button class="swatch" type="button" data-color="' + p.hex + '" aria-pressed="' + (p.hex === c.color ? 'true' : 'false')
-            + '" style="--c:' + p.hex + '" title="' + p.name + '" aria-label="' + p.name + '"></button>').join('')
+            + '" data-accent="' + p.hex + '" title="' + p.name + '" aria-label="' + p.name + '"></button>').join('')
       + '</span>'
       + '<span class="swatchname">' + esc(colourName(c.color)) + '</span>'
-      + (isNew ? '' : '<label for="c-arch">Archived</label><span class="pair"><input id="c-arch" type="checkbox" data-cf="archived" ' + (c.archived ? 'checked' : '') + ' style="width:14px;height:14px;accent-color:var(--accent)"><span>hidden from the sidebar, items kept</span></span>')
+      + (isNew ? '' : '<label for="c-arch">Archived</label><span class="pair"><input id="c-arch" type="checkbox" data-cf="archived" ' + (c.archived ? 'checked' : '') + ' data-layout="d5cb2920"><span>hidden from the sidebar, items kept</span></span>')
     + '</div>'
     + '<div class="dsec"><h4>Classes<em>time · room</em></h4><div class="mtglist">';
-  if (!(c.meetings || []).length) body += '<div class="ttnone" style="padding:0">No classes yet — add the first one below.</div>';
+  if (!(c.meetings || []).length) body += '<div class="ttnone" data-layout="35eecf3e">No classes yet — add the first one below.</div>';
   (c.meetings || []).forEach((m) => {
     body += '<div class="mtg" data-mid="' + esc(m.id) + '"><div class="line">'
       + '<select class="kind" data-mf="kind" aria-label="Kind">'
@@ -55,7 +55,7 @@ export function renderCourseDrawer(focus) {
       + '<input class="room" type="text" data-mf="room" value="' + esc(m.room || '') + '" placeholder="Room number" aria-label="Room" maxlength="40">'
       + '</div><button class="x" type="button" data-mx="' + esc(m.id) + '" aria-label="Remove class">✕</button></div>';
   });
-  body += '</div>' + ((c.meetings || []).length < 12 ? '<button class="btn ghost" type="button" data-act="addmtg" style="align-self:flex-start">+ Add a class</button>' : '<span class="note">Twelve classes is the most a course can hold.</span>') + '</div>';
+  body += '</div>' + ((c.meetings || []).length < 12 ? '<button class="btn ghost" type="button" data-act="addmtg" data-layout="0fd943ff">+ Add a class</button>' : '<span class="note">Twelve classes is the most a course can hold.</span>') + '</div>';
   if (!isNew && used) body += '<div class="warnline">' + used + ' item' + (used === 1 ? '' : 's') + ' ' + (used === 1 ? 'is' : 'are') + ' filed under this course. Deleting it leaves them without a course.</div>';
   body += '</div>';
 

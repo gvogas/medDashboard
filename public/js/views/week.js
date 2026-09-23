@@ -9,7 +9,7 @@ import { stepsHtml, statusChip, CHECK_SVG } from './bits.js';
 function rowHtml(inst) {
   const TODAY = today();
   const it = inst.item, m = tmeta(it.type), c = course(it.courseId);
-  let badges = '<span class="chip type" style="--c:' + m.color + '">' + esc(m.label) + '</span>';
+  let badges = '<span class="chip type" data-accent="' + m.color + '">' + esc(m.label) + '</span>';
   if (isOverdue(it) || it.status !== 'todo') badges += statusChip(it);
   else if (dueSoon(it) && (it.type === 'assignment' || it.type === 'exam')) badges += '<span class="chip soon">' + (diffDays(TODAY, inst.date) === 0 ? 'Today' : 'Soon') + '</span>';
 
@@ -20,7 +20,7 @@ function rowHtml(inst) {
   if (it.start && it.end) bits.push(hhmm(it.start) + '–' + hhmm(it.end));
   if (it.recur === 'weekly') bits.push('weekly');
 
-  return '<button class="row tint' + (isComplete(it) ? ' complete' : '') + '" type="button" data-id="' + esc(it.id) + '" style="--c:' + m.color + '">'
+  return '<button class="row tint' + (isComplete(it) ? ' complete' : '') + '" type="button" data-id="' + esc(it.id) + '" data-accent="' + m.color + '">'
     + '<span class="when mono">' + esc(when) + '</span>'
     + '<span class="what"><span class="t' + (isComplete(it) && it.type === 'task' ? ' struck' : '') + '">' + esc(it.title) + '</span>'
     + '<span class="m">' + esc(bits.join(' · ')) + '</span>'
@@ -55,7 +55,7 @@ export function renderWeek() {
       + (key === TODAY ? '<span class="today-tag">Today</span>' : '')
       + (cls.length ? '<span class="classes">' + cls.length + ' class' + (cls.length === 1 ? '' : 'es') + ' · ' + esc(cls.map((x) => hhmm(x.mtg.start) + ' ' + x.course.code).join(', ')) + '</span>' : '')
       + '<button class="add" type="button" data-add="' + key + '" aria-label="Add item on ' + key + '">+</button></div>';
-    if (!rows.length) sched += '<div class="empty" style="padding:11px 13px;text-align:left">Nothing scheduled</div>';
+    if (!rows.length) sched += '<div class="empty" data-layout="08628ee7">Nothing scheduled</div>';
     else rows.forEach((x) => { sched += rowHtml(x); });
   }
   if (!any) {

@@ -5,16 +5,25 @@
   "description": "Med-school tracker: static front end + Cloudflare Worker API on D1",
   "scripts": {
     "dev": "wrangler dev",
-    "deploy": "wrangler d1 migrations apply rounds --remote && wrangler deploy",
-    "test": "vitest run",
+    "deploy": "npm run check && node scripts/check-secrets.mjs && wrangler d1 migrations apply rounds --remote && wrangler deploy --assets .build/site",
+    "test": "vitest run && npm run test:local",
     "test:watch": "vitest",
     "db:local": "wrangler d1 migrations apply rounds --local",
     "db:remote": "wrangler d1 migrations apply rounds --remote",
-    "user:add": "node scripts/add-user.mjs"
+    "user:add": "node scripts/add-user.mjs",
+    "build": "node scripts/build.mjs",
+    "csp:update": "node scripts/csp-hash.mjs --write",
+    "test:local": "node --test test/local-store.node.mjs",
+    "check": "npm test && npm run build",
+    "spotify:key": "node scripts/spotify-key.mjs"
   },
   "devDependencies": {
     "@cloudflare/vitest-pool-workers": "^0.22.0",
+    "fake-indexeddb": "^6.2.5",
     "vitest": "^4.1.0",
     "wrangler": "^4.0.0"
+  },
+  "overrides": {
+    "sharp": "^0.35.4"
   }
 }

@@ -1,3 +1,4 @@
+import { setHTML } from '../dom.js';
 // The slide-in drawer and its scrim, shared by the item, course and settings panels.
 
 import { ui } from '../state.js';
@@ -8,7 +9,7 @@ export const drawer = $('drawer');
 export const scrim = $('scrim');
 
 export function showDrawer(html) {
-  drawer.innerHTML = html;
+  setHTML(drawer, html);
   drawer.classList.add('on');
   drawer.setAttribute('aria-hidden', 'false');
   scrim.classList.add('on');
