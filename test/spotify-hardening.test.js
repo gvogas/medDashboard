@@ -22,8 +22,13 @@ describe('Spotify upstream failures', () => {
     const blocked = await second.api('/api/spotify/player');
     expect(blocked.status).toBe(429);
     expect(Number(blocked.headers.get('retry-after'))).toBeGreaterThan(0);
+    expect(await (await second.api('/api/spotify/status')).json()).toEqual({ connected: true });
+    const unconnected = await signIn('cooldown-unconnected');
+    expect(await (await unconnected('/api/spotify/status')).json()).toEqual({ connected: false });
+    expect((await second.api('/api/spotify/connect', { redirect: 'manual' })).headers.get('location')).toMatch(/^https:\/\/accounts\.spotify\.com\/authorize\?/);
     expect((await second.api('/api/spotify/token')).status).toBe(200);
     expect((await second.api('/api/spotify', { method: 'DELETE' })).status).toBe(204);
+    expect(await (await second.api('/api/spotify/status')).json()).toEqual({ connected: false });
   });
 
   it('forwards account-service throttling without deleting the connection', async () => {

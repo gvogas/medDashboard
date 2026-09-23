@@ -67,6 +67,13 @@ export async function poll() {
   if (!canPoll()) return;
   const started = generation;
   try {
+    if (!state.loaded) {
+      const connection = await api.spotifyStatus();
+      if (started !== generation || !active) return;
+      apply(connection);
+      emit('state');
+      if (!connection.connected) { schedule(null); return; }
+    }
     const result = await api.spotifyPlayer();
     if (started !== generation || !active) return;
     apply(result);
@@ -76,7 +83,6 @@ export async function poll() {
     if (started !== generation || !active) return;
     if (e instanceof ApiError && e.status === 401) { stop(); onSignedOut(); return; }
     state.stale = true;
-    state.loaded = true;
     emit('state');
     schedule(retryDelayMs(e));
   }

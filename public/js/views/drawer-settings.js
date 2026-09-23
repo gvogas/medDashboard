@@ -9,6 +9,7 @@ import { status } from '../sync.js';
 import { state as spotify } from '../spotify.js';
 import { state as web } from '../web-player.js';
 import { SPOTIFY_MARK } from './player.js';
+import { spotifyRetryAt } from '../api.js';
 
 export function openSettings(focus) {
   resetDrawerState();
@@ -43,17 +44,20 @@ function syncLine() {
 
 function spotifyGroup() {
   const on = spotify.connected;
-  let html = '<h4>Spotify<em>' + (on ? 'Connected' : 'Not connected') + '</em></h4>'
+  let html = '<h4>Spotify<em>' + (!spotify.loaded ? 'Checking connection' : on ? 'Connected' : 'Not connected') + '</em></h4>'
     + '<div class="spotrow">' + SPOTIFY_MARK + '<div class="who">';
-  if (on) {
+  if (!spotify.loaded) {
+    html += '<b>Checking connection</b><span>' + (spotify.stale ? 'Connection status is unavailable. Try again when you are online.' : 'Checking your saved Spotify connection…') + '</span></div>';
+  } else if (on) {
     html += '<b>Connected</b><span>' + (spotify.device ? 'Playing on <b data-layout="c75d1a93">' + esc(spotify.device) + '</b>.'
-      : spotify.track ? 'Paused.' : 'Nothing playing right now.') + '</span></div>'
+      : spotify.stale ? 'Playback status is temporarily unavailable.' : spotify.track ? 'Paused.' : 'Nothing playing right now.') + '</span></div>'
       + '<button class="btn ghost" type="button" data-act="spotify-disconnect">Disconnect</button>';
   } else {
     html += '<b>Not connected</b><span>Show what you are listening to at the bottom of the sidebar.</span></div>'
       + '<a class="btn" href="/api/spotify/connect">Connect</a>';
   }
   html += '</div>';
+  if (on && spotifyRetryAt()) html += '<span class="note">Your account is connected. Spotify requests are paused until ' + esc(new Date(spotifyRetryAt()).toLocaleString()) + '.</span>';
   if (on && web.status === 'needs_reconnect') {
     html += '<span class="note err">Reconnect Spotify to play in this browser. <a href="/api/spotify/connect">Reconnect</a></span>';
   }

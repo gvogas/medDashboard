@@ -28,6 +28,8 @@ export const SPOTIFY_GAP_MS = 1500;
 let spotifyTail = Promise.resolve();
 let spotifyLastAt = 0;
 let spotifyBlockedUntil = 0;
+/** The current tab's retry deadline, also used by the Spotify view. */
+export function spotifyRetryAt() { return spotifyBlockedUntil > Date.now() ? spotifyBlockedUntil : 0; }
 const spotifyInFlight = new Map();
 let sessionRequests = new AbortController();
 let accountId = null;
@@ -73,8 +75,8 @@ function spotifyRequest(method, path, body) {
 
 /** Resolves to the parsed JSON (or null for 204). Throws ApiError on 4xx/5xx, TypeError offline. */
 export function request(method, path, body, headers) {
-  /* the token comes from Spotify's accounts service, not its API: the Web Playback SDK must always get one */
-  if (path.startsWith('/api/spotify') && path !== '/api/spotify/token') return spotifyRequest(method, path, body);
+  /* Account operations and the local connection check remain available during an API cooldown. */
+  if (path.startsWith('/api/spotify/') && !['/api/spotify/token', '/api/spotify/status'].includes(path)) return spotifyRequest(method, path, body);
   return send(method, path, body, headers);
 }
 
@@ -107,6 +109,7 @@ export const api = {
   revokeAll: () => request('POST', '/api/session/revoke-all'),
   del: (kind, id, revision = 0) => request('DELETE', `/api/${kind}/${encodeURIComponent(id)}`, undefined, match(revision)),
   spotifyPlayer: () => request('GET', '/api/spotify/player'),
+  spotifyStatus: () => request('GET', '/api/spotify/status'),
   spotifyControl: (action, deviceId) => request('POST', `/api/spotify/player/${action}` + (deviceId ? `?deviceId=${encodeURIComponent(deviceId)}` : '')),
   spotifyToken: () => request('GET', '/api/spotify/token'),
   spotifyTransfer: (deviceId, play = true) => request('POST', '/api/spotify/transfer', { deviceId, play }),

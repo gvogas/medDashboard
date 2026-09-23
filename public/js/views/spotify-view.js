@@ -3,7 +3,7 @@ import { setHTML } from '../dom.js';
 // Data is fetched through the Worker and cached here for the session; the badge's
 // poller owns "now playing", and this view follows it without redrawing the page.
 
-import { api, ApiError, retryDelayMs } from '../api.js';
+import { api, ApiError, retryDelayMs, spotifyRetryAt } from '../api.js';
 import { ui } from '../state.js';
 import { state as player, poll, onRoundsIfIdle } from '../spotify.js';
 import { state as web } from '../web-player.js';
@@ -58,13 +58,13 @@ const MESSAGES = {
 
 function explain(e) {
   if (!(e instanceof ApiError)) return MESSAGES.offline;
-  /* Spotify sometimes pauses one endpoint for most of a day; "a moment" would be wrong. */
-  const wait = e.body?.error === 'rate_limited' ? Number(e.body.retryAfter) : 0;
-  if (wait > 120) {
-    const later = wait >= 5400 ? 'about ' + Math.round(wait / 3600) + ' hours' : 'about ' + Math.round(wait / 60) + ' minutes';
-    return 'Spotify has paused this for ' + later + '. Try again then.';
-  }
+  if (e.status === 429) return cooldownMessage(spotifyRetryAt() || Date.now() + retryDelayMs(e));
   return MESSAGES[e.body?.error] || MESSAGES.spotify_unavailable;
+}
+
+function cooldownMessage(until) {
+  const time = new Date(until).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', second: '2-digit' });
+  return 'Spotify requests are paused. Try again after ' + time + '. You can keep listening in Spotify.';
 }
 
 function say(text, ms = 4000, ok = false) {
@@ -219,6 +219,8 @@ export function openQueue(refresh = false) {
 
 /** A refresh button: the playlist list, the open list, the queue, or recently played. */
 export function refresh(what) {
+  // Keep the visible cache while the shared request gate is waiting out a 429.
+  if (spotifyRetryAt()) { rerender(); return; }
   if (what === 'playlists') { cache.playlists = null; delete retryAt.playlists; ensurePlaylists(); return; }
   if (what === 'queue') { openQueue(true); return; }
   if (what === 'recent') { cache.recent = null; delete retryAt.recent; ensureRecent(); return; }
@@ -438,7 +440,8 @@ function playlistRow(p) {
 }
 
 function loadingRow(what) {
-  return '<div class="empty"><b>' + esc(what) + '</b>Asking Spotify…</div>';
+  return '<div class="empty"><b>' + esc(what) + '</b>'
+    + (spotifyRetryAt() ? 'Waiting for the Spotify request limit to reset.' : 'Asking Spotify…') + '</div>';
 }
 
 function moreButton(action, n) {
@@ -564,6 +567,7 @@ function devicesHtml() {
 const REPEAT_LABEL = { off: 'Repeat is off', context: 'Repeating the playlist or album', track: 'Repeating this track' };
 
 function topHtml() {
+  const cooldown = spotifyRetryAt();
   const vol = player.volume, can = player.connected && player.supportsVolume && vol != null, live = !!player.device;
   return '<div class="spot-top">'
     + '<form class="spot-search" data-spot-form role="search"><span class="spot-mark">' + SPOTIFY_MARK + '</span>'
@@ -583,7 +587,8 @@ function topHtml() {
     + '<span data-spot-dev-name>' + esc(player.device || 'Choose a device') + '</span> ▾</button>'
     + devicesHtml()
     + '</div>'
-    + (note ? '<div class="spot-note' + (note.ok ? ' ok' : '') + '" role="status">' + esc(note.text) + '</div>' : '');
+    + (cooldown ? '<div class="spot-note" role="status">' + esc(cooldownMessage(cooldown)) + '</div>'
+      : note ? '<div class="spot-note' + (note.ok ? ' ok' : '') + '" role="status">' + esc(note.text) + '</div>' : '');
 }
 
 export function renderSpotifyView() {
@@ -591,7 +596,7 @@ export function renderSpotifyView() {
   if (!player.connected) {
     return '<div class="panel spot-off"><div class="empty">' + SPOTIFY_MARK + '<b>Spotify is not connected</b>'
       + 'Connect your account to search, browse your playlists, see the queue and set the volume from here.'
-      + '<br><button class="btn" type="button" data-spotify="connect" data-layout="df928149">Connect Spotify</button></div></div>';
+      + '<br><a class="btn" href="/api/spotify/connect" data-layout="df928149">Connect Spotify</a></div></div>';
   }
   ensurePlaylists();
   ensureMe();

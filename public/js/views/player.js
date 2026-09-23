@@ -57,7 +57,7 @@ export function renderPlayer(s, kind = 'state') {
   if (!s.loaded) { setHTML(host, ''); return; }
 
   if (!s.connected) {
-    setHTML(host, '<button class="connect" type="button" data-spotify="connect">' + SPOTIFY_MARK + 'Connect Spotify</button>');
+    setHTML(host, '<a class="connect" href="/api/spotify/connect">' + SPOTIFY_MARK + 'Connect Spotify</a>');
     return;
   }
   const target = playTarget(s, web);

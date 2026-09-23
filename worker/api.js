@@ -179,6 +179,12 @@ const routes = [
 
   ['GET', /^\/api\/spotify\/connect$/, spotifyConnect],
   ['GET', /^\/api\/spotify\/callback$/, spotifyCallback],
+  ['GET', /^\/api\/spotify\/status$/, async ({ request, env }) => {
+    const userId = await requireUser(request, env);
+    // Connection state is local; checking it must not call a throttled Spotify API.
+    const row = await env.DB.prepare('SELECT 1 AS connected FROM spotify_tokens WHERE user_id = ?').bind(userId).first();
+    return json({ connected: !!row });
+  }],
   ['GET', /^\/api\/spotify\/player$/, async ({ request, env }) => {
     const userId = await requireUser(request, env);
     return json(await spotify.playerState(env, userId));

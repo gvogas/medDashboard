@@ -29,6 +29,8 @@ describe('shared request limits', () => {
     const api = await signIn('limit-spotify');
     await env.DB.prepare('INSERT INTO request_limits VALUES (?, ?, ?)').bind('spotify:u-limit-spotify', SPOTIFY_LIMIT, Date.now() + 60000).run();
     expect((await api('/api/spotify/player')).status).toBe(429);
+    expect(await (await api('/api/spotify/status')).json()).toEqual({ connected: false });
+    expect((await api('/api/spotify/connect', { redirect: 'manual' })).status).toBe(302);
     expect((await api('/api/spotify/token')).status).toBe(409);
     expect((await api('/api/spotify', { method: 'DELETE' })).status).toBe(204);
     expect((await api('/api/me')).status).toBe(200);

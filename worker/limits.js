@@ -50,7 +50,7 @@ export async function limitUser(request, env, userId) {
   if (wait) throw rateLimited(wait);
   const path = new URL(request.url).pathname;
   // SDK token retrieval and disconnect remain available during a Spotify API cooldown.
-  if (path.startsWith('/api/spotify/') && !['/api/spotify/token', '/api/spotify/callback'].includes(path)) {
+  if (path.startsWith('/api/spotify/') && !['/api/spotify/token', '/api/spotify/status', '/api/spotify/connect', '/api/spotify/callback'].includes(path)) {
     const spotifyWait = await claimLimit(env.DB, `spotify:${userId}`, SPOTIFY_LIMIT);
     if (spotifyWait) throw rateLimited(spotifyWait);
   }

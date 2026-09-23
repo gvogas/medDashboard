@@ -47,6 +47,17 @@ describe('spotify request gate', () => {
     expect(Date.now() - t0).toBeLessThan(500);
   });
 
+  it('can check and disconnect a saved connection during the browser cooldown', async () => {
+    stubFetch((path) => path === '/api/spotify/player'
+      ? new Response(JSON.stringify({ error: 'rate_limited', retryAfter: 3600 }), { status: 429 })
+      : new Response(JSON.stringify({ connected: true })));
+    const { api } = await freshApi();
+    await expect(api.spotifyPlayer()).rejects.toMatchObject({ status: 429 });
+    expect(await api.spotifyStatus()).toEqual({ connected: true });
+    await api.spotifyDisconnect();
+    expect(calls.map((call) => call.path)).toEqual(['/api/spotify/player', '/api/spotify/status', '/api/spotify']);
+  });
+
   it('cancels queued requests before another account can inherit them', async () => {
     let finish;
     stubFetch(() => new Promise((resolve) => { finish = resolve; }));
