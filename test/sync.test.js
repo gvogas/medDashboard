@@ -5,7 +5,7 @@ import * as sync from '../public/js/sync.js';
 vi.mock('../public/js/store.js', () => ({
  data: { profile: { id: 'u1' } }, conflicts: [], pending: vi.fn(), pendingCount: vi.fn(() => 0),
  settleOperation: vi.fn(), rejectOperation: vi.fn(), applyPage: vi.fn(), applyServerProfile: vi.fn(),
- meta: { get: vi.fn(() => 1) }, withSyncLock: (fn) => fn(), subscribe: vi.fn(),
+ meta: { get: vi.fn(() => 1) }, withSyncLock: vi.fn((fn) => fn()), subscribe: vi.fn(),
 }));
 const op = { key: 'items:i1', body: { id: 'i1', title: 'Study' }, revision: 1, op: 'put', token: 'a' };
 beforeEach(() => {
@@ -15,6 +15,7 @@ beforeEach(() => {
  sync.init();
  store.data.profile = { id: 'u1' };
  store.pending.mockResolvedValue([op]);
+ store.withSyncLock.mockImplementation((fn) => fn());
  vi.spyOn(api, 'put').mockResolvedValue({ ...op.body, revision: 2 });
  vi.spyOn(api, 'sync').mockResolvedValue({ changes: [], cursor: 1, more: false });
  vi.spyOn(api, 'me').mockResolvedValue({ id: 'u1', revision: 1 });
@@ -55,5 +56,69 @@ describe('persisted operation synchronization', () => {
    store.data.profile = null;
    expect(await sync.syncNow()).toBe(false);
    expect(api.put).not.toHaveBeenCalled();
+ });
+ it('does not acknowledge an upload after stop, even after another account resumes', async () => {
+   let finish;
+   api.put.mockImplementation(() => new Promise((resolve) => { finish = resolve; }));
+   const running = sync.syncNow();
+   await vi.waitFor(() => expect(finish).toBeTypeOf('function'));
+   sync.stop();
+   store.data.profile = { id: 'u2' };
+   sync.init();
+   finish({ ...op.body, revision: 2 });
+   expect(await running).toBe(false);
+   expect(store.settleOperation).not.toHaveBeenCalled();
+   expect(api.sync).not.toHaveBeenCalled();
+   api.put.mockResolvedValue({ ...op.body, revision: 2 });
+   expect(await sync.syncNow()).toBe(true);
+ });
+ it('does not apply a delayed change page after stop', async () => {
+   let finish;
+   api.sync.mockImplementation(() => new Promise((resolve) => { finish = resolve; }));
+   const pulled = vi.fn(); sync.onPulled(pulled);
+   const running = sync.syncNow();
+   await vi.waitFor(() => expect(finish).toBeTypeOf('function'));
+   sync.stop();
+   finish({ changes: [], cursor: 10, more: false });
+   expect(await running).toBe(false);
+   expect(store.applyPage).not.toHaveBeenCalled();
+   expect(api.me).not.toHaveBeenCalled();
+   expect(pulled).not.toHaveBeenCalled();
+ });
+ it('does not apply a delayed profile after stop', async () => {
+   let finish;
+   api.me.mockImplementation(() => new Promise((resolve) => { finish = resolve; }));
+   const running = sync.syncNow();
+   await vi.waitFor(() => expect(finish).toBeTypeOf('function'));
+   sync.stop();
+   finish({ id: 'u1', revision: 2 });
+   expect(await running).toBe(false);
+   expect(store.applyServerProfile).not.toHaveBeenCalled();
+ });
+ it('handles a failed cross-tab lock without leaking a rejected promise', async () => {
+   store.withSyncLock.mockRejectedValue(new Error('Lock unavailable'));
+   expect(await sync.syncNow()).toBe(false);
+   expect(api.put).not.toHaveBeenCalled();
+   expect(sync.status.message).toBe('Lock unavailable');
+ });
+ it('cancels a queued cross-tab lock so sign-out can drain', async () => {
+   store.withSyncLock.mockImplementation((fn, { signal } = {}) => new Promise((resolve, reject) => {
+     signal?.addEventListener('abort', () => reject(signal.reason), { once: true });
+   }));
+   const running = sync.syncNow();
+   sync.stop();
+   expect(await running).toBe(false);
+   await sync.drain();
+   expect(api.put).not.toHaveBeenCalled();
+ });
+ it('keeps a bounded, incomplete pull pending and schedules the next page', async () => {
+   let cursor = 1;
+   api.sync.mockImplementation(async () => ({ changes: [], cursor: ++cursor, more: true }));
+   expect(await sync.syncNow()).toBe(true);
+   expect(api.sync).toHaveBeenCalledTimes(20);
+   expect(sync.status.state).toBe('pending');
+   api.sync.mockResolvedValue({ changes: [], cursor: ++cursor, more: false });
+   await vi.advanceTimersByTimeAsync(1000);
+   expect(sync.status.state).toBe('idle');
  });
 });

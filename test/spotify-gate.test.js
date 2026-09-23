@@ -2,7 +2,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 let calls;
-function stubFetch(answer = () => new Response('{}', { status: 200 })) {
+function stubFetch(answer = (path) => new Response(JSON.stringify(path === '/api/me' ? { id: 'u1', revision: 1 } : {}))) {
   calls = [];
   vi.stubGlobal('fetch', async (path) => { calls.push({ path, at: Date.now() }); return answer(path); });
 }

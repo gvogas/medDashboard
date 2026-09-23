@@ -40,6 +40,7 @@ test('an edit made during upload survives acknowledgement and gets the new revis
  const [pending] = await first.pending();
  assert.equal(pending.body.title, 'Second'); assert.equal(pending.revision, 2);
  assert.equal(first.item('a').title, 'Second');
+ assert.equal(first.item('a').revision, 2);
 });
 test('another tab editing the same pending record preserves the first copy', async () => {
  const user = p(); await first.open(user); await second.open(user);
@@ -64,6 +65,27 @@ test('conflict remains recoverable after closing and reopening', async () => {
  assert.equal(first.conflicts[0].body.title, 'My work');
  await first.resolveConflict(first.conflicts[0].id, true);
  const [retry] = await first.pending(); assert.equal(retry.revision, 2); assert.equal(retry.body.title, 'My work');
+});
+
+test('restoring a saved copy builds on the latest locally known server revision', async () => {
+ await first.open(p());
+ await first.saveItem({ id: 'a', title: 'My work', revision: 1 });
+ const [op] = await first.pending();
+ await first.rejectOperation(op, { id: 'a', title: 'Other device', revision: 2 }, 'Conflict');
+ await first.applyPage({ changes: [{ kind: 'items', row: { id: 'a', title: 'Latest', revision: 3 } }], cursor: 3 });
+ await first.resolveConflict(first.conflicts[0].id, true);
+ const [retry] = await first.pending();
+ assert.equal(retry.revision, 3);
+ assert.equal(retry.body.title, 'My work');
+});
+
+test('editing a legacy pending record does not remove its review requirement', async () => {
+ const user = p(); await first.open(user);
+ const db = await openDb(`rounds:${user.id}`);
+ await db.put('pending', { key: 'items:a', op: 'put', body: { id: 'a', title: 'Legacy' }, revision: 0, reviewRequired: true, token: 'legacy', owner: 'migration' });
+ db.close();
+ await first.saveItem({ id: 'a', title: 'Still needs review' });
+ assert.equal((await first.pending())[0].reviewRequired, true);
 });
 test('version 1 migration keeps the old dirty map and row in the new queue', async () => {
  const user=p(), name=`rounds:${user.id}`;

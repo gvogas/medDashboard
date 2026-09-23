@@ -14,7 +14,7 @@ key storage. No production migration or deployment was performed while implement
    Use a securely generated value, not the placeholder. Do not commit the secret.
    The existing SESSION_SECRET and SPOTIFY_CLIENT_SECRET remain required.
 3. Deploy with `npm run deploy`. It runs tests and the release build, checks that the
-   required secret names exist, applies migrations (including 0006), then deploys
+   required secret names exist, applies migrations (including 0006 and 0007), then deploys
    `.build/site`. The build verifies the inline theme script's CSP hash and refuses
    inline style attributes. Update the theme hash with `npm run csp:update` when needed.
 4. Ask users to close older tabs and reopen Rounds. IndexedDB upgrades wait for old
@@ -103,3 +103,50 @@ The development dependency override for sharp selects the patched 0.35.4-or-newe
 line for GHSA-rgj7-g3m4-5g8c. Remove the override when upstream tooling requires a
 patched version itself. The dependency audit reported zero known vulnerabilities
 after installation; it does not establish that the entire application is secure.
+
+## Follow-up: request and sync reliability
+
+The browser now rejects malformed successful API replies instead of treating them
+as saved edits. Tracker writes must return the requested record with a newer,
+positive integer revision. Deletes must return an empty success response. Profiles
+must match the bound account, and change pages must have valid record identities,
+revisions, collection names, and cursors before reconciliation starts. Invalid
+responses leave operations queued for retry. A write that reached the server but
+lost its acknowledgement can still become a saved conflict copy on retry; it is
+never retried as an unconditional overwrite.
+
+Every browser request has a 30-second deadline covering both fetch and response
+body reading. Changing the bound account cancels outstanding requests. Stopping
+sync cancels a waiting Web Lock and prevents delayed uploads, pages, conflict
+lookups, or profiles from changing local storage after the cycle is stopped,
+including when sync has already resumed. Lock acquisition errors enter the normal
+retry path. Large pulls yield after 20 requests and stay pending until the remaining
+pages finish; the last successful pull time advances only after completion.
+
+Acknowledging an upload while a newer edit is queued now updates both the queued
+revision and the local row's revision without replacing the newer content.
+Restoring a saved conflict copy uses the latest locally known server revision.
+Editing a migrated operation retains its review requirement until it is reviewed.
+
+Regression coverage includes malformed replies, stalled response bodies, account
+switches, stopped sync cycles, queued lock cancellation, incomplete pagination,
+and local revision handling. A browser-client integration test checks profile
+updates, quote writes, change pages, and deletions against the real Worker and D1.
+Run `npm test` and `npm run build` to verify these changes and the release CSP.
+These changes require no additional database migration or dependency.
+
+## Database structure migration (0007)
+
+The separate database cleanup adds migration `0007_database_structure.sql`. It
+corrects the composite course relationship, enforces positive integer item
+revisions, adds indexes for course references and expired operational records, and
+provides read-only `active_items` and `account_summary` views. It copies existing
+items without changing their fields or generating new sync events. Failed copies
+roll back; account records, other tracker tables, and credentials are not rebuilt.
+
+Run `npm run db:local` and `npm run db:check` to apply and inspect the local database.
+The check can also inspect production explicitly with `-- --remote`; it performs no
+repairs or deletions. Migration tests verify preservation of legacy rows, JSON
+fields, tombstones, revisions, and change cursors, as well as atomic rollback.
+See [the current data model](DATA-MODEL.md) for the schema diagram, table purposes,
+index coverage, inspection views, and maintenance commands.

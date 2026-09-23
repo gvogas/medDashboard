@@ -33,7 +33,10 @@ export function spotifyRetryAt() { return spotifyBlockedUntil > Date.now() ? spo
 const spotifyInFlight = new Map();
 let sessionRequests = new AbortController();
 let accountId = null;
-export function bindAccount(id) { accountId = id; }
+export function bindAccount(id) {
+  if (accountId !== id) resetRequests();
+  accountId = id;
+}
 
 /** Cancel in-flight and queued calls before changing accounts. */
 export function resetRequests() {
@@ -73,7 +76,7 @@ function spotifyRequest(method, path, body) {
   return run;
 }
 
-/** Resolves to the parsed JSON (or null for 204). Throws ApiError on 4xx/5xx, TypeError offline. */
+/** Resolves to JSON (or null for 204). Invalid replies never acknowledge a write. */
 export function request(method, path, body, headers) {
   /* Account operations and the local connection check remain available during an API cooldown. */
   if (path.startsWith('/api/spotify/') && !['/api/spotify/token', '/api/spotify/status'].includes(path)) return spotifyRequest(method, path, body);
@@ -81,33 +84,77 @@ export function request(method, path, body, headers) {
 }
 
 async function send(method, path, body, extraHeaders = {}) {
-  const signal = sessionRequests.signal;
-  const res = await fetch(path, {
-    method,
-    credentials: 'same-origin',
-    cache: 'no-store',
-    signal,
-    headers: { ...(body !== undefined ? { 'content-type': 'application/json' } : {}), ...(accountId && path !== '/api/login' ? { 'x-rounds-user': accountId } : {}), ...extraHeaders },
-    body: body !== undefined ? JSON.stringify(body) : undefined,
-  });
-  const data = res.status === 204 ? null : await res.json().catch(() => null);
-  signal.throwIfAborted();
-  if (!res.ok) throw new ApiError(res.status, data, Number(res.headers.get('retry-after')) || null);
-  return data;
+  const session = sessionRequests.signal;
+  const controller = new AbortController();
+  const { signal } = controller;
+  const abort = () => controller.abort(session.reason);
+  session.addEventListener('abort', abort, { once: true });
+  const timer = setTimeout(() => controller.abort(new DOMException('The request timed out. Try again.', 'TimeoutError')), 30_000);
+  try {
+    session.throwIfAborted();
+    const res = await fetch(path, {
+      method,
+      credentials: 'same-origin',
+      cache: 'no-store',
+      redirect: 'error',
+      signal,
+      headers: { ...(body !== undefined ? { 'content-type': 'application/json' } : {}), ...(accountId && path !== '/api/login' ? { 'x-rounds-user': accountId } : {}), ...extraHeaders },
+      body: body !== undefined ? JSON.stringify(body) : undefined,
+    });
+    signal.throwIfAborted();
+    // Reading the body shares the request's deadline, including error responses.
+    const data = res.status === 204 ? null : await res.json().catch(() => null);
+    signal.throwIfAborted();
+    if (!res.ok) throw new ApiError(res.status, data, Number(res.headers.get('retry-after')) || null);
+    if (res.status !== 204 && (!data || typeof data !== 'object')) throw invalidResponse();
+    return data;
+  } catch (error) {
+    signal.throwIfAborted();
+    throw error;
+  } finally {
+    clearTimeout(timer);
+    session.removeEventListener('abort', abort);
+  }
 }
 
 const match = (revision = 0) => ({ 'if-match': `"${revision}"` });
+function invalidResponse() {
+  const error = new ApiError(502, { error: 'invalid_response' });
+  error.message = 'The server returned an invalid response. Your edits are still saved on this device.';
+  return error;
+}
+const validRecord = (row) => row && typeof row.id === 'string' && row.id.length > 0
+  && Number.isSafeInteger(row.revision) && row.revision > 0;
+async function record(response, id, previousRevision = 0) {
+  const row = await response;
+  if (!validRecord(row) || (id != null && row.id !== id) || row.revision <= previousRevision) throw invalidResponse();
+  return row;
+}
+async function empty(response) {
+  if (await response !== null) throw invalidResponse();
+  return null;
+}
+async function changes(cursor) {
+  const page = await request('GET', `/api/sync?v=2&cursor=${cursor}`);
+  if (!page || typeof page.reset !== 'boolean' || typeof page.more !== 'boolean'
+    || !Number.isSafeInteger(page.cursor) || page.cursor < 0 || !Array.isArray(page.changes)
+    || !page.changes.every((change) => change && ['courses', 'items', 'quotes'].includes(change.kind) && validRecord(change.row))) throw invalidResponse();
+  if (page.reset
+    ? cursor === 0 || page.cursor !== 0 || page.more || page.changes.length > 0
+    : page.cursor < cursor || (page.more && page.cursor === cursor)) throw invalidResponse();
+  return page;
+}
 
 export const api = {
-  me: () => request('GET', '/api/me'),
-  saveMe: (profile) => request('PUT', '/api/me', profile, match(profile.revision)),
-  login: (username, password) => request('POST', '/api/login', { username, password }),
-  signOut: () => request('DELETE', '/api/session'),
-  sync: (cursor) => request('GET', `/api/sync?v=2&cursor=${cursor}`),
-  get: (kind, id) => request('GET', `/api/${kind}/${encodeURIComponent(id)}`),
-  put: (kind, id, row) => request('PUT', `/api/${kind}/${encodeURIComponent(id)}`, row, match(row.revision)),
-  revokeAll: () => request('POST', '/api/session/revoke-all'),
-  del: (kind, id, revision = 0) => request('DELETE', `/api/${kind}/${encodeURIComponent(id)}`, undefined, match(revision)),
+  me: () => record(request('GET', '/api/me'), accountId),
+  saveMe: (profile) => record(request('PUT', '/api/me', profile, match(profile.revision)), accountId || profile.id, profile.revision),
+  login: (username, password) => record(request('POST', '/api/login', { username, password })),
+  signOut: () => empty(request('DELETE', '/api/session')),
+  sync: changes,
+  get: (kind, id) => record(request('GET', `/api/${kind}/${encodeURIComponent(id)}`), id),
+  put: (kind, id, row) => record(request('PUT', `/api/${kind}/${encodeURIComponent(id)}`, row, match(row.revision)), id, row.revision),
+  revokeAll: () => empty(request('POST', '/api/session/revoke-all')),
+  del: (kind, id, revision = 0) => empty(request('DELETE', `/api/${kind}/${encodeURIComponent(id)}`, undefined, match(revision))),
   spotifyPlayer: () => request('GET', '/api/spotify/player'),
   spotifyStatus: () => request('GET', '/api/spotify/status'),
   spotifyControl: (action, deviceId) => request('POST', `/api/spotify/player/${action}` + (deviceId ? `?deviceId=${encodeURIComponent(deviceId)}` : '')),

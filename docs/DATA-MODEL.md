@@ -11,8 +11,38 @@ items            exams, assignments, labs, tutorials, office hours, tasks
 quotes           the quote tile's list
 ```
 
-The schema is [`migrations/0001_init.sql`](../migrations/0001_init.sql). This document
-explains it.
+The schema is the ordered set of SQL files in [`migrations/`](../migrations/),
+currently through [`0007_database_structure.sql`](../migrations/0007_database_structure.sql).
+Apply migrations in order; the original migration alone is not the current schema.
+
+## Structure at a glance
+
+| Area | Tables | Responsibility |
+| --- | --- | --- |
+| Account and tracker data | `users`, `courses`, `items`, `quotes` | Profiles and the records users edit |
+| Synchronization | `changes`, `sync_state` | Latest record changes, ordered cursors, and the retention floor |
+| Authentication and request control | `login_throttle`, `request_limits` | Temporary attempt counts and cooldowns |
+| Spotify connection | `spotify_tokens`, `spotify_oauth_states`, `spotify_refresh_locks` | Credentials, one-use consent attempts, and refresh leases |
+| Read-only inspection | `active_items`, `account_summary` | Views over existing records, with no duplicate stored data |
+
+```mermaid
+erDiagram
+    users ||--o{ courses : owns
+    users ||--o{ items : owns
+    users ||--o{ quotes : owns
+    courses o|--o{ items : groups
+    users ||--o{ changes : syncs
+    users ||--o| spotify_tokens : connects
+    users ||--o| spotify_oauth_states : authorizes
+    users ||--o| spotify_refresh_locks : refreshes
+```
+
+An item's optional course relationship is `(user_id, course_id)` to
+`courses(user_id, id)`, so ownership cannot cross account boundaries. Direct hard
+deletion of a referenced course is restricted. The application's soft-delete
+transaction clears only `course_id`, increments affected item revisions, and
+records the resulting changes before a later purge can remove the course.
+Account removal remains an explicit operation that deletes dependent records first.
 
 Conventions used throughout:
 
@@ -51,6 +81,9 @@ Conventions used throughout:
 | `theme` | text | `light` \| `dark` \| `system` | |
 | `term_start` | text \| null | `YYYY-MM-DD` | The week board's default start. Null means today. |
 | `created_at`, `updated_at` | int | | |
+| `revision` | int | starts at 1 | Optimistic concurrency for profile edits. |
+| `pw_gen` | int | starts at 0 | Password/session generation; changing it revokes existing sessions. |
+| `imported_at` | int \| null | legacy | Reserved metadata; not exposed in the profile API. |
 
 A row is created by `npm run user:add`, with the defaults. The API
 exposes it as the **profile**, with the coat fields nested: `{coat: {name, role,
@@ -177,7 +210,7 @@ reads it to call Spotify on the user's behalf.
 | Column | Type | Rules |
 | --- | --- | --- |
 | `user_id` | text, PK | |
-| `refresh_token` | text | AES-GCM ciphertext, base64 of iv and ciphertext. The key is derived from `SESSION_SECRET` (HKDF, info `spotify-refresh`), so rotating the secret disconnects everyone. |
+| `refresh_token` | text | Versioned AES-GCM ciphertext: `keyId.ciphertext`, encrypted using independent `SPOTIFY_TOKEN_KEYS`. Legacy unversioned tokens are migrated when refreshed; see RELIABILITY-UPGRADE.md. |
 | `access_token` | text | lives an hour, kept in clear |
 | `expires_at`, `updated_at` | int | ms since the epoch |
 
@@ -191,10 +224,55 @@ reads it to call Spotify on the user's behalf.
 | `items (user_id, updated_at)` | the `sync` pull |
 | `quotes (user_id, updated_at)` | the `sync` pull |
 | `items (user_id, date)` | any future "this term only" query |
+| `items (user_id, course_id)` | course detachment and composite foreign-key lookups, including tombstones |
 | `*_deleted (deleted_at)` | the nightly tombstone purge |
+| `changes (user_id, seq)` | current paginated sync protocol |
+| `changes (deleted_at)` | expired deletion-history cleanup |
+| `login_throttle (updated_at, locked_until)` | expired login-attempt cleanup |
+| `request_limits (reset_at)` | expired request-window cleanup |
+| `spotify_oauth_states (expires_at)` | expired consent-attempt cleanup |
+| `spotify_refresh_locks (expires_at)` | expired refresh-lease cleanup |
 
-The app is a read-everything-once app: one pull returns every live row you own, and
-filters, search and view switches are in-memory. A semester is a few hundred rows.
+Primary keys and unique constraints also provide indexes. The timestamp indexes
+support the legacy read-only sync route; current clients page through `changes`.
+Filters, search, and view switches use the browser's local data after sync.
+The added indexes cover existing relationship and maintenance queries; tests check
+their query plans. See [D1 index guidance](https://developers.cloudflare.com/d1/best-practices/use-indexes/).
+
+## Inspection and maintenance
+
+`active_items` shows live items with their course code and name. `account_summary`
+shows each account's live course, item, and quote counts. Neither view contains
+password hashes or Spotify credentials. They are administrative SQL conveniences,
+not permission boundaries: queries for an account must still filter `user_id`.
+
+```sql
+SELECT * FROM active_items WHERE user_id = ? ORDER BY date, id;
+SELECT * FROM account_summary WHERE user_id = ?;
+```
+
+The health command checks SQLite integrity, foreign keys, revision values, live
+course references, and change-feed coverage/orphans. It prints aggregate counts,
+exits nonzero on problems or incomplete results, and changes no records.
+
+```sh
+npm run db:local                 # apply pending migrations to local development
+npm run db:check                 # inspect local data, read-only
+npm run db:check -- --json        # machine-readable report
+npm run db:check -- --remote      # explicitly inspect production, read-only
+```
+
+Migration 0007 copies all existing item fields into the corrected table before
+replacing the old table, then restores its indexes and sync triggers. The copy runs
+without change-feed triggers, preserving existing revisions, tombstones, history,
+and cursors. Other data tables are not rebuilt. Failed copies roll back, including
+when invalid legacy revisions are found; resolve reported data problems explicitly
+instead of deleting records to make the migration pass. Upgrade and rollback tests
+run against an isolated D1 database populated with the old schema.
+
+Meetings, checklists, and links remain bounded JSON arrays because they are loaded
+and edited with their parent. There is no second source of truth for these lists.
+Foreign-key behavior follows [D1's enforced relationship rules](https://developers.cloudflare.com/d1/sql-api/foreign-keys/).
 
 ---
 

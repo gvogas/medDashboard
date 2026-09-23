@@ -3,7 +3,7 @@ import { api, ApiError, retryDelayMs } from './api.js';
 import * as store from './store.js';
 export const status = { state: 'idle', pending: 0, lastPull: null, message: '' };
 const listeners = new Set();
-let initialized = false, paused = false, running = null, timer;
+let initialized = false, paused = false, running = null, controller = null, timer;
 let signedOut = () => {}, pulled = () => {};
 export const onStatus = (fn) => listeners.add(fn);
 export const onPulled = (fn) => { pulled = fn; };
@@ -19,25 +19,28 @@ function schedule(ms = 600) {
 }
 export function init() {
   paused = false;
+  schedule(0);
   if (initialized) return;
   initialized = true;
   store.subscribe((evt) => {
     if (evt.type === 'signed-out') { stop(); signedOut(); return; }
+    if (paused) return;
     if (evt.type === 'change' || evt.type === 'remote') { state('pending'); schedule(); }
   });
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') syncNow(); });
   window.addEventListener('online', syncNow);
-  window.addEventListener('offline', () => state('offline'));
+  window.addEventListener('offline', () => { if (!paused) state('offline'); });
   setInterval(() => { if (document.visibilityState === 'visible') syncNow(); }, 300000);
 }
-export function stop() { paused = true; clearTimeout(timer); }
+export function stop() { paused = true; clearTimeout(timer); controller?.abort(); }
 export async function drain() { await running; }
-async function pushAll() {
+const active = (cycle) => !paused && !cycle.signal.aborted && store.data.profile?.id === cycle.account;
+async function pushAll(cycle) {
   const operations = await store.pending();
   // New courses before items; course deletion after pending item writes.
   operations.sort((a, b) => rank(a) - rank(b));
   for (const op of operations) {
-    if (paused) return false;
+    if (!active(cycle)) return false;
     try {
       if (op.reviewRequired) throw new ApiError(409, { error: 'legacy_edit' });
       let saved;
@@ -49,8 +52,10 @@ async function pushAll() {
           catch (e) { if (!(e instanceof ApiError && e.status === 404)) throw e; }
         } else saved = await api.put(kind, id, { ...op.body, revision: op.revision });
       }
+      if (!active(cycle)) return false;
       await store.settleOperation(op, saved);
     } catch (e) {
+      if (!active(cycle)) return false;
       if (e instanceof ApiError && [400, 404, 409, 413, 422].includes(e.status)) {
         let current = e.body?.current;
         if (current === undefined) {
@@ -62,51 +67,69 @@ async function pushAll() {
             current = null;
           }
         }
+        if (!active(cycle)) return false;
         await store.rejectOperation(op, current, e.body?.error === 'legacy_edit' ? 'This edit was saved before conflict protection. Review it before restoring.' : e.body?.error === 'conflict' ? 'A newer version was saved on another device.' : 'The server could not accept this edit.');
       } else throw e;
     }
   }
-  return true;
+  return active(cycle);
 }
 function rank(op) { return op.key.startsWith('courses:') ? (op.op === 'put' ? 0 : 3) : 1; }
-async function pullAll() {
+async function pullAll(cycle) {
   let cursor = (await store.meta.get('syncCursor')) || 0;
   let reset = cursor === 0;
-  let pages = 0;
-  while (!paused) {
+  let complete = false;
+  // Bound resets as well as ordinary pages, then yield the account's sync lock.
+  for (let pages = 0; pages < 20 && active(cycle); pages++) {
     const page = await api.sync(cursor);
+    if (!active(cycle)) return false;
     if (page.reset) { cursor = 0; reset = true; continue; }
     await store.applyPage(page, reset);
     reset = false; cursor = page.cursor;
-    if (!page.more) break;
-    if (++pages >= 20) { schedule(1000); break; }
+    if (!page.more) { complete = true; break; }
   }
-  if (!paused) await store.applyServerProfile(await api.me());
-  status.lastPull = Date.now();
+  if (!active(cycle)) return false;
+  const profile = await api.me();
+  if (!active(cycle)) return false;
+  await store.applyServerProfile(profile);
+  if (!active(cycle)) return false;
+  if (complete) status.lastPull = Date.now();
   pulled();
+  return complete;
 }
 export async function syncNow() {
   if (paused || !store.data.profile) return false;
   if (running) return running;
-  running = store.withSyncLock(async () => {
-    if (paused) return false;
-    state('syncing');
+  clearTimeout(timer);
+  controller = new AbortController();
+  const cycle = { signal: controller.signal, account: store.data.profile.id };
+  running = (async () => {
     try {
-      if (!(await pushAll())) return false;
-      await pullAll();
-      if (paused) return false;
-      state(store.conflicts.length ? 'error' : store.pendingCount() ? 'pending' : 'idle', store.conflicts.length ? 'Saved copies need review in Settings.' : '');
-      if (store.pendingCount()) schedule();
-      return true;
+      return await store.withSyncLock(async () => {
+        if (!active(cycle)) return false;
+        state('syncing');
+        if (!(await pushAll(cycle))) return false;
+        const complete = await pullAll(cycle);
+        if (!active(cycle)) return false;
+        state(store.conflicts.length ? 'error' : store.pendingCount() || !complete ? 'pending' : 'idle',
+          store.conflicts.length ? 'Saved copies need review in Settings.' : !complete ? 'Downloading remaining changes.' : '');
+        if (!complete) schedule(1000);
+        else if (store.pendingCount()) schedule();
+        return true;
+      }, { signal: cycle.signal });
     } catch (e) {
-      if (paused) return false;
+      if (!active(cycle)) return false;
       if (e instanceof ApiError && e.status === 401) { stop(); state('signed-out'); signedOut(); }
       else if (e instanceof ApiError && e.status === 428) { state('error', 'Reload Rounds to finish the update. Your edits are saved.'); }
       else { state(e instanceof ApiError ? 'error' : 'offline', e.message); schedule(retryDelayMs(e)); }
       return false;
     }
-  });
-  try { return await running; } finally { running = null; }
+  })();
+  try { return await running; } finally {
+    running = null; controller = null;
+    // init() may have resumed while the cancelled cycle was still unwinding.
+    if (cycle.signal.aborted && !paused) schedule(0);
+  }
 }
 export const push = syncNow;
 export const pull = syncNow;

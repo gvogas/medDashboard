@@ -10,6 +10,8 @@ export default defineConfig(async () => {
       cloudflareTest({
         wrangler: { configPath: './wrangler.jsonc' },
         miniflare: {
+          // A separate empty database exercises upgrades from an existing schema.
+          d1Databases: { MIGRATION_DB: 'rounds-migration-tests' },
           bindings: {
             TEST_MIGRATIONS: migrations,
             SESSION_SECRET: 'test-secret-not-for-production',

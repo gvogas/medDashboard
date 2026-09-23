@@ -98,7 +98,7 @@ async function queue(a, key, op, body) {
     await a('conflicts').put({ id: crypto.randomUUID(), ...previous, reason: 'Another tab edited this record.', at: Date.now() });
   }
   const revision = previous?.revision ?? body?.revision ?? 0;
-  await a('pending').put({ key, op, body, revision, token: crypto.randomUUID(), owner });
+  await a('pending').put({ key, op, body, revision, reviewRequired: !!previous?.reviewRequired, token: crypto.randomUUID(), owner });
 }
 
 function saveRow(kind, raw) {
@@ -162,8 +162,14 @@ export function settleOperation(op, saved) {
         current.revision = saved.revision;
         if (current.body) current.body.revision = saved.revision;
         await a('pending').put(current);
+        const stored = await a(rowStore(op.key)).get(rowId(op.key));
+        const local = op.key === 'profile' ? stored?.value : stored;
+        if (local) {
+          local.revision = saved.revision;
+          await a(rowStore(op.key)).put(wrap(op.key, local));
+        }
       }
-      return;
+      return !!saved;
     }
     await a('pending').del(op.key);
     if (saved) await a(rowStore(op.key)).put(wrap(op.key, saved));
@@ -213,7 +219,10 @@ export function resolveConflict(id, restore) {
     if (!conflict) return;
     if (restore) {
       const stored = await a(rowStore(conflict.key)).get(rowId(conflict.key));
-      const current = conflict.current === undefined ? (conflict.key === 'profile' ? stored?.value : stored) : conflict.current;
+      const local = conflict.key === 'profile' ? stored?.value : stored;
+      // The saved copy may predate subsequent pulls. Restore against the latest
+      // revision we know, while the server still checks for unseen changes.
+      const current = (local?.revision || 0) >= (conflict.current?.revision || 0) ? local : conflict.current;
       const body = { ...conflict.body, revision: current?.revision || 0 };
       const existing = await a('pending').get(conflict.key);
       if (existing) throw new Error('Wait for the pending edit to sync before restoring this copy.');
@@ -225,8 +234,12 @@ export function resolveConflict(id, restore) {
   });
 }
 
-export async function withSyncLock(fn) {
+export async function withSyncLock(fn, { signal } = {}) {
   const id = userId;
-  const run = async () => { if (id && id === userId) return fn(); return false; };
-  return navigator.locks ? navigator.locks.request(`rounds-sync:${id}`, run) : run();
+  const run = async () => {
+    signal?.throwIfAborted();
+    if (id && id === userId) return fn();
+    return false;
+  };
+  return navigator.locks ? navigator.locks.request(`rounds-sync:${id}`, { signal }, run) : run();
 }

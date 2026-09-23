@@ -10,6 +10,7 @@
     "test:watch": "vitest",
     "db:local": "wrangler d1 migrations apply rounds --local",
     "db:remote": "wrangler d1 migrations apply rounds --remote",
+    "db:check": "node scripts/check-db.mjs",
     "user:add": "node scripts/add-user.mjs",
     "build": "node scripts/build.mjs",
     "csp:update": "node scripts/csp-hash.mjs --write",
