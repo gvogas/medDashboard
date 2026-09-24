@@ -1,6 +1,17 @@
 import { describe, it, expect } from 'vitest';
 import { signIn } from './helpers.js';
 
+/** The change feed after `cursor`, as the latest row of each kind; deleted rows carry deletedAt. */
+async function feed(api, cursor = 0) {
+  const out = { courses: [], items: [], quotes: [] };
+  for (let more = true; more;) {
+    const page = await (await api(`/api/sync?v=2&cursor=${cursor}`)).json();
+    for (const { kind, row } of page.changes) out[kind] = [...out[kind].filter((r) => r.id !== row.id), row];
+    ({ cursor, more } = page);
+  }
+  return { ...out, cursor };
+}
+
 const course = (over = {}) => ({
   code: 'CVS',
   name: 'Cardiovascular Block',
@@ -80,8 +91,8 @@ describe('courses', () => {
     await api('/api/items/i1', { method: 'PUT', body: item({ courseId: 'cvs' }) });
     const del = await api('/api/courses/cvs', { method: 'DELETE' });
     expect(del.status).toBe(204);
-    const sync = await (await api('/api/sync?since=0')).json();
-    expect(sync.courses).toEqual([{ id: 'cvs', deletedAt: expect.any(Number) }]);
+    const sync = await feed(api);
+    expect(sync.courses).toEqual([expect.objectContaining({ id: 'cvs', deletedAt: expect.any(Number) })]);
     expect(sync.items[0].courseId).toBeNull();
   });
 
@@ -90,7 +101,7 @@ describe('courses', () => {
     const bob = await signIn();
     await alice('/api/courses/cvs', { method: 'PUT', body: course() });
     expect((await bob('/api/courses/cvs', { method: 'DELETE' })).status).toBe(404);
-    const sync = await (await alice('/api/sync?since=0')).json();
+    const sync = await feed(alice);
     expect(sync.courses[0].deletedAt).toBeNull();
   });
 });
@@ -178,7 +189,7 @@ describe('quotes', () => {
 });
 
 describe('sync', () => {
-  it('since=0 returns every live row of mine, and nothing of anyone else', async () => {
+  it('cursor=0 returns every live row of mine, and nothing of anyone else', async () => {
     const alice = await signIn();
     const bob = await signIn();
     await alice('/api/courses/cvs', { method: 'PUT', body: course() });
@@ -186,22 +197,21 @@ describe('sync', () => {
     await alice('/api/quotes/q1', { method: 'PUT', body: quote() });
     await bob('/api/items/i2', { method: 'PUT', body: item({ title: 'Bob only' }) });
 
-    const res = await alice('/api/sync?since=0');
+    const res = await alice('/api/sync?v=2&cursor=0');
     expect(res.status).toBe(200);
-    const sync = await res.json();
-    expect(sync.now).toBeGreaterThan(0);
+    expect((await res.json()).reset).toBe(false);
+    const sync = await feed(alice);
     expect(sync.courses.map((c) => c.id)).toEqual(['cvs']);
     expect(sync.items.map((i) => i.id)).toEqual(['i1']);
     expect(sync.quotes.map((q) => q.id)).toEqual(['q1']);
   });
 
-  it('since=<now> returns only rows changed after it', async () => {
+  it('a cursor returns only rows changed after it', async () => {
     const api = await signIn();
-    const first = await (await api('/api/items/i1', { method: 'PUT', body: item() })).json();
-    const since = first.updatedAt;
-    await new Promise((r) => setTimeout(r, 5));
+    await api('/api/items/i1', { method: 'PUT', body: item() });
+    const { cursor } = await feed(api);
     await api('/api/items/i2', { method: 'PUT', body: item({ title: 'Later' }) });
-    const sync = await (await api(`/api/sync?since=${since}`)).json();
+    const sync = await feed(api, cursor);
     expect(sync.items.map((i) => i.id)).toEqual(['i2']);
   });
 
@@ -209,12 +219,12 @@ describe('sync', () => {
     const api = await signIn();
     await api('/api/quotes/q1', { method: 'PUT', body: quote() });
     await api('/api/quotes/q1', { method: 'DELETE' });
-    const sync = await (await api('/api/sync?since=0')).json();
-    expect(sync.quotes).toEqual([{ id: 'q1', deletedAt: expect.any(Number) }]);
+    const sync = await feed(api);
+    expect(sync.quotes).toEqual([expect.objectContaining({ id: 'q1', deletedAt: expect.any(Number) })]);
   });
 
-  it('rejects a non-numeric since', async () => {
+  it('rejects a non-numeric cursor', async () => {
     const api = await signIn();
-    expect((await api('/api/sync?since=yesterday')).status).toBe(400);
+    expect((await api('/api/sync?v=2&cursor=yesterday')).status).toBe(400);
   });
 });

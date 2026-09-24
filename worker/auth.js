@@ -17,6 +17,8 @@ async function hmacKey(secret) {
   if (cachedKey?.secret !== secret) {
     const key = crypto.subtle.importKey('raw', new TextEncoder().encode(secret), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
     cachedKey = { secret, key };
+    // A failed import (a missing secret) must not stay cached for the isolate's life.
+    key.catch(() => { if (cachedKey?.key === key) cachedKey = null; });
   }
   return cachedKey.key;
 }

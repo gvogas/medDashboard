@@ -511,7 +511,7 @@ describe('the Spotify view', () => {
 
 describe('the poller', () => {
   it('polls fast while playing, slowly when idle, and stops when not connected', () => {
-    expect(nextDelayMs({ connected: true, playing: true })).toBe(5000);
+    expect(nextDelayMs({ connected: true, playing: true })).toBe(10000);
     expect(nextDelayMs({ connected: true, playing: false })).toBe(20000);
     expect(nextDelayMs({ connected: false })).toBeNull();
   });

@@ -84,21 +84,25 @@ One catch: if you edit the small inline script inside `public/index.html`, run
 ## Deploying
 
 To put your changes live, run `npm run deploy` from the project folder. It runs the test suites, builds versioned assets, verifies the CSP hash and required
-secret names, applies database migrations, then uploads the website and API. It takes under a minute.
+secret names, applies database migrations, runs the read-only database checks against
+live, then uploads the website and API. It takes under a minute. Always deploy with
+`npm run deploy`, never a bare `wrangler deploy`, which skips the migrations.
 
 ```mermaid
 flowchart LR
   A[npm test<br/>all pass] --> B[git commit<br/>and push]
   B --> C[npm run deploy]
   C --> D[Live database<br/>migrations]
-  D --> E[Upload site<br/>and API]
+  D --> G[Live database<br/>checks]
+  G --> E[Upload site<br/>and API]
   E --> F[Sign in on<br/>live site]
 ```
 
 **Before you deploy**
 
 - [ ] `npm test` passes
-- [ ] You tried the change locally with `npm run dev`
+- [ ] You tried the change locally with `npm run dev`, or `npm run dev:built` to try
+      the built, versioned site the deploy will upload
 - [ ] The change is committed and pushed, so GitHub matches what goes live
 
 **While it runs**
@@ -106,7 +110,11 @@ flowchart LR
 If there are new migrations, it lists them and asks `continue? (Y/n)`. Type Y and
 press Enter. If there are none, it says "No migrations to apply!" and carries on. If
 the migration step fails, the deploy stops, so new code never goes live on an old
-database.
+database. The same goes for the database checks: an integrity problem stops the
+deploy before any code is uploaded.
+
+If a live request does hit a missing table or column anyway, `npx wrangler tail`
+shows "D1 schema is behind the code" next to the error.
 
 **After it finishes**
 
@@ -256,9 +264,10 @@ Run every command in PowerShell from the project folder.
 | Command | What it does | Affects |
 | --- | --- | --- |
 | `npm run dev` | Runs the app at http://localhost:8787 | Local |
+| `npm run dev:built` | Builds, then runs the versioned site the deploy uploads | Local |
 | `npm test` | Runs all tests | Local |
 | `npm run db:local` | Applies new migrations to the local database | Local |
-| `npm run deploy` | Applies new migrations to live, then publishes the site and API | Live |
+| `npm run deploy` | Applies new migrations to live, checks the live database, then publishes the site and API | Live |
 | `npm run db:remote` | Applies new migrations to live without deploying code | Live |
 | `npx wrangler d1 migrations list rounds --remote` | Shows migrations the live database is missing | Live, read-only |
 | `npx wrangler deployments list` | Shows when each version went live | Live, read-only |

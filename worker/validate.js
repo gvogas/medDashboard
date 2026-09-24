@@ -5,10 +5,11 @@
 import { HttpError } from './http.js';
 
 const COLOURS = ['#E4749B', '#8B5CC7', '#17B3AE', '#79B6EA', '#BCA6E6'];
-export const TYPES = ['exam', 'assignment', 'lab', 'tutoring', 'office', 'task'];
+export const TYPES = ['exam', 'assignment', 'lab', 'tutoring', 'office', 'task', 'project'];
 const STATUSES = ['todo', 'submitted', 'graded', 'done', 'missed'];
 export const KINDS = ['Lecture', 'Lab', 'Seminar', 'Tutorial', 'PBL', 'Clinical'];
 const THEMES = ['light', 'dark', 'system'];
+const BACKGROUNDS = ['med', 'cs'];
 const DATE = /^[0-9]{4}-[0-9]{2}-[0-9]{2}$/;
 const TIME = /^(?:[01][0-9]|2[0-3]):[0-5][0-9]$/;
 
@@ -97,6 +98,8 @@ export function validateProfile(body) {
     coatRole: str(coat.role ?? '', 'coat.role', 34),
     coatColor: oneOf(coat.color, 'coat.color', COLOURS),
     theme: oneOf(body.theme, 'theme', THEMES),
+    // Older clients do not send a background; they keep Med.
+    bg: oneOf(body.bg ?? 'med', 'bg', BACKGROUNDS),
     termStart: optDate(body.termStart, 'termStart'),
   };
 }

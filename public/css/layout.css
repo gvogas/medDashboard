@@ -105,6 +105,46 @@ button{cursor:pointer}
 .pocket .pen::after{content:"";position:absolute;left:1px;right:1px;top:-6px;height:13px;border-radius:3px;background:#B9C7CC}
 .pocket .tuck{position:absolute;right:27px;bottom:5px;width:50px;height:28px;color:var(--accent);opacity:var(--orn-art)}
 
+/* ─── CS: no coat. Plain panel on a faint dot grid, and a lanyard ID badge ─── */
+:root[data-bg="cs"] .side{
+  background-color:var(--panel);
+  background-image:radial-gradient(color-mix(in srgb, var(--ink) 9%, transparent) 1px, transparent 1.2px);
+  background-size:12px 12px;
+}
+:root[data-bg="cs"] .pocket{display:none}
+.idbadge{display:none}
+:root[data-bg="cs"] .idbadge{
+  display:block;margin-top:auto;position:relative;border:1px solid var(--line);border-radius:10px;
+  background:var(--panel);overflow:hidden;box-shadow:var(--shadow-1), 0 6px 14px rgba(23,32,51,.06);
+}
+.idbadge .strip{
+  display:flex;align-items:center;justify-content:space-between;height:24px;padding:0 9px;
+  background:var(--accent);color:var(--on-accent);
+  font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:9px;letter-spacing:.12em;font-weight:600;
+}
+.idbadge .slot{position:absolute;left:50%;top:7px;width:26px;height:6px;margin-left:-13px;border-radius:3px;background:var(--panel);box-shadow:inset 0 1px 1px rgba(0,0,0,.25)}
+.idbadge .body{display:flex;align-items:center;gap:10px;padding:10px 10px 8px}
+.idbadge .idc{display:grid;grid-template-columns:repeat(5,1fr);width:38px;height:38px;padding:4px;gap:1px;border-radius:7px;background:var(--accent-soft);flex:none}
+.idbadge .idc i{border-radius:1px}
+.idbadge .idc i.on{background:var(--accent)}
+.idbadge .who{display:flex;flex-direction:column;min-width:0}
+.idbadge .nm{font-weight:700;font-size:13.5px;line-height:1.15;letter-spacing:-.01em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.idbadge .rl{font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:10px;color:var(--ink-2);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.idbadge .rl b{color:var(--accent-ink);font-weight:600}
+.idbadge .editcoat{border:0;background:transparent;color:var(--ink-3);font-size:10px;padding:0 3px;opacity:0;vertical-align:middle}
+.idbadge:hover .editcoat,.idbadge .editcoat:focus-visible{opacity:1}
+.idbadge .editcoat:hover{color:var(--accent)}
+.idbadge .foot{display:flex;align-items:center;gap:8px;padding:6px 10px 8px;border-top:1px dashed var(--line)}
+.idbadge .bars{flex:1;height:14px;display:flex;gap:1px;align-items:stretch;min-width:0}
+.idbadge .bars i{background:var(--ink);opacity:.75;flex:1 0 0}
+.idbadge .bars i.w2{flex-grow:2}
+.idbadge .bars i.w3{flex-grow:3}
+.idbadge .bars b{flex:1 0 0}
+.idbadge .num{font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:9px;color:var(--ink-3);letter-spacing:.04em;white-space:nowrap;max-width:50%;overflow:hidden;text-overflow:ellipsis}
+/* the Spotify badge has nothing to clip to without the coat */
+:root[data-bg="cs"] .player{border-color:var(--line)}
+:root[data-bg="cs"] .player::before{display:none}
+
 /* ─── the Spotify badge, clipped to the coat under the pocket ─── */
 .player{
   position:relative;border-radius:9px;padding:9px 10px 10px;margin-top:3px;

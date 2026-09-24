@@ -5,9 +5,9 @@ The browser never talks to the database. A Worker reads the session cookie, reso
 the user, and every query it runs has `user_id = ?` in it.
 
 ```
-users            one row per account: username, password hash, profile, coat, theme
+users            one row per account: username, password hash, profile, coat, theme, background
 courses          a course + its weekly class meetings, as a JSON column
-items            exams, assignments, labs, tutorials, office hours, tasks
+items            exams, assignments, labs, tutorials, office hours, tasks, projects
 quotes           the quote tile's list
 ```
 
@@ -79,6 +79,7 @@ Conventions used throughout:
 | `coat_role` | text | ≤ 34 | The line under it, e.g. `MS II · Cardio block`. |
 | `coat_color` | text | one of the five | Tints the sidebar fabric, pocket and embroidery. |
 | `theme` | text | `light` \| `dark` \| `system` | |
+| `bg` | text | `med` \| `cs`, default `med` | background art; independent of `theme` (0008) |
 | `term_start` | text \| null | `YYYY-MM-DD` | The week board's default start. Null means today. |
 | `created_at`, `updated_at` | int | | |
 | `revision` | int | starts at 1 | Optimistic concurrency for profile edits. |
@@ -171,6 +172,7 @@ already uses, so the front end's field names do not change.
 | `tutoring` (shown as Tutorial) | `todo` Scheduled · `done` Attended · `missed` Cancelled | `done` |
 | `office` | `todo` Planned · `done` Went · `missed` Skipped | `done` |
 | `task` | `todo` To do · `done` Done | `done` |
+| `project` | `todo` In progress · `done` Shipped · `missed` Dropped; milestones are the checklist | `done` |
 
 The schema validates `status` against the whole set (`todo`, `submitted`, `graded`,
 `done`, `missed`); the per-type restriction is the client's job, since it's a UI
@@ -287,8 +289,8 @@ All routes are under `/api`, speak JSON, and require the session cookie except
 | `DELETE /api/session` | → clears the cookie. |
 | `POST /api/session/revoke-all` | → `204`, clears the cookie and invalidates every other session of this user. |
 | `GET /api/me` | → `{profile}` |
-| `PUT /api/me` | `{coat, theme, termStart, displayName}` → `{profile}` |
-| `GET /api/sync?since=<ms>` | → `{now, courses: [...], items: [...], quotes: [...]}` — every row with `updatedAt > since`, tombstones included as `{id, deletedAt}`. `since=0` is a full load. |
+| `PUT /api/me` | `{coat, theme, bg, termStart, displayName}` (`bg` optional, default `med`) → `{profile}` |
+| `GET /api/sync?v=2&cursor=<seq>` | → `{changes: [{kind, row}], cursor, more, reset}` — at most 100 changes after `cursor`, deleted rows included with `deletedAt` set. `cursor=0` is a full load. See the sync protocol below. |
 | `GET /api/{courses,items,quotes}/:id` | one live row of yours, or `404`. The client uses it to undo a rejected save. |
 | `PUT /api/courses/:id` | a course → the stored course, with server `updatedAt`. Upsert. |
 | `DELETE /api/courses/:id` | → `204`. Soft-deletes and nulls `courseId` on the user's items. |

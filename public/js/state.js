@@ -11,6 +11,7 @@ export const ui = {
   sel: null, draft: null, courseDraft: null, courseMode: null, confirm: null,
   settings: false, focusField: null, sort: { key: 'date', dir: 1 },
   theme: (typeof window !== 'undefined' && window.__roundsTheme) || 'system',
+  bg: (typeof window !== 'undefined' && window.__roundsBg) || 'med',     /* background art: 'med' | 'cs' */
   quoteIx: 0,
   spotifyNote: null,       /* 'connected' | 'error' after the Spotify round trip, shown once in Settings */
   /* the Spotify view: home | playlist | album | artist | queue | search, and the filter inside a list */
@@ -26,4 +27,5 @@ try {
 export function rememberUi() {
   try { localStorage.setItem(KEY, JSON.stringify({ view: ui.view })); } catch {}
   try { localStorage.setItem('rounds.theme', ui.theme); } catch {}
+  try { localStorage.setItem('rounds.bg', ui.bg); } catch {}
 }

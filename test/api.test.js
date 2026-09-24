@@ -35,6 +35,7 @@ describe('profile', () => {
       displayName: '',
       coat: { name: '', role: '', color: '#17B3AE' },
       theme: 'system',
+      bg: 'med',
       termStart: null,
     });
     expect(profile).not.toHaveProperty('passwordHash');
@@ -54,6 +55,18 @@ describe('profile', () => {
     expect(profile.termStart).toBe('2026-09-01');
     expect(profile.displayName).toBe('George');
     expect(profile.updatedAt).toBeGreaterThan(0);
+  });
+
+  it('PUT /api/me saves the background, and keeps it when an older client leaves it out', async () => {
+    const api = await signIn();
+    const body = { coat: { name: '', role: '', color: '#E4749B' }, theme: 'dark', termStart: null, displayName: '' };
+    let res = await api('/api/me', { method: 'PUT', body: { ...body, bg: 'cs' } });
+    expect(res.status).toBe(200);
+    const saved = await res.json();
+    expect(saved.bg).toBe('cs');
+    res = await api('/api/me', { method: 'PUT', body: { ...body, bg: 'nope' } });
+    expect(res.status).toBe(400);
+    expect(await res.json()).toEqual({ error: 'invalid', field: 'bg' });
   });
 
   it('PUT /api/me rejects a bad coat colour and names the field', async () => {

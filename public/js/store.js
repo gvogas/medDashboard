@@ -140,7 +140,7 @@ export function saveProfile(patch) {
   return mutate(async (a) => {
     const p = (await a('meta').get('profile')).value;
     if (copy.coat) Object.assign(p.coat, copy.coat);
-    for (const key of ['displayName', 'theme', 'termStart']) if (key in copy) p[key] = copy[key];
+    for (const key of ['displayName', 'theme', 'bg', 'termStart']) if (key in copy) p[key] = copy[key];
     await a('meta').put(wrap('profile', p));
     await queue(a, 'profile', 'put', p);
   });

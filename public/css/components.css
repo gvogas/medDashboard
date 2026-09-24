@@ -323,6 +323,13 @@ table.tbl td.num{white-space:nowrap;color:var(--ink-2);font-size:11.5px}
 .meter.pink{background:linear-gradient(90deg,#EFAEC3,#D9648C)}
 .meter.pink.full{background:linear-gradient(90deg,#DE7A9C,#C8517A)}
 @media (prefers-reduced-motion:reduce){.meter{transition:none}}
+/* CS stat cards: a blocky, terminal-style bar and a code-comment quote tile */
+:root[data-bg="cs"] .stat .meterwrap{border-radius:2px;height:8px}
+:root[data-bg="cs"] .stat .meter{border-radius:0;background:repeating-linear-gradient(90deg, var(--accent) 0 6px, transparent 6px 8px)}
+:root[data-bg="cs"] .stat.qcard .qm{font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:40px;font-weight:600;top:2px;right:10px}
+:root[data-bg="cs"] .stat.qcard .qt{font-family:"IBM Plex Mono",ui-monospace,monospace;font-style:normal;font-size:12px;line-height:1.55}
+:root[data-bg="cs"] .stat.qcard .qs{font-family:"IBM Plex Mono",ui-monospace,monospace;text-transform:none;letter-spacing:0}
+:root[data-bg="cs"] .stat.qcard .qs::before{content:"//"}
 /* checklist progress next to a row's step count */
 .steps{display:inline-flex;align-items:center;gap:6px;font-size:10.5px;color:var(--ink-2);margin-top:4px}
 .stepbar{width:54px;height:5px;border-radius:999px;background:var(--line-2);overflow:hidden;flex:none}
@@ -390,6 +397,19 @@ td .steps{margin-top:3px}
 .themeseg button[aria-pressed="true"]{border-color:var(--accent);color:var(--accent-ink);background:var(--accent-soft);font-weight:600}
 .themeseg .sw{width:100%;height:20px;border-radius:5px;border:1px solid var(--line);overflow:hidden;display:flex}
 .themeseg .sw i{flex:1}
+/* the Background picker: a line-art thumbnail of each, in the current accent */
+.bgseg{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.bgseg button{
+  border:1px solid var(--line);background:var(--panel-2);border-radius:9px;padding:7px;
+  display:flex;flex-direction:column;align-items:stretch;gap:3px;text-align:left;font-size:11px;color:var(--ink-3);
+}
+.bgseg button b{font-size:12px;color:var(--ink-2)}
+.bgseg button[aria-pressed="true"]{border-color:var(--accent);background:var(--accent-soft)}
+.bgseg button[aria-pressed="true"] b{color:var(--accent-ink)}
+.bgthumb{display:block;height:44px;border-radius:6px;background:var(--bg);border:1px solid var(--line);position:relative;overflow:hidden}
+.bgthumb::before{content:"";position:absolute;inset:0;background:var(--accent);opacity:.7;-webkit-mask:var(--art) center/cover no-repeat;mask:var(--art) center/cover no-repeat}
+.bgthumb[data-thumb="med"]{--art:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 120 44' fill='none' stroke='black' stroke-width='1.3'%3E%3Cpath d='M-4 30c10-14 20-14 30 0s20 14 30 0 20-14 30 0 20 14 30 0'/%3E%3Cpath d='M-4 30c10 14 20 14 30 0s20-14 30 0 20 14 30 0 20-14 30 0'/%3E%3Cpath d='M84 6l7 4v8l-7 4-7-4v-8z'/%3E%3Cpath d='M98 2l7 4v8l-7 4-7-4V6z'/%3E%3Ccircle cx='18' cy='10' r='5'/%3E%3C/svg%3E")}
+.bgthumb[data-thumb="cs"]{--art:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 120 44' fill='none' stroke='black' stroke-width='1.3' stroke-linecap='round'%3E%3Cpath d='M-2 8h26l8 8h22M-2 14h22l8 8h22M-2 20h18l8 8h22'/%3E%3Ccircle cx='56' cy='16' r='2'/%3E%3Ccircle cx='52' cy='22' r='2'/%3E%3Ccircle cx='48' cy='28' r='2'/%3E%3Ccircle cx='96' cy='6' r='3'/%3E%3Cpath d='M94 8l-8 9M98 8l8 9'/%3E%3Ccircle cx='85' cy='20' r='3'/%3E%3Ccircle cx='107' cy='20' r='3'/%3E%3Cpath d='M70 38h4M84 30v12M88 30v12'/%3E%3Cpath d='M104 32l-4 4 4 4M112 32l4 4-4 4'/%3E%3C/svg%3E")}
 .qrow{
   display:grid;grid-template-columns:minmax(0,1fr) auto;gap:6px;align-items:start;
   border:1px solid var(--line);border-radius:9px;padding:7px 9px;background:var(--panel-2);

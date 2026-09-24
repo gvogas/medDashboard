@@ -5,10 +5,25 @@
 # streams under its own origin. Artwork uses i.scdn.co and playlist mosaics use
 # mosaic.scdn.co; allow those hosts only for images.
 /*
-  Content-Security-Policy: default-src 'self'; script-src 'self' 'sha256-JLf3ufColssusE0SVsAeLq+LC/Nqrzfed6eQYKwO0uc=' https://sdk.scdn.co; frame-src https://sdk.scdn.co; style-src 'self' https://fonts.googleapis.com; style-src-attr 'none'; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https://i.scdn.co https://mosaic.scdn.co; connect-src 'self'; worker-src 'self'; manifest-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'; object-src 'none'
+  Content-Security-Policy: default-src 'self'; script-src 'self' 'sha256-npPDegaqv7XOEqrQQ0qhMPq6UPATWIrUAHU0FNaVCfs=' https://sdk.scdn.co; frame-src https://sdk.scdn.co; style-src 'self' https://fonts.googleapis.com; style-src-attr 'none'; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https://i.scdn.co https://mosaic.scdn.co; connect-src 'self'; worker-src 'self'; manifest-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'; object-src 'none'
   X-Content-Type-Options: nosniff
   Referrer-Policy: same-origin
   Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=()
   Strict-Transport-Security: max-age=31536000; includeSubDomains
   Cross-Origin-Opener-Policy: same-origin
+
+# Cache-Control is set per path, not on /* above: two matching rules would have
+# their values joined with a comma. Anything unlisted gets the platform default,
+# `public, max-age=0, must-revalidate`.
+# The build puts every asset under /releases/<content hash>/, so a URL there never
+# changes its content and need not be revalidated.
+/releases/*
+  Cache-Control: public, max-age=31536000, immutable
+
+# The entry points that name the current release must always be checked.
+/
+  Cache-Control: no-cache
+/index.html
+  Cache-Control: no-cache
+/sw.js
   Cache-Control: no-cache

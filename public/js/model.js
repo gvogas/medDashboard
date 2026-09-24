@@ -1,4 +1,4 @@
-// What the app knows about itself: the six types, their status sets, the five
+// What the app knows about itself: the seven types, their status sets, the five
 // colours, and the derived predicates. Nothing here touches the DOM or storage.
 
 import { diffDays, today, parse, addDays, iso } from './dates.js';
@@ -10,8 +10,9 @@ export const TYPES = {
   tutoring:   { label: 'Tutorial',     plural: 'Tutorials',    color: '#5A46A8' },   /* key kept for stored rows */
   office:     { label: 'Office hours', plural: 'Office hours', color: '#4C7370' },
   task:       { label: 'Task',         plural: 'Tasks',        color: '#0E7C74' },
+  project:    { label: 'Project',      plural: 'Projects',     color: '#C2571A' },
 };
-export const ORDER = ['exam', 'assignment', 'lab', 'tutoring', 'office', 'task'];
+export const ORDER = ['exam', 'assignment', 'lab', 'tutoring', 'office', 'project', 'task'];
 export const STATUS = {
   exam:       [['todo', 'Upcoming'],  ['done', 'Sat'],           ['graded', 'Graded']],
   assignment: [['todo', 'Open'],      ['submitted', 'Submitted'], ['graded', 'Graded']],
@@ -19,6 +20,7 @@ export const STATUS = {
   tutoring:   [['todo', 'Scheduled'], ['done', 'Attended'],      ['missed', 'Cancelled']],
   office:     [['todo', 'Planned'],   ['done', 'Went'],          ['missed', 'Skipped']],
   task:       [['todo', 'To do'],     ['done', 'Done']],
+  project:    [['todo', 'In progress'], ['done', 'Shipped'],     ['missed', 'Dropped']],   /* milestones are the checklist */
 };
 const COMPLETE = { done: 1, graded: 1, submitted: 1 };   /* light-pink states */
 const CLOSED = { done: 1, graded: 1, submitted: 1, missed: 1 };
@@ -42,6 +44,11 @@ export function colourName(hex) {
 
 export function uid() {
   return Math.random().toString(36).slice(2, 9);
+}
+
+/** Projects belong to the CS background: offered there, and anywhere one already exists. */
+export function typeShown(t, bg, items = []) {
+  return t !== 'project' || bg === 'cs' || items.some((it) => it.type === 'project');
 }
 
 export function tmeta(t) {

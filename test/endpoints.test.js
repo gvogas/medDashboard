@@ -58,12 +58,12 @@ describe('endpoint contract', () => {
     expect((await api('/api/quotes/%00', { method: 'PUT', body: { text: 'Study' } })).status).toBe(400);
   });
 
-  it('rejects unsafe sync timestamps without reaching D1 with Infinity', async () => {
+  it('rejects unsafe sync cursors without reaching D1 with Infinity', async () => {
     const api = await signIn();
-    for (const since of ['9'.repeat(400), '9007199254740992', '-1', '1.5']) {
-      const res = await api('/api/sync?since=' + since);
+    for (const cursor of ['9'.repeat(400), '9007199254740992', '-1', '1.5']) {
+      const res = await api('/api/sync?v=2&cursor=' + cursor);
       expect(res.status).toBe(400);
-      expect(await res.json()).toEqual({ error: 'invalid', field: 'since' });
+      expect(await res.json()).toEqual({ error: 'invalid', field: 'cursor' });
     }
   });
 

@@ -1,6 +1,6 @@
 import { data, course, item, saveItem } from '../store.js';
 import { ui } from '../state.js';
-import { TYPES, ORDER, STATUS, tmeta, statusLabel, isOverdue, uid, normalizeItem } from '../model.js';
+import { TYPES, ORDER, STATUS, tmeta, statusLabel, isOverdue, uid, normalizeItem, typeShown } from '../model.js';
 import { parse, diffDays, today, hhmm, DOW } from '../dates.js';
 import { activeCourses } from '../query.js';
 import { esc, autoGrow } from '../dom.js';
@@ -46,7 +46,7 @@ export function renderItemDrawer(focusTitle) {
   if (!it) { hideDrawer(); return; }
   const TODAY = today();
   const isNew = !!ui.draft, m = tmeta(it.type), sts = STATUS[it.type] || STATUS.task;
-  const typeOpts = ORDER.map((t) => '<option value="' + t + '"' + (t === it.type ? ' selected' : '') + '>' + TYPES[t].label + '</option>').join('');
+  const typeOpts = ORDER.filter((t) => t === it.type || typeShown(t, ui.bg, data.items)).map((t) => '<option value="' + t + '"' + (t === it.type ? ' selected' : '') + '>' + TYPES[t].label + '</option>').join('');
   const courseOpts = '<option value="">No course</option>' + activeCourses().map((c) =>
     '<option value="' + esc(c.id) + '"' + (c.id === it.courseId ? ' selected' : '') + '>' + esc(c.name) + '</option>').join('');
   const stOpts = sts.map((p) => '<option value="' + p[0] + '"' + (p[0] === it.status ? ' selected' : '') + '>' + p[1] + '</option>').join('');

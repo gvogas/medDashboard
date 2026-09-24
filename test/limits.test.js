@@ -25,10 +25,13 @@ describe('shared request limits', () => {
     expect((await other('/api/me')).status).toBe(200);
   });
 
-  it('limits Spotify separately while leaving SDK tokens and disconnect available', async () => {
+  it('limits Spotify separately while leaving the player poll, SDK tokens and disconnect available', async () => {
     const api = await signIn('limit-spotify');
     await env.DB.prepare('INSERT INTO request_limits VALUES (?, ?, ?)').bind('spotify:u-limit-spotify', SPOTIFY_LIMIT, Date.now() + 60000).run();
-    expect((await api('/api/spotify/player')).status).toBe(429);
+    expect((await api('/api/spotify/devices')).status).toBe(429);
+    expect((await api('/api/spotify/player/pause', { method: 'POST' })).status).toBe(429);
+    // The background player poll is bounded by the API limit only; it spends no Spotify row.
+    expect(await (await api('/api/spotify/player')).json()).toEqual({ connected: false });
     expect(await (await api('/api/spotify/status')).json()).toEqual({ connected: false });
     expect((await api('/api/spotify/connect', { redirect: 'manual' })).status).toBe(302);
     expect((await api('/api/spotify/token')).status).toBe(409);

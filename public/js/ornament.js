@@ -1,5 +1,6 @@
-// The background biomolecule layer: two helices, a steroid, benzenes, a lipid.
-// Drawn in the theme's teal; redrawn on resize and theme change.
+// The background layer. Med: two helices, a steroid, benzenes, a lipid. CS: circuit
+// traces, a binary tree, a gate, a graph and code. Drawn in the theme's accent;
+// redrawn on resize and on theme or background change.
 
 import { $ } from './dom.js';
 
@@ -28,6 +29,62 @@ function lipid(x, y, n, step) {
   const pts = []; for (let i = 0; i <= n; i++) pts.push([x + i * step, y + (i % 2 ? -step * 0.55 : step * 0.55)]);
   poly(pts, false); ctx.beginPath(); ctx.arc(x - step * 0.5, y + step * 0.2, step * 0.42, 0, Math.PI * 2); ctx.stroke();
 }
+/* ── the CS layer: circuit traces, a binary tree, an AND gate, a graph, code ── */
+function via(x, y, r) { ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.stroke(); }
+function trace(pts, r) { poly(pts, false); const e = pts[pts.length - 1]; via(e[0], e[1], r); }
+function tree(x, y, dx, dy, depth, r) {
+  via(x, y, r);
+  if (!depth) return;
+  [-1, 1].forEach((s) => {
+    const nx = x + s * dx, ny = y + dy, a = Math.atan2(dy, s * dx);
+    ctx.beginPath(); ctx.moveTo(x + r * Math.cos(a), y + r * Math.sin(a)); ctx.lineTo(nx - r * Math.cos(a), ny - r * Math.sin(a)); ctx.stroke();
+    tree(nx, ny, dx * 0.52, dy, depth - 1, r);
+  });
+}
+function andGate(x, y, s) {
+  ctx.beginPath(); ctx.moveTo(x, y - s); ctx.lineTo(x + s, y - s); ctx.arc(x + s, y, s, -Math.PI / 2, Math.PI / 2); ctx.lineTo(x, y + s); ctx.closePath(); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(x - s * 0.9, y - s * 0.5); ctx.lineTo(x, y - s * 0.5); ctx.moveTo(x - s * 0.9, y + s * 0.5); ctx.lineTo(x, y + s * 0.5);
+  ctx.moveTo(x + 2 * s, y); ctx.lineTo(x + 2.9 * s, y); ctx.stroke();
+}
+function graph(x, y, s, r) {
+  const n = [[0, 0], [1.2, -0.6], [2.3, 0.1], [1.1, 0.8], [2.9, -0.9], [3.2, 0.9]].map((p) => [x + p[0] * s, y + p[1] * s]);
+  [[0, 1], [1, 2], [0, 3], [3, 2], [2, 4], [2, 5], [1, 4]].forEach(([a, b]) => {
+    const A = n[a], B = n[b], t = Math.atan2(B[1] - A[1], B[0] - A[0]);
+    ctx.beginPath(); ctx.moveTo(A[0] + r * Math.cos(t), A[1] + r * Math.sin(t)); ctx.lineTo(B[0] - r * Math.cos(t), B[1] - r * Math.sin(t)); ctx.stroke();
+  });
+  n.forEach((p) => via(p[0], p[1], r));
+}
+function glyph(txt, x, y, size) { ctx.font = '500 ' + size + 'px "IBM Plex Mono", ui-monospace, monospace'; ctx.strokeText(txt, x, y); }
+
+function drawMed(w, h) {
+  helix(-40, h * 0.14, Math.hypot(w + 120, h * 0.72), 26, 7, Math.atan2(h * 0.68, w + 120));
+  helix(w * 0.30, h + 30, Math.hypot(w * 0.82, h * 0.95), 18, 6, Math.atan2(-h * 0.95, w * 0.82));
+  steroid(w * 0.60, h * 0.16, 20);
+  benzene(w * 0.14, h * 0.70, 22); benzene(w * 0.20, h * 0.77, 15);
+  lipid(w * 0.72, h * 0.78, 9, 15);
+  steroid(w * 0.05, h * 0.38, 13);
+}
+function drawCs(w, h) {
+  const k = Math.max(0.6, Math.min(1, w / 900)), g = 18 * k, r = 3.2 * k;
+  /* a bus of traces sweeping in from the top left, on the Med helix's diagonal */
+  for (let i = 0; i < 5; i++) {
+    const o = i * g * 0.55;
+    trace([[-10, h * 0.10 + o], [w * 0.18 + o, h * 0.10 + o], [w * 0.30 + o, h * 0.10 + o + w * 0.12], [w * 0.52 + o, h * 0.10 + o + w * 0.12]], r);
+  }
+  for (let i = 0; i < 4; i++) {
+    const o = i * g * 0.55;
+    trace([[w + 10, h * 0.62 + o], [w * 0.86 - o, h * 0.62 + o], [w * 0.78 - o, h * 0.62 + o - w * 0.08], [w * 0.66 - o, h * 0.62 + o - w * 0.08]], r);
+  }
+  trace([[w * 0.40, h + 10], [w * 0.40, h * 0.86], [w * 0.46, h * 0.80], [w * 0.58, h * 0.80]], r);
+  trace([[w * 0.43, h + 10], [w * 0.43, h * 0.88], [w * 0.47, h * 0.84], [w * 0.60, h * 0.84]], r);
+  tree(w * 0.80, h * 0.10, w * 0.085, h * 0.10, 3, 5 * k);
+  andGate(w * 0.10, h * 0.70, 16 * k);
+  graph(w * 0.18, h * 0.44, 26 * k, 4.5 * k);
+  glyph('{ }', w * 0.62, h * 0.36, 34 * k);
+  glyph('</>', w * 0.06, h * 0.94, 26 * k);
+  glyph('0110 1001', w * 0.66, h * 0.97, 15 * k);
+  glyph('O(n log n)', w * 0.44, h * 0.52, 14 * k);
+}
 function draw() {
   const w = hostEl.clientWidth, h = hostEl.clientHeight;
   if (!w || !h) return;
@@ -35,13 +92,9 @@ function draw() {
   canvas.width = Math.round(w * dpr); canvas.height = Math.round(h * dpr);
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.clearRect(0, 0, w, h);
   const stroke = getComputedStyle(document.documentElement).getPropertyValue('--orn-stroke').trim();
-  ctx.strokeStyle = stroke || '#0E7C74'; ctx.lineWidth = 1.15; ctx.lineJoin = 'round';
-  helix(-40, h * 0.14, Math.hypot(w + 120, h * 0.72), 26, 7, Math.atan2(h * 0.68, w + 120));
-  helix(w * 0.30, h + 30, Math.hypot(w * 0.82, h * 0.95), 18, 6, Math.atan2(-h * 0.95, w * 0.82));
-  steroid(w * 0.60, h * 0.16, 20);
-  benzene(w * 0.14, h * 0.70, 22); benzene(w * 0.20, h * 0.77, 15);
-  lipid(w * 0.72, h * 0.78, 9, 15);
-  steroid(w * 0.05, h * 0.38, 13);
+  const cs = document.documentElement.getAttribute('data-bg') === 'cs';
+  ctx.strokeStyle = stroke || '#0E7C74'; ctx.lineWidth = 1.15; ctx.lineJoin = 'round'; ctx.lineCap = cs ? 'round' : 'butt';
+  (cs ? drawCs : drawMed)(w, h);
 }
 let raf = null;
 export function schedule() { if (raf) cancelAnimationFrame(raf); raf = requestAnimationFrame(draw); }

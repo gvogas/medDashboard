@@ -64,6 +64,7 @@ npm install
 npm run db:local        # apply the schema to the local D1
 npm run db:check        # read-only integrity checks and table counts
 npm run dev             # http://localhost:8787
+npm run dev:built       # the same, serving the built, versioned site
 npm test                # regression tests against the Worker, a local D1 and a fake Spotify
 ```
 

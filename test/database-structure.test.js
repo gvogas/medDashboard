@@ -21,6 +21,15 @@ describe('database relationships and inspection views', () => {
       .toEqual({ user_id: id, course_id: null });
   });
 
+  it('stores project items and a background per user', async () => {
+    const id = await createUser('schema-project');
+    const saved = await upsertRow(env.DB, 'items', id, 'p', normalizeItem({ id: 'p', title: 'Compiler', type: 'project' }));
+    expect(saved.type).toBe('project');
+    expect(await env.DB.prepare('SELECT bg FROM users WHERE id = ?').bind(id).first()).toEqual({ bg: 'med' });
+    await expect(env.DB.prepare("UPDATE users SET bg = 'law' WHERE id = ?").bind(id).run()).rejects.toThrow(/CHECK constraint failed/);
+    await expect(env.DB.prepare("UPDATE items SET type = 'essay' WHERE user_id = ?").bind(id).run()).rejects.toThrow(/CHECK constraint failed/);
+  });
+
   it('rejects invalid item revisions at the database boundary', async () => {
     const id = await createUser('schema-revision');
     await upsertRow(env.DB, 'items', id, 'i', normalizeItem({ id: 'i', title: 'Study' }));

@@ -20,10 +20,15 @@ export function renderStats() {
   courses.forEach((c) => { (c.meetings || []).forEach((m) => { classH += dur(m.start, m.end); classN++; }); });
   const dd = nextExam ? diffDays(TODAY, nextExam.date) : null;
   const ddText = dd === null ? '—' : dd === 0 ? 'Today' : dd === 1 ? 'Tomorrow' : dd + ' <small>days</small>';
-  const ecg = '<svg class="ecg" viewBox="0 0 120 16" preserveAspectRatio="none" fill="none" stroke="currentColor" stroke-width="1.3" aria-hidden="true">'
-    + '<path d="M0 11h13l2-2 3 5 3-3h9l3-7 3 13 3-6h11l2-2 3 5 3-3h10l3-7 3 13 3-6h13l2-2 3 5 3-3h9"/></svg>';
+  const cs = ui.bg === 'cs';
+  /* Med: a heartbeat and a molecule. CS: a clock signal with one glitch, and a chip. */
+  const ecg = '<svg class="ecg" viewBox="0 0 120 16" preserveAspectRatio="none" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round" aria-hidden="true">'
+    + (cs ? '<path d="M0 12h8V4h8v8h8V4h8v8h4V2h2v12h2V4h8v8h8V4h8v8h8V4h8v8h4V2h2v12h2V4h8v8h8V4h6"/>'
+          : '<path d="M0 11h13l2-2 3 5 3-3h9l3-7 3 13 3-6h11l2-2 3 5 3-3h10l3-7 3 13 3-6h13l2-2 3 5 3-3h9"/>') + '</svg>';
   const mol = '<svg class="mol" viewBox="0 0 60 60" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">'
-    + '<path d="M30 6l14 8v16l-14 8-14-8V14z"/><circle cx="30" cy="22" r="7"/><path d="M44 30l12 7M16 30L4 37M30 38v14"/></svg>';
+    + (cs ? '<rect x="16" y="16" width="28" height="28" rx="3"/><rect x="24" y="24" width="12" height="12" rx="1"/>'
+          + '<path d="M23 16V8M30 16V8M37 16V8M23 44v8M30 44v8M37 44v8M16 23H8M16 30H8M16 37H8M44 23h8M44 30h8M44 37h8"/>'
+          : '<path d="M30 6l14 8v16l-14 8-14-8V14z"/><circle cx="30" cy="22" r="7"/><path d="M44 30l12 7M16 30L4 37M30 38v14"/>') + '</svg>';
 
   setHTML($('stats'), ''
     + '<div class="stat hot"><div class="lab">Next exam</div><div class="val">' + ddText + '</div><div class="foot">' + (nextExam ? esc(nextExam.title) : 'nothing scheduled') + '</div>' + ecg + '</div>'
@@ -40,13 +45,13 @@ function quoteCardHtml() {
   const qs = data.quotes || [];
   if (!qs.length) {
     return '<button class="stat qcard empty" type="button" data-quotenext>'
-      + '<span class="qm">“</span><span class="qt">Add a quote to keep here</span>'
+      + '<span class="qm">' + (ui.bg === 'cs' ? '/*' : '“') + '</span><span class="qt">Add a quote to keep here</span>'
       + '<span class="qs">Settings › Quotes</span></button>';
   }
   if (ui.quoteIx >= qs.length) ui.quoteIx = 0;
   const q = qs[ui.quoteIx];
   return '<button class="stat qcard" type="button" data-quotenext title="' + (qs.length > 1 ? 'Next quote' : 'Edit quotes in Settings') + '">'
-    + '<span class="qm">“</span>'
+    + '<span class="qm">' + (ui.bg === 'cs' ? '/*' : '“') + '</span>'
     + '<span class="qt">' + esc(q.text) + '</span>'
     + '<span class="qs">' + (q.source ? esc(q.source) : 'Unattributed')
     + (qs.length > 1 ? '<em>' + (ui.quoteIx + 1) + ' / ' + qs.length + '</em>' : '') + '</span></button>';

@@ -37,9 +37,13 @@ export function renderWeek() {
 
   let sched = '<div class="panel"><div class="ph">Schedule <em>' + list.length + ' item' + (list.length === 1 ? '' : 's') + '</em></div>'
     + '<svg class="helix-rule" viewBox="0 0 400 11" preserveAspectRatio="none" fill="none" stroke="currentColor" stroke-width="1.05" aria-hidden="true">'
-    + '<path d="M0 5.5c12-5.5 24-5.5 36 0s24 5.5 36 0 24-5.5 36 0 24 5.5 36 0 24-5.5 36 0 24 5.5 36 0 24-5.5 36 0 24 5.5 36 0 24-5.5 36 0 24 5.5 36 0"/>'
-    + '<path d="M0 5.5c12 5.5 24 5.5 36 0s24-5.5 36 0 24 5.5 36 0 24-5.5 36 0 24 5.5 36 0 24-5.5 36 0 24 5.5 36 0 24-5.5 36 0 24 5.5 36 0 24-5.5 36 0"/>'
-    + '<path d="M18 1.8v7.4M54 1.8v7.4M90 1.8v7.4M126 1.8v7.4M162 1.8v7.4M198 1.8v7.4M234 1.8v7.4M270 1.8v7.4M306 1.8v7.4M342 1.8v7.4M378 1.8v7.4"/></svg>';
+    + (ui.bg === 'cs'
+      /* CS: a two-line data bus, ticked where the DNA has its rungs */
+      ? '<path d="M0 3h400M0 8h400"/><path d="M18 3v5M54 3v5M90 3v5M126 3v5M162 3v5M198 3v5M234 3v5M270 3v5M306 3v5M342 3v5M378 3v5"/>'
+      : '<path d="M0 5.5c12-5.5 24-5.5 36 0s24 5.5 36 0 24-5.5 36 0 24 5.5 36 0 24-5.5 36 0 24 5.5 36 0 24-5.5 36 0 24 5.5 36 0 24-5.5 36 0 24 5.5 36 0"/>'
+        + '<path d="M0 5.5c12 5.5 24 5.5 36 0s24-5.5 36 0 24 5.5 36 0 24-5.5 36 0 24 5.5 36 0 24-5.5 36 0 24 5.5 36 0 24-5.5 36 0 24 5.5 36 0 24-5.5 36 0"/>'
+        + '<path d="M18 1.8v7.4M54 1.8v7.4M90 1.8v7.4M126 1.8v7.4M162 1.8v7.4M198 1.8v7.4M234 1.8v7.4M270 1.8v7.4M306 1.8v7.4M342 1.8v7.4M378 1.8v7.4"/>')
+    + '</svg>';
 
   const classesByDow = {};
   classes().forEach((x) => { (classesByDow[x.mtg.weekday] = classesByDow[x.mtg.weekday] || []).push(x); });
@@ -72,7 +76,8 @@ export function renderWeek() {
   ohRows.forEach((it, i) => {
     const c = course(it.courseId);
     ohHtml += '<tr data-id="' + esc(it.id) + '"><td class="' + (i === 0 ? 'next' : '') + '">'
-      + (i === 0 ? '<svg class="mini-scope" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><path d="M4 3c0 6 2 7 4 9s6 3 8 1"/><circle cx="16" cy="14" r="3.4"/></svg>' : '')
+      + (i === 0 ? '<svg class="mini-scope" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true">'
+        + (ui.bg === 'cs' ? '<path d="M3 6l5 4-5 4M10 15h7"/>' : '<path d="M4 3c0 6 2 7 4 9s6 3 8 1"/><circle cx="16" cy="14" r="3.4"/>') + '</svg>' : '')
       + esc(it.title.replace(' — office hours', '')) + ' <span class="dept">' + esc(it.dept || (c ? c.code : '')) + '</span></td>'
       + '<td class="w mono">' + (it.recur === 'weekly' ? DOW[it.weekday] : DOW[parse(it.date).getDay()]) + ' ' + hhmm(it.start) + '<br><span class="dept">' + esc(it.where || '') + '</span></td></tr>';
   });
@@ -91,8 +96,14 @@ export function renderWeek() {
   });
   tHtml += '<div class="quick"><input type="text" id="quickTask" placeholder="Add a task, press Enter" aria-label="Add a task"></div>'
     + '<svg class="steroid" viewBox="0 0 120 80" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true">'
-    + '<path d="M14 46l-9-16 9-16 18 1 8 15-8 16z"/><path d="M32 31l18 1 8 15-8 16-18-1-8-15"/>'
-    + '<path d="M50 32l17-8 13 11-5 17-17 3-8-15"/><path d="M80 35l16-4 8 12-11 11-13-5z"/></svg></div>';
+    + (ui.bg === 'cs'
+      /* CS: a small binary tree in the corner instead of the steroid */
+      ? '<circle cx="60" cy="12" r="6"/><circle cx="32" cy="40" r="6"/><circle cx="88" cy="40" r="6"/>'
+        + '<circle cx="18" cy="68" r="5"/><circle cx="46" cy="68" r="5"/><circle cx="102" cy="68" r="5"/>'
+        + '<path d="M55 16L37 36M65 16l18 20M28 45l-7 18M36 45l7 18M92 45l7 18"/>'
+      : '<path d="M14 46l-9-16 9-16 18 1 8 15-8 16z"/><path d="M32 31l18 1 8 15-8 16-18-1-8-15"/>'
+        + '<path d="M50 32l17-8 13 11-5 17-17 3-8-15"/><path d="M80 35l16-4 8 12-11 11-13-5z"/>')
+    + '</svg></div>';
 
   return '<div class="cols">' + sched + '<div class="aside-col">' + ohHtml + tHtml + '</div></div>';
 }

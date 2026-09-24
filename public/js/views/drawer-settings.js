@@ -76,7 +76,7 @@ export function refreshSpotifyGroup() {
 }
 
 function savedValues(row = {}) {
-  const labels = { title: 'Title', text: 'Quote', source: 'Source', name: 'Course', code: 'Code', instructor: 'Instructor', term: 'Term', date: 'Date', start: 'Start', end: 'End', where: 'Location', status: 'Status', grade: 'Grade', weight: 'Weight', notes: 'Notes', dept: 'Department', displayName: 'Name', theme: 'Theme', termStart: 'Term start' };
+  const labels = { title: 'Title', text: 'Quote', source: 'Source', name: 'Course', code: 'Code', instructor: 'Instructor', term: 'Term', date: 'Date', start: 'Start', end: 'End', where: 'Location', status: 'Status', grade: 'Grade', weight: 'Weight', notes: 'Notes', dept: 'Department', displayName: 'Name', theme: 'Theme', bg: 'Background', termStart: 'Term start' };
   let html = '<dl>';
   for (const [key, label] of Object.entries(labels)) if (row[key] !== undefined && row[key] !== null && row[key] !== '') html += '<dt>' + label + '</dt><dd>' + esc(row[key]) + '</dd>';
   for (const entry of row.checklist || []) html += '<dt>Checklist</dt><dd>' + (entry.done ? 'Done: ' : 'To do: ') + esc(entry.text) + '</dd>';
@@ -84,6 +84,36 @@ function savedValues(row = {}) {
   for (const meeting of row.meetings || []) html += '<dt>Class</dt><dd>' + esc(meeting.kind) + ' ' + esc(meeting.start) + '-' + esc(meeting.end) + ' ' + esc(meeting.room) + '</dd>';
   if (row.coat) html += '<dt>Coat</dt><dd>' + esc(row.coat.name) + ' ' + esc(row.coat.role) + '</dd>';
   return html + '</dl>';
+}
+
+/* Med: the lab coat, with its colour and a preview of the pocket. */
+function coatGroup(p, coat) {
+  return '<div class="setgrp"><h4>Lab coat</h4>'
+    + '<div class="fields">'
+      + '<label for="o-name">Name</label><input id="o-name" type="text" data-of="name" value="' + esc(coat.name) + '" placeholder="' + esc(p.displayName || 'Your name') + '" maxlength="28">'
+      + '<label for="o-role">Line under</label><input id="o-role" type="text" data-of="role" value="' + esc(coat.role) + '" placeholder="MS II · Cardio block" maxlength="34">'
+      + '<label>Coat</label><span class="swatchrow">'
+      + PALETTE.map((pal) =>
+          '<button class="swatch" type="button" data-coatcolor="' + pal.hex + '" aria-pressed="' + (pal.hex === coatColour() ? 'true' : 'false')
+            + '" data-accent="' + pal.hex + '" title="' + pal.name + '" aria-label="' + pal.name + ' coat"></button>').join('')
+      + '</span>'
+      + '<span class="swatchname">' + esc(colourName(coatColour())) + '</span>'
+    + '</div>'
+    + '<div class="coatpreview"><i class="pen" aria-hidden="true"></i>'
+    + '<div class="embroidery" id="coatPrevName">' + esc(coat.name) + '</div>'
+    + '<div class="role" id="coatPrevRole">' + esc(coat.role) + '</div>'
+    + TUCK_SVG + '</div>'
+    + '<span class="note">The coat colour tints the sidebar fabric, the pocket and the embroidery.</span></div>';
+}
+
+/* CS: the same name and line, printed on the ID badge. The coat colour is kept for Med. */
+function badgeGroup(p, coat) {
+  return '<div class="setgrp"><h4>ID badge</h4>'
+    + '<div class="fields">'
+      + '<label for="o-name">Name</label><input id="o-name" type="text" data-of="name" value="' + esc(coat.name) + '" placeholder="' + esc(p.displayName || 'Your name') + '" maxlength="28">'
+      + '<label for="o-role">Line under</label><input id="o-role" type="text" data-of="role" value="' + esc(coat.role) + '" placeholder="CS · Year 2" maxlength="34">'
+    + '</div>'
+    + '<span class="note">The pattern and barcode on the badge are made from your username.</span></div>';
 }
 
 export function renderSettings() {
@@ -106,22 +136,13 @@ export function renderSettings() {
           + t[1] + '</button>').join('')
     + '</div></div>'
 
-    + '<div class="setgrp"><h4>Lab coat</h4>'
-    + '<div class="fields">'
-      + '<label for="o-name">Name</label><input id="o-name" type="text" data-of="name" value="' + esc(coat.name) + '" placeholder="' + esc(p.displayName || 'Your name') + '" maxlength="28">'
-      + '<label for="o-role">Line under</label><input id="o-role" type="text" data-of="role" value="' + esc(coat.role) + '" placeholder="MS II · Cardio block" maxlength="34">'
-      + '<label>Coat</label><span class="swatchrow">'
-      + PALETTE.map((pal) =>
-          '<button class="swatch" type="button" data-coatcolor="' + pal.hex + '" aria-pressed="' + (pal.hex === coatColour() ? 'true' : 'false')
-            + '" data-accent="' + pal.hex + '" title="' + pal.name + '" aria-label="' + pal.name + ' coat"></button>').join('')
-      + '</span>'
-      + '<span class="swatchname">' + esc(colourName(coatColour())) + '</span>'
-    + '</div>'
-    + '<div class="coatpreview"><i class="pen" aria-hidden="true"></i>'
-    + '<div class="embroidery" id="coatPrevName">' + esc(coat.name) + '</div>'
-    + '<div class="role" id="coatPrevRole">' + esc(coat.role) + '</div>'
-    + TUCK_SVG + '</div>'
-    + '<span class="note">The coat colour tints the sidebar fabric, the pocket and the embroidery.</span></div>'
+    + '<div class="setgrp"><h4>Background<em>' + (ui.bg === 'cs' ? 'computer science' : 'medicine') + '</em></h4><div class="bgseg">'
+    + [['med', 'Med', 'Helices, rings and a lipid tail'], ['cs', 'CS', 'Circuits, trees and code']].map((b) =>
+        '<button type="button" data-bgset="' + b[0] + '" aria-pressed="' + (ui.bg === b[0] ? 'true' : 'false') + '">'
+          + '<span class="bgthumb" data-thumb="' + b[0] + '" aria-hidden="true"></span><b>' + b[1] + '</b><span>' + b[2] + '</span></button>').join('')
+    + '</div><span class="note">CS swaps the lab coat for an ID badge and adds Projects to your item types.</span></div>'
+
+    + (ui.bg === 'cs' ? badgeGroup(p, coat) : coatGroup(p, coat))
 
     + '<div class="setgrp"><h4>Quotes<em>' + qs.length + ' saved</em></h4>'
     + '<span class="note">One sits in the tile beside your stats. Click it there for the next one.</span>'

@@ -2,7 +2,7 @@
 import { HttpError } from './http.js';
 
 const PROFILE_COLS =
-  'id, username, display_name, coat_name, coat_role, coat_color, theme, term_start, created_at, updated_at, revision';
+  'id, username, display_name, coat_name, coat_role, coat_color, theme, bg, term_start, created_at, updated_at, revision';
 
 function profileFromRow(r) {
   return {
@@ -11,6 +11,7 @@ function profileFromRow(r) {
     displayName: r.display_name,
     coat: { name: r.coat_name, role: r.coat_role, color: r.coat_color },
     theme: r.theme,
+    bg: r.bg,
     termStart: r.term_start,
     createdAt: r.created_at,
     updatedAt: r.updated_at,
@@ -36,9 +37,9 @@ export async function getProfile(db, userId) {
 export async function updateProfile(db, userId, p, now = Date.now(), revision) {
   const saved = await db
     .prepare(
-      `UPDATE users SET display_name = ?, coat_name = ?, coat_role = ?, coat_color = ?, theme = ?, term_start = ?, updated_at = ?, revision = revision + 1 WHERE id = ? AND revision = ? RETURNING ${PROFILE_COLS}`,
+      `UPDATE users SET display_name = ?, coat_name = ?, coat_role = ?, coat_color = ?, theme = ?, bg = ?, term_start = ?, updated_at = ?, revision = revision + 1 WHERE id = ? AND revision = ? RETURNING ${PROFILE_COLS}`,
     )
-    .bind(p.displayName, p.coatName, p.coatRole, p.coatColor, p.theme, p.termStart, now, userId, revision ?? -1)
+    .bind(p.displayName, p.coatName, p.coatRole, p.coatColor, p.theme, p.bg, p.termStart, now, userId, revision ?? -1)
     .first();
   if (!saved) throw new HttpError(409, { error: 'conflict', current: await getProfile(db, userId) });
   return profileFromRow(saved);
@@ -152,22 +153,6 @@ export async function deleteRow(db, table, userId, id, now = Date.now(), revisio
 export async function courseExists(db, userId, id) {
   const r = await db.prepare('SELECT 1 AS x FROM courses WHERE user_id = ? AND id = ? AND deleted_at IS NULL').bind(userId, id).first();
   return !!r;
-}
-
-/** Every row changed after `since`; deleted rows collapse to {id, deletedAt}. One round trip. */
-export async function syncSince(db, userId, since) {
-  const now = Date.now();
-  const tables = Object.keys(TABLES);
-  const pages = await db.batch(
-    tables.map((table) =>
-      db.prepare(`SELECT ${selectCols(table)} FROM ${table} WHERE user_id = ? AND updated_at > ? ORDER BY updated_at, id`).bind(userId, since),
-    ),
-  );
-  const out = { now };
-  tables.forEach((table, i) => {
-    out[table] = pages[i].results.map((r) => (r.deleted_at ? { id: r.id, deletedAt: r.deleted_at } : rowToApi(table, r)));
-  });
-  return out;
 }
 
 /** A bounded page, ordered by commit sequence rather than wall-clock timestamps.

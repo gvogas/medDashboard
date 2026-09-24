@@ -5,7 +5,8 @@
   "description": "Med-school tracker: static front end + Cloudflare Worker API on D1",
   "scripts": {
     "dev": "wrangler dev",
-    "deploy": "npm run check && node scripts/check-secrets.mjs && wrangler d1 migrations apply rounds --remote && wrangler deploy --assets .build/site",
+    "dev:built": "npm run build && wrangler dev --assets .build/site",
+    "deploy": "npm run check && node scripts/check-secrets.mjs && wrangler d1 migrations apply rounds --remote && node scripts/check-db.mjs --remote && wrangler deploy --assets .build/site",
     "test": "vitest run && npm run test:local",
     "test:watch": "vitest",
     "db:local": "wrangler d1 migrations apply rounds --local",

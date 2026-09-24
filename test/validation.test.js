@@ -27,3 +27,18 @@ describe('calendar validation', () => {
     expect(validateItem({ ...item, start: '00:00', end: '23:59' })).toMatchObject({ start: '00:00', end: '23:59' });
   });
 });
+
+describe('backgrounds and projects', () => {
+  it('defaults a profile without a background to Med, for older clients', () => {
+    expect(validateProfile(profile).bg).toBe('med');
+  });
+
+  it('accepts the CS background and rejects anything else', () => {
+    expect(validateProfile({ ...profile, bg: 'cs' }).bg).toBe('cs');
+    expect(() => validateProfile({ ...profile, bg: 'law' })).toThrow();
+  });
+
+  it('accepts project items', () => {
+    expect(validateItem({ ...item, type: 'project' }).type).toBe('project');
+  });
+});

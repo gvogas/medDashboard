@@ -4,6 +4,7 @@ export const API_LIMIT = 600;
 export const SPOTIFY_LIMIT = 60;
 export const LOGIN_IP_LIMIT = 30;
 const WINDOW_MS = 60_000;
+const SPOTIFY_EXEMPT = ['/api/spotify/token', '/api/spotify/status', '/api/spotify/connect', '/api/spotify/callback'];
 
 export function rateLimited(seconds, error = 'rate_limited') {
   const retryAfter = Math.max(1, Math.ceil(seconds));
@@ -50,7 +51,9 @@ export async function limitUser(request, env, userId) {
   if (wait) throw rateLimited(wait);
   const path = new URL(request.url).pathname;
   // SDK token retrieval and disconnect remain available during a Spotify API cooldown.
-  if (path.startsWith('/api/spotify/') && !['/api/spotify/token', '/api/spotify/status', '/api/spotify/connect', '/api/spotify/callback'].includes(path)) {
+  // The player poll is exempt too: it is the steady background read, and a second
+  // counter row per poll would double its D1 writes. The API limit above still bounds it.
+  if (path.startsWith('/api/spotify/') && !SPOTIFY_EXEMPT.includes(path) && !(request.method === 'GET' && path === '/api/spotify/player')) {
     const spotifyWait = await claimLimit(env.DB, `spotify:${userId}`, SPOTIFY_LIMIT);
     if (spotifyWait) throw rateLimited(spotifyWait);
   }

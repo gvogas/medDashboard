@@ -24,10 +24,11 @@ let onSignedOut = () => {};
 let wired = false;
 let generation = 0;
 
-/** 5 s while playing, 20 s when connected but quiet, null when not connected. */
+/** 10 s while playing (the progress line ticks locally between polls), 20 s when
+    connected but quiet, null when not connected. Each poll is a D1 write. */
 export function nextDelayMs(s) {
   if (!s.connected) return null;
-  return s.playing ? 5000 : 20000;
+  return s.playing ? 10000 : 20000;
 }
 
 export function onState(fn) { listener = fn; }

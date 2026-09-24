@@ -34,6 +34,17 @@ function setTheme(choice, { persist = true } = {}) {
   drawOrnament();                     /* the ornament layer is drawn in the theme's teal */
 }
 function followSystem() { if (ui.theme === 'system') setTheme('system', { persist: false }); }
+
+/* ═════════ background: Med or CS art, independent of light/dark ═════════ */
+function setBg(choice, { persist = true } = {}) {
+  ui.bg = choice === 'cs' ? 'cs' : 'med';
+  document.documentElement.setAttribute('data-bg', ui.bg);
+  rememberUi();
+  if (persist && data.profile && data.profile.bg !== ui.bg) store.saveProfile({ bg: ui.bg });
+  if (data.profile) render();          /* the sidebar, stats and type lists change with it */
+  if (ui.settings) renderSettings();
+  drawOrnament();
+}
 if (window.matchMedia) window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', followSystem);
 
 /* ═════════ sync status pill ═════════ */
@@ -101,6 +112,7 @@ async function start(profile) {
   await store.open(profile);
   hideSignIn();
   setTheme(data.profile.theme || ui.theme, { persist: false });
+  setBg(data.profile.bg || ui.bg, { persist: false });
   applyCoat();
   ui.quoteIx = data.quotes.length ? Math.floor(Math.random() * data.quotes.length) : 0;
   render();
@@ -248,6 +260,7 @@ document.addEventListener('click', async (e) => {
     return;
   }
   if ((el = e.target.closest('[data-themeset]'))) { setTheme(el.dataset.themeset); return; }
+  if ((el = e.target.closest('[data-bgset]'))) { setBg(el.dataset.bgset); return; }
   if ((el = e.target.closest('[data-coatcolor]'))) {
     await store.saveProfile({ coat: { color: el.dataset.coatcolor } });
     applyCoat(); renderSettings(); return;

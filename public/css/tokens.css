@@ -52,4 +52,36 @@
   color-scheme:dark;
 }
 
+/* ════════════════════════════════════════════════
+   CS background — slate indigo instead of ward teal.
+   Stamped as data-bg="cs" beside data-app; only the
+   neutrals and the accent move. Status colours stay.
+   ════════════════════════════════════════════════ */
+:root[data-bg="cs"]{
+  --bg:#EDF0F7; --panel:#FFFFFF; --panel-2:#F5F7FB;
+  --ink:#172033; --ink-2:#5A6680; --ink-3:#8A94AA;
+  --line:#DCE1EC; --line-2:#ECEFF5;
+  --accent:#3650C8; --accent-soft:#E0E6FA; --accent-ink:#2A3E9E; --on-accent:#FFFFFF;
+  --chip-bg:#ECEFF5; --chip-ink:#5A6680;
+  --weave-1:rgba(23,32,51,.035); --weave-2:rgba(23,32,51,.025);
+  --cell-out:#F9FAFD; --box-line:#BAC3D6; --disabled:#C5CCDC;
+  --scroll-track:#E3E7F0; --orn-stroke:#3650C8;
+  --orn-bg:.22;
+  --shadow-1:0 1px 2px rgba(23,32,51,.08);
+  --shadow-2:0 2px 6px rgba(23,32,51,.08), 0 14px 34px rgba(23,32,51,.10);
+}
+:root[data-app="dark"][data-bg="cs"]{
+  --bg:#0A0E16; --panel:#111726; --panel-2:#161D2F;
+  --ink:#E1E6F2; --ink-2:#97A2BC; --ink-3:#6B7690;
+  --line:#222B40; --line-2:#1A2234;
+  --accent:#7D92F5; --accent-soft:#1A2347; --accent-ink:#A9B8FA; --on-accent:#0A1030;
+  --chip-bg:#1B2336; --chip-ink:#97A2BC;
+  --weave-1:rgba(255,255,255,.028); --weave-2:rgba(255,255,255,.020);
+  --cell-out:#0D1220; --box-line:#3A4560; --disabled:#2A3350;
+  --scroll-track:#222B40; --orn-stroke:#7D92F5;
+  --bar-bg:rgba(10,14,22,.82);
+  --shadow-1:0 1px 2px rgba(0,0,0,.4);
+  --shadow-2:0 2px 8px rgba(0,0,0,.45), 0 16px 40px rgba(0,0,0,.5);
+}
+
 *{box-sizing:border-box}

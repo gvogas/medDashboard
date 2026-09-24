@@ -4,9 +4,8 @@ import { verifyPassword, normalizeUsername } from './password.js';
 import { claimAttempt, recordSuccess } from './throttle.js';
 import { limitLogin } from './limits.js';
 import { validateProfile, validateCourse, validateItem, validateQuote, validateId } from './validate.js';
-import { getUserForLogin, getProfile, updateProfile, getRow, upsertRow, deleteRow, courseExists, syncSince, bumpPasswordGen, saveSpotifyTokens, deleteSpotifyTokens } from './db.js';
+import { getUserForLogin, getProfile, updateProfile, getRow, upsertRow, deleteRow, courseExists, syncPage, bumpPasswordGen, saveSpotifyTokens, deleteSpotifyTokens } from './db.js';
 import * as spotify from './spotify.js';
-import { syncPage } from './db.js';
 
 function revisionOf(request) {
   const raw = request.headers.get('if-match');
@@ -163,14 +162,10 @@ const routes = [
 
   ['GET', /^\/api\/sync$/, async ({ request, env, url }) => {
     const userId = await requireUser(request, env);
-    if (url.searchParams.get('v') === '2') {
-      const cursor = url.searchParams.get('cursor') || '0';
-      if (!/^\d{1,16}$/.test(cursor) || !Number.isSafeInteger(Number(cursor))) throw new HttpError(400, { error: 'invalid', field: 'cursor' });
-      return json(await syncPage(env.DB, userId, Number(cursor)));
-    }
-    const raw = url.searchParams.get('since') ?? '0';
-    if (!/^[0-9]{1,16}$/.test(raw) || !Number.isSafeInteger(Number(raw))) throw new HttpError(400, { error: 'invalid', field: 'since' });
-    return json(await syncSince(env.DB, userId, Number(raw)));
+    // The client still sends v=2; the timestamp feed it replaced is gone.
+    const cursor = url.searchParams.get('cursor') || '0';
+    if (!/^\d{1,16}$/.test(cursor) || !Number.isSafeInteger(Number(cursor))) throw new HttpError(400, { error: 'invalid', field: 'cursor' });
+    return json(await syncPage(env.DB, userId, Number(cursor)));
   }],
 
   ['GET', ROW, readRow],
@@ -336,7 +331,12 @@ export async function handleApi(request, env, url) {
     }
   } catch (e) {
     if (e instanceof HttpError) res = json(e.body, e.status, e.headers);
-    else { console.error(e); res = json({ error: 'internal' }, 500); }
+    else {
+      // A schema the code expects but D1 lacks means a migration was not applied remotely.
+      if (/no such (table|column)/i.test(e?.message || '')) console.error('D1 schema is behind the code; run `npm run db:remote`.');
+      console.error(e);
+      res = json({ error: 'internal' }, 500);
+    }
   }
   for (const [k, v] of Object.entries(API_HEADERS)) res.headers.set(k, v);
   return res;
