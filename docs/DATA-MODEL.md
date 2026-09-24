@@ -134,7 +134,7 @@ client.
 
 ## `items`
 
-One table for all six types. They share every column, differ only in which `status`
+One table for all seven types. They share every column, differ only in which `status`
 values apply, and the week board and table need them interleaved by date.
 
 | Column | API field | Type | Rules | Notes |

@@ -24,8 +24,8 @@ biomolecule layer behind the board.
 
 ```
 public/                   the app: index.html, css/, js/, manifest, service worker, icons
-worker/                   the API: index.js, api.js, auth.js, password.js, validate.js, db.js, spotify.js
-scripts/add-user.mjs      creates an account, locally or in production
+worker/                   the API: routes, auth, validation, D1 queries, rate limits, Spotify proxy
+scripts/                  add-user, build, deploy checks (secrets, database), CSP hash, Spotify key
 migrations/               the D1 schema, one file per change
 test/                     vitest, running inside the Workers runtime against a local D1
 wrangler.jsonc            Workers config: static assets, D1 binding, vars, cron
@@ -34,19 +34,21 @@ PLAN.md                   decisions, phases, file layout, backlog
 docs/DATA-MODEL.md        the schema explained: tables, API, sync
 docs/DEPLOYING.md         running, deploying, accounts and troubleshooting, step by step
 docs/API-REVIEW.md        endpoint inventory, rate limits, caching and review findings
+docs/RELIABILITY-UPGRADE.md  sync revisions, local queue and Spotify token keys
 ```
 
 ## Features
 
-- **Six item types** — exams, assignments, labs, tutorials, office hours, tasks. Each
-  opens a page with notes, a checklist and links.
+- **Seven item types** — exams, assignments, labs, tutorials, office hours, tasks and
+  projects. Each opens a page with notes, a checklist and links.
 - **Courses** you add and edit, each with a colour and a list of classes (kind, day,
   start, end, room). Courses can be archived without losing their items.
 - **Four views** — week board grouped by day, a month calendar showing the class
   timetable only, a sortable table of everything, and Spotify.
 - **Live status** — overdue flags, next-exam countdown, class hours per week, lab hours.
-- **Settings** — light / dark / follow-the-device, the name embroidered on the lab coat
-  and its colour, and your own quotes shown in a tile beside the stats.
+- **Settings** — light / dark / follow-the-device, a Med or CS background (the CS one
+  swaps the lab coat for a lanyard ID badge), the name embroidered on the coat and its
+  colour, and your own quotes shown in a tile beside the stats.
 - **Local-first** — the app renders from IndexedDB, works offline, and syncs to D1 on
   load, on focus and after every edit. The pill in the top bar shows where it stands.
 - **Several people** — each has a username and password and sees only their own data.
@@ -125,16 +127,18 @@ listener's Spotify email to it (five at most, a Spotify limit), put the client i
 
 ```sh
 wrangler secret put SPOTIFY_CLIENT_SECRET
+wrangler secret put SPOTIFY_TOKEN_KEYS     # JSON keyring, see docs/RELIABILITY-UPGRADE.md
 npm run deploy
 ```
 
 Then everyone connects their own account from Settings. Controls need Spotify Premium;
 free accounts still see what is playing. Tokens live in D1, the refresh token
-encrypted under `SESSION_SECRET`, so rotating that secret disconnects Spotify for
-everyone as well as signing them out.
+encrypted under `SPOTIFY_TOKEN_KEYS`, which is separate from `SESSION_SECRET`: rotating
+the session secret signs people out but leaves Spotify connected.
 
-If you ever edit the inline script in `public/index.html`, run `node scripts/csp-hash.mjs`
-and paste the new hash into `public/_headers`, or the page's security policy will block it.
+If you ever edit the inline script in `public/index.html`, run `npm run csp:update` to
+write its new hash into `public/_headers`, or the page's security policy will block it.
+`npm run build` refuses to build while the hash is stale.
 
 On a phone, open the site and choose *Add to Home Screen*; it installs as an app and
 opens offline.

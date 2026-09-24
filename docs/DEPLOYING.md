@@ -177,6 +177,11 @@ with Premium (free listeners still see what is playing).
     ```
    It asks for the value and hides what you paste. Locally, put it in `.dev.vars` as
    `SPOTIFY_CLIENT_SECRET=...`.
+
+   Then the key that encrypts stored refresh tokens. Locally, `npm run spotify:key`
+   adds one to `.dev.vars`. Live, `npx wrangler secret put SPOTIFY_TOKEN_KEYS` with the
+   JSON keyring described in [RELIABILITY-UPGRADE.md](RELIABILITY-UPGRADE.md).
+   `npm run deploy` refuses to run while it is missing.
 6. Deploy: `npm run deploy`. It applies the `spotify_tokens` migration and ships the
    Worker with the new id.
 7. In Rounds, open Settings, find **Spotify** and click **Connect**. Spotify asks you
@@ -200,8 +205,8 @@ longer accepts `localhost` as a redirect.
 Each person connects their own account from their own Settings; nobody sees anyone
 else's. **Disconnect** in Settings forgets the connection on the Rounds side; to
 revoke it on Spotify's side too, remove Rounds under *Manage apps* in the Spotify
-account settings. Rotating `SESSION_SECRET` disconnects everyone, because the stored
-refresh tokens are encrypted under it; they reconnect from Settings.
+account settings. The stored refresh tokens are encrypted under `SPOTIFY_TOKEN_KEYS`,
+not `SESSION_SECRET`, so rotating the session secret leaves Spotify connected.
 
 If the badge says *Open Spotify on a device first*, Spotify has no active device:
 press play in the Spotify app once and the controls work from then on. *Controls need

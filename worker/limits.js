@@ -2,7 +2,7 @@ import { HttpError } from './http.js';
 
 export const API_LIMIT = 600;
 export const SPOTIFY_LIMIT = 60;
-export const LOGIN_IP_LIMIT = 30;
+const LOGIN_IP_LIMIT = 30;
 const WINDOW_MS = 60_000;
 const SPOTIFY_EXEMPT = ['/api/spotify/token', '/api/spotify/status', '/api/spotify/connect', '/api/spotify/callback'];
 

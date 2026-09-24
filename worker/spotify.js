@@ -5,7 +5,7 @@ import { spotifyFetch } from './spotify/client.js';
 import { bodyOf, unavailable } from './spotify/transport.js';
 import { compactTrack, compactAlbum, compactArtist, compactPlaylist, nextPageOffset, page } from './spotify/mapping.js';
 export { configured, authorizeUrl, SCOPES, encryptToken, decryptToken, sealToken, openToken, exchangeCode, refreshAccessToken, freshAccessToken } from './spotify/tokens.js';
-export const ACTIONS = {
+const ACTIONS = {
   play: ['PUT', '/me/player/play'],
   pause: ['PUT', '/me/player/pause'],
   next: ['POST', '/me/player/next'],

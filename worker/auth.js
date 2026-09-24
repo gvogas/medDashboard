@@ -7,7 +7,7 @@ import { HttpError } from './http.js';
 import { limitUser } from './limits.js';
 
 const COOKIE = 'rounds_session';
-export const SESSION_MS = 30 * 24 * 60 * 60 * 1000;
+const SESSION_MS = 30 * 24 * 60 * 60 * 1000;
 export const RENEW_WITHIN_MS = 7 * 24 * 60 * 60 * 1000;
 
 // Imported once per isolate rather than on every request; keyed by the secret so a

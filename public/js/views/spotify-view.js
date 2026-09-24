@@ -95,7 +95,7 @@ async function load(what, fn, quiet = () => false) {
 }
 
 /** Which list is open, so a redraw of the same one keeps its scroll. */
-export function paneKey() {
+function paneKey() {
   const s = ui.spotify;
   return s.pane + ':' + (s.pane === 'playlist' ? s.playlistId : s.pane === 'album' ? s.albumId : s.pane === 'artist' ? s.artistId : s.pane === 'search' ? s.q : '');
 }
@@ -130,7 +130,7 @@ function ensureRecent() {
     (e) => { if (e instanceof ApiError && e.body?.error === 'reconnect_needed') { cache.recentBlocked = true; return true; } return false; });
 }
 
-export function morePlaylists() {
+function morePlaylists() {
   const pl = cache.playlists;
   if (!pl || !pl.next || busy.has('playlists') || !due('playlists')) return;
   load('playlists', async () => {
@@ -360,7 +360,7 @@ export function setVolume(percent) {
 }
 
 /** Called on every poll: keep the slider honest unless the user is holding it. */
-export function syncVolume() {
+function syncVolume() {
   const s = document.querySelector('[data-spot-vol]');
   if (!s || document.activeElement === s || volumePending !== null) return;
   if (player.volume != null) { s.value = player.volume; const l = document.querySelector('[data-spot-vol-label]'); if (l) l.textContent = player.volume; }

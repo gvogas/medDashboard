@@ -12,7 +12,7 @@ const FIRST_LOCK_S = 60;
 const MAX_LOCK_S = 60 * 60;
 
 /** Seconds until this username may try again, or 0. */
-export async function lockedFor(db, username, now = Date.now()) {
+async function lockedFor(db, username, now = Date.now()) {
   const row = await db.prepare('SELECT locked_until FROM login_throttle WHERE username = ?').bind(username).first();
   if (!row || row.locked_until <= now) return 0;
   return Math.ceil((row.locked_until - now) / 1000);

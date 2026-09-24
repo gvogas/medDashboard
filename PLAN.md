@@ -35,7 +35,7 @@ account and there is no OAuth client to configure.
 
 ## Phases
 
-Status, as of 22 September 2026: every phase is done and the app is live at
+Status, as of 23 September 2026: every phase is done and the app is live at
 https://rounds.termanitor07.workers.dev. Only the backlog remains.
 
 ### 0 — Accounts and keys — done
@@ -115,14 +115,14 @@ wrangler.jsonc
 docs/DATA-MODEL.md
 ```
 
-- `model.js` holds what the app knows about itself: the six types, their status sets,
+- `model.js` holds what the app knows about itself: the seven types, their status sets,
   the five course colours, `isOverdue`, `isComplete`, `occurrences`.
 - `dates.js` holds the date helpers, unchanged from the prototype.
 - Views stay dumb: given state, return HTML. One delegated click listener, as now.
 - `views/signin.js`: the coat pocket, a username and a password. A 401 anywhere shows
   the screen again.
 
-### 6 — Get it on your phone
+### 6 — Get it on your phone — done
 - `wrangler deploy`. Static files and the Worker ship together; D1 migrations are
   applied separately and first.
 - `manifest.webmanifest` + a service worker that caches the shell, so it installs to
@@ -134,7 +134,7 @@ docs/DATA-MODEL.md
   line, previous / play-pause / next, and the device it is playing on. Spec and design:
   `docs/superpowers/specs/2026-09-22-spotify-player-design.md`, `design/mockup-spotify-options.html`.
 - The Worker holds the tokens (`spotify_tokens`, migration 0004) and proxies every call;
-  the browser polls `/api/spotify/player` every 5 s while playing, 20 s otherwise.
+  the browser polls `/api/spotify/player` every 10 s while playing, 20 s otherwise.
 - A Spotify view beside Week, Month and Table: search, playlists and Liked Songs, the
   queue (add and skip; Spotify's API cannot remove or reorder) and volume.
 - Needs a Spotify app: client id in `wrangler.jsonc`, secret via `wrangler secret put`,
