@@ -10,6 +10,7 @@ import { state as spotify } from '../spotify.js';
 import { state as web } from '../web-player.js';
 import { SPOTIFY_MARK } from './player.js';
 import { spotifyRetryAt } from '../api.js';
+import { readSetting } from '../reviews.js';
 
 export function openSettings(focus) {
   resetDrawerState();
@@ -161,6 +162,26 @@ export function renderSettings() {
 
   // ── Spotify ──
   body += '<div class="setgrp" id="spotifyGrp" tabindex="-1">' + spotifyGroup() + '</div>';
+
+  // ── study: spaced review ──
+  const rv = readSetting();
+  body += '<div class="setgrp"><h4>Study<em>' + (rv.on ? 'reviews on' : 'reviews off') + '</em></h4>'
+    + '<label class="checkline"><input type="checkbox" id="reviewsOn" data-reviews' + (rv.on ? ' checked' : '') + '>'
+    + '<span>Create review tasks after lectures</span></label>'
+    + '<span class="note">The day after each timetabled lecture a “Review 1/4” task appears. Ticking it schedules the next one: days 1, 3, 7 and 21. Set on this device only; starts from today.</span></div>';
+
+  // ── import: .ics or CSV ──
+  body += '<div class="setgrp" id="importGrp" tabindex="-1"><h4>Import<em>.ics or CSV</em></h4>'
+    + '<span class="note">A calendar export from your school, or a spreadsheet saved as CSV with the columns <span class="mono">type,course,title,date,start,end,room,weight</span>. You will see everything before it is saved.</span>'
+    + '<span data-layout="ed524873"><label class="btn ghost filepick">Calendar or CSV…<input type="file" id="importFile" accept=".ics,.csv,.txt,text/calendar,text/csv"></label>'
+    + '<label class="btn ghost filepick' + (ui.outlineBusy ? ' busy' : '') + '">' + (ui.outlineBusy ? 'Reading outline…' : 'Course outline…')
+    + '<input type="file" id="outlineFile" accept=".pdf,.docx,.doc,.txt,.md,.html,.odt,application/pdf"' + (ui.outlineBusy ? ' disabled' : '') + '></label></span>'
+    + '<span class="note">A course outline (PDF or Word) is read by AI: the course, its weekly classes, and exams and assignments with dates and weights. Up to 10 a day.</span>'
+    + '<details class="imp-paste"><summary>Paste instead</summary>'
+    + '<textarea id="importText" rows="4" placeholder="Paste calendar or CSV text" aria-label="Calendar or CSV text"></textarea>'
+    + '<button class="btn ghost" type="button" data-act="import-paste">Preview</button></details>'
+    + (ui.importNote ? '<span class="note' + (ui.importNote.error ? ' err' : '') + '">' + esc(ui.importNote.text) + '</span>' : '')
+    + '</div>';
 
   // ── data: sync, import, account ──
   body += '<div class="setgrp"><h4>Data<em>' + data.items.length + ' items · ' + data.courses.length + ' courses</em></h4>'

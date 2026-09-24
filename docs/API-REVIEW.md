@@ -67,6 +67,7 @@ allowed for non-browser clients, but still require authentication where specifie
 | POST /api/spotify/queue | Valid session; track/episode URI string | Account + Spotify + upstream |
 | POST /api/spotify/play | Valid session; URI/context/list validation, optional device | Account + Spotify + upstream |
 | PUT /api/spotify/volume | Valid session; integer 0–100 | Account + Spotify + upstream |
+| POST /api/outline | Valid session; raw file body ≤ 5 MB; text capped at 48,000 characters before the model; the model's JSON is re-validated in `worker/outline.js` | Account + 10 per user per day (`outline:<user>`, counted before the AI call) |
 
 The route contract suite expands these into 37 protected method/path cases. Login,
 cookie clearing, and OAuth callback behavior have separate coverage. Unknown paths

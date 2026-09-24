@@ -8,9 +8,10 @@ const SHELL = [
   '/css/tokens.css', '/css/layout.css', '/css/components.css',
   '/js/main.js', '/js/api.js', '/js/db.js', '/js/store.js', '/js/sync.js', '/js/state.js', '/js/model.js',
   '/js/dates.js', '/js/dom.js', '/js/query.js', '/js/ornament.js', '/js/timepicker.js', '/js/fireworks.js', '/js/spotify.js', '/js/web-player.js',
+  '/js/grades.js', '/js/reviews.js', '/js/prep.js', '/js/importers/ics.js', '/js/importers/csv.js', '/js/importers/plan.js',
   '/js/views/render.js', '/js/views/bits.js', '/js/views/sidebar.js', '/js/views/stats.js', '/js/views/week.js',
   '/js/views/month.js', '/js/views/table.js', '/js/views/drawer-base.js', '/js/views/drawer-item.js',
-  '/js/views/drawer-course.js', '/js/views/drawer-settings.js', '/js/views/signin.js', '/js/views/player.js', '/js/views/spotify-view.js',
+  '/js/views/drawer-course.js', '/js/views/drawer-settings.js', '/js/views/signin.js', '/js/views/player.js', '/js/views/spotify-view.js', '/js/views/drawer-import.js',
 ];
 
 self.addEventListener('install', (e) => {

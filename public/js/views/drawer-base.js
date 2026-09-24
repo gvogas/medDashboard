@@ -22,12 +22,13 @@ export function hideDrawer() {
 }
 
 export function resetDrawerState() {
-  ui.sel = null; ui.draft = null; ui.courseDraft = null; ui.courseMode = null; ui.confirm = null; ui.settings = false;
+  ui.sel = null; ui.draft = null; ui.courseDraft = null; ui.courseMode = null; ui.confirm = null; ui.settings = false; ui.importPlan = null; ui.fillNote = null;
 }
 
 export function closeDrawer() {
   resetDrawerState();
   ui.spotifyNote = null;
+  ui.importNote = null;
   hideDrawer();
   render();
 }

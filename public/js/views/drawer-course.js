@@ -3,6 +3,7 @@ import { ui } from '../state.js';
 import { KINDS, PALETTE, HEXES, colourName, uid, normalizeCourse } from '../model.js';
 import { dur, DOW } from '../dates.js';
 import { esc, autoGrow } from '../dom.js';
+import { courseGrade, neededLabel, TARGETS } from '../grades.js';
 import { drawer, showDrawer, resetDrawerState, closeDrawer } from './drawer-base.js';
 
 export function openCourse(id) {
@@ -56,6 +57,7 @@ export function renderCourseDrawer(focus) {
       + '</div><button class="x" type="button" data-mx="' + esc(m.id) + '" aria-label="Remove class">✕</button></div>';
   });
   body += '</div>' + ((c.meetings || []).length < 12 ? '<button class="btn ghost" type="button" data-act="addmtg" data-layout="0fd943ff">+ Add a class</button>' : '<span class="note">Twelve classes is the most a course can hold.</span>') + '</div>';
+  if (!isNew) body += gradesSection(data.items.filter((it) => it.courseId === c.id));
   if (!isNew && used) body += '<div class="warnline">' + used + ' item' + (used === 1 ? '' : 's') + ' ' + (used === 1 ? 'is' : 'are') + ' filed under this course. Deleting it leaves them without a course.</div>';
   body += '</div>';
 
@@ -74,6 +76,23 @@ export function renderCourseDrawer(focus) {
   showDrawer(head + body + foot);
   if (focus) { const el = drawer.querySelector('.dtitle'); if (el) el.focus(); }
   autoGrow(drawer.querySelector('.dtitle'));
+}
+
+/* Weighted grade so far, how much of the course it covers, and what the rest needs. */
+function gradesSection(items) {
+  const g = courseGrade(items);
+  if (!g.total) return '';
+  let html = '<div class="dsec grades"><h4>Grades<em>' + g.graded + ' of ' + g.total + '% graded</em></h4>'
+    + '<div class="grade-now"><b>' + (g.current === null ? '—' : g.current + '%') + '</b><span>current weighted average</span></div>'
+    + '<div class="meterwrap"><span class="meter" data-width="' + Math.round(g.graded / Math.max(100, g.total) * 100) + '"></span></div>';
+  if (g.remaining > 0) {
+    html += '<div class="grade-need">' + TARGETS.map((t) => {
+      const label = neededLabel(g.needed(t));
+      return '<span class="' + (label === 'secured' ? 'ok' : label === 'out of reach' ? 'bad' : '') + '"><em>' + t + '</em>' + esc(label) + '</span>';
+    }).join('') + '</div><span class="dnote">What you need on the remaining ' + g.remaining + '% to finish at 50, 60 or 70.</span>';
+  }
+  if (g.total !== 100) html += '<div class="warnline">Weights add up to ' + g.total + '%, not 100.</div>';
+  return html + '</div>';
 }
 
 export async function saveCourseDraft() {

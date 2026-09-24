@@ -5,6 +5,7 @@ import { isOpen, isOverdue } from '../model.js';
 import { diffDays, today, dur } from '../dates.js';
 import { activeCourses } from '../query.js';
 import { esc, $ } from '../dom.js';
+import { prepPace, prepLabel } from '../prep.js';
 
 export function renderStats() {
   const TODAY = today();
@@ -20,6 +21,7 @@ export function renderStats() {
   courses.forEach((c) => { (c.meetings || []).forEach((m) => { classH += dur(m.start, m.end); classN++; }); });
   const dd = nextExam ? diffDays(TODAY, nextExam.date) : null;
   const ddText = dd === null ? '—' : dd === 0 ? 'Today' : dd === 1 ? 'Tomorrow' : dd + ' <small>days</small>';
+  const prep = nextExam ? prepPace(nextExam, TODAY) : null;
   const cs = ui.bg === 'cs';
   /* Med: a heartbeat and a molecule. CS: a clock signal with one glitch, and a chip. */
   const ecg = '<svg class="ecg" viewBox="0 0 120 16" preserveAspectRatio="none" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round" aria-hidden="true">'
@@ -31,7 +33,8 @@ export function renderStats() {
           : '<path d="M30 6l14 8v16l-14 8-14-8V14z"/><circle cx="30" cy="22" r="7"/><path d="M44 30l12 7M16 30L4 37M30 38v14"/>') + '</svg>';
 
   setHTML($('stats'), ''
-    + '<div class="stat hot"><div class="lab">Next exam</div><div class="val">' + ddText + '</div><div class="foot">' + (nextExam ? esc(nextExam.title) : 'nothing scheduled') + '</div>' + ecg + '</div>'
+    + '<div class="stat hot"><div class="lab">Next exam</div><div class="val">' + ddText + '</div><div class="foot">' + (nextExam ? esc(nextExam.title) : 'nothing scheduled')
+      + (prep ? '<span class="prepline' + (prep.hot ? ' hot' : '') + '">' + esc(prepLabel(prep)) + '</span>' : '') + '</div>' + ecg + '</div>'
     + '<div class="stat"><div class="lab">Open assignments</div><div class="val">' + openAssign + '</div><div class="foot">across ' + courses.length + ' course' + (courses.length === 1 ? '' : 's') + '</div>' + mol + '</div>'
     + '<div class="stat' + (overdue ? ' hot' : '') + '"><div class="lab">Overdue</div><div class="val">' + overdue + '</div><div class="foot">' + (overdue ? 'needs attention today' : 'all clear') + '</div></div>'
     + '<div class="stat"><div class="lab">Class hours / week</div><div class="val">' + (Math.round(classH * 10) / 10) + '<small> h</small></div><div class="foot">' + classN + ' timetabled class' + (classN === 1 ? '' : 'es') + '</div></div>'

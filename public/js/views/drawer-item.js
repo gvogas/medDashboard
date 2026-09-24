@@ -1,10 +1,12 @@
 import { data, course, item, saveItem } from '../store.js';
 import { ui } from '../state.js';
-import { TYPES, ORDER, STATUS, tmeta, statusLabel, isOverdue, uid, normalizeItem, typeShown } from '../model.js';
+import { TYPES, ORDER, STATUS, tmeta, statusLabel, isOverdue, isOpen, uid, normalizeItem, typeShown } from '../model.js';
 import { parse, diffDays, today, hhmm, DOW } from '../dates.js';
 import { activeCourses } from '../query.js';
 import { esc, autoGrow } from '../dom.js';
 import { CHECK_SVG } from './bits.js';
+import { GRADABLE } from '../grades.js';
+import { prepPace, prepLabel } from '../prep.js';
 import { drawer, showDrawer, hideDrawer, resetDrawerState, closeDrawer } from './drawer-base.js';
 
 export function openItem(id) {
@@ -62,10 +64,14 @@ export function renderItemDrawer(focusTitle) {
       + ' <button class="icon-btn" type="button" data-editcourse="' + esc(c.id) + '" data-layout="06525a50">Edit course</button></div>';
   }
 
+  const prep = !isNew && it.type === 'exam' && isOpen(it) ? prepPace(it, TODAY) : null;
+  const canFill = !isNew && it.type === 'exam' && c && (c.meetings || []).some((x) => x.kind === 'Lecture');
+
   const head = '<div class="dhead" data-accent="' + m.color + '">'
     + '<span class="kind">' + (isNew ? 'New ' + m.label.toLowerCase() : esc(m.label)) + '</span>'
     + (isNew ? '' : (isOverdue(it) ? '<span class="chip overdue">Overdue</span>' : '<span class="chip st-' + it.status + '">' + esc(statusLabel(it)) + '</span>'))
     + '<span data-layout="f7add123" class="mono">' + esc(countdown) + '</span>'
+    + (prep ? '<span class="chip prep' + (prep.hot ? ' hot' : '') + '" title="Topics done · topics a day to finish before the exam">' + esc(prepLabel(prep)) + '</span>' : '')
     + '<button class="icon-btn" type="button" data-act="close" aria-label="Close">✕</button></div>';
 
   let body = '<div class="dbody">'
@@ -78,6 +84,7 @@ export function renderItemDrawer(focusTitle) {
       + '<label for="f-start">Time</label><span class="pair"><input id="f-start" class="tp" type="text" inputmode="numeric" autocomplete="off" placeholder="--:--" data-f="start" value="' + esc(it.start || '') + '"><span>to</span><input class="tp" type="text" inputmode="numeric" autocomplete="off" placeholder="--:--" data-f="end" value="' + esc(it.end || '') + '" aria-label="End time"></span>'
       + '<label for="f-where">Room</label><input id="f-where" type="text" data-f="where" value="' + esc(it.where || '') + '" placeholder="Room, lab, platform" maxlength="80">'
       + '<label for="f-status">Status</label><select id="f-status" data-f="status">' + stOpts + '</select>'
+      + (GRADABLE.includes(it.type) ? '<label for="f-weight">Weight</label><input id="f-weight" type="number" min="0" max="100" step="any" data-f="weight" value="' + (typeof it.weight === 'number' ? it.weight : '') + '" placeholder="% of course">' : '')
       + (it.status === 'graded' ? '<label for="f-grade">Grade</label><input id="f-grade" type="number" min="0" max="100" data-f="grade" value="' + (typeof it.grade === 'number' ? it.grade : '') + '" placeholder="%">' : '')
       + ((it.type === 'office' || it.type === 'tutoring')
           ? '<label for="f-recur">Repeats</label><span class="pair"><input id="f-recur" type="checkbox" data-f="recur" ' + (it.recur === 'weekly' ? 'checked' : '') + ' data-layout="d5cb2920"><span>every week on ' + DOW[it.recur === 'weekly' ? it.weekday : parse(it.date).getDay()] + '</span></span>'
@@ -86,7 +93,9 @@ export function renderItemDrawer(focusTitle) {
           : '')
     + '</div>'
     + '<div class="dsec"><h4>Notes</h4><textarea class="notes" data-f="notes" maxlength="5000" placeholder="What to revise, what the lecturer said, page numbers.">' + esc(it.notes || '') + '</textarea></div>'
-    + '<div class="dsec"><h4>Checklist' + (cl.length ? '<em>' + clDone + ' of ' + cl.length + ' done</em>' : '') + '</h4>';
+    + '<div class="dsec"><h4>' + (it.type === 'exam' ? 'Topics' : 'Checklist') + (cl.length ? '<em>' + clDone + ' of ' + cl.length + ' done</em>' : '') + '</h4>'
+    + (canFill ? '<button class="btn ghost fill-topics" type="button" data-act="fill-topics">Fill topics from lectures</button>' : '')
+    + (ui.fillNote ? '<span class="dnote">' + esc(ui.fillNote) + '</span>' : '');
   if (cl.length) {
     body += '<div class="meterwrap"><span class="meter pink' + (clDone === cl.length ? ' full' : '') + '" data-width="' + Math.round(clDone / cl.length * 100) + '"></span></div><div class="cl">';
     cl.forEach((s) => {

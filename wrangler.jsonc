@@ -30,6 +30,9 @@
   // `wrangler secret put SPOTIFY_CLIENT_SECRET`. Both empty means the player is off.
   "vars": { "SPOTIFY_CLIENT_ID": "e553fc57814a408c946519bda5263f5e" },
 
+  // Workers AI reads uploaded course outlines (free daily allowance; see worker/outline.js).
+  "ai": { "binding": "AI" },
+
   "triggers": {
     // Nightly: hard-delete tombstones older than 30 days.
     "crons": ["0 3 * * *"]

@@ -2,7 +2,8 @@ import { json, readJson, HttpError } from './http.js';
 import { requireUser, requireSession, signSession, sessionCookie, clearCookie, parseCookies, secureFlag, RENEW_WITHIN_MS } from './auth.js';
 import { verifyPassword, normalizeUsername } from './password.js';
 import { claimAttempt, recordSuccess } from './throttle.js';
-import { limitLogin } from './limits.js';
+import { limitLogin, limitOutline } from './limits.js';
+import { readOutline, MAX_BYTES } from './outline.js';
 import { validateProfile, validateCourse, validateItem, validateQuote, validateId } from './validate.js';
 import { getUserForLogin, getProfile, updateProfile, getRow, upsertRow, deleteRow, courseExists, syncPage, bumpPasswordGen, saveSpotifyTokens, deleteSpotifyTokens } from './db.js';
 import * as spotify from './spotify.js';
@@ -108,7 +109,50 @@ async function spotifyCallback({ request, env, url }) {
   return redirect(url, 'connected', clear);
 }
 
+/** The raw request body, refused over `limit` bytes. */
+async function readBytes(request, limit) {
+  if (Number(request.headers.get('content-length') || 0) > limit) throw new HttpError(413, { error: 'too_large' });
+  const reader = request.body?.getReader();
+  const parts = [];
+  let size = 0;
+  if (reader) {
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      size += value.byteLength;
+      if (size > limit) { await reader.cancel().catch(() => {}); throw new HttpError(413, { error: 'too_large' }); }
+      parts.push(value);
+    }
+  }
+  const out = new Uint8Array(size);
+  let at = 0;
+  for (const p of parts) { out.set(p, at); at += p.byteLength; }
+  return out;
+}
+
+const DATE = /^\d{4}-\d{2}-\d{2}$/;
+
+/* Read a course outline with Workers AI. The body is the file itself; ?name= is its
+   file name and ?today= / ?termStart= help the model place "Week 3" on a date. */
+async function postOutline({ request, env, url }) {
+  const userId = await requireUser(request, env);
+  const bytes = await readBytes(request, MAX_BYTES);
+  if (!bytes.byteLength) throw new HttpError(400, { error: 'invalid', field: 'body' });
+  await limitOutline(env, userId);
+  const today = DATE.test(url.searchParams.get('today') || '') ? url.searchParams.get('today') : new Date().toISOString().slice(0, 10);
+  const termStart = DATE.test(url.searchParams.get('termStart') || '') ? url.searchParams.get('termStart') : null;
+  const name = (url.searchParams.get('name') || 'outline').slice(0, 120);
+  try {
+    return json(await readOutline(env.AI, { bytes, type: request.headers.get('content-type') || '', name, today, termStart }));
+  } catch (e) {
+    if (e instanceof HttpError) throw e;
+    console.error('outline:', e?.message || e);
+    throw new HttpError(503, { error: 'outline_unavailable' });
+  }
+}
+
 const routes = [
+  ['POST', /^\/api\/outline$/, postOutline],
   // Username + password. Accounts are created with `npm run user:add`.
   ['POST', /^\/api\/login$/, async ({ request, env, url }) => {
     await limitLogin(request, env);

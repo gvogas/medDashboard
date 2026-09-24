@@ -129,9 +129,15 @@ chain. Reopening a step does not remove the next one.
 step digit: at most 10 characters. Two devices generating the same step write the
 same row. Before creating, the generator skips an id already in `data.items`.
 
+**When it runs.** After every successful sync pull (on load, on focus, after edits),
+so this device already holds reviews another device created. A create of an id that
+exists on the server is refused as a conflict and would leave a saved copy in
+Settings; running after the pull keeps that to a narrow race.
+
 **Known edge case.** Deleted rows are dropped from the local store, so if a review is
 deleted on one device before a second device has generated that lecture, the second
-device recreates it. Rare; closing it needs a server-side record (a later batch).
+device's create meets the server tombstone and becomes a saved copy in Settings.
+Rare; closing it needs a server-side record (a later batch).
 
 ## 4. Exam prep
 
@@ -146,6 +152,31 @@ stops at 50 and says how many were left out. Uses `lectureDates` from `reviews.j
 and in the **Next exam** stat tile foot: `7/20 topics · 1.1/day`, where the pace is
 remaining steps ÷ days left (today counts as a day). It gets the `hot` style above
 3 per day. With no steps, the tile foot stays as it is.
+
+## 5. Course outline (added 23 September 2026)
+
+Settings › Import › "Course outline…" takes a PDF, Word or text file (≤ 5 MB) and
+opens the same preview as `.ics` and CSV.
+
+- **Worker** — `POST /api/outline`, body is the file, `?name=&today=&termStart=`.
+  `worker/outline.js` converts with `env.AI.toMarkdown` (free for documents; plain
+  text is used as sent), caps the text at 48,000 characters, and asks
+  `@cf/meta/llama-3.3-70b-instruct-fp8-fast` for JSON matching a schema: code, name,
+  instructor, term, weekly classes (kind, day, times, room) and assessments (title,
+  type, date, times, room, weight). The reply is re-validated and bounded before it
+  is returned; nothing is stored.
+- **Limits** — 10 outlines per user per day (`request_limits` key `outline:<user>`,
+  a 24-hour window), counted before the model runs, on top of the API limit.
+  Workers AI's free allowance is 10,000 neurons a day; one outline is a few hundred.
+- **Errors** — 413 over 5 MB, 422 unsupported or empty (a scanned PDF has no text),
+  502 unreadable model output, 503 when Workers AI is unreachable, 429 over the limit.
+- **Client** — `planOutline` maps the result onto the import plan: classes become
+  meetings, dated assessments become items with their weights, undated ones are
+  listed in the notes. A new course keeps its instructor and term and is offered even
+  when nothing else is.
+- **Tests** — the AI binding is remote-only, so `vitest.config.js` sets
+  `remoteBindings: false` and `test/outline.test.js` drives `readOutline` with a fake
+  binding; the endpoint tests cover auth, size, the unreachable case and the limit.
 
 ## Files
 

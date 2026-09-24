@@ -13,6 +13,10 @@ export const ui = {
   theme: (typeof window !== 'undefined' && window.__roundsTheme) || 'system',
   bg: (typeof window !== 'undefined' && window.__roundsBg) || 'med',     /* background art: 'med' | 'cs' */
   quoteIx: 0,
+  importPlan: null,        /* the import preview: { plan, name } */
+  fillNote: null,          /* what "Fill topics" did, shown in the exam drawer until it closes */
+  importNote: null,
+  outlineBusy: false,      /* a course outline is being read */        /* the last import's result or error, shown once in Settings */
   spotifyNote: null,       /* 'connected' | 'error' after the Spotify round trip, shown once in Settings */
   /* the Spotify view: home | playlist | album | artist | queue | search, and the filter inside a list */
   spotify: { pane: 'home', playlistId: null, albumId: null, artistId: null, q: '', filter: '' },

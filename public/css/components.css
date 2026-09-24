@@ -520,3 +520,40 @@ td .steps{margin-top:3px}
 .saved-copy dl { overflow-wrap: anywhere; max-height: 240px; overflow: auto; font-size: 12px; }
 .saved-copy dt { font-weight: 600; margin-top: 6px; }
 .saved-copy dd { margin-left: 0; white-space: pre-wrap; }
+
+/* ── study tools: exam prep, grades, reviews setting, import ── */
+.chip.prep{font-family:"IBM Plex Mono",ui-monospace,monospace;font-variant-numeric:tabular-nums}
+.chip.prep.hot,.prepline.hot{color:var(--crit)}
+.prepline{display:block;font-family:"IBM Plex Mono",ui-monospace,monospace;font-variant-numeric:tabular-nums}
+.fill-topics{align-self:flex-start;margin-bottom:6px}
+.dnote{display:block;font-size:11.5px;color:var(--ink-3);margin-bottom:6px}
+
+.grades .grade-now{display:flex;align-items:baseline;gap:8px;margin-bottom:6px}
+.grades .grade-now b{font-size:22px;font-weight:600;font-variant-numeric:tabular-nums}
+.grades .grade-now span{font-size:11.5px;color:var(--ink-3)}
+.grade-need{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;margin:8px 0 4px}
+.grade-need span{display:flex;flex-direction:column;gap:1px;padding:6px 8px;border-radius:8px;background:var(--panel-2);font-size:12px;font-variant-numeric:tabular-nums}
+.grade-need em{font-style:normal;font-size:10px;letter-spacing:.1em;color:var(--ink-3)}
+.grade-need .ok{color:var(--good)}
+.grade-need .bad{color:var(--crit)}
+.grades .warnline{margin-top:8px}
+
+.checkline{display:flex;align-items:center;gap:8px;font-size:12.5px}
+.filepick{position:relative;align-self:flex-start;cursor:pointer}
+.filepick input{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%}
+.filepick:focus-within{outline:2px solid var(--accent);outline-offset:2px}
+.imp-paste summary{font-size:11.5px;color:var(--ink-3);cursor:pointer}
+.imp-paste textarea{width:100%;margin:6px 0;border:1px solid var(--line);border-radius:7px;padding:6px 8px;background:var(--panel-2);font:12px/1.4 "IBM Plex Mono",ui-monospace,monospace;resize:vertical}
+
+.imp-sum{font-size:13px;font-weight:600;margin-bottom:8px}
+.imp-group h4 .pip{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px;background:var(--c,var(--ink-3))}
+.imp-row{display:flex;align-items:center;gap:8px;padding:4px 0;font-size:12.5px;border-bottom:1px solid var(--line-2);min-width:0}
+.imp-row:last-child{border-bottom:0}
+.imp-row input[type=checkbox]{flex:none}
+.imp-row select{flex:none;max-width:110px;border:1px solid transparent;border-radius:6px;padding:2px 4px;background:var(--panel-2);font-size:12px}
+.imp-row .imp-kind{flex:none;min-width:62px;color:var(--ink-2)}
+.imp-row .imp-title{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.imp-row .imp-title em{font-style:normal;font-size:10.5px;color:var(--warn)}
+.imp-row .imp-where{margin-left:auto;flex:none;font-size:11px;color:var(--ink-3);max-width:40%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.imp-row.dup .imp-title{color:var(--ink-3)}
+.filepick.busy{opacity:.7;cursor:progress}

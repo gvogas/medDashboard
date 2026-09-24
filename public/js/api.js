@@ -89,7 +89,9 @@ async function send(method, path, body, extraHeaders = {}) {
   const { signal } = controller;
   const abort = () => controller.abort(session.reason);
   session.addEventListener('abort', abort, { once: true });
-  const timer = setTimeout(() => controller.abort(new DOMException('The request timed out. Try again.', 'TimeoutError')), 30_000);
+  /* A file (a course outline) goes as it is, and reading it with AI can take a while. */
+  const file = typeof Blob !== 'undefined' && body instanceof Blob;
+  const timer = setTimeout(() => controller.abort(new DOMException('The request timed out. Try again.', 'TimeoutError')), file ? 120_000 : 30_000);
   try {
     session.throwIfAborted();
     const res = await fetch(path, {
@@ -98,8 +100,8 @@ async function send(method, path, body, extraHeaders = {}) {
       cache: 'no-store',
       redirect: 'error',
       signal,
-      headers: { ...(body !== undefined ? { 'content-type': 'application/json' } : {}), ...(accountId && path !== '/api/login' ? { 'x-rounds-user': accountId } : {}), ...extraHeaders },
-      body: body !== undefined ? JSON.stringify(body) : undefined,
+      headers: { ...(body !== undefined ? { 'content-type': file ? body.type || 'application/octet-stream' : 'application/json' } : {}), ...(accountId && path !== '/api/login' ? { 'x-rounds-user': accountId } : {}), ...extraHeaders },
+      body: file ? body : body !== undefined ? JSON.stringify(body) : undefined,
     });
     signal.throwIfAborted();
     // Reading the body shares the request's deadline, including error responses.
@@ -155,6 +157,7 @@ export const api = {
   put: (kind, id, row) => record(request('PUT', `/api/${kind}/${encodeURIComponent(id)}`, row, match(row.revision)), id, row.revision),
   revokeAll: () => empty(request('POST', '/api/session/revoke-all')),
   del: (kind, id, revision = 0) => empty(request('DELETE', `/api/${kind}/${encodeURIComponent(id)}`, undefined, match(revision))),
+  readOutline: (file, { name, today, termStart }) => request('POST', '/api/outline?' + new URLSearchParams({ name, today, ...(termStart ? { termStart } : {}) }), file),
   spotifyPlayer: () => request('GET', '/api/spotify/player'),
   spotifyStatus: () => request('GET', '/api/spotify/status'),
   spotifyControl: (action, deviceId) => request('POST', `/api/spotify/player/${action}` + (deviceId ? `?deviceId=${encodeURIComponent(deviceId)}` : '')),

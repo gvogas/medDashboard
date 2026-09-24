@@ -23,6 +23,9 @@ import { renderSignIn, hideSignIn } from './views/signin.js';
 import { schedule as drawOrnament } from './ornament.js';
 import { parseTime } from './timepicker.js';
 import { launch as fireworks } from './fireworks.js';
+import { readSetting, writeSetting, dueReviews, nextReview } from './reviews.js';
+import { fillTopics } from './prep.js';
+import { previewImport, previewOutline, renderImport, editImport, commitImport } from './views/drawer-import.js';
 
 /* ═════════ theme ═════════ */
 function setTheme(choice, { persist = true } = {}) {
@@ -56,8 +59,33 @@ sync.onStatus((s) => {
   pill.title = s.message || (s.state === 'offline' ? 'Changes are kept on this device until you are back online' : 'Sync now');
   refreshSyncNote();
 });
-sync.onPulled(() => { if (!drawerHasFocus()) { render(); if (ui.sel) renderItemDrawer(); if (ui.settings) renderSettings(); } });
+sync.onPulled(async () => {
+  await runReviews();
+  if (!drawerHasFocus()) { render(); if (ui.sel) renderItemDrawer(); if (ui.settings) renderSettings(); }
+});
 sync.onUnauthenticated(() => showSignIn('Your session has ended. Sign in again.'));
+
+/* ═════════ spaced review ═════════ */
+/* After a pull, so this device already holds any review another device created:
+   creating the same id twice would come back as a conflict. The pull on focus also
+   covers the day rolling over. */
+let reviewing = false;
+async function runReviews() {
+  if (reviewing || !data.profile) return;
+  reviewing = true;
+  try {
+    const setting = readSetting();
+    const { rows, through } = dueReviews(setting, data.courses, data.items, today());
+    for (const row of rows) await store.saveItem(normalizeItem(row));
+    if (through !== setting.through) writeSetting({ ...setting, through });
+  } finally { reviewing = false; }
+}
+/** A review step just finished: schedule the next one. */
+async function chainReview(it) {
+  if (it.status !== 'done') return;
+  const next = nextReview(it, today(), data.items);
+  if (next) await store.saveItem(normalizeItem(next));
+}
 
 /* ═════════ the Spotify badge on the coat ═════════ */
 spotify.onState((s, kind) => {
@@ -278,6 +306,7 @@ document.addEventListener('click', async (e) => {
       if (finishing) celebrate(el);
       setStatus(it, finishing ? 'done' : 'todo');
       await touch(it);
+      await chainReview(it);
     }
     render(); return;
   }
@@ -308,6 +337,33 @@ document.addEventListener('click', async (e) => {
     else if (act === 'course-save') saveCourseDraft();
     else if (act === 'course-delete') { ui.confirm = 'course'; renderCourseDrawer(); }
     else if (act === 'course-delete-yes' && ui.courseDraft) deleteCourseDraft();
+    else if (act === 'fill-topics' && it) {
+      const c = course(it.courseId); if (!c) return;
+      const r = fillTopics(it, c, data.items, data.profile?.termStart);
+      it.checklist = r.checklist;
+      if (r.added) await touch(it);
+      ui.fillNote = r.added ? 'Added ' + r.added + ' lecture' + (r.added === 1 ? '' : 's') + '.' + (r.left ? ' ' + r.left + ' more did not fit under the 50-step limit.' : '')
+        : r.left ? 'The list is full: 50 steps is the most an item can hold.' : 'Every lecture before this exam is already listed.';
+      renderItemDrawer(); renderStats(); renderView();
+    }
+    else if (act === 'import-paste') {
+      const box = $('importText');
+      const text = box ? box.value : '';
+      if (!text.trim()) return;
+      const error = previewImport(text);
+      if (error) { ui.importNote = { text: error, error: true }; renderSettings(); }
+    }
+    else if (act === 'import-cancel') openSettings('importGrp');
+    else if (act === 'import-confirm') {
+      el.disabled = true;
+      let note;
+      try { note = { text: await commitImport() }; }
+      catch (error) { note = { text: 'The import stopped part-way: ' + error.message, error: true }; }
+      render();
+      openSettings('importGrp');
+      ui.importNote = note;
+      renderSettings();
+    }
     else if (act === 'export-data') {
       await store.reload();
       const blob = new Blob([JSON.stringify({ ...store.data, pending: await store.pending(), conflicts: store.conflicts }, null, 2)], { type: 'application/json' });
@@ -399,6 +455,14 @@ async function addQuote() {
 document.addEventListener('input', async (e) => {
   const d = e.target.dataset || {};
 
+  if ('reviews' in d) {
+    const setting = readSetting();
+    writeSetting(e.target.checked ? { on: true, through: setting.through && setting.on ? setting.through : null } : { on: false, through: null });
+    await runReviews();
+    renderSettings(); return;
+  }
+  if ('impM' in d || 'impI' in d || 'impType' in d) { editImport(e.target); return; }
+
   if ('spotVol' in d) { spotView.setVolume(+e.target.value); return; }
   if ('spotQ' in d) { spotView.typed(e.target.value); return; }
   if ('spotFilter' in d) { spotView.setFilter(e.target.value); return; }
@@ -434,6 +498,8 @@ document.addEventListener('input', async (e) => {
       it.recur = e.target.checked ? 'weekly' : null;
       it.weekday = it.recur ? parse(it.date).getDay() : null;
       if (!it.recur) it.recurUntil = null;
+    } else if (d.f === 'weight') {
+      it.weight = e.target.value === '' || !(+e.target.value > 0) ? null : Math.min(100, +e.target.value);
     } else if (d.f === 'grade') {
       it.grade = e.target.value === '' ? null : Math.max(0, Math.min(100, +e.target.value));
     } else if (d.f === 'courseId' || d.f === 'recurUntil') {
@@ -461,6 +527,7 @@ document.addEventListener('input', async (e) => {
     }
     if (!ui.draft) {
       await touch(it);
+      if (d.f === 'status') await chainReview(it);
       /* notes show nowhere on the board except through the search, so typing them redraws nothing */
       if (d.f !== 'notes' || ui.search) { renderStats(); renderSidebar(); renderView(); }
     }
@@ -474,6 +541,38 @@ document.addEventListener('input', async (e) => {
     return;
   }
   if (e.target.id === 'search') { ui.search = e.target.value; renderView(); return; }
+});
+
+const OUTLINE_ERRORS = {
+  outline_unsupported: 'That kind of file cannot be read. Try a PDF or Word document.',
+  outline_empty: 'No text was found in that file. A scanned outline needs to be a text PDF.',
+  outline_unreadable: 'The outline could not be understood. Try again, or import a CSV instead.',
+  outline_unavailable: 'The outline reader is not available right now. Try again later.',
+  outline_limit: 'That is the limit of 10 outlines for today. Try again tomorrow.',
+  too_large: 'That file is over 5 MB.',
+};
+async function readOutlineFile(file) {
+  if (file.size > 5 * 1024 * 1024) { ui.importNote = { text: OUTLINE_ERRORS.too_large, error: true }; renderSettings(); return; }
+  ui.outlineBusy = true; ui.importNote = null; renderSettings();
+  try {
+    const outline = await api.readOutline(file, { name: file.name, today: today(), termStart: data.profile?.termStart || '' });
+    ui.outlineBusy = false;
+    previewOutline(outline, file.name);
+  } catch (err) {
+    ui.outlineBusy = false;
+    const code = err instanceof ApiError ? err.body?.error : null;
+    ui.importNote = { text: OUTLINE_ERRORS[code] || (err instanceof ApiError ? 'The outline could not be read (' + (code || err.status) + ').' : 'You seem to be offline. Reading an outline needs a connection.'), error: true };
+    if (ui.settings) renderSettings();
+  }
+}
+
+document.addEventListener('change', async (e) => {
+  if (e.target.id === 'outlineFile' && e.target.files?.[0]) { readOutlineFile(e.target.files[0]); return; }
+  if (e.target.id !== 'importFile' || !e.target.files?.[0]) return;
+  const file = e.target.files[0];
+  if (file.size > 2_000_000) { ui.importNote = { text: 'That file is over 2 MB; export a single term instead.', error: true }; renderSettings(); return; }
+  const error = previewImport(await file.text(), file.name);
+  if (error) { ui.importNote = { text: error, error: true }; renderSettings(); }
 });
 
 document.addEventListener('keydown', async (e) => {

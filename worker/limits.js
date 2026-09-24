@@ -2,6 +2,9 @@ import { HttpError } from './http.js';
 
 export const API_LIMIT = 600;
 export const SPOTIFY_LIMIT = 60;
+// Course outlines use Workers AI's free daily allowance; a few a day each is plenty.
+export const OUTLINE_DAILY_LIMIT = 10;
+const DAY_MS = 24 * 60 * 60 * 1000;
 const LOGIN_IP_LIMIT = 30;
 const WINDOW_MS = 60_000;
 const SPOTIFY_EXEMPT = ['/api/spotify/token', '/api/spotify/status', '/api/spotify/connect', '/api/spotify/callback'];
@@ -12,7 +15,7 @@ export function rateLimited(seconds, error = 'rate_limited') {
 }
 
 /** An atomic fixed window; rejected requests cannot extend it or increment it. */
-export async function claimLimit(db, key, limit, now = Date.now()) {
+export async function claimLimit(db, key, limit, now = Date.now(), windowMs = WINDOW_MS) {
   const row = await db.prepare(`
     INSERT INTO request_limits (key, hits, reset_at) VALUES (?1, 1, ?2 + ?3)
     ON CONFLICT (key) DO UPDATE SET
@@ -20,7 +23,7 @@ export async function claimLimit(db, key, limit, now = Date.now()) {
       reset_at = CASE WHEN reset_at <= ?2 THEN ?2 + ?3 ELSE reset_at END
     WHERE reset_at <= ?2 OR hits < ?4
     RETURNING reset_at
-  `).bind(key, now, WINDOW_MS, limit).first();
+  `).bind(key, now, windowMs, limit).first();
   if (row) return 0;
   return Math.max(1, await cooldownRemaining(db, key, now));
 }
@@ -57,6 +60,11 @@ export async function limitUser(request, env, userId) {
     const spotifyWait = await claimLimit(env.DB, `spotify:${userId}`, SPOTIFY_LIMIT);
     if (spotifyWait) throw rateLimited(spotifyWait);
   }
+}
+
+export async function limitOutline(env, userId) {
+  const wait = await claimLimit(env.DB, `outline:${userId}`, OUTLINE_DAILY_LIMIT, Date.now(), DAY_MS);
+  if (wait) throw rateLimited(wait, 'outline_limit');
 }
 
 export async function purgeLimits(db, now = Date.now()) {

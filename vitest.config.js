@@ -10,6 +10,9 @@ export default defineConfig(async () => {
     plugins: [
       cloudflareTest({
         wrangler: { configPath: './wrangler.jsonc' },
+        // Never reach Cloudflare from tests: the AI binding is remote-only, so outline
+        // reading is tested with a fake passed to worker/outline.js directly.
+        remoteBindings: false,
         miniflare: {
           // A separate empty database exercises upgrades from an existing schema.
           d1Databases: { MIGRATION_DB: 'rounds-migration-tests' },
