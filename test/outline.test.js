@@ -22,8 +22,10 @@ const MODEL_REPLY = {
     { kind: 'Lecture', day: 'Wed', start: '9am', end: '10am', room: 'LT2' },
     { kind: 'Nap', day: 'Someday', start: '12:00' },
   ],
+  officeHours: [{ day: 'Monday', start: '16:00', end: '17:00', room: 'SP 265' }, { day: 'Thu', start: '10:00', end: '11:00' }],
   assessments: [
     { title: 'Midterm exam', type: 'exam', date: '2026-10-20', weight: 30 },
+    { title: 'Assignment 1', type: 'assignment', date: '', week: 7, weight: 12.5 },
     { title: 'Essay', type: 'assignment', date: '2026-11-01', weight: '20' },
     { title: 'Final exam', type: 'exam', date: 'TBA', weight: 50 },
     { title: '', type: 'exam' },
@@ -36,6 +38,12 @@ describe('cleanOutline', () => {
     const o = cleanOutline(MODEL_REPLY);
     expect(o.code).toBe('PHARM101');
     expect(o.termStart).toBe('2026-09-07');
+    expect(o.officeHours).toEqual([
+      { weekday: 1, start: '16:00', end: '17:00', room: 'SP 265' },
+      { weekday: 4, start: '10:00', end: '11:00', room: '' },
+    ]);
+    expect(o.assessments.find((a) => a.title === 'Assignment 1').week).toBe(7);
+    expect(o.assessments.find((a) => a.title === 'Midterm exam').week).toBeNull();
     expect(cleanOutline({ ...MODEL_REPLY, termStart: 'September' }).termStart).toBe('');
     expect(o.classes).toEqual([
       { kind: 'Lecture', weekday: 1, start: '09:00', end: '10:00', room: 'LT2' },
@@ -43,14 +51,23 @@ describe('cleanOutline', () => {
     ]);
     expect(o.assessments.map((a) => [a.title, a.type, a.date, a.weight])).toEqual([
       ['Midterm exam', 'exam', '2026-10-20', 30],
+      ['Assignment 1', 'assignment', '', 12.5],
       ['Essay', 'assignment', '2026-11-01', 20],
       ['Final exam', 'exam', '', 50],
       ['Participation', 'task', '', null],
     ]);
   });
 
-  it('accepts a JSON string and refuses anything else', () => {
-    expect(cleanOutline(JSON.stringify({ code: 'A', name: 'B', classes: [], assessments: [] })).name).toBe('B');
+  it('shortens long course codes to eight characters', () => {
+    expect(cleanOutline({ ...MODEL_REPLY, code: '420-521-VA' }).code).toBe('420521VA');
+    expect(cleanOutline({ ...MODEL_REPLY, code: 'CHEM 271' }).code).toBe('CHEM271');
+  });
+
+  it('reads JSON from text, fenced text and a chat-completions reply', () => {
+    const body = JSON.stringify({ code: 'A', name: 'B', classes: [], assessments: [] });
+    expect(cleanOutline(body).name).toBe('B');
+    expect(cleanOutline('Here it is:\n```json\n' + body + '\n```').name).toBe('B');
+    expect(cleanOutline({ choices: [{ message: { content: body } }] }).name).toBe('B');
     expect(() => cleanOutline('not json')).toThrow();
     expect(() => cleanOutline(null)).toThrow();
   });
@@ -72,7 +89,8 @@ describe('readOutline', () => {
     expect(ai.calls[0]).toEqual(['toMarkdown', 'pharm.pdf', 'application/pdf']);
     const [, model, input] = ai.calls[1];
     expect(model).toBe(MODEL);
-    expect(input.response_format.type).toBe('json_schema');
+    expect(input.response_format).toBeUndefined();
+    expect(input.messages[0].content).toContain('"officeHours"');
     expect(input.messages[1].content).toContain('The term started on 2026-09-07.');
     expect(input.messages[1].content).toContain(OUTLINE);
     expect(out).toMatchObject({ code: 'PHARM101', truncated: false });
@@ -84,6 +102,15 @@ describe('readOutline', () => {
     const out = await readOutline(ai, { bytes: new TextEncoder().encode(long), type: 'text/plain; charset=utf-8', today: '2026-09-23' });
     expect(ai.calls[0][0]).toBe('run');
     expect(out.truncated).toBe(true);
+  });
+
+  it('reports a spent daily AI allowance as its own error', async () => {
+    const ai = { run: async () => { throw new Error('4006: you have used up your daily free allocation of 10,000 neurons'); } };
+    await expect(readOutline(ai, { bytes: new TextEncoder().encode(OUTLINE), type: 'text/plain', today: '2026-09-23' }))
+      .rejects.toMatchObject({ status: 429, body: { error: 'outline_quota' } });
+    const coded = { run: async () => { throw new Error('AiError: 4006'); } };
+    await expect(readOutline(coded, { bytes: new TextEncoder().encode(OUTLINE), type: 'text/plain', today: '2026-09-23' }))
+      .rejects.toMatchObject({ status: 429 });
   });
 
   it('reports documents that cannot be converted or are empty', async () => {

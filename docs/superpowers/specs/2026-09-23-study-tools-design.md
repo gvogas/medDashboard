@@ -178,6 +178,33 @@ opens the same preview as `.ics` and CSV.
   `remoteBindings: false` and `test/outline.test.js` drives `readOutline` with a fake
   binding; the endpoint tests cover auth, size, the unreachable case and the limit.
 
+### 5a. Outline reader, revised (24 September 2026)
+
+Tested on three real outlines (CHEM 271 Concordia; 420-521-VA and 420-511-VA Vanier),
+the first version missed office hours, term-test dates and every week-dated item.
+Three causes, each confirmed separately:
+
+1. **toMarkdown drops table text.** CHEM 271's lecture schedule (both term tests)
+   and pages 8–10 of the Networks weekly plan came back empty. PDFs are now read in
+   the browser with PDF.js (`public/js/pdftext.js`, vendored `public/js/vendor/pdfjs.mjs`,
+   loaded only when a PDF is chosen) and sent as text; toMarkdown remains for Word.
+   PDF.js is not run in the Worker: the free plan allows about 10 ms of CPU a request.
+2. **The schema had no place for office hours or week numbers.** The model filed
+   office hours as tutorials and invented dates for "Week 7". The schema now has
+   `officeHours` (weekly office-hours items, `recur: 'weekly'`) and an assessment
+   `week`; week items are dated to the Monday of that week from "Week 1 starts",
+   which the preview asks for when neither the profile nor the outline gives it.
+3. **Llama 3.3 70B followed the longer instructions unevenly** (titles missing,
+   weights as fractions, schedules not matched to grading rows). Scored on 21
+   facts across the three outlines: Llama 3.3 14/21, Qwen3-30B 17/21, Mistral Small
+   16/21, gpt-oss-120b 18/21 — 20/21 with the JSON Schema written into the prompt.
+   gpt-oss-120b is used, without JSON mode; `cleanOutline` reads JSON from plain,
+   fenced or chat-completions replies. About 300 neurons per outline.
+
+A spent account allowance (Workers AI error 4006) now answers 429 `outline_quota`
+with its own message instead of "not available". Course codes over 8 characters
+drop their hyphens (`420-521-VA` → `420521VA`).
+
 ## Files
 
 | File | Change |

@@ -9,7 +9,7 @@
 // }
 
 import { KINDS, HEXES, TYPES, uid } from '../model.js';
-import { parse, DOW } from '../dates.js';
+import { parse, DOW, iso, addDays, monday } from '../dates.js';
 
 const MAX_MEETINGS = 12;
 const ITEM_TYPES = Object.keys(TYPES);
@@ -122,12 +122,27 @@ export function planImport(events, data, source) {
   return { courses: courses.filter((c) => c.isNew || c.meetings.length || items.some((i) => i.row.courseId === c.id)), items, notes };
 }
 
+/** The Monday of week `n`, counting the week that contains `week1` as week 1. */
+export function weekDate(week1, n) {
+  return iso(addDays(monday(parse(week1)), (n - 1) * 7));
+}
+
+/** The first date on or after `from` that falls on `weekday`. */
+function onOrAfter(from, weekday) {
+  let d = parse(from);
+  for (let i = 0; i < 7 && d.getDay() !== weekday; i++) d = addDays(d, 1);
+  return iso(d);
+}
+
 /**
- * A course outline read by the Worker (worker/outline.js) → the same plan. Classes and
- * dated assessments become rows; assessments without a date are listed in the notes,
- * since an item needs a date.
+ * A course outline read by the Worker (worker/outline.js) → the same plan.
+ * Classes become meetings; office hours become weekly office-hours items; assessments
+ * with a date become items. Assessments given only as "Week N" are dated from week 1
+ * (plan.week1: the profile's term start, else the outline's) — the Monday of that
+ * week, so nothing is shown later than it is — and wait unticked until week 1 is known.
+ * Assessments with neither are listed in the notes.
  */
-export function planOutline(o, data) {
+export function planOutline(o, data, termStart = '') {
   const code = (o.code || String(o.name || '').replace(/[^A-Za-z0-9]/g, '').slice(0, 4) || 'NEW').toUpperCase().slice(0, 8);
   const name = o.name || code;
   const rows = [
@@ -137,18 +152,54 @@ export function planOutline(o, data) {
   const plan = planImport(rows, data, 'csv');
   let pc = plan.courses.find((c) => c.code.toUpperCase() === code);
   if (!pc) {
-    /* nothing dated and no classes: still offer the course itself */
-    pc = { id: uid(), code, name: name.slice(0, 80), isNew: !(data.courses || []).some((c) => c.code.toUpperCase() === code), meetings: [], color: HEXES[(data.courses || []).length % HEXES.length] };
-    if (pc.isNew) plan.courses.push(pc);
+    /* nothing dated and no classes: still offer the course itself, or use the one that exists */
+    const live = (data.courses || []).find((c) => c.code.toUpperCase() === code);
+    pc = live
+      ? { id: live.id, code: live.code, name: live.name, color: live.color, isNew: false, meetings: [] }
+      : { id: uid(), code, name: name.slice(0, 80), isNew: true, meetings: [], color: HEXES[(data.courses || []).length % HEXES.length] };
+    plan.courses.push(pc);
   }
   if (pc.isNew) { pc.instructor = o.instructor || ''; pc.term = o.term || ''; pc.name = name.slice(0, 80); pc.keep = true; }
-  const undated = o.assessments.filter((a) => !a.date);
+
+  plan.week1 = termStart || o.termStart || '';
+  const from = plan.week1 || iso(new Date());
+  const items = data.items || [];
+  for (const h of o.officeHours || []) {
+    const same = items.some((it) => it.type === 'office' && it.courseId === pc.id && it.recur === 'weekly' && it.weekday === h.weekday && it.start === h.start);
+    plan.items.push({
+      include: !same, duplicate: same,
+      row: {
+        type: 'office', title: (o.instructor ? o.instructor + ' — office hours' : 'Office hours').slice(0, 140), courseId: pc.id,
+        date: onOrAfter(from, h.weekday), start: h.start, end: h.end, where: h.room || '', status: 'todo',
+        recur: 'weekly', weekday: h.weekday, weight: null,
+      },
+    });
+  }
+  for (const a of o.assessments.filter((x) => !x.date && x.week)) {
+    plan.items.push({
+      include: !!plan.week1, duplicate: false, week: a.week,
+      row: { type: a.type, title: a.title, courseId: pc.id, date: plan.week1 ? weekDate(plan.week1, a.week) : '', start: a.start, end: a.end, where: a.room || '', status: 'todo', weight: a.weight },
+    });
+  }
+  const undated = o.assessments.filter((a) => !a.date && !a.week);
   if (undated.length) {
     plan.notes.push('No date in the outline for: ' + undated.map((a) => a.title + (a.weight ? ' (' + a.weight + '%)' : '')).join(', ') + '. Add them from the board once you know the dates.');
   }
   plan.termStart = o.termStart || '';
   if (o.truncated) plan.notes.push('The outline was long, so only the first part was read. Check the end of it by hand.');
   return plan;
+}
+
+/** Set week 1 and date every week-numbered item from it; newly dated ones get ticked. */
+export function setWeek1(plan, week1) {
+  plan.week1 = week1 || '';
+  for (const it of plan.items) {
+    if (!it.week) continue;
+    const had = !!it.row.date;
+    it.row.date = plan.week1 ? weekDate(plan.week1, it.week) : '';
+    if (!had && it.row.date) it.include = true;
+    if (!it.row.date) it.include = false;
+  }
 }
 
 /** "3 new courses · 14 classes · 9 items", counting only what is ticked. */

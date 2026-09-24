@@ -25,6 +25,7 @@ import { parseTime } from './timepicker.js';
 import { launch as fireworks } from './fireworks.js';
 import { readSetting, writeSetting, dueReviews, nextReview } from './reviews.js';
 import { fillTopics } from './prep.js';
+import { pdfText } from './pdftext.js';
 import { previewImport, previewOutline, renderImport, editImport, commitImport } from './views/drawer-import.js';
 
 /* ═════════ theme ═════════ */
@@ -461,7 +462,7 @@ document.addEventListener('input', async (e) => {
     await runReviews();
     renderSettings(); return;
   }
-  if ('impM' in d || 'impI' in d || 'impType' in d) { editImport(e.target); return; }
+  if ('impM' in d || 'impI' in d || 'impType' in d || 'impWeek1' in d) { editImport(e.target); return; }
 
   if ('spotVol' in d) { spotView.setVolume(+e.target.value); return; }
   if ('spotQ' in d) { spotView.typed(e.target.value); return; }
@@ -549,13 +550,17 @@ const OUTLINE_ERRORS = {
   outline_unreadable: 'The outline could not be understood. Try again, or import a CSV instead.',
   outline_unavailable: 'The outline reader is not available right now. Try again later.',
   outline_limit: 'That is the limit of 10 outlines for today. Try again tomorrow.',
+  outline_quota: 'The free AI allowance for today is used up. It resets at 8 pm Eastern (midnight UTC).',
   too_large: 'That file is over 5 MB.',
 };
 async function readOutlineFile(file) {
   if (file.size > 5 * 1024 * 1024) { ui.importNote = { text: OUTLINE_ERRORS.too_large, error: true }; renderSettings(); return; }
   ui.outlineBusy = true; ui.importNote = null; renderSettings();
   try {
-    const outline = await api.readOutline(file, { name: file.name, today: today(), termStart: data.profile?.termStart || '' });
+    /* PDFs are read here: the Worker's converter drops the text of many tables. */
+    const isPdf = file.type === 'application/pdf' || /\.pdf$/i.test(file.name);
+    const body = isPdf ? new Blob([await pdfText(file)], { type: 'text/plain' }) : file;
+    const outline = await api.readOutline(body, { name: file.name, today: today(), termStart: data.profile?.termStart || '' });
     ui.outlineBusy = false;
     previewOutline(outline, file.name);
   } catch (err) {

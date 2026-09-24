@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { parseIcs } from '../public/js/importers/ics.js';
 import { parseCsv, normDate } from '../public/js/importers/csv.js';
-import { planImport, planOutline, planSummary, guessKind, guessType, codeToken } from '../public/js/importers/plan.js';
+import { planImport, planOutline, planSummary, setWeek1, weekDate, guessKind, guessType, codeToken } from '../public/js/importers/plan.js';
 
 const pad = (n) => String(n).padStart(2, '0');
 
@@ -185,6 +185,31 @@ describe('planOutline', () => {
     const plan = planOutline(outline, { courses: [{ id: 'c1', code: 'pharm101', name: 'Pharm', color: '#E4749B', meetings: [] }], items: [] });
     expect(plan.courses[0]).toMatchObject({ id: 'c1', isNew: false });
     expect(plan.items[0].row.courseId).toBe('c1');
+  });
+
+  it('turns office hours into weekly office-hours items', () => {
+    const plan = planOutline({ ...outline, officeHours: [{ weekday: 1, start: '16:00', end: '17:00', room: 'SP 265' }] }, { courses: [], items: [] });
+    const oh = plan.items.find((i) => i.row.type === 'office');
+    expect(oh.row).toMatchObject({ title: 'Dr. Ada Okafor — office hours', recur: 'weekly', weekday: 1, start: '16:00', where: 'SP 265', date: '2026-09-07' });
+    expect(oh.include).toBe(true);
+  });
+
+  it('dates week-numbered items from week 1, or waits for it', () => {
+    const weekly = { ...outline, termStart: '', assessments: [{ title: 'Assignment 1', type: 'assignment', date: '', week: 7, start: '', end: '', room: '', weight: 12.5 }] };
+    const waiting = planOutline(weekly, { courses: [], items: [] });
+    const a1 = waiting.items.find((i) => i.row.title === 'Assignment 1');
+    expect(a1).toMatchObject({ week: 7, include: false });
+    expect(a1.row.date).toBe('');
+    setWeek1(waiting, '2026-08-26');                     /* a Wednesday: week 1 is Mon 24 Aug */
+    expect(a1.row.date).toBe('2026-10-05');
+    expect(a1.include).toBe(true);
+    expect(planOutline(weekly, { courses: [], items: [] }, '2026-08-24').items.find((i) => i.week).row.date).toBe('2026-10-05');
+    expect(weekDate('2026-08-24', 1)).toBe('2026-08-24');
+  });
+
+  it('uses the existing course when the outline adds nothing but the course', () => {
+    const plan = planOutline({ ...outline, classes: [], assessments: [] }, { courses: [{ id: 'c1', code: 'PHARM101', name: 'Pharm', color: '#E4749B', meetings: [] }], items: [] });
+    expect(plan.courses[0]).toMatchObject({ id: 'c1', isNew: false });
   });
 
   it('still offers the course when nothing is dated', () => {

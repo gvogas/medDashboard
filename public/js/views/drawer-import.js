@@ -8,7 +8,7 @@ import { DOW } from '../dates.js';
 import { esc } from '../dom.js';
 import { parseIcs } from '../importers/ics.js';
 import { parseCsv } from '../importers/csv.js';
-import { planImport, planOutline, planSummary } from '../importers/plan.js';
+import { planImport, planOutline, planSummary, setWeek1 } from '../importers/plan.js';
 import { showDrawer, resetDrawerState } from './drawer-base.js';
 import { shortDate } from '../reviews.js';
 
@@ -29,7 +29,7 @@ export function previewImport(text, name = '') {
 
 /** Open the preview for a course outline the Worker has read. */
 export function previewOutline(outline, name) {
-  const plan = planOutline(outline, data);
+  const plan = planOutline(outline, data, data.profile?.termStart || '');
   resetDrawerState();
   ui.importPlan = { plan, name };
   renderImport();
@@ -44,6 +44,10 @@ export function renderImport() {
   let body = '<div class="dbody"><div class="imp-sum">' + esc(planSummary(plan)) + '</div>';
   const kept = plan.courses.find((c) => c.keep && c.isNew && (c.instructor || c.term));
   if (kept || plan.termStart) body += '<div class="dnote">' + esc([kept?.instructor, kept?.term, plan.termStart && !data.profile?.termStart ? 'term start ' + shortDate(plan.termStart) : ''].filter(Boolean).join(' · ')) + '</div>';
+  if (plan.items.some((i) => i.week)) {
+    body += '<div class="fields imp-week1"><label for="imp-week1">Week 1 starts</label><input id="imp-week1" type="date" data-imp-week1 value="' + esc(plan.week1 || '') + '"></div>'
+      + '<div class="dnote">' + (plan.week1 ? 'Items given only as “Week N” are placed on the Monday of that week.' : 'This outline gives due dates as week numbers. Set the first day of week 1 to date them.') + '</div>';
+  }
   if (plan.notes.length) body += '<div class="warnline">' + plan.notes.slice(0, 6).map(esc).join('<br>') + (plan.notes.length > 6 ? '<br>…and ' + (plan.notes.length - 6) + ' more.' : '') + '</div>';
 
   const groups = plan.courses.map((c) => ({ c, items: plan.items.map((it, i) => ({ it, i })).filter((x) => x.it.row.courseId === c.id) }));
@@ -72,10 +76,10 @@ function itemRow({ it, i }) {
   const r = it.row;
   const types = ORDER.filter((t) => t !== 'project' || ui.bg === 'cs' || r.type === 'project')
     .map((t) => '<option value="' + t + '"' + (t === r.type ? ' selected' : '') + '>' + TYPES[t].label + '</option>').join('');
-  return '<div class="imp-row' + (it.duplicate ? ' dup' : '') + '"><input type="checkbox" data-imp-i="' + i + '"' + (it.include ? ' checked' : '') + ' aria-label="Import ' + esc(r.title) + '">'
+  return '<div class="imp-row' + (it.duplicate ? ' dup' : '') + '"><input type="checkbox" data-imp-i="' + i + '"' + (it.include ? ' checked' : '') + (r.date ? '' : ' disabled') + ' aria-label="Import ' + esc(r.title) + '">'
     + '<select data-imp-type="' + i + '" aria-label="Type">' + types + '</select>'
     + '<span class="imp-title">' + esc(r.title) + (it.duplicate ? ' <em>already there</em>' : '') + '</span>'
-    + '<span class="imp-where">' + esc(shortDate(r.date)) + (r.start ? ' ' + esc(r.start) : '') + '</span></div>';
+    + '<span class="imp-where">' + esc(r.recur === 'weekly' ? 'every ' + DOW[r.weekday] : r.date ? shortDate(r.date) + (it.week ? ' · wk ' + it.week : '') : 'week ' + it.week) + (r.start ? ' ' + esc(r.start) : '') + '</span></div>';
 }
 
 function countTicked(plan) {
@@ -87,7 +91,9 @@ export function editImport(target) {
   const plan = ui.importPlan?.plan;
   if (!plan) return;
   const d = target.dataset;
-  if (d.impM) {
+  if (d.impWeek1 !== undefined) {
+    setWeek1(plan, target.value);
+  } else if (d.impM) {
     const [cid, mid] = d.impM.split(':');
     const m = plan.courses.find((c) => c.id === cid)?.meetings.find((x) => x.id === mid);
     if (m) m.include = target.checked;
@@ -119,12 +125,13 @@ export async function commitImport() {
     classes += add.length;
   }
   for (const it of plan.items) {
-    if (!it.include) continue;
+    if (!it.include || !it.row.date) continue;
     await saveItem(normalizeItem(it.row));
     items++;
   }
   /* An outline that states when teaching starts sets the term start, if none is set yet. */
-  if (plan.termStart && data.profile && !data.profile.termStart) await saveProfile({ termStart: plan.termStart });
+  const start = plan.week1 || plan.termStart;
+  if (start && data.profile && !data.profile.termStart) await saveProfile({ termStart: start });
   ui.importPlan = null;
   return 'Imported ' + classes + ' class' + (classes === 1 ? '' : 'es') + ' and ' + items + ' item' + (items === 1 ? '' : 's') + '.';
 }
