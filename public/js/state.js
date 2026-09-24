@@ -1,7 +1,6 @@
 // UI state: what is open, what is filtered, how the table is sorted. Never synced.
 // The view and theme are remembered per browser as a convenience.
 
-import { ORDER } from './model.js';
 import { today } from './dates.js';
 
 const KEY = 'rounds.ui';
@@ -9,7 +8,9 @@ const KEY = 'rounds.ui';
 export const ui = {
   view: 'week', anchor: today(), search: '', types: {}, course: 'all',
   sel: null, draft: null, courseDraft: null, courseMode: null, confirm: null,
-  settings: false, focusField: null, sort: { key: 'date', dir: 1 },
+  settings: false, settingsTab: 'you', focusField: null,
+  typeEdit: false,         /* the Open items list is being edited */
+  typeAdd: null,           /* the new-type form: { label, color, kind } */ sort: { key: 'date', dir: 1 },
   theme: (typeof window !== 'undefined' && window.__roundsTheme) || 'system',
   bg: (typeof window !== 'undefined' && window.__roundsBg) || 'med',     /* background art: 'med' | 'cs' */
   quoteIx: 0,
@@ -21,7 +22,6 @@ export const ui = {
   /* the Spotify view: home | playlist | album | artist | queue | search, and the filter inside a list */
   spotify: { pane: 'home', playlistId: null, albumId: null, artistId: null, q: '', filter: '' },
 };
-ORDER.forEach((t) => { ui.types[t] = true; });
 
 try {
   const saved = JSON.parse(localStorage.getItem(KEY) || '{}');

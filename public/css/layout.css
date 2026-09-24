@@ -243,3 +243,33 @@ button{cursor:pointer}
 #viewRoot.fixed{overflow:hidden;display:flex;flex-direction:column}
 .drape{position:absolute;right:6px;top:-10px;width:270px;max-width:46%;height:auto;color:var(--accent);opacity:var(--orn-art);pointer-events:none;z-index:0}
 
+
+/* ── Open items: add and edit types ── */
+.navlabel .pen{margin-left:4px;color:var(--ink-3);font-size:11px}
+.navlabel .pen:hover{color:var(--accent)}
+.navlabel button + .pen{margin-left:6px}
+.typerow{display:flex;align-items:center;gap:5px;padding:3px 4px 3px 2px;border-radius:7px}
+.typerow:hover{background:var(--panel-2)}
+.typerow .grip{border:0;background:transparent;color:var(--ink-3);padding:3px 2px;width:20px;height:24px;flex:none;cursor:grab;touch-action:none;border-radius:5px}
+.typerow .grip svg{width:14px;height:14px;display:block;margin:auto}
+.typerow .grip:hover,.typerow .grip:focus-visible{color:var(--accent)}
+.typerow.dragging{background:var(--panel);box-shadow:var(--shadow-1);position:relative;z-index:1}
+.typerow.dragging .grip{cursor:grabbing}
+.typerow .pip{width:12px;height:12px;border-radius:50%;border:0;padding:0;flex:none;background:var(--c)}
+.typerow input{flex:1;min-width:0;font-size:12.5px;padding:3px 6px;border:1px solid var(--line);border-radius:6px;background:var(--panel);color:var(--ink)}
+.typerow .eye{border:0;background:transparent;color:var(--ink-3);padding:2px;width:22px;height:22px;flex:none}
+.typerow .eye svg{width:16px;height:16px}
+.typerow .eye[aria-pressed="false"]{opacity:.4}
+.typerow .del{border:0;background:transparent;color:var(--ink-3);font-size:11px;width:18px;padding:0;flex:none}
+.typerow .del:hover{color:var(--crit)}
+.typerow .inuse{width:18px;flex:none;text-align:center;font-size:10px;color:var(--ink-3);font-variant-numeric:tabular-nums}
+.typerow.off input{color:var(--ink-3);text-decoration:line-through}
+.typerow.off .pip{background:transparent;box-shadow:inset 0 0 0 1.5px var(--c)}
+.typenote{font-size:10.5px;color:var(--ink-3);padding:4px 6px 2px;line-height:1.35}
+.typeform{display:flex;flex-direction:column;gap:7px;margin-top:4px;padding:8px;border:1px dashed var(--line);border-radius:9px}
+.typeform input{font-size:12.5px;padding:5px 7px;border:1px solid var(--line);border-radius:6px;background:var(--panel);color:var(--ink)}
+.typeform .swatchrow{gap:5px}
+.typeform .swatch{width:19px;height:19px;border-radius:6px}
+.typeform .typenote{padding:0}
+.typeform .acts{display:flex;gap:6px;justify-content:flex-end}
+.typeform .acts .btn{padding:4px 10px;font-size:12px}

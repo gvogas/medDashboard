@@ -4,6 +4,9 @@ import { data, course } from './store.js';
 import { ui } from './state.js';
 import { tmeta, occurrences } from './model.js';
 
+/** A type filter is on unless it was switched off; new types start on. */
+export const typeOn = (t) => ui.types[t] !== false;
+
 export function matchSearch(it) {
   if (!ui.search) return true;
   const c = course(it.courseId);
@@ -12,7 +15,7 @@ export function matchSearch(it) {
 }
 
 export function passFilters(it) {
-  return ui.types[it.type] && (ui.course === 'all' || it.courseId === ui.course) && matchSearch(it);
+  return typeOn(it.type) && (ui.course === 'all' || it.courseId === ui.course) && matchSearch(it);
 }
 
 export function instances(from, to) {

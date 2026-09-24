@@ -3,7 +3,7 @@
 
 import { data, course, saveCourse, saveItem, saveProfile } from '../store.js';
 import { ui } from '../state.js';
-import { TYPES, ORDER, normalizeCourse, normalizeItem } from '../model.js';
+import { typeList, normalizeCourse, normalizeItem } from '../model.js';
 import { DOW } from '../dates.js';
 import { esc } from '../dom.js';
 import { parseIcs } from '../importers/ics.js';
@@ -74,8 +74,8 @@ export function renderImport() {
 
 function itemRow({ it, i }) {
   const r = it.row;
-  const types = ORDER.filter((t) => t !== 'project' || ui.bg === 'cs' || r.type === 'project')
-    .map((t) => '<option value="' + t + '"' + (t === r.type ? ' selected' : '') + '>' + TYPES[t].label + '</option>').join('');
+  const types = typeList(ui.bg, data.items).filter((t) => t.id === r.type || !t.hidden)
+    .map((t) => '<option value="' + t.id + '"' + (t.id === r.type ? ' selected' : '') + '>' + esc(t.label) + '</option>').join('');
   return '<div class="imp-row' + (it.duplicate ? ' dup' : '') + '"><input type="checkbox" data-imp-i="' + i + '"' + (it.include ? ' checked' : '') + (r.date ? '' : ' disabled') + ' aria-label="Import ' + esc(r.title) + '">'
     + '<select data-imp-type="' + i + '" aria-label="Type">' + types + '</select>'
     + '<span class="imp-title">' + esc(r.title) + (it.duplicate ? ' <em>already there</em>' : '') + '</span>'

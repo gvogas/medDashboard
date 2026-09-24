@@ -14,7 +14,7 @@ const notify = (evt) => { for (const fn of listeners) fn(evt); };
 export function subscribe(fn) { listeners.add(fn); return () => listeners.delete(fn); }
 export const course = (id) => data.courses.find((r) => r.id === id) || null;
 export const item = (id) => data.items.find((r) => r.id === id) || null;
-const profile = (p) => ({ ...p, coat: { name: '', role: '', color: DEFAULT_COAT, ...p.coat }, revision: p.revision || 0 });
+const profile = (p) => ({ ...p, types: Array.isArray(p.types) ? p.types : [], coat: { name: '', role: '', color: DEFAULT_COAT, ...p.coat }, revision: p.revision || 0 });
 const rowStore = (key) => key === 'profile' ? 'meta' : key.split(':')[0];
 const rowId = (key) => key === 'profile' ? 'profile' : key.slice(key.indexOf(':') + 1);
 const wrap = (key, row) => key === 'profile' ? { key: 'profile', value: row } : row;
@@ -140,7 +140,7 @@ export function saveProfile(patch) {
   return mutate(async (a) => {
     const p = (await a('meta').get('profile')).value;
     if (copy.coat) Object.assign(p.coat, copy.coat);
-    for (const key of ['displayName', 'theme', 'bg', 'termStart']) if (key in copy) p[key] = copy[key];
+    for (const key of ['displayName', 'theme', 'bg', 'termStart', 'types']) if (key in copy) p[key] = copy[key];
     await a('meta').put(wrap('profile', p));
     await queue(a, 'profile', 'put', p);
   });

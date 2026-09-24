@@ -1,26 +1,86 @@
 import { setHTML } from '../dom.js';
 import { data } from '../store.js';
 import { ui } from '../state.js';
-import { ORDER, tmeta, isOpen, typeShown } from '../model.js';
-import { activeCourses } from '../query.js';
+import { typeList, isOpen, TYPE_COLOURS, TYPE_KINDS, MAX_CUSTOM_TYPES } from '../model.js';
+import { activeCourses, typeOn } from '../query.js';
 import { esc, $ } from '../dom.js';
 
-export function renderSidebar() {
-  const counts = {};
-  ORDER.forEach((t) => { counts[t] = 0; });
+const EYE = '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M2 10s3-5.5 8-5.5S18 10 18 10s-3 5.5-8 5.5S2 10 2 10z"/><circle cx="10" cy="10" r="2.4"/></svg>';
+const GRIP = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><path d="M3 4.5h10M3 8h10M3 11.5h10"/></svg>';
+const KIND_NOTE = {
+  todo: 'To do, then done, like Tasks.',
+  event: 'Scheduled, attended or missed, like Labs.',
+  graded: 'Open, submitted, graded, with a weight, like Assignments.',
+};
+
+/* Normal: one filter button per shown type. Editing: every type, with order, colour, name, hide and delete. */
+function typeNav() {
+  const types = typeList(ui.bg, data.items), counts = {}, used = {};
   data.items.forEach((it) => {
+    used[it.type] = (used[it.type] || 0) + 1;
     if (ui.course !== 'all' && it.courseId !== ui.course) return;
-    if (it.recur === 'weekly') { counts[it.type]++; return; }
-    if (isOpen(it)) counts[it.type]++;
+    if (it.recur === 'weekly' || isOpen(it)) counts[it.type] = (counts[it.type] || 0) + 1;
   });
-  let html = '<div class="navlabel">Open items</div>';
-  ORDER.forEach((t) => {
-    if (!typeShown(t, ui.bg, data.items)) return;
-    const m = tmeta(t);
-    html += '<button class="nav' + (ui.types[t] ? '' : ' dim') + '" type="button" data-type="' + t + '" aria-pressed="' + (ui.types[t] ? 'true' : 'false') + '" data-accent="' + m.color + '">'
-      + '<i class="pip"></i><span class="lbl">' + esc(m.plural) + '</span><span class="ct">' + counts[t] + '</span></button>';
+  const customs = types.filter((t) => t.custom).length;
+  let html = '<div class="navlabel">Open items'
+    + (ui.typeEdit ? '<button type="button" data-typeedit="0">Done</button>'
+      : (customs < MAX_CUSTOM_TYPES ? '<button type="button" data-typeadd="1">+ Add</button>' : '')
+        + '<button type="button" class="pen" data-typeedit="1" aria-label="Edit item types" title="Rename, recolour, reorder or hide">✎</button>')
+    + '</div>';
+
+  if (ui.typeEdit) {
+    types.forEach((t) => {
+      const n = used[t.id] || 0;
+      html += '<div class="typerow' + (t.hidden ? ' off' : '') + '" data-accent="' + t.color + '">'
+        + '<button type="button" class="grip" data-typegrip="' + t.id + '" aria-label="Reorder ' + esc(t.plural) + '. Drag, or use the up and down arrow keys" title="Drag to reorder">' + GRIP + '</button>'
+        + '<button type="button" class="pip" data-typecolour="' + t.id + '" aria-label="Change colour of ' + esc(t.plural) + '" title="Next colour"></button>'
+        + '<input type="text" data-typelabel="' + t.id + '" value="' + esc(t.label) + '" maxlength="24" aria-label="Name">'
+        + '<button type="button" class="eye" data-typehide="' + t.id + '" aria-pressed="' + !t.hidden + '" aria-label="' + (t.hidden ? 'Show ' : 'Hide ') + esc(t.plural) + '" title="' + (t.hidden ? 'Hidden. Click to show' : 'Shown. Click to hide') + '">' + EYE + '</button>'
+        + (t.custom
+          ? (n ? '<span class="inuse" title="' + n + (n === 1 ? ' item uses' : ' items use') + ' it. Hide it instead">' + n + '</span>'
+            : '<button type="button" class="del" data-typedel="' + t.id + '" aria-label="Delete ' + esc(t.plural) + '">✕</button>')
+          : '<span class="inuse"></span>')
+        + '</div>';
+    });
+    return html + '<span class="typenote">Hidden types leave the sidebar and the new-item list; their items stay.</span>';
+  }
+
+  types.forEach((t) => {
+    if (t.hidden) return;
+    const on = typeOn(t.id);
+    html += '<button class="nav' + (on ? '' : ' dim') + '" type="button" data-type="' + t.id + '" aria-pressed="' + on + '" data-accent="' + t.color + '">'
+      + '<i class="pip"></i><span class="lbl">' + esc(t.plural) + '</span><span class="ct">' + (counts[t.id] || 0) + '</span></button>';
   });
-  setHTML($('typeNav'), html);
+
+  const a = ui.typeAdd;
+  if (a) {
+    html += '<div class="typeform">'
+      + '<input type="text" id="typeName" data-typename="1" value="' + esc(a.label) + '" maxlength="24" placeholder="Name, e.g. Quiz" aria-label="New type name">'
+      + '<span class="swatchrow">' + TYPE_COLOURS.map((c) =>
+          '<button class="swatch" type="button" data-typeaddcolour="' + c + '" data-accent="' + c + '" aria-pressed="' + (c === a.color) + '" aria-label="Colour ' + c + '"></button>').join('') + '</span>'
+      + '<div class="seg">' + TYPE_KINDS.map(([k, label]) =>
+          '<button type="button" data-typekind="' + k + '" aria-pressed="' + (k === a.kind) + '">' + label + '</button>').join('') + '</div>'
+      + '<span class="typenote">' + KIND_NOTE[a.kind] + '</span>'
+      + '<span class="acts"><button class="btn ghost" type="button" data-typeadd="0">Cancel</button>'
+      + '<button class="btn" type="button" data-typesave="1"' + (a.label.trim() ? '' : ' disabled') + '>Add type</button></span>'
+      + '</div>';
+  }
+  return html;
+}
+
+/** force: the type editor's own changes; otherwise a redraw leaves the list alone while someone types in it. */
+export function renderSidebar(force = false) {
+  const nav = $('typeNav');
+  const active = nav.contains(document.activeElement) ? document.activeElement : null;
+  if (!force && active?.tagName === 'INPUT') return drawRest();
+  /* a redraw keeps the keyboard on the same control, say the handle being moved with the arrow keys */
+  const key = active && Object.keys(active.dataset).find((k) => k.startsWith('type'));
+  setHTML(nav, typeNav());
+  if (key) nav.querySelector('[data-' + key + '="' + active.dataset[key] + '"]')?.focus();
+  drawRest();
+}
+
+function drawRest() {
 
   let ch = '<div class="navlabel">Courses<button type="button" data-newcourse="1">+ Add</button></div>'
     + '<button class="nav" type="button" data-course="all" aria-pressed="' + (ui.course === 'all' ? 'true' : 'false') + '"><span class="lbl">All courses</span></button>';

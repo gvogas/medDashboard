@@ -7,6 +7,10 @@ import { HttpError } from './http.js';
 const COLOURS = ['#E4749B', '#8B5CC7', '#17B3AE', '#79B6EA', '#BCA6E6'];
 export const TYPES = ['exam', 'assignment', 'lab', 'tutoring', 'office', 'task', 'project'];
 const STATUSES = ['todo', 'submitted', 'graded', 'done', 'missed'];
+// Custom item types: an id, and the swatches and behaviours a type can have.
+const CUSTOM_TYPE = /^c-[a-z0-9]{1,12}$/;
+export const TYPE_COLOURS = ['#C0392B', '#B77505', '#1E628F', '#5A46A8', '#4C7370', '#0E7C74', '#C2571A', '#B03A7A', '#3F7A2E', '#6B5B45'];
+const TYPE_KINDS = ['todo', 'event', 'graded'];
 export const KINDS = ['Lecture', 'Lab', 'Seminar', 'Tutorial', 'PBL', 'Clinical'];
 const THEMES = ['light', 'dark', 'system'];
 const BACKGROUNDS = ['med', 'cs'];
@@ -89,6 +93,39 @@ export function validateId(id) {
   return id;
 }
 
+function itemType(v, field) {
+  if (typeof v !== 'string' || !(TYPES.includes(v) || CUSTOM_TYPE.test(v))) fail(field);
+  return v;
+}
+
+/* The type list: built-ins may be relabelled, recoloured or hidden; custom types
+ * also need a kind. Order in the array is the order in the sidebar. */
+function typeEntry(t, f) {
+  const custom = CUSTOM_TYPE.test(t.id);
+  if (!custom && !TYPES.includes(t.id)) fail(`${f}.id`);
+  const out = { id: t.id };
+  const label = str(t.label ?? '', `${f}.label`, 24).trim();
+  if (label) out.label = label;
+  else if (custom) fail(`${f}.label`);
+  if (t.color !== undefined && t.color !== null) out.color = oneOf(t.color, `${f}.color`, TYPE_COLOURS);
+  else if (custom) fail(`${f}.color`);
+  if (custom) out.kind = oneOf(t.kind, `${f}.kind`, TYPE_KINDS);
+  // Left out, a built-in keeps its default (Projects follow the background).
+  if (t.hidden !== undefined) out.hidden = bool(t.hidden, `${f}.hidden`);
+  return out;
+}
+
+function typeList(v) {
+  const out = list(v, 'types', 20, typeEntry);
+  const seen = new Set();
+  for (const [i, t] of out.entries()) {
+    if (seen.has(t.id)) fail(`types[${i}].id`);
+    seen.add(t.id);
+  }
+  if (out.filter((t) => t.kind).length > 12) fail('types');
+  return out;
+}
+
 export function validateProfile(body) {
   obj(body, 'body');
   const coat = obj(body.coat, 'coat');
@@ -101,6 +138,8 @@ export function validateProfile(body) {
     // Older clients do not send a background; they keep Med.
     bg: oneOf(body.bg ?? 'med', 'bg', BACKGROUNDS),
     termStart: optDate(body.termStart, 'termStart'),
+    // Older clients do not send types; the stored list is kept (null here).
+    types: body.types === undefined ? null : typeList(body.types),
   };
 }
 
@@ -144,7 +183,7 @@ function linkEntry(l, f) {
 export function validateItem(body) {
   obj(body, 'body');
   const out = {
-    type: oneOf(body.type, 'type', TYPES),
+    type: itemType(body.type, 'type'),
     title: str(body.title, 'title', 140, 1),
     courseId: optStr(body.courseId, 'courseId', 40) || null,
     date: date(body.date, 'date'),

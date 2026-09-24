@@ -16,6 +16,7 @@ export function openSettings(focus) {
   resetDrawerState();
   ui.settings = true;
   ui.focusField = focus || null;
+  if (TAB_OF[focus]) ui.settingsTab = TAB_OF[focus];
   renderSettings();
 }
 
@@ -117,85 +118,115 @@ function badgeGroup(p, coat) {
     + '<span class="note">The pattern and barcode on the badge are made from your username.</span></div>';
 }
 
-export function renderSettings() {
-  const p = data.profile, coat = p.coat, qs = data.quotes || [];
+const TABS = [['you', 'You'], ['study', 'Study'], ['spotify', 'Spotify'], ['account', 'Account']];
+/* Where a deep link lands: the field or group to focus, and the tab it lives on. */
+const TAB_OF = { 'o-name': 'you', qText: 'you', importGrp: 'study', spotifyGrp: 'spotify' };
 
-  const head = '<div class="dhead"><span class="kind">Settings</span>'
-    + '<span data-layout="f7add123">saved as you type</span>'
-    + '<button class="icon-btn" type="button" data-act="close" aria-label="Close">✕</button></div>';
+/* Saved copies and sync trouble live on the Account tab, so the tab itself says so. */
+function accountFlag() {
+  if (conflicts.length) return '<i class="count">' + conflicts.length + '</i>';
+  return status.state === 'error' ? '<i class="dot" aria-label="sync problem"></i>' : '';
+}
 
+function tabStrip() {
+  return '<div class="seg settabs" role="tablist" aria-label="Settings sections">'
+    + TABS.map(([id, label]) =>
+        '<button type="button" role="tab" data-settab="' + id + '"' + (id === 'account' ? ' id="setTabAccount"' : '')
+          + ' aria-pressed="' + (ui.settingsTab === id) + '" aria-selected="' + (ui.settingsTab === id) + '">'
+          + label + (id === 'account' ? accountFlag() : '') + '</button>').join('')
+    + '</div>';
+}
+
+function youTab(p, coat) {
+  const qs = data.quotes || [];
   const themes = [
     ['light', 'Light', '#EEF4F3', '#FFFFFF', '#0E7C74'],
     ['dark', 'Dark', '#0A1214', '#111D1E', '#3FBFB2'],
     ['system', 'System', '#EEF4F3', '#0A1214', '#3FBFB2'],
   ];
-  let body = '<div class="dbody">'
-    + '<div class="setgrp"><h4>Appearance<em>' + esc(themeLabel()) + '</em></h4><div class="themeseg">'
+  let html = '<div class="setgrp"><h4>Look<em>' + esc(themeLabel()) + '</em></h4><div class="themeseg">'
     + themes.map((t) =>
         '<button type="button" data-themeset="' + t[0] + '" aria-pressed="' + (ui.theme === t[0] ? 'true' : 'false') + '">'
           + '<span class="sw"><i data-swatch="' + t[2] + '"></i><i data-swatch="' + t[3] + '"></i><i data-swatch="' + t[4] + '"></i></span>'
           + t[1] + '</button>').join('')
-    + '</div></div>'
-
-    + '<div class="setgrp"><h4>Background<em>' + (ui.bg === 'cs' ? 'computer science' : 'medicine') + '</em></h4><div class="bgseg">'
+    + '</div><div class="bgseg">'
     + [['med', 'Med', 'Helices, rings and a lipid tail'], ['cs', 'CS', 'Circuits, trees and code']].map((b) =>
         '<button type="button" data-bgset="' + b[0] + '" aria-pressed="' + (ui.bg === b[0] ? 'true' : 'false') + '">'
           + '<span class="bgthumb" data-thumb="' + b[0] + '" aria-hidden="true"></span><b>' + b[1] + '</b><span>' + b[2] + '</span></button>').join('')
-    + '</div><span class="note">CS swaps the lab coat for an ID badge and adds Projects to your item types.</span></div>'
+    + '</div><span class="note">CS swaps the coat for an ID badge and adds Projects.</span></div>'
 
     + (ui.bg === 'cs' ? badgeGroup(p, coat) : coatGroup(p, coat))
 
     + '<div class="setgrp"><h4>Quotes<em>' + qs.length + ' saved</em></h4>'
-    + '<span class="note">One sits in the tile beside your stats. Click it there for the next one.</span>'
     + '<div class="qlist">';
-  if (!qs.length) body += '<span class="note">No quotes yet — the tile stays clear.</span>';
+  if (!qs.length) html += '<span class="note">No quotes yet — the tile stays clear.</span>';
   qs.forEach((q) => {
-    body += '<div class="qrow"><div><div class="qtext">“' + esc(q.text) + '”</div>'
+    html += '<div class="qrow"><div><div class="qtext">“' + esc(q.text) + '”</div>'
       + (q.source ? '<div class="qsrc">— ' + esc(q.source) + '</div>' : '')
       + '</div><button class="x" type="button" data-qx="' + esc(q.id) + '" aria-label="Remove quote">✕</button></div>';
   });
-  body += '</div>'
+  return html + '</div>'
     + '<div class="addline" data-layout="4fb706c9">'
     + '<input type="text" id="qText" placeholder="Quote — press Enter to add" aria-label="Quote" maxlength="300">'
     + '<span data-layout="69374f35"><input type="text" id="qSrc" placeholder="Who said it (optional)" aria-label="Source" maxlength="80">'
     + '<button class="btn ghost" type="button" data-act="addquote">Add</button></span></div></div>';
+}
 
-  // ── Spotify ──
-  body += '<div class="setgrp" id="spotifyGrp" tabindex="-1">' + spotifyGroup() + '</div>';
-
-  // ── study: spaced review ──
+function studyTab() {
   const rv = readSetting();
-  body += '<div class="setgrp"><h4>Study<em>' + (rv.on ? 'reviews on' : 'reviews off') + '</em></h4>'
+  return '<div class="setgrp"><h4>Reviews<em>' + (rv.on ? 'on' : 'off') + '</em></h4>'
     + '<label class="checkline"><input type="checkbox" id="reviewsOn" data-reviews' + (rv.on ? ' checked' : '') + '>'
     + '<span>Create review tasks after lectures</span></label>'
-    + '<span class="note">The day after each timetabled lecture a “Review 1/4” task appears. Ticking it schedules the next one: days 1, 3, 7 and 21. Set on this device only; starts from today.</span></div>';
+    + '<span class="note">Days 1, 3, 7 and 21 after each lecture. This device only, from today.</span></div>'
 
-  // ── import: .ics or CSV ──
-  body += '<div class="setgrp" id="importGrp" tabindex="-1"><h4>Import<em>.ics or CSV</em></h4>'
-    + '<span class="note">A calendar export from your school, or a spreadsheet saved as CSV with the columns <span class="mono">type,course,title,date,start,end,room,weight</span>. You will see everything before it is saved.</span>'
+    + '<div class="setgrp" id="importGrp" tabindex="-1"><h4>Import<em>.ics, CSV or outline</em></h4>'
     + '<span data-layout="ed524873"><label class="btn ghost filepick">Calendar or CSV…<input type="file" id="importFile" accept=".ics,.csv,.txt,text/calendar,text/csv"></label>'
     + '<label class="btn ghost filepick' + (ui.outlineBusy ? ' busy' : '') + '">' + (ui.outlineBusy ? 'Reading outline…' : 'Course outline…')
     + '<input type="file" id="outlineFile" accept=".pdf,.docx,.doc,.txt,.md,.html,.odt,application/pdf"' + (ui.outlineBusy ? ' disabled' : '') + '></label></span>'
-    + '<span class="note">A course outline (PDF or Word) is read by AI: the course, its weekly classes, and exams and assignments with dates and weights. Up to 10 a day.</span>'
+    + '<span class="note">You see everything before it is saved. Outlines are read by AI, up to 10 a day.</span>'
     + '<details class="imp-paste"><summary>Paste instead</summary>'
+    + '<span class="note">Calendar text, or CSV with the columns <span class="mono">type,course,title,date,start,end,room,weight</span>.</span>'
     + '<textarea id="importText" rows="4" placeholder="Paste calendar or CSV text" aria-label="Calendar or CSV text"></textarea>'
     + '<button class="btn ghost" type="button" data-act="import-paste">Preview</button></details>'
     + (ui.importNote ? '<span class="note' + (ui.importNote.error ? ' err' : '') + '">' + esc(ui.importNote.text) + '</span>' : '')
     + '</div>';
+}
 
-  // ── data: sync, import, account ──
-  body += '<div class="setgrp"><h4>Data<em>' + data.items.length + ' items · ' + data.courses.length + ' courses</em></h4>'
+function accountTab(p) {
+  let html = '<div class="setgrp"><h4>Data<em>' + data.items.length + ' items · ' + data.courses.length + ' courses</em></h4>'
     + '<span class="note" id="syncNote">' + esc(syncLine()) + '</span>'
-    + '<button class="btn ghost" type="button" data-act="export-data">Export data and saved copies</button>';
-  for (const copy of conflicts) {
-    body += '<details class="saved-copy"><summary>Saved copy: ' + esc(copy.body?.title || copy.body?.name || copy.body?.text || copy.key) + '</summary>'
-      + '<p>' + esc(copy.reason) + '</p>' + (copy.op === 'delete' ? '<p>Your saved action: delete this record.</p>' : '') + savedValues(copy.body)
-      + '<button class="btn ghost" type="button" data-act="conflict-restore" data-conflict="' + esc(copy.id) + '">Restore my edit</button> '
-      + '<button class="btn ghost" type="button" data-act="conflict-dismiss" data-conflict="' + esc(copy.id) + '">Discard saved copy</button></details>';
+    + '<span data-layout="ed524873"><button class="btn ghost" type="button" data-act="export-data">Export data and saved copies</button></span></div>';
+  if (conflicts.length) {
+    html += '<div class="setgrp"><h4>Saved copies<em>' + conflicts.length + '</em></h4>'
+      + '<span class="note">Edits the server turned down. Restore one to try again, or discard it.</span>';
+    for (const copy of conflicts) {
+      html += '<details class="saved-copy"><summary>' + esc(copy.body?.title || copy.body?.name || copy.body?.text || copy.key) + '</summary>'
+        + '<p>' + esc(copy.reason) + '</p>' + (copy.op === 'delete' ? '<p>Your saved action: delete this record.</p>' : '') + savedValues(copy.body)
+        + '<button class="btn ghost" type="button" data-act="conflict-restore" data-conflict="' + esc(copy.id) + '">Restore my edit</button> '
+        + '<button class="btn ghost" type="button" data-act="conflict-dismiss" data-conflict="' + esc(copy.id) + '">Discard saved copy</button></details>';
+    }
+    html += '</div>';
   }
-  body += '<span class="note">Signed in as <b>' + esc(p.username) + '</b>.</span>'
+  return html + '<div class="setgrp"><h4>Account<em>' + esc(p.username) + '</em></h4>'
     + '<span data-layout="ed524873"><button class="btn ghost" type="button" data-act="signout">Sign out</button>'
-    + '<button class="btn ghost" type="button" data-act="signout-all" title="Every phone and laptop signed in as you will need the password again">Sign out everywhere</button></span></div>'
+    + '<button class="btn ghost" type="button" data-act="signout-all" title="Every phone and laptop signed in as you will need the password again">Sign out everywhere</button></span></div>';
+}
+
+export function renderSettings() {
+  const p = data.profile, coat = p.coat;
+  if (!TABS.some(([id]) => id === ui.settingsTab)) ui.settingsTab = 'you';
+
+  const head = '<div class="dhead"><span class="kind">Settings</span>'
+    + '<span data-layout="f7add123">saved as you type</span>'
+    + '<button class="icon-btn" type="button" data-act="close" aria-label="Close">✕</button></div>'
+    + tabStrip();
+
+  const tab = ui.settingsTab;
+  const body = '<div class="dbody" role="tabpanel">'
+    + (tab === 'you' ? youTab(p, coat)
+      : tab === 'study' ? studyTab()
+      : tab === 'spotify' ? '<div class="setgrp" id="spotifyGrp" tabindex="-1">' + spotifyGroup() + '</div>'
+      : accountTab(p))
     + '</div>';
 
   const foot = '<div class="dfoot"><span class="hint">Rounds</span>'
@@ -212,4 +243,6 @@ export function renderSettings() {
 export function refreshSyncNote() {
   const n = $('syncNote');
   if (n) n.textContent = syncLine();
+  const t = $('setTabAccount');
+  if (t) setHTML(t, 'Account' + accountFlag());
 }

@@ -1,5 +1,6 @@
-// What the app knows about itself: the seven types, their status sets, the five
-// colours, and the derived predicates. Nothing here touches the DOM or storage.
+// What the app knows about itself: the seven built-in types and the person's own,
+// their status sets, the five colours, and the derived predicates. Nothing here
+// touches the DOM or storage; the type list is read through a getter main.js sets.
 
 import { diffDays, today, parse, addDays, iso } from './dates.js';
 
@@ -22,6 +23,86 @@ export const STATUS = {
   task:       [['todo', 'To do'],     ['done', 'Done']],
   project:    [['todo', 'In progress'], ['done', 'Shipped'],     ['missed', 'Dropped']],   /* milestones are the checklist */
 };
+/* Custom types behave like a built-in: its statuses, its weight field. */
+export const TYPE_KINDS = [['todo', 'To-do', 'task'], ['event', 'Event', 'lab'], ['graded', 'Graded', 'assignment']];
+export const TYPE_COLOURS = ['#C0392B', '#B77505', '#1E628F', '#5A46A8', '#4C7370', '#0E7C74', '#C2571A', '#B03A7A', '#3F7A2E', '#6B5B45'];
+export const MAX_CUSTOM_TYPES = 12;
+const CUSTOM_TYPE = /^c-[a-z0-9]{1,12}$/;
+const FALLBACK = { label: 'Item', plural: 'Items', color: '#4C7370' };   /* a custom type this device has not heard of yet */
+
+let prefsOf = () => [];
+/** main.js points this at the profile's type list, so every view reads the current one. */
+export function useTypePrefs(get) { prefsOf = get; }
+
+export function isTypeId(t) {
+  return !!TYPES[t] || CUSTOM_TYPE.test(t);
+}
+
+export function pluralOf(label) {
+  if (/iz$/i.test(label)) return label + 'zes';
+  if (/(s|x|z|ch|sh)$/i.test(label)) return label + 'es';
+  if (/[^aeiou]y$/i.test(label)) return label.slice(0, -1) + 'ies';
+  return label + 's';
+}
+
+/**
+ * Every type in sidebar order: { id, label, plural, color, kind, custom, hidden }.
+ * Built-ins come from TYPES with the person's changes on top; a built-in missing
+ * from the list keeps its default place. Projects are hidden on Med by default,
+ * unless one already exists.
+ */
+export function typeList(bg, items = []) {
+  const prefs = prefsOf() || [];
+  const byId = new Map(prefs.map((p) => [p.id, p]));
+  const ids = prefs.map((p) => p.id).filter((id) => isTypeId(id));
+  ORDER.forEach((id, i) => {
+    if (byId.has(id)) return;
+    const after = ORDER.slice(0, i).reverse().find((x) => ids.includes(x));
+    ids.splice(after ? ids.indexOf(after) + 1 : 0, 0, id);
+  });
+  return ids.map((id) => {
+    const p = byId.get(id) || {}, base = TYPES[id];
+    const label = p.label || (base ? base.label : 'Item');
+    return {
+      id, label,
+      plural: base && !p.label ? base.plural : pluralOf(label),
+      color: p.color || (base ? base.color : FALLBACK.color),
+      kind: base ? null : p.kind || 'todo',
+      custom: !base,
+      hiddenSet: p.hidden !== undefined,
+      hidden: p.hidden !== undefined ? !!p.hidden
+        : id === 'project' && bg !== 'cs' && !items.some((it) => it.type === 'project'),
+    };
+  });
+}
+
+/**
+ * The stored form of an edited list: every type in order, and for a built-in only
+ * what differs from its default, so Projects still follow the background.
+ */
+export function typePrefsFrom(list) {
+  return list.map((t) => {
+    const base = TYPES[t.id];
+    if (!base) return { id: t.id, label: t.label, color: t.color, kind: t.kind, hidden: !!t.hidden };
+    const out = { id: t.id };
+    if (t.label && t.label !== base.label) out.label = t.label;
+    if (t.color && t.color !== base.color) out.color = t.color;
+    if (t.hiddenSet) out.hidden = !!t.hidden;
+    return out;
+  });
+}
+
+/** The built-in a type behaves like: itself, or its kind's model. */
+export function baseOf(t) {
+  if (TYPES[t]) return t;
+  const kind = (prefsOf() || []).find((p) => p.id === t)?.kind;
+  return (TYPE_KINDS.find((k) => k[0] === kind) || TYPE_KINDS[0])[2];
+}
+
+export function statusesFor(t) {
+  return STATUS[baseOf(t)] || STATUS.task;
+}
+
 const COMPLETE = { done: 1, graded: 1, submitted: 1 };   /* light-pink states */
 const CLOSED = { done: 1, graded: 1, submitted: 1, missed: 1 };
 export const KINDS = ['Lecture', 'Lab', 'Seminar', 'Tutorial', 'PBL', 'Clinical'];
@@ -46,16 +127,18 @@ export function uid() {
   return Math.random().toString(36).slice(2, 9);
 }
 
-/** Projects belong to the CS background: offered there, and anywhere one already exists. */
+/** Offered in the sidebar and the type picker: not hidden. */
 export function typeShown(t, bg, items = []) {
-  return t !== 'project' || bg === 'cs' || items.some((it) => it.type === 'project');
+  const hit = typeList(bg, items).find((x) => x.id === t);
+  return !!hit && !hit.hidden;
 }
 
 export function tmeta(t) {
-  return TYPES[t] || TYPES.task;
+  const hit = typeList('cs').find((x) => x.id === t);
+  return hit || (CUSTOM_TYPE.test(t) ? FALLBACK : TYPES.task);
 }
 export function statusLabel(it) {
-  const list = STATUS[it.type] || STATUS.task;
+  const list = statusesFor(it.type);
   const hit = list.find((p) => p[0] === it.status);
   return (hit || list[0])[1];
 }
@@ -90,7 +173,7 @@ export function occurrences(it, from, to) {
 export function normalizeItem(raw) {
   return {
     id: raw.id || uid(),
-    type: TYPES[raw.type] ? raw.type : 'task',
+    type: isTypeId(raw.type) ? raw.type : 'task',
     title: raw.title || '',
     courseId: raw.courseId || raw.course || null,
     date: raw.date || today(),

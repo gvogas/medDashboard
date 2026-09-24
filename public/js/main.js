@@ -5,7 +5,8 @@ import * as store from './store.js';
 import { data, course } from './store.js';
 import * as sync from './sync.js';
 import { ui, rememberUi } from './state.js';
-import { ORDER, uid, isOpen, isComplete, normalizeItem } from './model.js';
+import { uid, isOpen, isComplete, normalizeItem, useTypePrefs, typeList, typePrefsFrom, TYPE_COLOURS, MAX_CUSTOM_TYPES, statusesFor } from './model.js';
+import { typeOn } from './query.js';
 import { iso, parse, addDays, today } from './dates.js';
 import { $, autoGrow } from './dom.js';
 import { render, renderView, renderHeader } from './views/render.js';
@@ -29,6 +30,87 @@ import { pdfText } from './pdftext.js';
 import { previewImport, previewOutline, renderImport, editImport, commitImport } from './views/drawer-import.js';
 
 /* ═════════ theme ═════════ */
+useTypePrefs(() => data.profile?.types || []);
+
+/* The Open items editor: every change saves the whole list to the profile. */
+async function saveTypes(list) {
+  await store.saveProfile({ types: typePrefsFrom(list) });
+  render();
+  renderSidebar(true);
+}
+
+function typesOnScreen() {
+  const list = typeList(ui.bg, data.items);
+  document.querySelectorAll('#typeNav [data-typelabel]').forEach((box) => {
+    const t = list.find((x) => x.id === box.dataset.typelabel), label = box.value.trim().slice(0, 24);
+    if (t && (label || !t.custom)) t.label = label;
+  });
+  return list;
+}
+
+/* Save a new order (ids top to bottom), then put the keyboard back on the handle. */
+async function reorderTypes(ids, focusId) {
+  const list = typesOnScreen();
+  list.sort((a, b) => ids.indexOf(a.id) - ids.indexOf(b.id));
+  await saveTypes(list);
+  if (focusId) document.querySelector('#typeNav [data-typegrip="' + focusId + '"]')?.focus();
+}
+
+const rowIds = () => [...document.querySelectorAll('#typeNav [data-typegrip]')].map((g) => g.dataset.typegrip);
+
+/* Drag a ≡ handle (listening on the document: moving the row would drop a pointer capture): the row moves among the others as the pointer passes their middles; drop saves. */
+function dragType(e, grip) {
+  const row = grip.closest('.typerow'), nav = $('typeNav'), before = rowIds().join();
+  e.preventDefault();
+  row.classList.add('dragging');
+  const move = (ev) => {
+    const others = [...nav.querySelectorAll('.typerow')].filter((r) => r !== row);
+    const next = others.find((r) => { const b = r.getBoundingClientRect(); return ev.clientY < b.top + b.height / 2; });
+    if (next) { if (row.nextElementSibling !== next) nav.insertBefore(row, next); }
+    else if (others.length) others[others.length - 1].after(row);
+  };
+  const drop = (ev) => {
+    if (ev.type === 'pointerup') move(ev);   /* where it was let go, even if no move arrived */
+    document.removeEventListener('pointermove', move);
+    document.removeEventListener('pointerup', drop);
+    document.removeEventListener('pointercancel', drop);
+    row.classList.remove('dragging');
+    const ids = rowIds();
+    if (ids.join() !== before) reorderTypes(ids);
+  };
+  document.addEventListener('pointermove', move);
+  document.addEventListener('pointerup', drop);
+  document.addEventListener('pointercancel', drop);
+}
+
+async function editTypes(el) {
+  const list = typesOnScreen(), i = list.findIndex((t) => t.id === (el.dataset.typecolour || el.dataset.typehide || el.dataset.typedel));
+  if (i < 0) return;
+  const t = list[i];
+  if (el.dataset.typecolour) {
+    t.color = TYPE_COLOURS[(TYPE_COLOURS.indexOf(t.color) + 1) % TYPE_COLOURS.length];
+  } else if (el.dataset.typehide) {
+    t.hidden = !t.hidden; t.hiddenSet = true;
+  } else if (el.dataset.typedel) {
+    if (!t.custom || data.items.some((it) => it.type === t.id)) return;
+    list.splice(i, 1);
+  }
+  await saveTypes(list);
+  /* keep the keyboard where it was after the redraw */
+  const again = document.querySelector('#typeNav [data-' + Object.keys(el.dataset).find((k) => k.startsWith('type')) + '="' + t.id + '"]');
+  if (again) again.focus();
+}
+
+async function addType() {
+  const a = ui.typeAdd, label = a?.label.trim();
+  if (!label) return;
+  const list = typeList(ui.bg, data.items);
+  if (list.filter((t) => t.custom).length >= MAX_CUSTOM_TYPES) return;
+  list.push({ id: 'c-' + uid(), label: label.slice(0, 24), color: a.color, kind: a.kind, custom: true, hidden: false });
+  ui.typeAdd = null;
+  await saveTypes(list);
+}
+
 function setTheme(choice, { persist = true } = {}) {
   ui.theme = choice;
   if (window.__roundsApplyTheme) window.__roundsApplyTheme(choice);
@@ -240,11 +322,24 @@ document.addEventListener('click', async (e) => {
     }
     return;
   }
+  if ((el = e.target.closest('[data-typeadd]'))) {
+    const used = typeList(ui.bg, data.items).map((t) => t.color);
+    ui.typeAdd = el.dataset.typeadd === '1' ? { label: '', color: TYPE_COLOURS.find((c) => !used.includes(c)) || TYPE_COLOURS[0], kind: 'todo' } : null;
+    ui.typeEdit = false;
+    renderSidebar(true);
+    if (ui.typeAdd) $('typeName').focus();
+    return;
+  }
+  if ((el = e.target.closest('[data-typeedit]'))) { ui.typeEdit = el.dataset.typeedit === '1'; ui.typeAdd = null; renderSidebar(true); return; }
+  if ((el = e.target.closest('[data-typeaddcolour]'))) { ui.typeAdd.color = el.dataset.typeaddcolour; renderSidebar(true); return; }
+  if ((el = e.target.closest('[data-typekind]'))) { ui.typeAdd.kind = el.dataset.typekind; renderSidebar(true); return; }
+  if (e.target.closest('[data-typesave]')) { await addType(); return; }
+  if ((el = e.target.closest('[data-typecolour], [data-typehide], [data-typedel]'))) { await editTypes(el); return; }
   if ((el = e.target.closest('[data-type]'))) {
-    const t = el.dataset.type, on = ORDER.filter((x) => ui.types[x]).length;
-    if (ui.types[t] && on === ORDER.length) ORDER.forEach((x) => { ui.types[x] = (x === t); });
-    else if (ui.types[t] && on === 1) ORDER.forEach((x) => { ui.types[x] = true; });
-    else ui.types[t] = !ui.types[t];
+    const all = typeList(ui.bg, data.items).map((x) => x.id), t = el.dataset.type, on = all.filter(typeOn).length;
+    if (typeOn(t) && on === all.length) all.forEach((x) => { ui.types[x] = (x === t); });
+    else if (typeOn(t) && on === 1) all.forEach((x) => { ui.types[x] = true; });
+    else ui.types[t] = !typeOn(t);
     render(); return;
   }
   if ((el = e.target.closest('[data-course]'))) { ui.course = el.dataset.course; render(); return; }
@@ -260,6 +355,7 @@ document.addEventListener('click', async (e) => {
   if (e.target.closest('#syncPill')) { sync.syncNow(); return; }
   if (e.target.closest('#setBtn')) { ui.settings ? closeDrawer() : openSettings(); return; }
   if ((el = e.target.closest('[data-setopen]'))) { openSettings('o-name'); return; }
+  if ((el = e.target.closest('[data-settab]'))) { ui.settingsTab = el.dataset.settab; renderSettings(); return; }
   if ((el = e.target.closest('[data-spotify]'))) {
     const act = el.dataset.spotify;
     if (act !== 'connect') web.activate();          /* inside the click, so the tab may make sound */
@@ -464,6 +560,12 @@ document.addEventListener('input', async (e) => {
   }
   if ('impM' in d || 'impI' in d || 'impType' in d || 'impWeek1' in d) { editImport(e.target); return; }
 
+  if ('typename' in d && ui.typeAdd) {
+    ui.typeAdd.label = e.target.value;
+    const b = document.querySelector('[data-typesave]');
+    if (b) b.disabled = !e.target.value.trim();
+    return;
+  }
   if ('spotVol' in d) { spotView.setVolume(+e.target.value); return; }
   if ('spotQ' in d) { spotView.typed(e.target.value); return; }
   if ('spotFilter' in d) { spotView.setFilter(e.target.value); return; }
@@ -517,6 +619,8 @@ document.addEventListener('input', async (e) => {
       it[d.f] = e.target.value;
       if (d.f === 'date' && it.recur === 'weekly') it.weekday = parse(it.date).getDay();
       if (d.f === 'type') autoTitle(it, it.courseId);
+      /* a status the new type does not have (Submitted on a Task) goes back to its first */
+      if (d.f === 'type' && !statusesFor(it.type).some((x) => x[0] === it.status)) setStatus(it, 'todo');
     }
     if (d.f === 'title') {
       autoGrow(e.target);
@@ -571,7 +675,22 @@ async function readOutlineFile(file) {
   }
 }
 
+document.addEventListener('pointerdown', (e) => {
+  const grip = e.target.closest?.('[data-typegrip]');
+  if (grip && e.button === 0) dragType(e, grip);
+});
+
 document.addEventListener('change', async (e) => {
+  const renamed = e.target.dataset?.typelabel;
+  if (renamed) {
+    const list = typesOnScreen(), t = list.find((x) => x.id === renamed);
+    const label = e.target.value.trim().slice(0, 24);
+    if (!t || (!label && t.custom)) { renderSidebar(true); return; }
+    t.label = label;                       /* empty on a built-in: back to its own name */
+    e.target.blur();
+    await saveTypes(list);
+    return;
+  }
   if (e.target.id === 'outlineFile' && e.target.files?.[0]) { readOutlineFile(e.target.files[0]); return; }
   if (e.target.id !== 'importFile' || !e.target.files?.[0]) return;
   const file = e.target.files[0];
@@ -582,6 +701,7 @@ document.addEventListener('change', async (e) => {
 
 document.addEventListener('keydown', async (e) => {
   if (e.key === 'Escape') {
+    if (e.target.closest?.('#typeNav')) { e.target.blur(); ui.typeAdd = null; ui.typeEdit = false; renderSidebar(true); return; }
     if (ui.view === 'spotify' && spotView.devicesOpen()) { spotView.closeDevices(); return; }
     if (ui.sel || ui.draft || ui.courseDraft || ui.settings) closeDrawer();
     return;
@@ -600,10 +720,21 @@ document.addEventListener('keydown', async (e) => {
       return;
     }
   }
+  if ((e.key === 'ArrowUp' || e.key === 'ArrowDown') && e.target.dataset?.typegrip) {
+    e.preventDefault();
+    const ids = rowIds(), i = ids.indexOf(e.target.dataset.typegrip), j = i + (e.key === 'ArrowUp' ? -1 : 1);
+    if (j < 0 || j >= ids.length) return;
+    [ids[i], ids[j]] = [ids[j], ids[i]];
+    await reorderTypes(ids, e.target.dataset.typegrip);
+    return;
+  }
   if (e.key === '/' && !/input|textarea|select/i.test(e.target.tagName)) {
     e.preventDefault(); $('search').focus(); return;
   }
   if (e.key !== 'Enter') return;
+
+  if (e.target.id === 'typeName') { await addType(); return; }
+  if (e.target.dataset?.typelabel) { e.target.blur(); return; }
 
   if (e.target.id === 'clAdd' && e.target.value.trim()) {
     const it = current(); if (!it) return;

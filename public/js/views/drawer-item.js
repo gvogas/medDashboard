@@ -1,6 +1,6 @@
 import { data, course, item, saveItem } from '../store.js';
 import { ui } from '../state.js';
-import { TYPES, ORDER, STATUS, tmeta, statusLabel, isOverdue, isOpen, uid, normalizeItem, typeShown } from '../model.js';
+import { typeList, statusesFor, baseOf, tmeta, statusLabel, isOverdue, isOpen, uid, normalizeItem } from '../model.js';
 import { parse, diffDays, today, hhmm, DOW } from '../dates.js';
 import { activeCourses } from '../query.js';
 import { esc, autoGrow } from '../dom.js';
@@ -47,8 +47,9 @@ export function renderItemDrawer(focusTitle) {
   const it = current();
   if (!it) { hideDrawer(); return; }
   const TODAY = today();
-  const isNew = !!ui.draft, m = tmeta(it.type), sts = STATUS[it.type] || STATUS.task;
-  const typeOpts = ORDER.filter((t) => t === it.type || typeShown(t, ui.bg, data.items)).map((t) => '<option value="' + t + '"' + (t === it.type ? ' selected' : '') + '>' + TYPES[t].label + '</option>').join('');
+  const isNew = !!ui.draft, m = tmeta(it.type), sts = statusesFor(it.type);
+  const typeOpts = typeList(ui.bg, data.items).filter((t) => t.id === it.type || !t.hidden)
+    .map((t) => '<option value="' + t.id + '"' + (t.id === it.type ? ' selected' : '') + '>' + esc(t.label) + '</option>').join('');
   const courseOpts = '<option value="">No course</option>' + activeCourses().map((c) =>
     '<option value="' + esc(c.id) + '"' + (c.id === it.courseId ? ' selected' : '') + '>' + esc(c.name) + '</option>').join('');
   const stOpts = sts.map((p) => '<option value="' + p[0] + '"' + (p[0] === it.status ? ' selected' : '') + '>' + p[1] + '</option>').join('');
@@ -84,7 +85,7 @@ export function renderItemDrawer(focusTitle) {
       + '<label for="f-start">Time</label><span class="pair"><input id="f-start" class="tp" type="text" inputmode="numeric" autocomplete="off" placeholder="--:--" data-f="start" value="' + esc(it.start || '') + '"><span>to</span><input class="tp" type="text" inputmode="numeric" autocomplete="off" placeholder="--:--" data-f="end" value="' + esc(it.end || '') + '" aria-label="End time"></span>'
       + '<label for="f-where">Room</label><input id="f-where" type="text" data-f="where" value="' + esc(it.where || '') + '" placeholder="Room, lab, platform" maxlength="80">'
       + '<label for="f-status">Status</label><select id="f-status" data-f="status">' + stOpts + '</select>'
-      + (GRADABLE.includes(it.type) ? '<label for="f-weight">Weight</label><input id="f-weight" type="number" min="0" max="100" step="any" data-f="weight" value="' + (typeof it.weight === 'number' ? it.weight : '') + '" placeholder="% of course">' : '')
+      + (GRADABLE.includes(baseOf(it.type)) ? '<label for="f-weight">Weight</label><input id="f-weight" type="number" min="0" max="100" step="any" data-f="weight" value="' + (typeof it.weight === 'number' ? it.weight : '') + '" placeholder="% of course">' : '')
       + (it.status === 'graded' ? '<label for="f-grade">Grade</label><input id="f-grade" type="number" min="0" max="100" data-f="grade" value="' + (typeof it.grade === 'number' ? it.grade : '') + '" placeholder="%">' : '')
       + ((it.type === 'office' || it.type === 'tutoring')
           ? '<label for="f-recur">Repeats</label><span class="pair"><input id="f-recur" type="checkbox" data-f="recur" ' + (it.recur === 'weekly' ? 'checked' : '') + ' data-layout="d5cb2920"><span>every week on ' + DOW[it.recur === 'weekly' ? it.weekday : parse(it.date).getDay()] + '</span></span>'
