@@ -1,4 +1,5 @@
 import path from 'node:path';
+import { availableParallelism } from 'node:os';
 import { defineConfig } from 'vitest/config';
 import { cloudflareTest, readD1Migrations } from '@cloudflare/vitest-pool-workers';
 import { spotifyStub } from './test/spotify-stub.js';
@@ -26,6 +27,11 @@ export default defineConfig(async () => {
       }),
     ],
     test: {
+      // Each file starts a Workers runtime and migrates isolated D1 storage.
+      // Limit startup and password-hashing contention on busy developer machines.
+      maxWorkers: Math.min(4, availableParallelism()),
+      // Sign-in runs 100,000 PBKDF2 rounds; tests that sign in several users can pass 5 s under load.
+      testTimeout: 20_000,
       setupFiles: ['./test/apply-migrations.js'],
     },
   };
