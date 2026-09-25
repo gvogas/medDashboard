@@ -6,6 +6,8 @@ import { spotifyStub } from './test/spotify-stub.js';
 
 export default defineConfig(async () => {
   const migrations = await readD1Migrations(path.join(import.meta.dirname, 'migrations'));
+  // The schema before the move to a fresh database, for testing the copy out of it.
+  const legacy = await readD1Migrations(path.join(import.meta.dirname, 'test/fixtures/legacy-migrations'));
   return {
     plugins: [
       cloudflareTest({
@@ -14,10 +16,11 @@ export default defineConfig(async () => {
         // reading is tested with a fake passed to worker/outline.js directly.
         remoteBindings: false,
         miniflare: {
-          // A separate empty database exercises upgrades from an existing schema.
-          d1Databases: { MIGRATION_DB: 'rounds-migration-tests' },
+          // Two more empty databases: an old-schema source and a fresh target for the copy.
+          d1Databases: { MIGRATION_DB: 'rounds-migration-tests', MOVE_DB: 'rounds-move-tests' },
           bindings: {
             TEST_MIGRATIONS: migrations,
+            LEGACY_MIGRATIONS: legacy,
             SESSION_SECRET: 'test-secret-not-for-production',
             SPOTIFY_TOKEN_KEYS: JSON.stringify({ current: 'v1', keys: { v1: 'test-spotify-encryption-key-at-least-32-characters' } }),
             SPOTIFY_CLIENT_ID: 'test-client-id',

@@ -1,5 +1,5 @@
 // What the app knows about itself: the seven built-in types and the person's own,
-// their status sets, the five colours, and the derived predicates. Nothing here
+// their status sets, the course colours, and the derived predicates. Nothing here
 // touches the DOM or storage; the type list is read through a getter main.js sets.
 
 import { diffDays, today, parse, addDays, iso } from './dates.js';
@@ -107,14 +107,22 @@ const COMPLETE = { done: 1, graded: 1, submitted: 1 };   /* light-pink states */
 const CLOSED = { done: 1, graded: 1, submitted: 1, missed: 1 };
 export const KINDS = ['Lecture', 'Lab', 'Seminar', 'Tutorial', 'PBL', 'Clinical'];
 
-/* the five course colours, which are also the coat colours */
+/* the twelve course colours; the first five are also the coat colours */
 export const PALETTE = [
   { name: 'Pink',         hex: '#E4749B' },
   { name: 'Purple',       hex: '#8B5CC7' },
   { name: 'Turquoise',    hex: '#17B3AE' },
   { name: 'Baby blue',    hex: '#79B6EA' },
   { name: 'Little lilac', hex: '#BCA6E6' },
+  { name: 'Coral',        hex: '#F08A6C' },
+  { name: 'Sunflower',    hex: '#E8B33A' },
+  { name: 'Mint',         hex: '#4FBF8B' },
+  { name: 'Sage',         hex: '#8FAE86' },
+  { name: 'Royal blue',   hex: '#4F74D9' },
+  { name: 'Berry',        hex: '#B8457E' },
+  { name: 'Slate',        hex: '#7D8A99' },
 ];
+export const COAT_PALETTE = PALETTE.slice(0, 5);
 export const HEXES = PALETTE.map((p) => p.hex);
 export const DEFAULT_COAT = '#17B3AE';
 
@@ -125,6 +133,26 @@ export function colourName(hex) {
 
 export function uid() {
   return Math.random().toString(36).slice(2, 9);
+}
+
+/** Exams, and any type of the person's own called a quiz, test or exam. */
+export function isTest(t) {
+  return t === 'exam' || (!TYPES[t] && /\b(quiz|test|exam|midterm)/i.test(tmeta(t).label));
+}
+
+/**
+ * Where an exam or quiz sits when it falls on a day the course meets: the room of
+ * the class its time overlaps, else of that day's lecture, else of the day's first
+ * class with a room. '' when there is none.
+ */
+export function classRoom(it, c) {
+  if (!c || !isTest(it.type) || it.recur === 'weekly') return '';
+  const day = parse(it.date).getDay();
+  const held = (c.meetings || []).filter((m) => m.weekday === day && m.room)
+    .sort((a, b) => a.start.localeCompare(b.start));
+  const hit = held.find((m) => it.start && it.start >= m.start && it.start < m.end)
+    || held.find((m) => m.kind === 'Lecture') || held[0];
+  return hit ? hit.room : '';
 }
 
 /** Offered in the sidebar and the type picker: not hidden. */

@@ -12,7 +12,7 @@ if (args.some((arg) => !['--remote', '--json'].includes(arg))) {
 const remote = args.includes('--remote');
 const wrangler = fileURLToPath(new URL('../node_modules/wrangler/bin/wrangler.js', import.meta.url));
 const sql = [...databaseChecks.map((check) => check.sql), databaseCountsSql].join(';\n') + ';';
-const result = spawnSync(process.execPath, [wrangler, 'd1', 'execute', 'rounds', remote ? '--remote' : '--local', '--json', '--command', sql], {
+const result = spawnSync(process.execPath, [wrangler, 'd1', 'execute', 'DB', remote ? '--remote' : '--local', '--json', '--command', sql], {
   cwd: fileURLToPath(new URL('../', import.meta.url)), encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'],
   timeout: 120_000, maxBuffer: 4 * 1024 * 1024,
 });

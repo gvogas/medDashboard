@@ -4,7 +4,8 @@
 
 import { HttpError } from './http.js';
 
-const COLOURS = ['#E4749B', '#8B5CC7', '#17B3AE', '#79B6EA', '#BCA6E6'];
+const COLOURS = ['#E4749B', '#8B5CC7', '#17B3AE', '#79B6EA', '#BCA6E6'];   /* the coat's */
+const COURSE_COLOURS = [...COLOURS, '#F08A6C', '#E8B33A', '#4FBF8B', '#8FAE86', '#4F74D9', '#B8457E', '#7D8A99'];
 export const TYPES = ['exam', 'assignment', 'lab', 'tutoring', 'office', 'task', 'project'];
 const STATUSES = ['todo', 'submitted', 'graded', 'done', 'missed'];
 // Custom item types: an id, and the swatches and behaviours a type can have.
@@ -161,7 +162,7 @@ export function validateCourse(body) {
   return {
     code: str(body.code, 'code', 8, 1),
     name: str(body.name, 'name', 80, 1),
-    color: oneOf(body.color, 'color', COLOURS),
+    color: oneOf(body.color, 'color', COURSE_COLOURS),
     instructor: str(body.instructor ?? '', 'instructor', 60),
     term: str(body.term ?? '', 'term', 40),
     archived: bool(body.archived ?? false, 'archived'),

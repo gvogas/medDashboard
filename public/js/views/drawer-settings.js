@@ -1,7 +1,7 @@
 import { setHTML } from '../dom.js';
 import { data, conflicts } from '../store.js';
 import { ui } from '../state.js';
-import { PALETTE, colourName, DEFAULT_COAT } from '../model.js';
+import { COAT_PALETTE, colourName, DEFAULT_COAT } from '../model.js';
 import { esc, $ } from '../dom.js';
 import { showDrawer, resetDrawerState } from './drawer-base.js';
 import { TUCK_SVG } from './bits.js';
@@ -95,7 +95,7 @@ function coatGroup(p, coat) {
       + '<label for="o-name">Name</label><input id="o-name" type="text" data-of="name" value="' + esc(coat.name) + '" placeholder="' + esc(p.displayName || 'Your name') + '" maxlength="28">'
       + '<label for="o-role">Line under</label><input id="o-role" type="text" data-of="role" value="' + esc(coat.role) + '" placeholder="MS II · Cardio block" maxlength="34">'
       + '<label>Coat</label><span class="swatchrow">'
-      + PALETTE.map((pal) =>
+      + COAT_PALETTE.map((pal) =>
           '<button class="swatch" type="button" data-coatcolor="' + pal.hex + '" aria-pressed="' + (pal.hex === coatColour() ? 'true' : 'false')
             + '" data-accent="' + pal.hex + '" title="' + pal.name + '" aria-label="' + pal.name + ' coat"></button>').join('')
       + '</span>'

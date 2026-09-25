@@ -1,4 +1,4 @@
-import { applyD1Migrations, env } from 'cloudflare:test';
+import { env } from 'cloudflare:test';
 import { afterEach, describe, expect, it } from 'vitest';
 import { validateItem, validateProfile } from '../worker/validate.js';
 import { upsertRow } from '../worker/db.js';
@@ -62,25 +62,6 @@ describe('custom item types: storage', () => {
     expect(res.status).toBe(400);
     expect(await res.json()).toEqual({ error: 'invalid', field: 'types[0].kind' });
   });
-});
-
-it('upgrades to 0009 without changing existing items, their revisions or the change feed', async () => {
-  const db = env.MIGRATION_DB;
-  const index = env.TEST_MIGRATIONS.findIndex((m) => m.name.startsWith('0009_'));
-  expect(index).toBeGreaterThan(0);
-  await applyD1Migrations(db, env.TEST_MIGRATIONS.slice(0, index));
-  await db.prepare("INSERT INTO users (id, username, password_hash, created_at, updated_at) VALUES ('old', 'old', 'test-only', 100, 100)").run();
-  await upsertRow(db, 'items', 'old', 'p', normalizeItem({ id: 'p', title: 'Compiler', type: 'project', status: 'done', weight: 30, checklist: [{ id: 's', text: 'Parse', done: true }] }), 200);
-  const snapshot = async () => ({
-    items: (await db.prepare('SELECT * FROM items ORDER BY id').all()).results,
-    changes: (await db.prepare('SELECT * FROM changes ORDER BY seq').all()).results,
-  });
-  const before = await snapshot();
-  await applyD1Migrations(db, env.TEST_MIGRATIONS.slice(index, index + 1));
-  expect(await snapshot()).toEqual(before);
-  expect(await db.prepare("SELECT types FROM users WHERE id = 'old'").first()).toEqual({ types: '[]' });
-  await upsertRow(db, 'items', 'old', 'q', normalizeItem({ id: 'q', title: 'Quiz', type: 'c-quiz1' }), 300);
-  expect((await db.prepare("SELECT payload FROM changes WHERE row_id = 'q'").first()).payload).toContain('"type":"c-quiz1"');
 });
 
 describe('custom item types: the model', () => {

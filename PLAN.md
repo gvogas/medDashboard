@@ -24,7 +24,7 @@ that single file into a real site with real storage.
 
 The full schema, API, sync protocol and migration are in
 [`docs/DATA-MODEL.md`](docs/DATA-MODEL.md). The schema itself is
-[`migrations/0001_init.sql`](migrations/0001_init.sql).
+[`migrations/0001_schema.sql`](migrations/0001_schema.sql).
 
 ### Why not Cloudflare Access or Google
 
@@ -49,7 +49,7 @@ https://rounds.termanitor07.workers.dev. Only the backlog remains.
   the row. There is no sign-up page.
 
 ### 1 — Database — done
-- `wrangler d1 migrations apply rounds --local` then `--remote`.
+- `npm run db:local` then `npm run db:remote`.
 - The schema enforces ownership and shape: composite primary keys `(user_id, id)`,
   enums and lengths as `CHECK` constraints, dates as `GLOB` patterns, JSON columns
   checked with `json_valid` and capped with `json_array_length`. A client bug cannot

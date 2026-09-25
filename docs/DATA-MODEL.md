@@ -11,9 +11,11 @@ items            exams, assignments, labs, tutorials, office hours, tasks, proje
 quotes           the quote tile's list
 ```
 
-The schema is the ordered set of SQL files in [`migrations/`](../migrations/),
-currently through [`0007_database_structure.sql`](../migrations/0007_database_structure.sql).
-Apply migrations in order; the original migration alone is not the current schema.
+The schema is [`migrations/0001_schema.sql`](../migrations/0001_schema.sql), in one
+piece. In September 2026 the live data moved into a fresh database built from it
+(`node scripts/move-db.mjs --from <old> --to <new> --remote`), replacing ten
+migrations of patches; they are kept only as a test fixture in
+`test/fixtures/legacy-migrations/`. Later changes are new numbered files.
 
 ## Structure at a glance
 
@@ -84,13 +86,12 @@ Conventions used throughout:
 | `created_at`, `updated_at` | int | | |
 | `revision` | int | starts at 1 | Optimistic concurrency for profile edits. |
 | `pw_gen` | int | starts at 0 | Password/session generation; changing it revokes existing sessions. |
-| `imported_at` | int \| null | legacy | Reserved metadata; not exposed in the profile API. |
 
 A row is created by `npm run user:add`, with the defaults. The API
 exposes it as the **profile**, with the coat fields nested: `{coat: {name, role,
 color}, theme, termStart, ...}`.
 
-The five course colours, which are also the coat colours:
+The twelve course colours; the first five are also the coat colours:
 
 | Name | Hex |
 | --- | --- |
@@ -99,6 +100,13 @@ The five course colours, which are also the coat colours:
 | Turquoise | `#17B3AE` |
 | Baby blue | `#79B6EA` |
 | Little lilac | `#BCA6E6` |
+| Coral | `#F08A6C` |
+| Sunflower | `#E8B33A` |
+| Mint | `#4FBF8B` |
+| Sage | `#8FAE86` |
+| Royal blue | `#4F74D9` |
+| Berry | `#B8457E` |
+| Slate | `#7D8A99` |
 
 ---
 
@@ -109,7 +117,7 @@ The five course colours, which are also the coat colours:
 | `user_id`, `id` | text, PK | | |
 | `code` | text | 1–8 | `CVS`, `ANAT`. Shown in the table and month chips. |
 | `name` | text | 1–80 | `Cardiovascular Block`. |
-| `color` | text | one of the five | Drives every chip, pip and card for this course. |
+| `color` | text | one of the twelve | Drives every chip, pip and card for this course. |
 | `instructor` | text | ≤ 60 | `Dr. Alvarez`. |
 | `term` | text | ≤ 40 | `2026 Autumn`. Used later for archiving. |
 | `archived` | int 0/1 | | Hidden from the sidebar, kept for the record. |

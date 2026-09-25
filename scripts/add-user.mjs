@@ -93,7 +93,7 @@ if (remove) {
 const wranglerBin = fileURLToPath(new URL('../node_modules/wrangler/bin/wrangler.js', import.meta.url));
 function run(statement) {
   const result = spawnSync(
-    process.execPath, [wranglerBin, 'd1', 'execute', 'rounds', remote ? '--remote' : '--local', '--json', '--command', statement],
+    process.execPath, [wranglerBin, 'd1', 'execute', 'DB', remote ? '--remote' : '--local', '--json', '--command', statement],
     { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] },
   );
   try {

@@ -5,7 +5,7 @@ import * as store from './store.js';
 import { data, course } from './store.js';
 import * as sync from './sync.js';
 import { ui, rememberUi } from './state.js';
-import { uid, isOpen, isComplete, normalizeItem, shiftEnd, useTypePrefs, typeList, typePrefsFrom, TYPE_COLOURS, MAX_CUSTOM_TYPES, statusesFor } from './model.js';
+import { uid, isOpen, isComplete, normalizeItem, shiftEnd, classRoom, useTypePrefs, typeList, typePrefsFrom, TYPE_COLOURS, MAX_CUSTOM_TYPES, statusesFor } from './model.js';
 import { typeOn } from './query.js';
 import { iso, parse, addDays, today } from './dates.js';
 import { $, autoGrow, isTyping } from './dom.js';
@@ -631,6 +631,8 @@ document.addEventListener('input', async (e) => {
   }
   if (d.f) {                              /* item fields */
     const it = current(); if (!it) return;
+    const ROOMED = d.f === 'date' || d.f === 'courseId' || d.f === 'type' || d.f === 'start';
+    const roomWas = ROOMED ? classRoom(it, course(it.courseId)) : '';
     if (d.f === 'recur') {
       it.recur = e.target.checked ? 'weekly' : null;
       it.weekday = it.recur ? parse(it.date).getDay() : null;
@@ -662,6 +664,12 @@ document.addEventListener('input', async (e) => {
       if (d.f === 'type') autoTitle(it, it.courseId);
       /* a status the new type does not have (Submitted on a Task) goes back to its first */
       if (d.f === 'type' && !statusesFor(it.type).some((x) => x[0] === it.status)) setStatus(it, 'todo');
+    }
+    if (ROOMED) {
+      /* an exam or quiz on a class day is held in that class's room, unless one was typed */
+      if (!it.where || it.where === roomWas) it.where = classRoom(it, course(it.courseId));
+      const whereBox = drawer.querySelector('[data-f="where"]');
+      if (whereBox && whereBox.value !== it.where) whereBox.value = it.where;
     }
     if (d.f === 'title') {
       autoGrow(e.target);

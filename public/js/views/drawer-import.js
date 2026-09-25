@@ -3,7 +3,7 @@
 
 import { data, course, saveRows, saveProfile } from '../store.js';
 import { ui } from '../state.js';
-import { typeList, normalizeCourse, normalizeItem } from '../model.js';
+import { typeList, normalizeCourse, normalizeItem, classRoom } from '../model.js';
 import { DOW } from '../dates.js';
 import { esc } from '../dom.js';
 import { parseIcs } from '../importers/ics.js';
@@ -125,9 +125,12 @@ export async function commitImport() {
     }
     classes += add.length;
   }
+  const meets = new Map(rows.map((r) => [r.row.id, r.row]));
   for (const it of plan.items) {
     if (!it.include || !it.row.date) continue;
-    rows.push({ kind: 'items', row: normalizeItem(it.row) });
+    const row = normalizeItem(it.row);
+    if (!row.where) row.where = classRoom(row, meets.get(row.courseId) || course(row.courseId));
+    rows.push({ kind: 'items', row });
     items++;
   }
   if (rows.length) await saveRows(rows);
