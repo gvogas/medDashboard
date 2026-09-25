@@ -112,9 +112,13 @@ the time and phase, for example `24:13 · Study`. Push notifications are batch C
 Start opens the focus screen: the whole window shows only the timer and Spotify. The top
 bar, the views, the stats and the sidebar are hidden.
 
-- Left (top on a phone): the flip clock, the phase label, the round strip, and Pause,
-  Skip step and Stop & log. The screen's background takes a light wash of the phase
-  colour.
+- It is dark in both themes: a deep teal ground with a soft glow during Study, deep
+  plum during Break, cross-fading when the phase changes. Its colours are their own
+  tokens (`--fx-*`) so the rest of the app's light theme is untouched.
+- Top: **Leave focus** on the left, the course and item as a chip on the right.
+- Left (top on a phone): the phase label, the flip clock, the round strip with the time
+  left in the flow, then Skip step, a round Pause/Resume button in the phase colour, and
+  Stop & log, and under them "Next · Break 10 min".
 - Right (below on a phone): the Spotify view, drawn with `renderSpotifyInto()`, so
   playlists, search and the player all work without leaving. When Spotify is not
   connected it shows the Spotify view's own connect prompt.
