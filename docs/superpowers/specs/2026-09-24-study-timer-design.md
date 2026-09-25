@@ -112,8 +112,8 @@ the time and phase, for example `24:13 · Study`. Push notifications are batch C
 Start opens the focus screen: the whole window shows only the timer and Spotify. The top
 bar, the views, the stats and the sidebar are hidden.
 
-- It is dark in both themes: a deep teal ground with a soft glow during Study, deep
-  plum during Break, cross-fading when the phase changes. Its colours are their own
+- It is dark in both themes: a deep ground in the phase colour with a soft glow,
+  cross-fading when the phase changes (see Colours for each background). Its colours are their own
   tokens (`--fx-*`) so the rest of the app's light theme is untouched.
 - Top: **Leave focus** on the left, the course and item as a chip on the right.
 - Left (top on a phone): the phase label, the flip clock, the round strip with the time
@@ -164,9 +164,17 @@ the time left while a run is going.
 
 ### Colours
 
-`tokens.css` gains `--study`, `--study-soft`, `--study-ink`, `--study-card` and the
-same five for `--break`, in light and dark and for the CS background. Study derives
-from the theme accent (teal on Med, blue on CS); break is the existing pink family.
+`tokens.css` gains `--study`, `--study-soft`, `--study-ink`, `--study-card`,
+`--study-card-2` and the same five for `--break`, plus the focus screen's `--fx-*` set,
+in light and dark. The pair depends on the background:
+
+| Background | Study | Break |
+| --- | --- | --- |
+| Med | soft pink (`#C8577F` light, `#EFA3BE` dark, `#F5A8C3` focus) | soft purple (`#8B5CC7` light, `#BCA6E6` dark, `#C9B6F2` focus) |
+| CS | teal (`#0E7C74` light, `#3FBFB2` dark, `#5FD3C6` focus) | pink (`#C0577A` light, `#E28AA8` dark, `#F29BB8` focus) |
+
+On Med the focus screen's ground is a deep rose during Study and a deep violet during
+Break; on CS, deep teal and deep plum.
 The clock cards, phase label, Start button, top-bar dot, corner clock border and the
 strip all take the current phase's colour.
 
