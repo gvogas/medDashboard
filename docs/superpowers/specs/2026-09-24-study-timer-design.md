@@ -102,14 +102,36 @@ the time and phase, for example `24:13 · Study`. Push notifications are batch C
   counts; the remainder does not.
 - When the last step of the last round ends, the run stops and the session is saved.
 - A run with less than 1 minute of study saves nothing.
-- Editing the flow while a run is going changes future steps only. The current step
-  keeps its length.
+- The flow cannot be edited while a run is going; the editor is only on the Study tab,
+  which shows the focus screen during a run. Stop the run to change it.
 - Course is required to start; item is optional and lists that course's items that are
   not done.
 
+### Focus screen
+
+Start opens the focus screen: the whole window shows only the timer and Spotify. The top
+bar, the views, the stats and the sidebar are hidden.
+
+- Left (top on a phone): the flip clock, the phase label, the round strip, and Pause,
+  Skip step and Stop & log. The screen's background takes a light wash of the phase
+  colour.
+- Right (below on a phone): the Spotify view, drawn with `renderSpotifyInto()`, so
+  playlists, search and the player all work without leaving. When Spotify is not
+  connected it shows the Spotify view's own connect prompt.
+- Start also asks the browser for full screen and a screen wake lock, so a phone on the
+  desk stays on. Both are optional: if the browser refuses, the focus screen still
+  opens in the window.
+- It is a soft lock. A small **Leave focus** link opens the full app while the run keeps
+  going; the corner clock then shows, and tapping it returns to the focus screen.
+- When a new Study step begins and the person is outside the focus screen, the app goes
+  back to it, unless a drawer is open (an edit in progress is never thrown away).
+- The focus screen closes when the run is stopped or the flow finishes, landing on the
+  Study tab with the log.
+
 ### Study tab — `public/js/views/study.js`
 
-A fifth view after Spotify.
+A fifth view after Spotify. While a run is going, opening it shows the focus screen
+instead; what follows is the Study tab when no run is going.
 
 Left column:
 - The flip clock (`public/js/views/flipclock.js`): four digit cards, `MM:SS`, each card
@@ -131,9 +153,9 @@ Right column, the log for the current week (Monday to Sunday):
 
 ### Corner clock
 
-On every other view, while a run is going or paused, a small flip clock sits in the
-bottom-right corner (full width at the bottom on a phone) with the phase label. It takes
-the phase colour and opens the Study tab when tapped. The top bar's Study button shows
+After **Leave focus**, while a run is going or paused, a small flip clock sits in the
+bottom-right corner of every view (full width at the bottom on a phone) with the phase
+label. It takes the phase colour and returns to the focus screen when tapped. The top bar's Study button shows
 the time left while a run is going.
 
 ### Colours
@@ -151,7 +173,10 @@ An item with sessions shows "Studied 3h 20m" in its drawer, summed from its sess
 ## Tests
 
 - `timer.js`: step boundaries, pause and resume, skip mid-study, the last round ending,
-  a long gap (sleep) crossing several steps, flow edited mid-run.
+  a long gap (sleep) crossing several steps.
+- Focus screen, by hand in the browser: Start opens it, Leave focus and the corner clock
+  go out and back, a new Study step pulls you back but not with a drawer open, and it
+  still opens when full screen is refused.
 - Worker: session shape rejected with the field named, another user's session is 404,
   unauthenticated is 401, `study_flow` shape rejected, deleting a course or item
   unlinks its sessions.
