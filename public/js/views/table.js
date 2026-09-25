@@ -28,13 +28,13 @@ export function renderTable() {
   if (!rows.length) html += '<tr><td colspan="7"><div class="empty"><b>Nothing matches</b>Clear the search or turn a filter back on.</div></td></tr>';
   rows.forEach((it) => {
     const m = tmeta(it.type), c = course(it.courseId), d = parse(it.date);
-    html += '<tr data-id="' + esc(it.id) + '" class="' + (isComplete(it) ? 'complete' : '') + '">'
+    html += '<tr data-id="' + esc(it.id) + '" tabindex="0" class="' + (isComplete(it) ? 'complete' : '') + '">'
       + '<td><b data-layout="6e8bcfac">' + esc(it.title) + '</b>' + (it.checklist && it.checklist.length ? '<br>' + stepsHtml(it) : '') + '</td>'
       + '<td><span class="chip type" data-accent="' + m.color + '">' + esc(m.label) + '</span></td>'
-      + '<td>' + (c ? '<span class="course-tag" data-accent="' + c.color + '"><i></i>' + esc(c.code) + '</span>' : '<span data-layout="ae860f94">—</span>') + '</td>'
+      + '<td' + (c ? '' : ' class="none"') + '>' + (c ? '<span class="course-tag" data-accent="' + c.color + '"><i></i>' + esc(c.code) + '</span>' : '<span data-layout="ae860f94">—</span>') + '</td>'
       + '<td class="num mono">' + (it.recur === 'weekly' ? 'Weekly · ' + DOW[it.weekday] : DOW[d.getDay()] + ' ' + d.getDate() + ' ' + MON[d.getMonth()].slice(0, 3)) + '</td>'
-      + '<td class="num mono">' + (it.start ? hhmm(it.start) + (it.end ? '–' + hhmm(it.end) : '') : (it.end ? hhmm(it.end) : '—')) + '</td>'
-      + '<td class="num">' + esc(it.where || '—') + '</td>'
+      + '<td class="num mono' + (it.start || it.end ? '' : ' none') + '">' + (it.start ? hhmm(it.start) + (it.end ? '–' + hhmm(it.end) : '') : (it.end ? hhmm(it.end) : '—')) + '</td>'
+      + '<td class="num' + (it.where ? '' : ' none') + '">' + esc(it.where || '—') + '</td>'
       + '<td>' + statusChip(it) + '</td></tr>';
   });
   return html + '</tbody></table></div></div>';

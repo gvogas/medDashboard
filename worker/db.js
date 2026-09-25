@@ -51,7 +51,11 @@ export async function updateProfile(db, userId, p, now = Date.now(), revision) {
 // (JSON columns, booleans, the where/location rename).
 
 const jsonIn = (v) => JSON.stringify(v ?? []);
-const jsonOut = (v) => (typeof v === 'string' ? JSON.parse(v) : v ?? []);
+// Every JSON column is a list. One unreadable value must not fail a whole sync page.
+const jsonOut = (v) => {
+  if (typeof v !== 'string') return v ?? [];
+  try { return JSON.parse(v); } catch { return []; }
+};
 
 const TABLES = {
   courses: {
@@ -115,11 +119,20 @@ function upsertStmt(db, table, userId, id, fields, now, revision) {
     .bind(...values, revision, userId, id, ...courseBindings, revision);
 }
 
-/** The saved row in API shape, read back in the same statement. */
+/**
+ * The saved row in API shape, read back in the same statement. An item's course is
+ * checked by the statement's own guard; only a miss looks further, to tell a course
+ * that is not the user's (400) from a stale revision (409).
+ */
 export async function upsertRow(db, table, userId, id, fields, now = Date.now(), revision = 0) {
   const saved = await upsertStmt(db, table, userId, id, fields, now, revision).first();
-  if (!saved) throw new HttpError(409, { error: 'conflict', current: await getRow(db, table, userId, id) });
-  return rowToApi(table, saved);
+  if (saved) return rowToApi(table, saved);
+  const [current, course] = await db.batch([
+    db.prepare(`SELECT ${selectCols(table)} FROM ${table} WHERE user_id = ? AND id = ?`).bind(userId, id),
+    table === 'items' && fields.courseId ? courseStmt(db, userId, fields.courseId) : db.prepare('SELECT 1 AS x'),
+  ]);
+  if (!course.results.length) throw new HttpError(400, { error: 'invalid', field: 'courseId' });
+  throw new HttpError(409, { error: 'conflict', current: current.results[0] ? rowToApi(table, current.results[0]) : null });
 }
 
 /** Hard-delete rows soft-deleted before `before`. Items first, so course rows go last. */
@@ -135,9 +148,6 @@ export async function purgeTombstones(db, before) {
 
 /** Soft delete. Returns false if the row does not exist for this user. */
 export async function deleteRow(db, table, userId, id, now = Date.now(), revision = 0) {
-  const exists = await getRow(db, table, userId, id);
-  if (!exists) return false;
-  if (exists.deletedAt) return true;
   const stmts = [
     db.prepare(`UPDATE ${table} SET deleted_at = ?, updated_at = ?, revision = revision + 1 WHERE user_id = ? AND id = ? AND deleted_at IS NULL AND revision = ? RETURNING id`).bind(now, now, userId, id, revision),
   ];
@@ -147,14 +157,16 @@ export async function deleteRow(db, table, userId, id, now = Date.now(), revisio
     );
   }
   const results = await db.batch(stmts);
-  if (!results[0].results.length) throw new HttpError(409, { error: 'conflict', current: await getRow(db, table, userId, id) });
-  return true;
+  if (results[0].results.length) return true;
+  // A miss: no such row (404), already deleted (done), or a stale revision (409).
+  const current = await getRow(db, table, userId, id);
+  if (!current) return false;
+  if (current.deletedAt) return true;
+  throw new HttpError(409, { error: 'conflict', current });
 }
 
-export async function courseExists(db, userId, id) {
-  const r = await db.prepare('SELECT 1 AS x FROM courses WHERE user_id = ? AND id = ? AND deleted_at IS NULL').bind(userId, id).first();
-  return !!r;
-}
+const courseStmt = (db, userId, id) =>
+  db.prepare('SELECT 1 AS x FROM courses WHERE user_id = ? AND id = ? AND deleted_at IS NULL').bind(userId, id);
 
 /** A bounded page, ordered by commit sequence rather than wall-clock timestamps.
  * The metadata and page share a D1 batch transaction, including during pruning.

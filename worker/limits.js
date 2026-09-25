@@ -14,16 +14,23 @@ export function rateLimited(seconds, error = 'rate_limited') {
   return new HttpError(429, { error, retryAfter }, { 'retry-after': String(retryAfter) });
 }
 
-/** An atomic fixed window; rejected requests cannot extend it or increment it. */
-export async function claimLimit(db, key, limit, now = Date.now(), windowMs = WINDOW_MS) {
-  const row = await db.prepare(`
-    INSERT INTO request_limits (key, hits, reset_at) VALUES (?1, 1, ?2 + ?3)
+/**
+ * An atomic fixed window; rejected requests cannot extend it or increment it. `guard`
+ * is SQL that must hold for the hit to count at all, with its own bindings from ?5.
+ */
+function claimStmt(db, key, limit, now, windowMs, guard = 'true', ...guardArgs) {
+  return db.prepare(`
+    INSERT INTO request_limits (key, hits, reset_at) SELECT ?1, 1, ?2 + ?3 WHERE ${guard}
     ON CONFLICT (key) DO UPDATE SET
       hits = CASE WHEN reset_at <= ?2 THEN 1 ELSE hits + 1 END,
       reset_at = CASE WHEN reset_at <= ?2 THEN ?2 + ?3 ELSE reset_at END
     WHERE reset_at <= ?2 OR hits < ?4
     RETURNING reset_at
-  `).bind(key, now, windowMs, limit).first();
+  `).bind(key, now, windowMs, limit, ...guardArgs);
+}
+
+export async function claimLimit(db, key, limit, now = Date.now(), windowMs = WINDOW_MS) {
+  const row = await claimStmt(db, key, limit, now, windowMs).first();
   if (row) return 0;
   return Math.max(1, await cooldownRemaining(db, key, now));
 }
@@ -49,17 +56,31 @@ export async function limitLogin(request, env) {
   if (wait) throw rateLimited(wait, 'too_many_attempts');
 }
 
-export async function limitUser(request, env, userId) {
-  const wait = await claimLimit(env.DB, `api:${userId}`, API_LIMIT);
-  if (wait) throw rateLimited(wait);
+/**
+ * Check the session's generation and claim the user's windows in one D1 round trip.
+ * False when the user is gone or signed out everywhere (nothing is counted then);
+ * a 429 when a window is full.
+ */
+export async function limitUser(request, env, userId, gen, now = Date.now()) {
+  const db = env.DB;
   const path = new URL(request.url).pathname;
   // SDK token retrieval and disconnect remain available during a Spotify API cooldown.
   // The player poll is exempt too: it is the steady background read, and a second
-  // counter row per poll would double its D1 writes. The API limit above still bounds it.
-  if (path.startsWith('/api/spotify/') && !SPOTIFY_EXEMPT.includes(path) && !(request.method === 'GET' && path === '/api/spotify/player')) {
-    const spotifyWait = await claimLimit(env.DB, `spotify:${userId}`, SPOTIFY_LIMIT);
-    if (spotifyWait) throw rateLimited(spotifyWait);
-  }
+  // counter row per poll would double its D1 writes. The API limit still bounds it.
+  const spotify = path.startsWith('/api/spotify/') && !SPOTIFY_EXEMPT.includes(path) && !(request.method === 'GET' && path === '/api/spotify/player');
+  const keys = [`api:${userId}`, ...(spotify ? [`spotify:${userId}`] : [])];
+  const [user, api, spotifyClaim, windows] = await db.batch([
+    db.prepare('SELECT pw_gen FROM users WHERE id = ?').bind(userId),
+    claimStmt(db, keys[0], API_LIMIT, now, WINDOW_MS, 'EXISTS (SELECT 1 FROM users WHERE id = ?5 AND pw_gen = ?6)', userId, gen),
+    // Counted only when the API hit above was: changes() is that statement's row count.
+    spotify ? claimStmt(db, keys[1], SPOTIFY_LIMIT, now, WINDOW_MS, 'changes() > 0') : db.prepare('SELECT 1'),
+    db.prepare(`SELECT key, reset_at FROM request_limits WHERE key IN (${keys.map(() => '?').join(', ')})`).bind(...keys),
+  ]);
+  if (user.results[0]?.pw_gen !== gen) return false;
+  const wait = (key) => Math.max(1, Math.ceil(((windows.results.find((r) => r.key === key)?.reset_at || 0) - now) / 1000));
+  if (!api.results.length) throw rateLimited(wait(keys[0]));
+  if (spotify && !spotifyClaim.results.length) throw rateLimited(wait(keys[1]));
+  return true;
 }
 
 export async function limitOutline(env, userId) {

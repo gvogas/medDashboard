@@ -238,14 +238,29 @@ export function search(q, typed = false) {
   q = (q || '').trim();
   ui.spotify.q = q;
   if (!q) return;
-  if (typed && (!due('search') || busy.has('search'))) return;
+  if (typed && (!due('search') || busy.has('search'))) { catchUp(); return; }
   go('search', { q });
   if (cache.results && cache.results.q === q) { rerender(); return; }
+  lastAsked = q;
   load('search', async () => {
     const r = await api.spotifySearch(q);
     remember(r);
     cache.results = { q, ...r };
-  });
+  }).then(catchUp);
+}
+
+/* Text typed while a search is out, or while Spotify has asked us to wait, is searched
+   once the way is clear, so the list never stays on "Searching…" for it. */
+let lastAsked = null, catchUpTimer = null;
+function catchUp() {
+  clearTimeout(catchUpTimer);
+  if (busy.has('search')) return;   /* the search that is out calls this when it ends */
+  const q = ui.spotify.q;
+  if (!q || q === lastAsked || (cache.results && cache.results.q === q)) return;
+  catchUpTimer = setTimeout(() => {
+    /* someone who has moved on to an album or playlist is not pulled back to results */
+    if (ui.spotify.pane === 'search' && ui.spotify.q === q) search(q);
+  }, Math.max(0, (retryAt.search || 0) - Date.now()));
 }
 
 /** Search as the user types: after a pause, and only for two characters or more. */
@@ -617,6 +632,7 @@ export function renderSpotifyInto(root) {
   const box = document.activeElement && document.activeElement.closest && root.contains(document.activeElement)
     ? ['data-spot-q', 'data-spot-filter'].find((a) => document.activeElement.hasAttribute(a)) : null;
   const val = box ? document.activeElement.value : '', pos = box ? document.activeElement.selectionStart : 0;
+  const button = !box && root.contains(document.activeElement) ? focusKey(document.activeElement) : null;
   const key = paneKey(), same = key === drawnKey;
   setHTML(root, renderSpotifyView());
   drawnKey = key;
@@ -627,7 +643,14 @@ export function renderSpotifyInto(root) {
     const el = root.querySelector('[' + box + ']');
     if (el) { el.value = val; el.focus({ preventScroll: true }); try { el.setSelectionRange(pos, pos); } catch {} }
   }
+  if (button) root.querySelector(button)?.focus({ preventScroll: true });
   applyFilter();
+}
+
+/** A selector for the same control after a redraw: its first data-spot-* attribute and value. */
+export function focusKey(el) {
+  const attr = [...(el.attributes || [])].find((a) => a.name.startsWith('data-spot'));
+  return attr ? '[' + attr.name + '="' + CSS.escape(attr.value) + '"]' : null;
 }
 
 export function devicesOpen() { return !!cache.devices; }

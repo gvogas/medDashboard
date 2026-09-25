@@ -360,6 +360,30 @@ describe('the Spotify view', () => {
     expect((await api('/api/spotify/search?q=Weightless&type=track&offset=x')).status).toBe(400);
   });
 
+  it('stops paging search where Spotify does, at an offset of 1000', async () => {
+    const { api, id } = await user('v-search-deep');
+    await connect(id, 'tok-playing');
+    const at = async (offset) => (await api(`/api/spotify/search?q=deep&type=track&offset=${offset}`)).json();
+    expect(await at(980)).toMatchObject({ more: { tracks: true }, nextOffsets: { tracks: 990 } });
+    expect(await at(990)).toMatchObject({ more: { tracks: false }, nextOffsets: { tracks: null } });
+    const past = await api('/api/spotify/search?q=deep&type=track&offset=991');
+    expect(past.status).toBe(400);
+    expect(await past.json()).toEqual({ error: 'invalid', field: 'offset' });
+  });
+
+  it('passes on a request Spotify refused as a 400, not as Spotify being down', async () => {
+    const { api, id } = await user('v-refused');
+    await connect(id, 'tok-playing');
+    const refused = await api('/api/spotify/search?q=refused');
+    expect(refused.status).toBe(400);
+    expect(await refused.json()).toEqual({ error: 'spotify_rejected' });
+    expect((await api('/api/spotify/albums/al1/tracks?offset=6000')).status).toBe(400);
+    expect((await api('/api/spotify/artists/ar1/albums?offset=6000')).status).toBe(400);
+    // Spotify answers a malformed id with a 400; to the view it is simply not there.
+    expect(await (await api('/api/spotify/albums/short/tracks')).json()).toEqual({ error: 'not_found' });
+    expect(await (await api('/api/spotify/artists/short/albums')).json()).toEqual({ error: 'not_found' });
+  });
+
   it("opens an album's tracks and an artist's albums", async () => {
     const { api, id } = await user('v-album');
     await connect(id, 'tok-playing');

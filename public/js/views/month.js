@@ -1,9 +1,14 @@
 import { ui } from '../state.js';
 import { iso, parse, addDays, monday, today, hhmm, dur, DOW } from '../dates.js';
-import { classes } from '../query.js';
+import { classes, instances } from '../query.js';
+import { tmeta } from '../model.js';
 import { esc } from '../dom.js';
+import { classChip } from './week.js';
 
-/* month = class schedule only */
+const PER_CELL = 4;
+
+/* month = the class schedule, and the dated deadlines when "Deadlines" is on. Weekly
+   items (office hours, recurring tasks) stay off: they would fill every week. */
 export function renderMonth() {
   const TODAY = today();
   const a = parse(ui.anchor), first = new Date(a.getFullYear(), a.getMonth(), 1);
@@ -11,18 +16,27 @@ export function renderMonth() {
   const byDow = {};
   all.forEach((x) => { (byDow[x.mtg.weekday] = byDow[x.mtg.weekday] || []).push(x); });
 
-  let html = '<div class="panel"><div class="ph">Class schedule <em>' + all.length + ' weekly class' + (all.length === 1 ? '' : 'es') + '</em></div><div class="month">';
+  const byDate = {};
+  if (ui.monthDeadlines) {
+    instances(iso(gridStart), iso(addDays(gridStart, cells - 1)))
+      .filter((x) => x.item.recur !== 'weekly' && x.item.type !== 'office')
+      .forEach((x) => { (byDate[x.date] = byDate[x.date] || []).push(x); });
+  }
+
+  let html = '<div class="panel"><div class="ph">' + (ui.monthDeadlines ? 'Classes and deadlines' : 'Class schedule')
+    + '<button class="ph-toggle" type="button" data-monthdeadlines aria-pressed="' + (ui.monthDeadlines ? 'true' : 'false') + '">Deadlines</button>'
+    + '<em>' + all.length + ' weekly class' + (all.length === 1 ? '' : 'es') + '</em></div><div class="month">';
   ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].forEach((d) => { html += '<div class="mhead">' + d + '</div>'; });
   for (let i = 0; i < cells; i++) {
     const d = addDays(gridStart, i), key = iso(d), out = d.getMonth() !== a.getMonth();
-    const rows = byDow[d.getDay()] || [];
-    html += '<button class="cell' + (out ? ' out' : '') + (key === TODAY ? ' is-today' : '') + '" type="button" data-day="' + key + '">'
+    const due = byDate[key] || [], rows = byDow[d.getDay()] || [];
+    const chips = due.map(deadlineChip).concat(rows.map(classChip));
+    html += '<button class="cell' + (out ? ' out' : '') + (key === TODAY ? ' is-today' : '') + '" type="button" data-day="' + key + '"'
+      + ' aria-label="' + esc(DOW[d.getDay()] + ' ' + key + (due.length ? ', ' + due.length + ' due' : '') + (rows.length ? ', ' + rows.length + ' class' + (rows.length === 1 ? '' : 'es') : '')) + '">'
       + '<span class="dnum">' + d.getDate() + '</span>';
-    rows.slice(0, 3).forEach((x) => {
-      html += '<span class="mchip" data-accent="' + x.course.color + '"><b>' + hhmm(x.mtg.start) + '</b> ' + esc(x.course.code)
-        + ' <span class="rm">' + esc(x.mtg.room || '') + '</span></span>';
-    });
-    if (rows.length > 3) html += '<span class="more">+' + (rows.length - 3) + ' more</span>';
+    const shown = chips.length > PER_CELL ? PER_CELL - 1 : chips.length;
+    html += chips.slice(0, shown).join('');
+    if (chips.length > shown) html += '<span class="more">+' + (chips.length - shown) + ' more</span>';
     html += '</button>';
   }
   html += '</div></div>';
@@ -46,4 +60,10 @@ export function renderMonth() {
   tt += '</div></div>';
 
   return html + tt;
+}
+
+function deadlineChip(x) {
+  const m = tmeta(x.item.type);
+  return '<span class="mchip due" data-accent="' + m.color + '" title="' + esc(m.label + ': ' + x.item.title) + '">'
+    + (x.item.start ? '<b>' + hhmm(x.item.start) + '</b> ' : '') + esc(x.item.title) + '</span>';
 }

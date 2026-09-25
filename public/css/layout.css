@@ -71,7 +71,9 @@ button{cursor:pointer}
 .course-line .cog{
   border:0;background:transparent;color:var(--ink-3);font-size:11px;padding:4px 7px;opacity:0;flex:none;border-radius:6px;
 }
-.course-line:hover .cog{opacity:1}
+/* hover-only for a mouse; always there for keyboard focus and touch screens */
+.course-line:hover .cog,.course-line .cog:focus-visible,.course-line:focus-within .cog{opacity:1}
+@media (hover:none){.course-line .cog{opacity:1}}
 .course-line .cog:hover{color:var(--accent)}
 .addcourse{
   border:1px dashed var(--line);background:transparent;color:var(--ink-2);border-radius:7px;
@@ -234,7 +236,7 @@ button{cursor:pointer}
 .btn:disabled{background:var(--disabled);cursor:not-allowed}
 .btn.ghost{background:var(--panel);color:var(--ink-2);border:1px solid var(--line);font-weight:500}
 .btn.ghost:hover{color:var(--accent);border-color:var(--accent);background:var(--panel)}
-.btn.danger{background:var(--crit);color:#fff}
+.btn.danger{background:var(--crit);color:var(--on-crit)}
 .btn.danger:hover{background:color-mix(in srgb, var(--crit) 82%, #000)}
 .pill{border:1px solid var(--line);background:var(--panel);border-radius:999px;padding:4px 11px;font-size:11px;color:var(--ink-2);letter-spacing:.04em}
 /* the frame never scrolls — the view region inside it does */

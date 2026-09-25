@@ -3,6 +3,10 @@
 // A successful sign-in clears the count. Unknown usernames are counted too, so a
 // guesser gets no cheaper by picking names that do not exist.
 //
+// A lock refuses the right password too, or a guesser could keep guessing through it.
+// So that a stranger cannot lock the owner out, a browser that has signed in as a name
+// before is counted under its own key, `name#device` (see trustedDevice in auth.js).
+//
 // An attempt is counted before its password is checked, in one statement that also
 // refuses it while the name is locked. Checking first and counting after the failure
 // would let a burst of parallel guesses all pass the check before any was counted.
@@ -42,6 +46,15 @@ export async function claimAttempt(db, username, now = Date.now()) {
 
 export async function recordSuccess(db, username) {
   await db.prepare('DELETE FROM login_throttle WHERE username = ?').bind(username).run();
+}
+
+/**
+ * SQL matching every throttle row of a normalised name: its own and its trusted devices'
+ * (`name#device`). For scripts/add-user.mjs, which runs SQL text through wrangler.
+ * Not LIKE: `_` is a wildcard there, and usernames may contain it.
+ */
+export function throttleRowsFor(username) {
+  return `username = '${username}' OR substr(username, 1, ${username.length + 1}) = '${username}#'`;
 }
 
 /** Nightly housekeeping: forget names whose lock has long expired. */

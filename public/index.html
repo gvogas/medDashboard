@@ -64,7 +64,7 @@
     <canvas id="orn" aria-hidden="true"></canvas>
 
     <header class="bar">
-      <button class="menu-btn" type="button" id="menuBtn" aria-label="Show sidebar">☰</button>
+      <button class="menu-btn" type="button" id="menuBtn" aria-label="Show sidebar" aria-controls="side" aria-expanded="false">☰</button>
       <div class="title-grp">
         <h1 class="h1" id="viewTitle">Week board</h1>
         <div class="sub" id="viewSub">—</div>
@@ -104,7 +104,7 @@
 </div>
 
 <div class="scrim" id="scrim"></div>
-<aside class="drawer" id="drawer" aria-hidden="true"></aside>
+<aside class="drawer" id="drawer" role="dialog" aria-modal="true" aria-label="Details" tabindex="-1" inert></aside>
 
 <script type="module" src="/js/main.js"></script>
 </body>

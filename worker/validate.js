@@ -203,6 +203,10 @@ export function validateItem(body) {
     completedAt: optInt(body.completedAt, 'completedAt'),
   };
   if (out.recur === 'weekly' && out.weekday === null) fail('weekday');
+  // The client sets a weekday only on a weekly item (normalizeItem in public/js/model.js).
+  if (out.recur === null && out.weekday !== null) fail('weekday');
+  if (out.start && out.end && out.end <= out.start) fail('end');
+  if (out.recurUntil && out.recurUntil < out.date) fail('recurUntil');
   return out;
 }
 

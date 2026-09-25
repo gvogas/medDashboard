@@ -123,7 +123,7 @@ export async function refreshAccessToken(env, refreshToken, now = Date.now()) {
 
 const notConnected = () => new HttpError(409, { error: 'not_connected' });
 
-/** Refresh, store, and return `{ accessToken, expiresAt }`; drops the row if Spotify revoked it. */
+/** Refresh, store, and return `{ accessToken, expiresAt, row }` (row as now stored); drops the row if Spotify revoked it. */
 export async function refreshFor(env, userId, previous) {
   if (!previous) throw notConnected();
   const owner = crypto.randomUUID();
@@ -142,7 +142,7 @@ export async function refreshFor(env, userId, previous) {
     if (!current) throw notConnected();
     // Another request may have refreshed or reconnected while this one waited.
     if (current.access_token !== previous.access_token || current.refresh_token !== previous.refresh_token || current.expires_at !== previous.expires_at) {
-      return { accessToken: current.access_token, expiresAt: current.expires_at };
+      return stored(current);
     }
     return await refreshLocked(env, userId, current);
   } finally {
@@ -161,23 +161,23 @@ async function refreshLocked(env, userId, row) {
     if (e instanceof HttpError && e.body.error === 'invalid_grant') {
       await discardSpotifyTokens(env.DB, userId, row);
       const current = await getSpotifyTokens(env.DB, userId);
-      if (current) return { accessToken: current.access_token, expiresAt: current.expires_at };
+      if (current) return stored(current);
       throw notConnected();
     }
     throw e;
   }
-  const saved = await replaceSpotifyTokens(env.DB, userId, row, {
-    refreshToken: await sealToken(env, fresh.refreshToken || refreshToken),
-    accessToken: fresh.accessToken,
-    expiresAt: fresh.expiresAt,
-  });
+  const next = { refresh_token: await sealToken(env, fresh.refreshToken || refreshToken), access_token: fresh.accessToken, expires_at: fresh.expiresAt };
+  const saved = await replaceSpotifyTokens(env.DB, userId, row, { refreshToken: next.refresh_token, accessToken: next.access_token, expiresAt: next.expires_at });
   if (!saved) {
     const current = await getSpotifyTokens(env.DB, userId);
     if (!current) throw notConnected();
-    return { accessToken: current.access_token, expiresAt: current.expires_at };
+    return stored(current);
   }
-  return fresh;
+  // What was just written, so the caller need not read it back.
+  return stored(next);
 }
+
+const stored = (row) => ({ accessToken: row.access_token, expiresAt: row.expires_at, row });
 
 /** A usable access token for this user and when it expires, refreshed when it is about to. */
 export async function freshAccessToken(env, userId, now = Date.now()) {
@@ -185,6 +185,6 @@ export async function freshAccessToken(env, userId, now = Date.now()) {
   if (!row) throw notConnected();
   if (row.expires_at - now > REFRESH_WITHIN_MS) return { token: row.access_token, expiresAt: row.expires_at, row };
   const fresh = await refreshFor(env, userId, row);
-  return { token: fresh.accessToken, expiresAt: fresh.expiresAt, row: await getSpotifyTokens(env.DB, userId) };
+  return { token: fresh.accessToken, expiresAt: fresh.expiresAt, row: fresh.row };
 }
 

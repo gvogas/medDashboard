@@ -45,10 +45,33 @@ async function readSession(token, secret, now = Date.now()) {
   const [userId, gen, expiresAt, sig] = parts;
   if (!/^[0-9]+$/.test(gen) || !/^[0-9]+$/.test(expiresAt) || Number(expiresAt) < now) return null;
   const expected = await signature(`${userId}.${gen}.${expiresAt}`, secret);
-  if (expected.length !== sig.length) return null;
+  return sameString(expected, sig) ? { userId, gen: Number(gen), expiresAt: Number(expiresAt) } : null;
+}
+
+function sameString(a, b) {
+  if (a.length !== b.length) return false;
   let diff = 0;
-  for (let i = 0; i < expected.length; i++) diff |= expected.charCodeAt(i) ^ sig.charCodeAt(i);
-  return diff === 0 ? { userId, gen: Number(gen), expiresAt: Number(expiresAt) } : null;
+  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return diff === 0;
+}
+
+// Trusted devices: a browser that has signed in as a name gets `rounds_device=nonce.sig`,
+// signed over the name. Sign-ins from it are throttled on their own, so failures from
+// anywhere else cannot lock its owner out (see worker/throttle.js).
+const DEVICE_COOKIE = 'rounds_device';
+const DEVICE_MS = 365 * 24 * 60 * 60 * 1000;
+
+export async function deviceCookie(username, secret, url) {
+  const nonce = hex(crypto.getRandomValues(new Uint8Array(12)));
+  const sig = await signature(`device:${username}:${nonce}`, secret);
+  return `${DEVICE_COOKIE}=${nonce}.${sig}; Path=/api/login; HttpOnly; SameSite=Strict; Max-Age=${DEVICE_MS / 1000}${secureFlag(url)}`;
+}
+
+/** The device's nonce when the request carries a valid device cookie for this name, else null. */
+export async function trustedDevice(request, username, secret) {
+  const [nonce, sig] = (parseCookies(request.headers.get('cookie'))[DEVICE_COOKIE] || '').split('.');
+  if (!/^[0-9a-f]{24}$/.test(nonce || '') || !sig) return null;
+  return sameString(await signature(`device:${username}:${nonce}`, secret), sig) ? nonce : null;
 }
 
 export function parseCookies(header) {
@@ -79,9 +102,8 @@ export async function requireSession(request, env) {
   if (!session) throw new HttpError(401, { error: 'unauthenticated' });
   const expectedUser = request.headers.get('x-rounds-user');
   if (expectedUser && expectedUser !== session.userId) throw new HttpError(401, { error: 'account_changed' });
-  const row = await env.DB.prepare('SELECT pw_gen FROM users WHERE id = ?').bind(session.userId).first();
-  if (!row || row.pw_gen !== session.gen) throw new HttpError(401, { error: 'unauthenticated' });
-  await limitUser(request, env, session.userId);
+  // One round trip: the generation check and the rate limit share a D1 batch.
+  if (!(await limitUser(request, env, session.userId, session.gen))) throw new HttpError(401, { error: 'unauthenticated' });
   return session;
 }
 

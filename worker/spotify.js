@@ -1,6 +1,5 @@
 // Spotify playback and library operations. The SDK also talks directly to Spotify.
 import { HttpError } from './http.js';
-import { getSpotifyTokens } from './db.js';
 import { spotifyFetch } from './spotify/client.js';
 import { bodyOf, unavailable } from './spotify/transport.js';
 import { compactTrack, compactAlbum, compactArtist, compactPlaylist, nextPageOffset, page } from './spotify/mapping.js';
@@ -17,7 +16,7 @@ const REPEAT = ['off', 'context', 'track'];
 
 /** `{ connected: false }`, or `{ connected: true, playing, track, device, deviceId, volume, supportsVolume, shuffle, repeat }`. */
 export async function playerState(env, userId) {
-  if (!(await getSpotifyTokens(env.DB, userId))) return { connected: false };
+  // No pre-check for a row: spotifyFetch reads it anyway and throws not_connected.
   let res;
   try {
     res = await spotifyFetch(env, userId, 'GET', '/me/player');
@@ -101,11 +100,13 @@ const LIST_LIMIT = 50;
 const PLAYLIST_LIMIT = 5;
 
 /**
- * A read Spotify refused. A token granted before a scope was added to SCOPES is told
+ * A read Spotify refused. A 400 is a request it would not take (a paging offset past
+ * its end), passed on as one. A token granted before a scope was added to SCOPES is told
  * to reconnect; anything else is logged with Spotify's own words and reported as
  * Spotify being unavailable. `forbidden` is the error for any other 403.
  */
 async function readFailure(res, what, forbidden = null) {
+  if (res.status === 400) return new HttpError(400, { error: 'spotify_rejected' });
   const message = String((await bodyOf(res)).error?.message || '');
   if (res.status === 403 && /scope/i.test(message)) return new HttpError(403, { error: 'reconnect_needed' });
   if (res.status === 403 && forbidden) return new HttpError(403, { error: forbidden });
@@ -114,7 +115,10 @@ async function readFailure(res, what, forbidden = null) {
 }
 
 export const SEARCH_TYPES = ['track', 'artist', 'album', 'playlist'];
+const KINDS = SEARCH_TYPES.map((t) => t + 's');
 const SEARCH_LIMIT = 10;       /* Spotify's most for a development-mode app */
+/* Spotify pages search results no further than 1000 in, offset plus limit. */
+export const SEARCH_MAX_OFFSET = 1000 - SEARCH_LIMIT;
 
 /**
  * Tracks, artists, albums and playlists matching `q`, ten of each; or, with `type`, the
@@ -126,13 +130,17 @@ export async function search(env, userId, q, type = null, offset = 0) {
   if (!res.ok) throw await readFailure(res, 'search');
   const b = await bodyOf(res);
   const list = (key, map) => (b[key]?.items || []).filter(Boolean).map(map);
+  const next = (key) => {
+    const at = b[key]?.next ? nextPageOffset(b[key], offset) : null;
+    return at !== null && at <= SEARCH_MAX_OFFSET ? at : null;
+  };
   return {
     tracks: list('tracks', (t) => compactTrack(t, 0, 64)),
     artists: list('artists', compactArtist),
     albums: list('albums', compactAlbum),
     playlists: list('playlists', compactPlaylist),
-    more: Object.fromEntries(['tracks', 'artists', 'albums', 'playlists'].map((k) => [k, !!b[k]?.next])),
-    nextOffsets: Object.fromEntries(['tracks', 'artists', 'albums', 'playlists'].map((k) => [k, nextPageOffset(b[k] || {}, offset)])),
+    more: Object.fromEntries(KINDS.map((k) => [k, next(k) !== null])),
+    nextOffsets: Object.fromEntries(KINDS.map((k) => [k, next(k)])),
   };
 }
 
@@ -144,10 +152,17 @@ export async function me(env, userId) {
   return { id: b.id || null, name: b.display_name || '' };
 }
 
+/** Not there: a 404, or the 400 Spotify gives an id that cannot be one. Reads a clone. */
+async function missing(res) {
+  if (res.status === 404) return true;
+  if (res.status !== 400) return false;
+  return /invalid (base62 )?id/i.test(String((await bodyOf(res.clone()).catch(() => ({}))).error?.message || ''));
+}
+
 /** An album's tracks. Spotify leaves the album off each one; the view already knows it. */
 export async function albumTracks(env, userId, id, offset = 0) {
   const res = await spotifyFetch(env, userId, 'GET', `/albums/${id}/tracks?limit=${LIST_LIMIT}&offset=${offset}`);
-  if (res.status === 404 || res.status === 400) throw new HttpError(404, { error: 'not_found' });
+  if (await missing(res)) throw new HttpError(404, { error: 'not_found' });
   if (!res.ok) throw await readFailure(res, 'album tracks');
   const b = await bodyOf(res);
   return page(b, offset, (b.items || []).filter((t) => t && t.uri && !t.is_local).map((t) => compactTrack(t, 0, 64)));
@@ -156,7 +171,7 @@ export async function albumTracks(env, userId, id, offset = 0) {
 /** An artist's albums and singles, newest first as Spotify gives them. */
 export async function artistAlbums(env, userId, id, offset = 0) {
   const res = await spotifyFetch(env, userId, 'GET', `/artists/${id}/albums?include_groups=album,single&limit=${SEARCH_LIMIT}&offset=${offset}`);
-  if (res.status === 404 || res.status === 400) throw new HttpError(404, { error: 'not_found' });
+  if (await missing(res)) throw new HttpError(404, { error: 'not_found' });
   if (!res.ok) throw await readFailure(res, 'artist albums');
   const b = await bodyOf(res);
   return page(b, offset, (b.items || []).filter(Boolean).map(compactAlbum));

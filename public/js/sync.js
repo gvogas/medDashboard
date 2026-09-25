@@ -131,5 +131,18 @@ export async function syncNow() {
     if (cycle.signal.aborted && !paused) schedule(0);
   }
 }
+/* The account to open. The server is asked first, so an ended session (signed out
+   everywhere, a reset password) never shows its data. A remembered account still opens
+   from this device when offline, when the server fails, or when it is slow to answer. */
+const BOOT_WAIT_MS = 1500;
+export async function startingProfile(remembered) {
+  if (!remembered) { try { return await api.me(); } catch { return null; } }
+  if (typeof navigator !== 'undefined' && navigator.onLine === false) return remembered;
+  let timer;
+  const slow = new Promise((resolve) => { timer = setTimeout(() => resolve(remembered), BOOT_WAIT_MS); });
+  try { return await Promise.race([api.me(), slow]); }
+  catch (e) { return e instanceof ApiError && e.status === 401 ? null : remembered; }
+  finally { clearTimeout(timer); }
+}
 export const push = syncNow;
 export const pull = syncNow;

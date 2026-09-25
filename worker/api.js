@@ -1,11 +1,11 @@
 import { json, readJson, HttpError } from './http.js';
-import { requireUser, requireSession, signSession, sessionCookie, clearCookie, parseCookies, secureFlag, RENEW_WITHIN_MS } from './auth.js';
+import { requireUser, requireSession, signSession, sessionCookie, clearCookie, deviceCookie, trustedDevice, parseCookies, secureFlag, RENEW_WITHIN_MS } from './auth.js';
 import { verifyPassword, normalizeUsername } from './password.js';
 import { claimAttempt, recordSuccess } from './throttle.js';
 import { limitLogin, limitOutline } from './limits.js';
 import { readOutline, MAX_BYTES } from './outline.js';
 import { validateProfile, validateCourse, validateItem, validateQuote, validateId } from './validate.js';
-import { getUserForLogin, getProfile, updateProfile, getRow, upsertRow, deleteRow, courseExists, syncPage, bumpPasswordGen, saveSpotifyTokens, deleteSpotifyTokens } from './db.js';
+import { getUserForLogin, getProfile, updateProfile, getRow, upsertRow, deleteRow, syncPage, bumpPasswordGen, saveSpotifyTokens, deleteSpotifyTokens } from './db.js';
 import * as spotify from './spotify.js';
 
 function revisionOf(request) {
@@ -21,9 +21,7 @@ async function putRow({ request, env, params: [table, id] }) {
   const userId = await requireUser(request, env);
   validateId(id);
   const fields = VALIDATORS[table](await readJson(request));
-  if (table === 'items' && fields.courseId && !(await courseExists(env.DB, userId, fields.courseId))) {
-    throw new HttpError(400, { error: 'invalid', field: 'courseId' });
-  }
+  // An item's course is checked inside the upsert; see upsertRow.
   return json(await upsertRow(env.DB, table, userId, id, fields, Date.now(), revisionOf(request)));
 }
 
@@ -64,9 +62,9 @@ function deviceParam(value) {
   if (typeof value !== 'string' || !DEVICE_ID.test(value)) throw new HttpError(400, { error: 'invalid', field: 'deviceId' });
   return value;
 }
-function offsetParam(url) {
+function offsetParam(url, max = 999999) {
   const raw = url.searchParams.get('offset') ?? '0';
-  if (!/^[0-9]{1,6}$/.test(raw)) throw new HttpError(400, { error: 'invalid', field: 'offset' });
+  if (!/^[0-9]{1,6}$/.test(raw) || Number(raw) > max) throw new HttpError(400, { error: 'invalid', field: 'offset' });
   return Number(raw);
 }
 
@@ -138,12 +136,11 @@ async function postOutline({ request, env, url }) {
   const userId = await requireUser(request, env);
   const bytes = await readBytes(request, MAX_BYTES);
   if (!bytes.byteLength) throw new HttpError(400, { error: 'invalid', field: 'body' });
-  await limitOutline(env, userId);
   const today = DATE.test(url.searchParams.get('today') || '') ? url.searchParams.get('today') : new Date().toISOString().slice(0, 10);
   const termStart = DATE.test(url.searchParams.get('termStart') || '') ? url.searchParams.get('termStart') : null;
   const name = (url.searchParams.get('name') || 'outline').slice(0, 120);
   try {
-    return json(await readOutline(env.AI, { bytes, type: request.headers.get('content-type') || '', name, today, termStart }));
+    return json(await readOutline(env.AI, { bytes, type: request.headers.get('content-type') || '', name, today, termStart, claim: () => limitOutline(env, userId) }));
   } catch (e) {
     if (e instanceof HttpError) throw e;
     console.error('outline:', e?.message || e);
@@ -163,17 +160,22 @@ const routes = [
     const bad = () => new HttpError(401, { error: 'bad_login' });
     const username = normalizeUsername(body.username);
     if (!username) throw bad();
-    // Counted before the password is checked; see worker/throttle.js.
-    const wait = await claimAttempt(env.DB, username);
+    // Counted before the password is checked; see worker/throttle.js. A browser that has
+    // signed in as this name before counts on its own, so strangers cannot lock it out.
+    const device = await trustedDevice(request, username, env.SESSION_SECRET);
+    const throttleKey = device ? `${username}#${device}` : username;
+    const wait = await claimAttempt(env.DB, throttleKey);
     if (wait) throw new HttpError(429, { error: 'too_many_attempts', retryAfter: wait }, { 'retry-after': String(wait) });
     const user = await getUserForLogin(env.DB, username);
     // Verify even when the user is unknown, so timing does not reveal which usernames exist.
     const ok = await verifyPassword(body.password, user ? user.password_hash : 'pbkdf2$100000$AAAAAAAAAAAAAAAAAAAAAA$AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA');
     if (!user || !ok) throw bad();
-    await recordSuccess(env.DB, username);
+    await recordSuccess(env.DB, throttleKey);
     const profile = await getProfile(env.DB, user.id);
     const token = await signSession(profile.id, user.pw_gen, env.SESSION_SECRET);
-    return json(profile, 200, { 'set-cookie': sessionCookie(token, url) });
+    const res = json(profile, 200, { 'set-cookie': sessionCookie(token, url) });
+    if (!device) res.headers.append('set-cookie', await deviceCookie(username, env.SESSION_SECRET, url));
+    return res;
   }],
 
   // Sign out on every device: bump the generation, drop this cookie too.
@@ -280,7 +282,7 @@ const routes = [
     if (!q || q.length > 200) throw new HttpError(400, { error: 'invalid', field: 'q' });
     const type = url.searchParams.get('type') || null;
     if (type !== null && !spotify.SEARCH_TYPES.includes(type)) throw new HttpError(400, { error: 'invalid', field: 'type' });
-    const offset = offsetParam(url);
+    const offset = offsetParam(url, spotify.SEARCH_MAX_OFFSET);
     return json(await spotify.search(env, userId, q, type, type ? offset : 0));
   }],
   ['GET', /^\/api\/spotify\/albums\/([A-Za-z0-9]{1,64})\/tracks$/, async ({ request, env, url, params: [id] }) => {

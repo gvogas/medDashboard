@@ -1,7 +1,8 @@
 import { describe, it, expect } from 'vitest';
-import { SELF } from 'cloudflare:test';
+import { SELF, env } from 'cloudflare:test';
 import { cleanOutline, cleanTime, readOutline, outlineText, MODEL, MAX_CHARS } from '../worker/outline.js';
 import { signIn, BASE } from './helpers.js';
+import { OUTLINE_DAILY_LIMIT } from '../worker/limits.js';
 
 const OUTLINE = 'PHARM101 Principles of Pharmacology. Dr. Ada Okafor. Lectures Monday and Wednesday 9-10am in LT2. Midterm exam 20 October 2026 (30%). Essay due 1 November (20%). Final exam (50%).';
 
@@ -118,6 +119,32 @@ describe('readOutline', () => {
       .rejects.toMatchObject({ status: 422 });
     await expect(readOutline(fakeAi({}), { bytes: new TextEncoder().encode('too short'), type: 'text/plain', today: '2026-09-23' }))
       .rejects.toMatchObject({ status: 422 });
+  });
+});
+
+describe('the daily attempt', () => {
+  it('is claimed just before the model runs, never for a file with no text', async () => {
+    const claims = [];
+    const claim = async () => { claims.push('claim'); };
+    await expect(readOutline(fakeAi({}), { bytes: new TextEncoder().encode('too short'), type: 'text/plain', today: '2026-09-23', claim })).rejects.toMatchObject({ status: 422 });
+    await expect(readOutline(fakeAi({}, { format: 'error' }), { bytes: new Uint8Array(4), type: 'application/pdf', today: '2026-09-23', claim })).rejects.toMatchObject({ status: 422 });
+    expect(claims).toEqual([]);
+    const ai = fakeAi(MODEL_REPLY);
+    const run = ai.run;
+    ai.run = async (...args) => { claims.push('run'); return run(...args); };
+    await readOutline(ai, { bytes: new TextEncoder().encode(OUTLINE), type: 'text/plain', today: '2026-09-23', claim });
+    expect(claims).toEqual(['claim', 'run']);
+  });
+
+  it('is not spent on an outline that cannot be read', async () => {
+    const call = await signIn('outline-empty');
+    await env.DB.prepare('INSERT OR REPLACE INTO request_limits (key, hits, reset_at) VALUES (?, ?, ?)')
+      .bind('outline:u-outline-empty', OUTLINE_DAILY_LIMIT - 1, Date.now() + 3_600_000).run();
+    const post = (body) => call('/api/outline?name=a.txt', { method: 'POST', headers: { 'content-type': 'text/plain' }, body });
+    for (let i = 0; i < 3; i++) expect(await (await post('too short')).json()).toEqual({ error: 'outline_empty' });
+    expect((await post(OUTLINE)).status).toBe(503);   // the last attempt reaches the (absent) model
+    expect((await post(OUTLINE)).status).toBe(429);
+    expect((await post('too short')).status).toBe(422);
   });
 });
 

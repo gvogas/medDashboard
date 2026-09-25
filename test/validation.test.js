@@ -28,6 +28,27 @@ describe('calendar validation', () => {
   });
 });
 
+describe('item times and repeats', () => {
+  it('rejects an end at or before the start, when both are set', () => {
+    expect(() => validateItem({ ...item, start: '10:00', end: '10:00' })).toThrow(expect.objectContaining({ body: { error: 'invalid', field: 'end' } }));
+    expect(() => validateItem({ ...item, start: '10:00', end: '09:00' })).toThrow();
+    expect(validateItem({ ...item, start: '10:00', end: '10:01' }).end).toBe('10:01');
+    expect(validateItem({ ...item, start: '', end: '09:00' }).end).toBe('09:00');
+    expect(validateItem({ ...item, start: '10:00' }).start).toBe('10:00');
+  });
+
+  it('rejects a repeat that ends before it starts', () => {
+    const weekly = { ...item, recur: 'weekly', weekday: 2 };
+    expect(() => validateItem({ ...weekly, recurUntil: '2026-09-21' })).toThrow(expect.objectContaining({ body: { error: 'invalid', field: 'recurUntil' } }));
+    expect(validateItem({ ...weekly, recurUntil: '2026-09-22' }).recurUntil).toBe('2026-09-22');
+  });
+
+  it('rejects a weekday on an item that does not repeat', () => {
+    expect(() => validateItem({ ...item, weekday: 2 })).toThrow(expect.objectContaining({ body: { error: 'invalid', field: 'weekday' } }));
+    expect(validateItem({ ...item, weekday: null }).weekday).toBeNull();
+  });
+});
+
 describe('backgrounds and projects', () => {
   it('defaults a profile without a background to Med, for older clients', () => {
     expect(validateProfile(profile).bg).toBe('med');

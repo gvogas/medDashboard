@@ -64,8 +64,11 @@ function quoteCardHtml() {
 export function renderQuote(animate = false) {
   const card = document.querySelector('.qcard');
   if (!card) { renderStats(); return; }
+  const focused = card.contains(document.activeElement);
   card.outerHTML = quoteCardHtml();
-  if (animate) document.querySelector('.qcard')?.classList.add('swap');
+  const next = document.querySelector('.qcard');
+  if (animate) next?.classList.add('swap');
+  if (focused) next?.focus();   /* a click or Enter on the tile keeps the keyboard there */
 }
 
 /** Show the next quote, animated. Returns false if there is nothing to rotate to. */

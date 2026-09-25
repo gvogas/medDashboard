@@ -122,3 +122,30 @@ describe('persisted operation synchronization', () => {
    expect(sync.status.state).toBe('idle');
  });
 });
+describe('opening the app', () => {
+ const remembered = { id: 'u1', username: 'george' };
+ it('opens a remembered account once the server confirms the session', async () => {
+   expect(await sync.startingProfile(remembered)).toEqual({ id: 'u1', revision: 1 });
+ });
+ it('shows sign-in, not the remembered data, when the server says the session ended', async () => {
+   api.me.mockRejectedValue(new ApiError(401, { error: 'unauthenticated' }));
+   expect(await sync.startingProfile(remembered)).toBe(null);
+ });
+ it.each([500, 502, 429])('opens the remembered account when the server answers %s', async (code) => {
+   api.me.mockRejectedValue(new ApiError(code, { error: 'x' }));
+   expect(await sync.startingProfile(remembered)).toBe(remembered);
+ });
+ it('opens the remembered account when the server is slow, without waiting for it', async () => {
+   api.me.mockReturnValue(new Promise(() => {}));
+   const opened = sync.startingProfile(remembered);
+   await vi.advanceTimersByTimeAsync(1500);
+   expect(await opened).toBe(remembered);
+ });
+ it('asks the server when nothing is remembered', async () => {
+   expect(await sync.startingProfile(null)).toEqual({ id: 'u1', revision: 1 });
+ });
+ it.each([401, 429, 500, 502])('shows sign-in when nothing is remembered and the server answers %s', async (code) => {
+   api.me.mockRejectedValue(new ApiError(code, { error: 'x' }));
+   expect(await sync.startingProfile(null)).toBe(null);
+ });
+});

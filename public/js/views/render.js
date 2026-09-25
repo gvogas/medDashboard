@@ -39,6 +39,7 @@ export function renderHeader() {
 export function renderView() {
   const root = $('viewRoot');
   root.className = ui.view === 'table' || ui.view === 'spotify' ? 'fixed' : '';   /* these scroll their own rows */
+  root.dataset.view = ui.view;
   if (ui.view === 'spotify') { renderSpotifyInto(root); return; }
   setHTML(root, ui.view === 'week' ? renderWeek() : ui.view === 'month' ? renderMonth() : renderTable());
 }

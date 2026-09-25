@@ -15,7 +15,7 @@ export const TYPES = {
 };
 export const ORDER = ['exam', 'assignment', 'lab', 'tutoring', 'office', 'project', 'task'];
 export const STATUS = {
-  exam:       [['todo', 'Upcoming'],  ['done', 'Sat'],           ['graded', 'Graded']],
+  exam:       [['todo', 'Upcoming'],  ['done', 'Taken'],         ['graded', 'Graded']],
   assignment: [['todo', 'Open'],      ['submitted', 'Submitted'], ['graded', 'Graded']],
   lab:        [['todo', 'Scheduled'], ['done', 'Attended'],      ['missed', 'Missed']],
   tutoring:   [['todo', 'Scheduled'], ['done', 'Attended'],      ['missed', 'Cancelled']],
@@ -170,15 +170,31 @@ export function occurrences(it, from, to) {
 }
 
 /** Fill every field the API expects, so views never meet `undefined`. */
+const minutes = (t) => +t.slice(0, 2) * 60 + +t.slice(3, 5);
+const clock = (m) => m >= 24 * 60 ? '23:59' : String(Math.floor(m / 60)).padStart(2, '0') + ':' + String(m % 60).padStart(2, '0');
+/** An end that is not after the start becomes an hour after it, or none if the day has
+   no room left: the server refuses it. */
+const fixEnd = (start, end) => {
+  if (!start || !end || end > start) return end;
+  return start < '23:59' ? clock(minutes(start) + 60) : '';
+};
+
+/** The end after the start moves from `was` to `now`, keeping the length. */
+export function shiftEnd(was, end, now) {
+  if (!was || !end || !now) return end;
+  return clock(Math.max(0, minutes(end) - minutes(was)) + minutes(now));
+}
+
 export function normalizeItem(raw) {
+  const date = raw.date || today(), start = raw.start || '';
   return {
     id: raw.id || uid(),
     type: isTypeId(raw.type) ? raw.type : 'task',
     title: raw.title || '',
     courseId: raw.courseId || raw.course || null,
-    date: raw.date || today(),
-    start: raw.start || '',
-    end: raw.end || '',
+    date,
+    start,
+    end: fixEnd(start, raw.end || ''),
     where: raw.where || '',
     status: raw.status || 'todo',
     grade: typeof raw.grade === 'number' ? raw.grade : null,
@@ -190,7 +206,7 @@ export function normalizeItem(raw) {
       : [],
     recur: raw.recur === 'weekly' ? 'weekly' : null,
     weekday: raw.recur === 'weekly' ? (Number.isInteger(raw.weekday) ? raw.weekday : parse(raw.date || today()).getDay()) : null,
-    recurUntil: raw.recurUntil || null,
+    recurUntil: raw.recurUntil && raw.recurUntil >= date ? raw.recurUntil : null,
     dept: raw.dept || '',
     completedAt: typeof raw.completedAt === 'number' ? raw.completedAt : null,
     createdAt: raw.createdAt ?? null,

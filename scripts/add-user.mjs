@@ -9,6 +9,7 @@
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { hashPassword, normalizeUsername } from '../worker/password.js';
+import { throttleRowsFor } from '../worker/throttle.js';
 
 const args = process.argv.slice(2);
 const remote = args.includes('--remote');
@@ -69,7 +70,8 @@ if (remove) {
          DELETE FROM quotes WHERE user_id IN (SELECT id FROM users WHERE username = '${username}');
          DELETE FROM courses WHERE user_id IN (SELECT id FROM users WHERE username = '${username}');
          DELETE FROM spotify_tokens WHERE user_id IN (SELECT id FROM users WHERE username = '${username}');
-         DELETE FROM users WHERE username = '${username}';`;
+         DELETE FROM users WHERE username = '${username}';
+         DELETE FROM login_throttle WHERE ${throttleRowsFor(username)};`;
 } else {
   const password = await ask(`Password for ${username}: `);
   if (password.length < 8) { console.error('Use at least 8 characters.'); process.exit(1); }
@@ -78,7 +80,9 @@ if (remove) {
   const now = Date.now();
   const id = crypto.randomUUID();
   sql = reset
-    ? `UPDATE users SET password_hash = '${hash}', pw_gen = pw_gen + 1, updated_at = ${now} WHERE username = '${username}';`
+    // A new password also lifts any sign-in lock on the name.
+    ? `UPDATE users SET password_hash = '${hash}', pw_gen = pw_gen + 1, updated_at = ${now} WHERE username = '${username}';
+       DELETE FROM login_throttle WHERE ${throttleRowsFor(username)};`
     : `INSERT INTO users (id, username, password_hash, display_name, created_at, updated_at) VALUES ('${id}', '${username}', '${hash}', '${displayName.replace(/'/g, "''")}', ${now}, ${now});`;
 }
 

@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import { env } from 'cloudflare:test';
 import { signIn } from './helpers.js';
 
 /** The change feed after `cursor`, as the latest row of each kind; deleted rows carry deletedAt. */
@@ -226,5 +227,21 @@ describe('sync', () => {
   it('rejects a non-numeric cursor', async () => {
     const api = await signIn();
     expect((await api('/api/sync?v=2&cursor=yesterday')).status).toBe(400);
+  });
+});
+
+describe('stored JSON', () => {
+  it('a corrupt JSON column does not fail the whole sync page', async () => {
+    const api = await signIn('corrupt-json');
+    await api('/api/quotes/q1', { method: 'PUT', body: quote() });
+    // The columns are CHECKed now, but a change-feed payload keeps whatever was written.
+    await env.DB.prepare(`INSERT INTO changes (user_id, kind, row_id, payload, deleted_at) VALUES (?1, 'courses', 'bad', json_object(
+      'user_id', ?1, 'id', 'bad', 'code', 'BAD', 'name', 'Bad', 'color', '#E4749B', 'instructor', '', 'term', '', 'archived', 0,
+      'meetings', '[{"id":', 'created_at', 1, 'updated_at', 1, 'deleted_at', NULL, 'revision', 1), NULL)`).bind('u-corrupt-json').run();
+    const res = await api('/api/sync?v=2&cursor=0');
+    expect(res.status).toBe(200);
+    const { changes } = await res.json();
+    expect(changes.find((c) => c.row.id === 'bad').row.meetings).toEqual([]);
+    expect(changes.find((c) => c.row.id === 'q1').row.text).toBe(quote().text);
   });
 });

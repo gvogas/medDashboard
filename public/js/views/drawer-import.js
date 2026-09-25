@@ -1,7 +1,7 @@
 // The import preview: what a .ics or CSV file would add, with a tick per row.
 // Nothing is written until "Import"; see commitImport in main.js.
 
-import { data, course, saveCourse, saveItem, saveProfile } from '../store.js';
+import { data, course, saveRows, saveProfile } from '../store.js';
 import { ui } from '../state.js';
 import { typeList, normalizeCourse, normalizeItem } from '../model.js';
 import { DOW } from '../dates.js';
@@ -111,24 +111,26 @@ export async function commitImport() {
   const plan = ui.importPlan?.plan;
   if (!plan) return '';
   let classes = 0, items = 0;
+  const rows = [];   /* saved as one change, not one database reload per row */
   const wanted = new Set(plan.items.filter((i) => i.include).map((i) => i.row.courseId).filter(Boolean));
   for (const c of plan.courses) {
     const add = c.meetings.filter((m) => m.include).map(({ include, ...m }) => m);
     if (!add.length && !(c.isNew && (c.keep || wanted.has(c.id)))) continue;
     if (c.isNew) {
-      await saveCourse(normalizeCourse({ id: c.id, code: c.code, name: c.name, color: c.color, instructor: c.instructor || '', term: c.term || '', meetings: add }));
+      rows.push({ kind: 'courses', row: normalizeCourse({ id: c.id, code: c.code, name: c.name, color: c.color, instructor: c.instructor || '', term: c.term || '', meetings: add }) });
     } else {
       const live = course(c.id);
       if (!live) continue;
-      await saveCourse({ ...live, meetings: [...live.meetings, ...add].slice(0, 12) });
+      rows.push({ kind: 'courses', row: { ...live, meetings: [...live.meetings, ...add].slice(0, 12) } });
     }
     classes += add.length;
   }
   for (const it of plan.items) {
     if (!it.include || !it.row.date) continue;
-    await saveItem(normalizeItem(it.row));
+    rows.push({ kind: 'items', row: normalizeItem(it.row) });
     items++;
   }
+  if (rows.length) await saveRows(rows);
   /* An outline that states when teaching starts sets the term start, if none is set yet. */
   const start = plan.week1 || plan.termStart;
   if (start && data.profile && !data.profile.termStart) await saveProfile({ termStart: start });

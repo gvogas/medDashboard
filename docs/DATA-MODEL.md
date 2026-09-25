@@ -364,7 +364,9 @@ supported incremental cursor.
 3. **Passwords** — PBKDF2-SHA256, 100,000 iterations, a 16-byte salt per user, a
    constant-time compare, and the same work done for unknown usernames. After five
    failures a username is locked, for one minute doubling up to an hour per further
-   failure (`login_throttle`, cleared on success, swept nightly).
+   failure (`login_throttle`, cleared on success, swept nightly). A browser that has
+   signed in as that name before carries a signed `rounds_device` cookie and is counted
+   on its own, so failures from elsewhere cannot lock its owner out.
 4. **Sessions** — `HttpOnly` keeps the cookie away from scripts, `SameSite=Lax` keeps
    other sites from posting with it, and every state-changing request must also carry
    a same-origin `Origin` / `Sec-Fetch-Site`, or none at all, else `403 cross_site`.

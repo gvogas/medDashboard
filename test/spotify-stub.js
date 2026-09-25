@@ -106,6 +106,9 @@ async function player(request, url) {
       const limit = Number(q.get('limit'));
       if (!q.get('q') || !q.get('type') || !(limit >= 1 && limit <= 10)) return json({ error: { status: 400, message: 'Invalid limit' } }, 400);
       const hit = q.get('q').toLowerCase() === 'weightless', types = q.get('type').split(','), offset = Number(q.get('offset') || 0);
+      // Spotify stops paging search results at an offset of 1000.
+      if (offset + limit > 1000 || q.get('q') === 'refused') return json({ error: { status: 400, message: 'Bad search offset' } }, 400);
+      if (q.get('q') === 'deep') return json({ tracks: { items: [T1], next: `https://api.spotify.com/v1/search?offset=${offset + limit}&limit=${limit}` } });
       const kind = (t, items, next = null) => (types.includes(t) ? { [t + 's']: { items: hit ? items : [], next: hit ? next : null } } : {});
       return json({
         ...kind('track', offset ? [T2] : [T1], offset ? null : 'more'),
@@ -116,13 +119,17 @@ async function player(request, url) {
     }
     const al = path.match(/^\/v1\/albums\/([^/]+)\/tracks$/);
     if (al) {
+      if (al[1] === 'short') return json({ error: { status: 400, message: 'Invalid base62 id' } }, 400);
       if (al[1] !== 'al1') return json({ error: { status: 404, message: 'Not found' } }, 404);
+      if (Number(q.get('offset')) > 5000) return json({ error: { status: 400, message: 'Bad offset' } }, 400);
       const { album: _, ...bare } = T1;   /* Spotify leaves the album off an album's tracks */
       return json({ items: [bare, { ...bare, is_local: true }], total: 1, next: null });
     }
     const ar = path.match(/^\/v1\/artists\/([^/]+)\/albums$/);
     if (ar) {
+      if (ar[1] === 'short') return json({ error: { status: 400, message: 'invalid id' } }, 400);
       if (ar[1] !== 'ar1') return json({ error: { status: 404, message: 'Not found' } }, 404);
+      if (Number(q.get('offset')) > 5000) return json({ error: { status: 400, message: 'Bad offset' } }, 400);
       if (Number(q.get('limit')) > 10) return json({ error: { status: 400, message: 'Invalid limit' } }, 400);
       return json({ items: [{ id: 'al1', uri: 'spotify:album:al1', name: 'Weightless', artists: artists('Marconi Union'), images: [], total_tracks: 6 }], total: 1, next: null });
     }

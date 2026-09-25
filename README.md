@@ -43,8 +43,10 @@ docs/RELIABILITY-UPGRADE.md  sync revisions, local queue and Spotify token keys
   projects. Each opens a page with notes, a checklist and links.
 - **Courses** you add and edit, each with a colour and a list of classes (kind, day,
   start, end, room). Courses can be archived without losing their items.
-- **Four views** — week board grouped by day, a month calendar showing the class
-  timetable only, a sortable table of everything, and Spotify.
+- **Four views** — week board grouped by day, a month calendar of classes with the
+  deadlines on it (a Deadlines switch turns them off), a sortable table of everything,
+  and Spotify. On a phone the page scrolls as one, the stats swipe sideways and the
+  table becomes a list of cards.
 - **Live status** — overdue flags, next-exam countdown, class hours per week, lab hours.
 - **Settings** — light / dark / follow-the-device, a Med or CS background (the CS one
   swaps the lab coat for a lanyard ID badge), the name embroidered on the coat and its

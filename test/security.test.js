@@ -4,6 +4,14 @@ import { createUser, login, signIn, PASSWORD } from './helpers.js';
 
 const BASE = 'http://localhost';
 
+function loginWith(username, password, cookie) {
+  return SELF.fetch(`${BASE}/api/login`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', cookie },
+    body: JSON.stringify({ username, password }),
+  });
+}
+
 describe('login throttling', () => {
   it('locks a username after repeated failures, even for the right password, then tells you how long', { timeout: 20000 }, async () => {
     await createUser('victim');
@@ -30,6 +38,32 @@ describe('login throttling', () => {
     const statuses = results.map((r) => r.status);
     expect(statuses.filter((s) => s === 401).length).toBe(5);
     expect(statuses.filter((s) => s === 429).length).toBe(7);
+  });
+
+  it('a stranger cannot lock you out of a browser you have signed in from', { timeout: 30000 }, async () => {
+    await createUser('trusted');
+    const first = await login('trusted');
+    const device = first.headers.getSetCookie().find((c) => c.startsWith('rounds_device='))?.split(';')[0];
+    expect(device).toBeTruthy();
+    for (let i = 0; i < 8; i++) await login('trusted', 'wrong');
+    expect((await login('trusted')).status).toBe(429);
+    expect((await loginWith('trusted', PASSWORD, device)).status).toBe(200);
+  });
+
+  it('a trusted browser still gets locked by its own failures', { timeout: 30000 }, async () => {
+    await createUser('forgetful');
+    const device = (await login('forgetful')).headers.getSetCookie().find((c) => c.startsWith('rounds_device=')).split(';')[0];
+    for (let i = 0; i < 5; i++) expect((await loginWith('forgetful', 'wrong', device)).status).toBe(401);
+    expect((await loginWith('forgetful', PASSWORD, device)).status).toBe(429);
+  });
+
+  it('a device cookie for another name or with a bad signature does not get past the lock', { timeout: 30000 }, async () => {
+    await createUser('owner');
+    await createUser('target');
+    const other = (await login('owner')).headers.getSetCookie().find((c) => c.startsWith('rounds_device=')).split(';')[0];
+    for (let i = 0; i < 6; i++) await login('target', 'wrong');
+    expect((await loginWith('target', PASSWORD, other)).status).toBe(429);
+    expect((await loginWith('target', PASSWORD, other.replace('owner', 'target'))).status).toBe(429);
   });
 
   it('does not lock other usernames', { timeout: 20000 }, async () => {

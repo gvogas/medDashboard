@@ -117,3 +117,21 @@ test('blocked database deletion is reported as a failure, not success', async ()
  try { await assert.rejects(deleteDb(name), /Close other Rounds tabs/); }
  finally { connection.close(); }
 });
+test('saveRows writes many rows and their pending operations in one change', async () => {
+ await first.open(p());
+ const events = [];
+ const off = first.subscribe((e) => events.push(e.type));
+ await first.saveRows([{ kind: 'courses', row: { id: 'c1', code: 'C1', name: 'One' } }, { kind: 'items', row: { id: 'a', title: 'A', courseId: 'c1' } }, { kind: 'items', row: { id: 'b', title: 'B' } }]);
+ off();
+ assert.deepEqual(events, ['change']);
+ assert.deepEqual((await first.pending()).map((op) => op.key).sort(), ['courses:c1', 'items:a', 'items:b']);
+ assert.equal(first.item('a').title, 'A');
+ assert.equal(first.course('c1').name, 'One');
+});
+test('lookups by id follow reloads', async () => {
+ await first.open(p());
+ await first.saveItem({ id: 'x', title: 'Old' });
+ await first.saveItem({ id: 'x', title: 'New' });
+ assert.equal(first.item('x').title, 'New');
+ assert.equal(first.item('missing'), null);
+});

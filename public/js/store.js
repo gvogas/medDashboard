@@ -12,8 +12,11 @@ let db = null, channel = null, userId = null, localTail = Promise.resolve();
 const dbName = (id) => `rounds:${id}`;
 const notify = (evt) => { for (const fn of listeners) fn(evt); };
 export function subscribe(fn) { listeners.add(fn); return () => listeners.delete(fn); }
-export const course = (id) => data.courses.find((r) => r.id === id) || null;
-export const item = (id) => data.items.find((r) => r.id === id) || null;
+// Lookups by id run inside sorts and searches, so they use maps rebuilt on every reload.
+let byId = { courses: new Map(), items: new Map() };
+export const course = (id) => byId.courses.get(id) || null;
+export const item = (id) => byId.items.get(id) || null;
+const index = () => { byId = { courses: new Map(data.courses.map((r) => [r.id, r])), items: new Map(data.items.map((r) => [r.id, r])) }; };
 const profile = (p) => ({ ...p, types: Array.isArray(p.types) ? p.types : [], coat: { name: '', role: '', color: DEFAULT_COAT, ...p.coat }, revision: p.revision || 0 });
 const rowStore = (key) => key === 'profile' ? 'meta' : key.split(':')[0];
 const rowId = (key) => key === 'profile' ? 'profile' : key.slice(key.indexOf(':') + 1);
@@ -29,6 +32,7 @@ export async function reload() {
   }));
   if (db !== handle) return;
   for (const kind of Object.keys(normal)) data[kind] = snapshot[kind].map(normal[kind]);
+  index();
   data.profile = snapshot.profile || null;
   for (const key of Object.keys(dirty)) delete dirty[key];
   for (const op of snapshot.pending) dirty[op.key] = op.op;
@@ -64,6 +68,7 @@ export async function close() {
   channel?.close(); channel = null;
   data.profile = null;
   for (const kind of Object.keys(normal)) data[kind] = [];
+  index();
   for (const key of Object.keys(dirty)) delete dirty[key];
   conflicts.length = 0;
 }
@@ -114,6 +119,17 @@ function deleteRow(kind, id) {
     const row = await a(kind).get(id);
     await queue(a, `${kind}:${id}`, 'delete', row || { id });
     await a(kind).del(id);
+  });
+}
+/** Save many rows, `[{ kind, row }]`, as one change: one transaction, one reload, one broadcast. */
+export function saveRows(rows) {
+  const clean = rows.map(({ kind, row }) => ({ kind, row: normal[kind](structuredClone(row)) }));
+  return mutate(async (a) => {
+    for (const { kind, row } of clean) {
+      await a(kind).put(row);
+      await queue(a, `${kind}:${row.id}`, 'put', row);
+    }
+    return clean.map(({ row }) => row);
   });
 }
 export const saveItem = (row) => saveRow('items', row);

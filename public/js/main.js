@@ -5,15 +5,25 @@ import * as store from './store.js';
 import { data, course } from './store.js';
 import * as sync from './sync.js';
 import { ui, rememberUi } from './state.js';
-import { uid, isOpen, isComplete, normalizeItem, useTypePrefs, typeList, typePrefsFrom, TYPE_COLOURS, MAX_CUSTOM_TYPES, statusesFor } from './model.js';
+import { uid, isOpen, isComplete, normalizeItem, shiftEnd, useTypePrefs, typeList, typePrefsFrom, TYPE_COLOURS, MAX_CUSTOM_TYPES, statusesFor } from './model.js';
 import { typeOn } from './query.js';
 import { iso, parse, addDays, today } from './dates.js';
-import { $, autoGrow } from './dom.js';
+import { $, autoGrow, isTyping } from './dom.js';
 import { render, renderView, renderHeader } from './views/render.js';
 import { renderSidebar } from './views/sidebar.js';
 import { renderStats, renderQuote, nextQuote } from './views/stats.js';
-import { drawer, scrim, closeDrawer, drawerHasFocus } from './views/drawer-base.js';
-import { openItem, newItem, current, saveDraft, touch, renderItemDrawer } from './views/drawer-item.js';
+import { drawer, scrim, closeDrawer, drawerHasFocus, beforeClose } from './views/drawer-base.js';
+import { openItem, newItem, current, saveDraft, touch, touchSoon, flushTouch, renderItemDrawer } from './views/drawer-item.js';
+beforeClose.add(flushTouch);
+let startBase = null;   /* the item's times when its start field took focus */
+document.addEventListener('focusin', (e) => {
+  if (e.target.dataset?.f !== 'start') return;
+  const it = current();
+  startBase = it ? { id: it.id, start: it.start, end: it.end } : null;
+});
+document.addEventListener('focusout', (e) => { if (drawer.contains(e.target)) flushTouch(); });
+window.addEventListener('pagehide', flushTouch);
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') flushTouch(); });
 import { openCourse, renderCourseDrawer, saveCourseDraft, deleteCourseDraft } from './views/drawer-course.js';
 import { openSettings, renderSettings, applyCoat, refreshSyncNote, refreshSpotifyGroup } from './views/drawer-settings.js';
 import * as spotify from './spotify.js';
@@ -144,8 +154,22 @@ sync.onStatus((s) => {
 });
 sync.onPulled(async () => {
   await runReviews();
-  if (!drawerHasFocus()) { render(); if (ui.sel) renderItemDrawer(); if (ui.settings) renderSettings(); }
+  refreshAfterSync();
 });
+
+/* A redraw replaces every field, so one arriving from a sync while someone types would
+   lose their text. Hold it until they leave the field, and until any click has landed:
+   redrawing between press and release would swap the button out from under the pointer. */
+let heldRefresh = false, pointerDown = false, searchTimer = null;
+function refreshAfterSync() {
+  if (isTyping(document.activeElement) || pointerDown) { heldRefresh = true; return; }
+  heldRefresh = false;
+  render(); if (ui.sel) renderItemDrawer(); if (ui.settings) renderSettings();
+}
+const runHeldRefresh = () => setTimeout(() => { if (heldRefresh) refreshAfterSync(); });
+document.addEventListener('focusout', runHeldRefresh);
+document.addEventListener('pointerdown', () => { pointerDown = true; }, true);
+for (const type of ['pointerup', 'pointercancel']) document.addEventListener(type, () => { pointerDown = false; runHeldRefresh(); }, true);
 sync.onUnauthenticated(() => showSignIn('Your session has ended. Sign in again.'));
 
 /* ═════════ spaced review ═════════ */
@@ -159,7 +183,7 @@ async function runReviews() {
   try {
     const setting = readSetting();
     const { rows, through } = dueReviews(setting, data.courses, data.items, today());
-    for (const row of rows) await store.saveItem(normalizeItem(row));
+    if (rows.length) await store.saveRows(rows.map((row) => ({ kind: 'items', row: normalizeItem(row) })));
     if (through !== setting.through) writeSetting({ ...setting, through });
   } finally { reviewing = false; }
 }
@@ -197,7 +221,7 @@ function spotifyReturn() {
 const QUOTE_EVERY_MS = 25000;
 setInterval(() => {
   if (document.visibilityState !== 'visible' || !data.profile) return;
-  if (document.querySelector('.qcard:hover')) return;                 /* being read: leave it */
+  if (document.querySelector('.qcard:hover, .qcard:focus-within')) return;   /* being read: leave it */
   if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return;
   nextQuote();
 }, QUOTE_EVERY_MS);
@@ -209,12 +233,7 @@ function rememberedSession() {
 
 async function boot() {
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(() => {});
-  let profile = null;
-  try {
-    profile = await api.me();
-  } catch (e) {
-    if (!(e instanceof ApiError)) profile = rememberedSession();   /* offline: open what we have */
-  }
+  const profile = await sync.startingProfile(rememberedSession());
   if (profile) { try { await start(profile); } catch (e) { showSignIn(e.message); } } else showSignIn();
 }
 
@@ -238,7 +257,7 @@ async function start(profile) {
 store.subscribe((evt) => {
   if (evt.type === 'save-error') alert('The change could not be saved on this device. ' + evt.message);
   if (evt.type === 'signed-out') { sync.stop(); spotify.stop(); web.stop(); resetRequests(); location.reload(); }
-  if (evt.type === 'remote' && data.profile && !drawerHasFocus()) render();
+  if (evt.type === 'remote' && data.profile) refreshAfterSync();
 });
 window.addEventListener('storage', (event) => {
   if (event.key !== 'rounds.session' || !data.profile) return;
@@ -344,7 +363,7 @@ document.addEventListener('click', async (e) => {
   }
   if ((el = e.target.closest('[data-course]'))) { ui.course = el.dataset.course; render(); return; }
   if ((el = e.target.closest('#viewSeg button'))) { ui.view = el.dataset.view; rememberUi(); render(); return; }
-  if (e.target.closest('#menuBtn')) { $('side').classList.toggle('on'); return; }
+  if (e.target.closest('#menuBtn')) { setSide(!$('side').classList.contains('on')); return; }
   if (e.target.closest('#newBtn')) { newItem(ui.anchor); return; }
   if (e.target.closest('#today')) { ui.anchor = today(); render(); return; }
   if (e.target.closest('#prev') || e.target.closest('#next')) {
@@ -411,6 +430,7 @@ document.addEventListener('click', async (e) => {
     const host = el.dataset.id ? el : el.closest('[data-id]');
     if (host && host.dataset.id) { openItem(host.dataset.id); return; }
   }
+  if (e.target.closest('[data-monthdeadlines]')) { ui.monthDeadlines = !ui.monthDeadlines; rememberUi(); renderView(); return; }
   if ((el = e.target.closest('[data-day]'))) { ui.anchor = el.dataset.day; ui.view = 'week'; rememberUi(); render(); return; }
   if ((el = e.target.closest('[data-sort]'))) {
     const k = el.dataset.sort;
@@ -499,8 +519,22 @@ document.addEventListener('click', async (e) => {
     await touch(s3);
     renderItemDrawer(); return;
   }
-  if (!e.target.closest('#side') && !e.target.closest('#menuBtn')) $('side').classList.remove('on');
+  if (!e.target.closest('#side') && !e.target.closest('#menuBtn') && $('side').classList.contains('on')) setSide(false);
 });
+
+/* On narrow screens the sidebar slides over the page. Closed, it is inert, so Tab does
+   not wander through it off-screen; open, it takes focus and Escape closes it. */
+const narrow = window.matchMedia('(max-width:900px)');
+function setSide(open) {
+  const side = $('side'), btn = $('menuBtn');
+  side.classList.toggle('on', open);
+  side.inert = narrow.matches && !open;
+  btn.setAttribute('aria-expanded', String(open));
+  if (open) side.querySelector('button, input')?.focus();
+  else if (side.contains(document.activeElement)) btn.focus();
+}
+narrow.addEventListener('change', () => setSide(false));
+setSide(false);
 
 scrim.addEventListener('click', closeDrawer);
 
@@ -615,6 +649,13 @@ document.addEventListener('input', async (e) => {
       if (!wasDone && isComplete(it)) celebrate(e.target);
     } else if (d.f === 'start' || d.f === 'end') {
       it[d.f] = parseTime(e.target.value) || '';      /* half-typed stays out of the model until it parses */
+      if (d.f === 'start' && it.start && startBase?.id === it.id) {
+        /* moving the start moves the end with it, measured from before this edit so
+           half-typed times along the way do not stretch or shrink it */
+        it.end = shiftEnd(startBase.start, startBase.end, it.start);
+        const endBox = drawer.querySelector('[data-f="end"]');
+        if (endBox) endBox.value = it.end;
+      }
     } else {
       it[d.f] = e.target.value;
       if (d.f === 'date' && it.recur === 'weekly') it.weekday = parse(it.date).getDay();
@@ -631,10 +672,16 @@ document.addEventListener('input', async (e) => {
       }
     }
     if (!ui.draft) {
-      await touch(it);
-      if (d.f === 'status') await chainReview(it);
       /* notes show nowhere on the board except through the search, so typing them redraws nothing */
-      if (d.f !== 'notes' || ui.search) { renderStats(); renderSidebar(); renderView(); }
+      const redraw = () => { if (d.f !== 'notes' || ui.search) { renderStats(); renderSidebar(); renderView(); } };
+      /* only plain text waits: other fields change what is derived from them (the end
+         follows the start, the weekday the date), and those must save together */
+      if (d.f === 'title' || d.f === 'notes' || d.f === 'where') touchSoon(it, d.f, redraw);
+      else {
+        await touch(it);
+        if (d.f === 'status') await chainReview(it);
+        redraw();
+      }
     }
     if (d.f === 'type' || d.f === 'status' || d.f === 'recur') renderItemDrawer();
     return;
@@ -642,10 +689,15 @@ document.addEventListener('input', async (e) => {
   if (d.cltext) {
     const s = current(); if (!s) return;
     s.checklist.forEach((x) => { if (x.id === d.cltext) x.text = e.target.value; });
-    await touch(s);
+    touchSoon(s, 'checklist');
     return;
   }
-  if (e.target.id === 'search') { ui.search = e.target.value; renderView(); return; }
+  if (e.target.id === 'search') {
+    ui.search = e.target.value;
+    clearTimeout(searchTimer);   /* redraw once typing pauses, not on every key */
+    searchTimer = setTimeout(renderView, 120);
+    return;
+  }
 });
 
 const OUTLINE_ERRORS = {
@@ -701,11 +753,15 @@ document.addEventListener('change', async (e) => {
 
 document.addEventListener('keydown', async (e) => {
   if (e.key === 'Escape') {
+    if (e.defaultPrevented) return;   /* a field used it, like the time picker closing its list */
+    if ($('side').classList.contains('on')) { setSide(false); return; }
     if (e.target.closest?.('#typeNav')) { e.target.blur(); ui.typeAdd = null; ui.typeEdit = false; renderSidebar(true); return; }
     if (ui.view === 'spotify' && spotView.devicesOpen()) { spotView.closeDevices(); return; }
     if (ui.sel || ui.draft || ui.courseDraft || ui.settings) closeDrawer();
     return;
   }
+  /* Rows that open an item (table and office-hour rows) take Enter and Space like a button. */
+  if ((e.key === 'Enter' || e.key === ' ') && e.target.matches?.('tr[data-id][tabindex]')) { e.preventDefault(); e.target.click(); return; }
   /* The Spotify view: / to search, space to play or pause, when not typing or on a button. */
   if (ui.view === 'spotify' && !e.ctrlKey && !e.metaKey && !e.altKey && !/^(input|textarea|select|button|a)$/i.test(e.target.tagName)
       && !e.target.isContentEditable && !ui.sel && !ui.draft && !ui.courseDraft && !ui.settings) {

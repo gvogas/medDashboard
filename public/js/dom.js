@@ -6,6 +6,13 @@ export function $(id) {
   return document.getElementById(id);
 }
 
+/** True when el takes typed text, so redrawing it would lose what is being typed. */
+export function isTyping(el) {
+  if (!el) return false;
+  if (el.isContentEditable || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT') return true;
+  return el.tagName === 'INPUT' && !/^(checkbox|radio|button|submit|reset|range|color|file|image)$/i.test(el.type);
+}
+
 export function autoGrow(el) {
   if (!el) return;
   el.style.height = 'auto';

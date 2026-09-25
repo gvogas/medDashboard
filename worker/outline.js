@@ -8,7 +8,7 @@
 //
 // Cost: toMarkdown is free for documents; the extraction is one gpt-oss-120b call
 // (about 300 neurons for a 10-page outline), bounded by MAX_CHARS in and MAX_TOKENS
-// out, and by OUTLINE_DAILY_LIMIT per person per day. On three real outlines it
+// out, and by OUTLINE_DAILY_LIMIT model calls per person per day. On three real outlines it
 // scored 18/21 against 14/21 for Llama 3.3 70B; see the study-tools spec.
 
 import { HttpError } from './http.js';
@@ -183,11 +183,16 @@ export async function outlineText(ai, bytes, type, name) {
   return doc.data;
 }
 
-export async function readOutline(ai, { bytes, type, name, today, termStart }) {
+/**
+ * `claim` runs just before the model does: only an outline that reaches the model uses
+ * one of the day's attempts, not a file that could not be converted or has no text.
+ */
+export async function readOutline(ai, { bytes, type, name, today, termStart, claim }) {
   let text = (await outlineText(ai, bytes, type, name)).trim();
   if (text.length < 40) throw new HttpError(422, { error: 'outline_empty' });
   const truncated = text.length > MAX_CHARS;
   if (truncated) text = text.slice(0, MAX_CHARS);
+  if (claim) await claim();
   let out;
   try {
     out = await ai.run(MODEL, { messages: prompt(text, today, termStart), max_tokens: MAX_TOKENS, temperature: 0 });

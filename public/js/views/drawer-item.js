@@ -27,7 +27,9 @@ export function newItem(date, type) {
 /** The item being edited: the unsaved draft, or the selected stored item. */
 export function current() {
   if (ui.draft) return ui.draft;
-  return ui.sel ? item(ui.sel) : null;
+  const row = ui.sel ? item(ui.sel) : null;
+  if (row && soon?.id === row.id) row[soon.field] = soon.value;   /* a reload must not undo typing */
+  return row;
 }
 
 /** Save the new item and close the drawer; the row appears on the board. */
@@ -40,7 +42,34 @@ export async function saveDraft() {
 /** Persist an edit to a stored item. Drafts are kept in memory until saved. */
 export async function touch(it) {
   if (ui.draft === it) return;
+  if (soon?.id === it.id) { it[soon.field] = soon.value; clearTimeout(soon.timer); soon = null; }
+  else await flushTouch();
   await saveItem(it);
+}
+
+/* Typing saves when it pauses, not on every key: each save rewrites the local database,
+   reloads it and tells the other tabs. The typed value is held apart from the row, since
+   a sync may reload the row in the meantime; leaving the field or the drawer saves at once. */
+const TYPING_MS = 400;
+let soon = null;   /* { id, field, value, after, timer } */
+
+export function touchSoon(it, field, after) {
+  if (ui.draft === it) return;
+  if (soon && (soon.id !== it.id || soon.field !== field)) flushTouch();
+  clearTimeout(soon?.timer);
+  soon = { id: it.id, field, value: it[field], after, timer: setTimeout(flushTouch, TYPING_MS) };
+}
+
+export async function flushTouch() {
+  const s = soon;
+  soon = null;
+  if (!s) return;
+  clearTimeout(s.timer);
+  const row = item(s.id);
+  if (!row) return;
+  row[s.field] = s.value;
+  await saveItem(row);
+  s.after?.();
 }
 
 export function renderItemDrawer(focusTitle) {

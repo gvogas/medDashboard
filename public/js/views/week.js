@@ -29,6 +29,13 @@ function rowHtml(inst) {
     + '<span class="badges">' + badges + '</span></button>';
 }
 
+/** A class under its day: time, course name and room, in the course's colour. */
+export function classChip(x) {
+  return '<span class="mchip" data-accent="' + x.course.color + '" title="' + esc([x.course.code, x.mtg.kind, x.mtg.room].filter(Boolean).join(' · ')) + '">'
+    + '<b>' + hhmm(x.mtg.start) + '</b> ' + esc(x.course.name || x.course.code)
+    + (x.mtg.room ? ' <span class="rm">' + esc(x.mtg.room) + '</span>' : '') + '</span>';
+}
+
 export function renderWeek() {
   const TODAY = today();
   const start = monday(parse(ui.anchor)), from = iso(start), to = iso(addDays(start, 6));
@@ -57,10 +64,10 @@ export function renderWeek() {
     sched += '<div class="day' + (key === TODAY ? ' is-today' : '') + '">'
       + DOW[d.getDay()] + ' ' + d.getDate() + ' ' + MON[d.getMonth()].slice(0, 3)
       + (key === TODAY ? '<span class="today-tag">Today</span>' : '')
-      + (cls.length ? '<span class="classes">' + cls.length + ' class' + (cls.length === 1 ? '' : 'es') + ' · ' + esc(cls.map((x) => hhmm(x.mtg.start) + ' ' + x.course.code).join(', ')) + '</span>' : '')
+      + (rows.length ? '' : '<span class="free">Nothing due</span>')
       + '<button class="add" type="button" data-add="' + key + '" aria-label="Add item on ' + key + '">+</button></div>';
-    if (!rows.length) sched += '<div class="empty" data-layout="08628ee7">Nothing scheduled</div>';
-    else rows.forEach((x) => { sched += rowHtml(x); });
+    if (cls.length) sched += '<div class="dayclasses">' + cls.map(classChip).join('') + '</div>';
+    rows.forEach((x) => { sched += rowHtml(x); });
   }
   if (!any) {
     sched += data.items.length
@@ -75,7 +82,7 @@ export function renderWeek() {
   if (!ohRows.length) ohHtml += '<tr><td colspan="2" class="empty">None yet</td></tr>';
   ohRows.forEach((it, i) => {
     const c = course(it.courseId);
-    ohHtml += '<tr data-id="' + esc(it.id) + '"><td class="' + (i === 0 ? 'next' : '') + '">'
+    ohHtml += '<tr data-id="' + esc(it.id) + '" tabindex="0"><td class="' + (i === 0 ? 'next' : '') + '">'
       + (i === 0 ? '<svg class="mini-scope" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true">'
         + (ui.bg === 'cs' ? '<path d="M3 6l5 4-5 4M10 15h7"/>' : '<path d="M4 3c0 6 2 7 4 9s6 3 8 1"/><circle cx="16" cy="14" r="3.4"/>') + '</svg>' : '')
       + esc(it.title.replace(' — office hours', '')) + ' <span class="dept">' + esc(it.dept || (c ? c.code : '')) + '</span></td>'
@@ -90,9 +97,9 @@ export function renderWeek() {
   tasks.slice(0, 9).forEach((it) => {
     tHtml += '<div class="task' + (isOpen(it) ? '' : ' done') + '">'
       + '<button class="box" type="button" data-toggle="' + esc(it.id) + '" aria-pressed="' + (isOpen(it) ? 'false' : 'true') + '" aria-label="Mark done">' + CHECK_SVG + '</button>'
-      + '<span class="tx" data-id="' + esc(it.id) + '">' + esc(it.title)
+      + '<button type="button" class="tx" data-id="' + esc(it.id) + '">' + esc(it.title)
       + (it.date ? ' <span class="meta">' + (isOverdue(it) ? '· overdue' : '· ' + DOW[parse(it.date).getDay()] + ' ' + parse(it.date).getDate()) + '</span>' : '')
-      + '</span></div>';
+      + '</button></div>';
   });
   tHtml += '<div class="quick"><input type="text" id="quickTask" placeholder="Add a task, press Enter" aria-label="Add a task"></div>'
     + '<svg class="steroid" viewBox="0 0 120 80" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true">'

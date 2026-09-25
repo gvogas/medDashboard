@@ -233,7 +233,8 @@ type the username again to confirm, and it can't be undone.
   letters don't matter.
 - **Lockouts:** after 5 wrong passwords, that username is locked for 1 minute. Each
   further wrong guess doubles the wait, up to 1 hour. The sign-in screen shows how
-  long to wait.
+  long to wait. A browser that has signed in as that name before has its own count,
+  so someone else's wrong guesses don't lock you out there.
 - **Staying signed in:** a sign-in lasts 30 days and renews itself automatically while
   the app is used.
 - **Sign out everywhere:** changing a password signs that person out on every device.

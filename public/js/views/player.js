@@ -28,6 +28,14 @@ const MESSAGES = {
 
 let lastKey = null;
 
+/* Redraw the badge, keeping the keyboard on the same control: play and pause are one button. */
+function draw(host, html) {
+  const el = host.contains(document.activeElement) ? document.activeElement : null;
+  const slot = el ? (el.classList.contains('pp') ? '.pp' : el.dataset.spotify ? '[data-spotify="' + el.dataset.spotify + '"]' : null) : null;
+  setHTML(host, html);
+  if (slot) host.querySelector(slot)?.focus();
+}
+
 function message(s) {
   return s.error ? '<div class="msg" role="status">' + esc(MESSAGES[s.error] || MESSAGES.spotify_unavailable) + '</div>' : '';
 }
@@ -54,21 +62,21 @@ export function renderPlayer(s, kind = 'state') {
   host.toggleAttribute('data-stale', !!s.stale);
   host.dataset.state = !s.loaded ? 'loading' : !s.connected ? 'off' : !s.track ? 'idle' : s.playing ? 'playing' : 'paused';
   host.hidden = !s.loaded;
-  if (!s.loaded) { setHTML(host, ''); return; }
+  if (!s.loaded) { draw(host, ''); return; }
 
   if (!s.connected) {
-    setHTML(host, '<a class="connect" href="/api/spotify/connect">' + SPOTIFY_MARK + 'Connect Spotify</a>');
+    draw(host, '<a class="connect" href="/api/spotify/connect">' + SPOTIFY_MARK + 'Connect Spotify</a>');
     return;
   }
   const target = playTarget(s, web);
   if (!s.track) {
-    setHTML(host, '<div class="quiet">' + SPOTIFY_MARK + 'Nothing playing'
+    draw(host, '<div class="quiet">' + SPOTIFY_MARK + 'Nothing playing'
       + (target === 'here' ? '<button class="pp" type="button" data-spotify="play" aria-label="Play in Rounds" title="Play in Rounds">' + ICON.play + '</button>' : '')
       + '</div>' + message(s));
     return;
   }
   const t = s.track;
-  setHTML(host,
+  draw(host,
     '<div class="now">'
       + (t.art ? '<img class="art" src="' + esc(t.art) + '" alt="" width="42" height="42">' : '<span class="art"></span>')
       + '<div class="meta">'

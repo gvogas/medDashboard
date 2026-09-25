@@ -1,7 +1,9 @@
-import { SELF } from 'cloudflare:test';
+import { SELF, env } from 'cloudflare:test';
 import { describe, it, expect, beforeAll } from 'vitest';
 import { hashPassword, verifyPassword, normalizeUsername } from '../worker/password.js';
 import { createUser, login } from './helpers.js';
+import { throttleRowsFor } from '../worker/throttle.js';
+import addUserScript from '../scripts/add-user.mjs?raw';
 
 describe('password hashing', () => {
   it('round-trips and rejects the wrong password', { timeout: 20000 }, async () => {
@@ -67,5 +69,19 @@ describe('POST /api/login', () => {
       method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ username: 'student1' }),
     });
     expect(res.status).toBe(400);
+  });
+});
+
+describe('npm run user:add -- --reset / --delete', () => {
+  it("clears the name's sign-in throttle, its own row and its trusted devices'", async () => {
+    const names = ['a_b', 'a_b#0123456789abcdef01234567', 'axb#0123456789abcdef01234567', 'a_bc', 'a_bc#0123456789abcdef01234567'];
+    await env.DB.batch(names.map((n) => env.DB.prepare('INSERT INTO login_throttle (username, fails, locked_until, updated_at) VALUES (?, 5, 0, 0)').bind(n)));
+    await env.DB.prepare(`DELETE FROM login_throttle WHERE ${throttleRowsFor('a_b')}`).run();
+    const left = await env.DB.prepare('SELECT username FROM login_throttle ORDER BY username').all();
+    expect(left.results.map((r) => r.username).filter((n) => names.includes(n))).toEqual(['a_bc', 'a_bc#0123456789abcdef01234567', 'axb#0123456789abcdef01234567']);
+  });
+
+  it('is what the script runs on a reset and a delete', () => {
+    expect(addUserScript.match(/DELETE FROM login_throttle WHERE \$\{throttleRowsFor\(username\)\}/g)).toHaveLength(2);
   });
 });
