@@ -8,6 +8,7 @@ import { CHECK_SVG } from './bits.js';
 import { GRADABLE } from '../grades.js';
 import { prepPace, prepLabel } from '../prep.js';
 import { drawer, showDrawer, hideDrawer, resetDrawerState, closeDrawer } from './drawer-base.js';
+import { studiedFor, duration } from './study.js';
 
 export function openItem(id) {
   resetDrawerState();
@@ -115,6 +116,7 @@ export function renderItemDrawer(focusTitle) {
       + '<label for="f-where">Room</label><input id="f-where" type="text" data-f="where" value="' + esc(it.where || '') + '" placeholder="Room, lab, platform" maxlength="80">'
       + '<label for="f-status">Status</label><select id="f-status" data-f="status">' + stOpts + '</select>'
       + (GRADABLE.includes(baseOf(it.type)) ? '<label for="f-weight">Weight</label><input id="f-weight" type="number" min="0" max="100" step="any" data-f="weight" value="' + (typeof it.weight === 'number' ? it.weight : '') + '" placeholder="% of course">' : '')
+      + (studiedFor(it.id) ? '<span class="flabel">Studied</span><span class="studied mono">' + duration(studiedFor(it.id)) + '</span>' : '')
       + (it.status === 'graded' ? '<label for="f-grade">Grade</label><input id="f-grade" type="number" min="0" max="100" data-f="grade" value="' + (typeof it.grade === 'number' ? it.grade : '') + '" placeholder="%">' : '')
       + ((it.type === 'office' || it.type === 'tutoring')
           ? '<label for="f-recur">Repeats</label><span class="pair"><input id="f-recur" type="checkbox" data-f="recur" ' + (it.recur === 'weekly' ? 'checked' : '') + ' data-layout="d5cb2920"><span>every week on ' + DOW[it.recur === 'weekly' ? it.weekday : parse(it.date).getDay()] + '</span></span>'

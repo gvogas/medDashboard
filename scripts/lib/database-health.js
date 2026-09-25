@@ -1,5 +1,5 @@
 // Read-only checks shared by the CLI and D1 tests. Results contain counts only.
-const trackerTables = ['courses', 'items', 'quotes'];
+const trackerTables = ['courses', 'items', 'quotes', 'study_sessions'];
 export const databaseChecks = [
   { name: 'SQLite integrity', sql: 'PRAGMA quick_check', kind: 'integrity' },
   { name: 'Foreign keys', sql: 'PRAGMA foreign_key_check', kind: 'rows' },
@@ -26,7 +26,7 @@ export const databaseChecks = [
   },
   {
     name: 'Change-feed orphans', kind: 'count',
-    sql: `SELECT count(*) AS issues FROM changes AS c WHERE c.kind NOT IN ('courses', 'items', 'quotes') OR ${trackerTables.map((table) =>
+    sql: `SELECT count(*) AS issues FROM changes AS c WHERE c.kind NOT IN (${trackerTables.map((t) => `'${t}'`).join(', ')}) OR ${trackerTables.map((table) =>
       `(c.kind = '${table}' AND NOT EXISTS (SELECT 1 FROM ${table} AS r WHERE r.user_id = c.user_id AND r.id = c.row_id))`).join(' OR ')}`,
   },
 ];

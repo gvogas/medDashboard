@@ -11,6 +11,7 @@ import { renderMonth } from './month.js';
 import { renderTable } from './table.js';
 import { renderSpotifyInto } from './spotify-view.js';
 import { state as spotify } from '../spotify.js';
+import { renderStudy, renderFocus } from './study.js';
 
 export function renderHeader() {
   const a = parse(ui.anchor), t = $('viewTitle'), s = $('viewSub');
@@ -21,6 +22,9 @@ export function renderHeader() {
   } else if (ui.view === 'month') {
     t.textContent = MON[a.getMonth()] + ' ' + a.getFullYear();
     s.textContent = '';
+  } else if (ui.view === 'study') {
+    t.textContent = 'Study';
+    s.textContent = '';
   } else if (ui.view === 'spotify') {
     t.textContent = 'Spotify';
     s.textContent = !spotify.loaded ? '' : !spotify.connected ? 'Not connected' : spotify.device ? 'Playing on ' + spotify.device : 'No active device';
@@ -28,7 +32,7 @@ export function renderHeader() {
     t.textContent = 'All items';
     s.textContent = '';
   }
-  const music = ui.view === 'spotify';
+  const music = ui.view === 'spotify' || ui.view === 'study';
   document.querySelector('.navdate').hidden = music;
   $('stats').hidden = music;
   document.querySelectorAll('#viewSeg button').forEach((b) => {
@@ -36,11 +40,18 @@ export function renderHeader() {
   });
 }
 
+/* The focus screen is a layout of the page: the study clock beside the Spotify view. */
+export const showsSpotify = () => ui.focus || ui.view === 'spotify';
+
 export function renderView() {
-  const root = $('viewRoot');
-  root.className = ui.view === 'table' || ui.view === 'spotify' ? 'fixed' : '';   /* these scroll their own rows */
-  root.dataset.view = ui.view;
-  if (ui.view === 'spotify') { renderSpotifyInto(root); return; }
+  const root = $('viewRoot'), focusing = ui.focus;
+  document.documentElement.classList.toggle('focusing', focusing);
+  $('focusClock').hidden = !focusing;
+  if (focusing) renderFocus();
+  root.className = focusing || ui.view === 'table' || ui.view === 'spotify' ? 'fixed' : '';   /* these scroll their own rows */
+  root.dataset.view = focusing ? 'spotify' : ui.view;
+  if (showsSpotify()) { renderSpotifyInto(root); return; }
+  if (ui.view === 'study') { setHTML(root, renderStudy()); return; }
   setHTML(root, ui.view === 'week' ? renderWeek() : ui.view === 'month' ? renderMonth() : renderTable());
 }
 

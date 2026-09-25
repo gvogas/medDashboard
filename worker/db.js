@@ -2,7 +2,7 @@
 import { HttpError } from './http.js';
 
 const PROFILE_COLS =
-  'id, username, display_name, coat_name, coat_role, coat_color, theme, bg, types, term_start, created_at, updated_at, revision';
+  'id, username, display_name, coat_name, coat_role, coat_color, theme, bg, types, study_flow, term_start, created_at, updated_at, revision';
 
 function profileFromRow(r) {
   return {
@@ -13,6 +13,7 @@ function profileFromRow(r) {
     theme: r.theme,
     bg: r.bg,
     types: jsonOut(r.types),
+    studyFlow: flowOut(r.study_flow),
     termStart: r.term_start,
     createdAt: r.created_at,
     updatedAt: r.updated_at,
@@ -38,9 +39,9 @@ export async function getProfile(db, userId) {
 export async function updateProfile(db, userId, p, now = Date.now(), revision) {
   const saved = await db
     .prepare(
-      `UPDATE users SET display_name = ?, coat_name = ?, coat_role = ?, coat_color = ?, theme = ?, bg = ?, types = COALESCE(?, types), term_start = ?, updated_at = ?, revision = revision + 1 WHERE id = ? AND revision = ? RETURNING ${PROFILE_COLS}`,
+      `UPDATE users SET display_name = ?, coat_name = ?, coat_role = ?, coat_color = ?, theme = ?, bg = ?, types = COALESCE(?, types), study_flow = COALESCE(?, study_flow), term_start = ?, updated_at = ?, revision = revision + 1 WHERE id = ? AND revision = ? RETURNING ${PROFILE_COLS}`,
     )
-    .bind(p.displayName, p.coatName, p.coatRole, p.coatColor, p.theme, p.bg, p.types === null ? null : JSON.stringify(p.types), p.termStart, now, userId, revision ?? -1)
+    .bind(p.displayName, p.coatName, p.coatRole, p.coatColor, p.theme, p.bg, p.types === null ? null : JSON.stringify(p.types), p.studyFlow ? JSON.stringify(p.studyFlow) : null, p.termStart, now, userId, revision ?? -1)
     .first();
   if (!saved) throw new HttpError(409, { error: 'conflict', current: await getProfile(db, userId) });
   return profileFromRow(saved);
@@ -55,6 +56,11 @@ const jsonIn = (v) => JSON.stringify(v ?? []);
 const jsonOut = (v) => {
   if (typeof v !== 'string') return v ?? [];
   try { return JSON.parse(v); } catch { return []; }
+};
+
+const DEFAULT_FLOW = { steps: [['study', 25], ['break', 5]], rounds: 4 };
+const flowOut = (v) => {
+  try { const f = JSON.parse(v); return f && Array.isArray(f.steps) ? f : DEFAULT_FLOW; } catch { return DEFAULT_FLOW; }
 };
 
 const TABLES = {
@@ -75,6 +81,11 @@ const TABLES = {
   quotes: {
     cols: { text: 'text', source: 'source' },
     toRow: (q) => q,
+    fromRow: () => ({}),
+  },
+  study_sessions: {
+    cols: { courseId: 'course_id', itemId: 'item_id', startedAt: 'started_at', studyMinutes: 'study_minutes', roundsDone: 'rounds_done' },
+    toRow: (s) => s,
     fromRow: () => ({}),
   },
 };
@@ -140,7 +151,7 @@ export async function purgeTombstones(db, before) {
   await db.batch(
     [db.prepare('UPDATE sync_state SET floor = MAX(floor, COALESCE((SELECT MAX(seq) FROM changes WHERE deleted_at < ?), 0)) WHERE id = 1').bind(before),
     db.prepare('DELETE FROM changes WHERE deleted_at < ?').bind(before),
-    ...['items', 'quotes', 'courses'].map((table) =>
+    ...['study_sessions', 'items', 'quotes', 'courses'].map((table) =>
       db.prepare(`DELETE FROM ${table} WHERE deleted_at IS NOT NULL AND deleted_at < ?`).bind(before),
     )],
   );
@@ -154,6 +165,15 @@ export async function deleteRow(db, table, userId, id, now = Date.now(), revisio
   if (table === 'courses') {
     stmts.push(
       db.prepare('UPDATE items SET course_id = NULL, updated_at = ?, revision = revision + 1 WHERE user_id = ? AND course_id = ? AND changes() > 0').bind(now, userId, id),
+    );
+  }
+  // Study sessions outlive their course and item; only the link goes. The guard is the
+  // delete above having happened now (changes() would only see the statement before).
+  const unlink = { courses: 'course_id', items: 'item_id' }[table];
+  if (unlink) {
+    stmts.push(
+      db.prepare(`UPDATE study_sessions SET ${unlink} = NULL, updated_at = ?, revision = revision + 1 WHERE user_id = ? AND ${unlink} = ? AND deleted_at IS NULL
+        AND EXISTS (SELECT 1 FROM ${table} WHERE user_id = ? AND id = ? AND deleted_at = ?)`).bind(now, userId, id, userId, id, now),
     );
   }
   const results = await db.batch(stmts);

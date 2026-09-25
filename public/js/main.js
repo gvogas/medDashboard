@@ -5,7 +5,7 @@ import * as store from './store.js';
 import { data, course } from './store.js';
 import * as sync from './sync.js';
 import { ui, rememberUi } from './state.js';
-import { uid, isOpen, isComplete, normalizeItem, shiftEnd, classRoom, useTypePrefs, typeList, typePrefsFrom, TYPE_COLOURS, MAX_CUSTOM_TYPES, statusesFor } from './model.js';
+import { uid, isOpen, isComplete, normalizeItem, shiftEnd, classRoom, useTypePrefs, typeList, typePrefsFrom, TYPE_COLOURS, MAX_CUSTOM_TYPES, statusesFor, normalizeFlow, FLOW_PRESETS } from './model.js';
 import { typeOn } from './query.js';
 import { iso, parse, addDays, today } from './dates.js';
 import { $, autoGrow, isTyping } from './dom.js';
@@ -38,6 +38,8 @@ import { readSetting, writeSetting, dueReviews, nextReview } from './reviews.js'
 import { fillTopics } from './prep.js';
 import { pdfText } from './pdftext.js';
 import { previewImport, previewOutline, renderImport, editImport, commitImport } from './views/drawer-import.js';
+import * as focus from './focus.js';
+import { paint as paintStudy, clearRun, flow as studyFlow } from './views/study.js';
 
 /* ═════════ theme ═════════ */
 useTypePrefs(() => data.profile?.types || []);
@@ -200,13 +202,13 @@ spotify.onState((s, kind) => {
   if (kind !== 'state') return;
   if (s.connected) web.start(); else if (s.loaded) web.stop();     /* the tab is a device only while connected */
   if (ui.settings && !drawerHasFocus()) refreshSpotifyGroup();
-  if (ui.view === 'spotify') { spotView.onPlayerState(); renderHeader(); }
+  if (ui.view === 'spotify' || ui.focus) { spotView.onPlayerState(); renderHeader(); }
 });
 web.onChange(() => {
   renderPlayer(spotify.state);
   if (ui.settings && !drawerHasFocus()) refreshSpotifyGroup();
 });
-spotView.onChange(() => { if (ui.view === 'spotify') renderView(); });   /* the view keeps its own scroll and caret */
+spotView.onChange(() => { if (ui.view === 'spotify' || ui.focus) renderView(); });   /* the view keeps its own scroll and caret */
 spotify.onUnauthenticated(() => showSignIn('Your session has ended. Sign in again.'));
 
 /* Spotify's consent page sends the browser back to /#spotify=connected or =error. */
@@ -245,7 +247,10 @@ async function start(profile) {
   setBg(data.profile.bg || ui.bg, { persist: false });
   applyCoat();
   ui.quoteIx = data.quotes.length ? Math.floor(Math.random() * data.quotes.length) : 0;
+  await focus.load();
+  if (focus.active()) ui.focus = true;       /* a run this device was in the middle of */
   render();
+  paintStudy(false);
   drawOrnament();
   sync.init();
   sync.syncNow();
@@ -287,6 +292,7 @@ async function signOut({ everywhere = false } = {}) {
     return;
   }
   await sync.drain();
+  focus.reset();
   const id = data.profile?.id;
   spotify.stop();
   web.stop();
@@ -325,6 +331,93 @@ $('signin').addEventListener('submit', async (e) => {
   }
 });
 
+/* ═════════ the study timer ═════════ */
+const drawerOpen = () => !!(ui.sel || ui.draft || ui.courseDraft || ui.settings);
+
+focus.onTick((s, event) => {
+  if (event === 'start') { ui.focus = true; render(); }
+  else if (event === 'end') {
+    ui.focus = false;
+    ui.view = 'study'; rememberUi();
+    clearRun();
+    render();
+    return;
+  } else if (event === 'step' && s.kind === 'study' && !ui.focus && !drawerOpen()) {
+    ui.focus = true;                       /* a new Study step pulls you back in */
+    render();
+  }
+  paintStudy(event !== 'start');
+});
+
+function openFocus() {
+  ui.focus = true;
+  focus.fullscreen(true);
+  render(); paintStudy(false);
+}
+function leaveFocus() {
+  ui.focus = false;
+  focus.fullscreen(false);
+  if (ui.view === 'study') { ui.view = 'week'; rememberUi(); }
+  render(); paintStudy(false);
+}
+
+/* Every change to the flow saves it to the profile, so it follows you to other devices. */
+async function saveFlow(next) {
+  await store.saveProfile({ studyFlow: normalizeFlow(next) });
+  renderView();
+}
+
+async function studyClick(e) {
+  let el;
+  if (e.target.closest('[data-study-start]')) {
+    if (!ui.study.courseId || focus.active()) return true;
+    await focus.begin(studyFlow(), ui.study.courseId, ui.study.itemId);
+    return true;
+  }
+  if (e.target.closest('[data-study-pause]')) { await focus.togglePause(); return true; }
+  if (e.target.closest('[data-study-skip]')) { await focus.skip(); return true; }
+  if (e.target.closest('[data-study-stop]')) { await focus.stop(); return true; }
+  if (e.target.closest('[data-study-leave]')) { leaveFocus(); return true; }
+  if (e.target.closest('[data-study-back]')) { openFocus(); return true; }
+  if ((el = e.target.closest('[data-study-sessdel]'))) { await store.deleteStudySession(el.dataset.studySessdel); renderView(); return true; }
+  const f = studyFlow();
+  if ((el = e.target.closest('[data-study-kind]'))) {
+    const step = f.steps[+el.dataset.studyKind];
+    if (step) step[0] = step[0] === 'study' ? 'break' : 'study';
+    /* a flow needs a Study step: switching the only one is refused by normalizeFlow */
+    if (f.steps.some(([k]) => k === 'study')) await saveFlow(f);
+    return true;
+  }
+  if ((el = e.target.closest('[data-study-del]'))) {
+    f.steps.splice(+el.dataset.studyDel, 1);
+    if (f.steps.some(([k]) => k === 'study')) await saveFlow(f);
+    return true;
+  }
+  if ((el = e.target.closest('[data-study-add]'))) {
+    if (f.steps.length < 12) { f.steps.push([el.dataset.studyAdd, el.dataset.studyAdd === 'study' ? 25 : 5]); await saveFlow(f); }
+    return true;
+  }
+  if ((el = e.target.closest('[data-study-preset]'))) {
+    const preset = FLOW_PRESETS[+el.dataset.studyPreset];
+    if (preset) await saveFlow(structuredClone(preset[1]));
+    return true;
+  }
+  return false;
+}
+
+async function studyChange(target) {
+  if (target.id === 'studyCourse') { ui.study.courseId = target.value; ui.study.itemId = null; renderView(); return true; }
+  if (target.id === 'studyItem') { ui.study.itemId = target.value || null; return true; }
+  if (target.id === 'studyRounds' || target.dataset?.studyMin !== undefined) {
+    const f = studyFlow();
+    if (target.id === 'studyRounds') f.rounds = +target.value;
+    else if (f.steps[+target.dataset.studyMin]) f.steps[+target.dataset.studyMin][1] = +target.value;
+    await saveFlow(f);
+    return true;
+  }
+  return false;
+}
+
 /* ═════════ events ═════════ */
 document.addEventListener('click', async (e) => {
   let el;
@@ -362,7 +455,11 @@ document.addEventListener('click', async (e) => {
     render(); return;
   }
   if ((el = e.target.closest('[data-course]'))) { ui.course = el.dataset.course; render(); return; }
-  if ((el = e.target.closest('#viewSeg button'))) { ui.view = el.dataset.view; rememberUi(); render(); return; }
+  if ((el = e.target.closest('#viewSeg button'))) {
+    if (el.dataset.view === 'study' && focus.active()) { openFocus(); return; }
+    ui.view = el.dataset.view; rememberUi(); render(); return;
+  }
+  if (await studyClick(e)) return;
   if (e.target.closest('#menuBtn')) { setSide(!$('side').classList.contains('on')); return; }
   if (e.target.closest('#newBtn')) { newItem(ui.anchor); return; }
   if (e.target.closest('#today')) { ui.anchor = today(); render(); return; }
@@ -741,6 +838,7 @@ document.addEventListener('pointerdown', (e) => {
 });
 
 document.addEventListener('change', async (e) => {
+  if (await studyChange(e.target)) return;
   const renamed = e.target.dataset?.typelabel;
   if (renamed) {
     const list = typesOnScreen(), t = list.find((x) => x.id === renamed);

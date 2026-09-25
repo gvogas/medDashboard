@@ -43,10 +43,13 @@ devices. `worker/validate.js` checks the shape: `steps` is an array of 1–12 pa
 `["study"|"break", 1..180]` with an integer minute count, at least one `study` step;
 `rounds` is an integer 1–12.
 
-### `sessions`
+### `study_sessions`
+
+(Named `study_sessions` in the build: "sessions" already means sign-in sessions in
+this codebase.)
 
 ```sql
-CREATE TABLE sessions (
+CREATE TABLE study_sessions (
   user_id        TEXT NOT NULL REFERENCES users(id),
   id             TEXT NOT NULL CHECK (length(id) BETWEEN 1 AND 24),
   course_id      TEXT,
@@ -60,13 +63,13 @@ CREATE TABLE sessions (
   revision       INTEGER NOT NULL DEFAULT 1 CHECK (typeof(revision) = 'integer' AND revision > 0),
   PRIMARY KEY (user_id, id)
 );
-CREATE INDEX sessions_user_started ON sessions (user_id, started_at);
+CREATE INDEX study_sessions_user_started ON study_sessions (user_id, started_at);
 ```
 
-It is a synced row table exactly like `quotes`: `PUT` / `DELETE /api/sessions/:id`, the
+It is a synced row table exactly like `quotes`: `PUT` / `DELETE /api/study_sessions/:id`, the
 `changes` feed, soft delete, and the nightly purge of tombstones. The server wiring is
 adding `sessions` to the route pattern, `VALIDATORS`, the table list in `worker/db.js`
-and the sync pull. `account_summary` gains a `sessions` count.
+and the sync pull. `account_summary` gains a `study_sessions` count.
 
 `rounds_done` counts rounds whose every step finished; it is shown in the log
 ("2 rounds") and not used for anything else.
@@ -82,8 +85,9 @@ No DOM. It takes the flow and a run record and answers "where are we": current r
 step index, kind (`study` / `break`), seconds left, study seconds so far, and whether
 the flow is done.
 
-The run record is timestamps, not a counter: `{ startedAt, pausedAt, pausedMs, skips }`,
-where `skips` lists the times a step was skipped. Position is computed from
+The run record is timestamps, not a counter: `{ flow, startedAt, pausedAt, pausedMs,
+skippedMs, skippedStudyMs }`; a skip jumps the clock forward and sets aside the study
+time it passed over. Position is computed from
 `now - startedAt - pausedMs`, so a phone that sleeps or a background tab that is
 throttled comes back showing the right time, and a reload resumes the run.
 

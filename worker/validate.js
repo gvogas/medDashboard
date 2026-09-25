@@ -141,7 +141,22 @@ export function validateProfile(body) {
     termStart: optDate(body.termStart, 'termStart'),
     // Older clients do not send types; the stored list is kept (null here).
     types: body.types === undefined ? null : typeList(body.types),
+    // Older clients do not send a flow; the stored one is kept (null here).
+    studyFlow: body.studyFlow === undefined ? null : studyFlow(body.studyFlow),
   };
+}
+
+/* The study timer's flow: Study and Break steps repeated for a number of rounds. */
+const STEP_KINDS = ['study', 'break'];
+export function studyFlow(v) {
+  obj(v, 'studyFlow');
+  if (!Array.isArray(v.steps) || v.steps.length < 1 || v.steps.length > 12) fail('studyFlow.steps');
+  const steps = v.steps.map((s, i) => {
+    if (!Array.isArray(s) || s.length !== 2) fail(`studyFlow.steps[${i}]`);
+    return [oneOf(s[0], `studyFlow.steps[${i}]`, STEP_KINDS), int(s[1], `studyFlow.steps[${i}]`, 1, 180)];
+  });
+  if (!steps.some(([k]) => k === 'study')) fail('studyFlow.steps');
+  return { steps, rounds: int(v.rounds, 'studyFlow.rounds', 1, 12) };
 }
 
 function meeting(m, f) {
@@ -209,6 +224,17 @@ export function validateItem(body) {
   if (out.start && out.end && out.end <= out.start) fail('end');
   if (out.recurUntil && out.recurUntil < out.date) fail('recurUntil');
   return out;
+}
+
+export function validateStudySession(body) {
+  obj(body, 'body');
+  return {
+    courseId: optStr(body.courseId, 'courseId', 40) || null,
+    itemId: optStr(body.itemId, 'itemId', 24) || null,
+    startedAt: int(body.startedAt, 'startedAt', 1, Number.MAX_SAFE_INTEGER),
+    studyMinutes: int(body.studyMinutes, 'studyMinutes', 1, 1440),
+    roundsDone: int(body.roundsDone ?? 0, 'roundsDone', 0, 12),
+  };
 }
 
 export function validateQuote(body) {

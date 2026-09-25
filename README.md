@@ -61,6 +61,11 @@ docs/RELIABILITY-UPGRADE.md  sync revisions, local queue and Spotify token keys
   preview where you tick what to keep.
 - **Study** — optional spaced-review tasks after each lecture (days 1, 3, 7, 21), and
   exam topics filled from the lectures an exam covers, with the pace needed per day.
+- **Study timer** — a flip clock that runs a flow you build: Study and Break steps of
+  any length, repeated for a number of rounds (study is pink and breaks purple on Med,
+  teal and pink on CS). Start opens a focus screen with only the clock and Spotify;
+  study time is logged against a course and an optional item, and the Study tab shows
+  the week's hours.
 - **Spotify** — a badge on the coat shows what you are listening to, with previous,
   play/pause and next, and a Spotify view lets you search, browse your playlists and
   Liked Songs, see the queue and set the volume. Each person connects their own account

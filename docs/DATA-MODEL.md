@@ -9,6 +9,7 @@ users            one row per account: username, password hash, profile, coat, th
 courses          a course + its weekly class meetings, as a JSON column
 items            exams, assignments, labs, tutorials, office hours, tasks, projects
 quotes           the quote tile's list
+study_sessions   finished study-timer runs: minutes studied, by course and item
 ```
 
 The schema is [`migrations/0001_schema.sql`](../migrations/0001_schema.sql), in one
@@ -21,7 +22,7 @@ migrations of patches; they are kept only as a test fixture in
 
 | Area | Tables | Responsibility |
 | --- | --- | --- |
-| Account and tracker data | `users`, `courses`, `items`, `quotes` | Profiles and the records users edit |
+| Account and tracker data | `users`, `courses`, `items`, `quotes`, `study_sessions` | Profiles and the records users edit |
 | Synchronization | `changes`, `sync_state` | Latest record changes, ordered cursors, and the retention floor |
 | Authentication and request control | `login_throttle`, `request_limits` | Temporary attempt counts and cooldowns |
 | Spotify connection | `spotify_tokens`, `spotify_oauth_states`, `spotify_refresh_locks` | Credentials, one-use consent attempts, and refresh leases |
@@ -32,6 +33,7 @@ erDiagram
     users ||--o{ courses : owns
     users ||--o{ items : owns
     users ||--o{ quotes : owns
+    users ||--o{ study_sessions : owns
     courses o|--o{ items : groups
     users ||--o{ changes : syncs
     users ||--o| spotify_tokens : connects
@@ -212,6 +214,27 @@ Storing any of these would mean a write every midnight. They cost nothing to com
 
 ---
 
+## `study_sessions`
+
+One row per finished study-timer run (migration `0002_study.sql`). Only study time is
+logged, never breaks; a run with under a minute of study saves nothing. The run in
+progress lives in the browser's IndexedDB on that device and does not sync.
+
+| Column | Type | Rules |
+| --- | --- | --- |
+| `user_id`, `id` | text, PK | |
+| `course_id` | text, nullable | cleared when the course is deleted; the session stays |
+| `item_id` | text, nullable | cleared when the item is deleted; the session stays |
+| `started_at` | int | ms since the epoch |
+| `study_minutes` | int | 1–1440, whole minutes |
+| `rounds_done` | int | 0–12, rounds whose every step finished |
+| `created_at`, `updated_at`, `deleted_at` | int | |
+
+The flow itself is `users.study_flow`, JSON `{"steps":[["study",25],["break",5]],"rounds":4}`:
+1–12 steps of 1–180 minutes with at least one Study step, 1–12 rounds.
+
+---
+
 ## `spotify_tokens`
 
 One row per user who has connected Spotify. Not synced to the browser; the Worker
@@ -233,6 +256,8 @@ reads it to call Spotify on the user's behalf.
 | `courses (user_id, updated_at)` | the `sync` pull |
 | `items (user_id, updated_at)` | the `sync` pull |
 | `quotes (user_id, updated_at)` | the `sync` pull |
+| `study_sessions (user_id, started_at)` | the week's study log |
+| `study_sessions (user_id, course_id)`, `(user_id, item_id)` | unlinking a deleted course or item |
 | `items (user_id, date)` | any future "this term only" query |
 | `items (user_id, course_id)` | course detachment and composite foreign-key lookups, including tombstones |
 | `*_deleted (deleted_at)` | the nightly tombstone purge |
@@ -297,13 +322,14 @@ All routes are under `/api`, speak JSON, and require the session cookie except
 | `DELETE /api/session` | → clears the cookie. |
 | `POST /api/session/revoke-all` | → `204`, clears the cookie and invalidates every other session of this user. |
 | `GET /api/me` | → `{profile}` |
-| `PUT /api/me` | `{coat, theme, bg, termStart, displayName}` (`bg` optional, default `med`) → `{profile}` |
+| `PUT /api/me` | `{coat, theme, bg, termStart, displayName, studyFlow}` (`bg` optional, default `med`; `studyFlow` optional, kept when left out) → `{profile}` |
 | `GET /api/sync?v=2&cursor=<seq>` | → `{changes: [{kind, row}], cursor, more, reset}` — at most 100 changes after `cursor`, deleted rows included with `deletedAt` set. `cursor=0` is a full load. See the sync protocol below. |
-| `GET /api/{courses,items,quotes}/:id` | one live row of yours, or `404`. The client uses it to undo a rejected save. |
+| `GET /api/{courses,items,quotes,study_sessions}/:id` | one live row of yours, or `404`. The client uses it to undo a rejected save. |
 | `PUT /api/courses/:id` | a course → the stored course, with server `updatedAt`. Upsert. |
-| `DELETE /api/courses/:id` | → `204`. Soft-deletes and nulls `courseId` on the user's items. |
-| `PUT /api/items/:id` · `DELETE /api/items/:id` | as above |
+| `DELETE /api/courses/:id` | → `204`. Soft-deletes and nulls `courseId` on the user's items and study sessions. |
+| `PUT /api/items/:id` · `DELETE /api/items/:id` | as above; deleting nulls `itemId` on the user's study sessions |
 | `PUT /api/quotes/:id` · `DELETE /api/quotes/:id` | as above |
+| `PUT /api/study_sessions/:id` · `DELETE /api/study_sessions/:id` | `{courseId, itemId, startedAt, studyMinutes, roundsDone}`, as above |
 
 Errors are `{error, field?}`: `400` bad shape (with the field), `401` no session,
 `404` a row that isn't yours, `413` body over 1 MB.

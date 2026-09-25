@@ -51,7 +51,7 @@ describe('database relationships and inspection views', () => {
     expect(rows[0]).toMatchObject({ id: 'live', course_name: 'Biology' });
     const summary = await env.DB.prepare('SELECT * FROM account_summary WHERE user_id = ?').bind(first).first();
     expect(summary).toMatchObject({ courses: 1, items: 1, quotes: 0 });
-    expect(Object.keys(summary).sort()).toEqual(['courses', 'created_at', 'items', 'quotes', 'user_id', 'username']);
+    expect(Object.keys(summary).sort()).toEqual(['courses', 'created_at', 'items', 'quotes', 'study_sessions', 'user_id', 'username']);
   });
 
   it.each([

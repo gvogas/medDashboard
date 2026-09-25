@@ -691,7 +691,7 @@ function markNow(root) {
 /** The poller learned something: update only what depends on it. */
 export function onPlayerState() {
   const root = $('viewRoot');
-  if (ui.view !== 'spotify' || !root) return;
+  if ((ui.view !== 'spotify' && !ui.focus) || !root) return;
   if (!root.querySelector('.spot-view') && player.loaded) { rerender(); return; }   /* was "connecting…" or "not connected" */
   if (!player.connected) { rerender(); return; }
   syncVolume();

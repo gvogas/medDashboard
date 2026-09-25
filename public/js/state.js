@@ -22,6 +22,8 @@ export const ui = {
   spotifyNote: null,       /* 'connected' | 'error' after the Spotify round trip, shown once in Settings */
   /* the Spotify view: home | playlist | album | artist | queue | search, and the filter inside a list */
   spotify: { pane: 'home', playlistId: null, albumId: null, artistId: null, q: '', filter: '' },
+  focus: false,            /* the focus screen is up: the study clock and Spotify, nothing else */
+  study: { courseId: null, itemId: null },   /* what the next study run is logged against */
 };
 
 try {

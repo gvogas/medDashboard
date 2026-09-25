@@ -25,7 +25,7 @@ export function autoGrow(el) {
 export function setHTML(host, html) {
   const template = document.createElement('template');
   template.innerHTML = html;
-  for (const el of template.content.querySelectorAll('[data-accent], [data-width], [data-swatch]')) {
+  for (const el of template.content.querySelectorAll('[data-accent], [data-width], [data-swatch], [data-height], [data-flex]')) {
     for (const [attribute, property] of [['accent', '--c'], ['swatch', 'background-color']]) {
       const value = el.dataset[attribute];
       if (value && /^#[0-9a-f]{6}$/i.test(value)) el.style.setProperty(property, value);
@@ -33,6 +33,14 @@ export function setHTML(host, html) {
     if (el.dataset.width !== undefined) {
       const width = Number(el.dataset.width);
       if (Number.isFinite(width)) el.style.width = Math.max(0, Math.min(100, width)) + '%';
+    }
+    if (el.dataset.height !== undefined) {
+      const height = Number(el.dataset.height);
+      if (Number.isFinite(height)) el.style.height = Math.max(0, Math.min(100, height)) + '%';
+    }
+    if (el.dataset.flex !== undefined) {
+      const grow = Number(el.dataset.flex);
+      if (Number.isFinite(grow) && grow > 0) el.style.flexGrow = String(grow);
     }
   }
   host.replaceChildren(template.content);

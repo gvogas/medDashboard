@@ -1,12 +1,12 @@
 // The database is authoritative; memory is a render cache, never the shared queue.
 import { openDb, deleteDb } from './db.js';
-import { normalizeItem, normalizeCourse, normalizeQuote, DEFAULT_COAT } from './model.js';
-export const data = { profile: null, courses: [], items: [], quotes: [] };
+import { normalizeItem, normalizeCourse, normalizeQuote, normalizeStudySession, normalizeFlow, DEFAULT_COAT } from './model.js';
+export const data = { profile: null, courses: [], items: [], quotes: [], study_sessions: [] };
 export const dirty = {};
 export const conflicts = [];
 const listeners = new Set();
-const normal = { items: normalizeItem, courses: normalizeCourse, quotes: normalizeQuote };
-const stores = ['courses', 'items', 'quotes', 'meta', 'pending', 'conflicts'];
+const normal = { items: normalizeItem, courses: normalizeCourse, quotes: normalizeQuote, study_sessions: normalizeStudySession };
+const stores = ['courses', 'items', 'quotes', 'study_sessions', 'meta', 'pending', 'conflicts'];
 const owner = crypto.randomUUID();
 let db = null, channel = null, userId = null, localTail = Promise.resolve();
 const dbName = (id) => `rounds:${id}`;
@@ -17,7 +17,7 @@ let byId = { courses: new Map(), items: new Map() };
 export const course = (id) => byId.courses.get(id) || null;
 export const item = (id) => byId.items.get(id) || null;
 const index = () => { byId = { courses: new Map(data.courses.map((r) => [r.id, r])), items: new Map(data.items.map((r) => [r.id, r])) }; };
-const profile = (p) => ({ ...p, types: Array.isArray(p.types) ? p.types : [], coat: { name: '', role: '', color: DEFAULT_COAT, ...p.coat }, revision: p.revision || 0 });
+const profile = (p) => ({ ...p, types: Array.isArray(p.types) ? p.types : [], studyFlow: normalizeFlow(p.studyFlow), coat: { name: '', role: '', color: DEFAULT_COAT, ...p.coat }, revision: p.revision || 0 });
 const rowStore = (key) => key === 'profile' ? 'meta' : key.split(':')[0];
 const rowId = (key) => key === 'profile' ? 'profile' : key.slice(key.indexOf(':') + 1);
 const wrap = (key, row) => key === 'profile' ? { key: 'profile', value: row } : row;
@@ -26,7 +26,7 @@ export async function reload() {
   const handle = db;
   if (!handle) return;
   const snapshot = await handle.transaction(stores, 'readonly', async (a) => ({
-    courses: await a('courses').all(), items: await a('items').all(), quotes: await a('quotes').all(),
+    courses: await a('courses').all(), items: await a('items').all(), quotes: await a('quotes').all(), study_sessions: await a('study_sessions').all(),
     profile: (await a('meta').get('profile'))?.value,
     pending: await a('pending').all(), conflicts: await a('conflicts').all(),
   }));
@@ -135,7 +135,26 @@ export function saveRows(rows) {
 export const saveItem = (row) => saveRow('items', row);
 export const saveCourse = (row) => saveRow('courses', row);
 export const saveQuote = (row) => saveRow('quotes', row);
-export const deleteItem = (id) => deleteRow('items', id);
+export const saveStudySession = (row) => saveRow('study_sessions', row);
+export const deleteStudySession = (id) => deleteRow('study_sessions', id);
+export function deleteItem(id) {
+  return mutate(async (a) => {
+    const row = await a('items').get(id);
+    await queue(a, `items:${id}`, 'delete', row || { id });
+    await a('items').del(id);
+    await unlinkSessions(a, 'itemId', id);
+  });
+}
+/* The server clears a deleted course's or item's link on its sessions in the same
+   change; this does the same on this device, pending uploads included. */
+async function unlinkSessions(a, field, id) {
+  for (const s of await a('study_sessions').all()) if (s[field] === id) {
+    s[field] = null;
+    await a('study_sessions').put(s);
+    const pending = await a('pending').get(`study_sessions:${s.id}`);
+    if (pending?.body) { pending.body[field] = null; await a('pending').put(pending); }
+  }
+}
 export const deleteQuote = (id) => deleteRow('quotes', id);
 export function deleteCourse(id) {
   return mutate(async (a) => {
@@ -149,6 +168,7 @@ export function deleteCourse(id) {
       const pending = await a('pending').get(`items:${it.id}`);
       if (pending?.body) { pending.body.courseId = null; await a('pending').put(pending); }
     }
+    await unlinkSessions(a, 'courseId', id);
   });
 }
 export function saveProfile(patch) {
@@ -156,7 +176,7 @@ export function saveProfile(patch) {
   return mutate(async (a) => {
     const p = (await a('meta').get('profile')).value;
     if (copy.coat) Object.assign(p.coat, copy.coat);
-    for (const key of ['displayName', 'theme', 'bg', 'termStart', 'types']) if (key in copy) p[key] = copy[key];
+    for (const key of ['displayName', 'theme', 'bg', 'termStart', 'types', 'studyFlow']) if (key in copy) p[key] = copy[key];
     await a('meta').put(wrap('profile', p));
     await queue(a, 'profile', 'put', p);
   });

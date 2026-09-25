@@ -17,6 +17,9 @@ it('copies an old-schema database into a fresh one, row for row, with the change
   const from = env.MIGRATION_DB, to = env.MOVE_DB;
   await applyD1Migrations(from, env.LEGACY_MIGRATIONS);
   await applyD1Migrations(to, env.TEST_MIGRATIONS);
+  // The rows below are written with today's worker/db.js, whose deletes also unlink
+  // study sessions (migration 0002); the old schema only needs the empty table for that.
+  await from.prepare('CREATE TABLE study_sessions (user_id TEXT, id TEXT, course_id TEXT, item_id TEXT, deleted_at INTEGER, updated_at INTEGER, revision INTEGER)').run();
 
   for (const id of ['ana', 'ben']) {
     await from.prepare("INSERT INTO users (id, username, password_hash, types, created_at, updated_at, imported_at) VALUES (?, ?, 'hash', '[{\"id\":\"c-quiz1\",\"label\":\"Quiz\",\"color\":\"#B03A7A\",\"kind\":\"graded\"}]', 100, 100, 50)")

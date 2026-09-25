@@ -14,6 +14,7 @@
 <link rel="stylesheet" href="/css/tokens.css">
 <link rel="stylesheet" href="/css/layout.css">
 <link rel="stylesheet" href="/css/components.css">
+<link rel="stylesheet" href="/css/study.css">
 <script>
   /* Resolve the theme and background before the app paints, so there is no flash
      of the wrong one. "system" follows the device. The last choice is remembered in
@@ -79,6 +80,7 @@
         <button type="button" data-view="month" aria-pressed="false">Month</button>
         <button type="button" data-view="table" aria-pressed="false">Table</button>
         <button type="button" data-view="spotify" aria-pressed="false">Spotify</button>
+        <button type="button" data-view="study" aria-pressed="false">Study</button>
       </div>
       <div class="grow"></div>
       <div class="search">
@@ -98,11 +100,13 @@
         <circle cx="242" cy="86" r="17"/><circle cx="242" cy="86" r="8.5"/><path d="M228 74l-8-7"/>
       </svg>
       <div class="stats" id="stats"></div>
+      <section class="focus-clock" id="focusClock" aria-label="Study timer" hidden></section>
       <div id="viewRoot"></div>
     </div>
   </div>
 </div>
 
+<div class="study-dock" id="studyDock" role="region" aria-label="Study timer" hidden></div>
 <div class="scrim" id="scrim"></div>
 <aside class="drawer" id="drawer" role="dialog" aria-modal="true" aria-label="Details" tabindex="-1" inert></aside>
 

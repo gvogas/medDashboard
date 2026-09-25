@@ -269,3 +269,35 @@ export function normalizeCourse(raw, index = 0) {
 export function normalizeQuote(raw) {
   return { id: raw.id || uid(), text: raw.text || '', source: raw.source || '', createdAt: raw.createdAt ?? null, revision: raw.revision ?? 0, updatedAt: raw.updatedAt ?? null };
 }
+
+/* ── the study timer ── */
+export const DEFAULT_FLOW = { steps: [['study', 25], ['break', 5]], rounds: 4 };
+export const FLOW_PRESETS = [
+  ['Classic 25/5', { steps: [['study', 25], ['break', 5]], rounds: 4 }],
+  ['Deep 50/10', { steps: [['study', 50], ['break', 10]], rounds: 3 }],
+  ['Anki then read', { steps: [['study', 20], ['break', 5], ['study', 40], ['break', 15]], rounds: 2 }],
+];
+const clampInt = (v, lo, hi, dflt) => Number.isFinite(+v) ? Math.max(lo, Math.min(hi, Math.round(+v))) : dflt;
+
+/** A flow the server accepts: 1-12 steps of 1-180 minutes, at least one Study, 1-12 rounds. */
+export function normalizeFlow(raw) {
+  const steps = (Array.isArray(raw?.steps) ? raw.steps : [])
+    .filter((s) => Array.isArray(s) && (s[0] === 'study' || s[0] === 'break'))
+    .slice(0, 12)
+    .map(([k, m]) => [k, clampInt(m, 1, 180, k === 'study' ? 25 : 5)]);
+  if (!steps.some(([k]) => k === 'study')) return structuredClone(DEFAULT_FLOW);
+  return { steps, rounds: clampInt(raw.rounds, 1, 12, 1) };
+}
+
+export function normalizeStudySession(raw) {
+  return {
+    id: raw.id || uid(),
+    courseId: raw.courseId || null,
+    itemId: raw.itemId || null,
+    startedAt: typeof raw.startedAt === 'number' ? raw.startedAt : Date.now(),
+    studyMinutes: clampInt(raw.studyMinutes, 1, 1440, 1),
+    roundsDone: clampInt(raw.roundsDone, 0, 12, 0),
+    createdAt: raw.createdAt ?? null,
+    revision: raw.revision ?? 0, updatedAt: raw.updatedAt ?? null,
+  };
+}

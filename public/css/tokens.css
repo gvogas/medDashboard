@@ -85,3 +85,30 @@
 }
 
 *{box-sizing:border-box}
+
+/* ════════════════════════════════════════════════
+   Study timer — study and break colours.
+   Med: soft pink study, soft purple break.
+   CS: teal study, pink break.
+   The focus screen (--fx-*) is dark in both themes.
+   ════════════════════════════════════════════════ */
+:root{
+  --study:#C8577F; --study-soft:#FBE3EC; --study-ink:#9C4D66; --study-card:#6E2A45; --study-card-2:#843552;
+  --break:#8B5CC7; --break-soft:#EEE6FA; --break-ink:#6B45A0; --break-card:#43296B; --break-card-2:#53337F;
+  --fx-study-bg:#1C0A12; --fx-study-glow:rgba(245,168,195,.30); --fx-study:#F5A8C3; --fx-study-card:#3A1624; --fx-study-card-2:#4A1D2F;
+  --fx-break-bg:#110B22; --fx-break-glow:rgba(188,166,230,.34); --fx-break:#C9B6F2; --fx-break-card:#281E45; --fx-break-card-2:#342857;
+}
+:root[data-app="dark"]{
+  --study:#EFA3BE; --study-soft:#3A2029; --study-ink:#F5BCD0; --study-card:#3A1726; --study-card-2:#4C1F32;
+  --break:#BCA6E6; --break-soft:#2A2240; --break-ink:#D2C4F2; --break-card:#2A1F45; --break-card-2:#35285A;
+}
+:root[data-bg="cs"]{
+  --study:#0E7C74; --study-soft:#D8EDEA; --study-ink:#0A5B55; --study-card:#0F4F4A; --study-card-2:#17625C;
+  --break:#C0577A; --break-soft:#FBE3EC; --break-ink:#9C4D66; --break-card:#6E2A42; --break-card-2:#853752;
+  --fx-study-bg:#041B1A; --fx-study-glow:rgba(56,196,180,.30); --fx-study:#5FD3C6; --fx-study-card:#0E2E2B; --fx-study-card-2:#143D39;
+  --fx-break-bg:#1A0811; --fx-break-glow:rgba(236,130,168,.30); --fx-break:#F29BB8; --fx-break-card:#35141F; --fx-break-card-2:#461B29;
+}
+:root[data-bg="cs"][data-app="dark"]{
+  --study:#3FBFB2; --study-soft:#11302D; --study-ink:#7FD8CE; --study-card:#0B2E2B; --study-card-2:#11403C;
+  --break:#E28AA8; --break-soft:#3A2029; --break-ink:#EFAFC3; --break-card:#3A1726; --break-card-2:#4C1F32;
+}
