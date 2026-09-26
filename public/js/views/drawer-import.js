@@ -4,13 +4,17 @@
 import { data, course, saveRows, saveProfile } from '../store.js';
 import { ui } from '../state.js';
 import { typeList, normalizeCourse, normalizeItem, classRoom } from '../model.js';
-import { DOW } from '../dates.js';
+import { DOW, today } from '../dates.js';
 import { esc } from '../dom.js';
 import { parseIcs } from '../importers/ics.js';
 import { parseCsv } from '../importers/csv.js';
 import { planImport, planOutline, planSummary, setWeek1 } from '../importers/plan.js';
 import { showDrawer, resetDrawerState } from './drawer-base.js';
 import { shortDate } from '../reviews.js';
+import { api, ApiError } from '../api.js';
+import { pdfText } from '../pdftext.js';
+import { showBusy, hideBusy } from './busy.js';
+import { renderSettings } from './drawer-settings.js';
 
 /** Parse a file's text and open the preview. Returns an error message, or '' on success. */
 export function previewImport(text, name = '') {
@@ -139,4 +143,33 @@ export async function commitImport() {
   if (start && data.profile && !data.profile.termStart) await saveProfile({ termStart: start });
   ui.importPlan = null;
   return 'Imported ' + classes + ' class' + (classes === 1 ? '' : 'es') + ' and ' + items + ' item' + (items === 1 ? '' : 's') + '.';
+}
+
+const OUTLINE_ERRORS = {
+  outline_unsupported: 'That kind of file cannot be read. Try a PDF or Word document.',
+  outline_empty: 'No text was found in that file. A scanned outline needs to be a text PDF.',
+  outline_unreadable: 'The outline could not be understood. Try again, or import a CSV instead.',
+  outline_unavailable: 'The outline reader is not available right now. Try again later.',
+  outline_limit: 'That is the limit of 10 outlines for today. Try again tomorrow.',
+  outline_quota: 'The free AI allowance for today is used up. It resets at 8 pm Eastern (midnight UTC).',
+  too_large: 'That file is over 5 MB.',
+};
+export async function readOutlineFile(file) {
+  if (file.size > 5 * 1024 * 1024) { ui.importNote = { text: OUTLINE_ERRORS.too_large, error: true }; renderSettings(); return; }
+  ui.outlineBusy = true; ui.importNote = null; renderSettings();
+  try {
+    /* PDFs are read here: the Worker's converter drops the text of many tables. */
+    const isPdf = file.type === 'application/pdf' || /\.pdf$/i.test(file.name);
+    if (isPdf) showBusy(file.name, 'Pulling the text out of the PDF…');
+    const body = isPdf ? new Blob([await pdfText(file)], { type: 'text/plain' }) : file;
+    showBusy(file.name, 'Reading the dates and grades with AI…');
+    const outline = await api.readOutline(body, { name: file.name, today: today(), termStart: data.profile?.termStart || '' });
+    ui.outlineBusy = false; hideBusy();
+    previewOutline(outline, file.name);
+  } catch (err) {
+    ui.outlineBusy = false; hideBusy();
+    const code = err instanceof ApiError ? err.body?.error : null;
+    ui.importNote = { text: OUTLINE_ERRORS[code] || (err instanceof ApiError ? 'The outline could not be read (' + (code || err.status) + ').' : 'You seem to be offline. Reading an outline needs a connection.'), error: true };
+    if (ui.settings) renderSettings();
+  }
 }

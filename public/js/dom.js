@@ -45,3 +45,25 @@ export function setHTML(host, html) {
   }
   host.replaceChildren(template.content);
 }
+
+/** The same control in new markup, found by its id or a data attribute. */
+export function refind(el) {
+  if (!el || el.isConnected) return el;
+  if (el.id) return $(el.id);
+  for (const [key, value] of Object.entries(el.dataset || {})) {
+    const attr = 'data-' + key.replace(/[A-Z]/g, (c) => '-' + c.toLowerCase());
+    const found = document.querySelector('[' + attr + '="' + CSS.escape(value) + '"]');
+    if (found) return found;
+  }
+  return null;
+}
+
+/* A redraw replaces the focused control. Focus goes to the same control in the new
+   markup, so a keyboard user is not dropped to the top of the page. */
+export function keepFocus(draw) {
+  const was = document.activeElement;
+  draw();
+  if (was && was !== document.body && !was.isConnected && (!document.activeElement || document.activeElement === document.body)) {
+    refind(was)?.focus({ preventScroll: true });
+  }
+}

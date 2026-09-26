@@ -1,6 +1,6 @@
 import { data, course, item, saveItem } from '../store.js';
 import { ui } from '../state.js';
-import { typeList, statusesFor, baseOf, tmeta, statusLabel, isOverdue, isOpen, isTest, uid, normalizeItem } from '../model.js';
+import { typeList, statusesFor, baseOf, tmeta, statusLabel, isOverdue, isOpen, isTest, isComplete, uid, normalizeItem, shiftEnd, classRoom } from '../model.js';
 import { parse, diffDays, today, hhmm, DOW } from '../dates.js';
 import { activeCourses } from '../query.js';
 import { esc, autoGrow } from '../dom.js';
@@ -9,6 +9,12 @@ import { GRADABLE } from '../grades.js';
 import { prepPace, prepLabel } from '../prep.js';
 import { drawer, showDrawer, hideDrawer, resetDrawerState, closeDrawer } from './drawer-base.js';
 import { studiedFor, duration } from './study.js';
+import { renderView } from './render.js';
+import { renderSidebar } from './sidebar.js';
+import { renderStats } from './stats.js';
+import { parseTime } from '../timepicker.js';
+import { nextReview } from '../reviews.js';
+import { launch as fireworks } from '../fireworks.js';
 
 export function openItem(id) {
   resetDrawerState();
@@ -165,4 +171,122 @@ export function renderItemDrawer(focusTitle) {
   showDrawer(head + body + foot);
   if (focusTitle) { const el = drawer.querySelector('.dtitle'); if (el) el.focus(); }
   autoGrow(drawer.querySelector('.dtitle'));
+}
+
+let startBase = null;   /* the item's times when its start field took focus */
+/** focusin: an item's start field keeps the times it had, so the end can follow it. */
+export function noteStartBase(e) {
+  if (e.target.dataset?.f !== 'start') return;
+  const it = current();
+  startBase = it ? { id: it.id, start: it.start, end: it.end } : null;
+}
+
+/* Some items name themselves from the course: office hours after the teacher, exams,
+   quizzes and tutorials after the class. Picking a course (or switching type) fills the title in, unless
+   the title was typed by hand. */
+function autoTitleFor(type, c) {
+  if (!c) return '';
+  if (type === 'office') return c.instructor ? c.instructor + ' — office hours' : '';
+  if (type === 'exam') return c.name ? 'Exam — ' + c.name : '';
+  if (type === 'quiz') return c.name ? 'Quiz — ' + c.name : '';
+  if (type === 'tutoring') return c.name ? c.name + ' — tutorial' : '';
+  return '';
+}
+function autoTitle(it, prevCourseId) {
+  const next = autoTitleFor(it.type, course(it.courseId));
+  if (!next) return;
+  const wasAuto = ['office', 'exam', 'quiz', 'tutoring'].some((t) => it.title === autoTitleFor(t, course(prevCourseId)) || it.title === autoTitleFor(t, course(it.courseId)));
+  if (it.title.trim() && !wasAuto) return;
+  it.title = next;
+  const ta = drawer.querySelector('.dtitle');
+  if (ta) { ta.value = next; autoGrow(ta); }
+  if (ui.draft) {
+    const b = drawer.querySelector('[data-act="save"]'), h = drawer.querySelector('.dfoot .hint');
+    if (b) b.disabled = false;
+    if (h) h.textContent = 'Ready to save';
+  }
+}
+
+/* A small show from an element, for finishing something. */
+export function celebrate(el) {
+  const r = el.getBoundingClientRect();
+  fireworks(r.left + r.width / 2, r.top + r.height / 2, { rockets: 2 });
+}
+
+export function setStatus(it, status) {
+  it.status = status;
+  it.completedAt = status === 'todo' ? null : (it.completedAt || Date.now());
+}
+
+/** A review step just finished: schedule the next one. */
+export async function chainReview(it) {
+  if (it.status !== 'done') return;
+  const next = nextReview(it, today(), data.items);
+  if (next) await saveItem(normalizeItem(next));
+}
+
+/** Typing in an item's fields (data-f): the item follows, and what is derived from it. */
+export async function onItemInput(e, d) {
+  const it = current(); if (!it) return;
+  const ROOMED = d.f === 'date' || d.f === 'courseId' || d.f === 'type' || d.f === 'start';
+  const roomWas = ROOMED ? classRoom(it, course(it.courseId)) : '';
+  if (d.f === 'recur') {
+    it.recur = e.target.checked ? 'weekly' : null;
+    it.weekday = it.recur ? parse(it.date).getDay() : null;
+    if (!it.recur) it.recurUntil = null;
+  } else if (d.f === 'weight') {
+    it.weight = e.target.value === '' || !(+e.target.value > 0) ? null : Math.min(100, +e.target.value);
+  } else if (d.f === 'grade') {
+    it.grade = e.target.value === '' ? null : Math.max(0, Math.min(100, +e.target.value));
+  } else if (d.f === 'courseId' || d.f === 'recurUntil') {
+    const before = it.courseId;
+    it[d.f] = e.target.value || null;
+    if (d.f === 'courseId') autoTitle(it, before);
+  } else if (d.f === 'status') {
+    const wasDone = isComplete(it);
+    setStatus(it, e.target.value);
+    if (!wasDone && isComplete(it)) celebrate(e.target);
+  } else if (d.f === 'start' || d.f === 'end') {
+    it[d.f] = parseTime(e.target.value) || '';      /* half-typed stays out of the model until it parses */
+    if (d.f === 'start' && it.start && startBase?.id === it.id) {
+      /* moving the start moves the end with it, measured from before this edit so
+         half-typed times along the way do not stretch or shrink it */
+      it.end = shiftEnd(startBase.start, startBase.end, it.start);
+      const endBox = drawer.querySelector('[data-f="end"]');
+      if (endBox) endBox.value = it.end;
+    }
+  } else {
+    it[d.f] = e.target.value;
+    if (d.f === 'date' && it.recur === 'weekly') it.weekday = parse(it.date).getDay();
+    if (d.f === 'type') autoTitle(it, it.courseId);
+    /* a status the new type does not have (Submitted on a Task) goes back to its first */
+    if (d.f === 'type' && !statusesFor(it.type).some((x) => x[0] === it.status)) setStatus(it, 'todo');
+  }
+  if (ROOMED) {
+    /* an exam or quiz on a class day is held in that class's room, unless one was typed */
+    if (!it.where || it.where === roomWas) it.where = classRoom(it, course(it.courseId));
+    const whereBox = drawer.querySelector('[data-f="where"]');
+    if (whereBox && whereBox.value !== it.where) whereBox.value = it.where;
+  }
+  if (d.f === 'title') {
+    autoGrow(e.target);
+    if (ui.draft) {
+      const b = drawer.querySelector('[data-act="save"]'), h = drawer.querySelector('.dfoot .hint');
+      if (b) b.disabled = !it.title.trim();
+      if (h) h.textContent = it.title.trim() ? 'Ready to save' : 'Give it a name to save';
+    }
+  }
+  if (!ui.draft) {
+    /* notes show nowhere on the board except through the search, so typing them redraws nothing */
+    const redraw = () => { if (d.f !== 'notes' || ui.search) { renderStats(); renderSidebar(); renderView(); } };
+    /* only plain text waits: other fields change what is derived from them (the end
+       follows the start, the weekday the date), and those must save together */
+    if (d.f === 'title' || d.f === 'notes' || d.f === 'where') touchSoon(it, d.f, redraw);
+    else {
+      await touch(it);
+      if (d.f === 'status') await chainReview(it);
+      redraw();
+    }
+  }
+  if (d.f === 'type' || d.f === 'status' || d.f === 'recur') renderItemDrawer();
 }

@@ -1,0 +1,30 @@
+// The theme (light, dark or the system's) and the Med or CS background art; both are
+// saved to the profile so they follow the account to other devices.
+
+import * as store from './store.js';
+import { data } from './store.js';
+import { ui, rememberUi } from './state.js';
+import { render } from './views/render.js';
+import { renderSettings } from './views/drawer-settings.js';
+import { schedule as drawOrnament } from './ornament.js';
+
+export function setTheme(choice, { persist = true } = {}) {
+  ui.theme = choice;
+  if (window.__roundsApplyTheme) window.__roundsApplyTheme(choice);
+  rememberUi();
+  if (persist && data.profile && data.profile.theme !== choice) store.saveProfile({ theme: choice });
+  if (ui.settings) renderSettings();
+  drawOrnament();                     /* the ornament layer is drawn in the theme's teal */
+}
+export function followSystem() { if (ui.theme === 'system') setTheme('system', { persist: false }); }
+
+/* ═════════ background: Med or CS art, independent of light/dark ═════════ */
+export function setBg(choice, { persist = true } = {}) {
+  ui.bg = choice === 'cs' ? 'cs' : 'med';
+  document.documentElement.setAttribute('data-bg', ui.bg);
+  rememberUi();
+  if (persist && data.profile && data.profile.bg !== ui.bg) store.saveProfile({ bg: ui.bg });
+  if (data.profile) render();          /* the sidebar, stats and type lists change with it */
+  if (ui.settings) renderSettings();
+  drawOrnament();
+}

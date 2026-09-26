@@ -3,7 +3,7 @@ import { setHTML } from '../dom.js';
 
 import { ui } from '../state.js';
 import { parse, addDays, monday, DOW, MON } from '../dates.js';
-import { $ } from '../dom.js';
+import { $, keepFocus } from '../dom.js';
 import { renderSidebar } from './sidebar.js';
 import { renderStats } from './stats.js';
 import { renderWeek } from './week.js';
@@ -44,6 +44,9 @@ export function renderHeader() {
 export const showsSpotify = () => ui.focus || ui.view === 'spotify';
 
 export function renderView() {
+  keepFocus(drawView);
+}
+function drawView() {
   const root = $('viewRoot'), focusing = ui.focus;
   document.documentElement.classList.toggle('focusing', focusing);
   $('focusClock').hidden = !focusing;
@@ -56,8 +59,10 @@ export function renderView() {
 }
 
 export function render() {
-  renderHeader();
-  renderSidebar();
-  renderStats();
-  renderView();
+  keepFocus(() => {
+    renderHeader();
+    renderSidebar();
+    renderStats();
+    drawView();
+  });
 }

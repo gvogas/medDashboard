@@ -1,7 +1,7 @@
 import { setHTML } from '../dom.js';
-import { data, conflicts } from '../store.js';
+import { data, conflicts, saveQuote } from '../store.js';
 import { ui } from '../state.js';
-import { COAT_PALETTE, colourName, DEFAULT_COAT, normalizePrefs } from '../model.js';
+import { COAT_PALETTE, colourName, DEFAULT_COAT, normalizePrefs, uid } from '../model.js';
 import { esc, $ } from '../dom.js';
 import { showDrawer, resetDrawerState } from './drawer-base.js';
 import { TUCK_SVG } from './bits.js';
@@ -11,6 +11,7 @@ import { state as web } from '../web-player.js';
 import { SPOTIFY_MARK } from './player.js';
 import { api, spotifyRetryAt } from '../api.js';
 import { readSetting } from '../reviews.js';
+import { renderQuote } from './stats.js';
 
 export function openSettings(focus) {
   resetDrawerState();
@@ -349,4 +350,13 @@ export function refreshSyncNote() {
   if (n) n.textContent = syncLine();
   const t = $('setTabAccount');
   if (t) setHTML(t, 'Account' + accountFlag());
+}
+
+export async function addQuote() {
+  const t = $('qText'), s = $('qSrc');
+  if (!t || !t.value.trim()) return;
+  await saveQuote({ id: uid(), text: t.value.trim().replace(/^[“"']|[”"']$/g, ''), source: s ? s.value.trim() : '' });
+  ui.quoteIx = data.quotes.length - 1;
+  ui.focusField = 'qText';
+  renderSettings(); renderQuote();
 }

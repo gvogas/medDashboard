@@ -5,6 +5,7 @@ import { dur, DOW } from '../dates.js';
 import { esc, autoGrow, setHTML } from '../dom.js';
 import { courseGrade, neededLabel, targetsFor, ungraded } from '../grades.js';
 import { drawer, showDrawer, resetDrawerState, closeDrawer } from './drawer-base.js';
+import { parseTime } from '../timepicker.js';
 
 export function openCourse(id) {
   resetDrawerState();
@@ -154,3 +155,46 @@ export async function saveCourseDraft() {
   closeDrawer();
 }
 
+/** Close the drawer from ✕, Escape or the scrim. A course with unsaved edits asks
+   first; asked, a second Escape or click discards them. */
+export function leaveDrawer() {
+  if (ui.courseDraft && ui.confirm !== 'discard' && courseChanged()) {
+    ui.confirm = 'discard';
+    renderCourseDrawer();
+    drawer.querySelector('[data-act="keep"]')?.focus();
+    return;
+  }
+  closeDrawer();
+}
+
+/** Typing in the course drawer: its fields, class meetings and what-if scores. True if it was one of them. */
+export function onCourseInput(e, d) {
+  if ('whatif' in d && ui.courseDraft) {  /* a what-if score, never saved */
+    const v = e.target.value.trim() === '' ? NaN : +e.target.value;
+    if (Number.isFinite(v) && v >= 0 && v <= 100) ui.whatIf[d.whatif] = v; else delete ui.whatIf[d.whatif];
+    refreshGrades(); return true;
+  }
+  if (d.cf && ui.courseDraft) {           /* course fields */
+    const n = Math.round(+e.target.value);
+    ui.courseDraft[d.cf] = d.cf === 'archived' ? e.target.checked
+      : d.cf === 'target' ? (e.target.value.trim() !== '' && n >= 1 && n <= 100 ? n : null)
+      : e.target.value;
+    if (d.cf === 'target') refreshGrades();
+    if (d.cf === 'name') autoGrow(e.target);
+    const hint = drawer.querySelector('.dfoot .hint'), btn = drawer.querySelector('[data-act="course-save"]');
+    if (btn) btn.disabled = !ui.courseDraft.name.trim();
+    if (hint) hint.textContent = ui.courseDraft.name.trim() ? (ui.courseMode === 'new' ? 'Ready to save' : 'Unsaved changes') : 'Give it a name to save';
+    return true;
+  }
+  if (d.mf && ui.courseDraft) {           /* class meeting fields */
+    const wrap = e.target.closest('[data-mid]'); if (!wrap) return true;
+    ui.courseDraft.meetings.forEach((m) => {
+      if (m.id !== wrap.dataset.mid) return;
+      m[d.mf] = d.mf === 'weekday' ? +e.target.value
+        : d.mf === 'start' || d.mf === 'end' ? (parseTime(e.target.value) || m[d.mf])
+        : e.target.value;
+    });
+    return true;
+  }
+  return false;
+}

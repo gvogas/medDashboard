@@ -2,7 +2,8 @@ import { setHTML } from '../dom.js';
 // The slide-in drawer and its scrim, shared by the item, course and settings panels.
 
 import { ui } from '../state.js';
-import { $ } from '../dom.js';
+import { $, refind } from '../dom.js';
+export { refind };
 import { render } from './render.js';
 
 export const drawer = $('drawer');
@@ -48,16 +49,6 @@ export function hideDrawer() {
 }
 
 /* A redraw may have replaced the opener; find its successor by what it points at. */
-export function refind(el) {
-  if (!el || el.isConnected) return el;
-  if (el.id) return $(el.id);
-  for (const [key, value] of Object.entries(el.dataset || {})) {
-    const attr = 'data-' + key.replace(/[A-Z]/g, (c) => '-' + c.toLowerCase());
-    const found = document.querySelector('[' + attr + '="' + CSS.escape(value) + '"]');
-    if (found) return found;
-  }
-  return null;
-}
 
 export function resetDrawerState() {
   ui.sel = null; ui.draft = null; ui.courseDraft = null; ui.courseMode = null; ui.confirm = null; ui.settings = false; ui.importPlan = null; ui.fillNote = null; ui.sessionDraft = null; ui.signoutAsk = null;
@@ -77,4 +68,22 @@ export function closeDrawer() {
 
 export function drawerHasFocus() {
   return drawer.contains(document.activeElement) && /input|textarea|select/i.test(document.activeElement.tagName);
+}
+
+/** Is any drawer open: an item, a course, settings or a study session. */
+export const drawerOpen = () => !!(ui.sel || ui.draft || ui.courseDraft || ui.settings || ui.sessionDraft);
+
+/* On narrow screens the sidebar slides over the page. Closed, it is inert, so Tab does
+   not wander through it off-screen; open, it takes focus and Escape closes it. */
+export const narrow = window.matchMedia('(max-width:900px)');
+export function setSide(open) {
+  const side = $('side'), btn = $('menuBtn');
+  side.classList.toggle('on', open);
+  side.inert = narrow.matches && !open;
+  /* open over the page, the page behind is dimmed and out of reach */
+  document.querySelector('.content').inert = narrow.matches && open;
+  if (!drawer.classList.contains('on')) scrim.classList.toggle('on', narrow.matches && open);
+  btn.setAttribute('aria-expanded', String(open));
+  if (open) side.querySelector('button, input')?.focus();
+  else if (side.contains(document.activeElement)) btn.focus();
 }
