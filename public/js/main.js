@@ -5,7 +5,7 @@ import * as store from './store.js';
 import { data, course } from './store.js';
 import * as sync from './sync.js';
 import { ui, rememberUi } from './state.js';
-import { uid, isOpen, isComplete, normalizeItem, shiftEnd, tmeta, classRoom, useTypePrefs, typeList, typePrefsFrom, TYPE_COLOURS, MAX_CUSTOM_TYPES, statusesFor, normalizeFlow, FLOW_PRESETS } from './model.js';
+import { uid, isOpen, isComplete, normalizeItem, shiftEnd, tmeta, classRoom, useTypePrefs, typeList, typePrefsFrom, TYPE_COLOURS, MAX_CUSTOM_TYPES, statusesFor, normalizeFlow, normalizePrefs, FLOW_PRESETS } from './model.js';
 import { typeOn } from './query.js';
 import { iso, parse, addDays, today } from './dates.js';
 import { $, autoGrow, isTyping } from './dom.js';
@@ -23,8 +23,11 @@ document.addEventListener('focusin', (e) => {
 });
 document.addEventListener('focusout', (e) => { if (drawer.contains(e.target)) flushTouch(); });
 window.addEventListener('pagehide', flushTouch);
-document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') flushTouch(); });
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') { flushTouch(); commitUndo(); } });
 import { openKeys, closeKeys, keysOpen } from './views/keys.js';
+import { openSession, renderSessionDrawer, refreshSessionDrawer, editSession, saveSessionDraft } from './views/drawer-session.js';
+import { minutesByDay, streak } from './history.js';
+import { launch as fireworks } from './fireworks.js';
 import { openCourse, renderCourseDrawer, saveCourseDraft, deleteCourseDraft, refreshGrades } from './views/drawer-course.js';
 import { openSettings, renderSettings, applyCoat, refreshSyncNote, refreshSpotifyGroup, feedAction } from './views/drawer-settings.js';
 import * as spotify from './spotify.js';
@@ -34,7 +37,6 @@ import * as spotView from './views/spotify-view.js';
 import { renderSignIn, hideSignIn } from './views/signin.js';
 import { schedule as drawOrnament } from './ornament.js';
 import { parseTime } from './timepicker.js';
-import { launch as fireworks } from './fireworks.js';
 import { readSetting, writeSetting, dueReviews, nextReview } from './reviews.js';
 import { fillTopics } from './prep.js';
 import { pdfText } from './pdftext.js';
@@ -253,6 +255,7 @@ async function start(profile) {
   render();
   paintStudy(false);
   drawOrnament();
+  celebrateStudy();                             /* the first look only records where today stands */
   sync.init();
   sync.syncNow();
   spotify.start();
@@ -261,6 +264,7 @@ async function start(profile) {
 }
 
 store.subscribe((evt) => {
+  if (evt.type === 'change' && data.profile) celebrateStudy();
   if (evt.type === 'save-error') alert('The change could not be saved on this device. ' + evt.message);
   if (evt.type === 'signed-out') { sync.stop(); spotify.stop(); web.stop(); resetRequests(); location.reload(); }
   if (evt.type === 'remote' && data.profile) refreshAfterSync();
@@ -333,7 +337,7 @@ $('signin').addEventListener('submit', async (e) => {
 });
 
 /* ═════════ the study timer ═════════ */
-const drawerOpen = () => !!(ui.sel || ui.draft || ui.courseDraft || ui.settings);
+const drawerOpen = () => !!(ui.sel || ui.draft || ui.courseDraft || ui.settings || ui.sessionDraft);
 
 focus.onTick((s, event) => {
   if (event === 'start') { ui.focus = true; render(); }
@@ -362,6 +366,65 @@ function leaveFocus() {
   render(); paintStudy(false);
 }
 
+/* ── the history: deletes that can be undone, a day picked on the heatmap, the goal ── */
+
+/* A delete waits six seconds so Undo can take it back; the session is only hidden
+   meanwhile. Another delete, or leaving the page, makes the waiting one final. */
+const UNDO_MS = 6000;
+function deleteWithUndo(id) {
+  const session = data.study_sessions.find((x) => x.id === id);
+  if (!session) return;
+  commitUndo();
+  ui.hist.undo = { session, timer: setTimeout(commitUndo, UNDO_MS) };
+  renderView();
+}
+function commitUndo() {
+  const u = ui.hist.undo;
+  if (!u) return;
+  clearTimeout(u.timer);
+  ui.hist.undo = null;
+  store.deleteStudySession(u.session.id).then(() => { if (ui.view === 'study') renderView(); });
+}
+function undoDelete() {
+  const u = ui.hist.undo;
+  if (!u) return;
+  clearTimeout(u.timer);
+  ui.hist.undo = null;
+  renderView();
+}
+
+/** The heatmap: show that day's sessions, in its month. */
+function showDay(day) {
+  const d = parse(day), now = parse(today());
+  ui.hist.range = 'month';
+  ui.hist.monthOffset = (d.getFullYear() - now.getFullYear()) * 12 + d.getMonth() - now.getMonth();
+  ui.hist.focusDay = day;
+  renderView();
+  /* after this click has finished with the page */
+  requestAnimationFrame(() => document.getElementById('hday-' + day)?.scrollIntoView({ block: 'center', behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' }));
+}
+
+const studyPrefs = () => normalizePrefs(data.profile?.studyPrefs);
+async function savePrefs(patch) {
+  await store.saveProfile({ studyPrefs: { ...studyPrefs(), ...patch } });
+  if (ui.settings) renderSettings();
+  renderView();
+}
+
+/* Fireworks when today's study crosses the goal, or the streak reaches a milestone,
+   through something done on this device. The first look only records where it stands. */
+let seen = null;
+function celebrateStudy() {
+  const p = studyPrefs(), now = today(), byDay = minutesByDay(data.study_sessions);
+  const mins = byDay.get(now) || 0, days = streak(byDay, now, p).current;
+  const was = seen;
+  seen = { day: now, mins, days };
+  if (!was || was.day !== now || !p.celebrate) return;
+  const goal = p.goal && was.mins < p.goal && mins >= p.goal;
+  const milestone = days > was.days && [7, 30, 100, 365].includes(days);
+  if (goal || milestone) fireworks(window.innerWidth / 2, window.innerHeight * 0.7, { rockets: milestone ? 6 : 4 });
+}
+
 /* Every change to the flow saves it to the profile, so it follows you to other devices. */
 async function saveFlow(next) {
   await store.saveProfile({ studyFlow: normalizeFlow(next) });
@@ -380,7 +443,32 @@ async function studyClick(e) {
   if (e.target.closest('[data-study-stop]')) { await focus.stop(); return true; }
   if (e.target.closest('[data-study-leave]')) { leaveFocus(); return true; }
   if (e.target.closest('[data-study-back]')) { openFocus(); return true; }
-  if ((el = e.target.closest('[data-study-sessdel]'))) { await store.deleteStudySession(el.dataset.studySessdel); renderView(); return true; }
+  if ((el = e.target.closest('[data-study-sessdel]'))) { deleteWithUndo(el.dataset.studySessdel); return true; }
+  if (e.target.closest('[data-hist-undo]')) { undoDelete(); return true; }
+  if ((el = e.target.closest('[data-hist-edit]'))) { openSession(el.dataset.histEdit); return true; }
+  if (e.target.closest('[data-hist-log]')) { openSession(null); return true; }
+  if (e.target.closest('[data-hist-goal]')) { openSettings('goalGrp'); return true; }
+  if ((el = e.target.closest('[data-hist-week]'))) {
+    const n = +el.dataset.histWeek;
+    ui.hist.weekOffset = n ? Math.min(0, ui.hist.weekOffset + n) : 0;
+    renderView(); return true;
+  }
+  if ((el = e.target.closest('[data-hist-range]'))) { ui.hist.range = el.dataset.histRange; ui.hist.focusDay = null; renderView(); return true; }
+  if ((el = e.target.closest('[data-hist-month]'))) {
+    ui.hist.monthOffset = Math.min(0, ui.hist.monthOffset + +el.dataset.histMonth);
+    ui.hist.focusDay = null;
+    renderView(); return true;
+  }
+  if ((el = e.target.closest('[data-hist-pick]'))) { ui.hist.focusDay = el.dataset.histPick; renderView(); document.querySelector('[data-hist-pick="' + el.dataset.histPick + '"]')?.focus(); return true; }
+  if ((el = e.target.closest('[data-hist-day]'))) { showDay(el.dataset.histDay); return true; }
+  if ((el = e.target.closest('[data-sd-mins]'))) { editSession('minutes', el.dataset.sdMins); $('sd-min').value = el.dataset.sdMins; return true; }
+  if ((el = e.target.closest('[data-goal-step]'))) { const p = studyPrefs(); await savePrefs({ goal: Math.max(0, Math.min(720, p.goal + +el.dataset.goalStep)) }); return true; }
+  if ((el = e.target.closest('[data-goal-set]'))) { await savePrefs({ goal: +el.dataset.goalSet }); return true; }
+  if ((el = e.target.closest('[data-rest]'))) {
+    const d = +el.dataset.rest, rest = studyPrefs().rest;
+    await savePrefs({ rest: rest.includes(d) ? rest.filter((x) => x !== d) : rest.length < 6 ? [...rest, d] : rest });
+    return true;
+  }
   const f = studyFlow();
   if ((el = e.target.closest('[data-study-kind]'))) {
     const step = f.steps[+el.dataset.studyKind];
@@ -541,7 +629,10 @@ document.addEventListener('click', async (e) => {
     if (act === 'close' || act === 'cancel') closeDrawer();
     else if (act === 'save') saveDraft();
     else if (act === 'delete') { ui.confirm = 'item'; renderItemDrawer(); }
-    else if (act === 'keep') { ui.confirm = null; ui.courseDraft ? renderCourseDrawer() : renderItemDrawer(); }
+    else if (act === 'keep') { ui.confirm = null; ui.sessionDraft ? renderSessionDrawer() : ui.courseDraft ? renderCourseDrawer() : renderItemDrawer(); }
+    else if (act === 'session-save') saveSessionDraft();
+    else if (act === 'session-delete') { ui.confirm = 'session'; renderSessionDrawer(); }
+    else if (act === 'session-delete-yes' && ui.sessionDraft) { const id = ui.sessionDraft.id; closeDrawer(); deleteWithUndo(id); }
     else if (act === 'delete-yes' && it) { await store.deleteItem(it.id); closeDrawer(); }
     else if (act === 'addmtg' && ui.courseDraft) {
       ui.courseDraft.meetings = ui.courseDraft.meetings || [];
@@ -686,6 +777,7 @@ async function addQuote() {
 
 document.addEventListener('input', async (e) => {
   const d = e.target.dataset || {};
+  if ('sd' in d) { editSession(d.sd, e.target.value); return; }     /* the Log study drawer */
 
   if ('reviews' in d) {
     const setting = readSetting();
@@ -852,6 +944,8 @@ document.addEventListener('pointerdown', (e) => {
 
 document.addEventListener('change', async (e) => {
   if (await studyChange(e.target)) return;
+  if (e.target.id === 'goalDayMin') { const v = Math.round(+e.target.value); if (v >= 1 && v <= 240) await savePrefs({ dayMin: v }); else renderSettings(); return; }
+  if (e.target.id === 'goalCelebrate') { await savePrefs({ celebrate: e.target.checked }); return; }
   const renamed = e.target.dataset?.typelabel;
   if (renamed) {
     const list = typesOnScreen(), t = list.find((x) => x.id === renamed);
@@ -876,7 +970,7 @@ const VIEW_KEYS = { 1: 'week', 2: 'month', 3: 'table', 4: 'spotify', 5: 'study' 
 function shortcut(e) {
   if (e.ctrlKey || e.metaKey || e.altKey || e.repeat || isTyping(e.target) || e.target.isContentEditable) return false;
   if (e.key === '?') { keysOpen() ? closeKeys() : openKeys(); e.preventDefault(); return true; }
-  if (keysOpen() || ui.focus || ui.sel || ui.draft || ui.courseDraft || ui.settings || $('app').hidden) return false;
+  if (keysOpen() || ui.focus || ui.sel || ui.draft || ui.courseDraft || ui.settings || ui.sessionDraft || $('app').hidden) return false;
   const press = (sel) => { const b = document.querySelector(sel); if (!b) return false; e.preventDefault(); b.click(); return true; };
   if (e.key === 'n') return press('#newBtn');
   if (e.key === 't') return press('#today');
@@ -892,7 +986,7 @@ document.addEventListener('keydown', async (e) => {
     if ($('side').classList.contains('on')) { setSide(false); return; }
     if (e.target.closest?.('#typeNav')) { e.target.blur(); ui.typeAdd = null; ui.typeEdit = false; renderSidebar(true); return; }
     if (ui.view === 'spotify' && spotView.devicesOpen()) { spotView.closeDevices(); return; }
-    if (ui.sel || ui.draft || ui.courseDraft || ui.settings) { closeDrawer(); return; }
+    if (ui.sel || ui.draft || ui.courseDraft || ui.settings || ui.sessionDraft) { closeDrawer(); return; }
     if (ui.focus) leaveFocus();
     return;
   }

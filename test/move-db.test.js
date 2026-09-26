@@ -18,8 +18,11 @@ it('copies an old-schema database into a fresh one, row for row, with the change
   await applyD1Migrations(from, env.LEGACY_MIGRATIONS);
   await applyD1Migrations(to, env.TEST_MIGRATIONS);
   // The rows below are written with today's worker/db.js, which also saves a course's
-  // grade target; the old schema only needs the column for that, and the copy leaves it.
+  // grade target and a session's note; the old schema only needs the columns for that,
+  // and the copy leaves them.
   await from.prepare('ALTER TABLE courses ADD COLUMN target INTEGER').run();
+  await from.prepare("ALTER TABLE study_sessions ADD COLUMN note TEXT NOT NULL DEFAULT ''").run();
+  await from.prepare('ALTER TABLE study_sessions ADD COLUMN manual INTEGER NOT NULL DEFAULT 0').run();
 
   for (const id of ['ana', 'ben']) {
     await from.prepare("INSERT INTO users (id, username, password_hash, types, study_flow, created_at, updated_at) VALUES (?, ?, 'hash', '[{\"id\":\"c-quiz1\",\"label\":\"Quiz\",\"color\":\"#B03A7A\",\"kind\":\"graded\"}]', '{\"steps\":[[\"study\",50],[\"break\",10]],\"rounds\":3}', 100, 100)")

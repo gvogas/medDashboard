@@ -2,7 +2,7 @@
 import { HttpError } from './http.js';
 
 const PROFILE_COLS =
-  'id, username, display_name, coat_name, coat_role, coat_color, theme, bg, types, study_flow, term_start, created_at, updated_at, revision';
+  'id, username, display_name, coat_name, coat_role, coat_color, theme, bg, types, study_flow, study_prefs, term_start, created_at, updated_at, revision';
 
 function profileFromRow(r) {
   return {
@@ -14,6 +14,7 @@ function profileFromRow(r) {
     bg: r.bg,
     types: jsonOut(r.types),
     studyFlow: flowOut(r.study_flow),
+    studyPrefs: prefsOut(r.study_prefs),
     termStart: r.term_start,
     createdAt: r.created_at,
     updatedAt: r.updated_at,
@@ -39,9 +40,9 @@ export async function getProfile(db, userId) {
 export async function updateProfile(db, userId, p, now = Date.now(), revision) {
   const saved = await db
     .prepare(
-      `UPDATE users SET display_name = ?, coat_name = ?, coat_role = ?, coat_color = ?, theme = ?, bg = ?, types = COALESCE(?, types), study_flow = COALESCE(?, study_flow), term_start = ?, updated_at = ?, revision = revision + 1 WHERE id = ? AND revision = ? RETURNING ${PROFILE_COLS}`,
+      `UPDATE users SET display_name = ?, coat_name = ?, coat_role = ?, coat_color = ?, theme = ?, bg = ?, types = COALESCE(?, types), study_flow = COALESCE(?, study_flow), study_prefs = COALESCE(?, study_prefs), term_start = ?, updated_at = ?, revision = revision + 1 WHERE id = ? AND revision = ? RETURNING ${PROFILE_COLS}`,
     )
-    .bind(p.displayName, p.coatName, p.coatRole, p.coatColor, p.theme, p.bg, p.types === null ? null : JSON.stringify(p.types), p.studyFlow ? JSON.stringify(p.studyFlow) : null, p.termStart, now, userId, revision ?? -1)
+    .bind(p.displayName, p.coatName, p.coatRole, p.coatColor, p.theme, p.bg, p.types === null ? null : JSON.stringify(p.types), p.studyFlow ? JSON.stringify(p.studyFlow) : null, p.studyPrefs ? JSON.stringify(p.studyPrefs) : null, p.termStart, now, userId, revision ?? -1)
     .first();
   if (!saved) throw new HttpError(409, { error: 'conflict', current: await getProfile(db, userId) });
   return profileFromRow(saved);
@@ -59,6 +60,10 @@ const jsonOut = (v) => {
 };
 
 const DEFAULT_FLOW = { steps: [['study', 25], ['break', 5]], rounds: 4 };
+/* The client fills in defaults (normalizePrefs); an unreadable value is no prefs at all. */
+const prefsOut = (v) => {
+  try { const p = JSON.parse(v); return p && typeof p === 'object' && !Array.isArray(p) ? p : {}; } catch { return {}; }
+};
 const flowOut = (v) => {
   try { const f = JSON.parse(v); return f && Array.isArray(f.steps) ? f : DEFAULT_FLOW; } catch { return DEFAULT_FLOW; }
 };
@@ -84,9 +89,9 @@ const TABLES = {
     fromRow: () => ({}),
   },
   study_sessions: {
-    cols: { courseId: 'course_id', itemId: 'item_id', startedAt: 'started_at', studyMinutes: 'study_minutes', roundsDone: 'rounds_done' },
-    toRow: (s) => s,
-    fromRow: () => ({}),
+    cols: { courseId: 'course_id', itemId: 'item_id', startedAt: 'started_at', studyMinutes: 'study_minutes', roundsDone: 'rounds_done', note: 'note', manual: 'manual' },
+    toRow: (s) => ({ ...s, note: s.note ?? '', manual: s.manual ? 1 : 0 }),
+    fromRow: (r) => ({ note: r.note ?? '', manual: r.manual === 1 }),
   },
 };
 

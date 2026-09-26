@@ -9,7 +9,7 @@ users            one row per account: username, password hash, profile, coat, th
 courses          a course + its weekly class meetings, as a JSON column
 items            exams, quizzes, assignments, labs, tutorials, office hours, tasks, projects
 quotes           the quote tile's list
-study_sessions   finished study-timer runs: minutes studied, by course and item
+study_sessions   study time: timer runs and time logged by hand, by course and item
 ```
 
 The schema is [`migrations/0001_schema.sql`](../migrations/0001_schema.sql), in one
@@ -218,8 +218,9 @@ Storing any of these would mean a write every midnight. They cost nothing to com
 
 ## `study_sessions`
 
-One row per finished study-timer run (migration `0002_study.sql`). Only study time is
-logged, never breaks; a run with under a minute of study saves nothing. The run in
+One row per finished study-timer run, or per stretch logged by hand from Log study
+(`note` and `manual`: migration `0002_study_history.sql`). Only study time is logged,
+never breaks; a run with under a minute of study saves nothing. The run in
 progress lives in the browser's IndexedDB on that device and does not sync.
 
 | Column | Type | Rules |
@@ -230,10 +231,17 @@ progress lives in the browser's IndexedDB on that device and does not sync.
 | `started_at` | int | ms since the epoch |
 | `study_minutes` | int | 1–1440, whole minutes |
 | `rounds_done` | int | 0–12, rounds whose every step finished |
+| `note` | text | up to 200 characters: what was covered |
+| `manual` | int | 1 when logged by hand, 0 when the timer recorded it |
 | `created_at`, `updated_at`, `deleted_at` | int | |
 
 The flow itself is `users.study_flow`, JSON `{"steps":[["study",25],["break",5]],"rounds":4}`:
 1–12 steps of 1–180 minutes with at least one Study step, 1–12 rounds.
+
+The goal and streak rules are `users.study_prefs`, JSON `{"goal":120,"dayMin":15,"rest":[0],"celebrate":true}`:
+a daily goal of 0–720 minutes (0 = none), 1–240 minutes to make a day count, up to six
+rest days (0 = Sunday) that never break the streak, and fireworks on or off. Streaks,
+weeks, months and the heatmap are worked out on the device (`public/js/history.js`).
 
 ---
 
@@ -324,14 +332,14 @@ All routes are under `/api`, speak JSON, and require the session cookie except
 | `DELETE /api/session` | → clears the cookie. |
 | `POST /api/session/revoke-all` | → `204`, clears the cookie and invalidates every other session of this user. |
 | `GET /api/me` | → `{profile}` |
-| `PUT /api/me` | `{coat, theme, bg, termStart, displayName, studyFlow}` (`bg` optional, default `med`; `studyFlow` optional, kept when left out) → `{profile}` |
+| `PUT /api/me` | `{coat, theme, bg, termStart, displayName, studyFlow, studyPrefs}` (`bg` optional, default `med`; `studyFlow` and `studyPrefs` optional, kept when left out) → `{profile}` |
 | `GET /api/sync?v=2&cursor=<seq>` | → `{changes: [{kind, row}], cursor, more, reset}` — at most 100 changes after `cursor`, deleted rows included with `deletedAt` set. `cursor=0` is a full load. See the sync protocol below. |
 | `GET /api/{courses,items,quotes,study_sessions}/:id` | one live row of yours, or `404`. The client uses it to undo a rejected save. |
 | `PUT /api/courses/:id` | a course (with an optional `target`, a whole-number grade goal 1–100) → the stored course, with server `updatedAt`. Upsert. |
 | `DELETE /api/courses/:id` | → `204`. Soft-deletes and nulls `courseId` on the user's items and study sessions. |
 | `PUT /api/items/:id` · `DELETE /api/items/:id` | as above; deleting nulls `itemId` on the user's study sessions |
 | `PUT /api/quotes/:id` · `DELETE /api/quotes/:id` | as above |
-| `PUT /api/study_sessions/:id` · `DELETE /api/study_sessions/:id` | `{courseId, itemId, startedAt, studyMinutes, roundsDone}`, as above |
+| `PUT /api/study_sessions/:id` · `DELETE /api/study_sessions/:id` | `{courseId, itemId, startedAt, studyMinutes, roundsDone, note, manual}`, as above |
 | `GET /api/calendar` · `POST /api/calendar` · `DELETE /api/calendar` | the calendar feed: → `{on, url}`; POST turns it on or makes a new link (the old one stops working); DELETE turns it off. See `worker/calendar.js`. |
 | `GET /api/calendar/:userId/:token.ics?tz=` | no session: the feed itself, `text/calendar`. The token is an HMAC of the user id and `users.feed_gen`; a wrong one is `404`. At most 60 fetches an hour per link. |
 

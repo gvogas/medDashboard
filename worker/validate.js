@@ -143,6 +143,25 @@ export function validateProfile(body) {
     types: body.types === undefined ? null : typeList(body.types),
     // Older clients do not send a flow; the stored one is kept (null here).
     studyFlow: body.studyFlow === undefined ? null : studyFlow(body.studyFlow),
+    // Nor study prefs; the stored ones are kept (null here).
+    studyPrefs: body.studyPrefs === undefined ? null : studyPrefs(body.studyPrefs),
+  };
+}
+
+/* The study goal and streak rules: minutes a day to aim for (0 = no goal), the least
+   that makes a day count toward the streak, rest days (0 = Sunday) that never break
+   it, and whether to celebrate. */
+export function studyPrefs(v) {
+  obj(v, 'studyPrefs');
+  const rest = v.rest ?? [];
+  if (!Array.isArray(rest) || rest.length > 6) fail('studyPrefs.rest');
+  rest.forEach((d, i) => int(d, `studyPrefs.rest[${i}]`, 0, 6));
+  if (new Set(rest).size !== rest.length) fail('studyPrefs.rest');
+  return {
+    goal: int(v.goal ?? 0, 'studyPrefs.goal', 0, 720),
+    dayMin: int(v.dayMin ?? 15, 'studyPrefs.dayMin', 1, 240),
+    rest: [...rest].sort((a, b) => a - b),
+    celebrate: bool(v.celebrate ?? true, 'studyPrefs.celebrate'),
   };
 }
 
@@ -235,6 +254,8 @@ export function validateStudySession(body) {
     startedAt: int(body.startedAt, 'startedAt', 1, Number.MAX_SAFE_INTEGER),
     studyMinutes: int(body.studyMinutes, 'studyMinutes', 1, 1440),
     roundsDone: int(body.roundsDone ?? 0, 'roundsDone', 0, 12),
+    note: str(body.note ?? '', 'note', 200),
+    manual: bool(body.manual ?? false, 'manual'),
   };
 }
 

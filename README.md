@@ -71,8 +71,12 @@ docs/RELIABILITY-UPGRADE.md  sync revisions, local queue and Spotify token keys
 - **Study timer** — a flip clock that runs a flow you build: Study and Break steps of
   any length, repeated for a number of rounds (study is pink and breaks purple on Med,
   teal and pink on CS). Start opens a focus screen with only the clock and Spotify;
-  study time is logged against a course and an optional item, and the Study tab shows
-  the week's hours.
+  study time is logged against a course and an optional item.
+- **Study history** — the Study tab shows your streak, today against a daily goal and
+  the term's total; the week by day and course, with arrows back through past weeks; a
+  heatmap of the term; and every session by week or on a month calendar. Time away from
+  the timer can be logged by hand with a note, any session edited, and a delete undone.
+  Settings › Study sets the goal, when a day counts, rest days and fireworks.
 - **Spotify** — a badge on the coat shows what you are listening to, with previous,
   play/pause and next, and a Spotify view lets you search, browse your playlists and
   Liked Songs, see the queue and set the volume. Each person connects their own account

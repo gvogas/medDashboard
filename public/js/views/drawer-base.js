@@ -49,7 +49,7 @@ function refind(el) {
 }
 
 export function resetDrawerState() {
-  ui.sel = null; ui.draft = null; ui.courseDraft = null; ui.courseMode = null; ui.confirm = null; ui.settings = false; ui.importPlan = null; ui.fillNote = null;
+  ui.sel = null; ui.draft = null; ui.courseDraft = null; ui.courseMode = null; ui.confirm = null; ui.settings = false; ui.importPlan = null; ui.fillNote = null; ui.sessionDraft = null;
 }
 
 /** Run before the drawer closes, e.g. to save what is still being typed. */

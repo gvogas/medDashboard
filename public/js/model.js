@@ -294,6 +294,21 @@ export function normalizeFlow(raw) {
   return { steps, rounds: clampInt(raw.rounds, 1, 12, 1) };
 }
 
+/* The study goal and streak rules: a daily goal in minutes (0 = none), the least that
+   makes a day count toward the streak, rest days (0 = Sunday) that never break it, and
+   whether to celebrate. The server keeps what it is given; this fills the gaps. */
+export const DEFAULT_PREFS = { goal: 0, dayMin: 15, rest: [], celebrate: true };
+export function normalizePrefs(raw) {
+  const p = raw && typeof raw === 'object' ? raw : {};
+  const rest = Array.isArray(p.rest) ? [...new Set(p.rest.filter((d) => Number.isInteger(d) && d >= 0 && d <= 6))].sort().slice(0, 6) : [];
+  return {
+    goal: clampInt(p.goal, 0, 720, DEFAULT_PREFS.goal),
+    dayMin: clampInt(p.dayMin, 1, 240, DEFAULT_PREFS.dayMin),
+    rest,
+    celebrate: p.celebrate === undefined ? true : !!p.celebrate,
+  };
+}
+
 export function normalizeStudySession(raw) {
   return {
     id: raw.id || uid(),
@@ -302,6 +317,8 @@ export function normalizeStudySession(raw) {
     startedAt: typeof raw.startedAt === 'number' ? raw.startedAt : Date.now(),
     studyMinutes: clampInt(raw.studyMinutes, 1, 1440, 1),
     roundsDone: clampInt(raw.roundsDone, 0, 12, 0),
+    note: typeof raw.note === 'string' ? raw.note.slice(0, 200) : '',
+    manual: !!raw.manual,
     createdAt: raw.createdAt ?? null,
     revision: raw.revision ?? 0, updatedAt: raw.updatedAt ?? null,
   };

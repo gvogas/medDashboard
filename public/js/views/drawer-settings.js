@@ -1,7 +1,7 @@
 import { setHTML } from '../dom.js';
 import { data, conflicts } from '../store.js';
 import { ui } from '../state.js';
-import { COAT_PALETTE, colourName, DEFAULT_COAT } from '../model.js';
+import { COAT_PALETTE, colourName, DEFAULT_COAT, normalizePrefs } from '../model.js';
 import { esc, $ } from '../dom.js';
 import { showDrawer, resetDrawerState } from './drawer-base.js';
 import { TUCK_SVG } from './bits.js';
@@ -120,7 +120,7 @@ function badgeGroup(p, coat) {
 
 const TABS = [['you', 'You'], ['study', 'Study'], ['spotify', 'Spotify'], ['account', 'Account']];
 /* Where a deep link lands: the field or group to focus, and the tab it lives on. */
-const TAB_OF = { 'o-name': 'you', qText: 'you', importGrp: 'study', spotifyGrp: 'spotify' };
+const TAB_OF = { 'o-name': 'you', qText: 'you', goalGrp: 'study', importGrp: 'study', spotifyGrp: 'spotify' };
 
 /* Saved copies and sync trouble live on the Account tab, so the tab itself says so. */
 function accountFlag() {
@@ -172,9 +172,29 @@ function youTab(p, coat) {
     + '<button class="btn ghost" type="button" data-act="addquote">Add</button></span></div></div>';
 }
 
+const hm = (m) => (m >= 60 ? Math.floor(m / 60) + 'h' + (m % 60 ? ' ' + String(m % 60).padStart(2, '0') + 'm' : '') : m + 'm');
+const GOALS = [0, 60, 90, 120, 180, 240];
+const DAYS = [[1, 'Mon'], [2, 'Tue'], [3, 'Wed'], [4, 'Thu'], [5, 'Fri'], [6, 'Sat'], [0, 'Sun']];
+
+/* The daily goal and the streak's rules, saved on the profile so every device shares them. */
+function goalGroup() {
+  const p = normalizePrefs(data.profile?.studyPrefs);
+  return '<div class="setgrp" id="goalGrp" tabindex="-1"><h4>Daily goal<em>' + (p.goal ? hm(p.goal) + ' a day' : 'off') + '</em></h4>'
+    + '<div class="goalstep"><button type="button" class="btn ghost" data-goal-step="-15" aria-label="15 minutes less"' + (p.goal ? '' : ' disabled') + '>−</button>'
+    + '<b class="mono" aria-live="polite">' + (p.goal ? hm(p.goal) : 'No goal') + '</b>'
+    + '<button type="button" class="btn ghost" data-goal-step="15" aria-label="15 minutes more">+</button></div>'
+    + '<span class="goalchips" role="group" aria-label="Pick a goal">' + GOALS.map((g) => '<button type="button" data-goal-set="' + g + '" aria-pressed="' + (p.goal === g) + '">' + (g ? hm(g) : 'Off') + '</button>').join('') + '</span>'
+    + '<span class="note">The Study tab and the corner clock show how far along today is.</span></div>'
+    + '<div class="setgrp"><h4>Streak</h4>'
+    + '<label class="checkline"><span>A day counts from</span><input type="number" id="goalDayMin" inputmode="numeric" min="1" max="240" value="' + p.dayMin + '"><span>min</span></label>'
+    + '<span class="note">Rest days never break it: study on one and it counts, skip it and nothing resets.</span>'
+    + '<span class="restdays" role="group" aria-label="Rest days">' + DAYS.map(([d, l]) => '<button type="button" data-rest="' + d + '" aria-pressed="' + p.rest.includes(d) + '">' + l + '</button>').join('') + '</span>'
+    + '<label class="checkline"><input type="checkbox" id="goalCelebrate"' + (p.celebrate ? ' checked' : '') + '><span>Fireworks at the daily goal and at 7, 30, 100 and 365 days</span></label></div>';
+}
+
 function studyTab() {
   const rv = readSetting();
-  return '<div class="setgrp"><h4>Reviews<em>' + (rv.on ? 'on' : 'off') + '</em></h4>'
+  return goalGroup() + '<div class="setgrp"><h4>Reviews<em>' + (rv.on ? 'on' : 'off') + '</em></h4>'
     + '<label class="checkline"><input type="checkbox" id="reviewsOn" data-reviews' + (rv.on ? ' checked' : '') + '>'
     + '<span>Create review tasks after lectures</span></label>'
     + '<span class="note">Days 1, 3, 7 and 21 after each lecture. This device only, from today.</span></div>'

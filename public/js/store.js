@@ -1,6 +1,6 @@
 // The database is authoritative; memory is a render cache, never the shared queue.
 import { openDb, deleteDb } from './db.js';
-import { normalizeItem, normalizeCourse, normalizeQuote, normalizeStudySession, normalizeFlow, DEFAULT_COAT } from './model.js';
+import { normalizeItem, normalizeCourse, normalizeQuote, normalizeStudySession, normalizeFlow, normalizePrefs, DEFAULT_COAT } from './model.js';
 export const data = { profile: null, courses: [], items: [], quotes: [], study_sessions: [] };
 export const dirty = {};
 export const conflicts = [];
@@ -17,7 +17,7 @@ let byId = { courses: new Map(), items: new Map() };
 export const course = (id) => byId.courses.get(id) || null;
 export const item = (id) => byId.items.get(id) || null;
 const index = () => { byId = { courses: new Map(data.courses.map((r) => [r.id, r])), items: new Map(data.items.map((r) => [r.id, r])) }; };
-const profile = (p) => ({ ...p, types: Array.isArray(p.types) ? p.types : [], studyFlow: normalizeFlow(p.studyFlow), coat: { name: '', role: '', color: DEFAULT_COAT, ...p.coat }, revision: p.revision || 0 });
+const profile = (p) => ({ ...p, types: Array.isArray(p.types) ? p.types : [], studyFlow: normalizeFlow(p.studyFlow), studyPrefs: normalizePrefs(p.studyPrefs), coat: { name: '', role: '', color: DEFAULT_COAT, ...p.coat }, revision: p.revision || 0 });
 const rowStore = (key) => key === 'profile' ? 'meta' : key.split(':')[0];
 const rowId = (key) => key === 'profile' ? 'profile' : key.slice(key.indexOf(':') + 1);
 const wrap = (key, row) => key === 'profile' ? { key: 'profile', value: row } : row;
@@ -176,7 +176,7 @@ export function saveProfile(patch) {
   return mutate(async (a) => {
     const p = (await a('meta').get('profile')).value;
     if (copy.coat) Object.assign(p.coat, copy.coat);
-    for (const key of ['displayName', 'theme', 'bg', 'termStart', 'types', 'studyFlow']) if (key in copy) p[key] = copy[key];
+    for (const key of ['displayName', 'theme', 'bg', 'termStart', 'types', 'studyFlow', 'studyPrefs']) if (key in copy) p[key] = copy[key];
     await a('meta').put(wrap('profile', p));
     await queue(a, 'profile', 'put', p);
   });
