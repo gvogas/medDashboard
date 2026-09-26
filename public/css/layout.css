@@ -231,7 +231,7 @@ button{cursor:pointer}
 .search{position:relative;flex:0 1 200px;min-width:126px}
 .search input{width:100%;padding:6px 10px 6px 28px;border:1px solid var(--line);border-radius:8px;background:var(--panel);font-size:12.5px}
 .search svg{position:absolute;left:8px;top:50%;transform:translateY(-50%);width:13px;height:13px;color:var(--ink-3)}
-.btn{border:0;border-radius:8px;background:var(--accent);color:var(--on-accent);font-weight:600;font-size:12.5px;padding:7px 13px;white-space:nowrap}
+.btn{border:0;border-radius:8px;background:var(--accent);color:var(--on-accent);font-weight:600;font-size:12.5px;padding:7px 13px;white-space:nowrap;text-decoration:none;display:inline-block}
 .btn:hover{background:var(--accent-ink)}
 .btn:disabled{background:var(--disabled);cursor:not-allowed}
 .btn.ghost{background:var(--panel);color:var(--ink-2);border:1px solid var(--line);font-weight:500}

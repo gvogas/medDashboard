@@ -39,23 +39,30 @@ docs/RELIABILITY-UPGRADE.md  sync revisions, local queue and Spotify token keys
 
 ## Features
 
-- **Seven item types** — exams, assignments, labs, tutorials, office hours, tasks and
-  projects. Each opens a page with notes, a checklist and links.
+- **Eight item types** — exams, quizzes, assignments, labs, tutorials, office hours,
+  tasks and projects. Each opens a page with notes, a checklist and links.
 - **Courses** you add and edit, each with a colour and a list of classes (kind, day,
   start, end, room). Courses can be archived without losing their items.
 - **Four views** — week board grouped by day, a month calendar of classes with the
   deadlines on it (a Deadlines switch turns them off), a sortable table of everything,
   and Spotify. On a phone the page scrolls as one, the stats swipe sideways and the
   table becomes a list of cards.
-- **Live status** — overdue flags, next-exam countdown, class hours per week, lab hours.
+- **Live status** — overdue flags, a countdown to the next exam or quiz, class hours per
+  week, lab hours.
 - **Settings** — light / dark / follow-the-device, a Med or CS background (the CS one
   swaps the lab coat for a lanyard ID badge), the name embroidered on the coat and its
   colour, and your own quotes shown in a tile beside the stats.
 - **Local-first** — the app renders from IndexedDB, works offline, and syncs to D1 on
   load, on focus and after every edit. The pill in the top bar shows where it stands.
 - **Several people** — each has a username and password and sees only their own data.
-- **Grades** — a weight per exam, assignment, lab or project; each course shows its
-  weighted average so far and what the rest needs to finish at 50, 60 or 70.
+- **Grades** — a weight per exam, quiz, assignment, lab or project; each course shows its
+  weighted average so far and what the rest needs to finish at 50, 60, 70 or a target
+  of your own, and "What if…" scores to try out before they are real.
+- **Calendar feed** — a private link, from Settings › Study, that Google or Apple
+  Calendar subscribes to: every dated item and your weekly classes. A new link retires
+  the old one.
+- **Keyboard shortcuts** — `n` new item, `t` today, `[` `]` back and forward, `1`–`5`
+  the views, `/` search; `?` lists them.
 - **Import** — a school calendar (`.ics`), a CSV timetable, or a course outline (PDF or
   Word, read by Workers AI) becomes courses, classes and dated items, through a
   preview where you tick what to keep.

@@ -9,7 +9,7 @@ import { status } from '../sync.js';
 import { state as spotify } from '../spotify.js';
 import { state as web } from '../web-player.js';
 import { SPOTIFY_MARK } from './player.js';
-import { spotifyRetryAt } from '../api.js';
+import { api, spotifyRetryAt } from '../api.js';
 import { readSetting } from '../reviews.js';
 
 export function openSettings(focus) {
@@ -189,7 +189,83 @@ function studyTab() {
     + '<textarea id="importText" rows="4" placeholder="Paste calendar or CSV text" aria-label="Calendar or CSV text"></textarea>'
     + '<button class="btn ghost" type="button" data-act="import-paste">Preview</button></details>'
     + (ui.importNote ? '<span class="note' + (ui.importNote.error ? ' err' : '') + '">' + esc(ui.importNote.text) + '</span>' : '')
-    + '</div>';
+    + '</div>'
+    + '<div class="setgrp" id="feedGrp" tabindex="-1">' + feedGroup() + '</div>';
+}
+
+/* ── the calendar feed: a private link Google or Apple Calendar subscribes to ── */
+
+/** The link as calendars get it: with this browser's time zone, so Google places class times right. */
+function feedLink(url) {
+  let tz = '';
+  try { tz = Intl.DateTimeFormat().resolvedOptions().timeZone || ''; } catch { /* no zone: floating times */ }
+  return tz ? url + '?tz=' + encodeURIComponent(tz) : url;
+}
+
+function feedGroup() {
+  const f = ui.feed;
+  let html = '<h4>Calendar feed<em>' + (!f || f.loading ? 'checking' : f.on ? 'on' : 'off') + '</em></h4>';
+  if (!f || f.loading) return html + '<span class="note">Checking…</span>';
+  if (f.on) {
+    const link = feedLink(f.url), webcal = link.replace(/^https?:/, 'webcal:');
+    html += '<div class="feedrow"><input type="text" id="feedUrl" readonly value="' + esc(link) + '" aria-label="Calendar feed link">'
+      + '<button class="btn ghost" type="button" data-act="feed-copy">' + (f.copied ? 'Copied' : 'Copy') + '</button></div>'
+      + '<span data-layout="ed524873">'
+      + '<a class="btn ghost" href="https://calendar.google.com/calendar/render?cid=' + encodeURIComponent(webcal) + '" target="_blank" rel="noopener noreferrer">Add to Google Calendar</a>'
+      + '<a class="btn ghost" href="' + esc(webcal) + '">Add to Apple Calendar</a></span>';
+    if (f.confirm) {
+      html += '<div class="feedconfirm"><span>' + (f.confirm === 'renew'
+        ? 'Make a new link? Calendars using the old one stop updating until you add the new one.'
+        : 'Turn the feed off? Calendars using this link stop updating.') + '</span>'
+        + '<button class="btn ghost" type="button" data-act="feed-keep">Keep</button>'
+        + '<button class="btn danger" type="button" data-act="' + (f.confirm === 'renew' ? 'feed-renew-yes' : 'feed-off-yes') + '">' + (f.confirm === 'renew' ? 'New link' : 'Turn off') + '</button></div>';
+    } else {
+      html += '<span data-layout="ed524873"><button class="btn ghost" type="button" data-act="feed-renew">New link</button>'
+        + '<button class="btn ghost" type="button" data-act="feed-off">Turn off</button></span>';
+    }
+    html += '<span class="note">Deadlines, exams, quizzes and your weekly classes. Keep the link private: anyone who has it can see your schedule. Google refreshes it every few hours, so changes can take up to a day to show there.</span>';
+  } else {
+    html += '<span class="note">See your deadlines, exams, quizzes and classes in Google or Apple Calendar. It updates by itself as you change things here.</span>'
+      + '<span data-layout="ed524873"><button class="btn" type="button" data-act="feed-on"' + (f.busy ? ' disabled' : '') + '>Create a calendar link</button></span>';
+  }
+  if (f.error) html += '<span class="note err">' + esc(f.error) + '</span>';
+  return html;
+}
+
+/** Redraw just the feed group, when its state changes while Settings is open. */
+export function refreshFeedGroup() {
+  const g = $('feedGrp');
+  if (g) setHTML(g, feedGroup());
+}
+
+/** Ask the server whether the feed is on; the Study tab calls this the first time it opens. */
+export async function loadFeed() {
+  ui.feed = { loading: true };
+  try { ui.feed = { ...(await api.calendarFeed()) }; }
+  catch { ui.feed = { on: false, error: 'Could not check the calendar feed. Try again when you are online.' }; }
+  refreshFeedGroup();
+}
+
+/** feed-on, feed-renew-yes, feed-off-yes, and the rest of the group's buttons. */
+export async function feedAction(act) {
+  const f = ui.feed || (ui.feed = {});
+  if (act === 'feed-renew' || act === 'feed-off') { f.confirm = act === 'feed-renew' ? 'renew' : 'stop'; refreshFeedGroup(); return; }
+  if (act === 'feed-keep') { f.confirm = null; refreshFeedGroup(); return; }
+  if (act === 'feed-copy') {
+    const box = $('feedUrl');
+    try { await navigator.clipboard.writeText(box.value); } catch { box.select(); document.execCommand?.('copy'); }
+    f.copied = true; refreshFeedGroup();
+    setTimeout(() => { if (ui.feed === f) { f.copied = false; refreshFeedGroup(); } }, 2000);
+    return;
+  }
+  f.busy = true; f.error = null; f.confirm = null; refreshFeedGroup();
+  try {
+    if (act === 'feed-off-yes') { await api.calendarStop(); ui.feed = { on: false }; }
+    else ui.feed = { ...(await api.calendarRenew()) };
+  } catch {
+    ui.feed = { ...f, busy: false, error: 'That did not go through. Try again when you are online.' };
+  }
+  refreshFeedGroup();
 }
 
 function accountTab(p) {
@@ -230,9 +306,11 @@ export function renderSettings() {
     + '</div>';
 
   const foot = '<div class="dfoot"><span class="hint">Rounds</span>'
+    + '<button class="btn ghost keys-btn" type="button" data-act="shortcuts">Keyboard shortcuts <kbd>?</kbd></button>'
     + '<button class="btn" type="button" data-act="close">Done</button></div>';
 
   showDrawer(head + body + foot);
+  if (tab === 'study' && !ui.feed) loadFeed();
   if (ui.focusField) {
     const f = $(ui.focusField);
     if (f) { f.focus({ preventScroll: true }); f.scrollIntoView({ block: 'nearest' }); }

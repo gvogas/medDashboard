@@ -17,14 +17,15 @@
     "run_worker_first": ["/api", "/api/*"]
   },
 
-  // rounds-v2 was built fresh from migrations/0001_schema.sql and filled by
-  // scripts/move-db.mjs on 2026-09-24. The old "rounds" database
-  // (61d75810-5015-41f5-8b3e-fc2339d4acf1) is kept untouched as a backup.
+  // rounds-v3 was built fresh from migrations/0001_schema.sql and filled by
+  // scripts/move-db.mjs on 2026-09-25. The databases before it are kept untouched
+  // as backups: "rounds-v2" (2cdc66b8-25b3-445a-ad1b-616a7369b262) and "rounds"
+  // (61d75810-5015-41f5-8b3e-fc2339d4acf1).
   "d1_databases": [
     {
       "binding": "DB",
-      "database_name": "rounds-v2",
-      "database_id": "2cdc66b8-25b3-445a-ad1b-616a7369b262",
+      "database_name": "rounds-v3",
+      "database_id": "94de2d33-2cbd-4169-9398-faf3b3895f95",
       "migrations_dir": "migrations"
     }
   ],

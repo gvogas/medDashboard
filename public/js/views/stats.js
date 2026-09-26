@@ -1,7 +1,7 @@
 import { setHTML } from '../dom.js';
 import { data } from '../store.js';
 import { ui } from '../state.js';
-import { isOpen, isOverdue } from '../model.js';
+import { isOpen, isOverdue, isTest, tmeta } from '../model.js';
 import { diffDays, today, dur } from '../dates.js';
 import { activeCourses } from '../query.js';
 import { esc, $ } from '../dom.js';
@@ -11,7 +11,9 @@ export function renderStats() {
   const TODAY = today();
   let nextExam = null, openAssign = 0, overdue = 0, labDone = 0, labAll = 0;
   data.items.forEach((it) => {
-    if (it.type === 'exam' && isOpen(it) && diffDays(TODAY, it.date) >= 0 && (!nextExam || it.date < nextExam.date)) nextExam = it;
+    /* the soonest open exam or quiz; on the same day, the earlier start */
+    if (isTest(it.type) && isOpen(it) && diffDays(TODAY, it.date) >= 0
+      && (!nextExam || it.date + (it.start || '~') < nextExam.date + (nextExam.start || '~'))) nextExam = it;
     if (it.type === 'assignment' && isOpen(it)) openAssign++;
     if (isOverdue(it)) overdue++;
     if (it.type === 'lab') { const h = dur(it.start, it.end); labAll += h; if (!isOpen(it)) labDone += h; }
@@ -33,7 +35,8 @@ export function renderStats() {
           : '<path d="M30 6l14 8v16l-14 8-14-8V14z"/><circle cx="30" cy="22" r="7"/><path d="M44 30l12 7M16 30L4 37M30 38v14"/>') + '</svg>';
 
   setHTML($('stats'), ''
-    + '<div class="stat hot"><div class="lab">Next exam</div><div class="val">' + ddText + '</div><div class="foot">' + (nextExam ? esc(nextExam.title) : 'nothing scheduled')
+    + '<div class="stat hot"><div class="lab">Next exam / quiz</div><div class="val">' + ddText + '</div><div class="foot">'
+      + (nextExam ? '<span class="ttag">' + esc(tmeta(nextExam.type).label) + '</span>' + esc(nextExam.title) : 'nothing scheduled')
       + (prep ? '<span class="prepline' + (prep.hot ? ' hot' : '') + '">' + esc(prepLabel(prep)) + '</span>' : '') + '</div>' + ecg + '</div>'
     + '<div class="stat"><div class="lab">Open assignments</div><div class="val">' + openAssign + '</div><div class="foot">across ' + courses.length + ' course' + (courses.length === 1 ? '' : 's') + '</div>' + mol + '</div>'
     + '<div class="stat' + (overdue ? ' hot' : '') + '"><div class="lab">Overdue</div><div class="val">' + overdue + '</div><div class="foot">' + (overdue ? 'needs attention today' : 'all clear') + '</div></div>'

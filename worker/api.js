@@ -7,6 +7,7 @@ import { readOutline, MAX_BYTES } from './outline.js';
 import { validateProfile, validateCourse, validateItem, validateQuote, validateStudySession, validateId } from './validate.js';
 import { getUserForLogin, getProfile, updateProfile, getRow, upsertRow, deleteRow, syncPage, bumpPasswordGen, saveSpotifyTokens, deleteSpotifyTokens } from './db.js';
 import * as spotify from './spotify.js';
+import { feedState, renewFeed, stopFeed, serveFeed } from './calendar.js';
 
 function revisionOf(request) {
   const raw = request.headers.get('if-match');
@@ -213,6 +214,15 @@ const routes = [
     if (!/^\d{1,16}$/.test(cursor) || !Number.isSafeInteger(Number(cursor))) throw new HttpError(400, { error: 'invalid', field: 'cursor' });
     return json(await syncPage(env.DB, userId, Number(cursor)));
   }],
+
+  // The calendar feed: its state and link for the app, and the .ics a calendar fetches.
+  ['GET', /^\/api\/calendar$/, async ({ request, env, url }) => json(await feedState(env, url.origin, await requireUser(request, env)))],
+  ['POST', /^\/api\/calendar$/, async ({ request, env, url }) => json(await renewFeed(env, url.origin, await requireUser(request, env)))],
+  ['DELETE', /^\/api\/calendar$/, async ({ request, env }) => {
+    await stopFeed(env, await requireUser(request, env));
+    return new Response(null, { status: 204 });
+  }],
+  ['GET', /^\/api\/calendar\/([^/]{1,64})\/([^/]{1,64})\.ics$/, ({ env, url, params: [userId, token] }) => serveFeed(env, url, userId, token)],
 
   ['GET', ROW, readRow],
   ['PUT', ROW, putRow],

@@ -65,9 +65,9 @@ const flowOut = (v) => {
 
 const TABLES = {
   courses: {
-    cols: { code: 'code', name: 'name', color: 'color', instructor: 'instructor', term: 'term', archived: 'archived', meetings: 'meetings' },
+    cols: { code: 'code', name: 'name', color: 'color', instructor: 'instructor', term: 'term', archived: 'archived', meetings: 'meetings', target: 'target' },
     toRow: (c) => ({ ...c, archived: c.archived ? 1 : 0, meetings: jsonIn(c.meetings) }),
-    fromRow: (r) => ({ archived: r.archived === 1, meetings: jsonOut(r.meetings) }),
+    fromRow: (r) => ({ archived: r.archived === 1, meetings: jsonOut(r.meetings), target: r.target ?? null }),
   },
   items: {
     cols: {

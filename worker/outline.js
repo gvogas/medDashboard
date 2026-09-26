@@ -20,7 +20,7 @@ const MAX_TOKENS = 6000;            /* a reasoning model: its thinking counts to
 
 const KINDS = ['Lecture', 'Lab', 'Seminar', 'Tutorial', 'PBL', 'Clinical'];
 const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-const TYPES = ['exam', 'assignment', 'lab', 'project', 'task'];
+const TYPES = ['exam', 'quiz', 'assignment', 'lab', 'project', 'task'];
 const TEXT_TYPES = /^text\/(plain|markdown|csv)\b/i;
 
 /* The shape asked for in the prompt; gpt-oss answers in JSON text rather than JSON mode. */
@@ -95,7 +95,7 @@ export function prompt(text, today, termStart) {
         'Find the date of each assessment by reading the WHOLE outline, including lecture schedules, weekly plans and tables: e.g. a schedule row "29-Sep Term test 1" gives Term test 1 the date YYYY-09-29 in the year of the outline.',
         'date: YYYY-MM-DD when a calendar date is given, otherwise "". week: the week number (1, 2, 3…) when the outline gives only a week such as "Week 7" or a weekly table row; for a range like "Week 6 to 12" use the last week. Never convert weeks to dates yourself.',
         'weight: the percentage of the final grade as written, e.g. 12.5 for 12.5% (never a fraction like 0.125). Omit it when not stated. When a total is split between entries (15% + 20%), give each entry its own part.',
-        'type: exam for exams, tests, midterms, finals, quizzes and OSCEs; assignment for assignments, essays and written reports; lab for lab reports and practicals; project for projects and their deliverables; otherwise task.',
+        'type: exam for exams, tests, midterms, finals and OSCEs; quiz for quizzes; assignment for assignments, essays and written reports; lab for lab reports and practicals; project for projects and their deliverables; otherwise task.',
         'Never invent classes, dates, weeks or weights that the outline does not state.',
         'Answer with one JSON object, no other text, using exactly this JSON Schema: ' + JSON.stringify(SCHEMA),
       ].join(' '),

@@ -2,14 +2,15 @@ import { data, course, saveCourse, deleteCourse } from '../store.js';
 import { ui } from '../state.js';
 import { KINDS, PALETTE, HEXES, colourName, uid, normalizeCourse } from '../model.js';
 import { dur, DOW } from '../dates.js';
-import { esc, autoGrow } from '../dom.js';
-import { courseGrade, neededLabel, TARGETS } from '../grades.js';
+import { esc, autoGrow, setHTML } from '../dom.js';
+import { courseGrade, neededLabel, targetsFor, ungraded } from '../grades.js';
 import { drawer, showDrawer, resetDrawerState, closeDrawer } from './drawer-base.js';
 
 export function openCourse(id) {
   resetDrawerState();
   const c = course(id);
   ui.courseMode = c ? 'edit' : 'new';
+  ui.whatIf = {};
   ui.courseDraft = c ? JSON.parse(JSON.stringify(c))
     : normalizeCourse({ id: uid(), code: '', name: '', color: HEXES[data.courses.length % HEXES.length], instructor: '', meetings: [] });
   renderCourseDrawer(true);
@@ -57,7 +58,7 @@ export function renderCourseDrawer(focus) {
       + '</div><button class="x" type="button" data-mx="' + esc(m.id) + '" aria-label="Remove class">✕</button></div>';
   });
   body += '</div>' + ((c.meetings || []).length < 12 ? '<button class="btn ghost" type="button" data-act="addmtg" data-layout="0fd943ff">+ Add a class</button>' : '<span class="note">Twelve classes is the most a course can hold.</span>') + '</div>';
-  if (!isNew) body += gradesSection(data.items.filter((it) => it.courseId === c.id));
+  if (!isNew) body += gradesSection(c, data.items.filter((it) => it.courseId === c.id));
   if (!isNew && used) body += '<div class="warnline">' + used + ' item' + (used === 1 ? '' : 's') + ' ' + (used === 1 ? 'is' : 'are') + ' filed under this course. Deleting it leaves them without a course.</div>';
   body += '</div>';
 
@@ -78,21 +79,57 @@ export function renderCourseDrawer(focus) {
   autoGrow(drawer.querySelector('.dtitle'));
 }
 
-/* Weighted grade so far, how much of the course it covers, and what the rest needs. */
-function gradesSection(items) {
+/* Weighted grade so far, how much of the course it covers, what the rest needs to reach
+   50, 60, 70 or the course's own target, and what-if scores for what is still to come. */
+function gradesSection(c, items) {
   const g = courseGrade(items);
   if (!g.total) return '';
+  const open = ungraded(items).sort((a, b) => a.date.localeCompare(b.date));
   let html = '<div class="dsec grades"><h4>Grades<em>' + g.graded + ' of ' + g.total + '% graded</em></h4>'
-    + '<div class="grade-now"><b>' + (g.current === null ? '—' : g.current + '%') + '</b><span>current weighted average</span></div>'
-    + '<div class="meterwrap"><span class="meter" data-width="' + Math.round(g.graded / Math.max(100, g.total) * 100) + '"></span></div>';
-  if (g.remaining > 0) {
-    html += '<div class="grade-need">' + TARGETS.map((t) => {
-      const label = neededLabel(g.needed(t));
-      return '<span class="' + (label === 'secured' ? 'ok' : label === 'out of reach' ? 'bad' : '') + '"><em>' + t + '</em>' + esc(label) + '</span>';
-    }).join('') + '</div><span class="dnote">What you need on the remaining ' + g.remaining + '% to finish at 50, 60 or 70.</span>';
+    + '<div id="gradeOut">' + gradeOut(c, items) + '</div>'
+    + '<div class="grade-target"><label for="c-target">Your target</label>'
+    + '<input id="c-target" type="number" inputmode="numeric" min="1" max="100" step="1" data-cf="target" value="' + (c.target ?? '') + '" placeholder="e.g. 75">'
+    + '<span>% final grade</span></div>';
+  if (open.length) {
+    const guessed = open.some((it) => typeof ui.whatIf?.[it.id] === 'number');
+    html += '<details class="whatif"' + (guessed ? ' open' : '') + '><summary>What if…</summary><div class="wi-list">'
+      + open.map((it) =>
+          '<label class="wi-row"><span class="wi-t">' + esc(it.title) + '</span><em>' + it.weight + '%</em>'
+          + '<input type="number" inputmode="decimal" min="0" max="100" step="any" data-whatif="' + esc(it.id) + '" value="' + (ui.whatIf?.[it.id] ?? '') + '" placeholder="score" aria-label="If I get this score on ' + esc(it.title) + '"></label>').join('')
+      + '</div><span class="dnote">Scores you might get. Not saved; they clear when you close the course.</span></details>';
   }
   if (g.total !== 100) html += '<div class="warnline">Weights add up to ' + g.total + '%, not 100.</div>';
   return html + '</div>';
+}
+
+function gradeOut(c, items) {
+  const real = courseGrade(items), guesses = ui.whatIf || {};
+  const guessed = ungraded(items).some((it) => typeof guesses[it.id] === 'number');
+  const g = guessed ? courseGrade(items, guesses) : real;
+  let html = '<div class="grade-now"><b>' + (real.current === null ? '—' : real.current + '%') + '</b><span>current weighted average</span></div>';
+  if (guessed) {
+    const final = g.remaining <= 0;
+    html += '<div class="grade-now proj"><b>' + g.current + '%</b><span>' + (final ? 'your final grade with these scores' : 'with your what-if scores') + '</span></div>';
+  }
+  html += '<div class="meterwrap"><span class="meter" data-width="' + Math.round(real.graded / Math.max(100, real.total) * 100) + '"></span></div>';
+  if (g.remaining > 0) {
+    const ts = targetsFor(c.target);
+    html += '<div class="grade-need">' + ts.map((t) => {
+      const label = neededLabel(g.needed(t));
+      return '<span class="' + (label === 'secured' ? 'ok' : label === 'out of reach' ? 'bad' : '') + (t === c.target ? ' mine' : '') + '">'
+        + '<em>' + (t === c.target ? 'Target ' + t : t) + '</em>' + esc(label) + '</span>';
+    }).join('') + '</div><span class="dnote">What you need on the ' + (guessed ? 'other ' : 'remaining ') + g.remaining + '% to finish at '
+      + ts.slice(0, -1).join(', ') + ' or ' + ts.at(-1) + '.</span>';
+  } else if (c.target && g.current !== null) {
+    html += '<span class="dnote ' + (g.current >= c.target ? 'ok' : 'bad') + '">' + (g.current >= c.target ? 'At or above' : 'Below') + ' your target of ' + c.target + '%.</span>';
+  }
+  return html;
+}
+
+/** Redraw the numbers only, so the target and what-if fields keep focus while typing. */
+export function refreshGrades() {
+  const out = drawer.querySelector('#gradeOut'), c = ui.courseDraft;
+  if (out && c) setHTML(out, gradeOut(c, data.items.filter((it) => it.courseId === c.id)));
 }
 
 export async function saveCourseDraft() {

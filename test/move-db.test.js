@@ -17,12 +17,12 @@ it('copies an old-schema database into a fresh one, row for row, with the change
   const from = env.MIGRATION_DB, to = env.MOVE_DB;
   await applyD1Migrations(from, env.LEGACY_MIGRATIONS);
   await applyD1Migrations(to, env.TEST_MIGRATIONS);
-  // The rows below are written with today's worker/db.js, whose deletes also unlink
-  // study sessions (migration 0002); the old schema only needs the empty table for that.
-  await from.prepare('CREATE TABLE study_sessions (user_id TEXT, id TEXT, course_id TEXT, item_id TEXT, deleted_at INTEGER, updated_at INTEGER, revision INTEGER)').run();
+  // The rows below are written with today's worker/db.js, which also saves a course's
+  // grade target; the old schema only needs the column for that, and the copy leaves it.
+  await from.prepare('ALTER TABLE courses ADD COLUMN target INTEGER').run();
 
   for (const id of ['ana', 'ben']) {
-    await from.prepare("INSERT INTO users (id, username, password_hash, types, created_at, updated_at, imported_at) VALUES (?, ?, 'hash', '[{\"id\":\"c-quiz1\",\"label\":\"Quiz\",\"color\":\"#B03A7A\",\"kind\":\"graded\"}]', 100, 100, 50)")
+    await from.prepare("INSERT INTO users (id, username, password_hash, types, study_flow, created_at, updated_at) VALUES (?, ?, 'hash', '[{\"id\":\"c-quiz1\",\"label\":\"Quiz\",\"color\":\"#B03A7A\",\"kind\":\"graded\"}]', '{\"steps\":[[\"study\",50],[\"break\",10]],\"rounds\":3}', 100, 100)")
       .bind(id, id).run();
     await upsertRow(from, 'courses', id, 'bio', normalizeCourse({ id: 'bio', code: 'BIO', name: "Biology 'n' more", color: '#17B3AE', meetings: [{ id: 'm', kind: 'Lecture', weekday: 1, start: '09:00', end: '10:00', room: 'Hall B' }] }), 200);
     await upsertRow(from, 'items', id, 'mid', normalizeItem({
@@ -32,6 +32,7 @@ it('copies an old-schema database into a fresh one, row for row, with the change
     }), 210);
     await upsertRow(from, 'items', id, 'q', normalizeItem({ id: 'q', title: 'Quiz', type: 'c-quiz1', date: '2026-10-06' }), 220);
     await upsertRow(from, 'quotes', id, 'k', { text: 'Keep going', source: '' }, 230);
+    await upsertRow(from, 'study_sessions', id, 's1', { courseId: 'bio', itemId: 'mid', startedAt: 1000, studyMinutes: 50, roundsDone: 1 }, 235);
   }
   const gone = await upsertRow(from, 'items', 'ana', 'old', normalizeItem({ id: 'old', title: 'Old' }), 240);
   await deleteRow(from, 'items', 'ana', 'old', 250, gone.revision);
@@ -61,4 +62,7 @@ it('copies an old-schema database into a fresh one, row for row, with the change
   expect(next.revision).toBe(source.state.head + 1);
   /* and the twelve colours are accepted there */
   await upsertRow(to, 'courses', 'ana', 'c12', normalizeCourse({ id: 'c12', code: 'SL', name: 'Slate', color: '#7D8A99' }), 310);
+  /* and so are quizzes and a grade target, which the old schema had no room for */
+  expect((await upsertRow(to, 'items', 'ana', 'q2', normalizeItem({ id: 'q2', title: 'Quiz 2', type: 'quiz', date: '2026-10-08' }), 320)).type).toBe('quiz');
+  expect((await upsertRow(to, 'courses', 'ana', 'tg', normalizeCourse({ id: 'tg', code: 'TG', name: 'Target', color: '#7D8A99', target: 80 }), 330)).target).toBe(80);
 });

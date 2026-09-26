@@ -1,9 +1,9 @@
 #!/usr/bin/env node
-// Copy every account, course, item, quote, Spotify connection and the change feed
+// Copy every account, course, item, quote, study session, Spotify connection and the change feed
 // from one D1 database into a fresh one built from migrations/0001_schema.sql, then
 // read both back and compare. The source is only read.
 //
-//   node scripts/move-db.mjs --from rounds --to rounds-v2 [--remote]
+//   node scripts/move-db.mjs --from rounds-v2 --to rounds-v3 [--remote]
 import { spawnSync } from 'node:child_process';
 import { mkdtempSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';

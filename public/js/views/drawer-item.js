@@ -1,6 +1,6 @@
 import { data, course, item, saveItem } from '../store.js';
 import { ui } from '../state.js';
-import { typeList, statusesFor, baseOf, tmeta, statusLabel, isOverdue, isOpen, uid, normalizeItem } from '../model.js';
+import { typeList, statusesFor, baseOf, tmeta, statusLabel, isOverdue, isOpen, isTest, uid, normalizeItem } from '../model.js';
 import { parse, diffDays, today, hhmm, DOW } from '../dates.js';
 import { activeCourses } from '../query.js';
 import { esc, autoGrow } from '../dom.js';
@@ -95,8 +95,8 @@ export function renderItemDrawer(focusTitle) {
       + ' <button class="icon-btn" type="button" data-editcourse="' + esc(c.id) + '" data-layout="06525a50">Edit course</button></div>';
   }
 
-  const prep = !isNew && it.type === 'exam' && isOpen(it) ? prepPace(it, TODAY) : null;
-  const canFill = !isNew && it.type === 'exam' && c && (c.meetings || []).some((x) => x.kind === 'Lecture');
+  const prep = !isNew && isTest(it.type) && isOpen(it) ? prepPace(it, TODAY) : null;
+  const canFill = !isNew && isTest(it.type) && c && (c.meetings || []).some((x) => x.kind === 'Lecture');
 
   const head = '<div class="dhead" data-accent="' + m.color + '">'
     + '<span class="kind">' + (isNew ? 'New ' + m.label.toLowerCase() : esc(m.label)) + '</span>'
@@ -125,7 +125,7 @@ export function renderItemDrawer(focusTitle) {
           : '')
     + '</div>'
     + '<div class="dsec"><h4>Notes</h4><textarea class="notes" data-f="notes" maxlength="5000" placeholder="What to revise, what the lecturer said, page numbers.">' + esc(it.notes || '') + '</textarea></div>'
-    + '<div class="dsec"><h4>' + (it.type === 'exam' ? 'Topics' : 'Checklist') + (cl.length ? '<em>' + clDone + ' of ' + cl.length + ' done</em>' : '') + '</h4>'
+    + '<div class="dsec"><h4>' + (isTest(it.type) ? 'Topics' : 'Checklist') + (cl.length ? '<em>' + clDone + ' of ' + cl.length + ' done</em>' : '') + '</h4>'
     + (canFill ? '<button class="btn ghost fill-topics" type="button" data-act="fill-topics">Fill topics from lectures</button>' : '')
     + (ui.fillNote ? '<span class="dnote">' + esc(ui.fillNote) + '</span>' : '');
   if (cl.length) {

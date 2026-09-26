@@ -27,7 +27,8 @@ export function guessKind(text) {
 
 export function guessType(text) {
   const t = String(text).toLowerCase();
-  if (/\b(exam|quiz|osce|test|midterm|mid-term|final)s?\b/.test(t)) return 'exam';
+  if (/\bquiz(zes)?\b/.test(t)) return 'quiz';
+  if (/\b(exam|osce|test|midterm|mid-term|final)s?\b/.test(t)) return 'exam';
   if (/\b(due|assignment|essay|submission|deadline)\b/.test(t)) return 'assignment';
   if (/\b(lab|practical)\b/.test(t)) return 'lab';
   return 'task';

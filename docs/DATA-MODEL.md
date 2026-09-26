@@ -7,16 +7,18 @@ the user, and every query it runs has `user_id = ?` in it.
 ```
 users            one row per account: username, password hash, profile, coat, theme, background
 courses          a course + its weekly class meetings, as a JSON column
-items            exams, assignments, labs, tutorials, office hours, tasks, projects
+items            exams, quizzes, assignments, labs, tutorials, office hours, tasks, projects
 quotes           the quote tile's list
 study_sessions   finished study-timer runs: minutes studied, by course and item
 ```
 
 The schema is [`migrations/0001_schema.sql`](../migrations/0001_schema.sql), in one
-piece. In September 2026 the live data moved into a fresh database built from it
-(`node scripts/move-db.mjs --from <old> --to <new> --remote`), replacing ten
-migrations of patches; they are kept only as a test fixture in
-`test/fixtures/legacy-migrations/`. Later changes are new numbered files.
+piece. Twice in September 2026 the live data moved into a fresh database built from it
+(`node scripts/move-db.mjs --from <old> --to <new> --remote`): first `rounds` into
+`rounds-v2`, replacing ten migrations of patches, then `rounds-v2` into `rounds-v3`,
+folding in the study timer, quizzes, grade targets and the calendar feed. Each old
+database is kept as a backup. The schema the last move copied from is kept as a test
+fixture in `test/fixtures/legacy-migrations/`. Later changes are new numbered files.
 
 ## Structure at a glance
 
@@ -325,11 +327,13 @@ All routes are under `/api`, speak JSON, and require the session cookie except
 | `PUT /api/me` | `{coat, theme, bg, termStart, displayName, studyFlow}` (`bg` optional, default `med`; `studyFlow` optional, kept when left out) → `{profile}` |
 | `GET /api/sync?v=2&cursor=<seq>` | → `{changes: [{kind, row}], cursor, more, reset}` — at most 100 changes after `cursor`, deleted rows included with `deletedAt` set. `cursor=0` is a full load. See the sync protocol below. |
 | `GET /api/{courses,items,quotes,study_sessions}/:id` | one live row of yours, or `404`. The client uses it to undo a rejected save. |
-| `PUT /api/courses/:id` | a course → the stored course, with server `updatedAt`. Upsert. |
+| `PUT /api/courses/:id` | a course (with an optional `target`, a whole-number grade goal 1–100) → the stored course, with server `updatedAt`. Upsert. |
 | `DELETE /api/courses/:id` | → `204`. Soft-deletes and nulls `courseId` on the user's items and study sessions. |
 | `PUT /api/items/:id` · `DELETE /api/items/:id` | as above; deleting nulls `itemId` on the user's study sessions |
 | `PUT /api/quotes/:id` · `DELETE /api/quotes/:id` | as above |
 | `PUT /api/study_sessions/:id` · `DELETE /api/study_sessions/:id` | `{courseId, itemId, startedAt, studyMinutes, roundsDone}`, as above |
+| `GET /api/calendar` · `POST /api/calendar` · `DELETE /api/calendar` | the calendar feed: → `{on, url}`; POST turns it on or makes a new link (the old one stops working); DELETE turns it off. See `worker/calendar.js`. |
+| `GET /api/calendar/:userId/:token.ics?tz=` | no session: the feed itself, `text/calendar`. The token is an HMAC of the user id and `users.feed_gen`; a wrong one is `404`. At most 60 fetches an hour per link. |
 
 Errors are `{error, field?}`: `400` bad shape (with the field), `401` no session,
 `404` a row that isn't yours, `413` body over 1 MB.

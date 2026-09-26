@@ -17,7 +17,7 @@ describe('custom item types: validation', () => {
   });
 
   it.each([
-    ['a bad id', [{ ...quiz, id: 'quiz' }], 'types[0].id'],
+    ['a bad id', [{ ...quiz, id: 'essay' }], 'types[0].id'],
     ['an id with capitals', [{ ...quiz, id: 'c-Quiz' }], 'types[0].id'],
     ['a custom type with no name', [{ ...quiz, label: '  ' }], 'types[0].label'],
     ['a colour off the palette', [{ ...quiz, color: '#000000' }], 'types[0].color'],
@@ -71,7 +71,7 @@ describe('custom item types: the model', () => {
 
   it('lists the built-ins in their usual order, with Projects hidden on Med unless one exists', () => {
     const ids = typeList('med').map((t) => t.id);
-    expect(ids).toEqual(['exam', 'assignment', 'lab', 'tutoring', 'office', 'project', 'task']);
+    expect(ids).toEqual(['exam', 'quiz', 'assignment', 'lab', 'tutoring', 'office', 'project', 'task']);
     expect(typeList('med').find((t) => t.id === 'project').hidden).toBe(true);
     expect(typeList('cs').find((t) => t.id === 'project').hidden).toBe(false);
     expect(typeList('med', [{ type: 'project' }]).find((t) => t.id === 'project').hidden).toBe(false);
@@ -80,10 +80,19 @@ describe('custom item types: the model', () => {
   it('applies renames, colours, order and hiding, and slots unlisted built-ins back in', () => {
     prefs = [{ id: 'task' }, quiz, { id: 'exam', label: 'Final', color: '#3F7A2E' }, { id: 'lab', hidden: true }];
     const list = typeList('med');
-    expect(list.map((t) => t.id)).toEqual(['task', 'c-quiz1', 'exam', 'assignment', 'lab', 'tutoring', 'office', 'project']);
+    expect(list.map((t) => t.id)).toEqual(['task', 'c-quiz1', 'exam', 'quiz', 'assignment', 'lab', 'tutoring', 'office', 'project']);
     expect(list.find((t) => t.id === 'exam')).toMatchObject({ label: 'Final', plural: 'Finals', color: '#3F7A2E' });
     expect(list.find((t) => t.id === 'c-quiz1')).toMatchObject({ plural: 'Quizzes', custom: true, kind: 'graded' });
     expect(list.find((t) => t.id === 'lab').hidden).toBe(true);
+  });
+
+  it('hides the built-in Quiz for someone with a Quiz type of their own, unless they use it or chose to show it', () => {
+    expect(typeList('med').find((t) => t.id === 'quiz')).toMatchObject({ label: 'Quiz', plural: 'Quizzes', hidden: false });
+    prefs = [quiz];
+    expect(typeList('med').find((t) => t.id === 'quiz').hidden).toBe(true);
+    expect(typeList('med', [{ type: 'quiz' }]).find((t) => t.id === 'quiz').hidden).toBe(false);
+    prefs = [quiz, { id: 'quiz', hidden: false }];
+    expect(typeList('med').find((t) => t.id === 'quiz').hidden).toBe(false);
   });
 
   it('gives a custom type the statuses of the built-in it behaves like', () => {

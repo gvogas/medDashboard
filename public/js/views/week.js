@@ -1,6 +1,6 @@
 import { data, course } from '../store.js';
 import { ui } from '../state.js';
-import { tmeta, isOpen, isComplete, isOverdue, dueSoon } from '../model.js';
+import { tmeta, isOpen, isComplete, isOverdue, dueSoon, isTest } from '../model.js';
 import { iso, parse, addDays, monday, diffDays, today, hhmm, DOW, MON } from '../dates.js';
 import { instances, classes, matchSearch } from '../query.js';
 import { esc } from '../dom.js';
@@ -11,7 +11,7 @@ function rowHtml(inst) {
   const it = inst.item, m = tmeta(it.type), c = course(it.courseId);
   let badges = '<span class="chip type" data-accent="' + m.color + '">' + esc(m.label) + '</span>';
   if (isOverdue(it) || it.status !== 'todo') badges += statusChip(it);
-  else if (dueSoon(it) && (it.type === 'assignment' || it.type === 'exam')) badges += '<span class="chip soon">' + (diffDays(TODAY, inst.date) === 0 ? 'Today' : 'Soon') + '</span>';
+  else if (dueSoon(it) && (it.type === 'assignment' || isTest(it.type))) badges += '<span class="chip soon">' + (diffDays(TODAY, inst.date) === 0 ? 'Today' : 'Soon') + '</span>';
 
   const when = it.start ? hhmm(it.start) : it.end ? hhmm(it.end) : '—';
   const bits = [];

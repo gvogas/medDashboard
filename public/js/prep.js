@@ -17,7 +17,8 @@ export function examWindow(exam, items, termStart) {
   let from = iso(addDays(parse(exam.date), -LOOKBACK_DAYS));
   if (termStart && termStart > from) from = termStart;
   for (const it of items) {
-    if (it.type !== 'exam' || it.id === exam.id || it.courseId !== exam.courseId || it.date >= exam.date) continue;
+    /* an exam starts after the last exam; a quiz after the last quiz or exam */
+    if ((it.type !== 'exam' && it.type !== exam.type) || it.id === exam.id || it.courseId !== exam.courseId || it.date >= exam.date) continue;
     const after = iso(addDays(parse(it.date), 1));
     if (after > from) from = after;
   }

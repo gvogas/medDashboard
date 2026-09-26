@@ -1,4 +1,4 @@
-// What the app knows about itself: the seven built-in types and the person's own,
+// What the app knows about itself: the eight built-in types and the person's own,
 // their status sets, the course colours, and the derived predicates. Nothing here
 // touches the DOM or storage; the type list is read through a getter main.js sets.
 
@@ -6,6 +6,7 @@ import { diffDays, today, parse, addDays, iso } from './dates.js';
 
 export const TYPES = {
   exam:       { label: 'Exam',         plural: 'Exams',        color: '#C0392B' },
+  quiz:       { label: 'Quiz',         plural: 'Quizzes',      color: '#B03A7A' },
   assignment: { label: 'Assignment',   plural: 'Assignments',  color: '#B77505' },
   lab:        { label: 'Lab',          plural: 'Labs',         color: '#1E628F' },
   tutoring:   { label: 'Tutorial',     plural: 'Tutorials',    color: '#5A46A8' },   /* key kept for stored rows */
@@ -13,9 +14,10 @@ export const TYPES = {
   task:       { label: 'Task',         plural: 'Tasks',        color: '#0E7C74' },
   project:    { label: 'Project',      plural: 'Projects',     color: '#C2571A' },
 };
-export const ORDER = ['exam', 'assignment', 'lab', 'tutoring', 'office', 'project', 'task'];
+export const ORDER = ['exam', 'quiz', 'assignment', 'lab', 'tutoring', 'office', 'project', 'task'];
 export const STATUS = {
   exam:       [['todo', 'Upcoming'],  ['done', 'Taken'],         ['graded', 'Graded']],
+  quiz:       [['todo', 'Upcoming'],  ['done', 'Taken'],         ['graded', 'Graded']],
   assignment: [['todo', 'Open'],      ['submitted', 'Submitted'], ['graded', 'Graded']],
   lab:        [['todo', 'Scheduled'], ['done', 'Attended'],      ['missed', 'Missed']],
   tutoring:   [['todo', 'Scheduled'], ['done', 'Attended'],      ['missed', 'Cancelled']],
@@ -48,12 +50,14 @@ export function pluralOf(label) {
 /**
  * Every type in sidebar order: { id, label, plural, color, kind, custom, hidden }.
  * Built-ins come from TYPES with the person's changes on top; a built-in missing
- * from the list keeps its default place. Projects are hidden on Med by default,
- * unless one already exists.
+ * from the list keeps its default place. Projects are hidden on Med by default, and
+ * Quizzes when the person has a Quiz type of their own, unless one already exists.
  */
 export function typeList(bg, items = []) {
   const prefs = prefsOf() || [];
   const byId = new Map(prefs.map((p) => [p.id, p]));
+  /* someone who made their own Quiz type before the built-in one keeps just theirs */
+  const ownQuiz = prefs.some((p) => CUSTOM_TYPE.test(p.id) && /^quiz(zes)?$/i.test((p.label || '').trim()));
   const ids = prefs.map((p) => p.id).filter((id) => isTypeId(id));
   ORDER.forEach((id, i) => {
     if (byId.has(id)) return;
@@ -71,7 +75,7 @@ export function typeList(bg, items = []) {
       custom: !base,
       hiddenSet: p.hidden !== undefined,
       hidden: p.hidden !== undefined ? !!p.hidden
-        : id === 'project' && bg !== 'cs' && !items.some((it) => it.type === 'project'),
+        : (id === 'project' && bg !== 'cs' || id === 'quiz' && ownQuiz) && !items.some((it) => it.type === id),
     };
   });
 }
@@ -135,9 +139,9 @@ export function uid() {
   return Math.random().toString(36).slice(2, 9);
 }
 
-/** Exams, and any type of the person's own called a quiz, test or exam. */
+/** Exams, quizzes, and any type of the person's own called a quiz, test or exam. */
 export function isTest(t) {
-  return t === 'exam' || (!TYPES[t] && /\b(quiz|test|exam|midterm)/i.test(tmeta(t).label));
+  return t === 'exam' || t === 'quiz' || (!TYPES[t] && /\b(quiz|test|exam|midterm)/i.test(tmeta(t).label));
 }
 
 /**
@@ -251,6 +255,7 @@ export function normalizeCourse(raw, index = 0) {
     instructor: raw.instructor || '',
     term: raw.term || '',
     archived: !!raw.archived,
+    target: Number.isInteger(raw.target) && raw.target >= 1 && raw.target <= 100 ? raw.target : null,
     meetings: Array.isArray(raw.meetings)
       ? raw.meetings.slice(0, 12).map((m) => ({
           id: m.id || uid(),

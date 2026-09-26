@@ -1,6 +1,6 @@
 -- Rounds — med school tracker. D1 (SQLite) schema, in one piece.
 --
--- This replaces migrations 0001–0010: the live data was copied into a fresh
+-- This replaces every earlier migration: the live data was copied into a fresh
 -- database built from this file (scripts/move-db.mjs), so no table carries the
 -- patches of earlier versions. Change the schema with a new numbered file.
 --
@@ -33,6 +33,15 @@ CREATE TABLE users (
   -- digits. The Worker validates the shape; this only checks a bounded array.
   types          TEXT NOT NULL DEFAULT '[]'
                  CHECK (json_valid(types) AND json_type(types) = 'array' AND json_array_length(types) <= 20),
+  -- The study timer's Study and Break steps, each 1-180 minutes, repeated 1-12
+  -- rounds. The Worker checks the shape (worker/validate.js); this only checks it is
+  -- a JSON object.
+  study_flow     TEXT NOT NULL DEFAULT '{"steps":[["study",25],["break",5]],"rounds":4}'
+                 CHECK (json_valid(study_flow) AND json_type(study_flow) = 'object'),
+  -- The calendar feed: a number while it is on, NULL when off. The feed's URL carries
+  -- an HMAC of the user id and this number (worker/calendar.js), so bumping it
+  -- retires every earlier link and nothing secret is stored.
+  feed_gen       INTEGER CHECK (feed_gen IS NULL OR (typeof(feed_gen) = 'integer' AND feed_gen > 0)),
   created_at     INTEGER NOT NULL,
   updated_at     INTEGER NOT NULL,
   revision       INTEGER NOT NULL DEFAULT 1 CHECK (typeof(revision) = 'integer' AND revision > 0)
@@ -54,6 +63,8 @@ CREATE TABLE courses (
   meetings    TEXT NOT NULL DEFAULT '[]'
               CHECK (json_valid(meetings) AND json_type(meetings) = 'array'
                      AND json_array_length(meetings) <= 12),
+  -- The final grade the person is aiming for, or none.
+  target      INTEGER CHECK (target IS NULL OR (typeof(target) = 'integer' AND target BETWEEN 1 AND 100)),
   created_at  INTEGER NOT NULL,
   updated_at  INTEGER NOT NULL,
   deleted_at  INTEGER,
@@ -65,7 +76,7 @@ CREATE TABLE items (
   user_id       TEXT NOT NULL REFERENCES users(id),
   id            TEXT NOT NULL CHECK (length(id) BETWEEN 1 AND 24),
   -- A built-in type, or one of the person's own ('c-' ids, see users.types).
-  type          TEXT NOT NULL CHECK (type IN ('exam', 'assignment', 'lab', 'tutoring', 'office', 'task', 'project')
+  type          TEXT NOT NULL CHECK (type IN ('exam', 'quiz', 'assignment', 'lab', 'tutoring', 'office', 'task', 'project')
                                  OR (type GLOB 'c-?*' AND length(type) <= 14 AND substr(type, 3) NOT GLOB '*[^a-z0-9]*')),
   title         TEXT NOT NULL CHECK (length(title) BETWEEN 1 AND 140),
   course_id     TEXT,
@@ -117,6 +128,28 @@ CREATE TABLE quotes (
   PRIMARY KEY (user_id, id)
 );
 
+-- Study time only; breaks are never logged. The course and item are plain references:
+-- deleting either clears them here (worker/db.js), and a session outlives both.
+CREATE TABLE study_sessions (
+  user_id        TEXT NOT NULL REFERENCES users(id),
+  id             TEXT NOT NULL CHECK (length(id) BETWEEN 1 AND 24),
+  course_id      TEXT CHECK (course_id IS NULL OR length(course_id) BETWEEN 1 AND 40),
+  item_id        TEXT CHECK (item_id IS NULL OR length(item_id) BETWEEN 1 AND 24),
+  started_at     INTEGER NOT NULL CHECK (typeof(started_at) = 'integer' AND started_at > 0),
+  study_minutes  INTEGER NOT NULL CHECK (typeof(study_minutes) = 'integer' AND study_minutes BETWEEN 1 AND 1440),
+  rounds_done    INTEGER NOT NULL DEFAULT 0 CHECK (typeof(rounds_done) = 'integer' AND rounds_done BETWEEN 0 AND 12),
+  created_at     INTEGER NOT NULL,
+  updated_at     INTEGER NOT NULL,
+  deleted_at     INTEGER,
+  revision       INTEGER NOT NULL DEFAULT 1 CHECK (typeof(revision) = 'integer' AND revision > 0),
+  PRIMARY KEY (user_id, id)
+);
+CREATE INDEX study_sessions_user_started ON study_sessions (user_id, started_at);
+CREATE INDEX study_sessions_user_course  ON study_sessions (user_id, course_id);
+CREATE INDEX study_sessions_user_item    ON study_sessions (user_id, item_id);
+CREATE INDEX study_sessions_deleted      ON study_sessions (deleted_at) WHERE deleted_at IS NOT NULL;
+
+
 -- The sync pull: every row of mine changed since a timestamp.
 CREATE INDEX courses_user_updated ON courses (user_id, updated_at);
 CREATE INDEX items_user_updated   ON items   (user_id, updated_at);
@@ -152,12 +185,12 @@ INSERT INTO sync_state (id) VALUES (1);
 CREATE TRIGGER courses_change_insert AFTER INSERT ON courses BEGIN
  DELETE FROM changes WHERE user_id = NEW.user_id AND kind = 'courses' AND row_id = NEW.id;
  INSERT INTO changes(user_id, kind, row_id, payload, deleted_at)
- VALUES(NEW.user_id, 'courses', NEW.id, json_object('user_id', NEW.user_id, 'id', NEW.id, 'code', NEW.code, 'name', NEW.name, 'color', NEW.color, 'instructor', NEW.instructor, 'term', NEW.term, 'archived', NEW.archived, 'meetings', NEW.meetings, 'created_at', NEW.created_at, 'updated_at', NEW.updated_at, 'deleted_at', NEW.deleted_at, 'revision', NEW.revision), NEW.deleted_at);
+ VALUES(NEW.user_id, 'courses', NEW.id, json_object('user_id', NEW.user_id, 'id', NEW.id, 'code', NEW.code, 'name', NEW.name, 'color', NEW.color, 'instructor', NEW.instructor, 'term', NEW.term, 'archived', NEW.archived, 'meetings', NEW.meetings, 'target', NEW.target, 'created_at', NEW.created_at, 'updated_at', NEW.updated_at, 'deleted_at', NEW.deleted_at, 'revision', NEW.revision), NEW.deleted_at);
 END;
 CREATE TRIGGER courses_change_update AFTER UPDATE ON courses BEGIN
  DELETE FROM changes WHERE user_id = NEW.user_id AND kind = 'courses' AND row_id = NEW.id;
  INSERT INTO changes(user_id, kind, row_id, payload, deleted_at)
- VALUES(NEW.user_id, 'courses', NEW.id, json_object('user_id', NEW.user_id, 'id', NEW.id, 'code', NEW.code, 'name', NEW.name, 'color', NEW.color, 'instructor', NEW.instructor, 'term', NEW.term, 'archived', NEW.archived, 'meetings', NEW.meetings, 'created_at', NEW.created_at, 'updated_at', NEW.updated_at, 'deleted_at', NEW.deleted_at, 'revision', NEW.revision), NEW.deleted_at);
+ VALUES(NEW.user_id, 'courses', NEW.id, json_object('user_id', NEW.user_id, 'id', NEW.id, 'code', NEW.code, 'name', NEW.name, 'color', NEW.color, 'instructor', NEW.instructor, 'term', NEW.term, 'archived', NEW.archived, 'meetings', NEW.meetings, 'target', NEW.target, 'created_at', NEW.created_at, 'updated_at', NEW.updated_at, 'deleted_at', NEW.deleted_at, 'revision', NEW.revision), NEW.deleted_at);
 END;
 
 CREATE TRIGGER items_change_insert AFTER INSERT ON items BEGIN
@@ -180,6 +213,17 @@ CREATE TRIGGER quotes_change_update AFTER UPDATE ON quotes BEGIN
  DELETE FROM changes WHERE user_id = NEW.user_id AND kind = 'quotes' AND row_id = NEW.id;
  INSERT INTO changes(user_id, kind, row_id, payload, deleted_at)
  VALUES(NEW.user_id, 'quotes', NEW.id, json_object('user_id', NEW.user_id, 'id', NEW.id, 'text', NEW.text, 'source', NEW.source, 'created_at', NEW.created_at, 'updated_at', NEW.updated_at, 'deleted_at', NEW.deleted_at, 'revision', NEW.revision), NEW.deleted_at);
+END;
+
+CREATE TRIGGER study_sessions_change_insert AFTER INSERT ON study_sessions BEGIN
+ DELETE FROM changes WHERE user_id = NEW.user_id AND kind = 'study_sessions' AND row_id = NEW.id;
+ INSERT INTO changes(user_id, kind, row_id, payload, deleted_at)
+ VALUES(NEW.user_id, 'study_sessions', NEW.id, json_object('user_id', NEW.user_id, 'id', NEW.id, 'course_id', NEW.course_id, 'item_id', NEW.item_id, 'started_at', NEW.started_at, 'study_minutes', NEW.study_minutes, 'rounds_done', NEW.rounds_done, 'created_at', NEW.created_at, 'updated_at', NEW.updated_at, 'deleted_at', NEW.deleted_at, 'revision', NEW.revision), NEW.deleted_at);
+END;
+CREATE TRIGGER study_sessions_change_update AFTER UPDATE ON study_sessions BEGIN
+ DELETE FROM changes WHERE user_id = NEW.user_id AND kind = 'study_sessions' AND row_id = NEW.id;
+ INSERT INTO changes(user_id, kind, row_id, payload, deleted_at)
+ VALUES(NEW.user_id, 'study_sessions', NEW.id, json_object('user_id', NEW.user_id, 'id', NEW.id, 'course_id', NEW.course_id, 'item_id', NEW.item_id, 'started_at', NEW.started_at, 'study_minutes', NEW.study_minutes, 'rounds_done', NEW.rounds_done, 'created_at', NEW.created_at, 'updated_at', NEW.updated_at, 'deleted_at', NEW.deleted_at, 'revision', NEW.revision), NEW.deleted_at);
 END;
 
 -- Failed sign-in counts per username, so a password cannot be guessed by brute force.
@@ -240,5 +284,6 @@ CREATE VIEW account_summary AS
 SELECT u.id AS user_id, u.username, u.created_at,
        (SELECT count(*) FROM courses AS c WHERE c.user_id = u.id AND c.deleted_at IS NULL) AS courses,
        (SELECT count(*) FROM items AS i WHERE i.user_id = u.id AND i.deleted_at IS NULL) AS items,
-       (SELECT count(*) FROM quotes AS q WHERE q.user_id = u.id AND q.deleted_at IS NULL) AS quotes
+       (SELECT count(*) FROM quotes AS q WHERE q.user_id = u.id AND q.deleted_at IS NULL) AS quotes,
+       (SELECT count(*) FROM study_sessions AS s WHERE s.user_id = u.id AND s.deleted_at IS NULL) AS study_sessions
 FROM users AS u;

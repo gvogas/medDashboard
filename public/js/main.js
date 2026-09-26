@@ -5,7 +5,7 @@ import * as store from './store.js';
 import { data, course } from './store.js';
 import * as sync from './sync.js';
 import { ui, rememberUi } from './state.js';
-import { uid, isOpen, isComplete, normalizeItem, shiftEnd, classRoom, useTypePrefs, typeList, typePrefsFrom, TYPE_COLOURS, MAX_CUSTOM_TYPES, statusesFor, normalizeFlow, FLOW_PRESETS } from './model.js';
+import { uid, isOpen, isComplete, normalizeItem, shiftEnd, tmeta, classRoom, useTypePrefs, typeList, typePrefsFrom, TYPE_COLOURS, MAX_CUSTOM_TYPES, statusesFor, normalizeFlow, FLOW_PRESETS } from './model.js';
 import { typeOn } from './query.js';
 import { iso, parse, addDays, today } from './dates.js';
 import { $, autoGrow, isTyping } from './dom.js';
@@ -24,8 +24,9 @@ document.addEventListener('focusin', (e) => {
 document.addEventListener('focusout', (e) => { if (drawer.contains(e.target)) flushTouch(); });
 window.addEventListener('pagehide', flushTouch);
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') flushTouch(); });
-import { openCourse, renderCourseDrawer, saveCourseDraft, deleteCourseDraft } from './views/drawer-course.js';
-import { openSettings, renderSettings, applyCoat, refreshSyncNote, refreshSpotifyGroup } from './views/drawer-settings.js';
+import { openKeys, closeKeys, keysOpen } from './views/keys.js';
+import { openCourse, renderCourseDrawer, saveCourseDraft, deleteCourseDraft, refreshGrades } from './views/drawer-course.js';
+import { openSettings, renderSettings, applyCoat, refreshSyncNote, refreshSpotifyGroup, feedAction } from './views/drawer-settings.js';
 import * as spotify from './spotify.js';
 import * as web from './web-player.js';
 import { renderPlayer } from './views/player.js';
@@ -557,7 +558,7 @@ document.addEventListener('click', async (e) => {
       it.checklist = r.checklist;
       if (r.added) await touch(it);
       ui.fillNote = r.added ? 'Added ' + r.added + ' lecture' + (r.added === 1 ? '' : 's') + '.' + (r.left ? ' ' + r.left + ' more did not fit under the 50-step limit.' : '')
-        : r.left ? 'The list is full: 50 steps is the most an item can hold.' : 'Every lecture before this exam is already listed.';
+        : r.left ? 'The list is full: 50 steps is the most an item can hold.' : 'Every lecture before this ' + tmeta(it.type).label.toLowerCase() + ' is already listed.';
       renderItemDrawer(); renderStats(); renderView();
     }
     else if (act === 'import-paste') {
@@ -589,6 +590,8 @@ document.addEventListener('click', async (e) => {
       try { await store.resolveConflict(el.dataset.conflict, act === 'conflict-restore'); renderSettings(); }
       catch (error) { alert(error.message); }
     }
+    else if (act === 'shortcuts') { closeDrawer(); openKeys(); }
+    else if (act.startsWith('feed-')) feedAction(act);
     else if (act === 'signout') signOut();
     else if (act === 'signout-all') signOut({ everywhere: true });
     else if (act === 'spotify-disconnect') {
@@ -635,20 +638,21 @@ setSide(false);
 
 scrim.addEventListener('click', closeDrawer);
 
-/* Some items name themselves from the course: office hours after the teacher, exams
-   and tutorials after the class. Picking a course (or switching type) fills the title in, unless
+/* Some items name themselves from the course: office hours after the teacher, exams,
+   quizzes and tutorials after the class. Picking a course (or switching type) fills the title in, unless
    the title was typed by hand. */
 function autoTitleFor(type, c) {
   if (!c) return '';
   if (type === 'office') return c.instructor ? c.instructor + ' — office hours' : '';
   if (type === 'exam') return c.name ? 'Exam — ' + c.name : '';
+  if (type === 'quiz') return c.name ? 'Quiz — ' + c.name : '';
   if (type === 'tutoring') return c.name ? c.name + ' — tutorial' : '';
   return '';
 }
 function autoTitle(it, prevCourseId) {
   const next = autoTitleFor(it.type, course(it.courseId));
   if (!next) return;
-  const wasAuto = ['office', 'exam', 'tutoring'].some((t) => it.title === autoTitleFor(t, course(prevCourseId)) || it.title === autoTitleFor(t, course(it.courseId)));
+  const wasAuto = ['office', 'exam', 'quiz', 'tutoring'].some((t) => it.title === autoTitleFor(t, course(prevCourseId)) || it.title === autoTitleFor(t, course(it.courseId)));
   if (it.title.trim() && !wasAuto) return;
   it.title = next;
   const ta = drawer.querySelector('.dtitle');
@@ -708,8 +712,17 @@ document.addEventListener('input', async (e) => {
     renderSidebar(); return;
   }
 
+  if ('whatif' in d && ui.courseDraft) {  /* a what-if score, never saved */
+    const v = e.target.value.trim() === '' ? NaN : +e.target.value;
+    if (Number.isFinite(v) && v >= 0 && v <= 100) ui.whatIf[d.whatif] = v; else delete ui.whatIf[d.whatif];
+    refreshGrades(); return;
+  }
   if (d.cf && ui.courseDraft) {           /* course fields */
-    ui.courseDraft[d.cf] = d.cf === 'archived' ? e.target.checked : e.target.value;
+    const n = Math.round(+e.target.value);
+    ui.courseDraft[d.cf] = d.cf === 'archived' ? e.target.checked
+      : d.cf === 'target' ? (e.target.value.trim() !== '' && n >= 1 && n <= 100 ? n : null)
+      : e.target.value;
+    if (d.cf === 'target') refreshGrades();
     if (d.cf === 'name') autoGrow(e.target);
     const hint = drawer.querySelector('.dfoot .hint'), btn = drawer.querySelector('[data-act="course-save"]');
     if (btn) btn.disabled = !ui.courseDraft.name.trim();
@@ -857,15 +870,33 @@ document.addEventListener('change', async (e) => {
   if (error) { ui.importNote = { text: error, error: true }; renderSettings(); }
 });
 
+/* Single keys, when nothing is being typed and no drawer or the focus screen is up:
+   the list is views/keys.js. Each presses the button it stands for. */
+const VIEW_KEYS = { 1: 'week', 2: 'month', 3: 'table', 4: 'spotify', 5: 'study' };
+function shortcut(e) {
+  if (e.ctrlKey || e.metaKey || e.altKey || e.repeat || isTyping(e.target) || e.target.isContentEditable) return false;
+  if (e.key === '?') { keysOpen() ? closeKeys() : openKeys(); e.preventDefault(); return true; }
+  if (keysOpen() || ui.focus || ui.sel || ui.draft || ui.courseDraft || ui.settings || $('app').hidden) return false;
+  const press = (sel) => { const b = document.querySelector(sel); if (!b) return false; e.preventDefault(); b.click(); return true; };
+  if (e.key === 'n') return press('#newBtn');
+  if (e.key === 't') return press('#today');
+  if ((e.key === '[' || e.key === ']') && (ui.view === 'week' || ui.view === 'month')) return press(e.key === '[' ? '#prev' : '#next');
+  if (VIEW_KEYS[e.key]) return press('#viewSeg [data-view="' + VIEW_KEYS[e.key] + '"]');
+  return false;
+}
+
 document.addEventListener('keydown', async (e) => {
   if (e.key === 'Escape') {
     if (e.defaultPrevented) return;   /* a field used it, like the time picker closing its list */
+    if (keysOpen()) { closeKeys(); return; }
     if ($('side').classList.contains('on')) { setSide(false); return; }
     if (e.target.closest?.('#typeNav')) { e.target.blur(); ui.typeAdd = null; ui.typeEdit = false; renderSidebar(true); return; }
     if (ui.view === 'spotify' && spotView.devicesOpen()) { spotView.closeDevices(); return; }
-    if (ui.sel || ui.draft || ui.courseDraft || ui.settings) closeDrawer();
+    if (ui.sel || ui.draft || ui.courseDraft || ui.settings) { closeDrawer(); return; }
+    if (ui.focus) leaveFocus();
     return;
   }
+  if (shortcut(e)) return;
   /* Rows that open an item (table and office-hour rows) take Enter and Space like a button. */
   if ((e.key === 'Enter' || e.key === ' ') && e.target.matches?.('tr[data-id][tabindex]')) { e.preventDefault(); e.target.click(); return; }
   /* The Spotify view: / to search, space to play or pause, when not typing or on a button. */
