@@ -193,7 +193,7 @@ function goalGroup() {
 }
 
 function studyTab() {
-  const rv = readSetting();
+  const rv = readSetting(data.profile.id);
   return goalGroup() + '<div class="setgrp"><h4>Reviews<em>' + (rv.on ? 'on' : 'off') + '</em></h4>'
     + '<label class="checkline"><input type="checkbox" id="reviewsOn" data-reviews' + (rv.on ? ' checked' : '') + '>'
     + '<span>Create review tasks after lectures</span></label>'

@@ -135,3 +135,36 @@ test('lookups by id follow reloads', async () => {
  assert.equal(first.item('x').title, 'New');
  assert.equal(first.item('missing'), null);
 });
+test('clearing a stored item\'s title keeps the old one, so the server never refuses it', async () => {
+ await first.open(p());
+ await first.saveItem({ id: 'a', title: 'Anatomy essay' });
+ await first.saveItem({ id: 'a', title: '   ' });
+ assert.equal(first.item('a').title, 'Anatomy essay');
+ assert.equal((await first.pending())[0].body.title, 'Anatomy essay');
+ await first.saveItem({ id: 'b', title: '' });
+ assert.equal(first.item('b').title, 'Untitled');
+});
+test('a quiet rejection takes the server copy without saving a conflict', async () => {
+ await first.open(p());
+ await first.saveItem({ id: 'rv0000abc1', title: 'Review 1/4 · X' });
+ const [op] = await first.pending();
+ await first.rejectOperation(op, { id: 'rv0000abc1', title: 'Review 1/4 · X', revision: 3, deletedAt: 5 }, '', { quiet: true });
+ assert.equal(first.conflicts.length, 0);
+ assert.equal(first.item('rv0000abc1'), null);
+ assert.equal((await first.pending()).length, 0);
+});
+test('a reloaded tab editing its own unsynced record saves no conflict copy', async () => {
+ const tab = new Map();
+ globalThis.sessionStorage = { getItem: (k) => tab.get(k) || null, setItem: (k, v) => tab.set(k, v) };
+ const before = await import('../public/js/store.js?before-reload');
+ const after = await import('../public/js/store.js?after-reload');
+ delete globalThis.sessionStorage;
+ const user = p();
+ await before.open(user);
+ await before.saveItem({ id: 'a', title: 'Offline edit' });
+ await before.close();
+ await after.open(user);
+ await after.saveItem({ id: 'a', title: 'Edited again after reload' });
+ assert.equal(after.conflicts.length, 0);
+ await after.close();
+});

@@ -101,7 +101,7 @@ export function renderWeek() {
       + (it.date ? ' <span class="meta">' + (isOverdue(it) ? '· overdue' : '· ' + DOW[parse(it.date).getDay()] + ' ' + parse(it.date).getDate()) + '</span>' : '')
       + '</button></div>';
   });
-  tHtml += '<div class="quick"><input type="text" id="quickTask" placeholder="Add a task, press Enter" aria-label="Add a task"></div>'
+  tHtml += '<div class="quick"><input type="text" id="quickTask" placeholder="Add a task, press Enter" aria-label="Add a task" maxlength="140"></div>'
     + '<svg class="steroid" viewBox="0 0 120 80" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true">'
     + (ui.bg === 'cs'
       /* CS: a small binary tree in the corner instead of the steroid */

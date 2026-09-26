@@ -7,7 +7,17 @@ export const conflicts = [];
 const listeners = new Set();
 const normal = { items: normalizeItem, courses: normalizeCourse, quotes: normalizeQuote, study_sessions: normalizeStudySession };
 const stores = ['courses', 'items', 'quotes', 'study_sessions', 'meta', 'pending', 'conflicts'];
-const owner = crypto.randomUUID();
+/* Which tab queued an edit. It lasts as long as the tab, reloads included: a new id on
+   every load made an unsynced edit look like another tab's once the page reloaded. */
+const owner = (() => {
+  try {
+    const kept = sessionStorage.getItem('rounds.tab');
+    if (kept) return kept;
+    const id = crypto.randomUUID();
+    sessionStorage.setItem('rounds.tab', id);
+    return id;
+  } catch { return crypto.randomUUID(); }
+})();
 let db = null, channel = null, userId = null, localTail = Promise.resolve();
 const dbName = (id) => `rounds:${id}`;
 const notify = (evt) => { for (const fn of listeners) fn(evt); };
@@ -106,9 +116,17 @@ async function queue(a, key, op, body) {
   await a('pending').put({ key, op, body, revision, reviewRequired: !!previous?.reviewRequired, token: crypto.randomUUID(), owner });
 }
 
+/* The server refuses an item with no title. A title cleared while editing keeps the
+   one already stored, so the edit is never refused and moved to the conflicts. */
+async function keepTitle(a, kind, row) {
+  if (kind !== 'items' || row.title.trim()) return;
+  row.title = (await a('items').get(row.id))?.title || 'Untitled';
+}
+
 function saveRow(kind, raw) {
   const clean = normal[kind](structuredClone(raw));
   return mutate(async (a) => {
+    await keepTitle(a, kind, clean);
     await a(kind).put(clean);
     await queue(a, `${kind}:${clean.id}`, 'put', clean);
     return clean;
@@ -126,6 +144,7 @@ export function saveRows(rows) {
   const clean = rows.map(({ kind, row }) => ({ kind, row: normal[kind](structuredClone(row)) }));
   return mutate(async (a) => {
     for (const { kind, row } of clean) {
+      await keepTitle(a, kind, row);
       await a(kind).put(row);
       await queue(a, `${kind}:${row.id}`, 'put', row);
     }
@@ -213,9 +232,10 @@ export function settleOperation(op, saved) {
   }, 'synced');
 }
 
-export function rejectOperation(op, current, reason) {
+/** Take the server's copy in place of a refused edit; unless `quiet`, the edit is kept for review. */
+export function rejectOperation(op, current, reason, { quiet = false } = {}) {
   return mutate(async (a) => {
-    await a('conflicts').put({ ...op, id: crypto.randomUUID(), current, reason, at: Date.now() });
+    if (!quiet) await a('conflicts').put({ ...op, id: crypto.randomUUID(), current, reason, at: Date.now() });
     if ((await a('pending').get(op.key))?.token !== op.token) return;
     await a('pending').del(op.key);
     if (current && !current.deletedAt) await a(rowStore(op.key)).put(wrap(op.key, current));

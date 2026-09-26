@@ -106,7 +106,7 @@ export function renderItemDrawer(focusTitle) {
     + '<button class="icon-btn" type="button" data-act="close" aria-label="Close">✕</button></div>';
 
   let body = '<div class="dbody">'
-    + '<textarea class="dtitle" data-f="title" rows="1" placeholder="' + (isNew ? 'What is it called?' : 'Untitled item') + '">' + esc(it.title) + '</textarea>'
+    + '<textarea class="dtitle" data-f="title" rows="1" maxlength="140" placeholder="' + (isNew ? 'What is it called?' : 'Untitled item') + '">' + esc(it.title) + '</textarea>'
     + mtgLine
     + '<div class="fields">'
       + '<label for="f-type">Type</label><select id="f-type" data-f="type">' + typeOpts + '</select>'

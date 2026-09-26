@@ -2,9 +2,9 @@
 // "Review 1/4 · PHARM Lecture Mon 14 Sep"; marking it done creates the next step, dated
 // from the day it was done: +2, +4, +14 days, which on schedule is days 1, 3, 7 and 21.
 //
-// The setting lives in this browser only (localStorage) with a watermark, `through`,
-// the last lecture date already handled. Ids are derived from the lecture, so two
-// devices that both generate a step write the same row.
+// The setting lives in this browser only (localStorage, per account) with a watermark,
+// `through`, the last lecture date already handled. Ids are derived from the lecture, so
+// two devices that both generate a step write the same row.
 
 import { parse, addDays, iso, diffDays, DOW, MON } from './dates.js';
 
@@ -14,14 +14,27 @@ const KEY = 'rounds.reviews';
 const ID = /^rv[0-9a-z]{7}([1-4])$/;
 const MAX_SPAN = 120;                         /* never walk more than this many days at once */
 
-export function readSetting() {
+const keyFor = (account) => KEY + ':' + account;
+
+export function readSetting(account) {
   try {
-    const v = JSON.parse(localStorage.getItem(KEY) || 'null');
+    /* the setting was once kept for the browser, not the account */
+    const v = JSON.parse(localStorage.getItem(keyFor(account)) || localStorage.getItem(KEY) || 'null');
     return v && typeof v.on === 'boolean' ? { on: v.on, through: typeof v.through === 'string' ? v.through : null } : { on: false, through: null };
   } catch { return { on: false, through: null }; }
 }
-export function writeSetting(v) {
-  try { localStorage.setItem(KEY, JSON.stringify(v)); } catch {}
+export function writeSetting(account, v) {
+  try { localStorage.setItem(keyFor(account), JSON.stringify(v)); } catch {}
+}
+
+/**
+ * A review step as generated, not yet touched: when another device already made the
+ * same row, or deleted it, this copy can simply give way without a saved copy.
+ */
+export function untouchedReview(op) {
+  const b = op.body;
+  return op.op === 'put' && op.key.startsWith('items:') && ID.test(op.key.slice(6)) && reviewStep(b) > 0
+    && b.status === 'todo' && !b.notes && !b.checklist?.length && !b.links?.length;
 }
 
 /** Every Lecture meeting of every live course, on each date in [from, to]. */

@@ -187,10 +187,10 @@ async function runReviews() {
   if (reviewing || !data.profile) return;
   reviewing = true;
   try {
-    const setting = readSetting();
+    const setting = readSetting(data.profile.id);
     const { rows, through } = dueReviews(setting, data.courses, data.items, today());
     if (rows.length) await store.saveRows(rows.map((row) => ({ kind: 'items', row: normalizeItem(row) })));
-    if (through !== setting.through) writeSetting({ ...setting, through });
+    if (through !== setting.through) writeSetting(data.profile.id, { ...setting, through });
   } finally { reviewing = false; }
 }
 /** A review step just finished: schedule the next one. */
@@ -781,8 +781,8 @@ document.addEventListener('input', async (e) => {
   if ('sd' in d) { editSession(d.sd, e.target.value); return; }     /* the Log study drawer */
 
   if ('reviews' in d) {
-    const setting = readSetting();
-    writeSetting(e.target.checked ? { on: true, through: setting.through && setting.on ? setting.through : null } : { on: false, through: null });
+    const setting = readSetting(data.profile.id);
+    writeSetting(data.profile.id, e.target.checked ? { on: true, through: setting.through && setting.on ? setting.through : null } : { on: false, through: null });
     await runReviews();
     renderSettings(); return;
   }
@@ -1038,8 +1038,13 @@ document.addEventListener('keydown', async (e) => {
   if (e.target.id === 'linkUrl' || e.target.id === 'linkLabel') {
     const url = $('linkUrl').value.trim(); if (!url) return;
     const it2 = current(); if (!it2 || it2.links.length >= 20) return;
-    const lab = $('linkLabel').value.trim();
-    it2.links.push({ label: lab || url.replace(/^https?:\/\//, ''), url: /^https?:\/\//.test(url) ? url : 'https://' + url });
+    const full = /^https?:\/\//i.test(url) ? url : 'https://' + url;
+    let ok = full.length <= 500;
+    try { new URL(full); } catch { ok = false; }
+    $('linkUrl').setAttribute('aria-invalid', String(!ok));
+    if (!ok) { $('linkUrl').focus(); return; }
+    const lab = $('linkLabel').value.trim() || full.replace(/^https?:\/\//i, '');
+    it2.links.push({ label: lab.slice(0, 60), url: full });
     await touch(it2);
     renderItemDrawer(); return;
   }

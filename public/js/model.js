@@ -217,29 +217,37 @@ export function shiftEnd(was, end, now) {
   return clock(Math.max(0, minutes(end) - minutes(was)) + minutes(now));
 }
 
+/* Text is cut to what the server stores (worker/validate.js): a longer value is refused,
+   and a refused edit leaves the board for the conflicts list. */
+const cut = (v, n) => typeof v === 'string' ? v.slice(0, n) : '';
+const httpUrl = (u) => {
+  if (typeof u !== 'string' || u.length > 500 || !/^https?:\/\//i.test(u)) return false;
+  try { new URL(u); return true; } catch { return false; }
+};
+
 export function normalizeItem(raw) {
   const date = raw.date || today(), start = raw.start || '';
   return {
     id: raw.id || uid(),
     type: isTypeId(raw.type) ? raw.type : 'task',
-    title: raw.title || '',
+    title: cut(raw.title, 140),
     courseId: raw.courseId || raw.course || null,
     date,
     start,
     end: fixEnd(start, raw.end || ''),
-    where: raw.where || '',
+    where: cut(raw.where, 80),
     status: raw.status || 'todo',
     grade: typeof raw.grade === 'number' ? raw.grade : null,
     weight: typeof raw.weight === 'number' ? raw.weight : null,
-    notes: raw.notes || '',
-    checklist: Array.isArray(raw.checklist) ? raw.checklist.map((c) => ({ id: c.id || uid(), text: c.text || '', done: !!c.done })) : [],
+    notes: cut(raw.notes, 5000),
+    checklist: Array.isArray(raw.checklist) ? raw.checklist.slice(0, 50).map((c) => ({ id: c.id || uid(), text: cut(c.text, 140), done: !!c.done })) : [],
     links: Array.isArray(raw.links)
-      ? raw.links.filter((l) => l && /^https?:\/\//i.test(l.url || '')).map((l) => ({ label: l.label || '', url: l.url }))
+      ? raw.links.filter((l) => l && httpUrl(l.url)).slice(0, 20).map((l) => ({ label: cut(l.label, 60), url: l.url }))
       : [],
     recur: raw.recur === 'weekly' ? 'weekly' : null,
     weekday: raw.recur === 'weekly' ? (Number.isInteger(raw.weekday) ? raw.weekday : parse(raw.date || today()).getDay()) : null,
     recurUntil: raw.recurUntil && raw.recurUntil >= date ? raw.recurUntil : null,
-    dept: raw.dept || '',
+    dept: cut(raw.dept, 40),
     completedAt: typeof raw.completedAt === 'number' ? raw.completedAt : null,
     createdAt: raw.createdAt ?? null,
     revision: raw.revision ?? 0, updatedAt: raw.updatedAt ?? null,
@@ -250,10 +258,10 @@ export function normalizeCourse(raw, index = 0) {
   return {
     id: raw.id || uid(),
     code: (raw.code || '').slice(0, 8),
-    name: raw.name || '',
+    name: cut(raw.name, 80),
     color: HEXES.includes(raw.color) ? raw.color : HEXES[index % HEXES.length],
-    instructor: raw.instructor || '',
-    term: raw.term || '',
+    instructor: cut(raw.instructor, 60),
+    term: cut(raw.term, 40),
     archived: !!raw.archived,
     target: Number.isInteger(raw.target) && raw.target >= 1 && raw.target <= 100 ? raw.target : null,
     meetings: Array.isArray(raw.meetings)
@@ -263,7 +271,7 @@ export function normalizeCourse(raw, index = 0) {
           weekday: Number.isInteger(m.weekday) ? m.weekday : 1,
           start: m.start || '09:00',
           end: m.end || '10:00',
-          room: m.room || '',
+          room: cut(m.room, 40),
         }))
       : [],
     createdAt: raw.createdAt ?? null,

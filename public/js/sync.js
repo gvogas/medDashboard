@@ -1,6 +1,7 @@
 // One sync cycle per account across tabs. Every uploaded operation is persisted.
 import { api, ApiError, retryDelayMs } from './api.js';
 import * as store from './store.js';
+import { untouchedReview } from './reviews.js';
 export const status = { state: 'idle', pending: 0, lastPull: null, message: '' };
 const listeners = new Set();
 let initialized = false, paused = false, running = null, controller = null, timer;
@@ -35,6 +36,24 @@ export function init() {
 export function stop() { paused = true; clearTimeout(timer); controller?.abort(); }
 export async function drain() { await running; }
 const active = (cycle) => !paused && !cycle.signal.aborted && store.data.profile?.id === cycle.account;
+/* Answers that end the cycle: the next one retries every edit. Any other failure holds
+   back only its own edit, so one edit the server keeps failing on cannot stop the rest
+   from uploading, nor this device from downloading. */
+const STOPS = [401, 408, 428, 429, 503];
+/* An edit that failed this many cycles, each with a working download (so the server was
+   up), is set aside with the saved copies. */
+const MAX_TRIES = 3;
+const tries = new Map();   /* op token → cycles it failed in */
+async function serverCopy(op, e) {
+  if (e?.body?.current !== undefined) return e.body.current;
+  try {
+    const [kind, id] = op.key.split(/:(.*)/s);
+    return op.key === 'profile' ? await api.me() : await api.get(kind, id);
+  } catch (readError) {
+    if (!(readError instanceof ApiError && readError.status === 404)) throw readError;
+    return null;
+  }
+}
 async function pushAll(cycle) {
   const operations = await store.pending();
   // New courses before items; course deletion after pending item writes.
@@ -57,22 +76,30 @@ async function pushAll(cycle) {
     } catch (e) {
       if (!active(cycle)) return false;
       if (e instanceof ApiError && [400, 404, 409, 413, 422].includes(e.status)) {
-        let current = e.body?.current;
-        if (current === undefined) {
-          try {
-            const [kind, id] = op.key.split(/:(.*)/s);
-            current = op.key === 'profile' ? await api.me() : await api.get(kind, id);
-          } catch (readError) {
-            if (!(readError instanceof ApiError && readError.status === 404)) throw readError;
-            current = null;
-          }
-        }
+        const current = await serverCopy(op, e);
         if (!active(cycle)) return false;
+        // A review step another device made first, or already deleted: its copy stands.
+        if (e.status === 409 && untouchedReview(op)) { await store.rejectOperation(op, current, '', { quiet: true }); continue; }
         await store.rejectOperation(op, current, e.body?.error === 'legacy_edit' ? 'This edit was saved before conflict protection. Review it before restoring.' : e.body?.error === 'conflict' ? 'A newer version was saved on another device.' : 'The server could not accept this edit.');
+      } else if (e instanceof ApiError && !STOPS.includes(e.status)) {
+        cycle.failed.push(op);
+        // Items after a new course may belong to it: they wait for it.
+        if (op.key.startsWith('courses:') && op.op === 'put') break;
       } else throw e;
     }
   }
   return active(cycle);
+}
+/** Count a failed cycle against each held-back edit; set aside those out of tries. */
+async function holdBack(cycle) {
+  for (const op of cycle.failed) {
+    const n = (tries.get(op.token) || 0) + 1;
+    if (n < MAX_TRIES) { tries.set(op.token, n); continue; }
+    tries.delete(op.token);
+    const current = await serverCopy(op);
+    if (!active(cycle)) return;
+    await store.rejectOperation(op, current, 'The server kept failing to save this edit.');
+  }
 }
 function rank(op) { return op.key.startsWith('courses:') ? (op.op === 'put' ? 0 : 3) : 1; }
 async function pullAll(cycle) {
@@ -102,7 +129,7 @@ export async function syncNow() {
   if (running) return running;
   clearTimeout(timer);
   controller = new AbortController();
-  const cycle = { signal: controller.signal, account: store.data.profile.id };
+  const cycle = { signal: controller.signal, account: store.data.profile.id, failed: [] };
   running = (async () => {
     try {
       return await store.withSyncLock(async () => {
@@ -111,6 +138,13 @@ export async function syncNow() {
         if (!(await pushAll(cycle))) return false;
         const complete = await pullAll(cycle);
         if (!active(cycle)) return false;
+        if (cycle.failed.length) {
+          await holdBack(cycle);
+          if (!active(cycle)) return false;
+          state('error', 'Some edits did not save yet. Trying again shortly.');
+          schedule(30000);
+          return false;
+        }
         state(store.conflicts.length ? 'error' : store.pendingCount() || !complete ? 'pending' : 'idle',
           store.conflicts.length ? 'Saved copies need review in Settings.' : !complete ? 'Downloading remaining changes.' : '');
         if (!complete) schedule(1000);
@@ -144,5 +178,3 @@ export async function startingProfile(remembered) {
   catch (e) { return e instanceof ApiError && e.status === 401 ? null : remembered; }
   finally { clearTimeout(timer); }
 }
-export const push = syncNow;
-export const pull = syncNow;

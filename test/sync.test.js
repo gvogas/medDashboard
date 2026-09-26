@@ -111,6 +111,63 @@ describe('persisted operation synchronization', () => {
    await sync.drain();
    expect(api.put).not.toHaveBeenCalled();
  });
+ it('uploads the other edits and still downloads while one edit keeps failing', async () => {
+   const other = { ...op, key: 'items:i2', body: { id: 'i2', title: 'Other' }, token: 'b' };
+   store.pending.mockResolvedValue([op, other]);
+   api.put.mockImplementation(async (kind, id, body) => {
+     if (id === 'i1') throw new ApiError(500, { error: 'internal' });
+     return { ...body, revision: 2 };
+   });
+   expect(await sync.syncNow()).toBe(false);
+   expect(store.settleOperation).toHaveBeenCalledWith(other, expect.objectContaining({ revision: 2 }));
+   expect(api.sync).toHaveBeenCalled();
+   expect(sync.status.state).toBe('error');
+   expect(store.rejectOperation).not.toHaveBeenCalled();
+ });
+ it('sets an edit aside after it fails three cycles with the server otherwise up', async () => {
+   const stuck = { ...op, token: 'stuck-1' };
+   store.pending.mockResolvedValue([stuck]);
+   api.put.mockRejectedValue(new ApiError(500, { error: 'internal' }));
+   vi.spyOn(api, 'get').mockResolvedValue({ id: 'i1', title: 'Server', revision: 1 });
+   await sync.syncNow(); await sync.syncNow();
+   expect(store.rejectOperation).not.toHaveBeenCalled();
+   await sync.syncNow();
+   expect(store.rejectOperation).toHaveBeenCalledWith(stuck, { id: 'i1', title: 'Server', revision: 1 }, expect.stringContaining('kept failing'));
+ });
+ it('does not count a failure while the server is down', async () => {
+   const stuck = { ...op, token: 'stuck-2' };
+   store.pending.mockResolvedValue([stuck]);
+   api.put.mockRejectedValue(new ApiError(500, { error: 'internal' }));
+   api.sync.mockRejectedValue(new ApiError(500, { error: 'internal' }));
+   for (let i = 0; i < 4; i++) await sync.syncNow();
+   expect(store.rejectOperation).not.toHaveBeenCalled();
+ });
+ it('holds back items after a new course that failed, but still downloads', async () => {
+   const courseOp = { key: 'courses:c1', op: 'put', body: { id: 'c1' }, revision: 0, token: 'c' };
+   store.pending.mockResolvedValue([op, courseOp]);
+   api.put.mockRejectedValue(new ApiError(500, { error: 'internal' }));
+   await sync.syncNow();
+   expect(api.put).toHaveBeenCalledTimes(1);
+   expect(api.put).toHaveBeenCalledWith('courses', 'c1', expect.anything());
+   expect(api.sync).toHaveBeenCalled();
+ });
+ it('lets an untouched review step give way to the copy another device made', async () => {
+   const review = { key: 'items:rv0000abc1', op: 'put', revision: 0, token: 'r',
+     body: { id: 'rv0000abc1', type: 'task', title: 'Review 1/4 · ANAT Lecture Mon 14 Sep', status: 'todo', notes: '', checklist: [], links: [] } };
+   store.pending.mockResolvedValue([review]);
+   const current = { ...review.body, revision: 3, deletedAt: 123 };
+   api.put.mockRejectedValue(new ApiError(409, { error: 'conflict', current }));
+   await sync.syncNow();
+   expect(store.rejectOperation).toHaveBeenCalledWith(review, current, '', { quiet: true });
+ });
+ it('keeps a review step the user worked on for review', async () => {
+   const review = { key: 'items:rv0000abc1', op: 'put', revision: 0, token: 'r2',
+     body: { id: 'rv0000abc1', type: 'task', title: 'Review 1/4 · ANAT Lecture Mon 14 Sep', status: 'done', notes: '', checklist: [], links: [] } };
+   store.pending.mockResolvedValue([review]);
+   api.put.mockRejectedValue(new ApiError(409, { error: 'conflict', current: null }));
+   await sync.syncNow();
+   expect(store.rejectOperation).toHaveBeenCalledWith(review, null, expect.stringContaining('another device'));
+ });
  it('keeps a bounded, incomplete pull pending and schedules the next page', async () => {
    let cursor = 1;
    api.sync.mockImplementation(async () => ({ changes: [], cursor: ++cursor, more: true }));
