@@ -8,9 +8,13 @@
 // Times are floating (no zone): a class at 09:00 is 09:00 wherever the calendar is.
 // A `tz` query parameter, added by the app from the browser's zone, becomes
 // X-WR-TIMEZONE, which Google uses to place floating times.
+//
+// With a school calendar, classes repeat only within each semester, skip the days with
+// no classes (EXDATE), and run on the days that follow their weekday's timetable.
 
 import { HttpError } from './http.js';
 import { claimLimit, rateLimited } from './limits.js';
+import { normalizeSchool, classWeekday, dayInfo, weekdayOf } from '../public/js/school.js';
 
 const FEED_LIMIT = 60;                     /* fetches an hour per link; calendars poll a few times a day */
 const HOUR_MS = 60 * 60 * 1000;
@@ -68,7 +72,7 @@ export async function stopFeed(env, userId) {
 export async function serveFeed(env, url, userId, token) {
   const gone = () => new HttpError(404, { error: 'not_found' });
   if (!/^[0-9a-f]{32}$/.test(token)) throw gone();
-  const user = await env.DB.prepare('SELECT feed_gen, term_start, types FROM users WHERE id = ?').bind(userId).first();
+  const user = await env.DB.prepare('SELECT feed_gen, term_start, types, school_calendar FROM users WHERE id = ?').bind(userId).first();
   if (!user?.feed_gen || !sameString(await feedToken(userId, user.feed_gen, env.SESSION_SECRET), token)) throw gone();
   const wait = await claimLimit(env.DB, `feed:${userId}`, FEED_LIMIT, Date.now(), HOUR_MS);
   if (wait) throw rateLimited(wait);
@@ -79,7 +83,7 @@ export async function serveFeed(env, url, userId, token) {
   ]);
   const tz = url.searchParams.get('tz');
   const body = buildCalendar({
-    courses: courses.results, items: items.results, termStart: user.term_start,
+    courses: courses.results, items: items.results, termStart: user.term_start, school: parseSchool(user.school_calendar),
     types: parseList(user.types), tz: tz && TZ.test(tz) && tz.length <= 64 ? tz : null, now: Date.now(),
   });
   return new Response(body, {
@@ -90,6 +94,10 @@ export async function serveFeed(env, url, userId, token) {
   });
 }
 
+function parseSchool(v) {
+  try { return normalizeSchool(JSON.parse(v)); } catch { return null; }
+}
+
 function parseList(v) {
   try { const out = JSON.parse(v); return Array.isArray(out) ? out : []; } catch { return []; }
 }
@@ -97,7 +105,7 @@ function parseList(v) {
 // ── building the file ────────────────────────────────────────────────────────
 
 /** The calendar as text, CRLF lines folded at 75 octets. Pure, for tests. */
-export function buildCalendar({ courses, items, termStart = null, types = [], tz = null, now = Date.now() }) {
+export function buildCalendar({ courses, items, termStart = null, school = null, types = [], tz = null, now = Date.now() }) {
   const stamp = new Date(now).toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, '');
   const byId = new Map(courses.map((c) => [c.id, c]));
   const labelOf = (t) => types.find((x) => x && x.id === t)?.label || LABELS[t] || 'Item';
@@ -132,6 +140,7 @@ export function buildCalendar({ courses, items, termStart = null, types = [], tz
     const from = termStart || new Date(c.created_at || now).toISOString().slice(0, 10);
     for (const m of parseList(c.meetings)) {
       if (!m || !Number.isInteger(m.weekday) || !/^\d\d:\d\d$/.test(m.start || '') || !/^\d\d:\d\d$/.test(m.end || '')) continue;
+      if (school) { lines.push(...schoolClasses(c, m, school, stamp)); continue; }
       const day = onOrAfter(from, m.weekday);
       lines.push('BEGIN:VEVENT', 'UID:class-' + c.id + '-' + m.id + '@rounds', 'DTSTAMP:' + stamp,
         ...when(day, m.start, m.end),
@@ -144,6 +153,35 @@ export function buildCalendar({ courses, items, termStart = null, types = [], tz
   }
   lines.push('END:VCALENDAR');
   return lines.map(fold).join('\r\n') + '\r\n';
+}
+
+/* One class meeting through each semester: weekly from the first day of classes to the
+   last, minus the days its weekday has no classes, plus the days that follow its weekday. */
+function schoolClasses(c, m, school, stamp) {
+  const out = [];
+  const event = (uid, day, extra) => {
+    out.push('BEGIN:VEVENT', 'UID:' + uid + '@rounds', 'DTSTAMP:' + stamp, ...when(day, m.start, m.end), ...extra,
+      'SUMMARY:' + text(c.code + ' ' + (m.kind || 'Class')), 'CATEGORIES:Class');
+    if (m.room) out.push('LOCATION:' + text(m.room));
+    out.push('DESCRIPTION:' + text(c.name), 'END:VEVENT');
+  };
+  const at = (d) => compact(d) + 'T' + m.start.replace(':', '') + '00';
+  for (const term of school.terms) {
+    const first = onOrAfter(term.start, m.weekday), id = 'class-' + c.id + '-' + m.id + '-' + term.start;
+    if (first <= term.end) {
+      const skip = [];
+      for (let d = first; d <= term.end; d = addDays(d, 7)) if (classWeekday(school, d) !== m.weekday) skip.push(d);
+      event(id, first, ['RRULE:FREQ=WEEKLY;BYDAY=' + DAYS[m.weekday] + ';UNTIL=' + compact(term.end) + 'T235959',
+        ...(skip.length ? ['EXDATE:' + skip.map(at).join(',')] : [])]);
+    }
+    for (const d of school.days) {
+      if (d.kind !== 'swap' || d.follows !== m.weekday) continue;
+      for (let day = d.from; day <= d.to; day = addDays(day, 1)) {
+        if (weekdayOf(day) !== m.weekday && dayInfo(school, day).kind === 'swap' && day >= term.start && day <= term.end) event(id + '-' + day, day, []);
+      }
+    }
+  }
+  return out;
 }
 
 /** DTSTART/DTEND: timed and floating, or a whole day. A timed item with no end lasts an hour. */

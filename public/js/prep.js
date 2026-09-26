@@ -29,12 +29,12 @@ export function examWindow(exam, items, termStart) {
  * The exam's checklist with a step per lecture appended; existing text is not repeated.
  * Returns { checklist, added, left } — left is how many did not fit under the cap.
  */
-export function fillTopics(exam, course, items, termStart) {
+export function fillTopics(exam, course, items, termStart, cal = null) {
   const { from, to } = examWindow(exam, items, termStart);
   const list = (exam.checklist || []).slice();
   const have = new Set(list.map((s) => s.text.trim().toLowerCase()));
   let added = 0, left = 0;
-  for (const { date } of lectureDates([course], from, to)) {
+  for (const { date } of lectureDates([course], from, to, cal)) {
     const text = course.code + ' Lecture · ' + shortDate(date);
     if (have.has(text.toLowerCase())) continue;
     have.add(text.toLowerCase());

@@ -2,7 +2,9 @@ import { data, course } from '../store.js';
 import { ui } from '../state.js';
 import { tmeta, isOpen, isComplete, isOverdue, dueSoon, isTest } from '../model.js';
 import { iso, parse, addDays, monday, diffDays, today, hhmm, DOW, MON } from '../dates.js';
-import { instances, classes, matchSearch } from '../query.js';
+import { instances, classes, matchSearch, schoolCal } from '../query.js';
+import { dayInfo, classWeekday } from '../school.js';
+import { schoolTags } from './school-bits.js';
 import { esc } from '../dom.js';
 import { stepsHtml, statusChip, CHECK_SVG } from './bits.js';
 
@@ -60,10 +62,11 @@ export function renderWeek() {
     const d = addDays(start, i), key = iso(d), rows = byDay[key] || [];
     if (!rows.length && ui.search) continue;
     any = any || rows.length > 0;
-    const cls = classesByDow[d.getDay()] || [];
-    sched += '<div class="day' + (key === TODAY ? ' is-today' : '') + '">'
+    const cal = schoolCal(), info = cal ? dayInfo(cal, key) : null, wd = classWeekday(cal, key);
+    const cls = wd === null ? [] : classesByDow[wd] || [];
+    sched += '<div class="day' + (key === TODAY ? ' is-today' : '') + (info && info.kind !== 'class' && info.kind !== 'swap' ? ' sd-' + info.kind : '') + '">'
       + DOW[d.getDay()] + ' ' + d.getDate() + ' ' + MON[d.getMonth()].slice(0, 3)
-      + (key === TODAY ? '<span class="today-tag">Today</span>' : '')
+      + (key === TODAY ? '<span class="today-tag">Today</span>' : '') + schoolTags(info)
       + (rows.length ? '' : '<span class="free">Nothing due</span>')
       + '<button class="add" type="button" data-add="' + key + '" aria-label="Add item on ' + key + '">+</button></div>';
     if (cls.length) sched += '<div class="dayclasses">' + cls.map(classChip).join('') + '</div>';

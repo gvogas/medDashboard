@@ -3,6 +3,19 @@
 import { data, course } from './store.js';
 import { ui } from './state.js';
 import { tmeta, occurrences } from './model.js';
+import { normalizeSchool, termStartFor } from './school.js';
+import { today } from './dates.js';
+
+/* The school calendar, read once per saved version of the profile. */
+let school = { raw: undefined, cal: null };
+/** The school's academic calendar, or null when none is loaded. */
+export function schoolCal() {
+  const raw = data.profile?.schoolCalendar;
+  if (raw !== school.raw) school = { raw, cal: normalizeSchool(raw) };
+  return school.cal;
+}
+/** The term start the app goes by: the school calendar's semester, else the one set. */
+export const termStart = () => termStartFor(data.profile, today());
 
 /** A type filter is on unless it was switched off; new types start on. */
 export const typeOn = (t) => ui.types[t] !== false;

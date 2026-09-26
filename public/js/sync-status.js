@@ -6,6 +6,7 @@ import { data } from './store.js';
 import { ui } from './state.js';
 import { normalizeItem } from './model.js';
 import { today } from './dates.js';
+import { schoolCal } from './query.js';
 import { $, isTyping } from './dom.js';
 import { render } from './views/render.js';
 import { renderItemDrawer } from './views/drawer-item.js';
@@ -55,7 +56,7 @@ export async function runReviews() {
   reviewing = true;
   try {
     const setting = readSetting(data.profile.id);
-    const { rows, through } = dueReviews(setting, data.courses, data.items, today());
+    const { rows, through } = dueReviews(setting, data.courses, data.items, today(), schoolCal());
     if (rows.length) await store.saveRows(rows.map((row) => ({ kind: 'items', row: normalizeItem(row) })));
     if (through !== setting.through) writeSetting(data.profile.id, { ...setting, through });
   } finally { reviewing = false; }

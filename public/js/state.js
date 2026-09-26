@@ -30,6 +30,10 @@ export const ui = {
   hist: { weekOffset: 0, range: 'week', monthOffset: 0, focusDay: null, undo: null },
   sessionDraft: null,      /* the Log study / Edit session drawer */
   achDraft: null,          /* the New / Edit achievement drawer */
+  schoolDraft: null,       /* the school calendar review drawer */
+  schoolBusy: false,       /* a school calendar is being read */
+  schoolNote: null,        /* {text, error}: the last school calendar read, in Settings */
+  schoolAsk: false,        /* Settings is asking before removing the school calendar */
   signoutAsk: null,        /* sign-out waits on a warning about unsynced edits: { everywhere } */
 };
 

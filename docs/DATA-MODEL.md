@@ -87,7 +87,8 @@ Conventions used throughout:
 | `coat_color` | text | one of the five | Tints the sidebar fabric, pocket and embroidery. |
 | `theme` | text | `light` \| `dark` \| `system` | |
 | `bg` | text | `med` \| `cs`, default `med` | background art; independent of `theme` (0008) |
-| `term_start` | text \| null | `YYYY-MM-DD` | The week board's default start. Null means today. |
+| `term_start` | text \| null | `YYYY-MM-DD` | The week board's default start. Null means today. With a school calendar, its current semester's first day counts instead. |
+| `school_calendar` | JSON object | `{}` = none | The school's academic calendar (`0004`), below. |
 | `created_at`, `updated_at` | int | | |
 | `revision` | int | starts at 1 | Optimistic concurrency for profile edits. |
 | `pw_gen` | int | starts at 0 | Password/session generation; changing it revokes existing sessions. |
@@ -239,6 +240,15 @@ progress lives in the browser's IndexedDB on that device and does not sync.
 The flow itself is `users.study_flow`, JSON `{"steps":[["study",25],["break",5]],"rounds":4}`:
 1–12 steps of 1–180 minutes with at least one Study step, 1–12 rounds.
 
+The school's academic calendar is `users.school_calendar`, JSON
+`{"name":"Vanier College 2026–27","terms":[{"name":"Autumn 2026","start":"2026-08-24","end":"2026-12-10"}],"days":[{"from":"2026-10-06","to":"2026-10-06","kind":"swap","label":"Monday schedule","follows":1}]}`:
+1–4 semesters (first and last day of classes) and up to 80 special days, each `off`
+(no classes), `break` (study break, left out of week numbers), `exams`, `swap` (runs the
+`follows` weekday's timetable) or `note` (a marker). Read from a PDF by
+`POST /api/school-calendar` and checked by the person before it is saved;
+`public/js/school.js` works out each day for the views, the lecture reviews and the
+calendar feed.
+
 The goal and streak rules are `users.study_prefs`, JSON `{"goal":120,"dayMin":15,"rest":[0],"celebrate":true}`:
 a daily goal of 0–720 minutes (0 = none), 1–240 minutes to make a day count, up to six
 rest days (0 = Sunday) that never break the streak, and fireworks on or off. Streaks,
@@ -354,7 +364,8 @@ All routes are under `/api`, speak JSON, and require the session cookie except
 | `DELETE /api/session` | → clears the cookie. |
 | `POST /api/session/revoke-all` | → `204`, clears the cookie and invalidates every other session of this user. |
 | `GET /api/me` | → `{profile}` |
-| `PUT /api/me` | `{coat, theme, bg, termStart, displayName, studyFlow, studyPrefs}` (`bg` optional, default `med`; `studyFlow` and `studyPrefs` optional, kept when left out) → `{profile}` |
+| `PUT /api/me` | `{coat, theme, bg, termStart, displayName, studyFlow, studyPrefs, schoolCalendar}` (`bg` optional, default `med`; `studyFlow`, `studyPrefs` and `schoolCalendar` optional, kept when left out; `schoolCalendar: {}` removes it) → `{profile}` |
+| `POST /api/outline` · `POST /api/school-calendar` | the file (or a PDF's text) as the body, `?name=&today=` → what Workers AI read: an outline, or `{name, terms, days, truncated}`. Nothing is saved. Ten reads a day between them (`429 outline_limit`). |
 | `GET /api/sync?v=2&cursor=<seq>` | → `{changes: [{kind, row}], cursor, more, reset}` — at most 100 changes after `cursor`, deleted rows included with `deletedAt` set. `cursor=0` is a full load. See the sync protocol below. |
 | `GET /api/{courses,items,quotes,study_sessions,achievements}/:id` | one live row of yours, or `404`. The client uses it to undo a rejected save. |
 | `PUT /api/courses/:id` | a course (with an optional `target`, a whole-number grade goal 1–100) → the stored course, with server `updatedAt`. Upsert. |

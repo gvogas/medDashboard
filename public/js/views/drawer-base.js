@@ -51,7 +51,7 @@ export function hideDrawer() {
 /* A redraw may have replaced the opener; find its successor by what it points at. */
 
 export function resetDrawerState() {
-  ui.sel = null; ui.draft = null; ui.courseDraft = null; ui.courseMode = null; ui.confirm = null; ui.settings = false; ui.importPlan = null; ui.fillNote = null; ui.sessionDraft = null; ui.achDraft = null; ui.signoutAsk = null;
+  ui.sel = null; ui.draft = null; ui.courseDraft = null; ui.courseMode = null; ui.confirm = null; ui.settings = false; ui.importPlan = null; ui.fillNote = null; ui.sessionDraft = null; ui.achDraft = null; ui.schoolDraft = null; ui.signoutAsk = null;
 }
 
 /** Run before the drawer closes, e.g. to save what is still being typed. */
@@ -70,8 +70,8 @@ export function drawerHasFocus() {
   return drawer.contains(document.activeElement) && /input|textarea|select/i.test(document.activeElement.tagName);
 }
 
-/** Is any drawer open: an item, a course, settings, a study session or an achievement. */
-export const drawerOpen = () => !!(ui.sel || ui.draft || ui.courseDraft || ui.settings || ui.sessionDraft || ui.achDraft);
+/** Is any drawer open: an item, a course, settings, a study session, an achievement or the school calendar. */
+export const drawerOpen = () => !!(ui.sel || ui.draft || ui.courseDraft || ui.settings || ui.sessionDraft || ui.achDraft || ui.schoolDraft);
 
 /* On narrow screens the sidebar slides over the page. Closed, it is inert, so Tab does
    not wander through it off-screen; open, it takes focus and Escape closes it. */

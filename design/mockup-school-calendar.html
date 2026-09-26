@@ -1,0 +1,309 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>School Calendar Mockup</title>
+<meta name="description" content="Uploading a school calendar: the review drawer, the month view with no-class days, the study break and exams marked, week numbers, and the Settings group.">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="../public/css/tokens.css">
+<link rel="stylesheet" href="../public/css/layout.css">
+<link rel="stylesheet" href="../public/css/components.css">
+<style>
+  :root{
+    --pg-bg:#F0F3F4; --pg-panel:#FFFFFF; --pg-ink:#131E22; --pg-ink-2:#5A6E74;
+    --pg-line:#D6DFE1; --pg-accent:#0E7C74;
+    --pg-shadow:0 1px 2px rgba(16,40,44,.06), 0 14px 36px rgba(16,40,44,.09);
+  }
+  :root[data-app="dark"]{
+    --pg-bg:#0D1315; --pg-panel:#141C1F; --pg-ink:#E4EDEF; --pg-ink-2:#8DA2A8;
+    --pg-line:#242F33; --pg-accent:#3FBFB2;
+    --pg-shadow:0 1px 2px rgba(0,0,0,.5), 0 16px 40px rgba(0,0,0,.45);
+  }
+  html,body{height:auto;overflow:auto}
+  body{background:var(--pg-bg);color:var(--pg-ink);font-family:Figtree,system-ui,sans-serif;font-size:15px;line-height:1.55;margin:0}
+  .wrap{max-width:1180px;margin:0 auto;padding:0 20px 72px}
+  .mast{padding:44px 0 8px;display:flex;align-items:flex-end;gap:20px;flex-wrap:wrap}
+  .mast > div:first-child{flex:1 1 420px}
+  h1.title{font-size:clamp(30px,5.4vw,46px);line-height:1.05;letter-spacing:-.02em;font-weight:800;margin:0}
+  .lede{max-width:68ch;color:var(--pg-ink-2);margin:14px 0 0;font-size:16px}
+  .lede strong{color:var(--pg-ink);font-weight:600}
+  .picks{display:flex;gap:10px;flex-wrap:wrap}
+  .themepick{display:flex;gap:2px;background:var(--pg-panel);border:1px solid var(--pg-line);border-radius:9px;padding:3px}
+  .themepick button{border:0;background:transparent;border-radius:6px;padding:5px 11px;font:inherit;font-size:12.5px;color:var(--pg-ink-2);cursor:pointer}
+  .themepick button[aria-pressed="true"]{background:var(--pg-accent);color:#fff;font-weight:600}
+  h2{font-size:22px;letter-spacing:-.015em;margin:56px 0 6px}
+  h2 + p{margin:0 0 18px;color:var(--pg-ink-2);max-width:74ch}
+  .frame{border:1px solid var(--pg-line);border-radius:14px;box-shadow:var(--pg-shadow);background:var(--bg);color:var(--ink);padding:16px;font-size:14px}
+
+  /* ═══════ school days on the month grid ═══════ */
+  .cell{position:relative}
+  .cell.sd-off{background:repeating-linear-gradient(135deg,var(--cell-out) 0 6px,transparent 6px 12px)}
+  .cell.sd-break{background:color-mix(in srgb,var(--good) 10%,var(--panel))}
+  .cell.sd-exams{background:var(--amber-bg)}
+  .cell.sd-none{background:var(--cell-out)}
+  .cell.sd-none .dnum{color:var(--ink-3)}
+  .sdtag{display:inline-flex;align-items:center;gap:4px;max-width:100%;font-size:9.5px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;border-radius:4px;padding:1px 5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .sdtag.off{background:var(--chip-bg);color:var(--ink-2)}
+  .sdtag.break{background:color-mix(in srgb,var(--good) 20%,var(--panel));color:var(--good)}
+  .sdtag.exams{background:color-mix(in srgb,var(--warn) 22%,var(--panel));color:var(--amber-ink)}
+  .sdtag.swap{background:var(--accent-soft);color:var(--accent-ink)}
+  .sdtag.note{background:none;color:var(--ink-3);padding-left:0;text-transform:none;letter-spacing:0;font-weight:600}
+  .sdtag.note::before{content:"";width:6px;height:6px;border-radius:50%;background:var(--ink-3);flex:none}
+  .gone{font-size:10px;color:var(--ink-3);font-style:italic;padding-left:2px}
+  .ph .wk{margin-left:10px;font-size:10.5px;letter-spacing:.06em;font-weight:700;color:var(--accent-ink);background:var(--accent-soft);border-radius:99px;padding:2px 9px;text-transform:none}
+  .legend{display:flex;flex-wrap:wrap;gap:14px;padding:10px 12px;border-top:1px solid var(--line-2);font-size:11.5px;color:var(--ink-2)}
+  .legend span{display:inline-flex;align-items:center;gap:6px}
+  .legend i{width:14px;height:14px;border-radius:3px;border:1px solid var(--line)}
+  .legend i.off{background:repeating-linear-gradient(135deg,var(--line) 0 3px,transparent 3px 6px)}
+  .legend i.break{background:color-mix(in srgb,var(--good) 18%,var(--panel))}
+  .legend i.exams{background:var(--amber-bg)}
+  .legend i.none{background:var(--cell-out)}
+
+  /* the week board's header */
+  .wkbar{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:14px 16px;background:var(--panel);border:1px solid var(--line);border-radius:12px}
+  .wkbar h3{margin:0;font-size:22px;letter-spacing:-.015em}
+  .wkbar .wk{font-size:12px;font-weight:700;color:var(--accent-ink);background:var(--accent-soft);border-radius:99px;padding:3px 10px}
+  .wkbar .wk.break{color:var(--good);background:color-mix(in srgb,var(--good) 16%,var(--panel))}
+  .wkbar .wk.exams{color:var(--amber-ink);background:var(--amber-bg)}
+  .wkbar .rest{margin-left:auto;font-size:12.5px;color:var(--ink-2)}
+  .wkdays{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:8px;margin-top:10px}
+  .wkday{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:8px 9px;min-height:94px;display:flex;flex-direction:column;gap:4px;font-size:12px}
+  .wkday b{font-size:12.5px}
+  .wkday.sd-off{background:repeating-linear-gradient(135deg,var(--cell-out) 0 6px,var(--panel) 6px 12px)}
+  @media (max-width:760px){.wkdays{grid-template-columns:repeat(2,minmax(0,1fr))}}
+  .stack{display:flex;flex-direction:column;gap:16px}
+
+  /* the review drawer, shown in place */
+  .dwrap{display:grid;grid-template-columns:minmax(0,1fr) 420px;gap:24px;align-items:start}
+  @media (max-width:900px){.dwrap{grid-template-columns:minmax(0,1fr)}}
+  .drawer.static{position:static;transform:none;width:auto;height:auto;max-height:860px;border:1px solid var(--line);border-radius:14px;box-shadow:var(--pg-shadow);overflow:hidden;color:var(--ink);font-size:14px}
+  .drawer.static .dbody{overflow-y:auto}
+  .dnote{font-size:12px;color:var(--ink-2);background:var(--panel-2);border-radius:9px;padding:9px 11px}
+  .terms{display:flex;flex-direction:column;gap:8px}
+  .term{border:1px solid var(--line-2);border-radius:10px;padding:10px 11px;display:grid;grid-template-columns:auto 1fr;gap:6px 10px;align-items:center;font-size:12.5px}
+  .term input{font:inherit;font-size:12.5px;border:1px solid transparent;border-radius:7px;padding:4px 7px;background:var(--panel-2);color:var(--ink);width:100%;min-width:0}
+  .term input.nm{font-weight:700;font-size:13.5px}
+  .term label{font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-3)}
+  .term .dates{display:flex;gap:6px;align-items:center}
+  .term .dates span{color:var(--ink-3)}
+  .term .sum{grid-column:1/-1;font-size:11.5px;color:var(--ink-2)}
+  .srows{display:flex;flex-direction:column}
+  .srow{display:grid;grid-template-columns:86px minmax(0,1fr) 26px;gap:4px 8px;align-items:center;padding:7px 0;border-top:1px solid var(--line-2);font-size:12.5px}
+  .srow .when{font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:11.5px;color:var(--ink)}
+  .srow .when small{display:block;color:var(--ink-3);font-size:10px}
+  .srow .what{display:flex;flex-direction:column;gap:3px;min-width:0}
+  .srow .what input{font:inherit;font-size:12.5px;border:1px solid transparent;border-radius:6px;padding:2px 5px;background:none;color:var(--ink);min-width:0}
+  .srow .what input:hover{border-color:var(--line)}
+  .srow select{font:inherit;font-size:11px;border:1px solid var(--line);border-radius:6px;padding:2px 4px;background:var(--panel-2);color:var(--ink-2);max-width:100%}
+  .srow .x{border:0;background:none;color:var(--ink-3);border-radius:6px;width:26px;height:26px;cursor:pointer}
+  .srow .x:hover{background:var(--line-2);color:var(--ink)}
+  .srow.k-off .when{color:var(--ink-2)}
+  .srow.k-break .when{color:var(--good)}
+  .srow.k-exams .when{color:var(--amber-ink)}
+  .srow.k-swap .when{color:var(--accent-ink)}
+  .addrow{align-self:flex-start;border:1px dashed var(--line);background:none;border-radius:8px;padding:5px 11px;font:inherit;font-size:12px;font-weight:600;color:var(--ink-2);margin-top:8px;cursor:pointer}
+  .semh{display:flex;align-items:baseline;gap:8px;margin-top:6px}
+  .semh b{font-size:12.5px}
+  .semh span{font-size:11.5px;color:var(--ink-3)}
+  .btn{font:inherit}
+  .notes{columns:2 320px;gap:28px;color:var(--pg-ink-2);font-size:14px}
+  .notes p{margin:0 0 12px;break-inside:avoid}
+  .notes b{color:var(--pg-ink)}
+
+  /* settings group */
+  .setg{max-width:420px;background:var(--panel);border:1px solid var(--line);border-radius:14px;box-shadow:var(--pg-shadow);padding:14px 15px;color:var(--ink);font-size:13px;display:flex;flex-direction:column;gap:10px}
+  .setg h4{margin:0;font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-2)}
+  .setg .school{display:flex;gap:11px;align-items:center}
+  .setg .ico{width:38px;height:38px;border-radius:10px;background:var(--accent-soft);color:var(--accent-ink);display:grid;place-items:center;flex:none}
+  .setg .ico svg{width:20px;height:20px}
+  .setg .school b{display:block;font-size:14px}
+  .setg .school span{font-size:12px;color:var(--ink-2)}
+  .setg .acts{display:flex;gap:8px;flex-wrap:wrap}
+  .setg .acts button{font:inherit;font-size:12.5px;font-weight:600;border:1px solid var(--line);background:var(--panel-2);color:var(--ink);border-radius:8px;padding:6px 12px;cursor:pointer}
+  .setg .hint{font-size:12px;color:var(--ink-3);margin:0}
+  .setrow{display:flex;gap:20px;flex-wrap:wrap;align-items:flex-start}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="mast">
+    <div>
+      <h1 class="title">School calendar</h1>
+      <p class="lede">Upload your school's academic calendar once. The app reads it, you check the dates, and from then on it knows your <strong>semesters, weeks, days off, study break and exams</strong>. It skips classes on days there are none and numbers your weeks. Example: <strong>Vanier College 2026–27</strong>.</p>
+    </div>
+    <div class="picks">
+      <div class="themepick" role="group" aria-label="Theme"><button type="button" data-theme="light">Light</button><button type="button" data-theme="dark">Dark</button></div>
+      <div class="themepick" role="group" aria-label="Background"><button type="button" data-bgpick="med">Med</button><button type="button" data-bgpick="cs">CS</button></div>
+    </div>
+  </header>
+
+  <h2>1 · Upload it in Settings</h2>
+  <p>A new group in Settings. Before a calendar is loaded, there's one button. Afterwards, it names the school, says where you are in the year, and offers to review, replace or remove it.</p>
+  <div class="setrow">
+    <div class="setg">
+      <h4>School calendar</h4>
+      <p class="hint">Upload your school's academic calendar (PDF). Rounds will mark days off, breaks and exams, skip classes when there are none, and number your weeks.</p>
+      <div class="acts"><button type="button">Upload calendar</button></div>
+    </div>
+    <div class="setg">
+      <h4>School calendar</h4>
+      <div class="school"><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="4" y="5" width="16" height="15" rx="2"/><path d="M4 10h16M9 3v4M15 3v4"/></svg></span>
+        <span><b>Vanier College 2026–27</b><span>Autumn 2026 · week 5 of 16 · 2 semesters, 21 special days</span></span></div>
+      <div class="acts"><button type="button">Review dates</button><button type="button">Replace</button><button type="button">Remove</button></div>
+    </div>
+  </div>
+
+  <h2>2 · Check what it found</h2>
+  <p>The AI reads the PDF, then you see everything before it's saved: the semesters (first day, last day of classes, end of exams) and each special day with its kind. Fix a date, change a kind, delete a row, or add one by hand. Only the kinds change how the app behaves; the labels are just names.</p>
+  <div class="dwrap">
+    <div class="notes">
+      <p><b>No classes</b>: holidays and closures. Class meetings are hidden that day; the cell is hatched.</p>
+      <p><b>Study break</b>: no classes, green, and the week isn't counted in "Week N of M".</p>
+      <p><b>Exams</b>: the exam period. Regular classes are hidden; your exam items still show.</p>
+      <p><b>Follows Monday</b>: that date runs another weekday's timetable. You see Monday's classes instead of its own.</p>
+      <p><b>Marker</b>: a date worth seeing that changes nothing: mid-point, course drop deadline, withdrawal deadline.</p>
+      <p><b>Outside every semester</b> (summer, the winter gap) is shown as "No school" and has no classes.</p>
+      <p>Things that don't matter to your timetable, like registration periods and grade submission deadlines, are left out by the AI. You can add them as markers.</p>
+    </div>
+    <div class="drawer static" aria-label="School calendar review">
+      <div class="dhead"><span class="kind" style="--c:var(--accent-ink)">School calendar</span><span></span><button class="icon-btn" type="button">✕</button></div>
+      <div class="dbody">
+        <div class="dnote">Read from <b>Vanier-2026-2027.pdf</b>. Check the dates, then save. Nothing changes until you do.</div>
+        <div class="dsec"><h4>Name</h4><input class="dtitle" value="Vanier College 2026–27" style="font-size:16px"></div>
+        <div class="dsec"><h4>Semesters <em>2</em></h4>
+          <div class="terms" id="terms"></div>
+        </div>
+        <div class="dsec"><h4>Special days <em id="scount"></em></h4>
+          <div class="srows" id="srows"></div>
+          <button type="button" class="addrow">+ Add a day</button>
+        </div>
+      </div>
+      <div class="dfoot"><span class="hint">2 semesters, 21 days</span><button class="btn ghost" type="button">Cancel</button><button class="btn go" type="button">Save calendar</button></div>
+    </div>
+  </div>
+
+  <h2>3 · The month view</h2>
+  <p>October 2026. The election on the 5th and Thanksgiving on the 12th are hatched and have no classes. On Tuesday the 6th you get <b>Monday's</b> classes. The mid-point and the mid-term deadline are small markers. The header says which week of the semester the month starts in.</p>
+  <div class="frame"><div class="panel" id="month"></div></div>
+
+  <h2>4 · The week board</h2>
+  <p>The week's title gets its number in the semester. A study break or exam week says so instead, and days off are hatched with their reason.</p>
+  <div class="stack">
+    <div class="frame">
+      <div class="wkbar"><h3>Oct 5 – 11</h3><span class="wk">Week 7 of 16</span><span class="rest">Autumn 2026</span></div>
+      <div class="wkdays" id="wk1"></div>
+    </div>
+    <div class="frame">
+      <div class="wkbar"><h3>Mar 8 – 14</h3><span class="wk break">Study break</span><span class="rest">Winter 2027 · back Monday, week 8 of 16</span></div>
+    </div>
+    <div class="frame">
+      <div class="wkbar"><h3>Dec 14 – 20</h3><span class="wk exams">Exams</span><span class="rest">Autumn 2026 · Dec 11 – 22</span></div>
+    </div>
+  </div>
+</div>
+
+<script>
+  var C = { NEURO: '#8B5CC7', ANAT: '#E4749B', CHEM: '#17B3AE' };
+  var TT = { 1: [['NEURO', '10:00', 'Lecture'], ['CHEM', '14:00', 'Lab']], 2: [['ANAT', '13:00', 'Lecture']], 3: [['NEURO', '10:00', 'Lecture']], 4: [['ANAT', '13:00', 'Lecture']], 5: [['CHEM', '09:00', 'Lecture']] };
+  var SPECIAL = {
+    '2026-10-05': ['off', 'Provincial election'],
+    '2026-10-06': ['swap', 'Monday schedule', 1],
+    '2026-10-12': ['off', 'Thanksgiving'],
+    '2026-10-16': ['note', 'Mid-point'],
+    '2026-10-23': ['note', 'Mid-term deadline'],
+    '2026-11-03': ['note', 'Course drop deadline'],
+  };
+  var iso = function (d) { return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); };
+  var chip = function (c) { return '<span class="mchip" style="--c:' + C[c[0]] + '"><b>' + c[1].replace(':', '') + '</b> ' + c[0] + ' <span class="rm">' + c[2] + '</span></span>'; };
+
+  /* the month */
+  (function () {
+    var start = new Date(2026, 8, 28), h = '<div class="ph">Class schedule<span class="wk">Weeks 6 – 11 · Autumn 2026</span><button class="ph-toggle" type="button" aria-pressed="false">Deadlines</button><em>5 weekly classes</em></div><div class="month">';
+    ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].forEach(function (d) { h += '<div class="mhead">' + d + '</div>'; });
+    for (var i = 0; i < 42; i++) {
+      var d = new Date(start); d.setDate(start.getDate() + i);
+      var key = iso(d), out = d.getMonth() !== 9, sp = SPECIAL[key], cls = '', tags = '', rows = TT[d.getDay()] || [];
+      if (sp && sp[0] === 'off') { cls = ' sd-off'; tags = '<span class="sdtag off">' + sp[1] + '</span>'; rows = []; }
+      else if (sp && sp[0] === 'swap') { tags = '<span class="sdtag swap">Follows Monday</span>'; rows = TT[sp[2]]; }
+      else if (sp && sp[0] === 'note') { tags = '<span class="sdtag note">' + sp[1] + '</span>'; }
+      var gone = sp && sp[0] === 'off' && (TT[d.getDay()] || []).length ? '<span class="gone">' + TT[d.getDay()].length + ' classes off</span>' : '';
+      h += '<div class="cell' + (out ? ' out' : '') + cls + (key === '2026-10-08' ? ' is-today' : '') + '"><span class="dnum">' + d.getDate() + '</span>' + tags + rows.map(chip).join('') + gone + '</div>';
+    }
+    h += '</div><div class="legend"><span><i class="off"></i>No classes</span><span><i class="break"></i>Study break</span><span><i class="exams"></i>Exams</span><span><i class="none"></i>No school (between semesters)</span></div>';
+    document.getElementById('month').innerHTML = h;
+  })();
+
+  /* the week board days */
+  (function () {
+    var names = ['Mon 5', 'Tue 6', 'Wed 7', 'Thu 8', 'Fri 9', 'Sat 10', 'Sun 11'], wd = [1, 2, 3, 4, 5, 6, 0], h = '';
+    names.forEach(function (n, i) {
+      var key = '2026-10-' + String(5 + i).padStart(2, '0'), sp = SPECIAL[key], rows = TT[wd[i]] || [], tag = '', cls = '';
+      if (sp && sp[0] === 'off') { cls = ' sd-off'; tag = '<span class="sdtag off">' + sp[1] + '</span>'; rows = []; }
+      if (sp && sp[0] === 'swap') { tag = '<span class="sdtag swap">Follows Monday</span>'; rows = TT[1]; }
+      h += '<div class="wkday' + cls + '"><b>' + n + ' Oct</b>' + tag + rows.map(chip).join('') + '</div>';
+    });
+    document.getElementById('wk1').innerHTML = h;
+  })();
+
+  /* the review drawer */
+  (function () {
+    var terms = [
+      ['Autumn 2026', '2026-08-24', '2026-12-10', '2026-12-22', '16 weeks · Aug 24 – Dec 10, exams to Dec 22'],
+      ['Winter 2027', '2027-01-19', '2027-05-14', '2027-05-26', '16 weeks plus the study break · Jan 19 – May 14, exams to May 26'],
+    ];
+    document.getElementById('terms').innerHTML = terms.map(function (t) {
+      return '<div class="term"><input class="nm" value="' + t[0] + '" aria-label="Semester name" style="grid-column:1/-1">'
+        + '<label>Classes</label><span class="dates"><input type="date" value="' + t[1] + '"><span>to</span><input type="date" value="' + t[2] + '"></span>'
+        + '<label>Exams end</label><span class="dates"><input type="date" value="' + t[3] + '"></span>'
+        + '<span class="sum">' + t[4] + '</span></div>';
+    }).join('');
+    var KINDS = [['off', 'No classes'], ['break', 'Study break'], ['exams', 'Exams'], ['swap', 'Follows Monday'], ['note', 'Marker']];
+    var rows = [
+      ['Autumn 2026'],
+      ['Sep 7', 'Mon', 'off', 'Labour Day'],
+      ['Sep 18', 'Fri', 'note', 'Withdrawal deadline'],
+      ['Oct 5', 'Mon', 'off', 'Provincial election'],
+      ['Oct 6', 'Tue', 'swap', 'Follows Monday'],
+      ['Oct 12', 'Mon', 'off', 'Thanksgiving'],
+      ['Oct 16', 'Fri', 'note', 'Mid-point'],
+      ['Nov 3', 'Tue', 'note', 'Course drop deadline'],
+      ['Nov 18', 'Wed', 'off', 'Pre-EUF exam day'],
+      ['Dec 10', 'Thu', 'swap', 'Follows Monday · last day'],
+      ['Dec 11–22', '12 days', 'exams', 'Evaluation & exam period'],
+      ['Dec 16', 'Wed', 'off', 'English Exit Exam & EUF'],
+      ['Winter 2027'],
+      ['Feb 12', 'Fri', 'note', 'Withdrawal deadline'],
+      ['Mar 8–12', '5 days', 'break', 'Study break'],
+      ['Mar 15', 'Mon', 'note', 'Mid-point'],
+      ['Mar 25', 'Thu', 'swap', 'Follows Monday'],
+      ['Mar 26', 'Fri', 'off', 'Good Friday'],
+      ['Mar 29', 'Mon', 'off', 'Easter Monday'],
+      ['Apr 6', 'Tue', 'note', 'Course drop deadline'],
+      ['Apr 13', 'Tue', 'off', 'Pre-EUF exam day'],
+      ['May 12', 'Wed', 'off', 'English Exit Exam & EUF'],
+      ['May 17–26', '10 days', 'exams', 'Evaluation & exam period'],
+    ];
+    var n = 0;
+    document.getElementById('srows').innerHTML = rows.map(function (r) {
+      if (r.length === 1) return '<div class="semh"><b>' + r[0] + '</b></div>';
+      n++;
+      return '<div class="srow k-' + r[2] + '"><span class="when">' + r[0] + '<small>' + r[1] + '</small></span>'
+        + '<span class="what"><input value="' + r[3] + '" aria-label="Label"><select aria-label="Kind">' + KINDS.map(function (k) { return '<option' + (k[0] === r[2] ? ' selected' : '') + '>' + k[1] + '</option>'; }).join('') + '</select></span>'
+        + '<button class="x" type="button" aria-label="Remove">✕</button></div>';
+    }).join('');
+    document.getElementById('scount').textContent = n;
+  })();
+
+  (function () {
+    var root = document.documentElement;
+    function setTheme(t) { root.setAttribute('data-app', t); document.querySelectorAll('[data-theme]').forEach(function (b) { b.setAttribute('aria-pressed', String(b.dataset.theme === t)); }); }
+    function setBg(v) { if (v === 'cs') root.setAttribute('data-bg', 'cs'); else root.removeAttribute('data-bg'); document.querySelectorAll('[data-bgpick]').forEach(function (b) { b.setAttribute('aria-pressed', String(b.dataset.bgpick === v)); }); }
+    setTheme(matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'); setBg('med');
+    document.querySelectorAll('[data-theme]').forEach(function (b) { b.onclick = function () { setTheme(b.dataset.theme); }; });
+    document.querySelectorAll('[data-bgpick]').forEach(function (b) { b.onclick = function () { setBg(b.dataset.bgpick); }; });
+  })();
+</script>
+</body>
+</html>

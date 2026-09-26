@@ -161,6 +161,7 @@ export const api = {
   calendarRenew: () => request('POST', '/api/calendar'),
   calendarStop: () => empty(request('DELETE', '/api/calendar')),
   readOutline: (file, { name, today, termStart }) => request('POST', '/api/outline?' + new URLSearchParams({ name, today, ...(termStart ? { termStart } : {}) }), file),
+  readSchool: (file, { name, today }) => request('POST', '/api/school-calendar?' + new URLSearchParams({ name, today }), file),
   spotifyPlayer: () => request('GET', '/api/spotify/player'),
   spotifyStatus: () => request('GET', '/api/spotify/status'),
   spotifyControl: (action, deviceId) => request('POST', `/api/spotify/player/${action}` + (deviceId ? `?deviceId=${encodeURIComponent(deviceId)}` : '')),

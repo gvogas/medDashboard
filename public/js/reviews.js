@@ -7,6 +7,7 @@
 // two devices that both generate a step write the same row.
 
 import { parse, addDays, iso, diffDays, DOW, MON } from './dates.js';
+import { classWeekday } from './school.js';
 
 export const STEPS = 4;
 const GAP = { 1: 2, 2: 4, 3: 14 };          /* days from finishing step n to step n + 1 */
@@ -37,14 +38,15 @@ export function untouchedReview(op) {
     && b.status === 'todo' && !b.notes && !b.checklist?.length && !b.links?.length;
 }
 
-/** Every Lecture meeting of every live course, on each date in [from, to]. */
-export function lectureDates(courses, from, to) {
+/** Every Lecture meeting of every live course, on each date in [from, to]; with a school
+    calendar, only on days with classes, and by the timetable the day follows. */
+export function lectureDates(courses, from, to, cal = null) {
   const out = [];
   if (!from || !to || from > to) return out;
   let d = parse(from), n = 0;
   const last = parse(to);
   while (d <= last && n++ <= MAX_SPAN * 3) {
-    const wd = d.getDay(), date = iso(d);
+    const date = iso(d), wd = classWeekday(cal, date);
     for (const c of courses) {
       if (c.archived) continue;
       for (const m of c.meetings || []) if (m.kind === 'Lecture' && m.weekday === wd) out.push({ course: c, meeting: m, date });
@@ -81,11 +83,11 @@ function row(id, step, title, courseId, date) {
 }
 
 /** Step 1 for every lecture in [from, to] that does not exist yet. */
-export function firstReviews(courses, items, from, to) {
+export function firstReviews(courses, items, from, to, cal = null) {
   if (from && to && diffDays(from, to) > MAX_SPAN) from = iso(addDays(parse(to), -MAX_SPAN));
   const have = new Set(items.map((it) => it.id));
   const out = [];
-  for (const { course, meeting, date } of lectureDates(courses, from, to)) {
+  for (const { course, meeting, date } of lectureDates(courses, from, to, cal)) {
     const id = reviewId(course.id, meeting.id, date, 1);
     if (have.has(id)) continue;
     have.add(id);
@@ -108,11 +110,11 @@ export function nextReview(it, today, items = []) {
  * What to create now, and the watermark to store. Turning the setting on sets the
  * watermark to yesterday, so nothing before today is backfilled.
  */
-export function dueReviews(setting, courses, items, today) {
+export function dueReviews(setting, courses, items, today, cal = null) {
   const yesterday = iso(addDays(parse(today), -1));
   if (!setting.on) return { rows: [], through: setting.through };
   if (!setting.through) return { rows: [], through: yesterday };
   if (setting.through >= yesterday) return { rows: [], through: setting.through };
   const from = iso(addDays(parse(setting.through), 1));
-  return { rows: firstReviews(courses, items, from, yesterday), through: yesterday };
+  return { rows: firstReviews(courses, items, from, yesterday, cal), through: yesterday };
 }

@@ -12,6 +12,7 @@ import { SPOTIFY_MARK } from './player.js';
 import { api, spotifyRetryAt } from '../api.js';
 import { readSetting } from '../reviews.js';
 import { renderQuote } from './stats.js';
+import { schoolGroup } from './drawer-school.js';
 
 export function openSettings(focus) {
   resetDrawerState();
@@ -121,7 +122,7 @@ function badgeGroup(p, coat) {
 
 const TABS = [['you', 'You'], ['study', 'Study'], ['spotify', 'Spotify'], ['account', 'Account']];
 /* Where a deep link lands: the field or group to focus, and the tab it lives on. */
-const TAB_OF = { 'o-name': 'you', qText: 'you', goalGrp: 'study', importGrp: 'study', spotifyGrp: 'spotify' };
+const TAB_OF = { 'o-name': 'you', qText: 'you', goalGrp: 'study', importGrp: 'study', schoolGrp: 'study', spotifyGrp: 'spotify' };
 
 /* Saved copies and sync trouble live on the Account tab, so the tab itself says so. */
 function accountFlag() {
@@ -211,6 +212,7 @@ function studyTab() {
     + '<button class="btn ghost" type="button" data-act="import-paste">Preview</button></details>'
     + (ui.importNote ? '<span class="note' + (ui.importNote.error ? ' err' : '') + '">' + esc(ui.importNote.text) + '</span>' : '')
     + '</div>'
+    + schoolGroup()
     + '<div class="setgrp" id="feedGrp" tabindex="-1">' + feedGroup() + '</div>';
 }
 

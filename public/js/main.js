@@ -7,7 +7,7 @@ import { data, course } from './store.js';
 import * as sync from './sync.js';
 import { ui, rememberUi } from './state.js';
 import { uid, isOpen, tmeta, useTypePrefs, typeList, TYPE_COLOURS } from './model.js';
-import { typeOn } from './query.js';
+import { typeOn, schoolCal, termStart } from './query.js';
 import { iso, parse, addDays, today } from './dates.js';
 import { $ } from './dom.js';
 import { render, renderView, renderHeader } from './views/render.js';
@@ -18,6 +18,7 @@ import { openItem, newItem, current, saveDraft, touch, touchSoon, flushTouch, re
 import { openKeys } from './views/keys.js';
 import { renderSessionDrawer, refreshSessionDrawer, editSession, saveSessionDraft } from './views/drawer-session.js';
 import { achievementClick, editAchievement } from './views/drawer-achievement.js';
+import { schoolClick, editSchool, readSchoolFile } from './views/drawer-school.js';
 import { launch as fireworks } from './fireworks.js';
 import { openCourse, renderCourseDrawer, saveCourseDraft, leaveDrawer, onCourseInput } from './views/drawer-course.js';
 import { toast, hideToast } from './views/toast.js';
@@ -150,6 +151,7 @@ async function onClick(e) {
   }
   if (await studyClick(e)) return;
   if (await achievementClick(e)) return;
+  if (await schoolClick(e)) return;
   if (e.target.closest('#menuBtn')) { setSide(!$('side').classList.contains('on')); return; }
   if (e.target.closest('#newBtn')) { newItem(ui.anchor); return; }
   if (e.target.closest('#today')) { ui.anchor = today(); render(); return; }
@@ -261,7 +263,7 @@ async function onClick(e) {
     }
     else if (act === 'fill-topics' && it) {
       const c = course(it.courseId); if (!c) return;
-      const r = fillTopics(it, c, data.items, data.profile?.termStart);
+      const r = fillTopics(it, c, data.items, termStart(), schoolCal());
       it.checklist = r.checklist;
       if (r.added) await touch(it);
       ui.fillNote = r.added ? 'Added ' + r.added + ' lecture' + (r.added === 1 ? '' : 's') + '.' + (r.left ? ' ' + r.left + ' more did not fit under the 50-step limit.' : '')
@@ -341,6 +343,7 @@ document.addEventListener('input', async (e) => {
   const d = e.target.dataset || {};
   if ('sd' in d) { editSession(d.sd, e.target.value); return; }     /* the Log study drawer */
   if ('ach' in d) { editAchievement(d.ach, e.target.value); return; } /* the achievement drawer */
+  if (('sc' in d || 'sct' in d || 'scd' in d) && editSchool(e.target)) return;   /* the school calendar drawer */
 
   if ('reviews' in d) {
     const setting = readSetting(data.profile.id);
@@ -391,6 +394,7 @@ document.addEventListener('change', async (e) => {
   if (e.target.id === 'goalCelebrate') { await savePrefs({ celebrate: e.target.checked }); return; }
   if (e.target.dataset?.typelabel) { await renameType(e.target); return; }
   if (e.target.id === 'outlineFile' && e.target.files?.[0]) { readOutlineFile(e.target.files[0]); return; }
+  if (e.target.id === 'schoolFile' && e.target.files?.[0]) { readSchoolFile(e.target.files[0]); return; }
   if (e.target.id !== 'importFile' || !e.target.files?.[0]) return;
   const file = e.target.files[0];
   if (file.size > 2_000_000) { ui.importNote = { text: 'That file is over 2 MB; export a single term instead.', error: true }; renderSettings(); return; }

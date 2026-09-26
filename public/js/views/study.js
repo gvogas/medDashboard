@@ -8,6 +8,7 @@ import { data, course, item } from '../store.js';
 import { isOpen, normalizeFlow, normalizePrefs, FLOW_PRESETS } from '../model.js';
 import { addDays, iso, today, DOW, MON, parse } from '../dates.js';
 import { dayOf, minutesByDay, week, month, streak, heatRange, level } from '../history.js';
+import { termStart } from '../query.js';
 import * as focus from '../focus.js';
 import { clockHtml, setClocks } from './flipclock.js';
 import { achievementsHtml } from './achievements.js';
@@ -153,7 +154,7 @@ export function ringSvg(part, whole, cls = 'ring') {
 
 function tilesHtml(all, byDay, p) {
   const now = today(), st = streak(byDay, now, p), todayMin = byDay.get(now) || 0;
-  const hr = heatRange(data.profile?.termStart, now);
+  const hr = heatRange(termStart(), now);
   const term = all.filter((s) => { const d = dayOf(s); return d >= hr.from && d <= now; });
   const termMin = term.reduce((a, s) => a + s.studyMinutes, 0);
   const left = Math.max(0, p.goal - todayMin);
@@ -205,7 +206,7 @@ function weekHtml(all, p) {
 }
 
 function termHtml(all, byDay, p) {
-  const now = today(), hr = heatRange(data.profile?.termStart, now);
+  const now = today(), hr = heatRange(termStart(), now);
   const start = parse(hr.from);
   let months = '', cells = '';
   for (let w = 0; w < hr.weeks; w++) {

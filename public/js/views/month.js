@@ -1,6 +1,8 @@
 import { ui } from '../state.js';
 import { iso, parse, addDays, monday, today, hhmm, dur, DOW } from '../dates.js';
-import { classes, instances } from '../query.js';
+import { classes, instances, schoolCal } from '../query.js';
+import { dayInfo, classWeekday, weekOf } from '../school.js';
+import { schoolTags, weekRange } from './school-bits.js';
 import { tmeta } from '../model.js';
 import { esc } from '../dom.js';
 import { classChip } from './week.js';
@@ -12,7 +14,7 @@ const PER_CELL = 4;
 export function renderMonth() {
   const TODAY = today();
   const a = parse(ui.anchor), first = new Date(a.getFullYear(), a.getMonth(), 1);
-  const gridStart = monday(first), cells = 42, all = classes();
+  const gridStart = monday(first), cells = 42, all = classes(), cal = schoolCal();
   const byDow = {};
   all.forEach((x) => { (byDow[x.mtg.weekday] = byDow[x.mtg.weekday] || []).push(x); });
 
@@ -25,18 +27,23 @@ export function renderMonth() {
 
   let html = '<div class="panel"><div class="ph">' + (ui.monthDeadlines ? 'Classes and deadlines' : 'Class schedule')
     + '<button class="ph-toggle" type="button" data-monthdeadlines aria-pressed="' + (ui.monthDeadlines ? 'true' : 'false') + '">Deadlines</button>'
+    + weekRange(cal, [0, 1, 2, 3, 4, 5].map((w) => weekOf(cal, iso(addDays(gridStart, 7 * w)))))
     + '<em>' + all.length + ' weekly class' + (all.length === 1 ? '' : 'es') + '</em></div><div class="month">';
   ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].forEach((d) => { html += '<div class="mhead">' + d + '</div>'; });
   for (let i = 0; i < cells; i++) {
     const d = addDays(gridStart, i), key = iso(d), out = d.getMonth() !== a.getMonth();
-    const due = byDate[key] || [], rows = byDow[d.getDay()] || [];
+    /* the school calendar decides whose classes run today, if any */
+    const info = cal ? dayInfo(cal, key) : null, wd = classWeekday(cal, key);
+    const due = byDate[key] || [], rows = wd === null ? [] : byDow[wd] || [];
     const chips = due.map(deadlineChip).concat(rows.map(classChip));
-    html += '<button class="cell' + (out ? ' out' : '') + (key === TODAY ? ' is-today' : '') + '" type="button" data-day="' + key + '"'
-      + ' aria-label="' + esc(DOW[d.getDay()] + ' ' + key + (due.length ? ', ' + due.length + ' due' : '') + (rows.length ? ', ' + rows.length + ' class' + (rows.length === 1 ? '' : 'es') : '')) + '">'
-      + '<span class="dnum">' + d.getDate() + '</span>';
+    const off = info && ['off', 'break', 'exams'].includes(info.kind) ? (byDow[d.getDay()] || []).length : 0;
+    html += '<button class="cell' + (out ? ' out' : '') + (info && info.kind !== 'class' && info.kind !== 'swap' ? ' sd-' + info.kind : '') + (key === TODAY ? ' is-today' : '') + '" type="button" data-day="' + key + '"'
+      + ' aria-label="' + esc(DOW[d.getDay()] + ' ' + key + (info && info.kind !== 'class' ? ', ' + (info.kind === 'swap' ? 'follows ' + DOW[info.follows] : info.label) : '') + (due.length ? ', ' + due.length + ' due' : '') + (rows.length ? ', ' + rows.length + ' class' + (rows.length === 1 ? '' : 'es') : '')) + '">'
+      + '<span class="dnum">' + d.getDate() + '</span>' + schoolTags(info);
     const shown = chips.length > PER_CELL ? PER_CELL - 1 : chips.length;
     html += chips.slice(0, shown).join('');
     if (chips.length > shown) html += '<span class="more">+' + (chips.length - shown) + ' more</span>';
+    if (off) html += '<span class="gone">' + off + ' class' + (off === 1 ? '' : 'es') + ' off</span>';
     html += '</button>';
   }
   html += '</div></div>';

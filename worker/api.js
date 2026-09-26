@@ -4,6 +4,7 @@ import { verifyPassword, normalizeUsername } from './password.js';
 import { claimAttempt, recordSuccess } from './throttle.js';
 import { limitLogin, limitOutline } from './limits.js';
 import { readOutline, MAX_BYTES } from './outline.js';
+import { readSchool } from './school.js';
 import { validateProfile, validateCourse, validateItem, validateQuote, validateStudySession, validateAchievement, validateId } from './validate.js';
 import { getUserForLogin, getProfile, updateProfile, getRow, upsertRow, deleteRow, syncPage, bumpPasswordGen, saveSpotifyTokens, deleteSpotifyTokens } from './db.js';
 import * as spotify from './spotify.js';
@@ -149,8 +150,25 @@ async function postOutline({ request, env, url }) {
   }
 }
 
+/* Read a school's academic calendar the same way; it counts toward the same daily reads. */
+async function postSchool({ request, env, url }) {
+  const userId = await requireUser(request, env);
+  const bytes = await readBytes(request, MAX_BYTES);
+  if (!bytes.byteLength) throw new HttpError(400, { error: 'invalid', field: 'body' });
+  const today = DATE.test(url.searchParams.get('today') || '') ? url.searchParams.get('today') : new Date().toISOString().slice(0, 10);
+  const name = (url.searchParams.get('name') || 'calendar').slice(0, 120);
+  try {
+    return json(await readSchool(env.AI, { bytes, type: request.headers.get('content-type') || '', name, today, claim: () => limitOutline(env, userId) }));
+  } catch (e) {
+    if (e instanceof HttpError) throw e;
+    console.error('school calendar:', e?.message || e);
+    throw new HttpError(503, { error: 'outline_unavailable' });
+  }
+}
+
 const routes = [
   ['POST', /^\/api\/outline$/, postOutline],
+  ['POST', /^\/api\/school-calendar$/, postSchool],
   // Username + password. Accounts are created with `npm run user:add`.
   ['POST', /^\/api\/login$/, async ({ request, env, url }) => {
     await limitLogin(request, env);

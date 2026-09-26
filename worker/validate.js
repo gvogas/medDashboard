@@ -3,6 +3,7 @@
 // object containing only known fields, in API (camelCase) shape.
 
 import { HttpError } from './http.js';
+import { SCHOOL_KINDS, SCHOOL_LIMITS, validDate } from '../public/js/school.js';
 
 const COLOURS = ['#E4749B', '#8B5CC7', '#17B3AE', '#79B6EA', '#BCA6E6'];   /* the coat's */
 const COURSE_COLOURS = [...COLOURS, '#F08A6C', '#E8B33A', '#4FBF8B', '#8FAE86', '#4F74D9', '#B8457E', '#7D8A99'];
@@ -145,7 +146,38 @@ export function validateProfile(body) {
     studyFlow: body.studyFlow === undefined ? null : studyFlow(body.studyFlow),
     // Nor study prefs; the stored ones are kept (null here).
     studyPrefs: body.studyPrefs === undefined ? null : studyPrefs(body.studyPrefs),
+    // Nor a school calendar; {} removes it.
+    schoolCalendar: body.schoolCalendar === undefined ? null : schoolCalendar(body.schoolCalendar),
   };
+}
+
+/* The school's academic calendar: semesters and special days (public/js/school.js).
+   An empty object is none. */
+function schoolDate(v, field) {
+  if (!validDate(v)) fail(field);
+  return v;
+}
+export function schoolCalendar(v) {
+  obj(v, 'schoolCalendar');
+  if (!Object.keys(v).length) return {};
+  if (!Array.isArray(v.terms) || v.terms.length < 1 || v.terms.length > SCHOOL_LIMITS.terms) fail('schoolCalendar.terms');
+  if (!Array.isArray(v.days) || v.days.length > SCHOOL_LIMITS.days) fail('schoolCalendar.days');
+  const terms = v.terms.map((t, i) => {
+    const f = `schoolCalendar.terms[${i}]`;
+    obj(t, f);
+    const out = { name: str(t.name, f + '.name', SCHOOL_LIMITS.term, 1), start: schoolDate(t.start, f + '.start'), end: schoolDate(t.end, f + '.end') };
+    if (out.end < out.start) fail(f + '.end');
+    return out;
+  });
+  const days = v.days.map((d, i) => {
+    const f = `schoolCalendar.days[${i}]`;
+    obj(d, f);
+    const out = { from: schoolDate(d.from, f + '.from'), to: schoolDate(d.to ?? d.from, f + '.to'), kind: oneOf(d.kind, f + '.kind', SCHOOL_KINDS), label: str(d.label ?? '', f + '.label', SCHOOL_LIMITS.label) };
+    if (out.to < out.from) fail(f + '.to');
+    if (out.kind === 'swap') out.follows = int(d.follows, f + '.follows', 0, 6);
+    return out;
+  });
+  return { name: str(v.name ?? '', 'schoolCalendar.name', SCHOOL_LIMITS.name), terms, days };
 }
 
 /* The study goal and streak rules: minutes a day to aim for (0 = no goal), the least

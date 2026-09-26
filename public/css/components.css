@@ -680,3 +680,54 @@ kbd{display:inline-block;min-width:22px;padding:2px 6px;border:1px solid var(--l
   .icon-btn{min-width:40px;min-height:40px}
   .cl-item .x{opacity:1;padding:4px 8px}
 }
+
+/* ─── the school calendar: days off, the break, exams, markers, week numbers ─── */
+.cell.sd-off{background:repeating-linear-gradient(135deg,var(--cell-out) 0 6px,transparent 6px 12px)}
+.cell.sd-break{background:color-mix(in srgb,var(--good) 10%,var(--panel))}
+.cell.sd-exams{background:var(--amber-bg)}
+.cell.sd-none{background:var(--cell-out)}
+.cell.sd-none .dnum{color:var(--ink-3)}
+.sdtag{display:inline-flex;align-items:center;gap:4px;max-width:100%;font-size:9.5px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;border-radius:4px;padding:1px 5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:none}
+.sdtag.off{background:var(--chip-bg);color:var(--ink-2)}
+.sdtag.break{background:color-mix(in srgb,var(--good) 20%,var(--panel));color:var(--good)}
+.sdtag.exams{background:color-mix(in srgb,var(--warn) 22%,var(--panel));color:var(--amber-ink)}
+.sdtag.swap{background:var(--accent-soft);color:var(--accent-ink)}
+.sdtag.note{background:none;color:var(--ink-3);padding-left:0;text-transform:none;letter-spacing:0;font-weight:600}
+.sdtag.note::before{content:"";width:6px;height:6px;border-radius:50%;background:var(--ink-3);flex:none}
+.cell .gone{font-size:10px;color:var(--ink-3);font-style:italic;padding-left:2px}
+.ph .wkr{margin-left:10px;font-size:10.5px;letter-spacing:.04em;font-weight:700;color:var(--accent-ink);background:var(--accent-soft);border-radius:99px;padding:2px 9px;text-transform:none}
+.day .sdtag{font-size:9px}
+.day.sd-off,.day.sd-none{background:repeating-linear-gradient(135deg,var(--cell-out) 0 6px,transparent 6px 12px)}
+.day.sd-break{background:color-mix(in srgb,var(--good) 10%,var(--panel))}
+.day.sd-exams{background:var(--amber-bg)}
+
+/* Settings, and the drawer that checks a calendar before it is saved */
+.school-now{display:flex;flex-direction:column;gap:1px;font-size:12.5px;color:var(--ink-2)}
+.school-now b{font-size:13.5px;color:var(--ink)}
+.sdrawer .sc-name{font:inherit;font-size:16px;font-weight:700;border:1px solid transparent;border-radius:7px;padding:4px 7px;background:var(--panel-2);color:var(--ink);width:100%}
+.sc-term{border:1px solid var(--line-2);border-radius:10px;padding:9px 10px;display:grid;grid-template-columns:auto minmax(0,1fr);gap:6px 10px;align-items:center;font-size:12.5px}
+.sc-term.bad,.sc-day.bad{border-color:var(--red-line);background:var(--red-bg)}
+.sc-term .sc-row1{grid-column:1/-1;display:flex;gap:6px}
+.sc-term label{font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-3)}
+.sc-term .sum{grid-column:1/-1;font-size:11.5px;color:var(--ink-2)}
+.sdrawer input,.sdrawer select{font:inherit;font-size:12.5px;border:1px solid transparent;border-radius:6px;padding:3px 6px;background:var(--panel-2);color:var(--ink);min-width:0}
+.sdrawer input:hover,.sdrawer select:hover{border-color:var(--line)}
+.sc-term .nm{flex:1;font-weight:700;font-size:13.5px}
+.sc-dates{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+.sc-dates span{color:var(--ink-3)}
+.sc-semh{font-size:12px;font-weight:700;margin-top:6px}
+.sc-day{display:grid;grid-template-columns:128px minmax(0,1fr) 26px;gap:4px 8px;align-items:start;padding:7px 4px;border-top:1px solid var(--line-2);border-radius:6px}
+.sc-when{display:flex;flex-direction:column;gap:3px}
+.sc-when input{font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:11px}
+.sc-when input.same{opacity:.55}
+.sc-what{display:flex;flex-direction:column;gap:3px;min-width:0}
+.sc-kinds{display:flex;gap:4px;flex-wrap:wrap}
+.sc-kinds select{font-size:11px}
+.sc-day.k-off .sc-kinds select:first-child{color:var(--ink-2)}
+.sc-day.k-break .sc-kinds select:first-child{color:var(--good)}
+.sc-day.k-exams .sc-kinds select:first-child{color:var(--amber-ink)}
+.sc-day.k-swap .sc-kinds select:first-child{color:var(--accent-ink)}
+.sdrawer .x{border:0;background:none;color:var(--ink-3);border-radius:6px;width:26px;height:26px;padding:0}
+.sdrawer .x:hover{background:var(--line-2);color:var(--ink)}
+.sc-add{align-self:flex-start;border:1px dashed var(--line);background:none;border-radius:8px;padding:5px 11px;font-size:12px;font-weight:600;color:var(--ink-2)}
+.sdrawer .note{font-size:11.5px;color:var(--ink-2)}

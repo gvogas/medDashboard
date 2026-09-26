@@ -2,7 +2,10 @@ import { setHTML } from '../dom.js';
 // The page: header, sidebar, stats and whichever view is chosen.
 
 import { ui } from '../state.js';
-import { parse, addDays, monday, DOW, MON } from '../dates.js';
+import { parse, addDays, monday, iso, DOW, MON } from '../dates.js';
+import { schoolCal } from '../query.js';
+import { weekOf } from '../school.js';
+import { weekLabel } from './school-bits.js';
 import { $, keepFocus } from '../dom.js';
 import { renderSidebar } from './sidebar.js';
 import { renderStats } from './stats.js';
@@ -18,7 +21,9 @@ export function renderHeader() {
   if (ui.view === 'week') {
     const st = monday(a), en = addDays(st, 6);
     t.textContent = 'Week board';
-    s.textContent = DOW[st.getDay()] + ' ' + st.getDate() + ' ' + MON[st.getMonth()].slice(0, 3) + ' – ' + DOW[en.getDay()] + ' ' + en.getDate() + ' ' + MON[en.getMonth()].slice(0, 3) + ' ' + en.getFullYear();
+    const school = weekLabel(weekOf(schoolCal(), iso(st)));
+    s.textContent = DOW[st.getDay()] + ' ' + st.getDate() + ' ' + MON[st.getMonth()].slice(0, 3) + ' – ' + DOW[en.getDay()] + ' ' + en.getDate() + ' ' + MON[en.getMonth()].slice(0, 3) + ' ' + en.getFullYear()
+      + (school ? ' · ' + school : '');
   } else if (ui.view === 'month') {
     t.textContent = MON[a.getMonth()] + ' ' + a.getFullYear();
     s.textContent = '';

@@ -5,6 +5,7 @@ import { data, course, saveRows, saveProfile } from '../store.js';
 import { ui } from '../state.js';
 import { typeList, normalizeCourse, normalizeItem, classRoom } from '../model.js';
 import { DOW, today } from '../dates.js';
+import { schoolCal, termStart } from '../query.js';
 import { esc } from '../dom.js';
 import { parseIcs } from '../importers/ics.js';
 import { parseCsv } from '../importers/csv.js';
@@ -33,7 +34,7 @@ export function previewImport(text, name = '') {
 
 /** Open the preview for a course outline the Worker has read. */
 export function previewOutline(outline, name) {
-  const plan = planOutline(outline, data, data.profile?.termStart || '');
+  const plan = planOutline(outline, data, termStart() || '');
   resetDrawerState();
   ui.importPlan = { plan, name };
   renderImport();
@@ -47,7 +48,7 @@ export function renderImport() {
 
   let body = '<div class="dbody"><div class="imp-sum">' + esc(planSummary(plan)) + '</div>';
   const kept = plan.courses.find((c) => c.keep && c.isNew && (c.instructor || c.term));
-  if (kept || plan.termStart) body += '<div class="dnote">' + esc([kept?.instructor, kept?.term, plan.termStart && !data.profile?.termStart ? 'term start ' + shortDate(plan.termStart) : ''].filter(Boolean).join(' · ')) + '</div>';
+  if (kept || plan.termStart) body += '<div class="dnote">' + esc([kept?.instructor, kept?.term, plan.termStart && !termStart() ? 'term start ' + shortDate(plan.termStart) : ''].filter(Boolean).join(' · ')) + '</div>';
   if (plan.items.some((i) => i.week)) {
     body += '<div class="fields imp-week1"><label for="imp-week1">Week 1 starts</label><input id="imp-week1" type="date" data-imp-week1 value="' + esc(plan.week1 || '') + '"></div>'
       + '<div class="dnote">' + (plan.week1 ? 'Items given only as “Week N” are placed on the Monday of that week.' : 'This outline gives due dates as week numbers. Set the first day of week 1 to date them.') + '</div>';
@@ -140,7 +141,7 @@ export async function commitImport() {
   if (rows.length) await saveRows(rows);
   /* An outline that states when teaching starts sets the term start, if none is set yet. */
   const start = plan.week1 || plan.termStart;
-  if (start && data.profile && !data.profile.termStart) await saveProfile({ termStart: start });
+  if (start && data.profile && !data.profile.termStart && !schoolCal()) await saveProfile({ termStart: start });
   ui.importPlan = null;
   return 'Imported ' + classes + ' class' + (classes === 1 ? '' : 'es') + ' and ' + items + ' item' + (items === 1 ? '' : 's') + '.';
 }
@@ -163,7 +164,7 @@ export async function readOutlineFile(file) {
     if (isPdf) showBusy(file.name, 'Pulling the text out of the PDF…');
     const body = isPdf ? new Blob([await pdfText(file)], { type: 'text/plain' }) : file;
     showBusy(file.name, 'Reading the dates and grades with AI…');
-    const outline = await api.readOutline(body, { name: file.name, today: today(), termStart: data.profile?.termStart || '' });
+    const outline = await api.readOutline(body, { name: file.name, today: today(), termStart: termStart() || '' });
     ui.outlineBusy = false; hideBusy();
     previewOutline(outline, file.name);
   } catch (err) {
