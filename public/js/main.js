@@ -18,6 +18,7 @@ import { openItem, newItem, current, saveDraft, touch, touchSoon, flushTouch, re
 import { openKeys } from './views/keys.js';
 import { renderSessionDrawer, editSession, saveSessionDraft } from './views/drawer-session.js';
 import { achievementClick, editAchievement } from './views/drawer-achievement.js';
+import { leaderboardClick } from './views/leaderboard.js';
 import { schoolClick, editSchool, readSchoolFile } from './views/drawer-school.js';
 import { launch as fireworks } from './fireworks.js';
 import { openCourse, renderCourseDrawer, saveCourseDraft, leaveDrawer, onCourseInput } from './views/drawer-course.js';
@@ -150,6 +151,7 @@ async function onClick(e) {
   }
   if (await studyClick(e)) return;
   if (await achievementClick(e)) return;
+  if (await leaderboardClick(e)) return;
   if (await schoolClick(e)) return;
   if (e.target.closest('#menuBtn')) { setSide(!$('side').classList.contains('on')); return; }
   if (e.target.closest('#newBtn')) { newItem(ui.anchor); return; }

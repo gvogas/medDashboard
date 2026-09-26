@@ -15,7 +15,7 @@ const SHELL = [
   '/js/theme.js', '/js/session.js', '/js/sync-status.js', '/js/study-controller.js', '/js/keyboard.js', '/js/views/types-nav.js',
   '/js/views/spotify-data.js', '/js/views/spotify-commands.js', '/js/views/spotify-html.js', '/js/views/toast.js',
   '/js/achievements.js', '/js/sticker.js', '/js/school.js', '/js/vendor/pdfjs.mjs',
-  '/js/views/achievements.js', '/js/views/drawer-achievement.js', '/js/views/drawer-school.js', '/js/views/school-bits.js',
+  '/js/views/achievements.js', '/js/views/leaderboard.js', '/js/views/drawer-achievement.js', '/js/views/drawer-school.js', '/js/views/school-bits.js',
 ];
 
 self.addEventListener('install', (e) => {

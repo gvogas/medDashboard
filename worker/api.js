@@ -9,6 +9,7 @@ import { validateProfile, validateCourse, validateItem, validateQuote, validateS
 import { getUserForLogin, getProfile, updateProfile, getRow, upsertRow, deleteRow, syncPage, bumpPasswordGen, saveSpotifyTokens, deleteSpotifyTokens } from './db.js';
 import * as spotify from './spotify.js';
 import { feedState, renewFeed, stopFeed, serveFeed } from './calendar.js';
+import { leaderboard, setJoined } from './leaderboard.js';
 
 function revisionOf(request) {
   const raw = request.headers.get('if-match');
@@ -205,6 +206,15 @@ const routes = [
     return new Response(null, { status: 204 });
   }],
   ['GET', /^\/api\/calendar\/([^/]{1,64})\/([^/]{1,64})\.ics$/, ({ env, url, params: [userId, token] }) => serveFeed(env, url, userId, token)],
+
+  // The study leaderboard; `since` is the viewer's Monday 00:00 in epoch ms.
+  ['GET', /^\/api\/leaderboard$/, async ({ request, env, url }) =>
+    json(await leaderboard(env.DB, await requireUser(request, env), url.searchParams.get('since')))],
+  ['PUT', /^\/api\/leaderboard$/, async ({ request, env }) => {
+    const userId = await requireUser(request, env);
+    await setJoined(env.DB, userId, (await readJson(request)).joined);
+    return new Response(null, { status: 204 });
+  }],
 
   ['GET', ROW, readRow],
   ['PUT', ROW, putRow],

@@ -30,6 +30,8 @@ export const ui = {
   hist: { weekOffset: 0, range: 'week', monthOffset: 0, focusDay: null, undo: null },
   sessionDraft: null,      /* the Log study / Edit session drawer */
   achDraft: null,          /* the New / Edit achievement drawer */
+  lb: null,                /* the leaderboard from the server: {joined, week, all, at}, or loading/offline/error */
+  lbTab: 'week',           /* the leaderboard's This week / All-time switch */
   schoolDraft: null,       /* the school calendar review drawer */
   schoolBusy: false,       /* a school calendar is being read */
   schoolNote: null,        /* {text, error}: the last school calendar read, in Settings */

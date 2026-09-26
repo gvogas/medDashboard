@@ -160,6 +160,8 @@ export const api = {
   calendarFeed: () => request('GET', '/api/calendar'),
   calendarRenew: () => request('POST', '/api/calendar'),
   calendarStop: () => empty(request('DELETE', '/api/calendar')),
+  leaderboard: (since) => request('GET', `/api/leaderboard?since=${since}`),
+  leaderboardJoin: (joined) => empty(request('PUT', '/api/leaderboard', { joined })),
   readOutline: (file, { name, today, termStart }) => request('POST', '/api/outline?' + new URLSearchParams({ name, today, ...(termStart ? { termStart } : {}) }), file),
   readSchool: (file, { name, today }) => request('POST', '/api/school-calendar?' + new URLSearchParams({ name, today }), file),
   spotifyPlayer: () => request('GET', '/api/spotify/player'),

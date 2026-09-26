@@ -1,5 +1,5 @@
 // The study timer's views: the Study tab (start, your flow, and the history: streak,
-// goal, the week, achievements, the term's heatmap and every session), the
+// goal, the week, achievements, the leaderboard, the term's heatmap and every session), the
 // focus screen's clock side, and the corner clock. The run itself is focus.js.
 
 import { setHTML, esc, $ } from '../dom.js';
@@ -12,6 +12,7 @@ import { termStart } from '../query.js';
 import * as focus from '../focus.js';
 import { clockHtml, setClocks } from './flipclock.js';
 import { achievementsHtml } from './achievements.js';
+import { leaderboardHtml } from './leaderboard.js';
 import { achievements, ownAchievements } from '../achievements.js';
 
 const MIN = 60_000;
@@ -102,6 +103,7 @@ export function renderStudy() {
     + '<div class="study-col">' + start + flowHtml(f) + '</div>'
     + '<div class="study-col">' + weekHtml(all, p) + '</div>'
     + achievementsHtml(achievements(all, data.items, p, today()), ownAchievements(data.achievements, all, data.items, data.courses))
+    + leaderboardHtml()
     + '<div class="st-wide">' + termHtml(all, byDay, p) + sessionsHtml(all) + '</div>'
     + '</div>';
 }
