@@ -7,7 +7,7 @@ beforeEach(async () => {
   cache = { match: vi.fn(), put: vi.fn(async () => {}), addAll: vi.fn(async () => {}) };
   vi.stubGlobal('self', { addEventListener: (name, fn) => { events[name] = fn; }, clients: { claim: vi.fn() } });
   vi.stubGlobal('location', { origin: 'https://rounds.test' });
-  vi.stubGlobal('caches', { open: vi.fn(async () => cache), keys: vi.fn(async () => ['rounds-shell-v8', 'rounds-shell-v9', 'another-app']), delete: vi.fn() });
+  vi.stubGlobal('caches', { open: vi.fn(async () => cache), keys: vi.fn(async () => ['rounds-shell-v9', 'rounds-shell-v10', 'another-app']), delete: vi.fn() });
   vi.stubGlobal('fetch', vi.fn(async () => new Response('asset')));
   await import('../public/sw.js');
 });
@@ -67,6 +67,6 @@ describe('service worker cache policy', () => {
     let done;
     events.activate({ waitUntil: (promise) => { done = promise; } });
     await done;
-    expect(caches.delete.mock.calls).toEqual([['rounds-shell-v8']]);
+    expect(caches.delete.mock.calls).toEqual([['rounds-shell-v9']]);
   });
 });

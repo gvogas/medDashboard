@@ -2,7 +2,7 @@
 // offline and a deploy is picked up on the next load. /api is never cached.
 
 const CACHE_PREFIX = 'rounds-shell-';
-const CACHE = CACHE_PREFIX + 'v9';
+const CACHE = CACHE_PREFIX + 'v10';
 const SHELL = [
   '/', '/index.html', '/manifest.webmanifest', '/icon.svg',
   '/css/tokens.css', '/css/layout.css', '/css/components.css', '/css/study.css',
@@ -11,7 +11,7 @@ const SHELL = [
   '/js/timer.js', '/js/focus.js', '/js/grades.js', '/js/reviews.js', '/js/pdftext.js', '/js/prep.js', '/js/importers/ics.js', '/js/importers/csv.js', '/js/importers/plan.js',
   '/js/views/render.js', '/js/views/bits.js', '/js/views/sidebar.js', '/js/views/stats.js', '/js/views/week.js',
   '/js/views/month.js', '/js/views/table.js', '/js/views/drawer-base.js', '/js/views/drawer-item.js',
-  '/js/views/drawer-course.js', '/js/views/drawer-settings.js', '/js/views/signin.js', '/js/views/player.js', '/js/views/spotify-view.js', '/js/views/drawer-import.js', '/js/views/study.js', '/js/views/flipclock.js', '/js/views/keys.js', '/js/views/drawer-session.js', '/js/history.js',
+  '/js/views/drawer-course.js', '/js/views/drawer-settings.js', '/js/views/signin.js', '/js/views/player.js', '/js/views/spotify-view.js', '/js/views/drawer-import.js', '/js/views/study.js', '/js/views/flipclock.js', '/js/views/keys.js', '/js/views/drawer-session.js', '/js/history.js', '/js/views/busy.js',
 ];
 
 self.addEventListener('install', (e) => {

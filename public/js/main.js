@@ -40,6 +40,7 @@ import { parseTime } from './timepicker.js';
 import { readSetting, writeSetting, dueReviews, nextReview } from './reviews.js';
 import { fillTopics } from './prep.js';
 import { pdfText } from './pdftext.js';
+import { showBusy, hideBusy } from './views/busy.js';
 import { previewImport, previewOutline, renderImport, editImport, commitImport } from './views/drawer-import.js';
 import * as focus from './focus.js';
 import { paint as paintStudy, clearRun, flow as studyFlow } from './views/study.js';
@@ -925,12 +926,14 @@ async function readOutlineFile(file) {
   try {
     /* PDFs are read here: the Worker's converter drops the text of many tables. */
     const isPdf = file.type === 'application/pdf' || /\.pdf$/i.test(file.name);
+    if (isPdf) showBusy(file.name, 'Pulling the text out of the PDF…');
     const body = isPdf ? new Blob([await pdfText(file)], { type: 'text/plain' }) : file;
+    showBusy(file.name, 'Reading the dates and grades with AI…');
     const outline = await api.readOutline(body, { name: file.name, today: today(), termStart: data.profile?.termStart || '' });
-    ui.outlineBusy = false;
+    ui.outlineBusy = false; hideBusy();
     previewOutline(outline, file.name);
   } catch (err) {
-    ui.outlineBusy = false;
+    ui.outlineBusy = false; hideBusy();
     const code = err instanceof ApiError ? err.body?.error : null;
     ui.importNote = { text: OUTLINE_ERRORS[code] || (err instanceof ApiError ? 'The outline could not be read (' + (code || err.status) + ').' : 'You seem to be offline. Reading an outline needs a connection.'), error: true };
     if (ui.settings) renderSettings();
