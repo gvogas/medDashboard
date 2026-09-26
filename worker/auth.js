@@ -48,7 +48,7 @@ async function readSession(token, secret, now = Date.now()) {
   return sameString(expected, sig) ? { userId, gen: Number(gen), expiresAt: Number(expiresAt) } : null;
 }
 
-function sameString(a, b) {
+export function sameString(a, b) {
   if (a.length !== b.length) return false;
   let diff = 0;
   for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);

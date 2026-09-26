@@ -3,7 +3,7 @@ import { HttpError } from './http.js';
 import { spotifyFetch } from './spotify/client.js';
 import { bodyOf, unavailable } from './spotify/transport.js';
 import { compactTrack, compactAlbum, compactArtist, compactPlaylist, nextPageOffset, page } from './spotify/mapping.js';
-export { configured, authorizeUrl, SCOPES, encryptToken, decryptToken, sealToken, openToken, exchangeCode, refreshAccessToken, freshAccessToken } from './spotify/tokens.js';
+export { configured, authorizeUrl, encryptToken, decryptToken, sealToken, openToken, exchangeCode, freshAccessToken } from './spotify/tokens.js';
 const ACTIONS = {
   play: ['PUT', '/me/player/play'],
   pause: ['PUT', '/me/player/pause'],
@@ -107,7 +107,7 @@ const PLAYLIST_LIMIT = 5;
  */
 async function readFailure(res, what, forbidden = null) {
   if (res.status === 400) return new HttpError(400, { error: 'spotify_rejected' });
-  const message = String((await bodyOf(res)).error?.message || '');
+  const message = String((await bodyOf(res).catch(() => ({}))).error?.message || '');
   if (res.status === 403 && /scope/i.test(message)) return new HttpError(403, { error: 'reconnect_needed' });
   if (res.status === 403 && forbidden) return new HttpError(403, { error: forbidden });
   console.error('spotify refused', what, res.status, message);

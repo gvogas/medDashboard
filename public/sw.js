@@ -2,7 +2,7 @@
 // offline and a deploy is picked up on the next load. /api is never cached.
 
 const CACHE_PREFIX = 'rounds-shell-';
-const CACHE = CACHE_PREFIX + 'v10';
+const CACHE = CACHE_PREFIX + 'v11';
 const SHELL = [
   '/', '/index.html', '/manifest.webmanifest', '/icon.svg',
   '/css/tokens.css', '/css/layout.css', '/css/components.css', '/css/study.css',
@@ -13,7 +13,9 @@ const SHELL = [
   '/js/views/month.js', '/js/views/table.js', '/js/views/drawer-base.js', '/js/views/drawer-item.js',
   '/js/views/drawer-course.js', '/js/views/drawer-settings.js', '/js/views/signin.js', '/js/views/player.js', '/js/views/spotify-view.js', '/js/views/drawer-import.js', '/js/views/study.js', '/js/views/flipclock.js', '/js/views/keys.js', '/js/views/drawer-session.js', '/js/history.js', '/js/views/busy.js',
   '/js/theme.js', '/js/session.js', '/js/sync-status.js', '/js/study-controller.js', '/js/keyboard.js', '/js/views/types-nav.js',
-  '/js/views/spotify-data.js', '/js/views/spotify-commands.js', '/js/views/spotify-html.js',
+  '/js/views/spotify-data.js', '/js/views/spotify-commands.js', '/js/views/spotify-html.js', '/js/views/toast.js',
+  '/js/achievements.js', '/js/sticker.js', '/js/school.js', '/js/vendor/pdfjs.mjs',
+  '/js/views/achievements.js', '/js/views/drawer-achievement.js', '/js/views/drawer-school.js', '/js/views/school-bits.js',
 ];
 
 self.addEventListener('install', (e) => {

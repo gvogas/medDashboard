@@ -1,5 +1,5 @@
 // Atomic IndexedDB transactions shared by every tab of this account.
-const STORES = ['courses', 'items', 'quotes', 'study_sessions', 'achievements', 'meta', 'pending', 'conflicts'];
+export const STORES = ['courses', 'items', 'quotes', 'study_sessions', 'achievements', 'meta', 'pending', 'conflicts'];
 const result = (request) => new Promise((resolve, reject) => {
   request.onsuccess = () => resolve(request.result);
   request.onerror = () => reject(request.error);

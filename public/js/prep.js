@@ -2,7 +2,8 @@
 // the remaining topics need to go.
 
 import { parse, addDays, iso, diffDays } from './dates.js';
-import { lectureDates, shortDate } from './reviews.js';
+import { lectureDates } from './reviews.js';
+import { shortDate } from './dates.js';
 import { uid } from './model.js';
 
 const MAX_STEPS = 50;

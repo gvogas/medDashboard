@@ -6,7 +6,7 @@ import { setHTML, esc, $ } from '../dom.js';
 import { ui } from '../state.js';
 import { data, course, item } from '../store.js';
 import { isOpen, normalizeFlow, normalizePrefs, FLOW_PRESETS } from '../model.js';
-import { addDays, iso, today, DOW, MON, parse } from '../dates.js';
+import { addDays, iso, today, DOW, MON, parse, shortDate, dayMonth } from '../dates.js';
 import { dayOf, minutesByDay, week, month, streak, heatRange, level } from '../history.js';
 import { termStart } from '../query.js';
 import * as focus from '../focus.js';
@@ -134,10 +134,8 @@ export const prefs = () => normalizePrefs(data.profile?.studyPrefs);
 /** Sessions shown: every one but a delete that can still be undone. */
 const shown = () => data.study_sessions.filter((s) => s.id !== ui.hist.undo?.session.id);
 const hm = (ms) => { const d = new Date(ms); return String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0'); };
-const dayLabel = (d) => { const x = parse(d); return DOW[x.getDay()] + ' ' + x.getDate() + ' ' + MON[x.getMonth()].slice(0, 3); };
-const range = (a, b) => { const x = parse(a), y = parse(b);
-  return x.getMonth() === y.getMonth() ? x.getDate() + ' – ' + y.getDate() + ' ' + MON[y.getMonth()].slice(0, 3)
-    : x.getDate() + ' ' + MON[x.getMonth()].slice(0, 3) + ' – ' + y.getDate() + ' ' + MON[y.getMonth()].slice(0, 3); };
+/** "14 – 20 Sep", or "28 Sep – 4 Oct" across two months. */
+const range = (a, b) => (a.slice(0, 7) === b.slice(0, 7) ? parse(a).getDate() : dayMonth(a)) + ' – ' + dayMonth(b);
 
 const FLAME = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true"><path d="M12 3c1 3.5 5 5.5 5 10a5 5 0 0 1-10 0c0-2.2 1-3.6 2.2-4.8.3 1.6 1 2.6 2.3 3.1C11 8.5 11.3 5.5 12 3z"/></svg>';
 const CAL = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><rect x="4" y="5" width="16" height="15" rx="2"/><path d="M4 10h16M9 3v4M15 3v4"/></svg>';
@@ -146,7 +144,7 @@ const PLUS = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-
 const NEXT = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 3l5 5-5 5"/></svg>';
 
 /** A ring filling toward the goal: `part` of `whole`, drawn with SVG attributes (no inline style). */
-export function ringSvg(part, whole, cls = 'ring') {
+function ringSvg(part, whole, cls = 'ring') {
   const c = 2 * Math.PI * 34, f = whole ? Math.min(1, part / whole) : 0;
   return '<svg class="' + cls + '" viewBox="0 0 80 80" aria-hidden="true"><circle cx="40" cy="40" r="34" class="track"/>'
     + '<circle cx="40" cy="40" r="34" class="fill" stroke-dasharray="' + (c * f).toFixed(1) + ' ' + c.toFixed(1) + '" transform="rotate(-90 40 40)"/></svg>';
@@ -170,7 +168,7 @@ function tilesHtml(all, byDay, p) {
         : '<button type="button" class="linkish" data-hist-goal>Set a daily goal</button>') + '</span></div>'
     + '<div class="panel st-tile"><span class="ic term">' + CAL + '</span><span class="tx"><span class="lab">' + (hr.since ? 'This term' : 'Last 12 weeks') + '</span>'
       + '<b>' + duration(termMin) + '</b>'
-      + '<span class="sub">' + term.length + ' session' + (term.length === 1 ? '' : 's') + (hr.since ? ' since ' + dayLabel(hr.since).slice(4) : '') + '</span></span></div>'
+      + '<span class="sub">' + term.length + ' session' + (term.length === 1 ? '' : 's') + (hr.since ? ' since ' + dayMonth(hr.since) : '') + '</span></span></div>'
     + '</div>';
 }
 
@@ -185,7 +183,7 @@ function weekHtml(all, p) {
   const now = today(), anchor = iso(addDays(parse(now), 7 * ui.hist.weekOffset));
   const w = week(all, anchor), prev = week(all, iso(addDays(parse(anchor), -7)));
   const max = Math.max(60, p.goal ? p.goal * 1.25 : 0, ...w.days.map((d) => d.total));
-  const bars = w.days.map((d) => '<span class="dbar' + (d.date > now ? ' future' : '') + '" title="' + esc(dayLabel(d.date) + ' · ' + duration(d.total)) + '">'
+  const bars = w.days.map((d) => '<span class="dbar' + (d.date > now ? ' future' : '') + '" title="' + esc(shortDate(d.date) + ' · ' + duration(d.total)) + '">'
     + d.byCourse.map(([id, m]) => '<i data-swatch="' + colourOf(id) + '" data-height="' + (m / max * 100).toFixed(1) + '"></i>').join('') + '</span>').join('');
   const labels = w.days.map((d) => '<span' + (d.date === now ? ' class="today"' : '') + '><b>' + DOW[parse(d.date).getDay()] + ' ' + parse(d.date).getDate() + '</b>'
     + (d.total ? duration(d.total) : '') + '</span>').join('');
@@ -216,17 +214,17 @@ function termHtml(all, byDay, p) {
     for (let i = 0; i < 7; i++) {
       const d = iso(addDays(mon, i)), m = byDay.get(d) || 0;
       cells += d > now ? '<span class="hc fut"></span>'
-        : '<span class="hc l' + level(m, p.goal) + (d === now ? ' now' : '') + (d === ui.hist.focusDay ? ' pick' : '') + '" data-hist-day="' + d + '" title="' + esc(dayLabel(d) + ' · ' + (m ? duration(m) : 'no study')) + '"></span>';
+        : '<span class="hc l' + level(m, p.goal) + (d === now ? ' now' : '') + (d === ui.hist.focusDay ? ' pick' : '') + '" data-hist-day="' + d + '" title="' + esc(shortDate(d) + ' · ' + (m ? duration(m) : 'no study')) + '"></span>';
     }
   }
   const term = all.filter((s) => { const d = dayOf(s); return d >= hr.from && d <= now; });
   const per = [...term.reduce((m, s) => m.set(s.courseId || '', (m.get(s.courseId || '') || 0) + s.studyMinutes), new Map())].sort((a, b) => b[1] - a[1]);
   const days = [...byDay].filter(([d, m]) => d >= hr.from && d <= now && m).length;
   return '<section class="panel st-term">'
-    + '<div class="st-head"><h3>' + (hr.since ? 'Term' : 'Last 12 weeks') + '</h3><span class="rng">' + dayLabel(hr.from).slice(4) + ' – ' + dayLabel(hr.to).slice(4) + '</span></div>'
+    + '<div class="st-head"><h3>' + (hr.since ? 'Term' : 'Last 12 weeks') + '</h3><span class="rng">' + dayMonth(hr.from) + ' – ' + dayMonth(hr.to) + '</span></div>'
     + '<p class="sr-only">Studied on ' + days + ' days in this range. The months view below lists every session.</p>'
     + '<div class="hmap" aria-hidden="true"><span class="dn"><i>Mon</i><i></i><i>Wed</i><i></i><i>Fri</i><i></i><i>Sun</i></span>'
-    + '<span class="hgrid"><span class="hmon" data-cols="' + hr.weeks + '">' + months + '</span><span class="hcells">' + cells + '</span></span></div>'
+    + '<span class="hgrid"><span class="hmon">' + months + '</span><span class="hcells">' + cells + '</span></span></div>'
     + '<div class="hleg"><span>Click a day to see its sessions</span><span class="sp"></span><span>Less</span>'
     + [0, 1, 2, 3, 4].map((l) => '<span class="hc l' + l + '"></span>').join('') + '<span>More</span></div>'
     + (per.length ? '<h3 class="sub-h">By course</h3><div class="crs">' + courseBars(per) + '</div>' : '')
@@ -266,14 +264,14 @@ function monthHtml(m, at) {
     if (date > now) { cells += '<span class="mc fut"><span class="n">' + d + '</span></span>'; continue; }
     const mins = g?.total || 0, split = g ? [...g.sessions.reduce((acc, s) => acc.set(s.courseId || '', (acc.get(s.courseId || '') || 0) + s.studyMinutes), new Map())] : [];
     cells += '<button type="button" class="mc l' + level(mins, p.goal) + (date === now ? ' now' : '') + (date === pick ? ' pick' : '') + (p.goal && mins >= p.goal ? ' met' : '') + '"'
-      + ' data-hist-pick="' + date + '" aria-pressed="' + (date === pick) + '" aria-label="' + esc(dayLabel(date) + ', ' + (mins ? duration(mins) : 'no study')) + '">'
+      + ' data-hist-pick="' + date + '" aria-pressed="' + (date === pick) + '" aria-label="' + esc(shortDate(date) + ', ' + (mins ? duration(mins) : 'no study')) + '">'
       + '<span class="n">' + d + '</span>' + (mins ? '<span class="t mono">' + duration(mins) + '</span>' : '')
       + (split.length ? '<span class="mbar">' + split.map(([id, v]) => '<i data-swatch="' + colourOf(id) + '" data-flex="' + v + '"></i>').join('') + '</span>' : '')
       + '</button>';
   }
   const g = pick ? byDate.get(pick) : null;
   const detail = !pick ? ''
-    : '<div class="mday" id="hday-' + pick + '"><div class="mdh"><b' + (pick === now ? ' class="today"' : '') + '>' + dayLabel(pick) + (pick === now ? ' · today' : '') + '</b>'
+    : '<div class="mday" id="hday-' + pick + '"><div class="mdh"><b' + (pick === now ? ' class="today"' : '') + '>' + shortDate(pick) + (pick === now ? ' · today' : '') + '</b>'
       + '<span class="mono">' + (g ? duration(g.total) + ' · ' + g.sessions.length + ' session' + (g.sessions.length === 1 ? '' : 's') : 'No study') + '</span></div>'
       + (g ? g.sessions.map((s) => rowHtml(s, false)).join('') : '<p class="hint">Nothing logged this day. <button type="button" class="linkish" data-hist-log>Log study</button></p>') + '</div>';
   const stat = (v, l) => '<span class="ms"><b class="mono">' + v + '</b><span>' + l + '</span></span>';
@@ -310,7 +308,7 @@ function sessionsHtml(all) {
     + '<span class="sp"></span>' + head
     + '<button type="button" class="btn ghost logbtn" data-hist-log>' + PLUS + 'Log study</button></div>'
     + '<div class="sess">' + body + '</div>'
-    + (u ? '<div class="undo" role="status"><span>Deleted <b>' + esc(courseCode(u.session.courseId)) + ' · ' + duration(u.session.studyMinutes) + '</b> from ' + dayLabel(dayOf(u.session)) + '.</span>'
+    + (u ? '<div class="undo" role="status"><span>Deleted <b>' + esc(courseCode(u.session.courseId)) + ' · ' + duration(u.session.studyMinutes) + '</b> from ' + shortDate(dayOf(u.session)) + '.</span>'
       + '<button type="button" data-hist-undo>Undo</button></div>' : '')
     + '</section>';
 }

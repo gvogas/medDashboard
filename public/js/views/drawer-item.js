@@ -4,7 +4,7 @@ import { typeList, statusesFor, baseOf, tmeta, statusLabel, isOverdue, isOpen, i
 import { parse, diffDays, today, hhmm, DOW } from '../dates.js';
 import { activeCourses } from '../query.js';
 import { esc, autoGrow } from '../dom.js';
-import { CHECK_SVG } from './bits.js';
+import { CHECK_SVG, confirmFoot } from './bits.js';
 import { GRADABLE } from '../grades.js';
 import { prepPace, prepLabel } from '../prep.js';
 import { drawer, showDrawer, hideDrawer, resetDrawerState, closeDrawer } from './drawer-base.js';
@@ -81,7 +81,7 @@ export async function flushTouch() {
 
 export function renderItemDrawer(focusTitle) {
   const it = current();
-  if (!it) { hideDrawer(); return; }
+  if (!it) { resetDrawerState(); hideDrawer(); return; }   /* gone, e.g. deleted on another device */
   const TODAY = today();
   const isNew = !!ui.draft, m = tmeta(it.type), sts = statusesFor(it.type);
   const typeOpts = typeList(ui.bg, data.items).filter((t) => t.id === it.type || !t.hidden)
@@ -105,7 +105,7 @@ export function renderItemDrawer(focusTitle) {
   const canFill = !isNew && isTest(it.type) && c && (c.meetings || []).some((x) => x.kind === 'Lecture');
 
   const head = '<div class="dhead" data-accent="' + m.color + '">'
-    + '<span class="kind">' + (isNew ? 'New ' + m.label.toLowerCase() : esc(m.label)) + '</span>'
+    + '<span class="kind">' + esc(isNew ? 'New ' + m.label.toLowerCase() : m.label) + '</span>'
     + (isNew ? '' : (isOverdue(it) ? '<span class="chip overdue">Overdue</span>' : '<span class="chip st-' + it.status + '">' + esc(statusLabel(it)) + '</span>'))
     + '<span data-layout="f7add123" class="mono">' + esc(countdown) + '</span>'
     + (prep ? '<span class="chip prep' + (prep.hot ? ' hot' : '') + '" title="Topics done · topics a day to finish before the exam">' + esc(prepLabel(prep)) + '</span>' : '')
@@ -159,9 +159,7 @@ export function renderItemDrawer(focusTitle) {
       + '<button class="btn ghost" type="button" data-act="cancel">Cancel</button>'
       + '<button class="btn" type="button" data-act="save"' + (it.title.trim() ? '' : ' disabled') + '>Save item</button></div>';
   } else if (ui.confirm === 'item') {
-    foot = '<div class="dfoot"><span class="hint" role="status">Delete “' + esc(it.title || 'this item') + '”?</span>'
-      + '<button class="btn ghost" type="button" data-act="keep">Keep</button>'
-      + '<button class="btn danger" type="button" data-act="delete-yes">Delete</button></div>';
+    foot = confirmFoot('Delete “' + (it.title || 'this item') + '”?', 'delete-yes');
   } else {
     foot = '<div class="dfoot"><span class="hint">Edits save as you type</span>'
       + '<button class="btn ghost" type="button" data-act="delete">Delete</button>'

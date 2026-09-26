@@ -33,3 +33,8 @@ export function dur(a, b) {
   const x = a.split(':'), y = b.split(':');
   return Math.max(0, y[0] * 60 + +y[1] - (x[0] * 60 + +x[1])) / 60;
 }
+
+/** "14 Sep" */
+export const dayMonth = (d) => { const x = parse(d); return x.getDate() + ' ' + MON[x.getMonth()].slice(0, 3); };
+/** "Mon 14 Sep" */
+export const shortDate = (d) => DOW[parse(d).getDay()] + ' ' + dayMonth(d);

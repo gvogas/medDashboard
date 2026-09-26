@@ -4,14 +4,15 @@
 import { data, course, saveStudySession } from '../store.js';
 import { ui } from '../state.js';
 import { isOpen, uid } from '../model.js';
-import { iso, today, parse } from '../dates.js';
+import { iso, today, shortDate } from '../dates.js';
 import { esc, $, setHTML } from '../dom.js';
 import { parseTime } from '../timepicker.js';
 import { minutesByDay, streak } from '../history.js';
 import { drawer, showDrawer, resetDrawerState, closeDrawer } from './drawer-base.js';
+import { confirmFoot } from './bits.js';
 import { duration, prefs } from './study.js';
 
-export const QUICK = [15, 25, 30, 45, 60, 90];
+const QUICK = [15, 25, 30, 45, 60, 90];
 const pad = (n) => String(n).padStart(2, '0');
 
 /** Open the drawer: a session to edit by id, else a new one for now, on `courseId` when given. */
@@ -36,7 +37,7 @@ export function openSession(id, courseId) {
 }
 
 /** When the typed day and time say the session started, in ms. */
-export function startedAtOf(d) {
+function startedAtOf(d) {
   const [y, m, day] = d.date.split('-').map(Number), [h, min] = (parseTime(d.time) || '09:00').split(':').map(Number);
   return new Date(y, m - 1, day, h, min).getTime();
 }
@@ -60,7 +61,7 @@ function impact(d) {
   const was = streak(before, today(), p);
   const parts = [];
   if (d.date === today() && p.goal) parts.push('Today goes to ' + duration(after.get(d.date)) + ' of ' + duration(p.goal) + '.');
-  else parts.push(parse(d.date).toDateString().slice(0, 10) + ' goes to ' + duration(after.get(d.date)) + '.');
+  else parts.push(shortDate(d.date) + ' goes to ' + duration(after.get(d.date)) + '.');
   if (st.current > was.current) parts.push('Your streak goes to ' + st.current + ' day' + (st.current === 1 ? '' : 's') + '.');
   else if (st.current) parts.push('Your ' + st.current + '-day streak is safe.');
   return parts.join(' ');
@@ -91,9 +92,7 @@ export function renderSessionDrawer(focus) {
     + '<p class="sd-hint" id="sdHint" role="status">' + esc(impact(d)) + '</p>'
     + '</div>';
   const foot = ui.confirm === 'session'
-    ? '<div class="dfoot"><span class="hint">Delete this session?</span>'
-      + '<button class="btn ghost" type="button" data-act="keep">Keep</button>'
-      + '<button class="btn danger" type="button" data-act="session-delete-yes">Delete</button></div>'
+    ? confirmFoot('Delete this session?', 'session-delete-yes')
     : '<div class="dfoot"><span class="hint">' + (valid(d) ? (d.isNew ? 'Ready to log' : 'Unsaved changes') : 'Not ready yet') + '</span>'
       + (d.isNew ? '' : '<button class="btn ghost" type="button" data-act="session-delete">Delete</button>')
       + '<button class="btn ghost" type="button" data-act="cancel">Cancel</button>'

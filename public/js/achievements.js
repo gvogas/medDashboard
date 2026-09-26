@@ -4,7 +4,7 @@
 // along a locked one is. Nothing is stored; a badge follows the data it came from.
 
 import { iso, parse, addDays } from './dates.js';
-import { minutesByDay } from './history.js';
+import { minutesByDay, runs } from './history.js';
 import { isComplete, isTest } from './model.js';
 
 export const GROUPS = [
@@ -38,25 +38,6 @@ function crossedOn(days, min) {
   let sum = 0;
   for (const [d, m] of days) { sum += m; if (sum >= min) return d; }
   return null;
-}
-
-/**
- * The streak walked forward, day by day, with the same rules as history.streak(): a day
- * counts from dayMin, rest days never break it, today never breaks it. {longest, reached}
- * where reached(n) is the first day a run got to n days.
- */
-function runs(byDay, todayIso, { dayMin = 15, rest = [] }) {
-  const reached = new Map();
-  let first = null, longest = 0, run = 0;
-  for (const d of byDay.keys()) if (!first || d < first) first = d;
-  if (first) {
-    for (let day = first; day <= todayIso; day = iso(addDays(parse(day), 1))) {
-      if ((byDay.get(day) || 0) >= dayMin) run++;
-      else if (!rest.includes(parse(day).getDay()) && day !== todayIso) run = 0;
-      if (run > longest) { longest = run; if (!reached.has(run)) reached.set(run, day); }
-    }
-  }
-  return { longest, reached: (n) => reached.get(n) || null };
 }
 
 /** The nth item finished (1-based) in the order they were done: its day, or null. */

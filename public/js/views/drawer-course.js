@@ -5,6 +5,7 @@ import { dur, DOW } from '../dates.js';
 import { esc, autoGrow, setHTML } from '../dom.js';
 import { courseGrade, neededLabel, targetsFor, ungraded } from '../grades.js';
 import { drawer, showDrawer, resetDrawerState, closeDrawer } from './drawer-base.js';
+import { confirmFoot } from './bits.js';
 import { parseTime } from '../timepicker.js';
 
 export function openCourse(id) {
@@ -18,7 +19,7 @@ export function openCourse(id) {
 }
 
 /** The draft holds edits not yet saved: it differs from the stored course, or, new, has anything in it. */
-export function courseChanged() {
+function courseChanged() {
   const c = ui.courseDraft;
   if (!c) return false;
   if (ui.courseMode === 'new') return !!(c.name.trim() || c.code.trim() || (c.instructor || '').trim() || (c.meetings || []).length);
@@ -74,13 +75,9 @@ export function renderCourseDrawer(focus) {
 
   let foot;
   if (ui.confirm === 'discard') {
-    foot = '<div class="dfoot"><span class="hint" role="status">Discard your changes to ' + esc(c.name.trim() || 'this course') + '?</span>'
-      + '<button class="btn ghost" type="button" data-act="keep">Keep editing</button>'
-      + '<button class="btn danger" type="button" data-act="cancel">Discard</button></div>';
+    foot = confirmFoot('Discard your changes to ' + (c.name.trim() || 'this course') + '?', 'cancel', 'Discard', 'Keep editing');
   } else if (ui.confirm === 'course') {
-    foot = '<div class="dfoot"><span class="hint" role="status">Delete ' + esc(c.name || 'this course') + '?</span>'
-      + '<button class="btn ghost" type="button" data-act="keep">Keep</button>'
-      + '<button class="btn danger" type="button" data-act="course-delete-yes">Delete</button></div>';
+    foot = confirmFoot('Delete ' + (c.name || 'this course') + '?', 'course-delete-yes');
   } else {
     foot = '<div class="dfoot"><span class="hint">' + (c.name.trim() ? (isNew ? 'Ready to save' : 'Unsaved changes') : 'Give it a name to save') + '</span>'
       + (isNew ? '' : '<button class="btn ghost" type="button" data-act="course-delete">Delete</button>')
@@ -141,7 +138,7 @@ function gradeOut(c, items) {
 }
 
 /** Redraw the numbers only, so the target and what-if fields keep focus while typing. */
-export function refreshGrades() {
+function refreshGrades() {
   const out = drawer.querySelector('#gradeOut'), c = ui.courseDraft;
   if (out && c) setHTML(out, gradeOut(c, data.items.filter((it) => it.courseId === c.id)));
 }
@@ -150,8 +147,7 @@ export async function saveCourseDraft() {
   const c = ui.courseDraft;
   if (!c || !c.name.trim()) return;
   if (!c.code.trim()) c.code = c.name.trim().slice(0, 4).toUpperCase();
-  for (const m of c.meetings) if (m.end <= m.start) m.end = m.start < '23:00' ? String(+m.start.slice(0, 2) + 1).padStart(2, '0') + m.start.slice(2) : '23:59';
-  await saveCourse(c);
+  await saveCourse(c);   /* normalizeCourse gives a class that ends before it starts an hour */
   closeDrawer();
 }
 

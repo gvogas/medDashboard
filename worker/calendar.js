@@ -14,6 +14,7 @@
 
 import { HttpError } from './http.js';
 import { claimLimit, rateLimited } from './limits.js';
+import { sameString } from './auth.js';
 import { normalizeSchool, classWeekday, dayInfo, weekdayOf } from '../public/js/school.js';
 
 const FEED_LIMIT = 60;                     /* fetches an hour per link; calendars poll a few times a day */
@@ -39,14 +40,7 @@ export async function feedToken(userId, gen, secret) {
   return [...new Uint8Array(sig)].slice(0, 16).map((b) => b.toString(16).padStart(2, '0')).join('');
 }
 
-function sameString(a, b) {
-  if (a.length !== b.length) return false;
-  let diff = 0;
-  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
-  return diff === 0;
-}
-
-export async function feedUrl(origin, userId, gen, secret) {
+async function feedUrl(origin, userId, gen, secret) {
   return `${origin}/api/calendar/${encodeURIComponent(userId)}/${await feedToken(userId, gen, secret)}.ics`;
 }
 

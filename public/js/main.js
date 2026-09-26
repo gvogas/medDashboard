@@ -9,19 +9,19 @@ import { ui, rememberUi } from './state.js';
 import { uid, isOpen, tmeta, useTypePrefs, typeList, TYPE_COLOURS } from './model.js';
 import { typeOn, schoolCal, termStart } from './query.js';
 import { iso, parse, addDays, today } from './dates.js';
-import { $ } from './dom.js';
+import { $, restoreFocus } from './dom.js';
 import { render, renderView, renderHeader } from './views/render.js';
 import { renderSidebar } from './views/sidebar.js';
 import { renderStats, renderQuote, nextQuote } from './views/stats.js';
-import { drawer, scrim, closeDrawer, drawerHasFocus, beforeClose, refind, setSide, narrow } from './views/drawer-base.js';
+import { drawer, scrim, closeDrawer, drawerHasFocus, beforeClose, setSide, narrow } from './views/drawer-base.js';
 import { openItem, newItem, current, saveDraft, touch, touchSoon, flushTouch, renderItemDrawer, noteStartBase, onItemInput, celebrate, setStatus, chainReview } from './views/drawer-item.js';
 import { openKeys } from './views/keys.js';
-import { renderSessionDrawer, refreshSessionDrawer, editSession, saveSessionDraft } from './views/drawer-session.js';
+import { renderSessionDrawer, editSession, saveSessionDraft } from './views/drawer-session.js';
 import { achievementClick, editAchievement } from './views/drawer-achievement.js';
 import { schoolClick, editSchool, readSchoolFile } from './views/drawer-school.js';
 import { launch as fireworks } from './fireworks.js';
 import { openCourse, renderCourseDrawer, saveCourseDraft, leaveDrawer, onCourseInput } from './views/drawer-course.js';
-import { toast, hideToast } from './views/toast.js';
+import { toast } from './views/toast.js';
 import { openSettings, renderSettings, applyCoat, refreshSpotifyGroup, feedAction, addQuote } from './views/drawer-settings.js';
 import * as spotify from './spotify.js';
 import * as web from './web-player.js';
@@ -29,7 +29,7 @@ import { renderPlayer } from './views/player.js';
 import * as spotView from './views/spotify-view.js';
 import { readSetting, writeSetting } from './reviews.js';
 import { fillTopics } from './prep.js';
-import { previewImport, renderImport, editImport, commitImport, readOutlineFile } from './views/drawer-import.js';
+import { previewImport, editImport, commitImport, readOutlineFile } from './views/drawer-import.js';
 import * as focus from './focus.js';
 import { addType, editTypes, onGripDown, renameType } from './views/types-nav.js';
 import { setTheme, setBg, followSystem } from './theme.js';
@@ -42,7 +42,7 @@ beforeClose.add(flushTouch);
 document.addEventListener('focusin', noteStartBase);
 document.addEventListener('focusout', (e) => { if (drawer.contains(e.target)) flushTouch(); });
 window.addEventListener('pagehide', flushTouch);
-document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') { flushTouch(); commitUndo(); finishDelete(); } });
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') { flushTouch(); commitUndo(); finishDelete().catch(() => {}); } });
 
 /* ═════════ theme ═════════ */
 useTypePrefs(() => data.profile?.types || []);
@@ -101,13 +101,12 @@ focus.onTick(onFocusTick);
 
 /* ═════════ events ═════════ */
 /* Most clicks redraw what was clicked. Focus then goes back to the same control in the
-   new markup, so a keyboard user is not dropped to the top of the page. */
+   new markup, or to the drawer itself when that control is gone (a question answered),
+   so a keyboard user is not dropped to the top of the page. */
 document.addEventListener('click', async (e) => {
-  const was = document.activeElement;
+  const was = document.activeElement, inDrawer = drawer.contains(was);
   await onClick(e);
-  if (was && was !== document.body && !was.isConnected && (!document.activeElement || document.activeElement === document.body)) {
-    refind(was)?.focus({ preventScroll: true });
-  }
+  restoreFocus(was, inDrawer && drawer.classList.contains('on') ? drawer : null);
 });
 async function onClick(e) {
   let el;
@@ -284,9 +283,8 @@ async function onClick(e) {
       try { note = { text: await commitImport() }; }
       catch (error) { note = { text: 'The import stopped part-way: ' + error.message, error: true }; }
       render();
-      openSettings('importGrp');
       ui.importNote = note;
-      renderSettings();
+      openSettings('importGrp');
     }
     else if (act === 'export-data') {
       await store.reload();

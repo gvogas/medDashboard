@@ -60,10 +60,11 @@ export function deleteWithUndo(id) {
 }
 export function commitUndo() {
   const u = ui.hist.undo;
-  if (!u) return;
+  if (!u) return Promise.resolve();
   clearTimeout(u.timer);
   ui.hist.undo = null;
-  store.deleteStudySession(u.session.id).then(() => { if (ui.view === 'study') renderView(); });
+  /* a failed save already shows its own toast */
+  return store.deleteStudySession(u.session.id).then(() => { if (ui.view === 'study') renderView(); }, () => {});
 }
 function undoDelete() {
   const u = ui.hist.undo;

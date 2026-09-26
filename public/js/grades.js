@@ -3,7 +3,7 @@
 // with a weight counts as graded 0.
 
 export const GRADABLE = ['exam', 'quiz', 'assignment', 'lab', 'project'];
-export const TARGETS = [50, 60, 70];
+const TARGETS = [50, 60, 70];
 
 const weightOf = (it) => (typeof it.weight === 'number' && it.weight > 0 ? it.weight : 0);
 const guessOf = (g, id) => (typeof g[id] === 'number' && g[id] >= 0 && g[id] <= 100 ? g[id] : null);

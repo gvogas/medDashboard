@@ -1,4 +1,4 @@
-// Shape rules, mirroring migrations/0001_init.sql, so a bad request gets a 400
+// Shape rules, mirroring migrations/0001_schema.sql and later, so a bad request gets a 400
 // naming the field instead of a raw SQLite error. Each validator returns a clean
 // object containing only known fields, in API (camelCase) shape.
 
@@ -7,13 +7,13 @@ import { SCHOOL_KINDS, SCHOOL_LIMITS, validDate } from '../public/js/school.js';
 
 const COLOURS = ['#E4749B', '#8B5CC7', '#17B3AE', '#79B6EA', '#BCA6E6'];   /* the coat's */
 const COURSE_COLOURS = [...COLOURS, '#F08A6C', '#E8B33A', '#4FBF8B', '#8FAE86', '#4F74D9', '#B8457E', '#7D8A99'];
-export const TYPES = ['exam', 'quiz', 'assignment', 'lab', 'tutoring', 'office', 'task', 'project'];
+const TYPES = ['exam', 'quiz', 'assignment', 'lab', 'tutoring', 'office', 'task', 'project'];
 const STATUSES = ['todo', 'submitted', 'graded', 'done', 'missed'];
 // Custom item types: an id, and the swatches and behaviours a type can have.
 const CUSTOM_TYPE = /^c-[a-z0-9]{1,12}$/;
-export const TYPE_COLOURS = ['#C0392B', '#B77505', '#1E628F', '#5A46A8', '#4C7370', '#0E7C74', '#C2571A', '#B03A7A', '#3F7A2E', '#6B5B45'];
+const TYPE_COLOURS = ['#C0392B', '#B77505', '#1E628F', '#5A46A8', '#4C7370', '#0E7C74', '#C2571A', '#B03A7A', '#3F7A2E', '#6B5B45'];
 const TYPE_KINDS = ['todo', 'event', 'graded'];
-export const KINDS = ['Lecture', 'Lab', 'Seminar', 'Tutorial', 'PBL', 'Clinical'];
+const KINDS = ['Lecture', 'Lab', 'Seminar', 'Tutorial', 'PBL', 'Clinical'];
 const THEMES = ['light', 'dark', 'system'];
 const BACKGROUNDS = ['med', 'cs'];
 const DATE = /^[0-9]{4}-[0-9]{2}-[0-9]{2}$/;
@@ -199,7 +199,7 @@ export function studyPrefs(v) {
 
 /* The study timer's flow: Study and Break steps repeated for a number of rounds. */
 const STEP_KINDS = ['study', 'break'];
-export function studyFlow(v) {
+function studyFlow(v) {
   obj(v, 'studyFlow');
   if (!Array.isArray(v.steps) || v.steps.length < 1 || v.steps.length > 12) fail('studyFlow.steps');
   const steps = v.steps.map((s, i) => {
@@ -302,7 +302,7 @@ export function validateQuote(body) {
 /* Your own achievement: a sticker picture as a small data: URL, a name, and what earns
    it, hours on a course (1–1000) or a grade on one exam or quiz (1–100). */
 const STICKER = /^data:image\/(?:webp|png|jpeg);base64,[A-Za-z0-9+/]+={0,2}$/;
-export const STICKER_MAX = 90_000;
+const STICKER_MAX = 90_000;
 export function validateAchievement(body) {
   obj(body, 'body');
   const sticker = str(body.sticker, 'sticker', STICKER_MAX, 1);

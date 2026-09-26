@@ -1,14 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import { achievements, nextUp } from '../public/js/achievements.js';
 import { normalizePrefs } from '../public/js/model.js';
+import { noon } from './helpers.js';
 
 /* A session at a local day and hour, so the tests hold in any time zone. */
 const at = (day, minutes, hour = 10) => {
   const [y, m, d] = day.split('-').map(Number);
   return { id: day + '-' + hour, startedAt: new Date(y, m - 1, d, hour).getTime(), studyMinutes: minutes, courseId: 'bio' };
 };
-/* A local timestamp at noon on a day. */
-const noon = (day) => { const [y, m, d] = day.split('-').map(Number); return new Date(y, m - 1, d, 12).getTime(); };
 const it_ = (id, type, status, day, extra = {}) => ({ id, type, status, date: day, completedAt: noon(day), grade: null, ...extra });
 
 const TODAY = '2026-09-25';

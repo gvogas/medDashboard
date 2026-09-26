@@ -10,13 +10,13 @@ import { render } from './render.js';
 import { renderSidebar } from './sidebar.js';
 
 /* The Open items editor: every change saves the whole list to the profile. */
-export async function saveTypes(list) {
+async function saveTypes(list) {
   await store.saveProfile({ types: typePrefsFrom(list) });
   render();
   renderSidebar(true);
 }
 
-export function typesOnScreen() {
+function typesOnScreen() {
   const list = typeList(ui.bg, data.items);
   document.querySelectorAll('#typeNav [data-typelabel]').forEach((box) => {
     const t = list.find((x) => x.id === box.dataset.typelabel), label = box.value.trim().slice(0, 24);

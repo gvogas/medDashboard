@@ -3,7 +3,7 @@ import { getSpotifyTokens, replaceSpotifyTokens, discardSpotifyTokens } from '..
 import { upstreamFetch, unavailable, bodyOf } from './transport.js';
 const ACCOUNTS = 'https://accounts.spotify.com';
 const REFRESH_WITHIN_MS = 60000;
-export const SCOPES = 'user-read-playback-state user-modify-playback-state playlist-read-private playlist-read-collaborative user-library-read streaming user-read-email user-read-private user-read-recently-played';
+const SCOPES = 'user-read-playback-state user-modify-playback-state playlist-read-private playlist-read-collaborative user-library-read streaming user-read-email user-read-private user-read-recently-played';
 export function configured(env) {
   return !!(env.SPOTIFY_CLIENT_ID && env.SPOTIFY_CLIENT_SECRET);
 }
@@ -106,7 +106,7 @@ async function tokenRequest(env, params) {
 const fromTokenBody = (body, now) => ({
   accessToken: body.access_token,
   refreshToken: body.refresh_token,
-  expiresAt: now + (Number(body.expires_in) || 3600) * 1000,
+  expiresAt: now + Number(body.expires_in) * 1000,
 });
 
 export async function exchangeCode(env, code, redirectUri, now = Date.now()) {
@@ -115,13 +115,13 @@ export async function exchangeCode(env, code, redirectUri, now = Date.now()) {
   return fromTokenBody(body, now);
 }
 
-export async function refreshAccessToken(env, refreshToken, now = Date.now()) {
+async function refreshAccessToken(env, refreshToken, now = Date.now()) {
   return fromTokenBody(await tokenRequest(env, { grant_type: 'refresh_token', refresh_token: refreshToken }), now);
 }
 
 // ── the user's access token ─────────────────────────────────────────────────
 
-const notConnected = () => new HttpError(409, { error: 'not_connected' });
+export const notConnected = () => new HttpError(409, { error: 'not_connected' });
 
 /** Refresh, store, and return `{ accessToken, expiresAt, row }` (row as now stored); drops the row if Spotify revoked it. */
 export async function refreshFor(env, userId, previous) {
@@ -151,7 +151,6 @@ export async function refreshFor(env, userId, previous) {
 }
 
 async function refreshLocked(env, userId, row) {
-  if (!row) throw notConnected();
   const refreshToken = await openToken(env, row.refresh_token);
   if (!refreshToken) { await discardSpotifyTokens(env.DB, userId, row); throw notConnected(); }
   let fresh;

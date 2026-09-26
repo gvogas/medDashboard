@@ -5,10 +5,11 @@ import { data, course, item, saveAchievement, deleteAchievement } from '../store
 import { ui } from '../state.js';
 import { isTest, uid, ACHIEVEMENT_LIMIT } from '../model.js';
 import { esc, $ } from '../dom.js';
-import { parse, MON } from '../dates.js';
+import { dayMonth } from '../dates.js';
 import { ownAchievements } from '../achievements.js';
 import { readPicture, drawSticker, dragCrop, stickerData } from '../sticker.js';
 import { drawer, showDrawer, resetDrawerState, closeDrawer } from './drawer-base.js';
+import { confirmFoot } from './bits.js';
 import { toast } from './toast.js';
 import { deleteLater } from '../study-controller.js';
 
@@ -16,7 +17,7 @@ const SHOWN = 208;            /* the crop preview, in CSS pixels */
 let pic = null;               /* the picture being cropped; never stored */
 
 /** Open the drawer: an achievement to edit by id, else a new one. */
-export function openAchievement(id) {
+function openAchievement(id) {
   resetDrawerState();
   const a = id ? data.achievements.find((x) => x.id === id) : null;
   if (!a && data.achievements.length >= ACHIEVEMENT_LIMIT) { toast('You have ' + ACHIEVEMENT_LIMIT + ' achievements, the most there can be.'); return; }
@@ -28,7 +29,6 @@ export function openAchievement(id) {
 }
 
 const tests = () => data.items.filter((it) => isTest(it.type)).sort((a, b) => a.date.localeCompare(b.date));
-const short = (d) => { const x = parse(d); return x.getDate() + ' ' + MON[x.getMonth()].slice(0, 3); };
 
 function valid(d) {
   const top = d.rule === 'grade' ? 100 : 1000;
@@ -40,7 +40,7 @@ function valid(d) {
 function standing(d) {
   if (!(d.rule === 'hours' ? d.courseId : d.itemId)) return d.rule === 'hours' ? 'Pick a course.' : 'Pick an exam or quiz.';
   const [b] = ownAchievements([{ ...d, name: d.name || 'This' }], data.study_sessions, data.items, data.courses);
-  return b.earned ? 'Already earned, on ' + short(b.earnedOn) + '. It goes on straight away.' : b.progress + ' so far.';
+  return b.earned ? 'Already earned, on ' + dayMonth(b.earnedOn) + '. It goes on straight away.' : b.progress + ' so far.';
 }
 
 function stickerSection(d) {
@@ -75,7 +75,7 @@ function ruleFields(d) {
     + '<label for="ad-target">Grade</label><span class="pair"><input id="ad-target" type="number" inputmode="numeric" min="1" max="100" data-ach="target" value="' + d.target + '"><span>or more</span></span>';
 }
 
-export function renderAchievementDrawer(focus) {
+function renderAchievementDrawer(focus) {
   const d = ui.achDraft;
   if (!d) return;
   const head = '<div class="dhead" data-accent="#E8B33A">'
@@ -93,9 +93,7 @@ export function renderAchievementDrawer(focus) {
     + '<p class="sd-hint" id="adHint" role="status">' + esc(standing(d)) + '</p>'
     + '</div>';
   const foot = ui.confirm === 'achievement'
-    ? '<div class="dfoot"><span class="hint">Delete this achievement?</span>'
-      + '<button class="btn ghost" type="button" data-act="keep">Keep</button>'
-      + '<button class="btn danger" type="button" data-act="ach-delete-yes">Delete</button></div>'
+    ? confirmFoot('Delete this achievement?', 'ach-delete-yes')
     : '<div class="dfoot"><span class="hint">' + footHint(d) + '</span>'
       + (d.isNew ? '' : '<button class="btn ghost" type="button" data-act="ach-delete">Delete</button>')
       + '<button class="btn ghost" type="button" data-act="cancel">Cancel</button>'

@@ -4,7 +4,7 @@
 // tilted on when earned and grey until then. The badges come from achievements.js.
 
 import { esc } from '../dom.js';
-import { parse, MON } from '../dates.js';
+import { dayMonth } from '../dates.js';
 import { GROUPS, nextUp } from '../achievements.js';
 import { ACHIEVEMENT_LIMIT } from '../model.js';
 
@@ -19,7 +19,6 @@ const ICONS = {
 };
 const CHECK = '<span class="ok" aria-hidden="true"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8.5l2.5 2.5L12 5.5"/></svg></span>';
 
-const short = (d) => { const x = parse(d); return x.getDate() + ' ' + MON[x.getMonth()].slice(0, 3); };
 
 /* the progress ring round a locked medal, drawn with SVG attributes (no inline style) */
 function ring(frac) {
@@ -29,11 +28,11 @@ function ring(frac) {
     + (c * frac).toFixed(1) + ' ' + c.toFixed(1) + '" transform="rotate(-90 30 30)"/></svg>';
 }
 
-const medal = (b, withRing = true) => '<span class="md">' + (b.earned ? CHECK : withRing ? ring(b.frac) : '') + esc(b.tier) + '</span>';
+const medal = (b) => '<span class="md">' + (b.earned ? CHECK : ring(b.frac)) + esc(b.tier) + '</span>';
 
 function badgeHtml(b) {
-  const sub = b.earned ? short(b.earnedOn) : b.group === 'grades' ? b.progress : Math.floor(b.frac * 100) + '%';
-  const label = b.name + ': ' + b.blurb + '. ' + (b.earned ? 'Earned ' + short(b.earnedOn) : b.progress);
+  const sub = b.earned ? dayMonth(b.earnedOn) : b.group === 'grades' ? b.progress : Math.floor(b.frac * 100) + '%';
+  const label = b.name + ': ' + b.blurb + '. ' + (b.earned ? 'Earned ' + dayMonth(b.earnedOn) : b.progress);
   return '<li class="bd ' + (b.earned ? 'on' : 'off') + '" id="ach-' + esc(b.id) + '" title="' + esc(label) + '">'
     + medal(b) + '<span class="nm">' + esc(b.name) + '</span><span class="dt">' + esc(sub) + '</span></li>';
 }
@@ -41,9 +40,9 @@ function badgeHtml(b) {
 /* One of your own: its sticker, tilted a little (by its id, so it stays put) when earned. */
 function ownHtml(b) {
   const tilt = [...b.ownId].reduce((t, ch) => t + ch.charCodeAt(0), 0) % 5;
-  const sub = b.earned ? short(b.earnedOn) : b.progress;
+  const sub = b.earned ? dayMonth(b.earnedOn) : b.progress;
   return '<li class="bd own ' + (b.earned ? 'on' : 'off') + '" id="ach-' + esc(b.id) + '">'
-    + '<button type="button" class="stk-btn" data-ach-edit="' + esc(b.ownId) + '" aria-label="' + esc(b.name + ', ' + (b.earned ? 'earned ' + short(b.earnedOn) : b.progress) + '. Edit') + '">'
+    + '<button type="button" class="stk-btn" data-ach-edit="' + esc(b.ownId) + '" aria-label="' + esc(b.name + ', ' + (b.earned ? 'earned ' + dayMonth(b.earnedOn) : b.progress) + '. Edit') + '">'
     + (b.sticker ? '<img class="stk t' + tilt + '" src="' + esc(b.sticker) + '" alt="" width="64" height="64" decoding="async">' : '<span class="md"></span>')
     + '<span class="nm">' + esc(b.name) + '</span><span class="dt">' + esc(sub) + '</span></button></li>';
 }

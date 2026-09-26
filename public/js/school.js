@@ -12,9 +12,9 @@ const DATE = /^\d{4}-\d{2}-\d{2}$/;
 const ms = (d) => Date.UTC(+d.slice(0, 4), +d.slice(5, 7) - 1, +d.slice(8, 10));
 const iso = (t) => new Date(t).toISOString().slice(0, 10);
 export const validDate = (d) => typeof d === 'string' && DATE.test(d) && iso(ms(d)) === d;
-export const plusDays = (d, n) => iso(ms(d) + n * DAY);
+const plusDays = (d, n) => iso(ms(d) + n * DAY);
 export const weekdayOf = (d) => new Date(ms(d)).getUTCDay();
-export const mondayOf = (d) => plusDays(d, -((weekdayOf(d) + 6) % 7));
+const mondayOf = (d) => plusDays(d, -((weekdayOf(d) + 6) % 7));
 const cut = (v, n) => (typeof v === 'string' ? v.replace(/\s+/g, ' ').trim().slice(0, n) : '');
 
 /** A stored or read calendar made safe: {name, terms, days}, or null when it has no semester. */
@@ -38,7 +38,7 @@ export function normalizeSchool(raw) {
 }
 
 /** The semester whose classes run on `date`, or null. */
-export const termOf = (cal, date) => cal?.terms.find((t) => t.start <= date && date <= t.end) || null;
+const termOf = (cal, date) => cal?.terms.find((t) => t.start <= date && date <= t.end) || null;
 
 /**
  * What kind of school day `date` is: {kind, label, follows, notes, term}. kind is

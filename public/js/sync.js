@@ -121,7 +121,7 @@ async function pullAll(cycle) {
   await store.applyServerProfile(profile);
   if (!active(cycle)) return false;
   if (complete) status.lastPull = Date.now();
-  pulled();
+  Promise.resolve().then(pulled).catch(() => {});   /* a failed save shows its own toast */
   return complete;
 }
 export async function syncNow() {

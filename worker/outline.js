@@ -19,12 +19,12 @@ export const MAX_CHARS = 48_000;          /* about 12k tokens of outline */
 const MAX_TOKENS = 6000;            /* a reasoning model: its thinking counts too */
 
 const KINDS = ['Lecture', 'Lab', 'Seminar', 'Tutorial', 'PBL', 'Clinical'];
-const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+export const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const TYPES = ['exam', 'quiz', 'assignment', 'lab', 'project', 'task'];
 const TEXT_TYPES = /^text\/(plain|markdown|csv)\b/i;
 
 /* The shape asked for in the prompt; gpt-oss answers in JSON text rather than JSON mode. */
-export const SCHEMA = {
+const SCHEMA = {
   type: 'object',
   properties: {
     code: { type: 'string' },
@@ -80,7 +80,7 @@ export const SCHEMA = {
   required: ['code', 'name', 'classes', 'officeHours', 'assessments'],
 };
 
-export function prompt(text, today, termStart) {
+function prompt(text, today, termStart) {
   return [
     {
       role: 'system',
@@ -107,7 +107,7 @@ export function prompt(text, today, termStart) {
   ];
 }
 
-const dayIndex = (d) => DAYS.indexOf(String(d || '').slice(0, 3).replace(/^./, (c) => c.toUpperCase()));
+export const dayIndex = (d) => DAYS.indexOf(String(d || '').slice(0, 3).replace(/^./, (c) => c.toUpperCase()));
 const clip = (v, n) => (typeof v === 'string' ? v.replace(/\s+/g, ' ').trim().slice(0, n) : '');
 
 /** "9:00", "0900", "2pm", "14.30" → "HH:MM", or '' */
@@ -129,15 +129,21 @@ function cleanDate(v) {
   return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === s ? s : '';
 }
 
-/** Whatever the model returned, made safe and bounded. */
-export function cleanOutline(raw) {
+/** The model's answer as an object, or null: gpt-oss answers in JSON text, sometimes wrapped. */
+export function modelJson(raw) {
   let o = raw;
   if (o && typeof o === 'object' && Array.isArray(o.choices)) o = o.choices[0]?.message?.content;
   if (typeof o === 'string') {
     const m = o.match(/\{[\s\S]*\}/);
     try { o = m ? JSON.parse(m[0]) : null; } catch { o = null; }
   }
-  if (!o || typeof o !== 'object') throw new HttpError(502, { error: 'outline_unreadable' });
+  return o && typeof o === 'object' ? o : null;
+}
+
+/** Whatever the model returned, made safe and bounded. */
+export function cleanOutline(raw) {
+  const o = modelJson(raw);
+  if (!o) throw new HttpError(502, { error: 'outline_unreadable' });
   /* Codes are at most 8 characters: "CHEM 271" → CHEM271, "420-521-VA" → 420521VA. */
   let code = clip(o.code, 24).toUpperCase().replace(/[^A-Z0-9-]/g, '');
   if (code.length > 8) code = code.replace(/-/g, '');
@@ -184,22 +190,27 @@ export async function outlineText(ai, bytes, type, name) {
 }
 
 /**
- * `claim` runs just before the model does: only an outline that reaches the model uses
+ * A document's text put to the model with `messages(text)`: {answer, truncated}.
+ * `claim` runs just before the model does: only a document that reaches the model uses
  * one of the day's attempts, not a file that could not be converted or has no text.
  */
-export async function readOutline(ai, { bytes, type, name, today, termStart, claim }) {
+export async function askModel(ai, { bytes, type, name, claim }, messages) {
   let text = (await outlineText(ai, bytes, type, name)).trim();
   if (text.length < 40) throw new HttpError(422, { error: 'outline_empty' });
   const truncated = text.length > MAX_CHARS;
   if (truncated) text = text.slice(0, MAX_CHARS);
   if (claim) await claim();
-  let out;
   try {
-    out = await ai.run(MODEL, { messages: prompt(text, today, termStart), max_tokens: MAX_TOKENS, temperature: 0 });
+    const out = await ai.run(MODEL, { messages: messages(text), max_tokens: MAX_TOKENS, temperature: 0 });
+    return { answer: out?.response ?? out, truncated };
   } catch (e) {
     /* 4006: the account's free daily neurons are spent; it resets at 00:00 UTC. */
     if (/\b4006\b|daily free allocation/i.test(e?.message || '')) throw new HttpError(429, { error: 'outline_quota' });
     throw e;
   }
-  return { ...cleanOutline(out?.response ?? out), truncated };
+}
+
+export async function readOutline(ai, { today, termStart, ...doc }) {
+  const { answer, truncated } = await askModel(ai, doc, (text) => prompt(text, today, termStart));
+  return { ...cleanOutline(answer), truncated };
 }

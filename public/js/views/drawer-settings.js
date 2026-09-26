@@ -131,10 +131,10 @@ function accountFlag() {
 }
 
 function tabStrip() {
-  return '<div class="seg settabs" role="tablist" aria-label="Settings sections">'
+  return '<div class="seg settabs" role="group" aria-label="Settings sections">'
     + TABS.map(([id, label]) =>
-        '<button type="button" role="tab" data-settab="' + id + '"' + (id === 'account' ? ' id="setTabAccount"' : '')
-          + ' aria-pressed="' + (ui.settingsTab === id) + '" aria-selected="' + (ui.settingsTab === id) + '">'
+        '<button type="button" data-settab="' + id + '"' + (id === 'account' ? ' id="setTabAccount"' : '')
+          + ' aria-pressed="' + (ui.settingsTab === id) + '">'
           + label + (id === 'account' ? accountFlag() : '') + '</button>').join('')
     + '</div>';
 }
@@ -256,13 +256,13 @@ function feedGroup() {
 }
 
 /** Redraw just the feed group, when its state changes while Settings is open. */
-export function refreshFeedGroup() {
+function refreshFeedGroup() {
   const g = $('feedGrp');
   if (g) setHTML(g, feedGroup());
 }
 
 /** Ask the server whether the feed is on; the Study tab calls this the first time it opens. */
-export async function loadFeed() {
+async function loadFeed() {
   ui.feed = { loading: true };
   try { ui.feed = { ...(await api.calendarFeed()) }; }
   catch { ui.feed = { on: false, error: 'Could not check the calendar feed. Try again when you are online.' }; }
@@ -327,7 +327,7 @@ export function renderSettings() {
     + tabStrip();
 
   const tab = ui.settingsTab;
-  const body = '<div class="dbody" role="tabpanel">'
+  const body = '<div class="dbody">'
     + (tab === 'you' ? youTab(p, coat)
       : tab === 'study' ? studyTab()
       : tab === 'spotify' ? '<div class="setgrp" id="spotifyGrp" tabindex="-1">' + spotifyGroup() + '</div>'

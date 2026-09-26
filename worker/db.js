@@ -30,7 +30,7 @@ export async function getUserForLogin(db, username) {
 
 /** Invalidate every session of this user; returns the new generation. */
 export async function bumpPasswordGen(db, userId) {
-  return (await db.prepare('UPDATE users SET pw_gen = pw_gen + 1 WHERE id = ? RETURNING pw_gen').bind(userId).first())?.pw_gen;
+  await db.prepare('UPDATE users SET pw_gen = pw_gen + 1 WHERE id = ?').bind(userId).run();
 }
 
 export async function getProfile(db, userId) {
@@ -102,7 +102,7 @@ const TABLES = {
 };
 
 /* Live achievements an account may hold; each carries its sticker picture. */
-export const ACHIEVEMENT_LIMIT = 30;
+const ACHIEVEMENT_LIMIT = 30;
 
 function rowToApi(table, r) {
   const t = TABLES[table];

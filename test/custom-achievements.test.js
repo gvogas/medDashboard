@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { SELF } from 'cloudflare:test';
-import { signIn, BASE } from './helpers.js';
+import { signIn, BASE, feed, noon } from './helpers.js';
 import { validateAchievement } from '../worker/validate.js';
 import { ownAchievements } from '../public/js/achievements.js';
 import { normalizeAchievement } from '../public/js/model.js';
@@ -10,15 +10,7 @@ const PNG = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJA
 const hours = (over = {}) => ({ name: '20 hours on Neuro', sticker: PNG, rule: 'hours', courseId: 'neuro', itemId: null, target: 20, ...over });
 const grade = (over = {}) => ({ name: 'ANAT midterm 85+', sticker: PNG, rule: 'grade', courseId: null, itemId: 'mid', target: 85, ...over });
 
-async function feed(api) {
-  const out = [];
-  for (let cursor = 0, more = true; more;) {
-    const page = await (await api(`/api/sync?v=2&cursor=${cursor}`)).json();
-    for (const { kind, row } of page.changes) if (kind === 'achievements') out.push(row);
-    ({ cursor, more } = page);
-  }
-  return out;
-}
+const rowsOf = async (api) => (await feed(api)).achievements;
 
 describe('your own achievements: the API', () => {
   it('saves one with its sticker, and the change feed carries it', async () => {
@@ -26,9 +18,9 @@ describe('your own achievements: the API', () => {
     const res = await api('/api/achievements/a1', { method: 'PUT', body: hours() });
     expect(res.status).toBe(200);
     expect(await res.json()).toMatchObject({ id: 'a1', ...hours(), deletedAt: null, revision: expect.any(Number) });
-    expect(await feed(api)).toEqual([expect.objectContaining({ id: 'a1', sticker: PNG, target: 20 })]);
+    expect(await rowsOf(api)).toEqual([expect.objectContaining({ id: 'a1', sticker: PNG, target: 20 })]);
     expect((await api('/api/achievements/a1', { method: 'DELETE' })).status).toBe(204);
-    expect(await feed(api)).toEqual([expect.objectContaining({ id: 'a1', deletedAt: expect.any(Number) })]);
+    expect(await rowsOf(api)).toEqual([expect.objectContaining({ id: 'a1', deletedAt: expect.any(Number) })]);
   });
 
   it('keeps each sticker to the account that made it', async () => {
@@ -37,7 +29,7 @@ describe('your own achievements: the API', () => {
     const a = await signIn(), b = await signIn();
     await a('/api/achievements/mine', { method: 'PUT', body: grade() });
     expect((await b('/api/achievements/mine')).status).toBe(404);
-    expect(await feed(b)).toEqual([]);
+    expect(await rowsOf(b)).toEqual([]);
   });
 
   it('refuses a bad shape and names the field', async () => {
@@ -83,7 +75,6 @@ const at = (day, minutes, courseId) => {
   const [y, m, d] = day.split('-').map(Number);
   return { id: day + courseId, startedAt: new Date(y, m - 1, d, 10).getTime(), studyMinutes: minutes, courseId };
 };
-const noon = (day) => { const [y, m, d] = day.split('-').map(Number); return new Date(y, m - 1, d, 12).getTime(); };
 const courses = [{ id: 'neuro' }, { id: 'anat' }];
 
 describe('your own achievements: earned or not', () => {

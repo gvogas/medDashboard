@@ -6,10 +6,10 @@
 // `through`, the last lecture date already handled. Ids are derived from the lecture, so
 // two devices that both generate a step write the same row.
 
-import { parse, addDays, iso, diffDays, DOW, MON } from './dates.js';
+import { parse, addDays, iso, diffDays, shortDate } from './dates.js';
 import { classWeekday } from './school.js';
 
-export const STEPS = 4;
+const STEPS = 4;
 const GAP = { 1: 2, 2: 4, 3: 14 };          /* days from finishing step n to step n + 1 */
 const KEY = 'rounds.reviews';
 const ID = /^rv[0-9a-z]{7}([1-4])$/;
@@ -72,11 +72,6 @@ export function reviewStep(it) {
   return m && /^Review \d\/\d · /.test(it.title || '') ? +m[1] : 0;
 }
 
-/** "Mon 14 Sep" */
-export function shortDate(date) {
-  const d = parse(date);
-  return DOW[d.getDay()] + ' ' + d.getDate() + ' ' + MON[d.getMonth()].slice(0, 3);
-}
 
 function row(id, step, title, courseId, date) {
   return { id, type: 'task', title: 'Review ' + step + '/' + STEPS + ' · ' + title, courseId, date, status: 'todo' };

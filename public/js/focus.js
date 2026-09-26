@@ -16,7 +16,6 @@ export const onTick = (fn) => listeners.add(fn);
 const emit = (event) => { const s = read(); for (const fn of listeners) fn(s, event); };
 
 export const active = () => !!run;
-export const current = () => run;
 export function read(now = Date.now()) {
   return run ? { ...timer.read(run, now), courseId: run.courseId, itemId: run.itemId, flow: run.flow } : null;
 }
@@ -41,7 +40,7 @@ function ensureTicking() {
 function tick() {
   if (!run) return;
   const s = timer.read(run);
-  if (s.done) { finish(); return; }
+  if (s.done) { finish().catch(() => {}); return; }
   const key = s.round + ':' + s.index;
   if (key !== lastStep) {
     lastStep = key;

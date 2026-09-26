@@ -1,12 +1,11 @@
 // The database is authoritative; memory is a render cache, never the shared queue.
-import { openDb, deleteDb } from './db.js';
+import { openDb, deleteDb, STORES as stores } from './db.js';
 import { normalizeItem, normalizeCourse, normalizeQuote, normalizeStudySession, normalizeAchievement, normalizeFlow, normalizePrefs, DEFAULT_COAT } from './model.js';
 export const data = { profile: null, courses: [], items: [], quotes: [], study_sessions: [], achievements: [] };
-export const dirty = {};
+const dirty = {};
 export const conflicts = [];
 const listeners = new Set();
 const normal = { items: normalizeItem, courses: normalizeCourse, quotes: normalizeQuote, study_sessions: normalizeStudySession, achievements: normalizeAchievement };
-const stores = ['courses', 'items', 'quotes', 'study_sessions', 'achievements', 'meta', 'pending', 'conflicts'];
 /* Which tab queued an edit. It lasts as long as the tab, reloads included: a new id on
    every load made an unsynced edit look like another tab's once the page reloaded. */
 const owner = (() => {
@@ -131,20 +130,14 @@ async function keepTitle(a, kind, row) {
   row.title = (await a('items').get(row.id))?.title || 'Untitled';
 }
 
-function saveRow(kind, raw) {
-  const clean = normal[kind](structuredClone(raw));
-  return mutate(async (a) => {
-    await keepTitle(a, kind, clean);
-    await a(kind).put(clean);
-    await queue(a, `${kind}:${clean.id}`, 'put', clean);
-    return clean;
-  });
-}
-function deleteRow(kind, id) {
+const saveRow = (kind, row) => saveRows([{ kind, row }]).then(([saved]) => saved);
+/* `after` does what the server does in the same change, e.g. clearing links to the row. */
+function deleteRow(kind, id, after) {
   return mutate(async (a) => {
     const row = await a(kind).get(id);
     await queue(a, `${kind}:${id}`, 'delete', row || { id });
     await a(kind).del(id);
+    await after?.(a);
   });
 }
 /** Save many rows, `[{ kind, row }]`, as one change: one transaction, one reload, one broadcast. */
@@ -166,14 +159,7 @@ export const saveStudySession = (row) => saveRow('study_sessions', row);
 export const deleteStudySession = (id) => deleteRow('study_sessions', id);
 export const saveAchievement = (row) => saveRow('achievements', row);
 export const deleteAchievement = (id) => deleteRow('achievements', id);
-export function deleteItem(id) {
-  return mutate(async (a) => {
-    const row = await a('items').get(id);
-    await queue(a, `items:${id}`, 'delete', row || { id });
-    await a('items').del(id);
-    await unlinkSessions(a, 'itemId', id);
-  });
-}
+export const deleteItem = (id) => deleteRow('items', id, (a) => unlinkSessions(a, 'itemId', id));
 /* The server clears a deleted course's or item's link on its sessions in the same
    change; this does the same on this device, pending uploads included. */
 async function unlinkSessions(a, field, id) {
@@ -186,10 +172,7 @@ async function unlinkSessions(a, field, id) {
 }
 export const deleteQuote = (id) => deleteRow('quotes', id);
 export function deleteCourse(id) {
-  return mutate(async (a) => {
-    const row = await a('courses').get(id);
-    await queue(a, `courses:${id}`, 'delete', row || { id });
-    await a('courses').del(id);
+  return deleteRow('courses', id, async (a) => {
     for (const it of await a('items').all()) if (it.courseId === id) {
       // Server clears this reference atomically with the course deletion.
       it.courseId = null;

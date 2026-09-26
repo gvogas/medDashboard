@@ -1,7 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { env } from 'cloudflare:test';
-import { signIn } from './helpers.js';
-import { BASE } from './helpers.js';
+import { signIn, feed, BASE } from './helpers.js';
 import { SELF } from 'cloudflare:test';
 
 const session = (over = {}) => ({ courseId: null, itemId: null, startedAt: 1_790_000_000_000, studyMinutes: 50, roundsDone: 2, ...over });
@@ -9,15 +8,7 @@ const course = { code: 'BIOC', name: 'Biochemistry', color: '#E4749B', instructo
 const item = (courseId) => ({ type: 'exam', title: 'Midterm', courseId, date: '2026-10-02', start: '', end: '', where: '', status: 'todo',
   grade: null, weight: null, notes: '', checklist: [], links: [], recur: null, weekday: null, recurUntil: null, dept: '', completedAt: null });
 
-async function feed(api) {
-  const out = [];
-  for (let cursor = 0, more = true; more;) {
-    const page = await (await api(`/api/sync?v=2&cursor=${cursor}`)).json();
-    for (const { kind, row } of page.changes) if (kind === 'study_sessions') out.push(row);
-    ({ cursor, more } = page);
-  }
-  return out;
-}
+const rowsOf = async (api) => (await feed(api)).study_sessions;
 
 describe('study sessions', () => {
   it('PUT saves a session and the change feed carries it', async () => {
@@ -25,7 +16,7 @@ describe('study sessions', () => {
     const res = await api('/api/study_sessions/s1', { method: 'PUT', body: session() });
     expect(res.status).toBe(200);
     expect(await res.json()).toMatchObject({ id: 's1', ...session(), deletedAt: null, revision: expect.any(Number) });
-    expect(await feed(api)).toEqual([expect.objectContaining({ id: 's1', studyMinutes: 50 })]);
+    expect(await rowsOf(api)).toEqual([expect.objectContaining({ id: 's1', studyMinutes: 50 })]);
   });
 
   it('refuses a bad shape and names the field', async () => {
@@ -49,7 +40,7 @@ describe('study sessions', () => {
     const a = await signIn(), b = await signIn();
     await a('/api/study_sessions/mine', { method: 'PUT', body: session() });
     expect((await b('/api/study_sessions/mine')).status).toBe(404);
-    expect(await feed(b)).toEqual([]);
+    expect(await rowsOf(b)).toEqual([]);
   });
 
   it('deleting a course or an item unlinks its sessions, which stay', async () => {
@@ -68,7 +59,7 @@ describe('study sessions', () => {
     const s2 = await (await api('/api/study_sessions/s2')).json();
     expect(s1.courseId).toBeNull();
     expect(s2.courseId).toBeNull();
-    expect((await feed(api)).every((s) => s.courseId === null)).toBe(true);
+    expect((await rowsOf(api)).every((s) => s.courseId === null)).toBe(true);
   });
 
   it('an unrelated delete leaves sessions alone', async () => {

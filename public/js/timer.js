@@ -16,7 +16,6 @@ export function start(flow, now = Date.now()) {
 
 export const roundMs = (flow) => flow.steps.reduce((a, [, m]) => a + m * MIN, 0);
 export const totalMs = (flow) => roundMs(flow) * flow.rounds;
-export const studyMsOf = (flow) => flow.steps.reduce((a, [k, m]) => a + (k === 'study' ? m * MIN : 0), 0) * flow.rounds;
 
 /** How far into the flow the run is, in ms of flow time. */
 export function elapsed(run, now = Date.now()) {

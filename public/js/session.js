@@ -18,7 +18,7 @@ import * as focus from './focus.js';
 import { paint as paintStudy } from './views/study.js';
 import { $ } from './dom.js';
 import { setTheme, setBg } from './theme.js';
-import { celebrateStudy, celebrateAchievements, finishDelete } from './study-controller.js';
+import { celebrateStudy, celebrateAchievements, finishDelete, commitUndo } from './study-controller.js';
 import { refreshAfterSync } from './sync-status.js';
 
 function rememberedSession() {
@@ -88,6 +88,7 @@ export function showSignIn(error, username = '') {
 /* With unsynced edits or saved copies on this device, the first press asks in Settings;
    the second (`force`) erases them. */
 export async function signOut({ everywhere = false, force = false } = {}) {
+  await commitUndo();
   await finishDelete();
   await store.reload();
   if (!force && (store.pendingCount() || store.conflicts.length)) { ui.signoutAsk = { everywhere }; renderSettings(); return; }

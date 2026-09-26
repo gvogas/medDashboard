@@ -36,7 +36,7 @@ let prefsOf = () => [];
 /** main.js points this at the profile's type list, so every view reads the current one. */
 export function useTypePrefs(get) { prefsOf = get; }
 
-export function isTypeId(t) {
+function isTypeId(t) {
   return !!TYPES[t] || CUSTOM_TYPE.test(t);
 }
 
@@ -159,12 +159,6 @@ export function classRoom(it, c) {
   return hit ? hit.room : '';
 }
 
-/** Offered in the sidebar and the type picker: not hidden. */
-export function typeShown(t, bg, items = []) {
-  const hit = typeList(bg, items).find((x) => x.id === t);
-  return !!hit && !hit.hidden;
-}
-
 export function tmeta(t) {
   const hit = typeList('cs').find((x) => x.id === t);
   return hit || (CUSTOM_TYPE.test(t) ? FALLBACK : TYPES.task);
@@ -267,14 +261,17 @@ export function normalizeCourse(raw, index = 0) {
     archived: !!raw.archived,
     target: Number.isInteger(raw.target) && raw.target >= 1 && raw.target <= 100 ? raw.target : null,
     meetings: Array.isArray(raw.meetings)
-      ? raw.meetings.slice(0, 12).map((m) => ({
-          id: m.id || uid(),
-          kind: KINDS.includes(m.kind) ? m.kind : 'Lecture',
-          weekday: Number.isInteger(m.weekday) ? m.weekday : 1,
-          start: m.start || '09:00',
-          end: m.end || '10:00',
-          room: cut(m.room, 40),
-        }))
+      ? raw.meetings.slice(0, 12).map((m) => {
+          const start = m.start || '09:00';
+          return {
+            id: m.id || uid(),
+            kind: KINDS.includes(m.kind) ? m.kind : 'Lecture',
+            weekday: Number.isInteger(m.weekday) ? m.weekday : 1,
+            /* the server refuses a class that ends when it starts: with no end, it lasts an hour */
+            start, end: m.end && m.end > start ? m.end : clock(minutes(start) + 60),
+            room: cut(m.room, 40),
+          };
+        })
       : [],
     createdAt: raw.createdAt ?? null,
     revision: raw.revision ?? 0, updatedAt: raw.updatedAt ?? null,
@@ -307,7 +304,7 @@ export function normalizeFlow(raw) {
 /* The study goal and streak rules: a daily goal in minutes (0 = none), the least that
    makes a day count toward the streak, rest days (0 = Sunday) that never break it, and
    whether to celebrate. The server keeps what it is given; this fills the gaps. */
-export const DEFAULT_PREFS = { goal: 0, dayMin: 15, rest: [], celebrate: true };
+const DEFAULT_PREFS = { goal: 0, dayMin: 15, rest: [], celebrate: true };
 export function normalizePrefs(raw) {
   const p = raw && typeof raw === 'object' ? raw : {};
   const rest = Array.isArray(p.rest) ? [...new Set(p.rest.filter((d) => Number.isInteger(d) && d >= 0 && d <= 6))].sort().slice(0, 6) : [];

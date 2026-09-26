@@ -52,3 +52,20 @@ export async function signIn(username = `user${++n}`) {
   call.cookie = cookie;   // for a test that has to send a second cookie alongside
   return call;
 }
+
+/** The change feed after `cursor`, as the latest row of each kind; deleted rows carry deletedAt. */
+export async function feed(api, cursor = 0) {
+  const out = { courses: [], items: [], quotes: [], study_sessions: [], achievements: [] };
+  for (let more = true; more;) {
+    const page = await (await api(`/api/sync?v=2&cursor=${cursor}`)).json();
+    for (const { kind, row } of page.changes) out[kind] = [...out[kind].filter((r) => r.id !== row.id), row];
+    ({ cursor, more } = page);
+  }
+  return { ...out, cursor };
+}
+
+/** A local timestamp at noon on 'YYYY-MM-DD', so tests hold in any time zone. */
+export const noon = (day) => { const [y, m, d] = day.split('-').map(Number); return new Date(y, m - 1, d, 12).getTime(); };
+
+/** An .ics file with its folded lines joined again. */
+export const unfold = (ics) => ics.replace(/\r\n /g, '');

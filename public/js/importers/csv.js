@@ -4,6 +4,7 @@
 // YYYY-MM-DD (DD/MM/YYYY is accepted); times to HH:MM when they parse.
 
 import { parseTime } from '../timepicker.js';
+import { validDate } from '../school.js';
 
 function records(text, sep) {
   const rows = [];
@@ -29,13 +30,13 @@ function records(text, sep) {
   return rows;
 }
 
+/** 'YYYY-MM-DD' from 2026-9-14 or 14/09/2026, or '' for anything else, 31/02 included. */
 export function normDate(v) {
   const s = String(v || '').trim();
-  let m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
-  if (m) return m[1] + '-' + m[2].padStart(2, '0') + '-' + m[3].padStart(2, '0');
-  m = s.match(/^(\d{1,2})[/.](\d{1,2})[/.](\d{4})$/);
-  if (m) return m[3] + '-' + m[2].padStart(2, '0') + '-' + m[1].padStart(2, '0');
-  return '';
+  let m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/), out = '';
+  if (m) out = m[1] + '-' + m[2].padStart(2, '0') + '-' + m[3].padStart(2, '0');
+  else if ((m = s.match(/^(\d{1,2})[/.](\d{1,2})[/.](\d{4})$/))) out = m[3] + '-' + m[2].padStart(2, '0') + '-' + m[1].padStart(2, '0');
+  return validDate(out) ? out : '';
 }
 
 const COLUMNS = ['type', 'course', 'title', 'date', 'start', 'end', 'room', 'weight'];

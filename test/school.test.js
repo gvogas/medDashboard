@@ -5,7 +5,7 @@ import { cleanSchool, readSchool } from '../worker/school.js';
 import { MODEL } from '../worker/outline.js';
 import { schoolCalendar } from '../worker/validate.js';
 import { buildCalendar } from '../worker/calendar.js';
-import { signIn } from './helpers.js';
+import { signIn, unfold } from './helpers.js';
 
 /* Vanier College 2026–27, as its calendar reads (2026-08-24 is a Monday). */
 const VANIER = {
@@ -140,7 +140,6 @@ describe('reading and saving a school calendar', () => {
 describe('the calendar feed with a school calendar', () => {
   const course = { id: 'n', code: 'NEURO', name: 'Neuroscience', archived: 0, created_at: Date.UTC(2026, 7, 1),
     meetings: JSON.stringify([{ id: 'm', kind: 'Lecture', weekday: 1, start: '10:00', end: '11:00', room: '' }]) };
-  const unfold = (ics) => ics.replace(/\r\n /g, '');
 
   it('repeats each class within a semester, skips days off, and adds swapped days', () => {
     const ics = unfold(buildCalendar({ courses: [course], items: [], school: cal, now: Date.UTC(2026, 8, 26) }));

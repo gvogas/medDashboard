@@ -1,7 +1,7 @@
 import { SELF, env } from 'cloudflare:test';
 import { describe, expect, it } from 'vitest';
 import { buildCalendar, feedToken, onOrAfter } from '../worker/calendar.js';
-import { BASE, signIn } from './helpers.js';
+import { BASE, signIn, unfold } from './helpers.js';
 
 /* 2026-09-21 is a Monday */
 const course = { id: 'bio', code: 'BIO', name: 'Biology, cells; and more', archived: 0, created_at: Date.UTC(2026, 8, 1),
@@ -9,7 +9,6 @@ const course = { id: 'bio', code: 'BIO', name: 'Biology, cells; and more', archi
 const item = (over) => ({ id: 'i1', type: 'exam', title: 'Midterm', course_id: 'bio', date: '2026-10-05', start: '', end: '',
   location: '', status: 'todo', weight: null, notes: '', recur: null, weekday: null, recur_until: null, ...over });
 const events = (ics) => ics.split('BEGIN:VEVENT').slice(1).map((e) => e.split('END:VEVENT')[0]);
-const unfold = (ics) => ics.replace(/\r\n /g, '');
 
 describe('the .ics file', () => {
   it('writes a valid calendar with CRLF lines no longer than 75 octets', () => {

@@ -4,7 +4,7 @@ import { setHTML } from '../dom.js';
 import { cover } from './drawer-base.js';
 
 /* [keys, what they do]; two keys are a pair ('[' and ']') or a range ('1' to '5') */
-export const SHORTCUTS = [
+const SHORTCUTS = [
   [['n'], 'New item'],
   [['t'], 'Go to today'],
   [['[', ']'], 'Previous / next week or month'],

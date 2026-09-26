@@ -4,27 +4,17 @@
 
 import { data, saveProfile } from '../store.js';
 import { ui } from '../state.js';
-import { api, ApiError } from '../api.js';
-import { pdfText } from '../pdftext.js';
-import { today, DOW } from '../dates.js';
+import { api } from '../api.js';
+import { today, DOW, shortDate } from '../dates.js';
 import { esc, $, keepFocus } from '../dom.js';
-import { shortDate } from '../reviews.js';
 import { normalizeSchool, validDate, weekOf, schoolStatus, KIND_LABELS, SCHOOL_KINDS, SCHOOL_LIMITS } from '../school.js';
 import { schoolCal } from '../query.js';
 import { drawer, showDrawer, resetDrawerState, closeDrawer } from './drawer-base.js';
-import { showBusy, hideBusy } from './busy.js';
+import { readWithAi } from './busy.js';
 import { toast } from './toast.js';
 import { renderSettings } from './drawer-settings.js';
 import { render } from './render.js';
 
-const ERRORS = {
-  outline_empty: 'No text was found in that file. A scanned calendar needs to be a text PDF.',
-  school_unreadable: 'No semesters could be found in that calendar. Try again, or check it is the academic calendar.',
-  outline_unavailable: 'The calendar reader is not available right now. Try again later.',
-  outline_limit: 'That is the limit of 10 AI reads for today (outlines and calendars). Try again tomorrow.',
-  outline_quota: 'The free AI allowance for today is used up. It resets at 8 pm Eastern (midnight UTC).',
-  too_large: 'That file is over 5 MB.',
-};
 
 /* ── Settings ── */
 
@@ -52,29 +42,23 @@ export function schoolGroup() {
 }
 
 /** A calendar file was picked: read it with AI, then open the drawer to check it. */
-export async function readSchoolFile(file) {
-  if (file.size > 5 * 1024 * 1024) { ui.schoolNote = { text: ERRORS.too_large, error: true }; renderSettings(); return; }
-  ui.schoolBusy = true; ui.schoolNote = null; renderSettings();
-  try {
-    const isPdf = file.type === 'application/pdf' || /\.pdf$/i.test(file.name);
-    if (isPdf) showBusy(file.name, 'Pulling the text out of the PDF…');
-    const body = isPdf ? new Blob([await pdfText(file)], { type: 'text/plain' }) : file;
-    showBusy(file.name, 'Finding the semesters, breaks and days off with AI…');
-    const read = await api.readSchool(body, { name: file.name, today: today() });
-    ui.schoolBusy = false; hideBusy();
-    openSchool(read, file.name);
-  } catch (err) {
-    ui.schoolBusy = false; hideBusy();
-    const code = err instanceof ApiError ? err.body?.error : null;
-    ui.schoolNote = { text: ERRORS[code] || (err instanceof ApiError ? 'The calendar could not be read (' + (code || err.status) + ').' : 'You seem to be offline. Reading a calendar needs a connection.'), error: true };
-    if (ui.settings) renderSettings();
-  }
+export function readSchoolFile(file) {
+  return readWithAi(file, {
+    what: 'calendar', title: 'Reading your school calendar', stage: 'Finding the semesters, breaks and days off with AI…',
+    flag: 'schoolBusy', note: 'schoolNote', refresh: renderSettings,
+    errors: {
+      outline_empty: 'No text was found in that file. A scanned calendar needs to be a text PDF.',
+      school_unreadable: 'No semesters could be found in that calendar. Try again, or check it is the academic calendar.',
+    },
+    call: (body) => api.readSchool(body, { name: file.name, today: today() }),
+    done: (read) => openSchool(read, file.name),
+  });
 }
 
 /* ── the drawer ── */
 
 /** Open the drawer on a calendar just read (with its file name), or on the saved one. */
-export function openSchool(read, source = null) {
+function openSchool(read, source = null) {
   const cal = normalizeSchool(read) || schoolCal();
   if (!cal) return;
   resetDrawerState();
@@ -122,7 +106,7 @@ function dayHtml(d, i) {
     + '<button type="button" class="x" data-school-del="' + i + '" aria-label="Remove ' + esc(d.label || KIND_LABELS[d.kind]) + '">✕</button></div>';
 }
 
-export function renderSchoolDrawer() {
+function renderSchoolDrawer() {
   const s = ui.schoolDraft;
   if (!s) return;
   /* the days in date order, under the semester they fall in or follow */

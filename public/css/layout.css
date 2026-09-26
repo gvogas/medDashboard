@@ -105,8 +105,8 @@ button{cursor:pointer}
 @media (hover:none){.pocket .editcoat,.idbadge .editcoat{opacity:1}}
 .pocket .editcoat:hover{color:var(--accent)}
 .pocket .role{font-size:9.5px;letter-spacing:.13em;text-transform:uppercase;color:var(--ink-3);margin-top:1px}
-.pocket .pen{position:absolute;right:12px;top:-7px;width:9px;height:40px;border-radius:2px 2px 4px 4px;background:#3C6E8F}
-.pocket .pen::after{content:"";position:absolute;left:1px;right:1px;top:-6px;height:13px;border-radius:3px;background:#B9C7CC}
+.pocket .pen,.coatpreview .pen{position:absolute;right:12px;top:-7px;width:9px;height:40px;border-radius:2px 2px 4px 4px;background:#3C6E8F}
+.pocket .pen::after,.coatpreview .pen::after{content:"";position:absolute;left:1px;right:1px;top:-6px;height:13px;border-radius:3px;background:#B9C7CC}
 .pocket .tuck{position:absolute;right:27px;bottom:5px;width:50px;height:28px;color:var(--accent);opacity:var(--orn-art)}
 
 /* ─── CS: no coat. Plain panel on a faint dot grid, and a lanyard ID badge ─── */
@@ -164,7 +164,7 @@ button{cursor:pointer}
   background:color-mix(in srgb, var(--coat) 70%, var(--ink));box-shadow:0 1px 1px rgba(20,48,45,.2);
 }
 .player[data-stale]{opacity:.5}
-.player .spot{width:14px;height:14px;flex:none;color:#1DB954}
+.player .spot{width:14px;height:14px;flex:none;color:var(--spotify)}
 .player .now{display:flex;align-items:center;gap:9px;min-width:0}
 .player .art{width:42px;height:42px;border-radius:7px;flex:none;object-fit:cover;background:var(--panel-2);box-shadow:0 1px 3px rgba(20,48,45,.22)}
 .player .meta{min-width:0;flex:1;line-height:1.3}
@@ -172,7 +172,7 @@ button{cursor:pointer}
 .player a.title:hover{color:var(--accent);text-decoration:underline}
 .player .artist{display:block;font-size:11px;color:var(--ink-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .player .eq{display:flex;align-items:flex-end;gap:2px;height:12px;margin-top:3px}
-.player .eq i{width:3px;height:6px;background:#1DB954;border-radius:1px}
+.player .eq i{width:3px;height:6px;background:var(--spotify);border-radius:1px}
 .player[data-state="playing"] .eq i{animation:eq 1s ease-in-out infinite}
 .player[data-state="playing"] .eq i:nth-child(2){animation-delay:.2s}
 .player[data-state="playing"] .eq i:nth-child(3){animation-delay:.45s}
@@ -181,7 +181,7 @@ button{cursor:pointer}
 @keyframes eq{0%,100%{height:3px}50%{height:12px}}
 @media (prefers-reduced-motion:reduce){.player .eq i{animation:none!important;height:6px}}
 .player .line{display:block;height:3px;border-radius:999px;background:var(--line-2);overflow:hidden}
-.player .line i{display:block;height:100%;background:linear-gradient(90deg,var(--accent),#1DB954);border-radius:999px}
+.player .line i{display:block;height:100%;background:linear-gradient(90deg,var(--accent),var(--spotify));border-radius:999px}
 .player .ctl{display:flex;align-items:center;justify-content:center;gap:10px}
 .player .ctl button{
   border:1px solid var(--line);background:var(--panel);color:var(--ink-2);width:28px;height:28px;border-radius:50%;
@@ -207,7 +207,7 @@ button{cursor:pointer}
 }
 .player .connect .spot{color:var(--ink-3)}
 .player .connect:hover{color:var(--accent)}
-.player .connect:hover .spot{color:#1DB954}
+.player .connect:hover .spot{color:var(--spotify)}
 
 /* ─── content ─── */
 /* min-height:0 matters — without it a grid item refuses to shrink below its

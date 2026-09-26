@@ -295,9 +295,6 @@ reads it to call Spotify on the user's behalf.
 
 | Index | Serves |
 | --- | --- |
-| `courses (user_id, updated_at)` | the `sync` pull |
-| `items (user_id, updated_at)` | the `sync` pull |
-| `quotes (user_id, updated_at)` | the `sync` pull |
 | `study_sessions (user_id, started_at)` | the week's study log |
 | `study_sessions (user_id, course_id)`, `(user_id, item_id)` | unlinking a deleted course or item |
 | `items (user_id, date)` | any future "this term only" query |

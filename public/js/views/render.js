@@ -46,7 +46,7 @@ export function renderHeader() {
 }
 
 /* The focus screen is a layout of the page: the study clock beside the Spotify view. */
-export const showsSpotify = () => ui.focus || ui.view === 'spotify';
+const showsSpotify = () => ui.focus || ui.view === 'spotify';
 
 export function renderView() {
   keepFocus(drawView);

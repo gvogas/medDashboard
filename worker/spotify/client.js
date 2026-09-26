@@ -1,8 +1,7 @@
 import { HttpError } from '../http.js';
-import { freshAccessToken, refreshFor } from './tokens.js';
+import { freshAccessToken, refreshFor, notConnected } from './tokens.js';
 import { upstreamFetch, unavailable } from './transport.js';
 const API = 'https://api.spotify.com/v1';
-const notConnected = () => new HttpError(409, { error: 'not_connected' });
 export async function spotifyFetch(env, userId, method, path, body) {
   const { token, row } = await freshAccessToken(env, userId);
   const call = async (bearer) => {

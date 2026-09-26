@@ -87,15 +87,22 @@ export function streak(byDay, todayIso, { dayMin = 15, rest = [] } = {}) {
     else if (!isRest(d)) break;
   }
 
-  let longest = current, run = 0;
-  if (first) {
-    for (let day = first; day <= todayIso; day = iso(addDays(parse(day), 1))) {
-      if (counts(day)) run++;
-      else if (!isRest(day) && day !== todayIso) run = 0;
-      if (run > longest) longest = run;
-    }
+  return { current, longest: Math.max(current, runs(byDay, todayIso, { dayMin, rest }).longest), today };
+}
+
+/**
+ * The streak walked forward from the first day studied, by the same rules:
+ * {longest, reached(n)}, where reached(n) is the day a run first got to n days.
+ */
+export function runs(byDay, todayIso, { dayMin = 15, rest = [] } = {}) {
+  const reached = new Map(), first = firstDay(byDay);
+  let longest = 0, run = 0;
+  for (let day = first; first && day <= todayIso; day = iso(addDays(parse(day), 1))) {
+    if ((byDay.get(day) || 0) >= dayMin) run++;
+    else if (!rest.includes(parse(day).getDay()) && day !== todayIso) run = 0;
+    if (run > longest) { longest = run; reached.set(run, day); }
   }
-  return { current, longest, today };
+  return { longest, reached: (n) => reached.get(n) || null };
 }
 
 function firstDay(byDay) {
@@ -114,7 +121,7 @@ export function heatRange(termStart, todayIso) {
   let start = addDays(thisMonday, -7 * 12), since = null;
   if (termStart && termStart <= todayIso) {
     const t = monday(parse(termStart));
-    if ((thisMonday - t) / 86_400_000 <= 7 * 26) { start = t; since = termStart; }
+    if (Math.round((thisMonday - t) / 86_400_000) <= 7 * 26) { start = t; since = termStart; }
   }
   const upToNow = Math.round((thisMonday - start) / (7 * 86_400_000)) + 1;
   const weeks = Math.max(16, upToNow);

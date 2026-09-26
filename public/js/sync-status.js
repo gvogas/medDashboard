@@ -55,9 +55,9 @@ export async function runReviews() {
   if (reviewing || !data.profile) return;
   reviewing = true;
   try {
-    const setting = readSetting(data.profile.id);
+    const account = data.profile.id, setting = readSetting(account);
     const { rows, through } = dueReviews(setting, data.courses, data.items, today(), schoolCal());
     if (rows.length) await store.saveRows(rows.map((row) => ({ kind: 'items', row: normalizeItem(row) })));
-    if (through !== setting.through) writeSetting(data.profile.id, { ...setting, through });
+    if (through !== setting.through) writeSetting(account, { ...setting, through });
   } finally { reviewing = false; }
 }

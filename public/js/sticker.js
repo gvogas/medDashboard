@@ -2,8 +2,8 @@
 // where it was dragged and how far it was zoomed, and kept small enough to sync as a
 // data: URL (WebP when the browser can write it, else PNG, smaller until it fits).
 
-export const STICKER_MAX = 90_000;          /* characters; worker/validate.js holds the same line */
-const EDGE = 0.07;                          /* the white edge, as a share of the size */
+const STICKER_MAX = 90_000;   /* characters; worker/validate.js holds the same line */
+const EDGE = 0.07;            /* the white edge, as a share of the size */
 
 /** The picture in a file, upright; null when the browser cannot read it (HEIC on most). */
 export async function readPicture(file) {

@@ -1,17 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { env } from 'cloudflare:test';
-import { signIn } from './helpers.js';
-
-/** The change feed after `cursor`, as the latest row of each kind; deleted rows carry deletedAt. */
-async function feed(api, cursor = 0) {
-  const out = { courses: [], items: [], quotes: [] };
-  for (let more = true; more;) {
-    const page = await (await api(`/api/sync?v=2&cursor=${cursor}`)).json();
-    for (const { kind, row } of page.changes) out[kind] = [...out[kind].filter((r) => r.id !== row.id), row];
-    ({ cursor, more } = page);
-  }
-  return { ...out, cursor };
-}
+import { signIn, feed } from './helpers.js';
 
 const course = (over = {}) => ({
   code: 'CVS',

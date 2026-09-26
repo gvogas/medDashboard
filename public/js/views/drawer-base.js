@@ -1,9 +1,7 @@
-import { setHTML } from '../dom.js';
 // The slide-in drawer and its scrim, shared by the item, course and settings panels.
 
 import { ui } from '../state.js';
-import { $, refind } from '../dom.js';
-export { refind };
+import { $, refind, setHTML } from '../dom.js';
 import { render } from './render.js';
 
 export const drawer = $('drawer');
@@ -52,6 +50,8 @@ export function hideDrawer() {
 
 export function resetDrawerState() {
   ui.sel = null; ui.draft = null; ui.courseDraft = null; ui.courseMode = null; ui.confirm = null; ui.settings = false; ui.importPlan = null; ui.fillNote = null; ui.sessionDraft = null; ui.achDraft = null; ui.schoolDraft = null; ui.signoutAsk = null;
+  /* questions asked in Settings are not still asked when it opens again */
+  ui.schoolAsk = false; if (ui.feed) ui.feed.confirm = null;
 }
 
 /** Run before the drawer closes, e.g. to save what is still being typed. */
@@ -62,6 +62,7 @@ export function closeDrawer() {
   resetDrawerState();
   ui.spotifyNote = null;
   ui.importNote = null;
+  ui.schoolNote = null;
   render();
   hideDrawer();
 }
@@ -70,8 +71,8 @@ export function drawerHasFocus() {
   return drawer.contains(document.activeElement) && /input|textarea|select/i.test(document.activeElement.tagName);
 }
 
-/** Is any drawer open: an item, a course, settings, a study session, an achievement or the school calendar. */
-export const drawerOpen = () => !!(ui.sel || ui.draft || ui.courseDraft || ui.settings || ui.sessionDraft || ui.achDraft || ui.schoolDraft);
+/** Is any drawer open: an item, a course, settings, an import, a study session, an achievement or the school calendar. */
+export const drawerOpen = () => !!(ui.sel || ui.draft || ui.courseDraft || ui.settings || ui.importPlan || ui.sessionDraft || ui.achDraft || ui.schoolDraft);
 
 /* On narrow screens the sidebar slides over the page. Closed, it is inert, so Tab does
    not wander through it off-screen; open, it takes focus and Escape closes it. */

@@ -91,7 +91,7 @@ export function renderSpotifyInto(root) {
 }
 
 /** A selector for the same control after a redraw: its first data-spot-* attribute and value. */
-export function focusKey(el) {
+function focusKey(el) {
   const attr = [...(el.attributes || [])].find((a) => a.name.startsWith('data-spot'));
   return attr ? '[' + attr.name + '="' + CSS.escape(attr.value) + '"]' : null;
 }

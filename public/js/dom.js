@@ -63,7 +63,12 @@ export function refind(el) {
 export function keepFocus(draw) {
   const was = document.activeElement;
   draw();
+  restoreFocus(was);
+}
+
+/** After a redraw: if `was` had focus and is gone, focus its successor, else `fallback`. */
+export function restoreFocus(was, fallback = null) {
   if (was && was !== document.body && !was.isConnected && (!document.activeElement || document.activeElement === document.body)) {
-    refind(was)?.focus({ preventScroll: true });
+    (refind(was) || fallback)?.focus({ preventScroll: true });
   }
 }

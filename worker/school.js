@@ -6,13 +6,10 @@
 // daily allowance of reads per person (limitOutline).
 
 import { HttpError } from './http.js';
-import { MODEL, MAX_CHARS, outlineText } from './outline.js';
+import { DAYS, dayIndex, modelJson, askModel } from './outline.js';
 import { normalizeSchool, SCHOOL_KINDS } from '../public/js/school.js';
 
-const MAX_TOKENS = 6000;
-const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-
-export const SCHEMA = {
+const SCHEMA = {
   type: 'object',
   properties: {
     name: { type: 'string' },
@@ -42,7 +39,7 @@ export const SCHEMA = {
   required: ['name', 'terms', 'days'],
 };
 
-export function prompt(text, today) {
+function prompt(text, today) {
   return [
     {
       role: 'system',
@@ -68,34 +65,15 @@ export function prompt(text, today) {
 
 /** Whatever the model returned, made safe: {name, terms, days}. 502 when there is no semester. */
 export function cleanSchool(raw) {
-  let o = raw;
-  if (o && typeof o === 'object' && Array.isArray(o.choices)) o = o.choices[0]?.message?.content;
-  if (typeof o === 'string') {
-    const m = o.match(/\{[\s\S]*\}/);
-    try { o = m ? JSON.parse(m[0]) : null; } catch { o = null; }
-  }
-  if (!o || typeof o !== 'object') throw new HttpError(502, { error: 'school_unreadable' });
-  const days = (Array.isArray(o.days) ? o.days : []).map((d) => ({
-    ...d, follows: DAYS.indexOf(String(d?.follows || '').slice(0, 3).replace(/^./, (c) => c.toUpperCase())),
-  }));
+  const o = modelJson(raw);
+  if (!o) throw new HttpError(502, { error: 'school_unreadable' });
+  const days = (Array.isArray(o.days) ? o.days : []).map((d) => ({ ...d, follows: dayIndex(d?.follows) }));
   const cal = normalizeSchool({ ...o, days });
   if (!cal) throw new HttpError(502, { error: 'school_unreadable' });
   return cal;
 }
 
-/** `claim` runs just before the model does, like an outline's. */
-export async function readSchool(ai, { bytes, type, name, today, claim }) {
-  let text = (await outlineText(ai, bytes, type, name)).trim();
-  if (text.length < 40) throw new HttpError(422, { error: 'outline_empty' });
-  const truncated = text.length > MAX_CHARS;
-  if (truncated) text = text.slice(0, MAX_CHARS);
-  if (claim) await claim();
-  let out;
-  try {
-    out = await ai.run(MODEL, { messages: prompt(text, today), max_tokens: MAX_TOKENS, temperature: 0 });
-  } catch (e) {
-    if (/\b4006\b|daily free allocation/i.test(e?.message || '')) throw new HttpError(429, { error: 'outline_quota' });
-    throw e;
-  }
-  return { ...cleanSchool(out?.response ?? out), truncated };
+export async function readSchool(ai, { today, ...doc }) {
+  const { answer, truncated } = await askModel(ai, doc, (text) => prompt(text, today));
+  return { ...cleanSchool(answer), truncated };
 }
