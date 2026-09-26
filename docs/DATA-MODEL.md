@@ -16,8 +16,8 @@ The schema is [`migrations/0001_schema.sql`](../migrations/0001_schema.sql), in 
 piece. Twice in September 2026 the live data moved into a fresh database built from it
 (`node scripts/move-db.mjs --from <old> --to <new> --remote`): first `rounds` into
 `rounds-v2`, replacing ten migrations of patches, then `rounds-v2` into `rounds-v3`,
-folding in the study timer, quizzes, grade targets and the calendar feed. Each old
-database is kept as a backup. The schema the last move copied from is kept as a test
+folding in the study timer, quizzes, grade targets and the calendar feed. The old
+databases were deleted once the move was checked. The schema the last move copied from is kept as a test
 fixture in `test/fixtures/legacy-migrations/`. Later changes are new numbered files.
 
 ## Structure at a glance

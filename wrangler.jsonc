@@ -18,9 +18,7 @@
   },
 
   // rounds-v3 was built fresh from migrations/0001_schema.sql and filled by
-  // scripts/move-db.mjs on 2026-09-25. The databases before it are kept untouched
-  // as backups: "rounds-v2" (2cdc66b8-25b3-445a-ad1b-616a7369b262) and "rounds"
-  // (61d75810-5015-41f5-8b3e-fc2339d4acf1).
+  // scripts/move-db.mjs on 2026-09-25. The databases before it have been deleted.
   "d1_databases": [
     {
       "binding": "DB",
