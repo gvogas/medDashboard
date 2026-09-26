@@ -96,7 +96,7 @@ export function renderWeek() {
   if (!tasks.length) tHtml += '<div class="empty">No tasks</div>';
   tasks.slice(0, 9).forEach((it) => {
     tHtml += '<div class="task' + (isOpen(it) ? '' : ' done') + '">'
-      + '<button class="box" type="button" data-toggle="' + esc(it.id) + '" aria-pressed="' + (isOpen(it) ? 'false' : 'true') + '" aria-label="Mark done">' + CHECK_SVG + '</button>'
+      + '<button class="box" type="button" data-toggle="' + esc(it.id) + '" aria-pressed="' + (isOpen(it) ? 'false' : 'true') + '" aria-label="Done: ' + esc(it.title) + '">' + CHECK_SVG + '</button>'
       + '<button type="button" class="tx" data-id="' + esc(it.id) + '">' + esc(it.title)
       + (it.date ? ' <span class="meta">' + (isOverdue(it) ? '· overdue' : '· ' + DOW[parse(it.date).getDay()] + ' ' + parse(it.date).getDate()) + '</span>' : '')
       + '</button></div>';

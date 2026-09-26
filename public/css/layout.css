@@ -46,7 +46,7 @@ button{cursor:pointer}
 .mark{width:25px;height:25px;border-radius:7px;background:var(--accent);color:var(--on-accent);display:grid;place-items:center;font-size:11.5px;font-weight:700;flex:none}
 .navgrp{display:flex;flex-direction:column;gap:1px}
 .navlabel{
-  font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-3);
+  font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-3);
   padding:4px 8px 5px;display:flex;align-items:center;gap:6px;
 }
 .navlabel button{
@@ -62,7 +62,8 @@ button{cursor:pointer}
 .nav .ct{margin-left:auto;font-size:10.5px;color:var(--ink-3);font-variant-numeric:tabular-nums}
 .nav[aria-pressed="true"]{background:var(--accent-soft);color:var(--accent-ink);font-weight:600}
 .nav[aria-pressed="true"] .ct{color:var(--accent-ink)}
-.nav.dim{opacity:.42}
+.nav.dim{color:var(--ink-3)}
+.nav.dim .lbl{text-decoration:line-through;text-decoration-color:color-mix(in srgb, currentColor 45%, transparent)}
 .nav.dim .pip{background:transparent;box-shadow:inset 0 0 0 1.5px var(--c,var(--ink-3))}
 .nav .lbl{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .course-line{display:flex;align-items:center;gap:0;border-radius:7px}
@@ -101,6 +102,7 @@ button{cursor:pointer}
   opacity:0;vertical-align:middle;
 }
 .pocket:hover .editcoat,.pocket .editcoat:focus-visible{opacity:1}
+@media (hover:none){.pocket .editcoat,.idbadge .editcoat{opacity:1}}
 .pocket .editcoat:hover{color:var(--accent)}
 .pocket .role{font-size:9.5px;letter-spacing:.13em;text-transform:uppercase;color:var(--ink-3);margin-top:1px}
 .pocket .pen{position:absolute;right:12px;top:-7px;width:9px;height:40px;border-radius:2px 2px 4px 4px;background:#3C6E8F}
@@ -275,3 +277,8 @@ button{cursor:pointer}
 .typeform .typenote{padding:0}
 .typeform .acts{display:flex;gap:6px;justify-content:flex-end}
 .typeform .acts .btn{padding:4px 10px;font-size:12px}
+
+@media (pointer:coarse){
+  .course-line .cog{min-width:40px;min-height:40px}
+  .typerow .eye,.typerow .del{width:40px;height:40px}
+}

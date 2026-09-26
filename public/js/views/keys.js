@@ -1,6 +1,7 @@
 // The keyboard shortcuts panel, opened with ? and closed with Esc, ? or a click outside.
 
 import { setHTML } from '../dom.js';
+import { cover } from './drawer-base.js';
 
 /* [keys, what they do]; two keys are a pair ('[' and ']') or a range ('1' to '5') */
 export const SHORTCUTS = [
@@ -33,6 +34,8 @@ export function openKeys() {
     + '</dl><p>Shortcuts are off while you type in a field.</p></div>');
   panel.addEventListener('click', (e) => { if (e.target === panel || e.target.closest('[data-keys-close]')) closeKeys(); });
   document.body.append(panel);
+  /* aria-modal alone does not keep Tab inside: the page behind is made inert */
+  cover(true);
   panel.querySelector('[data-keys-close]').focus();
 }
 
@@ -40,6 +43,7 @@ export function closeKeys() {
   if (!panel) return;
   panel.remove();
   panel = null;
+  cover(false);
   if (back && back.isConnected) back.focus();
   back = null;
 }

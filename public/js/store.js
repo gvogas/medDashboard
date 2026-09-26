@@ -32,6 +32,14 @@ const rowStore = (key) => key === 'profile' ? 'meta' : key.split(':')[0];
 const rowId = (key) => key === 'profile' ? 'profile' : key.slice(key.indexOf(':') + 1);
 const wrap = (key, row) => key === 'profile' ? { key: 'profile', value: row } : row;
 
+/* Rows a delete is waiting on: gone from every view while Undo can still bring them back. */
+const hidden = new Set();   /* 'items:id', 'courses:id' */
+export async function hide(key, on = true) {
+  if (on) hidden.add(key); else hidden.delete(key);
+  await reload();
+  notify({ type: 'hidden' });
+}
+
 export async function reload() {
   const handle = db;
   if (!handle) return;
@@ -41,7 +49,7 @@ export async function reload() {
     pending: await a('pending').all(), conflicts: await a('conflicts').all(),
   }));
   if (db !== handle) return;
-  for (const kind of Object.keys(normal)) data[kind] = snapshot[kind].map(normal[kind]);
+  for (const kind of Object.keys(normal)) data[kind] = snapshot[kind].filter((r) => !hidden.has(kind + ':' + r.id)).map(normal[kind]);
   index();
   data.profile = snapshot.profile || null;
   for (const key of Object.keys(dirty)) delete dirty[key];
@@ -74,7 +82,7 @@ export async function open(p) {
 
 export async function close() {
   await localTail.catch(() => {});
-  db?.close(); db = null; userId = null;
+  db?.close(); db = null; userId = null; hidden.clear();
   channel?.close(); channel = null;
   data.profile = null;
   for (const kind of Object.keys(normal)) data[kind] = [];

@@ -29,6 +29,7 @@ export const ui = {
      session that can still be undone */
   hist: { weekOffset: 0, range: 'week', monthOffset: 0, focusDay: null, undo: null },
   sessionDraft: null,      /* the Log study / Edit session drawer */
+  signoutAsk: null,        /* sign-out waits on a warning about unsynced edits: { everywhere } */
 };
 
 try {

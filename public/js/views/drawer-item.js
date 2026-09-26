@@ -132,8 +132,8 @@ export function renderItemDrawer(focusTitle) {
     body += '<div class="meterwrap"><span class="meter pink' + (clDone === cl.length ? ' full' : '') + '" data-width="' + Math.round(clDone / cl.length * 100) + '"></span></div><div class="cl">';
     cl.forEach((s) => {
       body += '<div class="cl-item' + (s.done ? ' done' : '') + '">'
-        + '<button class="box" type="button" data-cl="' + esc(s.id) + '" aria-pressed="' + (s.done ? 'true' : 'false') + '" aria-label="Toggle step">' + CHECK_SVG + '</button>'
-        + '<input class="tx" data-cltext="' + esc(s.id) + '" value="' + esc(s.text) + '" maxlength="140">'
+        + '<button class="box" type="button" data-cl="' + esc(s.id) + '" aria-pressed="' + (s.done ? 'true' : 'false') + '" aria-label="Done: ' + esc(s.text || 'step') + '">' + CHECK_SVG + '</button>'
+        + '<input class="tx" data-cltext="' + esc(s.id) + '" value="' + esc(s.text) + '" maxlength="140" aria-label="Step">'
         + '<button class="x" type="button" data-clx="' + esc(s.id) + '" aria-label="Remove step">✕</button></div>';
     });
     body += '</div>';
@@ -153,7 +153,7 @@ export function renderItemDrawer(focusTitle) {
       + '<button class="btn ghost" type="button" data-act="cancel">Cancel</button>'
       + '<button class="btn" type="button" data-act="save"' + (it.title.trim() ? '' : ' disabled') + '>Save item</button></div>';
   } else if (ui.confirm === 'item') {
-    foot = '<div class="dfoot"><span class="hint">Delete “' + esc(it.title || 'this item') + '”?</span>'
+    foot = '<div class="dfoot"><span class="hint" role="status">Delete “' + esc(it.title || 'this item') + '”?</span>'
       + '<button class="btn ghost" type="button" data-act="keep">Keep</button>'
       + '<button class="btn danger" type="button" data-act="delete-yes">Delete</button></div>';
   } else {

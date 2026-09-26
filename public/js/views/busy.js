@@ -1,4 +1,5 @@
 import { esc } from '../dom.js';
+import { cover } from './drawer-base.js';
 
 /* A full-screen wait card while a course outline is read: the AI step can take
    half a minute, and a button label alone is easy to miss. */
@@ -12,6 +13,7 @@ export function showBusy(fileName, stage) {
     el.setAttribute('aria-modal', 'true');
     el.setAttribute('aria-labelledby', 'busyTitle');
     document.body.appendChild(el);
+    cover(true);
     started = Date.now();
     timer = setInterval(tick, 1000);
   }
@@ -23,6 +25,8 @@ export function showBusy(fileName, stage) {
     + '<p class="busy-note">Please wait and keep this tab open. It usually takes 10 to 30 seconds.</p>'
     + '<p class="busy-time"></p>'
     + '</div>';
+  el.querySelector('.busy-card').tabIndex = -1;
+  if (!el.contains(document.activeElement)) el.querySelector('.busy-card').focus();
   tick();
 }
 
@@ -34,5 +38,6 @@ function tick() {
 
 export function hideBusy() {
   clearInterval(timer); timer = null;
+  if (el) cover(false);
   el?.remove(); el = null;
 }

@@ -5,14 +5,14 @@ import * as store from './store.js';
 import { data, course } from './store.js';
 import * as sync from './sync.js';
 import { ui, rememberUi } from './state.js';
-import { uid, isOpen, isComplete, normalizeItem, shiftEnd, tmeta, classRoom, useTypePrefs, typeList, typePrefsFrom, TYPE_COLOURS, MAX_CUSTOM_TYPES, statusesFor, normalizeFlow, normalizePrefs, FLOW_PRESETS } from './model.js';
+import { uid, isOpen, isComplete, normalizeItem, httpUrl, shiftEnd, tmeta, classRoom, useTypePrefs, typeList, typePrefsFrom, TYPE_COLOURS, MAX_CUSTOM_TYPES, statusesFor, normalizeFlow, normalizePrefs, FLOW_PRESETS } from './model.js';
 import { typeOn } from './query.js';
 import { iso, parse, addDays, today } from './dates.js';
 import { $, autoGrow, isTyping } from './dom.js';
 import { render, renderView, renderHeader } from './views/render.js';
 import { renderSidebar } from './views/sidebar.js';
 import { renderStats, renderQuote, nextQuote } from './views/stats.js';
-import { drawer, scrim, closeDrawer, drawerHasFocus, beforeClose } from './views/drawer-base.js';
+import { drawer, scrim, closeDrawer, drawerHasFocus, beforeClose, refind } from './views/drawer-base.js';
 import { openItem, newItem, current, saveDraft, touch, touchSoon, flushTouch, renderItemDrawer } from './views/drawer-item.js';
 beforeClose.add(flushTouch);
 let startBase = null;   /* the item's times when its start field took focus */
@@ -23,12 +23,13 @@ document.addEventListener('focusin', (e) => {
 });
 document.addEventListener('focusout', (e) => { if (drawer.contains(e.target)) flushTouch(); });
 window.addEventListener('pagehide', flushTouch);
-document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') { flushTouch(); commitUndo(); } });
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') { flushTouch(); commitUndo(); finishDelete(); } });
 import { openKeys, closeKeys, keysOpen } from './views/keys.js';
 import { openSession, renderSessionDrawer, refreshSessionDrawer, editSession, saveSessionDraft } from './views/drawer-session.js';
 import { minutesByDay, streak } from './history.js';
 import { launch as fireworks } from './fireworks.js';
-import { openCourse, renderCourseDrawer, saveCourseDraft, deleteCourseDraft, refreshGrades } from './views/drawer-course.js';
+import { openCourse, renderCourseDrawer, saveCourseDraft, refreshGrades, courseChanged } from './views/drawer-course.js';
+import { toast, hideToast } from './views/toast.js';
 import { openSettings, renderSettings, applyCoat, refreshSyncNote, refreshSpotifyGroup, feedAction } from './views/drawer-settings.js';
 import * as spotify from './spotify.js';
 import * as web from './web-player.js';
@@ -156,8 +157,18 @@ sync.onStatus((s) => {
   pill.dataset.state = s.state;
   pill.textContent = LABELS[s.state] + (s.state === 'offline' && s.pending ? ' · ' + s.pending : '');
   pill.title = s.message || (s.state === 'offline' ? 'Changes are kept on this device until you are back online' : 'Sync now');
+  sayTrouble(s);
   refreshSyncNote();
 });
+/* Screen readers hear sync trouble, and its end, not every save. */
+let troubled = false;
+function sayTrouble(s) {
+  const bad = s.state === 'offline' || s.state === 'error' || s.state === 'signed-out';
+  if (bad === troubled && !bad) return;
+  const text = bad ? LABELS[s.state] + (s.message ? '. ' + s.message : '') : 'Synced again';
+  if ($('syncSay').textContent !== text) $('syncSay').textContent = text;
+  troubled = bad;
+}
 sync.onPulled(async () => {
   await runReviews();
   refreshAfterSync();
@@ -266,7 +277,7 @@ async function start(profile) {
 
 store.subscribe((evt) => {
   if (evt.type === 'change' && data.profile) celebrateStudy();
-  if (evt.type === 'save-error') alert('The change could not be saved on this device. ' + evt.message);
+  if (evt.type === 'save-error') toast('The change could not be saved on this device. ' + evt.message, { error: true, ms: 10000 });
   if (evt.type === 'signed-out') { sync.stop(); spotify.stop(); web.stop(); resetRequests(); location.reload(); }
   if (evt.type === 'remote' && data.profile) refreshAfterSync();
 });
@@ -284,9 +295,13 @@ function showSignIn(error, username = '') {
   renderSignIn({ error, username });
 }
 
-async function signOut({ everywhere = false } = {}) {
+/* With unsynced edits or saved copies on this device, the first press asks in Settings;
+   the second (`force`) erases them. */
+async function signOut({ everywhere = false, force = false } = {}) {
+  await finishDelete();
   await store.reload();
-  if ((store.pendingCount() || store.conflicts.length) && !confirm('There are unsynced edits or saved conflict copies on this device. Export them from Settings before signing out. Sign out and erase them anyway?')) return;
+  if (!force && (store.pendingCount() || store.conflicts.length)) { ui.signoutAsk = { everywhere }; renderSettings(); return; }
+  ui.signoutAsk = null;
   sync.stop();
   spotify.stop();
   resetRequests();
@@ -294,7 +309,7 @@ async function signOut({ everywhere = false } = {}) {
   catch {
     sync.init();
     spotify.start();
-    alert('Sign-out failed. Check your connection and try again.');
+    toast('Sign-out failed. Check your connection and try again.', { error: true, ms: 8000 });
     return;
   }
   await sync.drain();
@@ -339,6 +354,17 @@ $('signin').addEventListener('submit', async (e) => {
 
 /* ═════════ the study timer ═════════ */
 const drawerOpen = () => !!(ui.sel || ui.draft || ui.courseDraft || ui.settings || ui.sessionDraft);
+/** Close the drawer from ✕, Escape or the scrim. A course with unsaved edits asks
+   first; asked, a second Escape or click discards them. */
+function leaveDrawer() {
+  if (ui.courseDraft && ui.confirm !== 'discard' && courseChanged()) {
+    ui.confirm = 'discard';
+    renderCourseDrawer();
+    drawer.querySelector('[data-act="keep"]')?.focus();
+    return;
+  }
+  closeDrawer();
+}
 
 focus.onTick((s, event) => {
   if (event === 'start') { ui.focus = true; render(); }
@@ -392,6 +418,33 @@ function undoDelete() {
   clearTimeout(u.timer);
   ui.hist.undo = null;
   renderView();
+}
+
+/* An item or course delete waits the same six seconds, the row hidden from every view
+   meanwhile, so the toast's Undo only has to show it again. */
+let doomed = null;   /* { key, commit, timer } */
+async function deleteLater(kind, id, what, commit) {
+  await finishDelete();
+  const key = kind + ':' + id;
+  doomed = { key, commit, timer: setTimeout(finishDelete, UNDO_MS) };
+  await store.hide(key);
+  render();
+  toast(what + ' deleted', { undo: undoLater, ms: UNDO_MS });
+}
+async function finishDelete() {
+  const d = doomed;
+  if (!d) return;
+  doomed = null;
+  clearTimeout(d.timer);
+  try { await d.commit(); } finally { await store.hide(d.key, false); }
+}
+async function undoLater() {
+  const d = doomed;
+  if (!d) return;
+  doomed = null;
+  clearTimeout(d.timer);
+  await store.hide(d.key, false);
+  render();
 }
 
 /** The heatmap: show that day's sessions, in its month. */
@@ -509,7 +562,16 @@ async function studyChange(target) {
 }
 
 /* ═════════ events ═════════ */
+/* Most clicks redraw what was clicked. Focus then goes back to the same control in the
+   new markup, so a keyboard user is not dropped to the top of the page. */
 document.addEventListener('click', async (e) => {
+  const was = document.activeElement;
+  await onClick(e);
+  if (was && was !== document.body && !was.isConnected && (!document.activeElement || document.activeElement === document.body)) {
+    refind(was)?.focus({ preventScroll: true });
+  }
+});
+async function onClick(e) {
   let el;
   if ((el = e.target.closest('[data-newcourse]'))) { openCourse(null); return; }
   if ((el = e.target.closest('[data-editcourse]'))) { openCourse(el.dataset.editcourse); return; }
@@ -627,14 +689,24 @@ document.addEventListener('click', async (e) => {
 
   if ((el = e.target.closest('[data-act]'))) {
     const act = el.dataset.act, it = current();
-    if (act === 'close' || act === 'cancel') closeDrawer();
+    if (act === 'close') leaveDrawer();
+    else if (act === 'cancel') closeDrawer();
     else if (act === 'save') saveDraft();
-    else if (act === 'delete') { ui.confirm = 'item'; renderItemDrawer(); }
-    else if (act === 'keep') { ui.confirm = null; ui.sessionDraft ? renderSessionDrawer() : ui.courseDraft ? renderCourseDrawer() : renderItemDrawer(); }
+    else if (act === 'delete') { ui.confirm = 'item'; renderItemDrawer(); drawer.querySelector('[data-act="keep"]')?.focus(); }
+    else if (act === 'keep') {
+      const was = ui.confirm;
+      ui.confirm = null;
+      ui.sessionDraft ? renderSessionDrawer() : ui.courseDraft ? renderCourseDrawer() : renderItemDrawer();
+      drawer.querySelector(was === 'discard' ? '.dtitle' : '[data-act$="delete"]')?.focus();
+    }
     else if (act === 'session-save') saveSessionDraft();
-    else if (act === 'session-delete') { ui.confirm = 'session'; renderSessionDrawer(); }
+    else if (act === 'session-delete') { ui.confirm = 'session'; renderSessionDrawer(); drawer.querySelector('[data-act="keep"]')?.focus(); }
     else if (act === 'session-delete-yes' && ui.sessionDraft) { const id = ui.sessionDraft.id; closeDrawer(); deleteWithUndo(id); }
-    else if (act === 'delete-yes' && it) { await store.deleteItem(it.id); closeDrawer(); }
+    else if (act === 'delete-yes' && it) {
+      const id = it.id, name = it.title.trim() || 'Item';
+      closeDrawer();
+      deleteLater('items', id, '“' + name + '”', () => store.deleteItem(id));
+    }
     else if (act === 'addmtg' && ui.courseDraft) {
       ui.courseDraft.meetings = ui.courseDraft.meetings || [];
       ui.courseDraft.meetings.push({ id: uid(), kind: 'Lecture', weekday: 1, start: '09:00', end: '10:00', room: '' });
@@ -642,8 +714,13 @@ document.addEventListener('click', async (e) => {
     }
     else if (act === 'addquote') addQuote();
     else if (act === 'course-save') saveCourseDraft();
-    else if (act === 'course-delete') { ui.confirm = 'course'; renderCourseDrawer(); }
-    else if (act === 'course-delete-yes' && ui.courseDraft) deleteCourseDraft();
+    else if (act === 'course-delete') { ui.confirm = 'course'; renderCourseDrawer(); drawer.querySelector('[data-act="keep"]')?.focus(); }
+    else if (act === 'course-delete-yes' && ui.courseDraft) {
+      const c = ui.courseDraft;
+      if (ui.course === c.id) ui.course = 'all';
+      closeDrawer();
+      deleteLater('courses', c.id, c.code || c.name || 'Course', () => store.deleteCourse(c.id));
+    }
     else if (act === 'fill-topics' && it) {
       const c = course(it.courseId); if (!c) return;
       const r = fillTopics(it, c, data.items, data.profile?.termStart);
@@ -680,15 +757,17 @@ document.addEventListener('click', async (e) => {
     }
     else if (act === 'conflict-restore' || act === 'conflict-dismiss') {
       try { await store.resolveConflict(el.dataset.conflict, act === 'conflict-restore'); renderSettings(); }
-      catch (error) { alert(error.message); }
+      catch (error) { toast(error.message, { error: true, ms: 8000 }); }
     }
     else if (act === 'shortcuts') { closeDrawer(); openKeys(); }
     else if (act.startsWith('feed-')) feedAction(act);
     else if (act === 'signout') signOut();
     else if (act === 'signout-all') signOut({ everywhere: true });
+    else if (act === 'signout-force') signOut({ everywhere: !!ui.signoutAsk?.everywhere, force: true });
+    else if (act === 'signout-keep') { ui.signoutAsk = null; renderSettings(); }
     else if (act === 'spotify-disconnect') {
       try { await api.spotifyDisconnect(); }
-      catch { alert('Spotify could not be disconnected. Try again when you are online.'); return; }
+      catch { toast('Spotify could not be disconnected. Try again when you are online.', { error: true, ms: 8000 }); return; }
       location.reload();
     }
     return;
@@ -712,7 +791,7 @@ document.addEventListener('click', async (e) => {
     renderItemDrawer(); return;
   }
   if (!e.target.closest('#side') && !e.target.closest('#menuBtn') && $('side').classList.contains('on')) setSide(false);
-});
+}
 
 /* On narrow screens the sidebar slides over the page. Closed, it is inert, so Tab does
    not wander through it off-screen; open, it takes focus and Escape closes it. */
@@ -721,6 +800,9 @@ function setSide(open) {
   const side = $('side'), btn = $('menuBtn');
   side.classList.toggle('on', open);
   side.inert = narrow.matches && !open;
+  /* open over the page, the page behind is dimmed and out of reach */
+  document.querySelector('.content').inert = narrow.matches && open;
+  if (!drawer.classList.contains('on')) scrim.classList.toggle('on', narrow.matches && open);
   btn.setAttribute('aria-expanded', String(open));
   if (open) side.querySelector('button, input')?.focus();
   else if (side.contains(document.activeElement)) btn.focus();
@@ -728,7 +810,7 @@ function setSide(open) {
 narrow.addEventListener('change', () => setSide(false));
 setSide(false);
 
-scrim.addEventListener('click', closeDrawer);
+scrim.addEventListener('click', () => { if ($('side').classList.contains('on') && !drawer.classList.contains('on')) setSide(false); else leaveDrawer(); });
 
 /* Some items name themselves from the course: office hours after the teacher, exams,
    quizzes and tutorials after the class. Picking a course (or switching type) fills the title in, unless
@@ -973,7 +1055,7 @@ const VIEW_KEYS = { 1: 'week', 2: 'month', 3: 'table', 4: 'spotify', 5: 'study' 
 function shortcut(e) {
   if (e.ctrlKey || e.metaKey || e.altKey || e.repeat || isTyping(e.target) || e.target.isContentEditable) return false;
   if (e.key === '?') { keysOpen() ? closeKeys() : openKeys(); e.preventDefault(); return true; }
-  if (keysOpen() || ui.focus || ui.sel || ui.draft || ui.courseDraft || ui.settings || ui.sessionDraft || $('app').hidden) return false;
+  if (keysOpen() || ui.focus || drawerOpen() || $('app').hidden) return false;
   const press = (sel) => { const b = document.querySelector(sel); if (!b) return false; e.preventDefault(); b.click(); return true; };
   if (e.key === 'n') return press('#newBtn');
   if (e.key === 't') return press('#today');
@@ -989,7 +1071,7 @@ document.addEventListener('keydown', async (e) => {
     if ($('side').classList.contains('on')) { setSide(false); return; }
     if (e.target.closest?.('#typeNav')) { e.target.blur(); ui.typeAdd = null; ui.typeEdit = false; renderSidebar(true); return; }
     if (ui.view === 'spotify' && spotView.devicesOpen()) { spotView.closeDevices(); return; }
-    if (ui.sel || ui.draft || ui.courseDraft || ui.settings || ui.sessionDraft) { closeDrawer(); return; }
+    if (drawerOpen()) { leaveDrawer(); return; }
     if (ui.focus) leaveFocus();
     return;
   }
@@ -998,7 +1080,7 @@ document.addEventListener('keydown', async (e) => {
   if ((e.key === 'Enter' || e.key === ' ') && e.target.matches?.('tr[data-id][tabindex]')) { e.preventDefault(); e.target.click(); return; }
   /* The Spotify view: / to search, space to play or pause, when not typing or on a button. */
   if (ui.view === 'spotify' && !e.ctrlKey && !e.metaKey && !e.altKey && !/^(input|textarea|select|button|a)$/i.test(e.target.tagName)
-      && !e.target.isContentEditable && !ui.sel && !ui.draft && !ui.courseDraft && !ui.settings) {
+      && !e.target.isContentEditable && !drawerOpen()) {
     if (e.key === '/') {
       const box = document.querySelector('[data-spot-q]');
       if (box) { e.preventDefault(); box.focus(); box.select(); return; }
@@ -1038,9 +1120,10 @@ document.addEventListener('keydown', async (e) => {
   if (e.target.id === 'linkUrl' || e.target.id === 'linkLabel') {
     const url = $('linkUrl').value.trim(); if (!url) return;
     const it2 = current(); if (!it2 || it2.links.length >= 20) return;
-    const full = /^https?:\/\//i.test(url) ? url : 'https://' + url;
-    let ok = full.length <= 500;
-    try { new URL(full); } catch { ok = false; }
+    /* spaces after the host are written out as %20; one inside the host is a typo */
+    const typed = /^https?:\/\//i.test(url) ? url : 'https://' + url;
+    const full = typed.replace(/^(https?:\/\/[^/?#]*)(.*)$/is, (m, head, rest) => head + rest.replace(/\s/g, '%20'));
+    const ok = httpUrl(full);
     $('linkUrl').setAttribute('aria-invalid', String(!ok));
     if (!ok) { $('linkUrl').focus(); return; }
     const lab = $('linkLabel').value.trim() || full.replace(/^https?:\/\//i, '');

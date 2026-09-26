@@ -40,13 +40,14 @@ describe('normalized rows pass the server checks', () => {
         { label: long(200), url: 'https://example.com/' + long(400) },
         { label: 'too long', url: 'https://example.com/' + long(600) },
         { label: 'space', url: 'https://exa mple.com' },
+        { label: 'space in path', url: 'https://example.com/a b' },
         { label: 'no scheme', url: 'example.com' },
       ],
     });
     expect(() => validateItem(row)).not.toThrow();
     expect(row.title).toHaveLength(140);
     expect(row.checklist).toHaveLength(50);
-    expect(row.links).toHaveLength(1);
+    expect(row.links).toHaveLength(2);
     expect(row.links[0].label).toHaveLength(60);
   });
   it('cuts the text of a course to the server limits', () => {

@@ -1,4 +1,4 @@
-import { data, course, saveCourse, deleteCourse } from '../store.js';
+import { data, course, saveCourse } from '../store.js';
 import { ui } from '../state.js';
 import { KINDS, PALETTE, HEXES, colourName, uid, normalizeCourse } from '../model.js';
 import { dur, DOW } from '../dates.js';
@@ -14,6 +14,15 @@ export function openCourse(id) {
   ui.courseDraft = c ? JSON.parse(JSON.stringify(c))
     : normalizeCourse({ id: uid(), code: '', name: '', color: HEXES[data.courses.length % HEXES.length], instructor: '', meetings: [] });
   renderCourseDrawer(true);
+}
+
+/** The draft holds edits not yet saved: it differs from the stored course, or, new, has anything in it. */
+export function courseChanged() {
+  const c = ui.courseDraft;
+  if (!c) return false;
+  if (ui.courseMode === 'new') return !!(c.name.trim() || c.code.trim() || (c.instructor || '').trim() || (c.meetings || []).length);
+  const was = course(c.id);
+  return !!was && JSON.stringify(normalizeCourse(c)) !== JSON.stringify(normalizeCourse(was));
 }
 
 export function renderCourseDrawer(focus) {
@@ -63,8 +72,12 @@ export function renderCourseDrawer(focus) {
   body += '</div>';
 
   let foot;
-  if (ui.confirm === 'course') {
-    foot = '<div class="dfoot"><span class="hint">Delete ' + esc(c.name || 'this course') + '?</span>'
+  if (ui.confirm === 'discard') {
+    foot = '<div class="dfoot"><span class="hint" role="status">Discard your changes to ' + esc(c.name.trim() || 'this course') + '?</span>'
+      + '<button class="btn ghost" type="button" data-act="keep">Keep editing</button>'
+      + '<button class="btn danger" type="button" data-act="cancel">Discard</button></div>';
+  } else if (ui.confirm === 'course') {
+    foot = '<div class="dfoot"><span class="hint" role="status">Delete ' + esc(c.name || 'this course') + '?</span>'
       + '<button class="btn ghost" type="button" data-act="keep">Keep</button>'
       + '<button class="btn danger" type="button" data-act="course-delete-yes">Delete</button></div>';
   } else {
@@ -141,9 +154,3 @@ export async function saveCourseDraft() {
   closeDrawer();
 }
 
-export async function deleteCourseDraft() {
-  const cid = ui.courseDraft.id;
-  await deleteCourse(cid);
-  if (ui.course === cid) ui.course = 'all';
-  closeDrawer();
-}

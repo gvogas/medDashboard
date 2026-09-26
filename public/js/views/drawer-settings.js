@@ -303,8 +303,14 @@ function accountTab(p) {
     }
     html += '</div>';
   }
-  return html + '<div class="setgrp"><h4>Account<em>' + esc(p.username) + '</em></h4>'
-    + '<span data-layout="ed524873"><button class="btn ghost" type="button" data-act="signout">Sign out</button>'
+  html += '<div class="setgrp"><h4>Account<em>' + esc(p.username) + '</em></h4>';
+  if (ui.signoutAsk) {
+    return html + '<div class="warnline" role="alert">This device has edits that have not synced, or saved copies. Signing out erases them. Export your data first to keep them.</div>'
+      + '<span data-layout="ed524873"><button class="btn ghost" type="button" data-act="export-data">Export data</button>'
+      + '<button class="btn ghost" type="button" data-act="signout-keep">Stay signed in</button>'
+      + '<button class="btn danger" type="button" data-act="signout-force">Sign out and erase</button></span></div>';
+  }
+  return html + '<span data-layout="ed524873"><button class="btn ghost" type="button" data-act="signout">Sign out</button>'
     + '<button class="btn ghost" type="button" data-act="signout-all" title="Every phone and laptop signed in as you will need the password again">Sign out everywhere</button></span></div>';
 }
 

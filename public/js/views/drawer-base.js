@@ -12,6 +12,19 @@ export const scrim = $('scrim');
    stays inside; when it closes, focus goes back to what opened it. Closed, it is inert
    itself, so its buttons leave the Tab order although it is only slid off-screen. */
 let opener = null;
+let covers = 0;   /* overlays above everything, drawer included: the shortcuts, the busy card */
+
+/** Which of the page and the drawer take focus, from what is open. */
+function settle() {
+  const open = drawer.classList.contains('on');
+  drawer.inert = covers > 0 || !open;
+  $('app').inert = covers > 0 || open;
+}
+/** An overlay opens (`true`) or closes over the page and the drawer. */
+export function cover(on) {
+  covers = Math.max(0, covers + (on ? 1 : -1));
+  settle();
+}
 
 export function showDrawer(html) {
   const opening = !drawer.classList.contains('on');
@@ -19,8 +32,7 @@ export function showDrawer(html) {
   setHTML(drawer, html);
   drawer.setAttribute('aria-label', drawer.querySelector('.dhead .kind')?.textContent || 'Details');
   drawer.classList.add('on');
-  drawer.inert = false;
-  $('app').inert = true;
+  settle();
   scrim.classList.add('on');
   /* callers may focus a field right after; only take focus if nothing inside has it */
   if (opening) requestAnimationFrame(() => { if (!drawer.contains(document.activeElement)) drawer.focus(); });
@@ -29,15 +41,14 @@ export function showDrawer(html) {
 export function hideDrawer() {
   const wasOpen = drawer.classList.contains('on');
   drawer.classList.remove('on');
-  drawer.inert = true;
-  $('app').inert = false;
+  settle();
   scrim.classList.remove('on');
   if (wasOpen) refind(opener)?.focus();
   opener = null;
 }
 
 /* A redraw may have replaced the opener; find its successor by what it points at. */
-function refind(el) {
+export function refind(el) {
   if (!el || el.isConnected) return el;
   if (el.id) return $(el.id);
   for (const [key, value] of Object.entries(el.dataset || {})) {
@@ -49,7 +60,7 @@ function refind(el) {
 }
 
 export function resetDrawerState() {
-  ui.sel = null; ui.draft = null; ui.courseDraft = null; ui.courseMode = null; ui.confirm = null; ui.settings = false; ui.importPlan = null; ui.fillNote = null; ui.sessionDraft = null;
+  ui.sel = null; ui.draft = null; ui.courseDraft = null; ui.courseMode = null; ui.confirm = null; ui.settings = false; ui.importPlan = null; ui.fillNote = null; ui.sessionDraft = null; ui.signoutAsk = null;
 }
 
 /** Run before the drawer closes, e.g. to save what is still being typed. */

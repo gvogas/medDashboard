@@ -220,8 +220,10 @@ export function shiftEnd(was, end, now) {
 /* Text is cut to what the server stores (worker/validate.js): a longer value is refused,
    and a refused edit leaves the board for the conflicts list. */
 const cut = (v, n) => typeof v === 'string' ? v.slice(0, n) : '';
-const httpUrl = (u) => {
-  if (typeof u !== 'string' || u.length > 500 || !/^https?:\/\//i.test(u)) return false;
+/* A link the server takes. Browsers let a space into a host name; the server's URL
+   parser does not, so that is refused here rather than trusted to `new URL`. */
+export const httpUrl = (u) => {
+  if (typeof u !== 'string' || u.length > 500 || !/^https?:\/\/[^\s/?#]+([/?#]|$)/i.test(u)) return false;
   try { new URL(u); return true; } catch { return false; }
 };
 

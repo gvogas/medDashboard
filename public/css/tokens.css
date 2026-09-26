@@ -11,7 +11,7 @@
   --accent:#0E7C74; --accent-soft:#D8EDEA; --accent-ink:#0A5B55; --on-accent:#FFFFFF;
   --good:#2F8757; --crit:#C0392B; --on-crit:#FFFFFF; --warn:#B77505;
   --done:#FCEDF2; --done-2:#F8DFE8; --done-line:#F0CFDB; --done-ink:#8A5A6B; --done-track:#F3D3DE;
-  --chip-bg:#EDF3F2; --chip-ink:#5D7B77;
+  --chip-bg:#EDF3F2; --chip-ink:#4F6D69;
   --pink-bg:#FBE3EC; --pink-ink:#9C4D66;
   --red-bg:#FBE9E7; --red-ink:#C0392B; --red-line:#F0C9C4;
   --amber-bg:#FCF2DF; --amber-ink:#93660E;
@@ -20,7 +20,7 @@
   --bar-bg:rgba(255,255,255,.82);
   --weave-1:rgba(20,48,45,.035); --weave-2:rgba(20,48,45,.025);
   --pocket-a:#FBFDFC; --pocket-b:#F3F8F7;
-  --cell-out:#FAFCFC; --box-line:#B9CCC9; --disabled:#C3D6D3;
+  --cell-out:#FAFCFC; --box-line:#7A938F; --disabled:#C3D6D3;
   --scroll-track:#E4EDEB; --orn-stroke:#0E7C74;
   --coat:#17B3AE;   /* the lab coat's colour, set from Settings */
   --orn-bg:.20; --orn-art:.42; --orn-weave:1;
@@ -45,7 +45,7 @@
   --bar-bg:rgba(10,18,20,.82);
   --weave-1:rgba(255,255,255,.028); --weave-2:rgba(255,255,255,.020);
   --pocket-a:#162526; --pocket-b:#101C1D;
-  --cell-out:#0D1718; --box-line:#3A4D4A; --disabled:#294240;
+  --cell-out:#0D1718; --box-line:#5C726F; --disabled:#294240;
   --scroll-track:#22322F; --orn-stroke:#3FBFB2;
   --shadow-1:0 1px 2px rgba(0,0,0,.4);
   --shadow-2:0 2px 8px rgba(0,0,0,.45), 0 16px 40px rgba(0,0,0,.5);
@@ -64,7 +64,7 @@
   --accent:#3650C8; --accent-soft:#E0E6FA; --accent-ink:#2A3E9E; --on-accent:#FFFFFF;
   --chip-bg:#ECEFF5; --chip-ink:#5A6680;
   --weave-1:rgba(23,32,51,.035); --weave-2:rgba(23,32,51,.025);
-  --cell-out:#F9FAFD; --box-line:#BAC3D6; --disabled:#C5CCDC;
+  --cell-out:#F9FAFD; --box-line:#7E89A3; --disabled:#C5CCDC;
   --scroll-track:#E3E7F0; --orn-stroke:#3650C8;
   --orn-bg:.22;
   --shadow-1:0 1px 2px rgba(23,32,51,.08);
@@ -77,7 +77,7 @@
   --accent:#7D92F5; --accent-soft:#1A2347; --accent-ink:#A9B8FA; --on-accent:#0A1030;
   --chip-bg:#1B2336; --chip-ink:#97A2BC;
   --weave-1:rgba(255,255,255,.028); --weave-2:rgba(255,255,255,.020);
-  --cell-out:#0D1220; --box-line:#3A4560; --disabled:#2A3350;
+  --cell-out:#0D1220; --box-line:#5F6B8A; --disabled:#2A3350;
   --scroll-track:#222B40; --orn-stroke:#7D92F5;
   --bar-bg:rgba(10,14,22,.82);
   --shadow-1:0 1px 2px rgba(0,0,0,.4);
