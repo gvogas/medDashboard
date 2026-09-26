@@ -27,6 +27,7 @@ export function cover(on) {
 
 export function showDrawer(html) {
   const opening = !drawer.classList.contains('on');
+  const had = drawer.contains(document.activeElement) ? document.activeElement : null;
   if (opening) opener = document.activeElement;
   setHTML(drawer, html);
   drawer.setAttribute('aria-label', drawer.querySelector('.dhead .kind')?.textContent || 'Details');
@@ -35,6 +36,12 @@ export function showDrawer(html) {
   scrim.classList.add('on');
   /* callers may focus a field right after; only take focus if nothing inside has it */
   if (opening) requestAnimationFrame(() => { if (!drawer.contains(document.activeElement)) drawer.focus(); });
+  /* redrawn under the keyboard (a select changed, a file picked): the same control, or the drawer */
+  else if (had && !had.isConnected) {
+    const next = refind(had);
+    if (next && drawer.contains(next)) next.focus({ preventScroll: true });
+    if (!drawer.contains(document.activeElement)) drawer.focus({ preventScroll: true });
+  }
 }
 
 export function hideDrawer() {
@@ -42,11 +49,9 @@ export function hideDrawer() {
   drawer.classList.remove('on');
   settle();
   scrim.classList.remove('on');
-  if (wasOpen) refind(opener)?.focus();
+  if (wasOpen) refind(opener)?.focus();   /* a redraw may have replaced the opener: its successor */
   opener = null;
 }
-
-/* A redraw may have replaced the opener; find its successor by what it points at. */
 
 export function resetDrawerState() {
   ui.sel = null; ui.draft = null; ui.courseDraft = null; ui.courseMode = null; ui.confirm = null; ui.settings = false; ui.importPlan = null; ui.fillNote = null; ui.sessionDraft = null; ui.achDraft = null; ui.schoolDraft = null; ui.signoutAsk = null;

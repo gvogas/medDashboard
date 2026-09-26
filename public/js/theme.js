@@ -9,10 +9,11 @@ import { renderSettings } from './views/drawer-settings.js';
 import { schedule as drawOrnament } from './ornament.js';
 
 export function setTheme(choice, { persist = true } = {}) {
-  ui.theme = choice;
-  if (window.__roundsApplyTheme) window.__roundsApplyTheme(choice);
+  ui.theme = choice === 'light' || choice === 'dark' ? choice : 'system';
+  if (window.__roundsApplyTheme) window.__roundsApplyTheme(ui.theme);
   rememberUi();
-  if (persist && data.profile && data.profile.theme !== choice) store.saveProfile({ theme: choice });
+  /* a failed save shows its own toast */
+  if (persist && data.profile && data.profile.theme !== ui.theme) store.saveProfile({ theme: ui.theme }).catch(() => {});
   if (ui.settings) renderSettings();
   drawOrnament();                     /* the ornament layer is drawn in the theme's teal */
 }
@@ -23,7 +24,7 @@ export function setBg(choice, { persist = true } = {}) {
   ui.bg = choice === 'cs' ? 'cs' : 'med';
   document.documentElement.setAttribute('data-bg', ui.bg);
   rememberUi();
-  if (persist && data.profile && data.profile.bg !== ui.bg) store.saveProfile({ bg: ui.bg });
+  if (persist && data.profile && data.profile.bg !== ui.bg) store.saveProfile({ bg: ui.bg }).catch(() => {});
   if (data.profile) render();          /* the sidebar, stats and type lists change with it */
   if (ui.settings) renderSettings();
   drawOrnament();

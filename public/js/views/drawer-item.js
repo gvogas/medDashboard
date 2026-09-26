@@ -1,6 +1,6 @@
 import { data, course, item, saveItem } from '../store.js';
 import { ui } from '../state.js';
-import { typeList, statusesFor, baseOf, tmeta, statusLabel, isOverdue, isOpen, isTest, isComplete, uid, normalizeItem, shiftEnd, classRoom } from '../model.js';
+import { typeList, statusesFor, baseOf, tmeta, statusLabel, isOverdue, isOpen, isTest, isComplete, uid, normalizeItem, shiftEnd, classRoom, httpUrl } from '../model.js';
 import { parse, diffDays, today, hhmm, DOW } from '../dates.js';
 import { activeCourses } from '../query.js';
 import { esc, autoGrow } from '../dom.js';
@@ -106,7 +106,7 @@ export function renderItemDrawer(focusTitle) {
 
   const head = '<div class="dhead" data-accent="' + m.color + '">'
     + '<span class="kind">' + esc(isNew ? 'New ' + m.label.toLowerCase() : m.label) + '</span>'
-    + (isNew ? '' : (isOverdue(it) ? '<span class="chip overdue">Overdue</span>' : '<span class="chip st-' + it.status + '">' + esc(statusLabel(it)) + '</span>'))
+    + (isNew ? '' : (isOverdue(it) ? '<span class="chip overdue">Overdue</span>' : '<span class="chip st-' + esc(it.status) + '">' + esc(statusLabel(it)) + '</span>'))
     + '<span data-layout="f7add123" class="mono">' + esc(countdown) + '</span>'
     + (prep ? '<span class="chip prep' + (prep.hot ? ' hot' : '') + '" title="Topics done · topics a day to finish before the exam">' + esc(prepLabel(prep)) + '</span>' : '')
     + '<button class="icon-btn" type="button" data-act="close" aria-label="Close">✕</button></div>';
@@ -147,7 +147,9 @@ export function renderItemDrawer(focusTitle) {
   body += '<div class="addline"><input type="text" id="clAdd" placeholder="Add a step, press Enter" aria-label="Add a step" maxlength="140"></div></div>'
     + '<div class="dsec"><h4>Links</h4><div class="links">';
   (it.links || []).forEach((l, i) => {
-    body += '<div class="linkrow"><span data-layout="ae860f94">↗</span><a href="' + esc(l.url) + '" target="_blank" rel="noopener noreferrer">' + esc(l.label || l.url) + '</a>'
+    /* only a web link becomes a link: never a javascript: or data: URL, however it got here */
+    body += '<div class="linkrow"><span data-layout="ae860f94">↗</span>'
+      + (httpUrl(l.url) ? '<a href="' + esc(l.url) + '" target="_blank" rel="noopener noreferrer">' + esc(l.label || l.url) + '</a>' : '<span>' + esc(l.label || l.url) + '</span>')
       + '<button class="x" type="button" data-linkx="' + i + '" aria-label="Remove link">✕</button></div>';
   });
   body += '</div><div class="addline"><input type="text" id="linkLabel" placeholder="Label" aria-label="Link label" data-layout="798c9fe1" maxlength="60">'

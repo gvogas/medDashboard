@@ -10,7 +10,7 @@ import { esc } from '../dom.js';
 import { parseIcs } from '../importers/ics.js';
 import { parseCsv } from '../importers/csv.js';
 import { planImport, planOutline, planSummary, setWeek1 } from '../importers/plan.js';
-import { showDrawer, resetDrawerState } from './drawer-base.js';
+import { drawer, showDrawer, resetDrawerState } from './drawer-base.js';
 import { api } from '../api.js';
 import { readWithAi } from './busy.js';
 import { renderSettings } from './drawer-settings.js';
@@ -38,7 +38,7 @@ function previewOutline(outline, name) {
   renderImport();
 }
 
-export function renderImport() {
+function renderImport() {
   const { plan, name } = ui.importPlan;
   const head = '<div class="dhead"><span class="kind">Import</span>'
     + '<span data-layout="f7add123" class="mono">' + esc(name || 'pasted text') + '</span>'
@@ -55,6 +55,7 @@ export function renderImport() {
 
   const groups = plan.courses.map((c) => ({ c, items: plan.items.map((it, i) => ({ it, i })).filter((x) => x.it.row.courseId === c.id) }));
   const loose = plan.items.map((it, i) => ({ it, i })).filter((x) => !x.it.row.courseId);
+  const types = typeList(ui.bg, data.items), row = (x) => itemRow(x, types);   /* once, not per row */
   for (const { c, items } of groups) {
     body += '<div class="dsec imp-group"><h4><i class="pip" data-accent="' + c.color + '"></i>' + esc(c.code) + ' · ' + esc(c.name)
       + (c.isNew ? '<em>new course</em>' : '') + '</h4>';
@@ -63,21 +64,21 @@ export function renderImport() {
         + '<span class="imp-kind">' + esc(m.kind) + '</span><span>' + DOW[m.weekday] + ' ' + esc(m.start) + '–' + esc(m.end) + '</span>'
         + '<span class="imp-where">' + esc(m.room) + '</span></label>';
     }
-    body += items.map(itemRow).join('') + '</div>';
+    body += items.map(row).join('') + '</div>';
   }
-  if (loose.length) body += '<div class="dsec imp-group"><h4>No course</h4>' + loose.map(itemRow).join('') + '</div>';
+  if (loose.length) body += '<div class="dsec imp-group"><h4>No course</h4>' + loose.map(row).join('') + '</div>';
   body += '</div>';
 
-  const n = countTicked(plan) + plan.courses.filter((c) => c.keep && c.isNew).length;
+  const n = importCount(plan);
   const foot = '<div class="dfoot"><span class="hint">Nothing is saved until you import</span>'
     + '<button class="btn ghost" type="button" data-act="import-cancel">Cancel</button>'
     + '<button class="btn" type="button" data-act="import-confirm"' + (n ? '' : ' disabled') + '>Import ' + n + '</button></div>';
   showDrawer(head + body + foot);
 }
 
-function itemRow({ it, i }) {
+function itemRow({ it, i }, list) {
   const r = it.row;
-  const types = typeList(ui.bg, data.items).filter((t) => t.id === r.type || !t.hidden)
+  const types = list.filter((t) => t.id === r.type || !t.hidden)
     .map((t) => '<option value="' + t.id + '"' + (t.id === r.type ? ' selected' : '') + '>' + esc(t.label) + '</option>').join('');
   return '<div class="imp-row' + (it.duplicate ? ' dup' : '') + '"><input type="checkbox" data-imp-i="' + i + '"' + (it.include ? ' checked' : '') + (r.date ? '' : ' disabled') + ' aria-label="Import ' + esc(r.title) + '">'
     + '<select data-imp-type="' + i + '" aria-label="Type">' + types + '</select>'
@@ -85,8 +86,10 @@ function itemRow({ it, i }) {
     + '<span class="imp-where">' + esc(r.recur === 'weekly' ? 'every ' + DOW[r.weekday] : r.date ? shortDate(r.date) + (it.week ? ' · wk ' + it.week : '') : 'week ' + it.week) + (r.start ? ' ' + esc(r.start) : '') + '</span></div>';
 }
 
-function countTicked(plan) {
-  return plan.courses.reduce((n, c) => n + c.meetings.filter((m) => m.include).length, 0) + plan.items.filter((i) => i.include).length;
+/** What Import would write: the ticked classes and items, and the new courses kept. */
+function importCount(plan) {
+  return plan.courses.reduce((n, c) => n + c.meetings.filter((m) => m.include).length + (c.keep && c.isNew ? 1 : 0), 0)
+    + plan.items.filter((i) => i.include).length;
 }
 
 /** Apply a tick or a type change from the preview. */
@@ -96,12 +99,17 @@ export function editImport(target) {
   const d = target.dataset;
   if (d.impWeek1 !== undefined) {
     setWeek1(plan, target.value);
-  } else if (d.impM) {
-    const [cid, mid] = d.impM.split(':');
-    const m = plan.courses.find((c) => c.id === cid)?.meetings.find((x) => x.id === mid);
-    if (m) m.include = target.checked;
-  } else if (d.impI !== undefined) {
-    plan.items[+d.impI].include = target.checked;
+  } else if (d.impM || d.impI !== undefined) {
+    if (d.impM) {
+      const [cid, mid] = d.impM.split(':');
+      const m = plan.courses.find((c) => c.id === cid)?.meetings.find((x) => x.id === mid);
+      if (m) m.include = target.checked;
+    } else plan.items[+d.impI].include = target.checked;
+    /* a tick changes only the counts, at the top and on the button: the list is not redrawn */
+    const sum = drawer.querySelector('.imp-sum'), btn = drawer.querySelector('[data-act="import-confirm"]'), n = importCount(plan);
+    if (sum) sum.textContent = planSummary(plan);
+    if (btn) { btn.textContent = 'Import ' + n; btn.disabled = !n; }
+    return;
   } else if (d.impType !== undefined) {
     plan.items[+d.impType].row.type = target.value;
     return;                                   /* nothing on screen depends on it */

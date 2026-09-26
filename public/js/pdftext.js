@@ -11,8 +11,8 @@ let pdfjs = null;
 export async function pdfText(file) {
   pdfjs ||= await import('./vendor/pdfjs.mjs');
   const task = pdfjs.getDocument({ data: new Uint8Array(await file.arrayBuffer()), useSystemFonts: true, isEvalSupported: false, disableFontFace: true });
-  const doc = await task.promise;
   try {
+    const doc = await task.promise;   /* a damaged or locked PDF fails here: the task still ends */
     const pages = [];
     for (let n = 1; n <= doc.numPages; n++) {
       const content = await (await doc.getPage(n)).getTextContent();

@@ -205,6 +205,10 @@ const fixEnd = (start, end) => {
   return start < '23:59' ? clock(minutes(start) + 60) : '';
 };
 
+/** A class's end: as given when after the start, else an hour on (the server refuses a
+   class that ends when it starts). The import preview dedupes by the same rule. */
+export const classEnd = (start, end) => end && end > start ? end : clock(minutes(start) + 60);
+
 /** The end after the start moves from `was` to `now`, keeping the length. */
 export function shiftEnd(was, end, now) {
   if (!was || !end || !now) return end;
@@ -253,7 +257,7 @@ export function normalizeItem(raw) {
 export function normalizeCourse(raw, index = 0) {
   return {
     id: raw.id || uid(),
-    code: (raw.code || '').slice(0, 8),
+    code: cut(raw.code, 8),
     name: cut(raw.name, 80),
     color: HEXES.includes(raw.color) ? raw.color : HEXES[index % HEXES.length],
     instructor: cut(raw.instructor, 60),
@@ -267,8 +271,7 @@ export function normalizeCourse(raw, index = 0) {
             id: m.id || uid(),
             kind: KINDS.includes(m.kind) ? m.kind : 'Lecture',
             weekday: Number.isInteger(m.weekday) ? m.weekday : 1,
-            /* the server refuses a class that ends when it starts: with no end, it lasts an hour */
-            start, end: m.end && m.end > start ? m.end : clock(minutes(start) + 60),
+            start, end: classEnd(start, m.end),
             room: cut(m.room, 40),
           };
         })
@@ -333,12 +336,14 @@ export function normalizeStudySession(raw) {
 
 /* Your own achievement: a sticker picture, a name, and what earns it (see achievements.js). */
 export const ACHIEVEMENT_LIMIT = 30;
+/* The pictures the server takes (worker/validate.js): an SVG or other type is dropped. */
+const STICKER_TYPE = /^data:image\/(?:webp|png|jpeg);base64,/;
 export function normalizeAchievement(raw) {
   const rule = raw.rule === 'grade' ? 'grade' : 'hours';
   return {
     id: raw.id || uid(),
     name: cut(raw.name, 40),
-    sticker: typeof raw.sticker === 'string' && raw.sticker.startsWith('data:image/') ? raw.sticker : '',
+    sticker: typeof raw.sticker === 'string' && STICKER_TYPE.test(raw.sticker) ? raw.sticker : '',
     rule,
     courseId: rule === 'hours' ? raw.courseId || null : null,
     itemId: rule === 'grade' ? raw.itemId || null : null,

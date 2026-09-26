@@ -9,7 +9,7 @@ import { mkdtempSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { readQueries, copyStatements } from './lib/move-db.js';
+import { readQueries, copyStatements, COLUMNS_QUERY, uncopied } from './lib/move-db.js';
 
 const args = process.argv.slice(2);
 const flag = (name) => { const i = args.indexOf(name); return i >= 0 ? args[i + 1] : null; };
@@ -47,6 +47,9 @@ try {
   const where = remote ? 'remote' : 'local';
   const fresh = d1(to, '--command', 'SELECT (SELECT count(*) FROM users) AS users, (SELECT count(*) FROM changes) AS changes')[0].results[0];
   if (fresh.users || fresh.changes) throw new Error(`${to} (${where}) already holds data; the copy only goes into a fresh database.`);
+
+  const left = uncopied(d1(from, '--command', COLUMNS_QUERY)[0].results);
+  if (left.length) throw new Error(`${from} has data the copy would drop; add it to TABLES in scripts/lib/move-db.js first: ${left.join(', ')}`);
 
   console.log(`Reading ${from} (${where})…`);
   const source = dump(from);

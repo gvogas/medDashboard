@@ -88,8 +88,8 @@ describe('the player poll', () => {
     const e = countedEnv();
     const res = await handleApi(request(api, '/api/spotify/player'), e, new URL(BASE + '/api/spotify/player'));
     expect((await res.json()).connected).toBe(true);
-    // The session and limit, the token row, the upstream cooldown.
-    expect(e.log).toHaveLength(3);
+    // The session and limit; the token row and the upstream cooldown together.
+    expect(e.log).toEqual(['batch', 'batch']);
   });
 
   it('does not read the row back after a refresh', async () => {
@@ -97,7 +97,7 @@ describe('the player poll', () => {
     const e = countedEnv();
     const res = await handleApi(request(api, '/api/spotify/player'), e, new URL(BASE + '/api/spotify/player'));
     expect((await res.json()).connected).toBe(true);
-    expect(e.log.filter((sql) => /^SELECT refresh_token/.test(sql))).toHaveLength(2);   // before and under the lease
+    expect(e.log.filter((sql) => /^SELECT refresh_token/.test(sql))).toHaveLength(1);   // under the lease; the first read is batched
   });
 
   it('is still not connected without a row', async () => {

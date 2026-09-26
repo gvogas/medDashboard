@@ -1,7 +1,6 @@
-import { setHTML } from '../dom.js';
 // The sign-in screen: the coat pocket, a username and a password.
 
-import { esc, $ } from '../dom.js';
+import { esc, $, setHTML } from '../dom.js';
 import { TUCK_SVG } from './bits.js';
 
 export function renderSignIn({ error = '', username = '' } = {}) {

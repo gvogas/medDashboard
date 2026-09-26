@@ -2,13 +2,13 @@ import { esc } from '../dom.js';
 import { ui } from '../state.js';
 import { ApiError } from '../api.js';
 import { pdfText } from '../pdftext.js';
-import { cover } from './drawer-base.js';
+import { cover, drawer } from './drawer-base.js';
 
 /* A full-screen wait card while a course outline or a school calendar is read: the AI
    step can take half a minute, and a button label alone is easy to miss. */
 let el = null, timer = null, started = 0;
 
-export function showBusy(fileName, stage, title = 'Uploading your course') {
+function showBusy(fileName, stage, title = 'Uploading your course') {
   if (!el) {
     el = document.createElement('div');
     el.className = 'busy-screen';
@@ -39,10 +39,14 @@ function tick() {
   t.textContent = s < 1 ? '' : s + 's';
 }
 
-export function hideBusy() {
+function hideBusy() {
   clearInterval(timer); timer = null;
-  if (el) cover(false);
-  el?.remove(); el = null;
+  if (!el) return;
+  cover(false);
+  const had = el.contains(document.activeElement);
+  el.remove(); el = null;
+  /* the card held the keyboard: it goes back to the drawer the file was picked in */
+  if (had) drawer.focus({ preventScroll: true });
 }
 
 /**

@@ -14,6 +14,21 @@ export const TABLES = {
 };
 
 const ORDER_BY = { users: 'id', changes: 'seq', spotify_tokens: 'user_id' };
+/* Short-lived, or filled by the fresh schema itself. */
+const LEFT_BEHIND = ['login_throttle', 'request_limits', 'spotify_oauth_states', 'spotify_refresh_locks', 'sync_state', 'd1_migrations'];
+
+/** Every column of the database's own tables, as rows of {tbl, col}. */
+export const COLUMNS_QUERY = `SELECT m.name AS tbl, p.name AS col FROM sqlite_master AS m, pragma_table_info(m.name) AS p
+  WHERE m.type = 'table' AND substr(m.name, 1, 7) != 'sqlite_' AND substr(m.name, 1, 4) != '_cf_' ORDER BY m.name, p.cid`;
+
+/**
+ * `table.column` for each source column the copy would silently leave behind: a table or
+ * column added since TABLES was last extended. The comparison after the copy cannot see
+ * these, since it reads back only what TABLES names.
+ */
+export function uncopied(columns) {
+  return columns.filter(({ tbl, col }) => !LEFT_BEHIND.includes(tbl) && !TABLES[tbl]?.includes(col)).map(({ tbl, col }) => `${tbl}.${col}`);
+}
 
 /** The reads that make a dump: one per table, plus the feed's floor and head. */
 export function readQueries() {

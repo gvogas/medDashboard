@@ -1,5 +1,5 @@
 import { json, readJson, readBytes, HttpError } from './http.js';
-import { requireUser, requireSession, signSession, sessionCookie, clearCookie, deviceCookie, trustedDevice, parseCookies, secureFlag, RENEW_WITHIN_MS } from './auth.js';
+import { requireUser, requireSession, signSession, sessionCookie, clearCookie, deviceCookie, trustedDevice, parseCookies, secureFlag, sameString, hex, RENEW_WITHIN_MS } from './auth.js';
 import { verifyPassword, normalizeUsername } from './password.js';
 import { claimAttempt, recordSuccess } from './throttle.js';
 import { limitLogin, limitOutline } from './limits.js';
@@ -73,7 +73,7 @@ function offsetParam(url, max = 999999) {
 async function spotifyConnect({ request, env, url }) {
   const userId = await requireUser(request, env);
   if (!spotify.configured(env)) throw new HttpError(503, { error: 'spotify_not_configured' });
-  const state = [...crypto.getRandomValues(new Uint8Array(16))].map((b) => b.toString(16).padStart(2, '0')).join('');
+  const state = hex(crypto.getRandomValues(new Uint8Array(16)));
   await env.DB.prepare(`INSERT INTO spotify_oauth_states (user_id, state, expires_at) VALUES (?, ?, ?)
     ON CONFLICT (user_id) DO UPDATE SET state = excluded.state, expires_at = excluded.expires_at`)
     .bind(userId, state, Date.now() + 600_000).run();
@@ -89,7 +89,7 @@ async function spotifyCallback({ request, env, url }) {
   try { userId = await requireUser(request, env); } catch { return redirect(url, 'error', clear); }
   const state = url.searchParams.get('state'), code = url.searchParams.get('code');
   const expected = parseCookies(request.headers.get('cookie'))[STATE_COOKIE];
-  if (!state || !expected || state !== expected || !code || url.searchParams.get('error') || !spotify.configured(env)) {
+  if (!state || !expected || !sameString(state, expected) || !code || url.searchParams.get('error') || !spotify.configured(env)) {
     return redirect(url, 'error', clear);
   }
   try {
@@ -108,7 +108,6 @@ async function spotifyCallback({ request, env, url }) {
   }
   return redirect(url, 'connected', clear);
 }
-
 
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -156,9 +155,8 @@ const routes = [
     const ok = await verifyPassword(body.password, user ? user.password_hash : 'pbkdf2$100000$AAAAAAAAAAAAAAAAAAAAAA$AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA');
     if (!user || !ok) throw bad();
     await recordSuccess(env.DB, throttleKey);
-    const profile = await getProfile(env.DB, user.id);
-    const token = await signSession(profile.id, user.pw_gen, env.SESSION_SECRET);
-    const res = json(profile, 200, { 'set-cookie': sessionCookie(token, url) });
+    const token = await signSession(user.profile.id, user.pw_gen, env.SESSION_SECRET);
+    const res = json(user.profile, 200, { 'set-cookie': sessionCookie(token, url) });
     if (!device) res.headers.append('set-cookie', await deviceCookie(username, env.SESSION_SECRET, url));
     return res;
   }],

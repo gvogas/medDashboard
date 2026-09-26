@@ -1,10 +1,9 @@
-import { setHTML } from '../dom.js';
 import { data } from '../store.js';
 import { ui } from '../state.js';
 import { isOpen, isOverdue, isTest, tmeta } from '../model.js';
 import { diffDays, today, dur } from '../dates.js';
 import { activeCourses } from '../query.js';
-import { esc, $ } from '../dom.js';
+import { esc, $, setHTML } from '../dom.js';
 import { prepPace, prepLabel } from '../prep.js';
 
 export function renderStats() {

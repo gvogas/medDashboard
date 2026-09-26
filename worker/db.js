@@ -23,12 +23,16 @@ function profileFromRow(r) {
   };
 }
 
-/** The id and stored hash for a username, or null. Only the login route reads the hash. */
+/**
+ * {password_hash, pw_gen, profile} for a username, or null: one read for the whole sign-in.
+ * Only the login route reads the hash.
+ */
 export async function getUserForLogin(db, username) {
-  return db.prepare('SELECT id, password_hash, pw_gen FROM users WHERE username = ?').bind(username).first();
+  const row = await db.prepare(`SELECT ${PROFILE_COLS}, password_hash, pw_gen FROM users WHERE username = ?`).bind(username).first();
+  return row ? { password_hash: row.password_hash, pw_gen: row.pw_gen, profile: profileFromRow(row) } : null;
 }
 
-/** Invalidate every session of this user; returns the new generation. */
+/** Invalidate every session of this user. */
 export async function bumpPasswordGen(db, userId) {
   await db.prepare('UPDATE users SET pw_gen = pw_gen + 1 WHERE id = ?').bind(userId).run();
 }
@@ -155,18 +159,18 @@ function upsertStmt(db, table, userId, id, fields, now, revision) {
 export async function upsertRow(db, table, userId, id, fields, now = Date.now(), revision = 0) {
   const saved = await upsertStmt(db, table, userId, id, fields, now, revision).first();
   if (saved) return rowToApi(table, saved);
-  const [current, course] = await db.batch([
+  const [current, course, live] = await db.batch([
     db.prepare(`SELECT ${selectCols(table)} FROM ${table} WHERE user_id = ? AND id = ?`).bind(userId, id),
     table === 'items' && fields.courseId ? courseStmt(db, userId, fields.courseId) : db.prepare('SELECT 1 AS x'),
+    table === 'achievements' ? db.prepare('SELECT count(*) AS n FROM achievements WHERE user_id = ? AND deleted_at IS NULL').bind(userId) : db.prepare('SELECT 0 AS n'),
   ]);
   if (!course.results.length) throw new HttpError(400, { error: 'invalid', field: 'courseId' });
   /* A new or revived achievement at a matching revision missed only because of the limit. */
   const row = current.results[0];
-  if (table === 'achievements' && (row ? row.deleted_at !== null && row.revision === revision : revision === 0)) {
-    const { n } = await db.prepare('SELECT count(*) AS n FROM achievements WHERE user_id = ? AND deleted_at IS NULL').bind(userId).first();
-    if (n >= ACHIEVEMENT_LIMIT) throw new HttpError(400, { error: 'too_many', limit: ACHIEVEMENT_LIMIT });
+  if (table === 'achievements' && (row ? row.deleted_at !== null && row.revision === revision : revision === 0) && live.results[0].n >= ACHIEVEMENT_LIMIT) {
+    throw new HttpError(400, { error: 'too_many', limit: ACHIEVEMENT_LIMIT });
   }
-  throw new HttpError(409, { error: 'conflict', current: current.results[0] ? rowToApi(table, current.results[0]) : null });
+  throw new HttpError(409, { error: 'conflict', current: row ? rowToApi(table, row) : null });
 }
 
 /** Hard-delete rows soft-deleted before `before`. Items first, so course rows go last. */
@@ -233,8 +237,11 @@ export async function syncPage(db, userId, cursor, limit = 100) {
 
 // ── Spotify ─────────────────────────────────────────────────────────────────
 
+export const spotifyTokensStmt = (db, userId) =>
+  db.prepare('SELECT refresh_token, access_token, expires_at FROM spotify_tokens WHERE user_id = ?').bind(userId);
+
 export async function getSpotifyTokens(db, userId) {
-  return db.prepare('SELECT refresh_token, access_token, expires_at FROM spotify_tokens WHERE user_id = ?').bind(userId).first();
+  return spotifyTokensStmt(db, userId).first();
 }
 
 export async function saveSpotifyTokens(db, userId, { refreshToken, accessToken, expiresAt }, now = Date.now()) {

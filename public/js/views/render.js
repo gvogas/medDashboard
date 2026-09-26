@@ -1,4 +1,3 @@
-import { setHTML } from '../dom.js';
 // The page: header, sidebar, stats and whichever view is chosen.
 
 import { ui } from '../state.js';
@@ -6,7 +5,7 @@ import { parse, addDays, monday, iso, DOW, MON } from '../dates.js';
 import { schoolCal } from '../query.js';
 import { weekOf } from '../school.js';
 import { weekLabel } from './school-bits.js';
-import { $, keepFocus } from '../dom.js';
+import { $, keepFocus, setHTML } from '../dom.js';
 import { renderSidebar } from './sidebar.js';
 import { renderStats } from './stats.js';
 import { renderWeek } from './week.js';

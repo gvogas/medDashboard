@@ -22,8 +22,9 @@ export function read(now = Date.now()) {
 
 /** On sign-in: resume a run this device was in the middle of. */
 export async function load() {
-  run = (await store.meta.get(KEY)) || null;
-  if (!run) return;
+  const kept = await store.meta.get(KEY);
+  run = kept && typeof kept.id === 'string' && timer.resumable(kept) ? kept : null;
+  if (!run) { if (kept) await store.meta.set(KEY, null); return; }   /* a damaged run would stop sign-in */
   if (timer.read(run).done) { await finish(); return; }
   lastStep = stepKey();
   tick();

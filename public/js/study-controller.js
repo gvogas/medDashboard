@@ -78,9 +78,11 @@ function undoDelete() {
    meanwhile, so the toast's Undo only has to show it again. */
 let doomed = null;   /* { key, commit, timer } */
 export async function deleteLater(kind, id, what, commit) {
-  await finishDelete();
+  /* a failed save already shows its own toast; it must not stop this delete */
+  const settle = () => finishDelete().catch(() => {});
+  await settle();
   const key = kind + ':' + id;
-  doomed = { key, commit, timer: setTimeout(finishDelete, UNDO_MS) };
+  doomed = { key, commit, timer: setTimeout(settle, UNDO_MS) };
   await store.hide(key);
   render();
   toast(what + ' deleted', { undo: undoLater, ms: UNDO_MS });

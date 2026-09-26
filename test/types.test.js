@@ -19,6 +19,7 @@ describe('custom item types: validation', () => {
   it.each([
     ['a bad id', [{ ...quiz, id: 'essay' }], 'types[0].id'],
     ['an id with capitals', [{ ...quiz, id: 'c-Quiz' }], 'types[0].id'],
+    ['an id that is not a string', [{ ...quiz, id: ['c-quiz1'] }], 'types[0].id'],
     ['a custom type with no name', [{ ...quiz, label: '  ' }], 'types[0].label'],
     ['a colour off the palette', [{ ...quiz, color: '#000000' }], 'types[0].color'],
     ['an unknown kind', [{ ...quiz, kind: 'exam' }], 'types[0].kind'],

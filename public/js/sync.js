@@ -73,6 +73,7 @@ async function pushAll(cycle) {
       }
       if (!active(cycle)) return false;
       await store.settleOperation(op, saved);
+      tries.delete(op.token);   /* it got through after all */
     } catch (e) {
       if (!active(cycle)) return false;
       if (e instanceof ApiError && [400, 404, 409, 413, 422].includes(e.status)) {

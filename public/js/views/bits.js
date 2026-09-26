@@ -15,7 +15,7 @@ export function stepsHtml(it) {
 
 export function statusChip(it) {
   if (isOverdue(it)) return '<span class="chip overdue">Overdue</span>';
-  return '<span class="chip st-' + it.status + '">' + esc(statusLabel(it))
+  return '<span class="chip st-' + esc(it.status) + '">' + esc(statusLabel(it))
     + (it.status === 'graded' && typeof it.grade === 'number' ? ' ' + it.grade + '%' : '') + '</span>';
 }
 

@@ -48,14 +48,18 @@ function when(prop) {
 
 export function parseIcs(text) {
   const out = [];
-  let ev = null;
+  let ev = null, inner = 0;   /* inner: depth inside an event's own parts, like a VALARM */
   for (const line of unfold(text)) {
-    if (/^BEGIN:VEVENT$/i.test(line)) { ev = {}; continue; }
+    if (/^BEGIN:VEVENT$/i.test(line)) { ev = {}; inner = 0; continue; }
     if (/^END:VEVENT$/i.test(line)) {
       if (ev && ev.start && !ev.cancelled) out.push(finish(ev));
       ev = null; continue;
     }
     if (!ev) continue;
+    /* an alarm has a SUMMARY of its own ("Alarm notification" from Google): not the event's */
+    if (/^BEGIN:/i.test(line)) { inner++; continue; }
+    if (/^END:/i.test(line)) { inner = Math.max(0, inner - 1); continue; }
+    if (inner) continue;
     const p = property(line);
     if (!p) continue;
     if (p.name === 'SUMMARY') ev.summary = unescape(p.value);

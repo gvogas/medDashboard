@@ -1,8 +1,7 @@
-import { setHTML } from '../dom.js';
 import { data, conflicts, saveQuote } from '../store.js';
 import { ui } from '../state.js';
 import { COAT_PALETTE, colourName, DEFAULT_COAT, normalizePrefs, uid } from '../model.js';
-import { esc, $ } from '../dom.js';
+import { esc, $, setHTML } from '../dom.js';
 import { showDrawer, resetDrawerState } from './drawer-base.js';
 import { TUCK_SVG } from './bits.js';
 import { status } from '../sync.js';

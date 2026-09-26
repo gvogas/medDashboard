@@ -39,7 +39,7 @@ export const ui = {
 
 try {
   const saved = JSON.parse(localStorage.getItem(KEY) || '{}');
-  if (saved.view) ui.view = saved.view;
+  if (['week', 'month', 'table', 'spotify', 'study'].includes(saved.view)) ui.view = saved.view;
   if (typeof saved.monthDeadlines === 'boolean') ui.monthDeadlines = saved.monthDeadlines;
 } catch {}
 

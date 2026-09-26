@@ -2,10 +2,15 @@ import { HttpError } from '../http.js';
 import { cooldownRemaining, setCooldown, rateLimited } from '../limits.js';
 export const unavailable = () => new HttpError(502, { error: 'spotify_unavailable' });
 
-/** Share upstream cooldowns across users, tabs, and Worker isolates. */
-export async function upstreamFetch(env, service, url, options) {
-  const key = `upstream:${service}:${env.SPOTIFY_CLIENT_ID}`;
-  const wait = await cooldownRemaining(env.DB, key);
+export const upstreamKey = (env, service) => `upstream:${service}:${env.SPOTIFY_CLIENT_ID}`;
+
+/**
+ * Share upstream cooldowns across users, tabs, and Worker isolates. `wait` is the
+ * cooldown when the caller has already read it; otherwise it is read here.
+ */
+export async function upstreamFetch(env, service, url, options, wait = null) {
+  const key = upstreamKey(env, service);
+  wait ??= await cooldownRemaining(env.DB, key);
   if (wait) throw rateLimited(wait);
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 10_000);

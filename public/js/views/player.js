@@ -1,8 +1,7 @@
-import { setHTML } from '../dom.js';
 // The Spotify badge at the bottom of the coat. Given the poller's state, draws it.
 // A tick only moves the progress line, so the buttons are not rebuilt under the cursor.
 
-import { esc, $ } from '../dom.js';
+import { esc, $, setHTML } from '../dom.js';
 import { state as web, playTarget } from '../web-player.js';
 
 export const SPOTIFY_MARK = '<svg class="spot" viewBox="0 0 24 24" aria-hidden="true">'

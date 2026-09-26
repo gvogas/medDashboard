@@ -2,7 +2,7 @@ import { applyD1Migrations, env } from 'cloudflare:test';
 import { expect, it } from 'vitest';
 import { upsertRow, deleteRow, syncPage } from '../worker/db.js';
 import { normalizeItem, normalizeCourse } from '../public/js/model.js';
-import { readQueries, copyStatements } from '../scripts/lib/move-db.js';
+import { readQueries, copyStatements, COLUMNS_QUERY, uncopied } from '../scripts/lib/move-db.js';
 
 async function dump(db) {
   const out = {};
@@ -68,4 +68,14 @@ it('copies an old-schema database into a fresh one, row for row, with the change
   /* and so are quizzes and a grade target, which the old schema had no room for */
   expect((await upsertRow(to, 'items', 'ana', 'q2', normalizeItem({ id: 'q2', title: 'Quiz 2', type: 'quiz', date: '2026-10-08' }), 320)).type).toBe('quiz');
   expect((await upsertRow(to, 'courses', 'ana', 'tg', normalizeCourse({ id: 'tg', code: 'TG', name: 'Target', color: '#7D8A99', target: 80 }), 330)).target).toBe(80);
+});
+
+it('names every source column the copy would leave behind, so a move stops before losing data', async () => {
+  const columns = async (db) => (await db.prepare(COLUMNS_QUERY).all()).results;
+  /* the old-schema source above, with the three columns the test added to it */
+  expect(uncopied(await columns(env.MIGRATION_DB))).toEqual(['courses.target', 'study_sessions.note', 'study_sessions.manual']);
+  /* today's schema has tables and columns TABLES does not name yet: the next move must add them first */
+  const current = uncopied(await columns(env.DB));
+  for (const col of ['achievements.sticker', 'users.study_prefs', 'users.school_calendar', 'study_sessions.note']) expect(current).toContain(col);
+  expect(current.some((c) => /^(login_throttle|request_limits|sync_state|d1_migrations)\./.test(c))).toBe(false);
 });

@@ -35,7 +35,7 @@ export function toast(text, { undo = null, label = 'Undo', badge = '', error = f
   timer = setTimeout(hideToast, ms);
 }
 
-export function hideToast() {
+function hideToast() {
   clearTimeout(timer);
   onUndo = null;
   if (box) { box.classList.remove('on'); box.replaceChildren(); }

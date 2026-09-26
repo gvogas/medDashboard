@@ -1,4 +1,3 @@
-import { setHTML } from '../dom.js';
 // The Spotify view: search, playlists, albums, artists, the queue, devices and volume.
 // Data is fetched through the Worker and cached for the session in spotify-data.js; the
 // badge's poller owns "now playing", and this view follows it without redrawing the page.
@@ -6,7 +5,7 @@ import { setHTML } from '../dom.js';
 import { api } from '../api.js';
 import { ui } from '../state.js';
 import { state as player } from '../spotify.js';
-import { $ } from '../dom.js';
+import { $, setHTML } from '../dom.js';
 import { SPOTIFY_MARK } from './player.js';
 import { cache, busy, due, load, rerender, ensureMe, ensurePlaylists, ensureRecent, openQueue } from './spotify-data.js';
 import { topHtml, navHtml, mainHtml, EQ, mmss, isNow } from './spotify-html.js';

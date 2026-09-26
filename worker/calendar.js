@@ -14,7 +14,7 @@
 
 import { HttpError } from './http.js';
 import { claimLimit, rateLimited } from './limits.js';
-import { sameString } from './auth.js';
+import { sameString, hex } from './auth.js';
 import { normalizeSchool, classWeekday, dayInfo, weekdayOf } from '../public/js/school.js';
 
 const FEED_LIMIT = 60;                     /* fetches an hour per link; calendars poll a few times a day */
@@ -37,7 +37,7 @@ async function feedKey(secret) {
 /** 32 hex characters: the first 128 bits of the HMAC of `userId:gen`. */
 export async function feedToken(userId, gen, secret) {
   const sig = await crypto.subtle.sign('HMAC', await feedKey(secret), new TextEncoder().encode(`${userId}:${gen}`));
-  return [...new Uint8Array(sig)].slice(0, 16).map((b) => b.toString(16).padStart(2, '0')).join('');
+  return hex(sig.slice(0, 16));
 }
 
 async function feedUrl(origin, userId, gen, secret) {
@@ -136,7 +136,7 @@ export function buildCalendar({ courses, items, termStart = null, school = null,
       if (!m || !Number.isInteger(m.weekday) || !/^\d\d:\d\d$/.test(m.start || '') || !/^\d\d:\d\d$/.test(m.end || '')) continue;
       if (school) { lines.push(...schoolClasses(c, m, school, stamp)); continue; }
       const day = onOrAfter(from, m.weekday);
-      lines.push('BEGIN:VEVENT', 'UID:class-' + c.id + '-' + m.id + '@rounds', 'DTSTAMP:' + stamp,
+      lines.push('BEGIN:VEVENT', 'UID:class-' + c.id + '-' + bare(m.id) + '@rounds', 'DTSTAMP:' + stamp,
         ...when(day, m.start, m.end),
         'RRULE:FREQ=WEEKLY;BYDAY=' + DAYS[m.weekday],
         'SUMMARY:' + text(c.code + ' ' + (m.kind || 'Class')),
@@ -161,7 +161,7 @@ function schoolClasses(c, m, school, stamp) {
   };
   const at = (d) => compact(d) + 'T' + m.start.replace(':', '') + '00';
   for (const term of school.terms) {
-    const first = onOrAfter(term.start, m.weekday), id = 'class-' + c.id + '-' + m.id + '-' + term.start;
+    const first = onOrAfter(term.start, m.weekday), id = 'class-' + c.id + '-' + bare(m.id) + '-' + term.start;
     if (first <= term.end) {
       const skip = [];
       for (let d = first; d <= term.end; d = addDays(d, 7)) if (classWeekday(school, d) !== m.weekday) skip.push(d);
@@ -204,10 +204,13 @@ export function onOrAfter(d, weekday) {
   return addDays(d, (weekday - day + 7) % 7);
 }
 
-/** RFC 5545 TEXT: backslash, semicolon, comma and newline escaped. */
+/** RFC 5545 TEXT: backslash, semicolon, comma and line breaks escaped; other controls dropped. */
 function text(s) {
-  return String(s).replace(/\\/g, '\\\\').replace(/;/g, '\\;').replace(/,/g, '\\,').replace(/\r?\n/g, '\\n');
+  return bare(String(s).replace(/\\/g, '\\\\').replace(/;/g, '\\;').replace(/,/g, '\\,').replace(/\r\n?|\n/g, '\\n'));
 }
+
+/* Without control characters: a lone CR ends a line in some readers, so saved text could start a property of its own. */
+const bare = (s) => String(s).replace(/[\x00-\x08\x0a-\x1f\x7f]/g, '');
 
 /** Lines longer than 75 octets continue on the next line after a space. */
 function fold(line) {

@@ -340,6 +340,14 @@ export function renderFocus() {
 
 /* ── per tick: the digits, the phase, the strip, the corner clock and the tab title ── */
 
+/* Four ticks a second mostly draw what is already there: only a change is rebuilt. */
+const drawn = new WeakMap();
+function redraw(el, html) {
+  if (drawn.get(el) === html) return;
+  drawn.set(el, html);
+  setHTML(el, html);
+}
+
 export function paint(animate = true) {
   const s = focus.read();
   const html = document.documentElement;
@@ -353,10 +361,10 @@ export function paint(animate = true) {
   const text = setClocks(document, s.leftMs, { animate, running: !s.paused });
   document.title = text + ' · ' + (s.kind === 'study' ? 'Study' : 'Break');
   document.querySelectorAll('[data-study-phase]').forEach((el) => { el.textContent = phaseText(s); });
-  document.querySelectorAll('[data-study-strip]').forEach((el) => setHTML(el, stripHtml(s.flow, s)));
-  document.querySelectorAll('[data-study-next]').forEach((el) => setHTML(el, nextText(s)));
+  document.querySelectorAll('[data-study-strip]').forEach((el) => redraw(el, stripHtml(s.flow, s)));
+  document.querySelectorAll('[data-study-next]').forEach((el) => redraw(el, nextText(s)));
   document.querySelectorAll('[data-study-pause]').forEach((el) => {
-    setHTML(el, s.paused ? ICON.play : ICON.pause);
+    redraw(el, s.paused ? ICON.play : ICON.pause);
     el.setAttribute('aria-label', s.paused ? 'Resume' : 'Pause');
   });
   const seg = document.querySelector('#viewSeg [data-view="study"]');

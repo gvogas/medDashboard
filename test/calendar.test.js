@@ -42,6 +42,15 @@ describe('the .ics file', () => {
     expect(b).toContain('STATUS:CANCELLED');
   });
 
+  it('lets no saved text or meeting id start a property of its own', () => {
+    const sneaky = { ...course, code: 'BIO\rX-A:1', meetings: JSON.stringify([{ id: 'm\r\nX-B:1', kind: 'Lab', weekday: 1, start: '09:00', end: '10:00', room: 'R\u000bX-C:1' }]) };
+    const ics = buildCalendar({ courses: [sneaky], items: [item({ title: 'T\rX-D:1', location: 'L\rX-E:1', notes: 'one\r\ntwo\rthree' })] });
+    for (const line of ics.split('\r\n')) expect(line).not.toMatch(/[\x00-\x08\x0a-\x1f\x7f]/);
+    expect(ics).not.toMatch(/(^|\r\n)X-[A-E]:1/);
+    expect(unfold(ics)).toContain('UID:class-bio-mX-B:1@rounds');
+    expect(unfold(ics)).toContain('\\none\\ntwo\\nthree');
+  });
+
   it('repeats a weekly item from its first weekday until its end date', () => {
     const [ev] = events(buildCalendar({ courses: [], items: [item({ type: 'office', date: '2026-09-21', weekday: 3, recur: 'weekly', recur_until: '2026-12-09', start: '13:00', end: '14:00' })] }));
     expect(ev).toContain('DTSTART:20260923T130000');

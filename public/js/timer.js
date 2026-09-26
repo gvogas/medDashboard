@@ -14,11 +14,21 @@ export function start(flow, now = Date.now()) {
   return { flow: structuredClone(flow), startedAt: now, pausedAt: null, pausedMs: 0, skippedMs: 0, skippedStudyMs: 0 };
 }
 
-export const roundMs = (flow) => flow.steps.reduce((a, [, m]) => a + m * MIN, 0);
+/** A kept run that read() can work with. A damaged one (no steps, a missing time) would
+    throw or never end, so it is dropped rather than resumed. */
+export function resumable(run) {
+  const f = run?.flow;
+  return !!f && Array.isArray(f.steps) && f.steps.length > 0 && Number.isInteger(f.rounds) && f.rounds > 0
+    && f.steps.every((s) => Array.isArray(s) && Number.isFinite(s[1]) && s[1] > 0)
+    && [run.startedAt, run.pausedMs, run.skippedMs, run.skippedStudyMs].every(Number.isFinite)
+    && (run.pausedAt === null || Number.isFinite(run.pausedAt));
+}
+
+const roundMs = (flow) => flow.steps.reduce((a, [, m]) => a + m * MIN, 0);
 export const totalMs = (flow) => roundMs(flow) * flow.rounds;
 
 /** How far into the flow the run is, in ms of flow time. */
-export function elapsed(run, now = Date.now()) {
+function elapsed(run, now = Date.now()) {
   return Math.max(0, (run.pausedAt ?? now) - run.startedAt - run.pausedMs + run.skippedMs);
 }
 

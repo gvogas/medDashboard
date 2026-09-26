@@ -102,7 +102,7 @@ export function renderSessionDrawer(focus) {
 }
 
 /** Keep the footer and the line about today in step with what is typed, without a redraw. */
-export function refreshSessionDrawer() {
+function refreshSessionDrawer() {
   const d = ui.sessionDraft;
   if (!d) return;
   const hint = $('sdHint'); if (hint) hint.textContent = impact(d);

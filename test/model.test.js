@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { normalizeItem, normalizeCourse, shiftEnd } from '../public/js/model.js';
+import { normalizeItem, normalizeCourse, normalizeAchievement, shiftEnd } from '../public/js/model.js';
 import { validateItem, validateCourse } from '../worker/validate.js';
 
 describe('normalizeItem keeps times and dates the server accepts', () => {
@@ -54,5 +54,18 @@ describe('normalized rows pass the server checks', () => {
     const c = normalizeCourse({ code: 'ANAT', name: long(200), instructor: long(90), term: long(90),
       meetings: [{ id: 'm1', kind: 'Lecture', weekday: 1, start: '09:00', end: '10:00', room: long(90) }] });
     expect(() => validateCourse(c)).not.toThrow();
+  });
+});
+
+describe('rows from storage or the network are made safe', () => {
+  it('keeps only the sticker pictures the server takes', () => {
+    const png = 'data:image/png;base64,iVBORw0KGgo=';
+    expect(normalizeAchievement({ sticker: png }).sticker).toBe(png);
+    expect(normalizeAchievement({ sticker: 'data:image/svg+xml;base64,PHN2Zz4=' }).sticker).toBe('');
+    expect(normalizeAchievement({ sticker: 'javascript:alert(1)' }).sticker).toBe('');
+  });
+  it('reads a course code that is not text as none, rather than failing every reload', () => {
+    expect(normalizeCourse({ code: 12345 }).code).toBe('');
+    expect(normalizeCourse({ code: 'PHARM1010' }).code).toBe('PHARM101');
   });
 });

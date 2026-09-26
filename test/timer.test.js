@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { start, read, pause, resume, skip, loggedMinutes, totalMs } from '../public/js/timer.js';
+import { start, read, pause, resume, skip, loggedMinutes, totalMs, resumable } from '../public/js/timer.js';
 import { normalizeFlow } from '../public/js/model.js';
 
 const MIN = 60_000;
@@ -63,6 +63,18 @@ describe('study timer engine', () => {
     const run = start(mine, t0);
     mine.steps[0][1] = 90;
     expect(read(run, t0).leftMs).toBe(25 * MIN);
+  });
+});
+
+describe('resumable', () => {
+  it('takes a kept run, and drops one read() would choke on', () => {
+    const run = start(flow, t0);
+    expect(resumable(run)).toBe(true);
+    expect(resumable(pause(run, t0 + MIN))).toBe(true);
+    expect(resumable(null)).toBe(false);
+    expect(resumable({ ...run, flow: { steps: [], rounds: 1 } })).toBe(false);
+    expect(resumable({ ...run, pausedMs: undefined })).toBe(false);
+    expect(resumable({ ...run, flow: { ...run.flow, rounds: 0 } })).toBe(false);
   });
 });
 

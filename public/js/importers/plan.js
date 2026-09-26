@@ -8,7 +8,7 @@
 //   notes:   ['…'],                               what was trimmed or dropped, and why
 // }
 
-import { KINDS, HEXES, TYPES, uid } from '../model.js';
+import { KINDS, HEXES, TYPES, uid, classEnd } from '../model.js';
 import { parse, DOW, iso, addDays, monday } from '../dates.js';
 
 const MAX_MEETINGS = 12;
@@ -92,7 +92,8 @@ export function planImport(events, data, source) {
     if (!cl.start) { notes.push('Skipped a class with no start time: ' + clip(cl.title, 60) + '.'); continue; }
     const pc = findCourse(cl.code) || proposeCourse(cl.code, cl.name);
     for (const weekday of cl.weekdays) {
-      const end = cl.end && cl.end > cl.start ? cl.end : cl.start;
+      /* as saved, so a class already imported without an end is known again */
+      const end = classEnd(cl.start, cl.end);
       const same = (m) => m.weekday === weekday && m.start === cl.start && m.end === end;
       if (pc.existing.some(same) || pc.meetings.some(same)) continue;
       if (pc.existing.length + pc.meetings.length >= MAX_MEETINGS) {

@@ -35,9 +35,12 @@ export async function claimLimit(db, key, limit, now = Date.now(), windowMs = WI
   return Math.max(1, await cooldownRemaining(db, key, now));
 }
 
+export const cooldownStmt = (db, key) => db.prepare('SELECT reset_at FROM request_limits WHERE key = ?').bind(key);
+/** Whole seconds until a request_limits row resets; 0 for none. */
+export const secondsLeft = (row, now) => Math.max(0, Math.ceil(((row?.reset_at || 0) - now) / 1000));
+
 export async function cooldownRemaining(db, key, now = Date.now()) {
-  const row = await db.prepare('SELECT reset_at FROM request_limits WHERE key = ?').bind(key).first();
-  return Math.max(0, Math.ceil(((row?.reset_at || 0) - now) / 1000));
+  return secondsLeft(await cooldownStmt(db, key).first(), now);
 }
 
 export async function setCooldown(db, key, seconds, now = Date.now()) {

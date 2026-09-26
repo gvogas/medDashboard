@@ -103,6 +103,7 @@ function itemType(v, field) {
 /* The type list: built-ins may be relabelled, recoloured or hidden; custom types
  * also need a kind. Order in the array is the order in the sidebar. */
 function typeEntry(t, f) {
+  if (typeof t.id !== 'string') fail(`${f}.id`);
   const custom = CUSTOM_TYPE.test(t.id);
   if (!custom && !TYPES.includes(t.id)) fail(`${f}.id`);
   const out = { id: t.id };

@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { parseIcs } from '../public/js/importers/ics.js';
 import { parseCsv, normDate } from '../public/js/importers/csv.js';
 import { planImport, planOutline, planSummary, setWeek1, weekDate, guessKind, guessType, codeToken } from '../public/js/importers/plan.js';
+import { normalizeCourse } from '../public/js/model.js';
 
 const pad = (n) => String(n).padStart(2, '0');
 
@@ -81,6 +82,13 @@ describe('parseIcs', () => {
   it('accepts LF-only files', () => {
     expect(parseIcs(ICS.replace(/\r\n/g, '\n'))).toHaveLength(4);
   });
+
+  it('keeps the event title when an alarm inside it has a summary of its own', () => {
+    const ics = ['BEGIN:VCALENDAR', 'BEGIN:VEVENT', 'SUMMARY:PHARM101 Midterm exam', 'DTSTART:20261020T130000',
+      'BEGIN:VALARM', 'ACTION:EMAIL', 'SUMMARY:Alarm notification', 'TRIGGER:-P0DT0H30M0S', 'END:VALARM',
+      'LOCATION:Hall A', 'END:VEVENT', 'END:VCALENDAR'].join('\r\n');
+    expect(parseIcs(ics)).toMatchObject([{ summary: 'PHARM101 Midterm exam', location: 'Hall A', start: '13:00' }]);
+  });
 });
 
 describe('parseCsv', () => {
@@ -133,6 +141,15 @@ describe('planImport', () => {
     const week = plan.items.find((i) => i.row.title === 'Reading week');
     expect(week.row).toMatchObject({ courseId: null, type: 'task' });
     expect(planSummary(plan)).toBe('1 new course · 2 classes · 2 items');
+  });
+
+  it('gives a class with no end an hour, and knows it again on a second import', () => {
+    const ics = ['BEGIN:VCALENDAR', 'BEGIN:VEVENT', 'SUMMARY:PHYS Lecture', 'DTSTART:20260914T090000',
+      'RRULE:FREQ=WEEKLY;BYDAY=MO', 'END:VEVENT', 'END:VCALENDAR'].join('\r\n');
+    const first = planImport(parseIcs(ics), { courses: [], items: [] }, 'ics');
+    expect(first.courses[0].meetings[0]).toMatchObject({ weekday: 1, start: '09:00', end: '10:00' });
+    const saved = { courses: [normalizeCourse({ ...first.courses[0], meetings: first.courses[0].meetings })], items: [] };
+    expect(planImport(parseIcs(ics), saved, 'ics').courses).toEqual([]);
   });
 
   it('marks duplicates unticked', () => {

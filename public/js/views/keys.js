@@ -1,6 +1,6 @@
 // The keyboard shortcuts panel, opened with ? and closed with Esc, ? or a click outside.
 
-import { setHTML } from '../dom.js';
+import { setHTML, refind } from '../dom.js';
 import { cover } from './drawer-base.js';
 
 /* [keys, what they do]; two keys are a pair ('[' and ']') or a range ('1' to '5') */
@@ -44,6 +44,6 @@ export function closeKeys() {
   panel.remove();
   panel = null;
   cover(false);
-  if (back && back.isConnected) back.focus();
+  refind(back)?.focus();   /* a redraw behind the panel may have replaced it: its successor */
   back = null;
 }

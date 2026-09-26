@@ -57,9 +57,6 @@ export async function decryptToken(secret, stored) {
   }
 }
 
-// ── accounts.spotify.com ────────────────────────────────────────────────────
-
-
 // One JSON secret: {"current":"v1","keys":{"v1":"a long random secret"}}.
 // Retain prior key IDs until their tokens have been refreshed under the current key.
 function keyring(env) {
@@ -79,6 +76,9 @@ export async function openToken(env, stored) {
   if (!key) throw new Error('Spotify token key is unavailable');
   return decryptToken(key, stored.slice(separator + 1));
 }
+
+// ── accounts.spotify.com ────────────────────────────────────────────────────
+
 async function tokenRequest(env, params) {
   let res;
   try {
@@ -178,9 +178,12 @@ async function refreshLocked(env, userId, row) {
 
 const stored = (row) => ({ accessToken: row.access_token, expiresAt: row.expires_at, row });
 
-/** A usable access token for this user and when it expires, refreshed when it is about to. */
-export async function freshAccessToken(env, userId, now = Date.now()) {
-  const row = await getSpotifyTokens(env.DB, userId);
+/**
+ * A usable access token for this user and when it expires, refreshed when it is about to.
+ * `row` is the stored token row (null for none) when the caller has already read it.
+ */
+export async function freshAccessToken(env, userId, now = Date.now(), row) {
+  if (row === undefined) row = await getSpotifyTokens(env.DB, userId);
   if (!row) throw notConnected();
   if (row.expires_at - now > REFRESH_WITHIN_MS) return { token: row.access_token, expiresAt: row.expires_at, row };
   const fresh = await refreshFor(env, userId, row);

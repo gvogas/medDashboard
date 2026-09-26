@@ -172,13 +172,14 @@ button{cursor:pointer}
 .player a.title:hover{color:var(--accent);text-decoration:underline}
 .player .artist{display:block;font-size:11px;color:var(--ink-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .player .eq{display:flex;align-items:flex-end;gap:2px;height:12px;margin-top:3px}
-.player .eq i{width:3px;height:6px;background:var(--spotify);border-radius:1px}
+.player .eq i{width:3px;height:6px;background:var(--spotify);border-radius:1px;transform-origin:bottom}
 .player[data-state="playing"] .eq i{animation:eq 1s ease-in-out infinite}
 .player[data-state="playing"] .eq i:nth-child(2){animation-delay:.2s}
 .player[data-state="playing"] .eq i:nth-child(3){animation-delay:.45s}
 .player[data-state="playing"] .eq i:nth-child(4){animation-delay:.1s}
 .player[data-stale] .eq i{animation:none}
-@keyframes eq{0%,100%{height:3px}50%{height:12px}}
+/* 3px to 12px tall, as a transform: an endless height animation would lay the page out every frame */
+@keyframes eq{0%,100%{transform:scaleY(.5)}50%{transform:scaleY(2)}}
 @media (prefers-reduced-motion:reduce){.player .eq i{animation:none!important;height:6px}}
 .player .line{display:block;height:3px;border-radius:999px;background:var(--line-2);overflow:hidden}
 .player .line i{display:block;height:100%;background:linear-gradient(90deg,var(--accent),var(--spotify));border-radius:999px}

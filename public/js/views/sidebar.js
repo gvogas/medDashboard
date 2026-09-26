@@ -1,9 +1,8 @@
-import { setHTML } from '../dom.js';
 import { data } from '../store.js';
 import { ui } from '../state.js';
 import { typeList, isOpen, TYPE_COLOURS, TYPE_KINDS, MAX_CUSTOM_TYPES } from '../model.js';
 import { activeCourses, typeOn } from '../query.js';
-import { esc, $ } from '../dom.js';
+import { esc, $, setHTML } from '../dom.js';
 
 const EYE = '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M2 10s3-5.5 8-5.5S18 10 18 10s-3 5.5-8 5.5S2 10 2 10z"/><circle cx="10" cy="10" r="2.4"/></svg>';
 const GRIP = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><path d="M3 4.5h10M3 8h10M3 11.5h10"/></svg>';
