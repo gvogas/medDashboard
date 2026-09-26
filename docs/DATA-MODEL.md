@@ -10,6 +10,7 @@ courses          a course + its weekly class meetings, as a JSON column
 items            exams, quizzes, assignments, labs, tutorials, office hours, tasks, projects
 quotes           the quote tile's list
 study_sessions   study time: timer runs and time logged by hand, by course and item
+achievements     your own achievements: an uploaded sticker and what earns it
 ```
 
 The schema is [`migrations/0001_schema.sql`](../migrations/0001_schema.sql), in one
@@ -245,6 +246,27 @@ weeks, months and the heatmap are worked out on the device (`public/js/history.j
 
 ---
 
+## `achievements`
+
+Your own achievements (migration `0003_achievements.sql`). The built-in ones (study hours,
+streaks, big days, tasks, exams, grades) are never stored: they are worked out on the
+device from sessions and items, as is whether one of these is earned
+(`public/js/achievements.js`). At most 30 live rows per account; `PUT` a 31st is
+`400 too_many`.
+
+| Column | Type | Rules |
+| --- | --- | --- |
+| `user_id`, `id` | text, PK | |
+| `name` | text | 1–40 |
+| `sticker` | text | the picture itself: a `data:image/{webp,png,jpeg};base64,` URL, at most 90,000 characters. Cut to a circle and shrunk to 256px or less in the browser (`public/js/sticker.js`). Served only through the API, to its owner. |
+| `rule` | text | `hours` \| `grade` |
+| `course_id` | text | `hours` only: the course whose study time counts. A plain reference; a deleted course leaves it locked. |
+| `item_id` | text | `grade` only: the exam or quiz. A deleted one leaves it locked. |
+| `target` | int | hours 1–1000, or the least grade, 1–100 |
+| `created_at`, `updated_at`, `deleted_at` | int | |
+
+---
+
 ## `spotify_tokens`
 
 One row per user who has connected Spotify. Not synced to the browser; the Worker
@@ -334,12 +356,13 @@ All routes are under `/api`, speak JSON, and require the session cookie except
 | `GET /api/me` | → `{profile}` |
 | `PUT /api/me` | `{coat, theme, bg, termStart, displayName, studyFlow, studyPrefs}` (`bg` optional, default `med`; `studyFlow` and `studyPrefs` optional, kept when left out) → `{profile}` |
 | `GET /api/sync?v=2&cursor=<seq>` | → `{changes: [{kind, row}], cursor, more, reset}` — at most 100 changes after `cursor`, deleted rows included with `deletedAt` set. `cursor=0` is a full load. See the sync protocol below. |
-| `GET /api/{courses,items,quotes,study_sessions}/:id` | one live row of yours, or `404`. The client uses it to undo a rejected save. |
+| `GET /api/{courses,items,quotes,study_sessions,achievements}/:id` | one live row of yours, or `404`. The client uses it to undo a rejected save. |
 | `PUT /api/courses/:id` | a course (with an optional `target`, a whole-number grade goal 1–100) → the stored course, with server `updatedAt`. Upsert. |
 | `DELETE /api/courses/:id` | → `204`. Soft-deletes and nulls `courseId` on the user's items and study sessions. |
 | `PUT /api/items/:id` · `DELETE /api/items/:id` | as above; deleting nulls `itemId` on the user's study sessions |
 | `PUT /api/quotes/:id` · `DELETE /api/quotes/:id` | as above |
 | `PUT /api/study_sessions/:id` · `DELETE /api/study_sessions/:id` | `{courseId, itemId, startedAt, studyMinutes, roundsDone, note, manual}`, as above |
+| `PUT /api/achievements/:id` · `DELETE /api/achievements/:id` | `{name, sticker, rule, courseId, itemId, target}`, as above; `400 too_many` past 30 |
 | `GET /api/calendar` · `POST /api/calendar` · `DELETE /api/calendar` | the calendar feed: → `{on, url}`; POST turns it on or makes a new link (the old one stops working); DELETE turns it off. See `worker/calendar.js`. |
 | `GET /api/calendar/:userId/:token.ics?tz=` | no session: the feed itself, `text/calendar`. The token is an HMAC of the user id and `users.feed_gen`; a wrong one is `404`. At most 60 fetches an hour per link. |
 

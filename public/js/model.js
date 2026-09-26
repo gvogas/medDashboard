@@ -333,3 +333,20 @@ export function normalizeStudySession(raw) {
     revision: raw.revision ?? 0, updatedAt: raw.updatedAt ?? null,
   };
 }
+
+/* Your own achievement: a sticker picture, a name, and what earns it (see achievements.js). */
+export const ACHIEVEMENT_LIMIT = 30;
+export function normalizeAchievement(raw) {
+  const rule = raw.rule === 'grade' ? 'grade' : 'hours';
+  return {
+    id: raw.id || uid(),
+    name: cut(raw.name, 40),
+    sticker: typeof raw.sticker === 'string' && raw.sticker.startsWith('data:image/') ? raw.sticker : '',
+    rule,
+    courseId: rule === 'hours' ? raw.courseId || null : null,
+    itemId: rule === 'grade' ? raw.itemId || null : null,
+    target: clampInt(raw.target, 1, rule === 'grade' ? 100 : 1000, rule === 'grade' ? 90 : 10),
+    createdAt: raw.createdAt ?? null,
+    revision: raw.revision ?? 0, updatedAt: raw.updatedAt ?? null,
+  };
+}

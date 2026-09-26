@@ -1,5 +1,5 @@
 // Atomic IndexedDB transactions shared by every tab of this account.
-const STORES = ['courses', 'items', 'quotes', 'study_sessions', 'meta', 'pending', 'conflicts'];
+const STORES = ['courses', 'items', 'quotes', 'study_sessions', 'achievements', 'meta', 'pending', 'conflicts'];
 const result = (request) => new Promise((resolve, reject) => {
   request.onsuccess = () => resolve(request.result);
   request.onerror = () => reject(request.error);
@@ -7,7 +7,7 @@ const result = (request) => new Promise((resolve, reject) => {
 
 export function openDb(name, onVersionChange = () => {}) {
   return new Promise((resolve, reject) => {
-    const req = indexedDB.open(name, 3);
+    const req = indexedDB.open(name, 4);
     let blocked = false;
     req.onupgradeneeded = () => {
       const db = req.result, tx = req.transaction;

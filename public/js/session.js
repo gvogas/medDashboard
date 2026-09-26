@@ -18,7 +18,7 @@ import * as focus from './focus.js';
 import { paint as paintStudy } from './views/study.js';
 import { $ } from './dom.js';
 import { setTheme, setBg } from './theme.js';
-import { celebrateStudy, finishDelete } from './study-controller.js';
+import { celebrateStudy, celebrateAchievements, finishDelete } from './study-controller.js';
 import { refreshAfterSync } from './sync-status.js';
 
 function rememberedSession() {
@@ -45,6 +45,7 @@ async function start(profile) {
   paintStudy(false);
   drawOrnament();
   celebrateStudy();                             /* the first look only records where today stands */
+  celebrateAchievements();
   sync.init();
   sync.syncNow();
   spotify.start();
@@ -62,10 +63,11 @@ function spotifyReturn() {
 
 /** What the store reports: a change, a failed save, a sign-out, another tab's edit. */
 export function onStoreEvent(evt) {
-  if (evt.type === 'change' && data.profile) celebrateStudy();
+  if (evt.type === 'change' && data.profile) { celebrateStudy(); celebrateAchievements(); }
   if (evt.type === 'save-error') toast('The change could not be saved on this device. ' + evt.message, { error: true, ms: 10000 });
   if (evt.type === 'signed-out') { sync.stop(); spotify.stop(); web.stop(); resetRequests(); location.reload(); }
   if (evt.type === 'remote' && data.profile) refreshAfterSync();
+  if ((evt.type === 'synced' || evt.type === 'remote') && data.profile) celebrateAchievements({ quiet: true });
 }
 
 /* Another tab signed in as someone else, or out: this one starts over. */

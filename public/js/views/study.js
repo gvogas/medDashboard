@@ -1,5 +1,5 @@
 // The study timer's views: the Study tab (start, your flow, and the history: streak,
-// goal, the week, the term's heatmap and every session), the
+// goal, the week, achievements, the term's heatmap and every session), the
 // focus screen's clock side, and the corner clock. The run itself is focus.js.
 
 import { setHTML, esc, $ } from '../dom.js';
@@ -10,6 +10,8 @@ import { addDays, iso, today, DOW, MON, parse } from '../dates.js';
 import { dayOf, minutesByDay, week, month, streak, heatRange, level } from '../history.js';
 import * as focus from '../focus.js';
 import { clockHtml, setClocks } from './flipclock.js';
+import { achievementsHtml } from './achievements.js';
+import { achievements, ownAchievements } from '../achievements.js';
 
 const MIN = 60_000;
 const ICON = {
@@ -98,6 +100,7 @@ export function renderStudy() {
     + tilesHtml(all, byDay, p)
     + '<div class="study-col">' + start + flowHtml(f) + '</div>'
     + '<div class="study-col">' + weekHtml(all, p) + '</div>'
+    + achievementsHtml(achievements(all, data.items, p, today()), ownAchievements(data.achievements, all, data.items, data.courses))
     + '<div class="st-wide">' + termHtml(all, byDay, p) + sessionsHtml(all) + '</div>'
     + '</div>';
 }

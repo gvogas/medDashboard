@@ -1,0 +1,356 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Achievements Mockup</title>
+<meta name="description" content="The achievements panel on the Study page: badges for hours studied, streaks, big days, tasks done, exams taken and exam grades, plus the unlock toast.">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="../public/css/tokens.css">
+<link rel="stylesheet" href="../public/css/layout.css">
+<link rel="stylesheet" href="../public/css/components.css">
+<style>
+  :root{
+    --pg-bg:#F0F3F4; --pg-panel:#FFFFFF; --pg-ink:#131E22; --pg-ink-2:#5A6E74;
+    --pg-line:#D6DFE1; --pg-accent:#0E7C74;
+    --pg-shadow:0 1px 2px rgba(16,40,44,.06), 0 14px 36px rgba(16,40,44,.09);
+  }
+  :root[data-app="dark"]{
+    --pg-bg:#0D1315; --pg-panel:#141C1F; --pg-ink:#E4EDEF; --pg-ink-2:#8DA2A8;
+    --pg-line:#242F33; --pg-accent:#3FBFB2;
+    --pg-shadow:0 1px 2px rgba(0,0,0,.5), 0 16px 40px rgba(0,0,0,.45);
+  }
+  html,body{height:auto;overflow:auto}
+  body{background:var(--pg-bg);color:var(--pg-ink);font-family:Figtree,system-ui,sans-serif;font-size:15px;line-height:1.55;margin:0}
+  .wrap{max-width:1180px;margin:0 auto;padding:0 20px 72px}
+  .mast{padding:44px 0 8px;display:flex;align-items:flex-end;gap:20px;flex-wrap:wrap}
+  .mast > div:first-child{flex:1 1 420px}
+  h1.title{font-size:clamp(30px,5.4vw,46px);line-height:1.05;letter-spacing:-.02em;font-weight:800;margin:0}
+  .lede{max-width:66ch;color:var(--pg-ink-2);margin:14px 0 0;font-size:16px}
+  .lede strong{color:var(--pg-ink);font-weight:600}
+  .picks{display:flex;gap:10px;flex-wrap:wrap}
+  .themepick{display:flex;gap:2px;background:var(--pg-panel);border:1px solid var(--pg-line);border-radius:9px;padding:3px;flex:none}
+  .themepick button{border:0;background:transparent;border-radius:6px;padding:5px 11px;font-size:12.5px;color:var(--pg-ink-2);cursor:pointer;font:inherit;font-size:12.5px}
+  .themepick button[aria-pressed="true"]{background:var(--pg-accent);color:#fff;font-weight:600}
+  h2{font-size:22px;letter-spacing:-.015em;margin:56px 0 6px}
+  h2 + p{margin:0 0 18px;color:var(--pg-ink-2);max-width:72ch}
+
+  /* the app frame: the Study page around the new panel */
+  .frame{border:1px solid var(--pg-line);border-radius:14px;box-shadow:var(--pg-shadow);background:var(--bg);color:var(--ink);padding:18px;font-size:14px}
+  .ghostrow{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:14px}
+  .ghostcols{display:grid;grid-template-columns:1.15fr 1fr;gap:14px;margin-bottom:14px}
+  .ghost{background:var(--panel);border:1px solid var(--line);border-radius:12px;opacity:.55;display:flex;align-items:center;padding:0 16px;font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-3);font-weight:600}
+  .ghostrow .ghost{height:76px}
+  .ghostcols .ghost{height:120px}
+  .ghost.below{height:90px;margin-top:14px}
+  @media (max-width:760px){.ghostrow{grid-template-columns:1fr 1fr}.ghostrow .ghost:last-child{display:none}.ghostcols{grid-template-columns:1fr}.ghostcols .ghost:last-child{display:none}}
+
+  /* ═══════ the achievements panel ═══════ */
+  .ach{padding:18px;container-type:inline-size}
+  .ach-head{display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+  .ach-head h3{margin:0;font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-2);font-weight:600}
+  .ach-count{font-size:13px;color:var(--ink-2);font-variant-numeric:tabular-nums}
+  .ach-count b{color:var(--ink);font-weight:700}
+  .ach-track{flex:1 1 160px;height:6px;border-radius:999px;background:var(--line-2);overflow:hidden;min-width:120px}
+  .ach-track i{display:block;height:100%;border-radius:999px;background:var(--accent)}
+  .ach-toggle{margin-left:auto;border:1px solid var(--line);background:var(--panel-2);color:var(--ink-2);border-radius:8px;padding:4px 10px;font:inherit;font-size:12px;cursor:pointer}
+
+  /* next up: the three locked badges closest to done */
+  .ac-next{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin:16px 0 4px}
+  @container (max-width:640px){.ac-next{grid-template-columns:minmax(0,1fr)}}
+  .nx{display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:11px;background:var(--panel-2);border:1px solid var(--line-2);min-width:0}
+  .nx .ac-tx{display:flex;flex-direction:column;gap:3px;min-width:0;flex:1}
+  .nx .ac-t{font-weight:700;font-size:13.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .nx .ac-p{font-size:12px;color:var(--ink-2);font-variant-numeric:tabular-nums}
+  .nx .ac-bar{height:4px;border-radius:999px;background:var(--line);overflow:hidden}
+  .nx .ac-bar i{display:block;height:100%;background:var(--g);border-radius:999px}
+  .nx-lab{font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-3);font-weight:600;margin-top:18px}
+
+  /* the groups */
+  .groups{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(310px,100%),1fr));gap:12px;margin-top:16px}
+  .grp{border:1px solid var(--line-2);border-radius:11px;padding:12px 12px 14px}
+  .grp-h{display:flex;align-items:center;gap:8px;margin-bottom:12px}
+  .grp-h .gi{width:24px;height:24px;border-radius:7px;display:grid;place-items:center;background:var(--g-soft);color:var(--g-ink)}
+  .grp-h .gi svg{width:14px;height:14px}
+  .grp-h .gn{font-weight:700;font-size:13px}
+  .grp-h .gs{margin-left:auto;font-size:12px;color:var(--ink-3);font-variant-numeric:tabular-nums}
+  .ac-badges{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-start;align-items:flex-start}
+  .bd{display:flex;flex-direction:column;align-items:center;gap:5px;width:62px;text-align:center}
+  .md{position:relative;width:52px;height:52px;border-radius:50%;display:grid;place-items:center;font-weight:800;font-size:13px;letter-spacing:-.01em;font-variant-numeric:tabular-nums}
+  .md svg.ring{position:absolute;inset:-4px;width:60px;height:60px;transform:rotate(-90deg)}
+  .bd.on .md{background:var(--g-soft);color:var(--g-ink);box-shadow:inset 0 0 0 2px var(--g), 0 2px 6px color-mix(in srgb, var(--g) 25%, transparent)}
+  .bd.on .md::after{content:"";position:absolute;right:-1px;bottom:-1px;width:17px;height:17px;border-radius:50%;background:var(--g) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='white' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4 8.5l2.5 2.5L12 5.5'/%3E%3C/svg%3E") center/11px no-repeat;border:2px solid var(--panel)}
+  .bd.off .md{background:var(--panel-2);color:var(--ink-3);box-shadow:inset 0 0 0 1.5px var(--line)}
+  .bd .ac-nm{font-size:11.5px;font-weight:600;line-height:1.2;color:var(--ink)}
+  .bd.off .ac-nm{color:var(--ink-2);font-weight:500}
+  .bd .dt{font-size:10.5px;color:var(--ink-3);line-height:1.2;font-variant-numeric:tabular-nums}
+  .bd.new .md{animation:pop 1.6s ease-out 1}
+  @keyframes pop{0%{transform:scale(.6);opacity:0}40%{transform:scale(1.12);opacity:1}100%{transform:scale(1)}}
+  @media (prefers-reduced-motion:reduce){.bd.new .md{animation:none}}
+
+  /* group colours, from the palette the app already has */
+  .g-hours{--g:var(--study);--g-soft:var(--study-soft);--g-ink:var(--study-ink)}
+  .g-streak{--g:#E08A3C;--g-soft:var(--amber-bg);--g-ink:var(--amber-ink)}
+  .g-days{--g:var(--accent);--g-soft:var(--accent-soft);--g-ink:var(--accent-ink)}
+  .g-tasks{--g:var(--good);--g-soft:color-mix(in srgb, var(--good) 16%, var(--panel));--g-ink:var(--good)}
+  .g-exams{--g:var(--break);--g-soft:var(--break-soft);--g-ink:var(--break-ink)}
+  .g-grades{--g:#D9A21E;--g-soft:color-mix(in srgb, #E8B33A 20%, var(--panel));--g-ink:color-mix(in srgb, #9A6B00 80%, var(--ink))}
+  :root[data-app="dark"] .g-grades{--g-ink:#F0C96A}
+  :root[data-app="dark"] .g-streak{--g:#E9A25E}
+
+  /* the unlock toast: the app's toast with a medallion in front */
+  .toastdemo{position:relative;height:120px;border:1px solid var(--pg-line);border-radius:14px;background:var(--bg);overflow:hidden;box-shadow:var(--pg-shadow)}
+  .toastdemo .toast{position:absolute;display:flex;left:18px;bottom:18px;width:400px}
+  .toast .md{flex:none;width:34px;height:34px;font-size:10.5px;margin-left:-6px}
+  .toast .md{background:var(--g-soft);color:var(--g-ink);box-shadow:inset 0 0 0 2px var(--g)}
+  .toast .ac-lbl{display:block;font-size:11px;letter-spacing:.08em;text-transform:uppercase;opacity:.7;font-weight:600}
+  .toast b{font-weight:700}
+  .spark{position:absolute;border-radius:50%;width:6px;height:6px;opacity:.85}
+
+  .phone{width:390px;max-width:100%;margin:0 auto;border-radius:28px;padding:14px 0}
+  .phone .frame{padding:12px;border-radius:22px}
+  .notes{columns:2 320px;gap:28px;color:var(--pg-ink-2);font-size:14px}
+  .notes p{margin:0 0 12px;break-inside:avoid}
+  .notes b{color:var(--pg-ink)}
+
+  /* ═══════ your own: stickers ═══════ */
+  .g-own{--g:var(--coat);--g-soft:color-mix(in srgb, var(--coat) 16%, var(--panel));--g-ink:color-mix(in srgb, var(--coat) 70%, var(--ink))}
+  .grp.g-own{grid-column:1/-1}
+  .stk{font-size:34px;line-height:1;display:grid;place-items:center;width:52px;height:52px;
+    filter:drop-shadow(1.5px 0 0 #fff) drop-shadow(-1.5px 0 0 #fff) drop-shadow(0 1.5px 0 #fff) drop-shadow(0 -1.5px 0 #fff) drop-shadow(0 3px 4px rgba(0,0,0,.28))}
+  .bd.on .stk{transform:rotate(var(--tilt,-6deg))}
+  .bd.off .stk{filter:grayscale(1) opacity(.35);transform:none}
+  .bd .how{font-size:10px;color:var(--ink-3);line-height:1.2}
+  .bd.add .md{background:none;box-shadow:none;border:1.5px dashed var(--line);color:var(--ink-3);font-size:22px;font-weight:500;cursor:pointer}
+  .bd.add .md:hover{border-color:var(--accent);color:var(--accent)}
+  .ac-own-badges{display:flex;gap:10px;flex-wrap:wrap;align-items:flex-start}
+  .ac-own-badges .bd{width:76px}
+
+  /* the editor: a drawer like the app's other editors */
+  .edwrap{display:grid;grid-template-columns:minmax(0,1fr) 380px;gap:22px;align-items:start}
+  @media (max-width:860px){.edwrap{grid-template-columns:minmax(0,1fr)}}
+  .drawer-mock{background:var(--panel);color:var(--ink);border:1px solid var(--line);border-radius:14px;box-shadow:var(--pg-shadow);padding:18px;font-size:14px;display:flex;flex-direction:column;gap:14px}
+  .drawer-mock h4{margin:0;font-size:17px;letter-spacing:-.01em}
+  .fld{display:flex;flex-direction:column;gap:6px}
+  .fld > span{font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-2);font-weight:600}
+  .fld input,.fld select{font:inherit;font-size:14px;padding:8px 10px;border:1px solid var(--line);border-radius:9px;background:var(--panel-2);color:var(--ink);width:100%}
+  .stickers{display:grid;grid-template-columns:repeat(8,1fr);gap:4px}
+  .stickers button{border:1px solid transparent;background:none;border-radius:10px;font-size:24px;padding:4px 0;cursor:pointer;line-height:1.2}
+  .stickers button:hover{background:var(--panel-2)}
+  .stickers button[aria-pressed="true"]{background:var(--accent-soft);border-color:var(--accent)}
+  .seg{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+  .seg button{font:inherit;font-size:12.5px;text-align:left;border:1px solid var(--line);background:var(--panel-2);color:var(--ink-2);border-radius:9px;padding:8px 10px;cursor:pointer;line-height:1.3}
+  .seg button b{display:block;color:var(--ink);font-size:13px}
+  .seg button[aria-pressed="true"]{border-color:var(--accent);background:var(--accent-soft)}
+  .seg button[aria-pressed="true"] b{color:var(--accent-ink)}
+  .row2{display:grid;grid-template-columns:1fr 110px;gap:8px}
+  .preview{display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:11px;background:var(--panel-2);border:1px dashed var(--line)}
+  .preview .stk{--tilt:-8deg}
+  .preview .pv-t{font-weight:700}
+  .preview .pv-s{font-size:12px;color:var(--ink-2)}
+  .acts{display:flex;gap:8px;justify-content:flex-end}
+  .acts button{font:inherit;font-size:13.5px;font-weight:600;border-radius:9px;padding:8px 16px;border:1px solid var(--line);background:var(--panel);color:var(--ink);cursor:pointer}
+  .acts .go{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
+  .ednotes{color:var(--pg-ink-2);font-size:14px}
+  .ednotes p{margin:0 0 12px}
+  .ednotes b{color:var(--pg-ink)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="mast">
+    <div>
+      <h1 class="title">Achievements</h1>
+      <p class="lede">A new panel on the <strong>Study</strong> page, under the week and above the term heatmap. The built-in badges are worked out from what you already log. Your own are stickers you make yourself. Sample account: <strong>31.5 h studied, 9-day best streak, 23 things done, 4 exams taken, best exam 92.</strong></p>
+    </div>
+    <div class="picks">
+      <div class="themepick" role="group" aria-label="Theme">
+        <button type="button" data-theme="light">Light</button><button type="button" data-theme="dark">Dark</button>
+      </div>
+      <div class="themepick" role="group" aria-label="Background">
+        <button type="button" data-bg="med">Med</button><button type="button" data-bg="cs">CS</button>
+      </div>
+    </div>
+  </header>
+
+  <h2>On the Study page</h2>
+  <p>A progress line up top, then the three badges you are closest to, then every group. Earned badges are filled and dated. Locked ones are hollow with a ring showing how far along you are. Hover (or long-press) a badge for its full description.</p>
+  <div class="frame">
+    <div class="ghostrow"><div class="ghost">Today</div><div class="ghost">Streak</div><div class="ghost">This week</div></div>
+    <div class="ghostcols"><div class="ghost">Ready · flow</div><div class="ghost">This week</div></div>
+    <section class="panel ach" id="panel-wide"></section>
+    <div class="ghost below">Term heatmap · sessions</div>
+  </div>
+
+  <h2>Your own, as stickers</h2>
+  <p>Make your own achievements. Pick a sticker, give it a name, and choose what earns it: hours studied on one course, or a grade on one exam or quiz. The app watches for it and sticks it on, at a slight tilt, when you get there. Until then it stays grey and shows how far along you are.</p>
+  <div class="edwrap">
+    <div class="frame"><section class="panel ach" id="panel-own"></section></div>
+    <div class="drawer-mock" aria-label="New achievement">
+      <h4>New achievement</h4>
+      <label class="fld"><span>Name</span><input value="20 hours on Neuro"></label>
+      <div class="fld"><span>Sticker</span>
+        <div class="stickers" id="stickers"></div>
+      </div>
+      <div class="fld"><span>Earned when</span>
+        <div class="seg">
+          <button type="button" aria-pressed="true"><b>Study hours</b>on one course</button>
+          <button type="button" aria-pressed="false"><b>A grade</b>on one exam or quiz</button>
+        </div>
+      </div>
+      <div class="row2">
+        <label class="fld"><span>Course</span><select><option>NEURO · Neuroscience</option><option>ANAT · Anatomy</option></select></label>
+        <label class="fld"><span>Hours</span><input value="20" inputmode="numeric"></label>
+      </div>
+      <div class="preview"><span class="stk">🧠</span><span><span class="pv-t">20 hours on Neuro</span><br><span class="pv-s">12.5 / 20 h so far</span></span></div>
+      <div class="acts"><button type="button">Cancel</button><button type="button" class="go">Add</button></div>
+    </div>
+  </div>
+
+  <h2>The moment you earn one</h2>
+  <p>The app's own toast, with the badge in front. Fireworks go off at the same time when celebrations are on in Settings. “See” scrolls to the badge, which pops in.</p>
+  <div class="toastdemo" id="toastdemo">
+    <div class="toast on g-hours" role="status">
+      <span class="md">50h</span>
+      <span><span class="ac-lbl">Achievement unlocked</span><b>50 hours</b> <span class="tx">· studied in total</span></span>
+      <button type="button">See</button>
+    </div>
+  </div>
+
+  <h2>On a phone</h2>
+  <p>Next up stacks, the groups go one per row, and the badges wrap.</p>
+  <div class="phone"><div class="frame"><section class="panel ach" id="panel-phone"></section></div></div>
+
+  <h2>What counts</h2>
+  <div class="notes">
+    <p><b>Study hours</b>: total minutes across every session, timer or logged by hand. Dated the day the total crossed the line.</p>
+    <p><b>Streak</b>: your longest streak ever, using the same rules as the streak tile (daily minimum, rest days). A broken streak never takes a badge away.</p>
+    <p><b>Big days</b>: your first session, the first day you hit your daily goal, and a 4-hour day.</p>
+    <p><b>Tasks done</b>: tasks, assignments, labs, projects and other items marked Done, Submitted or Graded. Exams and quizzes count separately.</p>
+    <p><b>Exams</b>: exams and quizzes marked Taken or Graded.</p>
+    <p><b>Grades</b>: an exam or quiz graded 80+, 90+, or 100. One great grade earns all the tiers below it too.</p>
+  </div>
+</div>
+
+<script>
+  var ICONS = {
+    hours: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><circle cx="8" cy="8" r="6"/><path d="M8 4.8V8l2.2 1.4"/></svg>',
+    streak: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M12 3c1 3.5 5 5.5 5 10a5 5 0 0 1-10 0c0-2.2 1-3.6 2.2-4.8.3 1.6 1 2.6 2.3 3.1C11 8.5 11.3 5.5 12 3z"/></svg>',
+    days: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="4" y="5" width="16" height="15" rx="2"/><path d="M4 10h16M9 3v4M15 3v4"/></svg>',
+    tasks: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8.5l3 3L13 4.5"/></svg>',
+    exams: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><path d="M4 2h6l2.5 2.5V14H4z"/><path d="M6 7h4.5M6 9.5h4.5M6 12h2.5" stroke-linecap="round"/></svg>',
+    grades: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><path d="M8 1.8l1.9 3.9 4.3.6-3.1 3 .7 4.3L8 11.6l-3.8 2 .7-4.3-3.1-3 4.3-.6z"/></svg>'
+  };
+  var GROUPS = [
+    { k: 'hours', name: 'Study hours', unit: 'h', have: 31.5, badges: [
+      ['1h', 'First hour', 1, '2 Sep'], ['10h', '10 hours', 10, '9 Sep'], ['25h', '25 hours', 25, '19 Sep'],
+      ['50h', '50 hours', 50], ['100h', 'Century', 100], ['250h', '250 hours', 250]] },
+    { k: 'streak', name: 'Streak', unit: ' days', have: 9, badges: [
+      ['3d', '3 in a row', 3, '4 Sep'], ['7d', 'Full week', 7, '8 Sep'], ['30d', 'Month strong', 30], ['100d', '100 days', 100]] },
+    { k: 'days', name: 'Big days', badges: [
+      ['1st', 'First session', 1, '2 Sep', 1], ['Goal', 'Goal met', 1, '3 Sep', 1], ['4h', 'Marathon day', 4, null, 3.2, 'h in one day']] },
+    { k: 'tasks', name: 'Tasks done', unit: '', have: 23, badges: [
+      ['1', 'First tick', 1, '1 Sep'], ['10', '10 done', 10, '14 Sep'], ['50', '50 done', 50], ['100', '100 done', 100]] },
+    { k: 'exams', name: 'Exams', unit: '', have: 4, badges: [
+      ['1', 'First exam', 1, '11 Sep'], ['5', '5 exams', 5], ['10', '10 exams', 10], ['25', '25 exams', 25]] },
+    { k: 'grades', name: 'Grades', badges: [
+      ['80+', 'Solid', 80, '11 Sep', 92], ['90+', 'Top marks', 90, '22 Sep', 92], ['100', 'Perfect', 100, null, 92, 'best 92']] }
+  ];
+
+  function ring(frac) {
+    var r = 28, c = 2 * Math.PI * r;
+    return '<svg class="ring" viewBox="0 0 60 60" aria-hidden="true"><circle cx="30" cy="30" r="' + r + '" fill="none" stroke="var(--g)" stroke-width="3" stroke-linecap="round" stroke-dasharray="' + (c * frac).toFixed(1) + ' ' + c.toFixed(1) + '" opacity=".9"/></svg>';
+  }
+  function flat() {
+    var out = [];
+    GROUPS.forEach(function (g) {
+      g.badges.forEach(function (b) {
+        var have = b[4] !== undefined ? b[4] : g.have;
+        out.push({ g: g, tier: b[0], name: b[1], goal: b[2], on: !!b[3], date: b[3], have: have,
+          frac: Math.min(1, have / b[2]), note: b[5] || null });
+      });
+    });
+    return out;
+  }
+  function progressText(b) {
+    if (b.g.k === 'grades') return 'best ' + b.have + ' · need ' + b.goal;
+    if (b.note) return b.have + ' / ' + b.goal + b.note.replace(/^h/, ' h');
+    return b.have + ' / ' + b.goal + (b.g.unit || '');
+  }
+  function render(el) {
+    var all = flat(), done = all.filter(function (b) { return b.on; }).length;
+    var next = all.filter(function (b) { return !b.on && b.g.k !== 'grades'; })
+      .sort(function (a, b) { return b.frac - a.frac; }).slice(0, 3);
+    var h = '<div class="ach-head"><h3>Achievements</h3>'
+      + '<span class="ach-count"><b>' + done + '</b> of ' + all.length + '</span>'
+      + '<span class="ach-track"><i style="width:' + (done / all.length * 100).toFixed(1) + '%"></i></span>'
+      + '</div>';
+    h += '<div class="nx-lab">Next up</div><div class="ac-next">' + next.map(function (b) {
+      return '<div class="nx g-' + b.g.k + '"><div class="bd off"><span class="md">' + ring(b.frac) + b.tier + '</span></div>'
+        + '<span class="ac-tx"><span class="ac-t">' + b.name + '</span><span class="ac-p">' + progressText(b) + '</span>'
+        + '<span class="ac-bar"><i style="width:' + (b.frac * 100).toFixed(0) + '%"></i></span></span></div>';
+    }).join('') + '</div>';
+    h += '<div class="groups">' + GROUPS.map(function (g) {
+      var mine = all.filter(function (b) { return b.g === g; });
+      var n = mine.filter(function (b) { return b.on; }).length;
+      return '<div class="grp g-' + g.k + '"><div class="grp-h"><span class="gi">' + ICONS[g.k] + '</span><span class="gn">' + g.name + '</span><span class="gs">' + n + ' / ' + mine.length + '</span></div>'
+        + '<div class="ac-badges">' + mine.map(function (b) {
+          var isNew = b.g.k === 'hours' && b.tier === '25h';
+          return '<div class="bd ' + (b.on ? 'on' : 'off') + (isNew ? ' new' : '') + '" title="' + b.name + (b.on ? ' · earned ' + b.date : ' · ' + progressText(b)) + '">'
+            + '<span class="md">' + (!b.on && b.frac > 0 && b.frac < 1 && b.g.k !== 'grades' ? ring(b.frac) : '') + b.tier + '</span>'
+            + '<span class="ac-nm">' + b.name + '</span>'
+            + '<span class="dt">' + (b.on ? b.date : b.g.k === 'grades' ? 'best ' + b.have : Math.round(b.frac * 100) + '%') + '</span></div>';
+        }).join('') + '</div></div>';
+    }).join('') + ownGroup() + '</div>';
+    el.innerHTML = h;
+  }
+
+  /* your own: [sticker, name, how it is earned, earned on | null, progress text, tilt] */
+  var OWN = [
+    ['🫀', 'Cardio final 75+', 'grade on an exam', '20 Sep', null, '-7deg'],
+    ['🏆', 'ANAT midterm 85+', 'grade on an exam', '22 Sep', null, '5deg'],
+    ['🧠', '20 hours on Neuro', 'hours on a course', null, '12.5 / 20 h'],
+    ['🔬', '10 hours on Histo', 'hours on a course', null, '6 / 10 h']
+  ];
+  function ownGroup() {
+    var n = OWN.filter(function (o) { return o[3]; }).length;
+    return '<div class="grp g-own"><div class="grp-h"><span class="gi"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><path d="M3 2.5h10v6.5L9 13H3z"/><path d="M9 13V9h4" /></svg></span><span class="gn">Your own</span><span class="gs">' + n + ' / ' + OWN.length + '</span></div>'
+      + '<div class="ac-own-badges">' + OWN.map(function (o) {
+        return '<div class="bd ' + (o[3] ? 'on' : 'off') + '" title="' + o[1] + ' · ' + o[2] + '">'
+          + '<span class="stk" style="--tilt:' + (o[5] || '-6deg') + '">' + o[0] + '</span>'
+          + '<span class="ac-nm">' + o[1] + '</span>'
+          + '<span class="dt">' + (o[3] || o[4]) + '</span></div>';
+      }).join('')
+      + '<div class="bd add"><span class="md">+</span><span class="ac-nm">New</span><span class="dt">sticker</span></div>'
+      + '</div></div>';
+  }
+  function renderOwn(el) {
+    el.innerHTML = '<div class="ach-head"><h3>Achievements</h3><span class="ach-count">· your own</span></div><div class="groups">' + ownGroup() + '</div>';
+  }
+  var STICKERS = ['🧠','🫀','🫁','🦴','🔬','💉','🩺','💊','🧬','💻','⌨️','🐛','🏆','⭐','🔥','🚀','☕','📚','✏️','🎯','🌙','🌸','🐱','🎉'];
+  document.getElementById('stickers').innerHTML = STICKERS.map(function (s) {
+    return '<button type="button" aria-pressed="' + (s === '🧠') + '">' + s + '</button>';
+  }).join('');
+  render(document.getElementById('panel-wide'));
+  render(document.getElementById('panel-phone'));
+  renderOwn(document.getElementById('panel-own'));
+
+  (function () {
+    var root = document.documentElement;
+    var dark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+    function setTheme(t) {
+      root.setAttribute('data-app', t);
+      document.querySelectorAll('[data-theme]').forEach(function (b) { b.setAttribute('aria-pressed', b.dataset.theme === t ? 'true' : 'false'); });
+    }
+    function setBg(v) {
+      if (v === 'cs') root.setAttribute('data-bg', 'cs'); else root.removeAttribute('data-bg');
+      document.querySelectorAll('[data-bg]').forEach(function (b) { if (b.tagName === 'BUTTON') b.setAttribute('aria-pressed', b.dataset.bg === v ? 'true' : 'false'); });
+    }
+    setTheme(dark ? 'dark' : 'light'); setBg('med');
+    document.querySelectorAll('[data-theme]').forEach(function (b) { b.addEventListener('click', function () { setTheme(b.dataset.theme); }); });
+    document.querySelectorAll('button[data-bg]').forEach(function (b) { b.addEventListener('click', function () { setBg(b.dataset.bg); }); });
+  })();
+</script>
+</body>
+</html>

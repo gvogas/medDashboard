@@ -35,7 +35,7 @@ export async function signIn(username = `user${++n}`) {
   const cookie = res.headers.get('set-cookie').split(';')[0];
   const revisions = new Map([['/api/me', (await res.clone().json()).revision]]);
   const call = async (path, init = {}) => {
-    const conditional = ['PUT', 'DELETE'].includes(init.method) && (/^\/api\/(courses|items|quotes|study_sessions)\//.test(path) || path === '/api/me');
+    const conditional = ['PUT', 'DELETE'].includes(init.method) && (/^\/api\/(courses|items|quotes|study_sessions|achievements)\//.test(path) || path === '/api/me');
     const response = await SELF.fetch(`${BASE}${path}`, {
       ...init,
       headers: { 'content-type': 'application/json', cookie,

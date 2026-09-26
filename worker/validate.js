@@ -266,3 +266,22 @@ export function validateQuote(body) {
     source: str(body.source ?? '', 'source', 80),
   };
 }
+
+/* Your own achievement: a sticker picture as a small data: URL, a name, and what earns
+   it, hours on a course (1–1000) or a grade on one exam or quiz (1–100). */
+const STICKER = /^data:image\/(?:webp|png|jpeg);base64,[A-Za-z0-9+/]+={0,2}$/;
+export const STICKER_MAX = 90_000;
+export function validateAchievement(body) {
+  obj(body, 'body');
+  const sticker = str(body.sticker, 'sticker', STICKER_MAX, 1);
+  if (!STICKER.test(sticker)) fail('sticker');
+  const rule = oneOf(body.rule, 'rule', ['hours', 'grade']);
+  return {
+    name: str(body.name, 'name', 40, 1),
+    sticker,
+    rule,
+    courseId: rule === 'hours' ? str(body.courseId, 'courseId', 40, 1) : null,
+    itemId: rule === 'grade' ? str(body.itemId, 'itemId', 24, 1) : null,
+    target: int(body.target, 'target', 1, rule === 'grade' ? 100 : 1000),
+  };
+}

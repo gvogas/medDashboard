@@ -17,6 +17,7 @@ import { drawer, scrim, closeDrawer, drawerHasFocus, beforeClose, refind, setSid
 import { openItem, newItem, current, saveDraft, touch, touchSoon, flushTouch, renderItemDrawer, noteStartBase, onItemInput, celebrate, setStatus, chainReview } from './views/drawer-item.js';
 import { openKeys } from './views/keys.js';
 import { renderSessionDrawer, refreshSessionDrawer, editSession, saveSessionDraft } from './views/drawer-session.js';
+import { achievementClick, editAchievement } from './views/drawer-achievement.js';
 import { launch as fireworks } from './fireworks.js';
 import { openCourse, renderCourseDrawer, saveCourseDraft, leaveDrawer, onCourseInput } from './views/drawer-course.js';
 import { toast, hideToast } from './views/toast.js';
@@ -148,6 +149,7 @@ async function onClick(e) {
     ui.view = el.dataset.view; rememberUi(); render(); return;
   }
   if (await studyClick(e)) return;
+  if (await achievementClick(e)) return;
   if (e.target.closest('#menuBtn')) { setSide(!$('side').classList.contains('on')); return; }
   if (e.target.closest('#newBtn')) { newItem(ui.anchor); return; }
   if (e.target.closest('#today')) { ui.anchor = today(); render(); return; }
@@ -338,6 +340,7 @@ let searchTimer = null;
 document.addEventListener('input', async (e) => {
   const d = e.target.dataset || {};
   if ('sd' in d) { editSession(d.sd, e.target.value); return; }     /* the Log study drawer */
+  if ('ach' in d) { editAchievement(d.ach, e.target.value); return; } /* the achievement drawer */
 
   if ('reviews' in d) {
     const setting = readSetting(data.profile.id);

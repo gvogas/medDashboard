@@ -4,7 +4,7 @@ import { verifyPassword, normalizeUsername } from './password.js';
 import { claimAttempt, recordSuccess } from './throttle.js';
 import { limitLogin, limitOutline } from './limits.js';
 import { readOutline, MAX_BYTES } from './outline.js';
-import { validateProfile, validateCourse, validateItem, validateQuote, validateStudySession, validateId } from './validate.js';
+import { validateProfile, validateCourse, validateItem, validateQuote, validateStudySession, validateAchievement, validateId } from './validate.js';
 import { getUserForLogin, getProfile, updateProfile, getRow, upsertRow, deleteRow, syncPage, bumpPasswordGen, saveSpotifyTokens, deleteSpotifyTokens } from './db.js';
 import * as spotify from './spotify.js';
 import { feedState, renewFeed, stopFeed, serveFeed } from './calendar.js';
@@ -16,7 +16,7 @@ function revisionOf(request) {
   return Number(raw.slice(1, -1));
 }
 
-const VALIDATORS = { courses: validateCourse, items: validateItem, quotes: validateQuote, study_sessions: validateStudySession };
+const VALIDATORS = { courses: validateCourse, items: validateItem, quotes: validateQuote, study_sessions: validateStudySession, achievements: validateAchievement };
 
 async function putRow({ request, env, params: [table, id] }) {
   const userId = await requireUser(request, env);
@@ -41,7 +41,7 @@ async function removeRow({ request, env, params: [table, id] }) {
   return new Response(null, { status: 204 });
 }
 
-const ROW = /^\/api\/(courses|items|quotes|study_sessions)\/([^/]+)$/;
+const ROW = /^\/api\/(courses|items|quotes|study_sessions|achievements)\/([^/]+)$/;
 
 // ── Spotify ─────────────────────────────────────────────────────────────────
 // The consent round trip is two browser navigations, so its failures are

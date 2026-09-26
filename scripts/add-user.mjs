@@ -64,9 +64,11 @@ async function ask(prompt) {
 
 let sql;
 if (remove) {
-  const typed = await ask(`This deletes ${username} and every course, item and quote it owns. Type the username to confirm: `);
+  const typed = await ask(`This deletes ${username} and every course, item, quote, study session and achievement it owns. Type the username to confirm: `);
   if (typed.trim().toLowerCase() !== username) { console.error('Not deleted.'); process.exit(1); }
-  sql = `DELETE FROM items WHERE user_id IN (SELECT id FROM users WHERE username = '${username}');
+  sql = `DELETE FROM achievements WHERE user_id IN (SELECT id FROM users WHERE username = '${username}');
+         DELETE FROM study_sessions WHERE user_id IN (SELECT id FROM users WHERE username = '${username}');
+         DELETE FROM items WHERE user_id IN (SELECT id FROM users WHERE username = '${username}');
          DELETE FROM quotes WHERE user_id IN (SELECT id FROM users WHERE username = '${username}');
          DELETE FROM courses WHERE user_id IN (SELECT id FROM users WHERE username = '${username}');
          DELETE FROM spotify_tokens WHERE user_id IN (SELECT id FROM users WHERE username = '${username}');

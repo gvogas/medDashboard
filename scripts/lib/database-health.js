@@ -1,12 +1,14 @@
 // Read-only checks shared by the CLI and D1 tests. Results contain counts only.
-const trackerTables = ['courses', 'items', 'quotes', 'study_sessions'];
+// Per-table counts are added as scalar subqueries: D1 refuses a compound SELECT of
+// more than five terms, and there are more tables than that.
+const trackerTables = ['courses', 'items', 'quotes', 'study_sessions', 'achievements'];
 export const databaseChecks = [
   { name: 'SQLite integrity', sql: 'PRAGMA quick_check', kind: 'integrity' },
   { name: 'Foreign keys', sql: 'PRAGMA foreign_key_check', kind: 'rows' },
   {
     name: 'Positive integer revisions', kind: 'count',
-    sql: `SELECT sum(issues) AS issues FROM (${['users', ...trackerTables].map((table) =>
-      `SELECT count(*) AS issues FROM ${table} WHERE typeof(revision) != 'integer' OR revision < 1`).join(' UNION ALL ')})`,
+    sql: `SELECT ${['users', ...trackerTables].map((table) =>
+      `(SELECT count(*) FROM ${table} WHERE typeof(revision) != 'integer' OR revision < 1)`).join(' + ')} AS issues`,
   },
   {
     name: 'Active item course references', kind: 'count',
@@ -15,14 +17,14 @@ export const databaseChecks = [
   },
   {
     name: 'Change-feed record coverage', kind: 'count',
-    sql: `SELECT sum(issues) AS issues FROM (${trackerTables.map((table) => `
-      SELECT count(*) AS issues FROM ${table} AS r LEFT JOIN changes AS c
+    sql: `SELECT ${trackerTables.map((table) => `
+      (SELECT count(*) FROM ${table} AS r LEFT JOIN changes AS c
         ON c.user_id = r.user_id AND c.row_id = r.id AND c.kind = '${table}'
       WHERE c.seq IS NULL OR CASE WHEN json_valid(c.payload) THEN
         json_extract(c.payload, '$.user_id') IS NOT r.user_id OR json_extract(c.payload, '$.id') IS NOT r.id OR
         json_extract(c.payload, '$.revision') IS NOT r.revision OR json_extract(c.payload, '$.deleted_at') IS NOT r.deleted_at
-        ELSE 1 END
-      `).join(' UNION ALL ')})`,
+        ELSE 1 END)
+      `).join(' + ')} AS issues`,
   },
   {
     name: 'Change-feed orphans', kind: 'count',

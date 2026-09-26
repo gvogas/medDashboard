@@ -140,7 +140,7 @@ async function changes(cursor) {
   const page = await request('GET', `/api/sync?v=2&cursor=${cursor}`);
   if (!page || typeof page.reset !== 'boolean' || typeof page.more !== 'boolean'
     || !Number.isSafeInteger(page.cursor) || page.cursor < 0 || !Array.isArray(page.changes)
-    || !page.changes.every((change) => change && ['courses', 'items', 'quotes', 'study_sessions'].includes(change.kind) && validRecord(change.row))) throw invalidResponse();
+    || !page.changes.every((change) => change && ['courses', 'items', 'quotes', 'study_sessions', 'achievements'].includes(change.kind) && validRecord(change.row))) throw invalidResponse();
   if (page.reset
     ? cursor === 0 || page.cursor !== 0 || page.more || page.changes.length > 0
     : page.cursor < cursor || (page.more && page.cursor === cursor)) throw invalidResponse();

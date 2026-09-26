@@ -184,6 +184,106 @@ html.focusing[data-phase="break"]{--fx-bg:var(--fx-break-bg);--fx-glow:var(--fx-
 .hleg .sp{flex:1}
 .hleg .hc{width:12px;height:12px}
 
+/* achievements: round medals, filled and dated when earned, a ring while on the way */
+.study .st-ach{grid-column:1/-1;container-type:inline-size}
+.ach-head{display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+.ach-count{font-size:13px;color:var(--ink-2);font-variant-numeric:tabular-nums}
+.ach-count b{color:var(--ink);font-weight:700}
+.ach-track{flex:1 1 160px;height:6px;border-radius:99px;background:var(--line-2);overflow:hidden;min-width:120px}
+.ach-track i{display:block;height:100%;border-radius:99px;background:var(--accent)}
+.st-ach h4{margin:0}
+.st-ach .ach-lab{font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-3);font-weight:600;margin-top:18px}
+.st-ach ul{list-style:none;margin:0;padding:0}
+.st-ach .ach-next{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-top:10px}
+@container (max-width:640px){.st-ach .ach-next{grid-template-columns:minmax(0,1fr)}}
+.ach-next .nx{display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:11px;background:var(--panel-2);border:1px solid var(--line-2);min-width:0}
+.nx-tx{display:flex;flex-direction:column;gap:3px;min-width:0;flex:1}
+.nx-tx b{font-weight:700;font-size:13.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.nx-tx > span:not(.nx-bar){font-size:12px;color:var(--ink-2);font-variant-numeric:tabular-nums}
+.nx-bar{display:block;height:4px;border-radius:99px;background:var(--line);overflow:hidden}
+.nx-bar i{display:block;height:100%;background:var(--g);border-radius:99px}
+.ach-groups{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(310px,100%),1fr));gap:12px;margin-top:16px}
+.ach-grp{border:1px solid var(--line-2);border-radius:11px;padding:12px 12px 14px;min-width:0}
+.ach-grp .grp-h{display:flex;align-items:center;gap:8px;margin-bottom:12px}
+.ach-grp .gi{width:24px;height:24px;border-radius:7px;display:grid;place-items:center;background:var(--g-soft);color:var(--g-ink)}
+.ach-grp .gi svg{width:14px;height:14px}
+.ach-grp h4{font-weight:700;font-size:13px}
+.ach-grp .gs{margin-left:auto;font-size:12px;color:var(--ink-3);font-variant-numeric:tabular-nums}
+.ach-badges{display:flex;gap:6px;flex-wrap:wrap;align-items:flex-start}
+.st-ach .bd{display:flex;flex-direction:column;align-items:center;gap:5px;width:62px;text-align:center}
+.st-ach .md{position:relative;width:52px;height:52px;border-radius:50%;display:grid;place-items:center;flex:none;font-weight:800;font-size:13px;letter-spacing:-.01em;font-variant-numeric:tabular-nums}
+.st-ach .bd.on .md{background:var(--g-soft);color:var(--g-ink);box-shadow:inset 0 0 0 2px var(--g),0 2px 6px color-mix(in srgb,var(--g) 25%,transparent)}
+.st-ach .bd.off .md{background:var(--panel-2);color:var(--ink-3);box-shadow:inset 0 0 0 1.5px var(--line)}
+.st-ach .md .ok{position:absolute;right:-1px;bottom:-1px;width:18px;height:18px;border-radius:50%;background:var(--g);color:var(--panel);border:2px solid var(--panel);display:grid;place-items:center}
+.st-ach .md .ok svg{width:10px;height:10px}
+.ach-ring{position:absolute;inset:-4px;width:60px;height:60px;pointer-events:none}
+.ach-ring circle{fill:none;stroke:var(--g);stroke-width:3;stroke-linecap:round}
+.st-ach .nm{font-size:11.5px;font-weight:600;line-height:1.2;color:var(--ink)}
+.st-ach .bd.off .nm{color:var(--ink-2);font-weight:500}
+.st-ach .dt{font-size:10.5px;color:var(--ink-3);line-height:1.2;font-variant-numeric:tabular-nums}
+.st-ach .bd.pop .md{animation:achPop 1.4s ease-out 1}
+@keyframes achPop{0%{transform:scale(.6);opacity:0}40%{transform:scale(1.14);opacity:1}100%{transform:scale(1)}}
+@media (prefers-reduced-motion:reduce){.st-ach .bd.pop .md{animation:none}}
+/* group colours, from the palette the app already has */
+.g-hours{--g:var(--study);--g-soft:var(--study-soft);--g-ink:var(--study-ink)}
+.g-streak{--g:#E08A3C;--g-soft:var(--amber-bg);--g-ink:var(--amber-ink)}
+.g-days{--g:var(--accent);--g-soft:var(--accent-soft);--g-ink:var(--accent-ink)}
+.g-tasks{--g:var(--good);--g-soft:color-mix(in srgb,var(--good) 16%,var(--panel));--g-ink:var(--good)}
+.g-exams{--g:var(--break);--g-soft:var(--break-soft);--g-ink:var(--break-ink)}
+.g-grades{--g:#D9A21E;--g-soft:color-mix(in srgb,#E8B33A 20%,var(--panel));--g-ink:#855D00}
+:root[data-app="dark"] .g-grades{--g-ink:#F0C96A}
+:root[data-app="dark"] .g-streak{--g:#E9A25E}
+/* the unlock toast: the badge in front of the words */
+.toast .md{flex:none;width:32px;height:32px;border-radius:50%;display:grid;place-items:center;font-weight:800;font-size:10.5px;background:var(--g-soft);color:var(--g-ink);box-shadow:inset 0 0 0 2px var(--g);margin-left:-6px}
+
+/* your own: uploaded stickers, stuck on at a tilt when earned, grey until then */
+.st-ach .ach-own{grid-column:1/-1}
+.g-own{--g:var(--coat);--g-soft:color-mix(in srgb,var(--coat) 16%,var(--panel));--g-ink:color-mix(in srgb,var(--coat) 70%,var(--ink))}
+.st-ach .ach-own .ach-badges{gap:10px}
+.st-ach .bd.own,.st-ach .bd.add{width:84px}
+.st-ach .stk-btn{display:flex;flex-direction:column;align-items:center;gap:5px;width:100%;border:0;background:none;padding:4px 0;border-radius:10px;color:inherit;font:inherit;cursor:pointer}
+.st-ach .stk-btn:hover,.st-ach .stk-btn:focus-visible{background:var(--panel-2)}
+.st-ach .stk-btn[disabled]{opacity:.5;cursor:default}
+.stk{display:block;width:64px;height:64px;filter:drop-shadow(0 2px 3px rgba(0,0,0,.25));transition:transform .2s}
+.st-ach .bd.on .stk.t0{transform:rotate(-7deg)}
+.st-ach .bd.on .stk.t1{transform:rotate(-3deg)}
+.st-ach .bd.on .stk.t2{transform:rotate(2deg)}
+.st-ach .bd.on .stk.t3{transform:rotate(5deg)}
+.st-ach .bd.on .stk.t4{transform:rotate(8deg)}
+.st-ach .bd.off .stk{filter:grayscale(1) opacity(.4)}
+.st-ach .bd.own .dt{max-width:84px}
+.st-ach .bd.add .md{width:64px;height:64px;background:none;box-shadow:none;border:1.5px dashed var(--line);color:var(--ink-3);font-size:24px;font-weight:500}
+.st-ach .bd.add .stk-btn:hover .md{border-color:var(--accent);color:var(--accent)}
+.st-ach .bd.own.pop .stk{animation:achPop 1.4s ease-out 1}
+.st-ach .ach-empty{text-align:left;margin:0 0 10px}
+@media (prefers-reduced-motion:reduce){.stk{transition:none}.st-ach .bd.own.pop .stk{animation:none}}
+.toast .stk{width:36px;height:36px;flex:none;margin-left:-6px}
+
+/* the achievement drawer: the sticker, the crop, the rule */
+.adraw .dsec{margin-bottom:16px}
+.ach-pick{display:flex;align-items:center;gap:16px}
+.ach-pick .stk{width:88px;height:88px;transform:rotate(-5deg)}
+.ach-pick > span:last-child{display:flex;flex-direction:column;align-items:flex-start;gap:6px}
+.ach-pick .hint{font-size:12px;color:var(--ink-2)}
+.stk-blank{width:88px;height:88px;border-radius:50%;border:1.5px dashed var(--line);display:grid;place-items:center;color:var(--ink-3);font-size:28px;flex:none}
+.file-btn{cursor:pointer;position:relative}
+.file-btn:focus-within{outline:2px solid var(--accent);outline-offset:2px}
+.ach-crop{display:flex;flex-direction:column;align-items:center;gap:10px}
+.crop-stage{width:208px;height:208px;border-radius:50%;cursor:grab;touch-action:none;background:var(--panel-2);filter:drop-shadow(0 2px 4px rgba(0,0,0,.2))}
+.crop-stage:active{cursor:grabbing}
+.crop-stage:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+.ach-crop .zoom{display:flex;align-items:center;gap:10px;width:208px;font-size:12px;color:var(--ink-2)}
+.ach-crop .zoom input{flex:1}
+.ach-crop .crop-acts{display:flex;gap:8px}
+.ach-crop .hint{font-size:12px;color:var(--ink-3);margin:0}
+.adraw .ach-rule{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.adraw .ach-rule button{text-align:left;border:1px solid var(--line);background:var(--panel-2);color:var(--ink-2);border-radius:9px;padding:7px 9px;font-size:11.5px;line-height:1.3}
+.adraw .ach-rule button b{display:block;color:var(--ink);font-size:12.5px}
+.adraw .ach-rule button[aria-pressed="true"]{border-color:var(--accent);background:var(--accent-soft)}
+.adraw .ach-rule button[aria-pressed="true"] b{color:var(--accent-ink)}
+.adraw .fields input[type="number"]{width:84px}
+.adraw .sd-hint{margin:14px 0 0;padding:10px 12px;border-radius:9px;background:var(--accent-soft);color:var(--accent-ink);font-size:12.5px}
+
 /* sessions */
 .st-sess .seg{display:inline-flex;gap:2px;padding:3px;background:var(--panel-2);border-radius:10px;margin-left:6px}
 .st-sess .seg button{border:0;background:none;border-radius:8px;padding:5px 13px;font-size:12.5px;font-weight:600;color:var(--ink-2)}

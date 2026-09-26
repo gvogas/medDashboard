@@ -6,13 +6,14 @@ import { data } from './store.js';
 import { ui, rememberUi } from './state.js';
 import { normalizeFlow, normalizePrefs, FLOW_PRESETS } from './model.js';
 import { parse, today } from './dates.js';
-import { $ } from './dom.js';
+import { $, esc } from './dom.js';
 import { render, renderView } from './views/render.js';
 import { drawerOpen } from './views/drawer-base.js';
 import { openSession, editSession } from './views/drawer-session.js';
 import { toast } from './views/toast.js';
 import { openSettings, renderSettings } from './views/drawer-settings.js';
 import { minutesByDay, streak } from './history.js';
+import { achievements, ownAchievements } from './achievements.js';
 import { launch as fireworks } from './fireworks.js';
 import * as focus from './focus.js';
 import { paint as paintStudy, clearRun, flow as studyFlow } from './views/study.js';
@@ -129,6 +130,36 @@ export function celebrateStudy() {
   const goal = p.goal && was.mins < p.goal && mins >= p.goal;
   const milestone = days > was.days && [7, 30, 100, 365].includes(days);
   if (goal || milestone) fireworks(window.innerWidth / 2, window.innerHeight * 0.7, { rockets: milestone ? 6 : 4 });
+}
+
+/* A toast, and fireworks when celebrations are on, for each achievement newly earned.
+   The first look, and anything synced from elsewhere, only records what is earned. */
+let earned = null;
+export function celebrateAchievements({ quiet = false } = {}) {
+  const list = [...achievements(data.study_sessions, data.items, studyPrefs(), today()),
+    ...ownAchievements(data.achievements, data.study_sessions, data.items, data.courses)];
+  const was = earned;
+  earned = new Set(list.filter((b) => b.earned).map((b) => b.id));
+  if (!was || quiet) return;
+  const fresh = list.filter((b) => b.earned && !was.has(b.id));
+  if (!fresh.length) return;
+  const b = fresh[0], more = fresh.length - 1;
+  toast('Achievement unlocked: ' + b.name + (more ? ' and ' + more + ' more' : ''), {
+    badge: b.sticker ? '<img class="stk" src="' + esc(b.sticker) + '" alt="" width="36" height="36">'
+      : '<span class="md g-' + b.group + '" aria-hidden="true">' + esc(b.tier) + '</span>',
+    label: 'See', undo: () => showAchievement(b.id), ms: 8000,
+  });
+  if (studyPrefs().celebrate) fireworks(window.innerWidth / 2, window.innerHeight * 0.7, { rockets: 5 });
+}
+
+function showAchievement(id) {
+  if (ui.view !== 'study') { ui.view = 'study'; rememberUi(); render(); }
+  const el = document.getElementById('ach-' + id);
+  if (!el) return;
+  el.scrollIntoView({ block: 'center', behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
+  el.classList.remove('pop');
+  void el.offsetWidth;
+  el.classList.add('pop');
 }
 
 /* Every change to the flow saves it to the profile, so it follows you to other devices. */

@@ -1,12 +1,12 @@
 // The database is authoritative; memory is a render cache, never the shared queue.
 import { openDb, deleteDb } from './db.js';
-import { normalizeItem, normalizeCourse, normalizeQuote, normalizeStudySession, normalizeFlow, normalizePrefs, DEFAULT_COAT } from './model.js';
-export const data = { profile: null, courses: [], items: [], quotes: [], study_sessions: [] };
+import { normalizeItem, normalizeCourse, normalizeQuote, normalizeStudySession, normalizeAchievement, normalizeFlow, normalizePrefs, DEFAULT_COAT } from './model.js';
+export const data = { profile: null, courses: [], items: [], quotes: [], study_sessions: [], achievements: [] };
 export const dirty = {};
 export const conflicts = [];
 const listeners = new Set();
-const normal = { items: normalizeItem, courses: normalizeCourse, quotes: normalizeQuote, study_sessions: normalizeStudySession };
-const stores = ['courses', 'items', 'quotes', 'study_sessions', 'meta', 'pending', 'conflicts'];
+const normal = { items: normalizeItem, courses: normalizeCourse, quotes: normalizeQuote, study_sessions: normalizeStudySession, achievements: normalizeAchievement };
+const stores = ['courses', 'items', 'quotes', 'study_sessions', 'achievements', 'meta', 'pending', 'conflicts'];
 /* Which tab queued an edit. It lasts as long as the tab, reloads included: a new id on
    every load made an unsynced edit look like another tab's once the page reloaded. */
 const owner = (() => {
@@ -44,7 +44,7 @@ export async function reload() {
   const handle = db;
   if (!handle) return;
   const snapshot = await handle.transaction(stores, 'readonly', async (a) => ({
-    courses: await a('courses').all(), items: await a('items').all(), quotes: await a('quotes').all(), study_sessions: await a('study_sessions').all(),
+    courses: await a('courses').all(), items: await a('items').all(), quotes: await a('quotes').all(), study_sessions: await a('study_sessions').all(), achievements: await a('achievements').all(),
     profile: (await a('meta').get('profile'))?.value,
     pending: await a('pending').all(), conflicts: await a('conflicts').all(),
   }));
@@ -164,6 +164,8 @@ export const saveCourse = (row) => saveRow('courses', row);
 export const saveQuote = (row) => saveRow('quotes', row);
 export const saveStudySession = (row) => saveRow('study_sessions', row);
 export const deleteStudySession = (id) => deleteRow('study_sessions', id);
+export const saveAchievement = (row) => saveRow('achievements', row);
+export const deleteAchievement = (id) => deleteRow('achievements', id);
 export function deleteItem(id) {
   return mutate(async (a) => {
     const row = await a('items').get(id);

@@ -93,7 +93,15 @@ const TABLES = {
     toRow: (s) => ({ ...s, note: s.note ?? '', manual: s.manual ? 1 : 0 }),
     fromRow: (r) => ({ note: r.note ?? '', manual: r.manual === 1 }),
   },
+  achievements: {
+    cols: { name: 'name', sticker: 'sticker', rule: 'rule', courseId: 'course_id', itemId: 'item_id', target: 'target' },
+    toRow: (a) => a,
+    fromRow: () => ({}),
+  },
 };
+
+/* Live achievements an account may hold; each carries its sticker picture. */
+export const ACHIEVEMENT_LIMIT = 30;
 
 function rowToApi(table, r) {
   const t = TABLES[table];
@@ -126,13 +134,16 @@ function upsertStmt(db, table, userId, id, fields, now, revision) {
   const updates = [...cols.map(([, col]) => `${col} = excluded.${col}`), 'updated_at = excluded.updated_at', 'deleted_at = NULL', 'revision = revision + 1'];
   const courseGuard = table === 'items' ? ' AND (? IS NULL OR EXISTS (SELECT 1 FROM courses WHERE user_id = ? AND id = ? AND deleted_at IS NULL))' : '';
   const courseBindings = table === 'items' ? [fields.courseId ?? null, userId, fields.courseId ?? null] : [];
+  /* a new or revived achievement must fit under the limit; an edit to a live one always does */
+  const capGuard = table === 'achievements' ? ' AND (SELECT count(*) FROM achievements WHERE user_id = ? AND id != ? AND deleted_at IS NULL) < ?' : '';
+  const capBindings = table === 'achievements' ? [userId, id, ACHIEVEMENT_LIMIT] : [];
   return db
     .prepare(
-      `INSERT INTO ${table} (${names.join(', ')}, revision) SELECT ${names.map(() => '?').join(', ')}, COALESCE((SELECT seq FROM sqlite_sequence WHERE name = 'changes'), 0) + 1 WHERE (? = 0 OR EXISTS (SELECT 1 FROM ${table} WHERE user_id = ? AND id = ?))${courseGuard}
+      `INSERT INTO ${table} (${names.join(', ')}, revision) SELECT ${names.map(() => '?').join(', ')}, COALESCE((SELECT seq FROM sqlite_sequence WHERE name = 'changes'), 0) + 1 WHERE (? = 0 OR EXISTS (SELECT 1 FROM ${table} WHERE user_id = ? AND id = ?))${courseGuard}${capGuard}
        ON CONFLICT (user_id, id) DO UPDATE SET ${updates.join(', ')} WHERE revision = ?
        RETURNING ${selectCols(table)}`,
     )
-    .bind(...values, revision, userId, id, ...courseBindings, revision);
+    .bind(...values, revision, userId, id, ...courseBindings, ...capBindings, revision);
 }
 
 /**
@@ -148,6 +159,12 @@ export async function upsertRow(db, table, userId, id, fields, now = Date.now(),
     table === 'items' && fields.courseId ? courseStmt(db, userId, fields.courseId) : db.prepare('SELECT 1 AS x'),
   ]);
   if (!course.results.length) throw new HttpError(400, { error: 'invalid', field: 'courseId' });
+  /* A new or revived achievement at a matching revision missed only because of the limit. */
+  const row = current.results[0];
+  if (table === 'achievements' && (row ? row.deleted_at !== null && row.revision === revision : revision === 0)) {
+    const { n } = await db.prepare('SELECT count(*) AS n FROM achievements WHERE user_id = ? AND deleted_at IS NULL').bind(userId).first();
+    if (n >= ACHIEVEMENT_LIMIT) throw new HttpError(400, { error: 'too_many', limit: ACHIEVEMENT_LIMIT });
+  }
   throw new HttpError(409, { error: 'conflict', current: current.results[0] ? rowToApi(table, current.results[0]) : null });
 }
 
@@ -156,7 +173,7 @@ export async function purgeTombstones(db, before) {
   await db.batch(
     [db.prepare('UPDATE sync_state SET floor = MAX(floor, COALESCE((SELECT MAX(seq) FROM changes WHERE deleted_at < ?), 0)) WHERE id = 1').bind(before),
     db.prepare('DELETE FROM changes WHERE deleted_at < ?').bind(before),
-    ...['study_sessions', 'items', 'quotes', 'courses'].map((table) =>
+    ...['achievements', 'study_sessions', 'items', 'quotes', 'courses'].map((table) =>
       db.prepare(`DELETE FROM ${table} WHERE deleted_at IS NOT NULL AND deleted_at < ?`).bind(before),
     )],
   );
