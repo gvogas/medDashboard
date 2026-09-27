@@ -33,7 +33,7 @@ import { previewImport, editImport, commitImport, readOutlineFile } from './view
 import * as focus from './focus.js';
 import { setTheme, setBg, followSystem } from './theme.js';
 import { refreshAfterSync, runHeldRefresh, pointerPressed, pointerReleased, runReviews } from './sync-status.js';
-import { boot, showSignIn, signOut, signIn, onStoreEvent, onStorage } from './session.js';
+import { boot, showSignIn, signOut, onStoreEvent, onStorage } from './session.js';
 import { onFocusTick, commitUndo, finishDelete, deleteWithUndo, deleteLater, studyClick, studyChange, savePrefs } from './study-controller.js';
 import { onKeydown } from './keyboard.js';
 
@@ -93,8 +93,6 @@ document.addEventListener('submit', (e) => {
   spotView.typed('');                               /* no delayed search after this one */
   spotView.search(e.target.querySelector('[data-spot-q]').value);
 });
-
-$('signin').addEventListener('submit', signIn);
 
 /* ═════════ the study timer ═════════ */
 focus.onTick(onFocusTick);

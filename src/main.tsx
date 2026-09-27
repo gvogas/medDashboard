@@ -6,28 +6,26 @@ import "./legacy/js/main.js"
 // Listen to the store and sync from the start, before any component mounts.
 import "./data/store"
 import "./data/sync"
-import { StrictMode } from "react"
+import { StrictMode, type ReactNode } from "react"
 import { createRoot } from "react-dom/client"
 import { TopBar } from "@/components/top-bar"
-
-/* ── the top bar (with the view dock), inside <header class="bar"> ── */
-const bar = document.querySelector("header.bar")
-if (bar) {
-    createRoot(bar).render(
-        <StrictMode>
-            <TopBar />
-        </StrictMode>
-    )
-}
-
-/* ── the sidebar: React renders inside the static <aside id="side"> ── */
 import { Sidebar } from "@/components/sidebar"
+import { SignIn } from "@/components/sign-in"
+import { Toaster } from "@/components/toaster"
 
-const side = document.getElementById("side")
-if (side) {
-    createRoot(side).render(
-        <StrictMode>
-            <Sidebar />
-        </StrictMode>
-    )
+function mount(el: Element | null, node: ReactNode) {
+    if (el) createRoot(el).render(<StrictMode>{node}</StrictMode>)
 }
+
+/* Inside static containers in index.html, whose own attributes stay with the legacy
+   code: <header class="bar"> (hidden on the focus screen), <aside id="side"> (.on and
+   inert on phones, from setSide) and #signin (shown and hidden by session.js). */
+mount(document.querySelector("header.bar"), <TopBar />)
+mount(document.getElementById("side"), <Sidebar />)
+mount(document.getElementById("signin"), <SignIn />)
+
+/* The toaster gets its own container at the end of <body>, outside #app, so a drawer
+   that makes #app inert leaves the toast's buttons usable. */
+const toaster = document.body.appendChild(document.createElement("div"))
+toaster.id = "toaster"
+mount(toaster, <Toaster />)

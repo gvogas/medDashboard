@@ -16,7 +16,6 @@ import { renderSignIn, hideSignIn } from './views/signin.js';
 import { schedule as drawOrnament } from './ornament.js';
 import * as focus from './focus.js';
 import { paint as paintStudy } from './views/study.js';
-import { $ } from './dom.js';
 import { setTheme, setBg } from './theme.js';
 import { celebrateStudy, celebrateAchievements, finishDelete, commitUndo } from './study-controller.js';
 import { refreshAfterSync } from './sync-status.js';
@@ -116,11 +115,10 @@ export async function signOut({ everywhere = false, force = false } = {}) {
   location.reload(); // Clear every in-memory account cache at the session boundary.
 }
 
-export async function signIn(e) {
-  if (e.target.id !== 'loginForm') return;
-  e.preventDefault();
-  const username = $('loginUser').value.trim(), password = $('loginPass').value;
-  const btn = $('loginBtn'); btn.disabled = true; btn.textContent = 'Signing in…';
+/** The sign-in form's submit (src/components/sign-in.tsx). Success reloads the page;
+ * a failure shows the form again with the reason. */
+export async function signIn(username, password) {
+  username = username.trim();
   try {
     sync.stop();
     spotify.stop();

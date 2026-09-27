@@ -234,7 +234,7 @@ html.focusing[data-phase="break"]{--fx-bg:var(--fx-break-bg);--fx-glow:var(--fx-
 :root[data-app="dark"] .g-grades{--g-ink:#F0C96A}
 :root[data-app="dark"] .g-streak{--g:#E9A25E}
 /* the unlock toast: the badge in front of the words */
-.toast .md{flex:none;width:32px;height:32px;border-radius:50%;display:grid;place-items:center;font-weight:800;font-size:10.5px;background:var(--g-soft);color:var(--g-ink);box-shadow:inset 0 0 0 2px var(--g);margin-left:-6px}
+.toast-badge .md{flex:none;width:32px;height:32px;border-radius:50%;display:grid;place-items:center;font-weight:800;font-size:10.5px;background:var(--g-soft);color:var(--g-ink);box-shadow:inset 0 0 0 2px var(--g);margin-left:-6px}
 
 /* your own: uploaded stickers, stuck on at a tilt when earned, grey until then */
 .st-ach .ach-own{grid-column:1/-1}
@@ -257,7 +257,7 @@ html.focusing[data-phase="break"]{--fx-bg:var(--fx-break-bg);--fx-glow:var(--fx-
 .st-ach .bd.own.pop .stk{animation:achPop 1.4s ease-out 1}
 .st-ach .ach-empty{text-align:left;margin:0 0 10px}
 @media (prefers-reduced-motion:reduce){.stk{transition:none}.st-ach .bd.own.pop .stk{animation:none}}
-.toast .stk{width:36px;height:36px;flex:none;margin-left:-6px}
+.toast-badge .stk{width:36px;height:36px;flex:none;margin-left:-6px}
 
 /* the achievement drawer: the sticker, the crop, the rule */
 .adraw .dsec{margin-bottom:16px}
