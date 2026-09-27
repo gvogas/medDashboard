@@ -453,12 +453,9 @@ td .steps{margin-top:3px}
 }
 
 /* ═════════ sign-in screen ═════════ */
-.signin{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:var(--bg);padding:24px;z-index:5}
+.signin{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;padding:24px;z-index:5;
+  background:radial-gradient(1200px 600px at 20% 10%,color-mix(in srgb,var(--accent) 16%,transparent),transparent),var(--bg)}
 .signin[hidden]{display:none}
-.signin-card{width:min(360px,100%);background:var(--panel);border:1px solid var(--line);border-radius:16px;box-shadow:var(--shadow-2);padding:22px 22px 20px;display:flex;flex-direction:column;gap:16px}
-.signin-card .brand{margin:0}
-.signin-card .pocket{margin:0}
-.signin-card .note.err{color:var(--crit)}
 
 /* ═════════ sync pill ═════════ */
 .pill.sync::before{content:"";display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--good);margin-right:6px;vertical-align:1px}
@@ -476,10 +473,6 @@ td .steps{margin-top:3px}
 .tp-pop button{display:block;width:100%;text-align:left;font:12.5px/1 "IBM Plex Mono",ui-monospace,monospace;padding:6px 12px;border:0;border-radius:6px;background:none;color:var(--ink);cursor:pointer}
 .tp-pop button:hover{background:var(--panel-2)}
 .tp-pop button.on{background:var(--accent-soft);color:var(--accent-ink);font-weight:600}
-.signin-card .login{display:flex;flex-direction:column;gap:6px}
-.signin-card .login label{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-3);margin-top:4px}
-.signin-card .login input{width:100%}
-.signin-card .login .btn{margin-top:8px;align-self:stretch;justify-content:center}
 
 /* ═════════ quote tile: a little life ═════════ */
 .stat.qcard{overflow:hidden}
@@ -652,18 +645,6 @@ kbd{display:inline-block;min-width:22px;padding:2px 6px;border:1px solid var(--l
 @keyframes busySpin{to{transform:rotate(360deg)}}
 @keyframes busyIn{from{opacity:0}}
 @media (prefers-reduced-motion:reduce){.busy-screen{animation:none}.busy-spin{animation:none;border-top-color:var(--accent)}}
-
-/* ── toast: an undoable delete or an error, one at a time ── */
-.toast{position:fixed;left:18px;bottom:calc(18px + env(safe-area-inset-bottom, 0px));z-index:70;max-width:min(440px, calc(100vw - 36px));
-  display:none;align-items:center;gap:6px;padding:8px 8px 8px 16px;background:var(--ink);color:var(--panel);border-radius:12px;box-shadow:var(--shadow-2);font-size:14px}
-.toast.on{display:flex}
-.toast.error{background:var(--red-ink);color:var(--on-crit)}
-.toast span{flex:1;line-height:1.35}
-.toast button{border:0;background:none;color:inherit;font:inherit;font-weight:700;min-height:40px;min-width:40px;padding:6px 10px;border-radius:8px;cursor:pointer}
-.toast button:hover,.toast button:focus-visible{background:rgba(255,255,255,.16)}
-.toast .tx{font-weight:400;opacity:.8}
-@media (max-width:640px){.toast{left:12px;right:12px;max-width:none;bottom:calc(84px + env(safe-area-inset-bottom, 0px))}}
-@media (prefers-reduced-motion:no-preference){.toast.on{animation:toastIn .18s ease-out}@keyframes toastIn{from{transform:translateY(8px);opacity:0}}}
 
 /* ── touch screens: every small control gets a finger-sized hit area; the look is unchanged ── */
 @media (pointer:coarse){
