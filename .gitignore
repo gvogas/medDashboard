@@ -25,5 +25,6 @@ Desktop.ini
 # The Vite build. It also holds a copy of .dev.vars, made for `vite preview`.
 dist/
 
-# Brainstorming mockups
+# Brainstorming mockups, and the worktrees Claude Code's sub-agents build in
 .superpowers/
+.claude/worktrees/
