@@ -1,5 +1,5 @@
 // The keyboard: single-key shortcuts, Escape closing whatever is on top, Enter in the
-// small add-a-thing boxes, and moving an Open items type with the arrow keys.
+// small add-a-thing boxes.
 
 import * as store from './store.js';
 import { ui } from './state.js';
@@ -7,13 +7,11 @@ import { uid, normalizeItem, httpUrl } from './model.js';
 import { today } from './dates.js';
 import { $, isTyping } from './dom.js';
 import { render, renderView } from './views/render.js';
-import { renderSidebar } from './views/sidebar.js';
 import { drawerOpen, setSide } from './views/drawer-base.js';
 import { current, saveDraft, touch, renderItemDrawer } from './views/drawer-item.js';
 import { leaveDrawer, saveCourseDraft } from './views/drawer-course.js';
 import { addQuote } from './views/drawer-settings.js';
 import { openKeys, closeKeys, keysOpen } from './views/keys.js';
-import { rowIds, reorderTypes, addType } from './views/types-nav.js';
 import * as spotify from './spotify.js';
 import * as web from './web-player.js';
 import * as spotView from './views/spotify-view.js';
@@ -39,7 +37,6 @@ export async function onKeydown(e) {
     if (e.defaultPrevented) return;   /* a field used it, like the time picker closing its list */
     if (keysOpen()) { closeKeys(); return; }
     if ($('side').classList.contains('on')) { setSide(false); return; }
-    if (e.target.closest?.('#typeNav')) { e.target.blur(); ui.typeAdd = null; ui.typeEdit = false; renderSidebar(true); return; }
     if (ui.view === 'spotify' && spotView.devicesOpen()) { spotView.closeDevices(); return; }
     if (drawerOpen()) { leaveDrawer(); return; }
     if (ui.focus) leaveFocus();
@@ -62,21 +59,10 @@ export async function onKeydown(e) {
       return;
     }
   }
-  if ((e.key === 'ArrowUp' || e.key === 'ArrowDown') && e.target.dataset?.typegrip) {
-    e.preventDefault();
-    const ids = rowIds(), i = ids.indexOf(e.target.dataset.typegrip), j = i + (e.key === 'ArrowUp' ? -1 : 1);
-    if (j < 0 || j >= ids.length) return;
-    [ids[i], ids[j]] = [ids[j], ids[i]];
-    await reorderTypes(ids, e.target.dataset.typegrip);
-    return;
-  }
   if (e.key === '/' && !/input|textarea|select/i.test(e.target.tagName)) {
     e.preventDefault(); $('search').focus(); return;
   }
   if (e.key !== 'Enter') return;
-
-  if (e.target.id === 'typeName') { await addType(); return; }
-  if (e.target.dataset?.typelabel) { e.target.blur(); return; }
 
   if (e.target.id === 'clAdd' && e.target.value.trim()) {
     const it = current(); if (!it) return;

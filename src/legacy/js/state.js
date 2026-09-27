@@ -9,8 +9,7 @@ export const ui = {
   view: 'week', anchor: today(), search: '', types: {}, course: 'all',
   sel: null, draft: null, courseDraft: null, courseMode: null, confirm: null,
   settings: false, settingsTab: 'you', focusField: null,
-  typeEdit: false,         /* the Open items list is being edited */
-  typeAdd: null,           /* the new-type form: { label, color, kind } */ sort: { key: 'date', dir: 1 },
+  sort: { key: 'date', dir: 1 },
   theme: (typeof window !== 'undefined' && window.__roundsTheme) || 'system',
   bg: (typeof window !== 'undefined' && window.__roundsBg) || 'med',     /* background art: 'med' | 'cs' */
   quoteIx: 0,

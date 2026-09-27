@@ -6,7 +6,6 @@ import { schoolCal } from '../query.js';
 import { weekOf } from '../school.js';
 import { weekLabel } from './school-bits.js';
 import { $, keepFocus, setHTML } from '../dom.js';
-import { renderSidebar } from './sidebar.js';
 import { renderStats } from './stats.js';
 import { renderWeek } from './week.js';
 import { renderMonth } from './month.js';
@@ -65,7 +64,6 @@ function drawView() {
 export function render() {
   keepFocus(() => {
     renderHeader();
-    renderSidebar();
     renderStats();
     drawView();
   });

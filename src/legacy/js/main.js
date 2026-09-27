@@ -6,12 +6,12 @@ import * as store from './store.js';
 import { data, course } from './store.js';
 import * as sync from './sync.js';
 import { ui, rememberUi } from './state.js';
-import { uid, isOpen, tmeta, useTypePrefs, typeList, TYPE_COLOURS } from './model.js';
-import { typeOn, schoolCal, termStart } from './query.js';
+import { uid, isOpen, tmeta, useTypePrefs } from './model.js';
+import { schoolCal, termStart } from './query.js';
 import { iso, parse, addDays, today } from './dates.js';
 import { $, restoreFocus } from './dom.js';
 import { render, renderView, renderHeader } from './views/render.js';
-import { renderSidebar } from './views/sidebar.js';
+import { notify } from '../../bridge.ts';
 import { renderStats, renderQuote, nextQuote } from './views/stats.js';
 import { drawer, scrim, closeDrawer, drawerHasFocus, beforeClose, setSide, narrow } from './views/drawer-base.js';
 import { openItem, newItem, current, saveDraft, touch, touchSoon, flushTouch, renderItemDrawer, noteStartBase, onItemInput, celebrate, setStatus, chainReview } from './views/drawer-item.js';
@@ -32,7 +32,6 @@ import { readSetting, writeSetting } from './reviews.js';
 import { fillTopics } from './prep.js';
 import { previewImport, editImport, commitImport, readOutlineFile } from './views/drawer-import.js';
 import * as focus from './focus.js';
-import { addType, editTypes, onGripDown, renameType } from './views/types-nav.js';
 import { setTheme, setBg, followSystem } from './theme.js';
 import { showSyncStatus, refreshAfterSync, runHeldRefresh, pointerPressed, pointerReleased, runReviews } from './sync-status.js';
 import { boot, showSignIn, signOut, signIn, onStoreEvent, onStorage } from './session.js';
@@ -124,27 +123,6 @@ async function onClick(e) {
     }
     return;
   }
-  if ((el = e.target.closest('[data-typeadd]'))) {
-    const used = typeList(ui.bg, data.items).map((t) => t.color);
-    ui.typeAdd = el.dataset.typeadd === '1' ? { label: '', color: TYPE_COLOURS.find((c) => !used.includes(c)) || TYPE_COLOURS[0], kind: 'todo' } : null;
-    ui.typeEdit = false;
-    renderSidebar(true);
-    if (ui.typeAdd) $('typeName').focus();
-    return;
-  }
-  if ((el = e.target.closest('[data-typeedit]'))) { ui.typeEdit = el.dataset.typeedit === '1'; ui.typeAdd = null; renderSidebar(true); return; }
-  if ((el = e.target.closest('[data-typeaddcolour]'))) { ui.typeAdd.color = el.dataset.typeaddcolour; renderSidebar(true); return; }
-  if ((el = e.target.closest('[data-typekind]'))) { ui.typeAdd.kind = el.dataset.typekind; renderSidebar(true); return; }
-  if (e.target.closest('[data-typesave]')) { await addType(); return; }
-  if ((el = e.target.closest('[data-typecolour], [data-typehide], [data-typedel]'))) { await editTypes(el); return; }
-  if ((el = e.target.closest('[data-type]'))) {
-    const all = typeList(ui.bg, data.items).map((x) => x.id), t = el.dataset.type, on = all.filter(typeOn).length;
-    if (typeOn(t) && on === all.length) all.forEach((x) => { ui.types[x] = (x === t); });
-    else if (typeOn(t) && on === 1) all.forEach((x) => { ui.types[x] = true; });
-    else ui.types[t] = !typeOn(t);
-    render(); return;
-  }
-  if ((el = e.target.closest('[data-course]'))) { ui.course = el.dataset.course; render(); return; }
   if (await studyClick(e)) return;
   if (await achievementClick(e)) return;
   if (await leaderboardClick(e)) return;
@@ -159,7 +137,6 @@ async function onClick(e) {
   }
   if (e.target.closest('#syncPill')) { sync.syncNow(); return; }
   if (e.target.closest('#setBtn')) { ui.settings ? closeDrawer() : openSettings(); return; }
-  if ((el = e.target.closest('[data-setopen]'))) { openSettings('o-name'); return; }
   if ((el = e.target.closest('[data-settab]'))) { ui.settingsTab = el.dataset.settab; renderSettings(); return; }
   if ((el = e.target.closest('[data-spotify]'))) {
     const act = el.dataset.spotify;
@@ -349,12 +326,6 @@ document.addEventListener('input', async (e) => {
   }
   if ('impM' in d || 'impI' in d || 'impType' in d || 'impWeek1' in d) { editImport(e.target); return; }
 
-  if ('typename' in d && ui.typeAdd) {
-    ui.typeAdd.label = e.target.value;
-    const b = document.querySelector('[data-typesave]');
-    if (b) b.disabled = !e.target.value.trim();
-    return;
-  }
   if ('spotVol' in d) { spotView.setVolume(+e.target.value); return; }
   if ('spotQ' in d) { spotView.typed(e.target.value); return; }
   if ('spotFilter' in d) { spotView.setFilter(e.target.value); return; }
@@ -363,7 +334,7 @@ document.addEventListener('input', async (e) => {
     await store.saveProfile({ coat: { [d.of]: e.target.value } });
     const prev = $(d.of === 'name' ? 'coatPrevName' : 'coatPrevRole');
     if (prev) prev.textContent = e.target.value;
-    renderSidebar(); return;
+    notify(); return;
   }
 
   if (onCourseInput(e, d)) return;         /* the course drawer */
@@ -382,13 +353,10 @@ document.addEventListener('input', async (e) => {
   }
 });
 
-document.addEventListener('pointerdown', onGripDown);
-
 document.addEventListener('change', async (e) => {
   if (await studyChange(e.target)) return;
   if (e.target.id === 'goalDayMin') { const v = Math.round(+e.target.value); if (v >= 1 && v <= 240) await savePrefs({ dayMin: v }); else renderSettings(); return; }
   if (e.target.id === 'goalCelebrate') { await savePrefs({ celebrate: e.target.checked }); return; }
-  if (e.target.dataset?.typelabel) { await renameType(e.target); return; }
   if (e.target.id === 'outlineFile' && e.target.files?.[0]) { readOutlineFile(e.target.files[0]); return; }
   if (e.target.id === 'schoolFile' && e.target.files?.[0]) { readSchoolFile(e.target.files[0]); return; }
   if (e.target.id !== 'importFile' || !e.target.files?.[0]) return;

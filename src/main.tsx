@@ -18,3 +18,15 @@ if (dock) {
         </StrictMode>
     )
 }
+
+/* ── the sidebar: React renders inside the static <aside id="side"> ── */
+import { Sidebar } from "@/components/sidebar"
+
+const side = document.getElementById("side")
+if (side) {
+    createRoot(side).render(
+        <StrictMode>
+            <Sidebar />
+        </StrictMode>
+    )
+}

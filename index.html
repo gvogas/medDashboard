@@ -39,24 +39,8 @@
 
 <div class="app" id="app" hidden>
 
-  <aside class="side" id="side">
-    <div class="brand"><span class="mark">R</span> Rounds</div>
-    <div class="navgrp" id="typeNav"></div>
-    <div class="navgrp" id="courseNav"></div>
-
-    <div class="pocket">
-      <i class="pen" aria-hidden="true"></i>
-      <div class="embroidery"><span id="ownerName"></span><button class="editcoat" type="button" data-setopen="coat" aria-label="Edit the name on the coat">✎</button></div>
-      <div class="role" id="ownerRole"></div>
-      <svg class="tuck" viewBox="0 0 60 34" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true">
-        <path d="M4 6c0 9 7 8 9 14s7 9 14 8 12-6 18-6"/><path d="M11 4c0 7 4 8 6 12"/>
-        <circle cx="50" cy="20" r="6"/><circle cx="50" cy="20" r="2.6"/><path d="M44.6 21.6 42 23"/>
-      </svg>
-    </div>
-    <!-- the CS background swaps the coat pocket for a lanyard ID badge -->
-    <div class="idbadge" id="idBadge"></div>
-    <div class="player" id="player" hidden></div>
-  </aside>
+  <!-- the sidebar: React (src/components/sidebar.tsx) renders inside; legacy setSide owns .on and inert -->
+  <aside class="side" id="side"></aside>
 
   <div class="content">
     <canvas id="orn" aria-hidden="true"></canvas>
