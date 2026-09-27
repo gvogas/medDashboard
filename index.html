@@ -61,27 +61,8 @@
   <div class="content">
     <canvas id="orn" aria-hidden="true"></canvas>
 
-    <header class="bar">
-      <button class="menu-btn" type="button" id="menuBtn" aria-label="Show sidebar" aria-controls="side" aria-expanded="false">☰</button>
-      <div class="title-grp">
-        <h1 class="h1" id="viewTitle">Week board</h1>
-        <div class="sub" id="viewSub">—</div>
-      </div>
-      <div class="navdate">
-        <button type="button" id="prev" aria-label="Previous">‹</button>
-        <button type="button" id="today">Today</button>
-        <button type="button" id="next" aria-label="Next">›</button>
-      </div>
-      <div id="viewDock"></div>
-      <div class="spacer"></div>
-      <div class="search">
-        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="7" cy="7" r="4.5"/><path d="M10.5 10.5 14 14"/></svg>
-        <input type="search" id="search" placeholder="Search everything  /" aria-label="Search">
-      </div>
-      <button class="pill sync" type="button" id="syncPill" data-state="idle" title="Sync now">Synced</button><span class="sr-only" id="syncSay" role="status"></span>
-      <button class="pill" type="button" id="setBtn" title="Settings" aria-label="Settings">⚙ Settings</button>
-      <button class="btn" type="button" id="newBtn">New item</button>
-    </header>
+    <!-- The top bar: React (src/components/top-bar.tsx) renders inside. -->
+    <header class="bar"></header>
 
     <div class="scroll" id="scroll">
       <svg class="drape" viewBox="0 0 300 118" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true">

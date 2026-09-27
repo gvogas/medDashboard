@@ -8,13 +8,14 @@ import "./data/store"
 import "./data/sync"
 import { StrictMode } from "react"
 import { createRoot } from "react-dom/client"
-import { ViewDock } from "@/components/view-dock"
+import { TopBar } from "@/components/top-bar"
 
-const dock = document.getElementById("viewDock")
-if (dock) {
-    createRoot(dock).render(
+/* ── the top bar (with the view dock), inside <header class="bar"> ── */
+const bar = document.querySelector("header.bar")
+if (bar) {
+    createRoot(bar).render(
         <StrictMode>
-            <ViewDock />
+            <TopBar />
         </StrictMode>
     )
 }

@@ -18,19 +18,20 @@ import * as spotify from './spotify.js';
 import * as web from './web-player.js';
 import * as spotView from './views/spotify-view.js';
 import { leaveFocus, setView } from './study-controller.js';
+import { newItem, goToday, step } from '../../data/actions.ts';
 
 /* Single keys, when nothing is being typed and no drawer or the focus screen is up:
-   the list is views/keys.js. Each presses the button it stands for; a number shows a view. */
+   the list is views/keys.js. Each does what its top-bar button does; a number shows a view. */
 const VIEW_KEYS = { 1: 'week', 2: 'month', 3: 'table', 4: 'spotify', 5: 'study' };
 function shortcut(e) {
   if (e.ctrlKey || e.metaKey || e.altKey || e.repeat || isTyping(e.target) || e.target.isContentEditable) return false;
   if (e.key === '?') { keysOpen() ? closeKeys() : openKeys(); e.preventDefault(); return true; }
   if (keysOpen() || ui.focus || drawerOpen() || $('app').hidden) return false;
-  const press = (sel) => { const b = document.querySelector(sel); if (!b) return false; e.preventDefault(); b.click(); return true; };
-  if (e.key === 'n') return press('#newBtn');
-  if (e.key === 't') return press('#today');
-  if ((e.key === '[' || e.key === ']') && (ui.view === 'week' || ui.view === 'month')) return press(e.key === '[' ? '#prev' : '#next');
-  if (VIEW_KEYS[e.key]) { e.preventDefault(); setView(VIEW_KEYS[e.key]); return true; }
+  const run = (fn) => { e.preventDefault(); fn(); return true; };
+  if (e.key === 'n') return run(newItem);
+  if (e.key === 't') return run(goToday);
+  if ((e.key === '[' || e.key === ']') && (ui.view === 'week' || ui.view === 'month')) return run(() => step(e.key === '[' ? -1 : 1));
+  if (VIEW_KEYS[e.key]) return run(() => setView(VIEW_KEYS[e.key]));
   return false;
 }
 
@@ -71,7 +72,7 @@ export async function onKeydown(e) {
     return;
   }
   if (e.key === '/' && !/input|textarea|select/i.test(e.target.tagName)) {
-    e.preventDefault(); $('search').focus(); return;
+    e.preventDefault(); $('search')?.focus(); return;   /* the top bar's search box */
   }
   if (e.key !== 'Enter') return;
 

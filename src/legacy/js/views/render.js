@@ -1,10 +1,7 @@
-// The page: header, sidebar, stats and whichever view is chosen.
+// The page: sidebar, stats and whichever view is chosen. The top bar is React
+// (src/components/top-bar.tsx); notify() tells it to redraw.
 
 import { ui } from '../state.js';
-import { parse, addDays, monday, iso, DOW, MON } from '../dates.js';
-import { schoolCal } from '../query.js';
-import { weekOf } from '../school.js';
-import { weekLabel } from './school-bits.js';
 import { $, keepFocus, setHTML } from '../dom.js';
 import { renderSidebar } from './sidebar.js';
 import { renderStats } from './stats.js';
@@ -12,36 +9,8 @@ import { renderWeek } from './week.js';
 import { renderMonth } from './month.js';
 import { renderTable } from './table.js';
 import { renderSpotifyInto } from './spotify-view.js';
-import { state as spotify } from '../spotify.js';
 import { renderStudy, renderFocus } from './study.js';
 import { notify } from '../../../bridge.ts';
-
-export function renderHeader() {
-  const a = parse(ui.anchor), t = $('viewTitle'), s = $('viewSub');
-  if (ui.view === 'week') {
-    const st = monday(a), en = addDays(st, 6);
-    t.textContent = 'Week board';
-    const school = weekLabel(weekOf(schoolCal(), iso(st)));
-    s.textContent = DOW[st.getDay()] + ' ' + st.getDate() + ' ' + MON[st.getMonth()].slice(0, 3) + ' – ' + DOW[en.getDay()] + ' ' + en.getDate() + ' ' + MON[en.getMonth()].slice(0, 3) + ' ' + en.getFullYear()
-      + (school ? ' · ' + school : '');
-  } else if (ui.view === 'month') {
-    t.textContent = MON[a.getMonth()] + ' ' + a.getFullYear();
-    s.textContent = '';
-  } else if (ui.view === 'study') {
-    t.textContent = 'Study';
-    s.textContent = '';
-  } else if (ui.view === 'spotify') {
-    t.textContent = 'Spotify';
-    s.textContent = !spotify.loaded ? '' : !spotify.connected ? 'Not connected' : spotify.device ? 'Playing on ' + spotify.device : 'No active device';
-  } else {
-    t.textContent = 'All items';
-    s.textContent = '';
-  }
-  const music = ui.view === 'spotify' || ui.view === 'study';
-  document.querySelector('.navdate').hidden = music;
-  $('stats').hidden = music;
-  notify();
-}
 
 /* The focus screen is a layout of the page: the study clock beside the Spotify view. */
 const showsSpotify = () => ui.focus || ui.view === 'spotify';
@@ -54,6 +23,7 @@ function drawView() {
   const root = $('viewRoot'), focusing = ui.focus;
   document.documentElement.classList.toggle('focusing', focusing);
   $('focusClock').hidden = !focusing;
+  $('stats').hidden = ui.view === 'spotify' || ui.view === 'study';
   if (focusing) renderFocus();
   root.className = focusing || ui.view === 'table' || ui.view === 'spotify' ? 'own-scroll' : '';   /* these scroll their own rows */
   root.dataset.view = focusing ? 'spotify' : ui.view;
@@ -64,7 +34,6 @@ function drawView() {
 
 export function render() {
   keepFocus(() => {
-    renderHeader();
     renderSidebar();
     renderStats();
     drawView();
