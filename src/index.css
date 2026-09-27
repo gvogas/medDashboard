@@ -6,17 +6,18 @@
 @layer theme, legacy, components, utilities;
 
 @import "tailwindcss/theme.css" layer(theme);
-@import "tailwindcss/utilities.css" layer(utilities);
+@import "tailwindcss/utilities.css" layer(utilities) source(none);
 
 @import "./legacy/css/tokens.css" layer(legacy);
 @import "./legacy/css/layout.css" layer(legacy);
 @import "./legacy/css/components.css" layer(legacy);
 @import "./legacy/css/study.css" layer(legacy);
 
-/* Scan only React code. The legacy markup uses class names such as "grow" that are also
-   Tailwind utilities, and generating those would change the old layout. */
+/* Utilities come only from the React code in src/. Scanning the whole repo (docs,
+   mockups, tests) generated utilities such as .fixed from words in them, and one hit a
+   legacy class of the same name. test/legacy-classes.node.mjs keeps the names apart. */
+@source "./";
 @source not "./legacy";
-@source not "../index.html";
 
 @custom-variant dark (&:where([data-app="dark"], [data-app="dark"] *));
 

@@ -119,15 +119,15 @@ html.focusing[data-phase="break"]{--fx-bg:var(--fx-break-bg);--fx-glow:var(--fx-
 .st-tile b small{font-size:13px;font-weight:600;color:var(--ink-2)}
 .st-tile .sub{font-size:12px;color:var(--ink-2)}
 .linkish{align-self:flex-start;border:0;background:none;padding:2px 0;font-size:12.5px;font-weight:600;color:var(--accent-ink);text-decoration:underline;text-underline-offset:2px}
-.ring{width:56px;height:56px;flex:none}
-.ring .track,.ring .fill{fill:none;stroke-width:9}
-.ring .track{stroke:var(--line-2)}
-.ring .fill{stroke:var(--study);stroke-linecap:round;transition:stroke-dasharray .4s}
-.ring.mini{width:30px;height:30px}
-.ring.mini .track{stroke:rgba(255,255,255,.14)}
-.ring.mini .fill{stroke:var(--ph)}
+.goal-ring{width:56px;height:56px;flex:none}
+.goal-ring .track,.goal-ring .fill{fill:none;stroke-width:9}
+.goal-ring .track{stroke:var(--line-2)}
+.goal-ring .fill{stroke:var(--study);stroke-linecap:round;transition:stroke-dasharray .4s}
+.goal-ring.mini{width:30px;height:30px}
+.goal-ring.mini .track{stroke:rgba(255,255,255,.14)}
+.goal-ring.mini .fill{stroke:var(--ph)}
 .dock-ring{display:grid;place-items:center}
-@media (prefers-reduced-motion:reduce){.ring .fill{transition:none}}
+@media (prefers-reduced-motion:reduce){.goal-ring .fill{transition:none}}
 
 .st-head{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px}
 .st-head h3{margin-right:auto}
@@ -443,7 +443,7 @@ html[data-phase="break"] .study-dock{background:var(--fx-break-card);
   .st-tiles{grid-template-columns:minmax(0,1fr)}
   .study .st-tile{padding:10px 14px;gap:12px}
   .st-tile .ic{width:40px;height:40px}
-  .st-tile .ring{width:44px;height:44px}
+  .st-tile .goal-ring{width:44px;height:44px}
   .st-tile b{font-size:22px}
 }
 

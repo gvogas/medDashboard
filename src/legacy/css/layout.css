@@ -230,7 +230,7 @@ button{cursor:pointer}
 .navdate[hidden]{display:none}
 .navdate button{border:1px solid var(--line);background:var(--panel);border-radius:7px;padding:4px 9px;font-size:12px;color:var(--ink-2)}
 .navdate button:hover{border-color:var(--accent);color:var(--accent)}
-.grow{flex:1 1 20px}
+.spacer{flex:1 1 20px}
 .search{position:relative;flex:0 1 200px;min-width:126px}
 .search input{width:100%;padding:6px 10px 6px 28px;border:1px solid var(--line);border-radius:8px;background:var(--panel);font-size:12.5px}
 .search svg{position:absolute;left:8px;top:50%;transform:translateY(-50%);width:13px;height:13px;color:var(--ink-3)}
@@ -245,7 +245,7 @@ button{cursor:pointer}
 /* the frame never scrolls — the view region inside it does */
 .scroll{flex:1;min-height:0;overflow:hidden;padding:14px 16px 14px;display:flex;flex-direction:column;gap:13px}
 #viewRoot{flex:1;min-height:0;overflow-y:auto;overflow-x:hidden;padding-right:2px}
-#viewRoot.fixed{overflow:hidden;display:flex;flex-direction:column}
+#viewRoot.own-scroll{overflow:hidden;display:flex;flex-direction:column}
 .drape{position:absolute;right:6px;top:-10px;width:270px;max-width:46%;height:auto;color:var(--accent);opacity:var(--orn-art);pointer-events:none;z-index:0}
 
 

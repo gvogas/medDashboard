@@ -54,7 +54,7 @@ function drawView() {
   document.documentElement.classList.toggle('focusing', focusing);
   $('focusClock').hidden = !focusing;
   if (focusing) renderFocus();
-  root.className = focusing || ui.view === 'table' || ui.view === 'spotify' ? 'fixed' : '';   /* these scroll their own rows */
+  root.className = focusing || ui.view === 'table' || ui.view === 'spotify' ? 'own-scroll' : '';   /* these scroll their own rows */
   root.dataset.view = focusing ? 'spotify' : ui.view;
   if (showsSpotify()) { renderSpotifyInto(root); return; }
   if (ui.view === 'study') { setHTML(root, renderStudy()); return; }

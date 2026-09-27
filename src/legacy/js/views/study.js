@@ -147,7 +147,7 @@ const PLUS = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-
 const NEXT = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 3l5 5-5 5"/></svg>';
 
 /** A ring filling toward the goal: `part` of `whole`, drawn with SVG attributes (no inline style). */
-function ringSvg(part, whole, cls = 'ring') {
+function ringSvg(part, whole, cls = 'goal-ring') {
   const c = 2 * Math.PI * 34, f = whole ? Math.min(1, part / whole) : 0;
   return '<svg class="' + cls + '" viewBox="0 0 80 80" aria-hidden="true"><circle cx="40" cy="40" r="34" class="track"/>'
     + '<circle cx="40" cy="40" r="34" class="fill" stroke-dasharray="' + (c * f).toFixed(1) + ' ' + c.toFixed(1) + '" transform="rotate(-90 40 40)"/></svg>';
@@ -387,7 +387,7 @@ export function paint(animate = true) {
       const mins = (minutesByDay(data.study_sessions).get(today()) || 0) + Math.floor(s.studyMs / MIN);
       if (ring.dataset.mins !== String(mins)) {
         ring.dataset.mins = String(mins);
-        setHTML(ring, ringSvg(mins, goal, 'ring mini'));
+        setHTML(ring, ringSvg(mins, goal, 'goal-ring mini'));
         ring.title = 'Today: ' + duration(mins) + ' of ' + duration(goal);
       }
     }
