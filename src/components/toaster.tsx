@@ -3,29 +3,39 @@
 // phones, full width above the round New item button.
 
 import { motion, useReducedMotion } from "framer-motion"
-import { hideToast, runToastAction, useToast } from "@/data/toast"
+import { hideToast, runToastAction, useToast, type Toast } from "@/data/toast"
 import { TextureCard } from "@/components/ui/texture-card"
 import { TextureButton } from "@/components/ui/texture-button"
 import { cn } from "@/lib/utils"
 
 export function Toaster() {
     const t = useToast()
+    /* Both live regions stay on the page and the card appears inside one: screen readers
+       announce content added to a region they already know more reliably than a new one. */
+    return (
+        <>
+            <div role="status" aria-live="polite">{t && !t.error && <Card t={t} />}</div>
+            <div role="alert" aria-live="assertive">{t?.error && <Card t={t} />}</div>
+        </>
+    )
+}
+
+function Card({ t }: { t: Toast }) {
     const reduced = useReducedMotion()
-    if (!t) return null
     return (
         <motion.div
             key={t.id}
-            role={t.error ? "alert" : "status"}
-            aria-live={t.error ? "assertive" : "polite"}
             initial={reduced ? false : { opacity: 0, y: 16, scale: 0.96 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             transition={{ type: "spring", stiffness: 520, damping: 32 }}
             className={cn(
                 "fixed bottom-[calc(18px+env(safe-area-inset-bottom,0px))] left-[18px] z-[70] max-w-[min(440px,calc(100vw-36px))]",
+                /* beside the sidebar on wide screens, not over the coat or badge */
+                "min-[901px]:left-[240px]",
                 "max-[640px]:right-3 max-[640px]:left-3 max-[640px]:bottom-[calc(84px+env(safe-area-inset-bottom,0px))] max-[640px]:max-w-none"
             )}
         >
-            <TextureCard className="shadow-[var(--shadow-2)]">
+            <TextureCard className="bg-card shadow-[var(--shadow-2)]">
                 <div className={cn("toast-badge flex items-center gap-2 py-1.5 pr-1.5 pl-4 text-sm", t.error ? "text-destructive" : "text-foreground")}>
                     {t.error && <span aria-hidden="true" className="size-2 shrink-0 rounded-full bg-destructive" />}
                     {t.badge && <span className="contents" dangerouslySetInnerHTML={{ __html: t.badge }} />}

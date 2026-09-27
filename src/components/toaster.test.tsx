@@ -49,7 +49,7 @@ describe("the toaster", () => {
         render(<Toaster />)
         act(() => toast("Sign-out failed.", { error: true }))
         expect(screen.getByRole("alert").textContent).toContain("Sign-out failed.")
-        expect(screen.queryByRole("status")).toBeNull()
+        expect(screen.getByRole("status").textContent).toBe("")
     })
 
     it("replaces the old toast with a new one", () => {

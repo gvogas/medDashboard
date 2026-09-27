@@ -1,7 +1,8 @@
 "use client";
 
-// From cult-ui (MIT). The "accent" variant is Rounds' --accent (Tailwind's primary)
-// rather than indigo, so it follows the Med and CS themes in light and dark.
+// From cult-ui (MIT). The "accent" and "minimal" variants use Rounds' tokens rather than
+// indigo and neutral greys, so they follow the Med and CS themes in light and dark; "sm"
+// is compact for the top bar.
 
 import { Slot } from "@radix-ui/react-slot";
 import { cva } from "class-variance-authority";
@@ -21,11 +22,11 @@ const buttonVariantsOuter = cva("", {
       secondary:
         "w-full border-[1px] border-black/20 bg-white/50 p-[1px] transition duration-300 ease-in-out dark:border-[2px] dark:border-neutral-950 dark:bg-neutral-600/50",
       minimal:
-        "group/texture-button w-full border-[1px] border-black/20 bg-white/50 to-white p-[1px] hover:bg-gradient-to-t hover:from-neutral-100 active:bg-neutral-200 dark:border-[2px] dark:border-neutral-950 dark:bg-neutral-600/80 dark:hover:from-neutral-600/50 dark:hover:to-neutral-600/70 dark:active:bg-neutral-800",
+        "group/texture-button w-full border border-border bg-[var(--rim-hi)] p-px transition duration-200 ease-in-out hover:border-primary/40 active:brightness-95",
       icon: "group/texture-button rounded-full border border-black/10 bg-white/50 to-white p-[1px] hover:bg-gradient-to-t hover:from-neutral-100 active:bg-neutral-200 dark:border-neutral-950 dark:bg-neutral-600/50 dark:hover:from-neutral-700 dark:hover:to-neutral-600 dark:active:bg-neutral-800",
     },
     size: {
-      sm: "rounded-[6px]",
+      sm: "rounded-[10px]",
       default: "rounded-[12px]",
       lg: "rounded-[12px]",
       icon: "rounded-full",
@@ -51,11 +52,11 @@ const innerDivVariants = cva(
         secondary:
           "bg-gradient-to-b from-neutral-100/80 to-neutral-200/50 text-sm transition duration-300 ease-in-out hover:bg-gradient-to-b hover:from-neutral-200/40 hover:to-neutral-300/60 active:bg-gradient-to-b active:from-neutral-200/60 active:to-neutral-300/70 dark:from-neutral-800 dark:to-neutral-700/50 dark:hover:from-neutral-700 dark:hover:to-neutral-700/60 dark:active:from-neutral-800 dark:active:to-neutral-700",
         minimal:
-          "bg-gradient-to-b from-white to-neutral-50/50 text-sm transition duration-300 ease-in-out group-hover/texture-button:bg-gradient-to-b group-hover/texture-button:from-neutral-50/50 group-hover/texture-button:to-neutral-100/60 group-active/texture-button:bg-gradient-to-b group-active/texture-button:from-neutral-100/60 group-active/texture-button:to-neutral-100/90 dark:from-neutral-800 dark:to-neutral-700/50 dark:group-hover/texture-button:from-neutral-700 dark:group-hover/texture-button:to-neutral-700/60 dark:group-active/texture-button:from-neutral-800 dark:group-active/texture-button:to-neutral-700",
+          "bg-gradient-to-b from-card to-muted text-sm text-ink-2 shadow-[inset_0_1px_0_var(--rim-hi)] transition duration-200 ease-in-out group-hover/texture-button:text-foreground",
         icon: "rounded-full bg-gradient-to-b from-white to-neutral-50/50 group-active/texture-button:bg-neutral-200 dark:from-neutral-800 dark:to-neutral-700/50 dark:group-active/texture-button:bg-neutral-800",
       },
       size: {
-        sm: "rounded-[4px] px-4 py-1 text-xs",
+        sm: "rounded-[9px] px-2.5 py-1 text-xs",
         default: "rounded-[10px] px-4 py-2 text-sm",
         lg: "rounded-[10px] px-4 py-2 text-base",
         icon: "rounded-full p-1",

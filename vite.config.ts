@@ -9,6 +9,14 @@ import { cloudflare } from '@cloudflare/vite-plugin';
 export default defineConfig({
   plugins: [react(), tailwindcss(), cloudflare()],
   resolve: { alias: { '@': path.resolve(import.meta.dirname, 'src') } },
+  // Bundle these for the dev server up front. Found one by one as pages load, each find
+  // re-bundles mid-load, the page gets two copies of React, and it stays blank.
+  optimizeDeps: {
+    include: [
+      'react', 'react-dom/client', 'react/jsx-dev-runtime', 'framer-motion',
+      'clsx', 'tailwind-merge', 'class-variance-authority', '@radix-ui/react-slot',
+    ],
+  },
   // http://127.0.0.1:8787 is the redirect URI registered with Spotify. If the port is
   // taken, fail rather than move to another one.
   server: { host: '127.0.0.1', port: 8787, strictPort: true },

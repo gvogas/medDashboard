@@ -186,7 +186,7 @@ function EditRow({ t, used, onDrop, onKey, gripRef }: EditRowProps) {
             dragControls={drag}
             onDragStart={() => setDragging(true)}
             onDragEnd={() => { setDragging(false); onDrop() }}
-            className={cn("relative flex items-center gap-1.5 rounded-[9px] py-1 pr-1 pl-0.5 hover:bg-muted", dragging && "z-10 bg-card shadow-md")}
+            className={cn("relative flex items-center gap-1 rounded-[9px] py-1 pr-1 pl-0.5 hover:bg-muted", dragging && "z-10 bg-card shadow-md")}
         >
             <button
                 ref={gripRef}
@@ -233,15 +233,14 @@ function EditRow({ t, used, onDrop, onKey, gripRef }: EditRowProps) {
                     <circle cx="10" cy="10" r="2.4" />
                 </svg>
             </button>
-            <span className="flex w-9 shrink-0 justify-center pointer-coarse:w-10">
-                {canDeleteType(t)
-                    ? <button type="button" className={cn(quietIcon, "text-[11px] hover:text-destructive")} aria-label={`Delete ${t.plural}`} onClick={() => deleteType(t.id)}>✕</button>
-                    : t.custom && (
-                        <span className="text-[10px] text-muted-foreground" title={`${used} ${used === 1 ? "item uses" : "items use"} it. Hide it instead`}>
-                            in use
-                        </span>
-                    )}
-            </span>
+            {/* Only your own types can go: ✕, or "in use" while items still have the type. */}
+            {t.custom && (canDeleteType(t)
+                ? <button type="button" className={cn(quietIcon, "text-[11px] hover:text-destructive")} aria-label={`Delete ${t.plural}`} onClick={() => deleteType(t.id)}>✕</button>
+                : (
+                    <span className="shrink-0 text-[10px] text-muted-foreground" title={`${used} ${used === 1 ? "item uses" : "items use"} it. Hide it instead`}>
+                        in use
+                    </span>
+                ))}
         </Reorder.Item>
     )
 }
