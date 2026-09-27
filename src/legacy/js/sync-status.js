@@ -1,5 +1,5 @@
-// The sync pill and what a screen reader hears of it, redraws a sync brings in (held
-// while someone types or clicks), and the spaced reviews a pull may bring due.
+// Redraws a sync brings in (held while someone types or clicks), and the spaced reviews
+// a pull may bring due. The sync status itself is React's (src/components/top-bar.tsx).
 
 import * as store from './store.js';
 import { data } from './store.js';
@@ -7,31 +7,11 @@ import { ui } from './state.js';
 import { normalizeItem } from './model.js';
 import { today } from './dates.js';
 import { schoolCal } from './query.js';
-import { $, isTyping } from './dom.js';
+import { isTyping } from './dom.js';
 import { render } from './views/render.js';
 import { renderItemDrawer } from './views/drawer-item.js';
-import { renderSettings, refreshSyncNote } from './views/drawer-settings.js';
+import { renderSettings } from './views/drawer-settings.js';
 import { readSetting, writeSetting, dueReviews } from './reviews.js';
-
-/* ═════════ sync status pill ═════════ */
-const LABELS = { idle: 'Synced', pending: 'Saving…', syncing: 'Syncing…', offline: 'Offline', error: 'Sync problem', 'signed-out': 'Signed out' };
-export function showSyncStatus(s) {
-  const pill = $('syncPill');
-  pill.dataset.state = s.state;
-  pill.textContent = LABELS[s.state] + (s.state === 'offline' && s.pending ? ' · ' + s.pending : '');
-  pill.title = s.message || (s.state === 'offline' ? 'Changes are kept on this device until you are back online' : 'Sync now');
-  sayTrouble(s);
-  refreshSyncNote();
-}
-/* Screen readers hear sync trouble, and its end, not every save. */
-let troubled = false;
-function sayTrouble(s) {
-  const bad = s.state === 'offline' || s.state === 'error' || s.state === 'signed-out';
-  if (bad === troubled && !bad) return;
-  const text = bad ? LABELS[s.state] + (s.message ? '. ' + s.message : '') : 'Synced again';
-  if ($('syncSay').textContent !== text) $('syncSay').textContent = text;
-  troubled = bad;
-}
 
 /* A redraw replaces every field, so one arriving from a sync while someone types would
    lose their text. Hold it until they leave the field, and until any click has landed:

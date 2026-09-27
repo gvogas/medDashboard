@@ -3,6 +3,7 @@
 import { ui } from '../state.js';
 import { $, refind, setHTML } from '../dom.js';
 import { render } from './render.js';
+import { notify } from '../../../bridge.ts';
 
 export const drawer = $('drawer');
 export const scrim = $('scrim');
@@ -89,7 +90,7 @@ export function setSide(open) {
   /* open over the page, the page behind is dimmed and out of reach */
   document.querySelector('.content').inert = narrow.matches && open;
   if (!drawer.classList.contains('on')) scrim.classList.toggle('on', narrow.matches && open);
-  btn.setAttribute('aria-expanded', String(open));
+  notify();   /* the top bar's menu button (React) reads .on for aria-expanded */
   if (open) side.querySelector('button, input')?.focus();
-  else if (side.contains(document.activeElement)) btn.focus();
+  else if (side.contains(document.activeElement)) btn?.focus();
 }

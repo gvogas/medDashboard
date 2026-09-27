@@ -8,9 +8,9 @@ import * as sync from './sync.js';
 import { ui, rememberUi } from './state.js';
 import { uid, isOpen, tmeta, useTypePrefs, typeList, TYPE_COLOURS } from './model.js';
 import { typeOn, schoolCal, termStart } from './query.js';
-import { iso, parse, addDays, today } from './dates.js';
 import { $, restoreFocus } from './dom.js';
-import { render, renderView, renderHeader } from './views/render.js';
+import { render, renderView } from './views/render.js';
+import { notify } from '../../bridge.ts';
 import { renderSidebar } from './views/sidebar.js';
 import { renderStats, renderQuote, nextQuote } from './views/stats.js';
 import { drawer, scrim, closeDrawer, drawerHasFocus, beforeClose, setSide, narrow } from './views/drawer-base.js';
@@ -23,7 +23,7 @@ import { schoolClick, editSchool, readSchoolFile } from './views/drawer-school.j
 import { launch as fireworks } from './fireworks.js';
 import { openCourse, renderCourseDrawer, saveCourseDraft, leaveDrawer, onCourseInput } from './views/drawer-course.js';
 import { toast } from './views/toast.js';
-import { openSettings, renderSettings, applyCoat, refreshSpotifyGroup, feedAction, addQuote } from './views/drawer-settings.js';
+import { openSettings, renderSettings, refreshSyncNote, applyCoat, refreshSpotifyGroup, feedAction, addQuote } from './views/drawer-settings.js';
 import * as spotify from './spotify.js';
 import * as web from './web-player.js';
 import { renderPlayer } from './views/player.js';
@@ -34,7 +34,7 @@ import { previewImport, editImport, commitImport, readOutlineFile } from './view
 import * as focus from './focus.js';
 import { addType, editTypes, onGripDown, renameType } from './views/types-nav.js';
 import { setTheme, setBg, followSystem } from './theme.js';
-import { showSyncStatus, refreshAfterSync, runHeldRefresh, pointerPressed, pointerReleased, runReviews } from './sync-status.js';
+import { refreshAfterSync, runHeldRefresh, pointerPressed, pointerReleased, runReviews } from './sync-status.js';
 import { boot, showSignIn, signOut, signIn, onStoreEvent, onStorage } from './session.js';
 import { onFocusTick, commitUndo, finishDelete, deleteWithUndo, deleteLater, studyClick, studyChange, savePrefs } from './study-controller.js';
 import { onKeydown } from './keyboard.js';
@@ -49,8 +49,9 @@ document.addEventListener('visibilitychange', () => { if (document.visibilitySta
 useTypePrefs(() => data.profile?.types || []);
 if (window.matchMedia) window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', followSystem);
 
-/* ═════════ sync status pill ═════════ */
-sync.onStatus(showSyncStatus);
+/* ═════════ sync ═════════ */
+/* The status itself shows in the React top bar; Settings has a line about it too. */
+sync.onStatus(refreshSyncNote);
 sync.onPulled(async () => {
   await runReviews();
   refreshAfterSync();
@@ -66,7 +67,7 @@ spotify.onState((s, kind) => {
   if (kind !== 'state') return;
   if (s.connected) web.start(); else if (s.loaded) web.stop();     /* the tab is a device only while connected */
   if (ui.settings && !drawerHasFocus()) refreshSpotifyGroup();
-  if (ui.view === 'spotify' || ui.focus) { spotView.onPlayerState(); renderHeader(); }
+  if (ui.view === 'spotify' || ui.focus) { spotView.onPlayerState(); notify(); }   /* the top bar shows the device */
 });
 web.onChange(() => {
   renderPlayer(spotify.state);
@@ -149,16 +150,6 @@ async function onClick(e) {
   if (await achievementClick(e)) return;
   if (await leaderboardClick(e)) return;
   if (await schoolClick(e)) return;
-  if (e.target.closest('#menuBtn')) { setSide(!$('side').classList.contains('on')); return; }
-  if (e.target.closest('#newBtn')) { newItem(ui.anchor); return; }
-  if (e.target.closest('#today')) { ui.anchor = today(); render(); return; }
-  if (e.target.closest('#prev') || e.target.closest('#next')) {
-    const dir = e.target.closest('#prev') ? -1 : 1, a = parse(ui.anchor);
-    ui.anchor = ui.view === 'month' ? iso(new Date(a.getFullYear(), a.getMonth() + dir, 1)) : iso(addDays(a, 7 * dir));
-    render(); return;
-  }
-  if (e.target.closest('#syncPill')) { sync.syncNow(); return; }
-  if (e.target.closest('#setBtn')) { ui.settings ? closeDrawer() : openSettings(); return; }
   if ((el = e.target.closest('[data-setopen]'))) { openSettings('o-name'); return; }
   if ((el = e.target.closest('[data-settab]'))) { ui.settingsTab = el.dataset.settab; renderSettings(); return; }
   if ((el = e.target.closest('[data-spotify]'))) {
@@ -334,7 +325,6 @@ setSide(false);
 
 scrim.addEventListener('click', () => { if ($('side').classList.contains('on') && !drawer.classList.contains('on')) setSide(false); else leaveDrawer(); });
 
-let searchTimer = null;
 document.addEventListener('input', async (e) => {
   const d = e.target.dataset || {};
   if ('sd' in d) { editSession(d.sd, e.target.value); return; }     /* the Log study drawer */
@@ -372,12 +362,6 @@ document.addEventListener('input', async (e) => {
     const s = current(); if (!s) return;
     s.checklist.forEach((x) => { if (x.id === d.cltext) x.text = e.target.value; });
     touchSoon(s, 'checklist');
-    return;
-  }
-  if (e.target.id === 'search') {
-    ui.search = e.target.value;
-    clearTimeout(searchTimer);   /* redraw once typing pauses, not on every key */
-    searchTimer = setTimeout(renderView, 120);
     return;
   }
 });

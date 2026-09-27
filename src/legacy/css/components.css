@@ -460,12 +460,6 @@ td .steps{margin-top:3px}
 .signin-card .pocket{margin:0}
 .signin-card .note.err{color:var(--crit)}
 
-/* ═════════ sync pill ═════════ */
-.pill.sync::before{content:"";display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--good);margin-right:6px;vertical-align:1px}
-.pill.sync[data-state="pending"]::before,.pill.sync[data-state="syncing"]::before{background:var(--warn)}
-.pill.sync[data-state="offline"]::before{background:var(--ink-3)}
-.pill.sync[data-state="error"]::before,.pill.sync[data-state="signed-out"]::before{background:var(--crit)}
-
 
 /* ═════════ time picker ═════════ */
 .tp{font-family:"IBM Plex Mono",ui-monospace,monospace;font-variant-numeric:tabular-nums;letter-spacing:.02em;text-align:center;width:72px}
@@ -582,19 +576,12 @@ td .steps{margin-top:3px}
 
 /* ═════════ phone ═════════ */
 /* The whole page scrolls instead of one short box under the header and stats; the
-   header scrolls away and New item floats. Spotify keeps its own columns. */
+   header scrolls away (New item floats: top-bar.tsx). Spotify keeps its own columns. */
 @media (max-width:700px){
   .content{overflow-y:auto;overflow-x:hidden;overscroll-behavior-y:contain}
   #orn{position:fixed}
   .bar{backdrop-filter:none;gap:8px;padding:10px 16px}
-  .search{flex:1 1 100%;order:10}
-  .navdate button,.menu-btn{min-width:36px;min-height:36px}
   .seg button{padding:8px 10px}
-  .pill{padding:7px 12px}
-  #newBtn{
-    position:fixed;right:16px;bottom:calc(16px + env(safe-area-inset-bottom));z-index:30;
-    border-radius:999px;padding:13px 20px;font-size:14px;box-shadow:var(--shadow-2);
-  }
   .scroll{flex:none;overflow:visible;padding-bottom:84px}
   #viewRoot,#viewRoot.own-scroll{flex:none;overflow:visible;display:block;padding-right:0}
   #viewRoot[data-view="spotify"]{height:calc(100dvh - 32px);display:flex;flex-direction:column;overflow:hidden}
