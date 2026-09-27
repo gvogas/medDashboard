@@ -10,7 +10,6 @@ import { prepPace, prepLabel } from '../prep.js';
 import { drawer, showDrawer, hideDrawer, resetDrawerState, closeDrawer } from './drawer-base.js';
 import { studiedFor, duration } from './study.js';
 import { renderView } from './render.js';
-import { renderSidebar } from './sidebar.js';
 import { renderStats } from './stats.js';
 import { parseTime } from '../timepicker.js';
 import { nextReview } from '../reviews.js';
@@ -278,7 +277,7 @@ export async function onItemInput(e, d) {
   }
   if (!ui.draft) {
     /* notes show nowhere on the board except through the search, so typing them redraws nothing */
-    const redraw = () => { if (d.f !== 'notes' || ui.search) { renderStats(); renderSidebar(); renderView(); } };
+    const redraw = () => { if (d.f !== 'notes' || ui.search) { renderStats(); renderView(); } };
     /* only plain text waits: other fields change what is derived from them (the end
        follows the start, the weekday the date), and those must save together */
     if (d.f === 'title' || d.f === 'notes' || d.f === 'where') touchSoon(it, d.f, redraw);

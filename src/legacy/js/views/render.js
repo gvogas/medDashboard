@@ -3,7 +3,6 @@
 
 import { ui } from '../state.js';
 import { $, keepFocus, setHTML } from '../dom.js';
-import { renderSidebar } from './sidebar.js';
 import { renderStats } from './stats.js';
 import { renderWeek } from './week.js';
 import { renderMonth } from './month.js';
@@ -34,7 +33,6 @@ function drawView() {
 
 export function render() {
   keepFocus(() => {
-    renderSidebar();
     renderStats();
     drawView();
   });
