@@ -27,6 +27,10 @@
   --orn-bg:.20; --orn-art:.42; --orn-weave:1;
   --shadow-1:0 1px 2px rgba(20,48,45,.08);
   --shadow-2:0 2px 6px rgba(20,48,45,.08), 0 14px 34px rgba(20,48,45,.10);
+  /* Texture: a light rim above a dark one; the floating sheet's lift; the scrim behind it */
+  --rim-hi:rgba(255,255,255,.9); --rim-lo:rgba(20,48,45,.10);
+  --lift:0 2px 6px rgba(20,48,45,.08), 0 24px 60px rgba(20,48,45,.20);
+  --scrim:rgba(8,26,24,.40);
   color-scheme:light;
 }
 
@@ -50,6 +54,9 @@
   --scroll-track:#22322F; --orn-stroke:#3FBFB2;
   --shadow-1:0 1px 2px rgba(0,0,0,.4);
   --shadow-2:0 2px 8px rgba(0,0,0,.45), 0 16px 40px rgba(0,0,0,.5);
+  --rim-hi:rgba(255,255,255,.07); --rim-lo:rgba(0,0,0,.55);
+  --lift:0 2px 8px rgba(0,0,0,.5), 0 24px 60px rgba(0,0,0,.6);
+  --scrim:rgba(0,0,0,.55);
   color-scheme:dark;
 }
 
@@ -70,6 +77,9 @@
   --orn-bg:.22;
   --shadow-1:0 1px 2px rgba(23,32,51,.08);
   --shadow-2:0 2px 6px rgba(23,32,51,.08), 0 14px 34px rgba(23,32,51,.10);
+  --rim-hi:rgba(255,255,255,.9); --rim-lo:rgba(23,32,51,.10);
+  --lift:0 2px 6px rgba(23,32,51,.08), 0 24px 60px rgba(23,32,51,.20);
+  --scrim:rgba(14,19,36,.40);
 }
 :root[data-app="dark"][data-bg="cs"]{
   --bg:#0A0E16; --panel:#111726; --panel-2:#161D2F;
@@ -83,6 +93,9 @@
   --bar-bg:rgba(10,14,22,.82);
   --shadow-1:0 1px 2px rgba(0,0,0,.4);
   --shadow-2:0 2px 8px rgba(0,0,0,.45), 0 16px 40px rgba(0,0,0,.5);
+  --rim-hi:rgba(255,255,255,.07); --rim-lo:rgba(0,0,0,.55);
+  --lift:0 2px 8px rgba(0,0,0,.5), 0 24px 60px rgba(0,0,0,.6);
+  --scrim:rgba(0,0,0,.55);
 }
 
 *{box-sizing:border-box}
