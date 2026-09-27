@@ -1,0 +1,21 @@
+// Hooks over the legacy store (legacy/js/store.js). Every write reloads the store, which
+// replaces each collection array and the profile, so the reference itself is the
+// snapshot: a component redraws when its collection changed and not otherwise.
+
+import { useSyncExternalStore } from "react"
+import * as store from "@/legacy/js/store.js"
+import { data } from "@/legacy/js/store.js"
+import { notify, subscribe } from "@/bridge"
+import type { Course, Item, Profile } from "./types"
+
+/* Events after which the data may differ. save-error leaves it as it was. */
+const WAKE = new Set(["change", "synced", "hidden", "remote", "signed-out"])
+store.subscribe((e: { type: string }) => { if (WAKE.has(e.type)) notify() })
+
+const items = () => data.items as Item[]
+const courses = () => data.courses as Course[]
+const profile = () => data.profile as Profile | null
+
+export const useItems = () => useSyncExternalStore(subscribe, items)
+export const useCourses = () => useSyncExternalStore(subscribe, courses)
+export const useProfile = () => useSyncExternalStore(subscribe, profile)

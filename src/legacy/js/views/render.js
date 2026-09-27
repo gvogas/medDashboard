@@ -48,6 +48,7 @@ const showsSpotify = () => ui.focus || ui.view === 'spotify';
 
 export function renderView() {
   keepFocus(drawView);
+  notify();
 }
 function drawView() {
   const root = $('viewRoot'), focusing = ui.focus;
@@ -68,4 +69,5 @@ export function render() {
     renderStats();
     drawView();
   });
+  notify();
 }
