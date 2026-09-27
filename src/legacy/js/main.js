@@ -36,7 +36,7 @@ import { addType, editTypes, onGripDown, renameType } from './views/types-nav.js
 import { setTheme, setBg, followSystem } from './theme.js';
 import { showSyncStatus, refreshAfterSync, runHeldRefresh, pointerPressed, pointerReleased, runReviews } from './sync-status.js';
 import { boot, showSignIn, signOut, signIn, onStoreEvent, onStorage } from './session.js';
-import { onFocusTick, openFocus, commitUndo, finishDelete, deleteWithUndo, deleteLater, studyClick, studyChange, savePrefs } from './study-controller.js';
+import { onFocusTick, commitUndo, finishDelete, deleteWithUndo, deleteLater, studyClick, studyChange, savePrefs } from './study-controller.js';
 import { onKeydown } from './keyboard.js';
 
 beforeClose.add(flushTouch);
@@ -145,10 +145,6 @@ async function onClick(e) {
     render(); return;
   }
   if ((el = e.target.closest('[data-course]'))) { ui.course = el.dataset.course; render(); return; }
-  if ((el = e.target.closest('#viewSeg button'))) {
-    if (el.dataset.view === 'study' && focus.active()) { openFocus(); return; }
-    ui.view = el.dataset.view; rememberUi(); render(); return;
-  }
   if (await studyClick(e)) return;
   if (await achievementClick(e)) return;
   if (await leaderboardClick(e)) return;

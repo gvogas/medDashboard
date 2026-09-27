@@ -15,16 +15,16 @@ and the API online together at https://rounds.termanitor07.workers.dev.
 flowchart LR
   B[Your browser] --> W[Cloudflare Worker<br/>rounds]
   W -->|/api/* requests| API[worker/<br/>API code]
-  W -->|everything else| P[public/<br/>HTML, CSS, JS]
+  W -->|everything else| P[dist/client/<br/>HTML, CSS, JS built by Vite]
   API --> D[(D1 database<br/>rounds)]
 ```
 
-Pages load from `public/`. Anything under `/api/`, such as signing in or saving an
+Pages load from the Vite build in `dist/client/`. Anything under `/api/`, such as signing in or saving an
 item, runs the code in `worker/`, which reads and writes the D1 database.
 
 | Piece | Folder or place | What it does |
 | --- | --- | --- |
-| Front end | `public/` | The pages, styles and scripts your browser runs |
+| Front end | `index.html`, `src/`, `public/` | The pages, styles and scripts your browser runs; `npm run build` turns them into `dist/client/` |
 | API | `worker/` | Sign-in, sessions, and saving courses, items and quotes |
 | Database | Cloudflare D1, named `rounds` | Stores users and everyone's data |
 | Schema changes | `migrations/` | Numbered SQL files that build and change the database |
@@ -68,7 +68,7 @@ Make and try every change locally first. Nothing you do locally affects the live
 1. Start the local server with `npm run dev`, then open http://127.0.0.1:8787 and sign
    in with your local account. Leave the command running. It picks up most edits when
    you save; press Ctrl+C to stop it.
-2. Edit files in `public/` (what you see) or `worker/` (the API).
+2. Edit files in `src/` (what you see) or `worker/` (the API).
 3. Run `npm test`. Both the Worker tests and local-storage regression tests should pass. A failing test means something
    broke, so fix it before deploying.
 4. Save the change in Git:
@@ -78,7 +78,7 @@ Make and try every change locally first. Nothing you do locally affects the live
     git push
     ```
 
-One catch: if you edit the small inline script inside `public/index.html`, run
+One catch: if you edit the small inline script inside `index.html`, run
 `npm run csp:update` to update `public/_headers`. The release build stops if the hash is stale.
 
 ## Deploying
@@ -251,7 +251,7 @@ the right-hand column says.
 | Too many attempts. Try again in N min. | 5 or more wrong passwords | Wait it out, or reset the password |
 | You seem to be offline. | The browser couldn't reach the server | Check your internet. Locally, make sure `npm run dev` is still running |
 | Sign in from the app itself, not from another site. | The request came from a different web address | Open the site directly at its own address |
-| `npm run dev` stops with `bind()` … `os error 10013` | Another server already holds port 8787. It is pinned there because it's the address registered with Spotify | Close the other `npm run dev` window, or run `Get-NetTCPConnection -LocalPort 8787` in PowerShell to find the process |
+| `npm run dev` stops with `Port 8787 is already in use` | Another server already holds port 8787. It is pinned there because it's the address registered with Spotify | Close the other `npm run dev` window, or run `Get-NetTCPConnection -LocalPort 8787` in PowerShell to find the process |
 | Spotify's own page says "Too many requests" | Spotify rate-limits its sign-in page after several tries | Wait 15–30 minutes, then click Connect once |
 | Page loads but a script is blocked | The inline script changed without its security hash | Run `node scripts/csp-hash.mjs` and update `public/_headers` |
 
@@ -269,8 +269,8 @@ Run every command in PowerShell from the project folder.
 
 | Command | What it does | Affects |
 | --- | --- | --- |
-| `npm run dev` | Runs the app at http://localhost:8787 | Local |
-| `npm run dev:built` | Builds, then runs the versioned site the deploy uploads | Local |
+| `npm run dev` | Runs the app at http://127.0.0.1:8787 | Local |
+| `npm run dev:built` | Builds, then runs the site the deploy uploads | Local |
 | `npm test` | Runs all tests | Local |
 | `npm run db:local` | Applies new migrations to the local database | Local |
 | `npm run deploy` | Applies new migrations to live, checks the live database, then publishes the site and API | Live |

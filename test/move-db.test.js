@@ -1,7 +1,7 @@
 import { applyD1Migrations, env } from 'cloudflare:test';
 import { expect, it } from 'vitest';
 import { upsertRow, deleteRow, syncPage } from '../worker/db.js';
-import { normalizeItem, normalizeCourse } from '../public/js/model.js';
+import { normalizeItem, normalizeCourse } from '../src/legacy/js/model.js';
 import { readQueries, copyStatements, COLUMNS_QUERY, uncopied } from '../scripts/lib/move-db.js';
 
 async function dump(db) {

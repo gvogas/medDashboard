@@ -1,7 +1,7 @@
 import { env } from 'cloudflare:test';
 import { describe, expect, it } from 'vitest';
-import { minutesByDay, streak, week, month, heatRange, level, dayOf } from '../public/js/history.js';
-import { normalizePrefs, normalizeStudySession } from '../public/js/model.js';
+import { minutesByDay, streak, week, month, heatRange, level, dayOf } from '../src/legacy/js/history.js';
+import { normalizePrefs, normalizeStudySession } from '../src/legacy/js/model.js';
 import { studyPrefs, validateStudySession } from '../worker/validate.js';
 import { upsertRow, syncPage } from '../worker/db.js';
 import { createUser, signIn } from './helpers.js';

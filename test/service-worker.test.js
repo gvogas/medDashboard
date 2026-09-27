@@ -7,7 +7,7 @@ beforeEach(async () => {
   cache = { match: vi.fn(), put: vi.fn(async () => {}), addAll: vi.fn(async () => {}) };
   vi.stubGlobal('self', { addEventListener: (name, fn) => { events[name] = fn; }, clients: { claim: vi.fn() } });
   vi.stubGlobal('location', { origin: 'https://rounds.test' });
-  vi.stubGlobal('caches', { open: vi.fn(async () => cache), keys: vi.fn(async () => ['rounds-shell-v10', 'rounds-shell-v11', 'another-app']), delete: vi.fn() });
+  vi.stubGlobal('caches', { open: vi.fn(async () => cache), keys: vi.fn(async () => ['rounds-shell-0123456789abcdef', 'rounds-shell-dev', 'another-app']), delete: vi.fn() });
   vi.stubGlobal('fetch', vi.fn(async () => new Response('asset')));
   await import('../public/sw.js');
 });
@@ -26,7 +26,7 @@ async function request(path, mode = 'cors') {
 
 describe('service worker cache policy', () => {
   it('never intercepts API responses or arbitrary resources', async () => {
-    for (const path of ['/api', '/api/me', '/api/spotify/token', '/private-data', '/js/main.js?unique=1']) {
+    for (const path of ['/api', '/api/me', '/api/spotify/token', '/private-data', '/icon.svg?unique=1']) {
       await request(path);
       expect(respondWith, path).not.toHaveBeenCalled();
     }
@@ -34,7 +34,7 @@ describe('service worker cache policy', () => {
   });
 
   it('caches known shell assets only', async () => {
-    expect((await request('/js/main.js')).status).toBe(200);
+    expect((await request('/icon.svg')).status).toBe(200);
     expect(cache.put).toHaveBeenCalledOnce();
     await request('/other-page', 'navigate');
     expect(cache.put).toHaveBeenCalledOnce();
@@ -49,24 +49,24 @@ describe('service worker cache policy', () => {
   it('uses the current cache during a server outage', async () => {
     fetch.mockResolvedValue(new Response('down', { status: 503 }));
     cache.match.mockResolvedValue(new Response('cached'));
-    expect(await (await request('/js/main.js')).text()).toBe('cached');
+    expect(await (await request('/icon.svg')).text()).toBe('cached');
     expect(cache.put).not.toHaveBeenCalled();
   });
 
   it('returns an explicit response when offline with no cached asset', async () => {
     fetch.mockRejectedValue(new TypeError('offline'));
-    expect((await request('/js/main.js')).status).toBe(503);
+    expect((await request('/icon.svg')).status).toBe(503);
   });
 
   it('does not let a failed cache write break a network response', async () => {
     cache.put.mockRejectedValue(new Error('quota'));
-    expect((await request('/js/main.js')).status).toBe(200);
+    expect((await request('/icon.svg')).status).toBe(200);
   });
 
   it('only removes obsolete caches belonging to this app', async () => {
     let done;
     events.activate({ waitUntil: (promise) => { done = promise; } });
     await done;
-    expect(caches.delete.mock.calls).toEqual([['rounds-shell-v10']]);
+    expect(caches.delete.mock.calls).toEqual([['rounds-shell-0123456789abcdef']]);
   });
 });

@@ -2,21 +2,10 @@
 // offline and a deploy is picked up on the next load. /api is never cached.
 
 const CACHE_PREFIX = 'rounds-shell-';
-const CACHE = CACHE_PREFIX + 'v11';
-const SHELL = [
-  '/', '/index.html', '/manifest.webmanifest', '/icon.svg',
-  '/css/tokens.css', '/css/layout.css', '/css/components.css', '/css/study.css',
-  '/js/main.js', '/js/api.js', '/js/db.js', '/js/store.js', '/js/sync.js', '/js/state.js', '/js/model.js',
-  '/js/dates.js', '/js/dom.js', '/js/query.js', '/js/ornament.js', '/js/timepicker.js', '/js/fireworks.js', '/js/spotify.js', '/js/web-player.js',
-  '/js/timer.js', '/js/focus.js', '/js/grades.js', '/js/reviews.js', '/js/pdftext.js', '/js/prep.js', '/js/importers/ics.js', '/js/importers/csv.js', '/js/importers/plan.js',
-  '/js/views/render.js', '/js/views/bits.js', '/js/views/sidebar.js', '/js/views/stats.js', '/js/views/week.js',
-  '/js/views/month.js', '/js/views/table.js', '/js/views/drawer-base.js', '/js/views/drawer-item.js',
-  '/js/views/drawer-course.js', '/js/views/drawer-settings.js', '/js/views/signin.js', '/js/views/player.js', '/js/views/spotify-view.js', '/js/views/drawer-import.js', '/js/views/study.js', '/js/views/flipclock.js', '/js/views/keys.js', '/js/views/drawer-session.js', '/js/history.js', '/js/views/busy.js',
-  '/js/theme.js', '/js/session.js', '/js/sync-status.js', '/js/study-controller.js', '/js/keyboard.js', '/js/views/types-nav.js',
-  '/js/views/spotify-data.js', '/js/views/spotify-commands.js', '/js/views/spotify-html.js', '/js/views/toast.js',
-  '/js/achievements.js', '/js/sticker.js', '/js/school.js', '/js/vendor/pdfjs.mjs',
-  '/js/views/achievements.js', '/js/views/leaderboard.js', '/js/views/drawer-achievement.js', '/js/views/drawer-school.js', '/js/views/school-bits.js',
-];
+// `npm run build` replaces both: CACHE with the release's hash, SHELL with every built
+// file (Vite's hashed /assets/*). Under `npm run dev` only these static files are listed.
+const CACHE = CACHE_PREFIX + 'dev';
+const SHELL = ['/', '/index.html', '/manifest.webmanifest', '/icon.svg'];
 
 self.addEventListener('install', (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL)));
@@ -40,7 +29,7 @@ self.addEventListener('fetch', (e) => {
     (async () => {
       // Release URLs never change. An older open page must keep using its cached
       // modules even after the server has deployed a different release.
-      if (shell && url.pathname.startsWith('/releases/')) {
+      if (shell && url.pathname.startsWith('/assets/')) {
         const cached = await (await caches.open(CACHE)).match(e.request);
         if (cached) return cached;
       }

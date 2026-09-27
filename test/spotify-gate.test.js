@@ -9,7 +9,7 @@ function stubFetch(answer = (path) => new Response(JSON.stringify(path === '/api
 
 async function freshApi() {
   vi.resetModules();
-  return import('../public/js/api.js');
+  return import('../src/legacy/js/api.js');
 }
 
 describe('spotify request gate', () => {

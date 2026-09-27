@@ -1,15 +1,15 @@
 import { test, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { indexedDB, IDBKeyRange } from 'fake-indexeddb';
-import { openDb, deleteDb } from '../public/js/db.js';
+import { openDb, deleteDb } from '../src/legacy/js/db.js';
 globalThis.indexedDB = indexedDB;
 globalThis.IDBKeyRange = IDBKeyRange;
 const storage = new Map();
 globalThis.localStorage = { getItem: (k) => storage.get(k) || null, setItem: (k,v) => storage.set(k,v), removeItem: (k) => storage.delete(k) };
 // Connections, rather than broadcasts, exercise the shared transaction boundary.
 globalThis.BroadcastChannel = undefined;
-const first = await import('../public/js/store.js?first');
-const second = await import('../public/js/store.js?second');
+const first = await import('../src/legacy/js/store.js?first');
+const second = await import('../src/legacy/js/store.js?second');
 let counter = 0;
 const p = () => ({ id: 'test-' + ++counter, username: 'tester', revision: 1, coat: {} });
 afterEach(async () => { await first.close(); await second.close(); });
@@ -156,8 +156,8 @@ test('a quiet rejection takes the server copy without saving a conflict', async 
 test('a reloaded tab editing its own unsynced record saves no conflict copy', async () => {
  const tab = new Map();
  globalThis.sessionStorage = { getItem: (k) => tab.get(k) || null, setItem: (k, v) => tab.set(k, v) };
- const before = await import('../public/js/store.js?before-reload');
- const after = await import('../public/js/store.js?after-reload');
+ const before = await import('../src/legacy/js/store.js?before-reload');
+ const after = await import('../src/legacy/js/store.js?after-reload');
  delete globalThis.sessionStorage;
  const user = p();
  await before.open(user);

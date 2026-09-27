@@ -34,6 +34,12 @@ export function onFocusTick(s, event) {
   paintStudy(event !== 'start');
 }
 
+/** Show a view: the dock and the 1–5 keys. Study while a run is going opens its focus screen. */
+export function setView(view) {
+  if (view === 'study' && focus.active()) { openFocus(); return; }
+  ui.view = view; rememberUi(); render();
+}
+
 export function openFocus() {
   ui.focus = true;
   focus.fullscreen(true);

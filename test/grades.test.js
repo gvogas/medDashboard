@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { courseGrade, neededLabel } from '../public/js/grades.js';
+import { courseGrade, neededLabel } from '../src/legacy/js/grades.js';
 
 const item = (status, weight, grade = null) => ({ status, weight, grade });
 

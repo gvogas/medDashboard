@@ -15,7 +15,7 @@ key storage. No production migration or deployment was performed while implement
    The existing SESSION_SECRET and SPOTIFY_CLIENT_SECRET remain required.
 3. Deploy with `npm run deploy`. It runs tests and the release build, checks that the
    required secret names exist, applies migrations (including 0006 and 0007), then deploys
-   `.build/site`. The build verifies the inline theme script's CSP hash and refuses
+   the Vite build in `dist/client`. The build verifies the inline theme script's CSP hash and refuses
    inline style attributes. Update the theme hash with `npm run csp:update` when needed.
 4. Ask users to close older tabs and reopen Rounds. IndexedDB upgrades wait for old
    connections; a blocked upgrade displays a useful message. Old clients get 428
@@ -71,9 +71,9 @@ Do not remove old keys until their stored-token counts are zero, or reconnect th
 
 ## Releases and rollback
 
-`npm run build` writes only `.build/site` and `.build/manifest.json`. Release assets
-live beneath a content-derived `/releases/<hash>/` directory. Relative module imports
-stay in that release; the service-worker asset list is generated from all build assets.
+`npm run build` runs `vite build`, which writes `dist/`. Scripts and styles live beneath
+`/assets/` with a content hash in each name, so a page keeps loading its own release;
+the service-worker asset list and cache name are generated from the build.
 The worker waits for existing pages to close before activating a new cache, avoiding
 an immediate takeover of pages running an older release. Static responses revalidate;
 API responses remain `no-store`. CI runs the same tests and build as deployment.

@@ -13,7 +13,7 @@ describe('Spotify connection on startup', () => {
       ? new Response(JSON.stringify({ connected }))
       : new Response(JSON.stringify({ error: 'rate_limited', retryAfter: 3600 }), { status: 429 }));
     vi.stubGlobal('fetch', fetcher);
-    spotify = await import('../public/js/spotify.js');
+    spotify = await import('../src/legacy/js/spotify.js');
     spotify.start();
     await vi.waitFor(() => {
       expect(spotify.state.loaded).toBe(true);
@@ -22,7 +22,7 @@ describe('Spotify connection on startup', () => {
     });
     expect(fetcher.mock.calls.map(([path]) => path)).toEqual(connected
       ? ['/api/spotify/status', '/api/spotify/player'] : ['/api/spotify/status']);
-    const { renderSpotifyView } = await import('../public/js/views/spotify-view.js');
+    const { renderSpotifyView } = await import('../src/legacy/js/views/spotify-view.js');
     const html = renderSpotifyView();
     expect(html).toContain(connected ? 'Try again after' : 'href="/api/spotify/connect"');
     expect(html).not.toContain('data-spotify="connect"');

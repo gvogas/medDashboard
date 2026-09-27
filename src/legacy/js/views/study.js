@@ -13,6 +13,7 @@ import * as focus from '../focus.js';
 import { clockHtml, setClocks } from './flipclock.js';
 import { achievementsHtml } from './achievements.js';
 import { leaderboardHtml } from './leaderboard.js';
+import { setStudyBadge } from '../../../bridge.ts';
 import { achievements, ownAchievements } from '../achievements.js';
 
 const MIN = 60_000;
@@ -369,8 +370,7 @@ export function paint(animate = true) {
     redraw(el, s.paused ? ICON.play : ICON.pause);
     el.setAttribute('aria-label', s.paused ? 'Resume' : 'Pause');
   });
-  const seg = document.querySelector('#viewSeg [data-view="study"]');
-  if (seg) seg.textContent = 'Study · ' + text;
+  setStudyBadge(text);
   const dock = $('studyDock');
   if (dock) {
     dock.hidden = ui.focus;
@@ -396,8 +396,7 @@ export function paint(animate = true) {
 
 /** The run ended: the Study tab's button goes back to its name, the dock empties. */
 export function clearRun() {
-  const seg = document.querySelector('#viewSeg [data-view="study"]');
-  if (seg) seg.textContent = 'Study';
+  setStudyBadge(null);
   const dock = $('studyDock');
   if (dock) { dock.hidden = true; setHTML(dock, ''); }
   paint();

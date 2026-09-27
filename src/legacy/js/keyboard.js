@@ -17,10 +17,10 @@ import { rowIds, reorderTypes, addType } from './views/types-nav.js';
 import * as spotify from './spotify.js';
 import * as web from './web-player.js';
 import * as spotView from './views/spotify-view.js';
-import { leaveFocus } from './study-controller.js';
+import { leaveFocus, setView } from './study-controller.js';
 
 /* Single keys, when nothing is being typed and no drawer or the focus screen is up:
-   the list is views/keys.js. Each presses the button it stands for. */
+   the list is views/keys.js. Each presses the button it stands for; a number shows a view. */
 const VIEW_KEYS = { 1: 'week', 2: 'month', 3: 'table', 4: 'spotify', 5: 'study' };
 function shortcut(e) {
   if (e.ctrlKey || e.metaKey || e.altKey || e.repeat || isTyping(e.target) || e.target.isContentEditable) return false;
@@ -30,7 +30,7 @@ function shortcut(e) {
   if (e.key === 'n') return press('#newBtn');
   if (e.key === 't') return press('#today');
   if ((e.key === '[' || e.key === ']') && (ui.view === 'week' || ui.view === 'month')) return press(e.key === '[' ? '#prev' : '#next');
-  if (VIEW_KEYS[e.key]) return press('#viewSeg [data-view="' + VIEW_KEYS[e.key] + '"]');
+  if (VIEW_KEYS[e.key]) { e.preventDefault(); setView(VIEW_KEYS[e.key]); return true; }
   return false;
 }
 

@@ -3,7 +3,7 @@ import { beforeEach, describe, it, expect } from 'vitest';
 import { BASE, signIn, createUser, login } from './helpers.js';
 import { openToken, encryptToken, decryptToken } from '../worker/spotify.js';
 import { handleApi } from '../worker/api.js';
-import { nextDelayMs } from '../public/js/spotify.js';
+import { nextDelayMs } from '../src/legacy/js/spotify.js';
 
 const HOUR = 60 * 60 * 1000;
 // Storage is shared within this file; an upstream cooldown intentionally affects all users.

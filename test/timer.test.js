@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { start, read, pause, resume, skip, loggedMinutes, totalMs, resumable } from '../public/js/timer.js';
-import { normalizeFlow } from '../public/js/model.js';
+import { start, read, pause, resume, skip, loggedMinutes, totalMs, resumable } from '../src/legacy/js/timer.js';
+import { normalizeFlow } from '../src/legacy/js/model.js';
 
 const MIN = 60_000;
 const flow = { steps: [['study', 25], ['break', 5]], rounds: 2 };

@@ -11,10 +11,7 @@
 <link rel="apple-touch-icon" href="/apple-touch-icon.png">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&family=Spectral:ital,wght@1,400;1,600&display=swap">
-<link rel="stylesheet" href="/css/tokens.css">
-<link rel="stylesheet" href="/css/layout.css">
-<link rel="stylesheet" href="/css/components.css">
-<link rel="stylesheet" href="/css/study.css">
+<link rel="stylesheet" href="/src/index.css">
 <script>
   /* Resolve the theme and background before the app paints, so there is no flash
      of the wrong one. "system" follows the device. The last choice is remembered in
@@ -75,13 +72,7 @@
         <button type="button" id="today">Today</button>
         <button type="button" id="next" aria-label="Next">›</button>
       </div>
-      <div class="seg" id="viewSeg" data-layout="f87fcd11">
-        <button type="button" data-view="week" aria-pressed="true">Week</button>
-        <button type="button" data-view="month" aria-pressed="false">Month</button>
-        <button type="button" data-view="table" aria-pressed="false">Table</button>
-        <button type="button" data-view="spotify" aria-pressed="false">Spotify</button>
-        <button type="button" data-view="study" aria-pressed="false">Study</button>
-      </div>
+      <div id="viewDock"></div>
       <div class="grow"></div>
       <div class="search">
         <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="7" cy="7" r="4.5"/><path d="M10.5 10.5 14 14"/></svg>
@@ -110,6 +101,6 @@
 <div class="scrim" id="scrim"></div>
 <aside class="drawer" id="drawer" role="dialog" aria-modal="true" aria-label="Details" tabindex="-1" inert></aside>
 
-<script type="module" src="/js/main.js"></script>
+<script type="module" src="/src/main.tsx"></script>
 </body>
 </html>

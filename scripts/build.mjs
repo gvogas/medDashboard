@@ -1,10 +1,15 @@
-import { readFile, writeFile, readdir, mkdir, rm } from 'node:fs/promises';
+// Runs after `vite build`: checks what Vite made, then gives the service worker its list.
+// Vite has already put every script and stylesheet under /assets/ with a content hash in
+// its name, so a URL there never changes its content (_headers caches it for a year).
+
+import { readFile, writeFile, readdir } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+
 const root = fileURLToPath(new URL('../', import.meta.url));
-const source = path.join(root, 'public');
-const output = path.join(root, '.build', 'site');
+const client = path.join(root, 'dist', 'client');
+
 async function files(dir, prefix = '') {
   const result = [];
   for (const entry of await readdir(dir, { withFileTypes: true })) {
@@ -14,42 +19,33 @@ async function files(dir, prefix = '') {
   }
   return result.sort();
 }
-const names = await files(source);
-const contents = new Map(await Promise.all(names.map(async (name) => [name, await readFile(path.join(source, name))])));
-const html = contents.get('index.html').toString();
-const inline = html.match(/<script>([\s\S]*?)<\/script>/)?.[1];
-if (!inline) throw new Error('Expected the inline theme script');
-const cspHash = 'sha256-' + createHash('sha256').update(inline).digest('base64');
-const headers = contents.get('_headers').toString();
+
+// 1. The inline theme script is the only inline script, and the CSP allows it by hash.
+const html = await readFile(path.join(client, 'index.html'), 'utf8');
+const scripts = [...html.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script>/g)];
+const inline = scripts.filter(([, attrs]) => !/\bsrc=/.test(attrs));
+if (inline.length !== 1) throw new Error(`Expected one inline script (the theme), found ${inline.length}`);
+const cspHash = 'sha256-' + createHash('sha256').update(inline[0][2]).digest('base64');
+const headers = await readFile(path.join(client, '_headers'), 'utf8');
 if (!headers.includes(cspHash)) throw new Error('Theme script CSP hash is stale. Run npm run csp:update.');
-for (const [name, value] of contents) if (/\.(js|html)$/.test(name) && /\bstyle\s*=\s*["']/.test(value.toString())) throw new Error(`Inline style in ${name}`);
+
+// 2. No inline style attributes: the CSP has style-src-attr 'none'. React's style={...}
+//    is set through the DOM, which the CSP allows; a style="..." string is not.
+for (const name of ['index.html', ...(await files(path.join(root, 'src'), 'src/')).filter((f) => /\.(js|ts|tsx)$/.test(f))]) {
+  if (/\bstyle\s*=\s*["']/.test(await readFile(path.join(root, name), 'utf8'))) throw new Error(`Inline style in ${name}`);
+}
+
+// 3. The service worker precaches the whole release, and its cache is named after it.
+const served = (await files(client)).filter((name) => !name.startsWith('.') && name !== '_headers' && name !== 'sw.js');
 const hash = createHash('sha256');
-for (const [name, value] of contents) hash.update(name).update(value);
+for (const name of served) hash.update(name).update(await readFile(path.join(client, name)));
 const version = hash.digest('hex').slice(0, 16);
-const prefix = `/releases/${version}/`;
-// Only this fixed, generated workspace directory is removed.
-if (path.relative(root, output) !== path.join('.build', 'site')) throw new Error('Unsafe output path');
-await mkdir(output, { recursive: true });
-for (const entry of await readdir(output)) {
-  const target = path.resolve(output, entry);
-  if (path.dirname(target) !== output) throw new Error('Unsafe generated asset path');
-  await rm(target, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 });
-}
-const assets = names.filter((name) => !['index.html', '_headers', 'sw.js'].includes(name));
-for (const name of assets) {
-  const target = path.join(output, prefix, name);
-  await mkdir(path.dirname(target), { recursive: true });
-  await writeFile(target, contents.get(name));
-}
-const builtHtml = html.replace(/(["'])\/(js|css)\//g, `$1${prefix}$2/`).replace(/(["'])\/(icon\.svg|manifest\.webmanifest)/g, `$1${prefix}$2`);
-await writeFile(path.join(output, 'index.html'), builtHtml);
-await writeFile(path.join(output, '_headers'), headers);
-// Keep stable manifest/icon URLs for installed apps from previous releases.
-for (const name of ['manifest.webmanifest', 'icon.svg', 'apple-touch-icon.png']) await writeFile(path.join(output, name), contents.get(name));
-const shell = ['/', '/index.html', ...assets.map((name) => prefix + name)];
-const sw = contents.get('sw.js').toString()
+const shell = ['/', ...served.map((name) => '/' + name)];
+const sw = (await readFile(path.join(client, 'sw.js'), 'utf8'))
   .replace(/const CACHE = [^;]+;/, `const CACHE = CACHE_PREFIX + '${version}';`)
   .replace(/const SHELL = \[[\s\S]*?\];/, `const SHELL = ${JSON.stringify(shell, null, 2)};`);
-await writeFile(path.join(output, 'sw.js'), sw);
-await writeFile(path.join(root, '.build', 'manifest.json'), JSON.stringify({ version, assets: shell, cspHash }, null, 2));
-console.log(`Built ${assets.length} versioned assets (${version}); CSP verified.`);
+if (!sw.includes(version)) throw new Error('Could not write the service worker cache name');
+for (const name of served) if (!sw.includes(`"/${name}"`)) throw new Error(`/${name} is missing from the service worker`);
+await writeFile(path.join(client, 'sw.js'), sw);
+
+console.log(`Service worker lists ${shell.length} files (${version}); CSP verified.`);

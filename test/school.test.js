@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { normalizeSchool, dayInfo, classWeekday, weekOf, currentTerm, termStartFor, schoolStatus } from '../public/js/school.js';
-import { lectureDates } from '../public/js/reviews.js';
+import { normalizeSchool, dayInfo, classWeekday, weekOf, currentTerm, termStartFor, schoolStatus } from '../src/legacy/js/school.js';
+import { lectureDates } from '../src/legacy/js/reviews.js';
 import { cleanSchool, readSchool } from '../worker/school.js';
 import { MODEL } from '../worker/outline.js';
 import { schoolCalendar } from '../worker/validate.js';

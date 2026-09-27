@@ -1,0 +1,49 @@
+/* Rounds — every stylesheet, in cascade layers.
+   The legacy CSS is layered below Tailwind's utilities, so a utility on a React element
+   always wins over an old global rule such as button{color:inherit}. Tailwind's reset
+   (preflight) stays off until the legacy CSS is gone. */
+
+@layer theme, legacy, components, utilities;
+
+@import "tailwindcss/theme.css" layer(theme);
+@import "tailwindcss/utilities.css" layer(utilities);
+
+@import "./legacy/css/tokens.css" layer(legacy);
+@import "./legacy/css/layout.css" layer(legacy);
+@import "./legacy/css/components.css" layer(legacy);
+@import "./legacy/css/study.css" layer(legacy);
+
+/* Scan only React code. The legacy markup uses class names such as "grow" that are also
+   Tailwind utilities, and generating those would change the old layout. */
+@source not "./legacy";
+@source not "../index.html";
+
+@custom-variant dark (&:where([data-app="dark"], [data-app="dark"] *));
+
+/* shadcn's colours are Rounds' tokens. shadcn's own :root variables are deliberately not
+   defined: its --accent would overwrite Rounds' --accent. Remove them after `shadcn add`. */
+@theme inline {
+  --color-background: var(--bg);
+  --color-foreground: var(--ink);
+  --color-card: var(--panel);
+  --color-card-foreground: var(--ink);
+  --color-popover: var(--panel);
+  --color-popover-foreground: var(--ink);
+  --color-muted: var(--panel-2);
+  --color-muted-foreground: var(--ink-3);
+  --color-primary: var(--accent);
+  --color-primary-foreground: var(--on-accent);
+  --color-secondary: var(--accent-soft);
+  --color-secondary-foreground: var(--accent-ink);
+  --color-accent: var(--accent-soft);
+  --color-accent-foreground: var(--accent-ink);
+  --color-border: var(--line);
+  --color-input: var(--line);
+  --color-ring: var(--accent);
+  --color-destructive: var(--crit);
+  --color-ink-2: var(--ink-2);
+  --color-line-2: var(--line-2);
+  --radius: 12px;
+  --font-sans: Figtree, system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, monospace;
+}

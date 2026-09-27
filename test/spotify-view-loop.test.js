@@ -14,9 +14,9 @@ describe('spotify view redraws', () => {
         status: 429, headers: { 'retry-after': '41233' },
       }));
     vi.stubGlobal('fetch', fetcher);
-    const { api, spotifyRetryAt } = await import('../public/js/api.js');
-    const { state: player } = await import('../public/js/spotify.js');
-    const view = await import('../public/js/views/spotify-view.js');
+    const { api, spotifyRetryAt } = await import('../src/legacy/js/api.js');
+    const { state: player } = await import('../src/legacy/js/spotify.js');
+    const view = await import('../src/legacy/js/views/spotify-view.js');
     Object.assign(player, { loaded: true, connected: true });
 
     view.openPlaylist('pl1', 'Study mix');
@@ -49,8 +49,8 @@ describe('spotify view redraws', () => {
       return new Response(JSON.stringify(body), { status: 200 });
     });
     vi.resetModules();
-    const { state: player } = await import('../public/js/spotify.js');
-    const view = await import('../public/js/views/spotify-view.js');
+    const { state: player } = await import('../src/legacy/js/spotify.js');
+    const view = await import('../src/legacy/js/views/spotify-view.js');
     Object.assign(player, { loaded: true, connected: true });
 
     let draws = 0;

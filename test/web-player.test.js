@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { playTarget } from '../public/js/web-player.js';
+import { playTarget } from '../src/legacy/js/web-player.js';
 
 const ready = { status: 'ready', deviceId: 'roundsdev' };
 

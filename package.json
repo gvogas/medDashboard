@@ -4,28 +4,50 @@
   "type": "module",
   "description": "Med-school tracker: static front end + Cloudflare Worker API on D1",
   "scripts": {
-    "dev": "wrangler dev",
-    "dev:built": "npm run build && wrangler dev --assets .build/site",
-    "deploy": "npm run check && node scripts/check-secrets.mjs && wrangler d1 migrations apply DB --remote && node scripts/check-db.mjs --remote && wrangler deploy --assets .build/site",
+    "dev": "vite",
+    "dev:built": "npm run build && vite preview",
+    "deploy": "npm run check && node scripts/check-secrets.mjs && wrangler d1 migrations apply DB --remote && node scripts/check-db.mjs --remote && wrangler deploy",
     "test": "vitest run && npm run test:local",
     "test:watch": "vitest",
     "db:local": "wrangler d1 migrations apply DB --local",
     "db:remote": "wrangler d1 migrations apply DB --remote",
     "db:check": "node scripts/check-db.mjs",
     "user:add": "node scripts/add-user.mjs",
-    "build": "node scripts/build.mjs",
+    "build": "vite build && node scripts/build.mjs",
     "csp:update": "node scripts/csp-hash.mjs --write",
     "test:local": "node --test test/local-store.node.mjs test/syntax.node.mjs",
-    "check": "npm test && npm run build",
+    "typecheck": "tsc --noEmit",
+    "check": "npm run typecheck && npm test && npm run build",
     "spotify:key": "node scripts/spotify-key.mjs"
   },
   "devDependencies": {
+    "@cloudflare/vite-plugin": "^1.61.0",
     "@cloudflare/vitest-pool-workers": "^0.22.0",
+    "@tailwindcss/vite": "^4.3.3",
+    "@testing-library/dom": "^10.4.2",
+    "@testing-library/react": "^16.3.3",
+    "@types/node": "^26.6.3",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^6.1.1",
     "fake-indexeddb": "^6.2.5",
+    "jsdom": "^30.1.1",
+    "tailwindcss": "^4.3.3",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.1",
     "vitest": "^4.1.0",
     "wrangler": "^4.0.0"
   },
   "overrides": {
     "sharp": "^0.35.4"
+  },
+  "dependencies": {
+    "@radix-ui/react-slot": "^1.3.3",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "framer-motion": "^13.4.4",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0",
+    "tailwind-merge": "^3.7.0"
   }
 }

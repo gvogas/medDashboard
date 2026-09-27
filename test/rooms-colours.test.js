@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { validateCourse, validateProfile } from '../worker/validate.js';
-import { classRoom, useTypePrefs, HEXES, COAT_PALETTE } from '../public/js/model.js';
+import { classRoom, useTypePrefs, HEXES, COAT_PALETTE } from '../src/legacy/js/model.js';
 
 /* 2026-09-21 is a Monday, 2026-09-23 a Wednesday */
 const pharm = {

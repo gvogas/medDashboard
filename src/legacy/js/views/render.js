@@ -14,6 +14,7 @@ import { renderTable } from './table.js';
 import { renderSpotifyInto } from './spotify-view.js';
 import { state as spotify } from '../spotify.js';
 import { renderStudy, renderFocus } from './study.js';
+import { notify } from '../../../bridge.ts';
 
 export function renderHeader() {
   const a = parse(ui.anchor), t = $('viewTitle'), s = $('viewSub');
@@ -39,9 +40,7 @@ export function renderHeader() {
   const music = ui.view === 'spotify' || ui.view === 'study';
   document.querySelector('.navdate').hidden = music;
   $('stats').hidden = music;
-  document.querySelectorAll('#viewSeg button').forEach((b) => {
-    b.setAttribute('aria-pressed', b.dataset.view === ui.view ? 'true' : 'false');
-  });
+  notify();
 }
 
 /* The focus screen is a layout of the page: the study clock beside the Spotify view. */

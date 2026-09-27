@@ -15,9 +15,9 @@
 # Cache-Control is set per path, not on /* above: two matching rules would have
 # their values joined with a comma. Anything unlisted gets the platform default,
 # `public, max-age=0, must-revalidate`.
-# The build puts every asset under /releases/<content hash>/, so a URL there never
-# changes its content and need not be revalidated.
-/releases/*
+# Vite puts every script and stylesheet under /assets/ with a content hash in its
+# name, so a URL there never changes its content and need not be revalidated.
+/assets/*
   Cache-Control: public, max-age=31536000, immutable
 
 # The entry points that name the current release must always be checked.

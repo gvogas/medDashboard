@@ -2,10 +2,10 @@ import { env } from 'cloudflare:test';
 import { describe, expect, it } from 'vitest';
 import { validateCourse, validateItem } from '../worker/validate.js';
 import { upsertRow, syncPage } from '../worker/db.js';
-import { courseGrade, targetsFor, ungraded } from '../public/js/grades.js';
-import { isTest, normalizeCourse, statusesFor } from '../public/js/model.js';
-import { guessType } from '../public/js/importers/plan.js';
-import { examWindow } from '../public/js/prep.js';
+import { courseGrade, targetsFor, ungraded } from '../src/legacy/js/grades.js';
+import { isTest, normalizeCourse, statusesFor } from '../src/legacy/js/model.js';
+import { guessType } from '../src/legacy/js/importers/plan.js';
+import { examWindow } from '../src/legacy/js/prep.js';
 import { createUser, signIn } from './helpers.js';
 
 const course = { code: 'BIO', name: 'Biology', color: '#17B3AE' };
