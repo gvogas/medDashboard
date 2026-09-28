@@ -54,6 +54,7 @@ export interface Profile {
     types: TypePref[]
     schoolCalendar?: unknown
     studyPrefs?: unknown
+    studyFlow?: unknown
     termStart?: string | null
 }
 
@@ -97,6 +98,12 @@ export interface Achievement {
     createdAt?: number | null
 }
 
+/** What a step of a study flow is: study time or a break. */
+export type StepKind = "study" | "break"
+
+/** A study flow, as normalizeFlow in legacy/js/model.js returns it: 1–12 steps, at least one Study, 1–12 rounds. */
+export interface Flow { steps: [StepKind, number][]; rounds: number }
+
 /** The study prefs, as normalizePrefs in legacy/js/model.js returns them. */
 export interface StudyPrefs { goal: number; dayMin: number; rest: number[]; celebrate: boolean }
 
@@ -116,6 +123,8 @@ export interface Ui {
     course: string
     settings: boolean
     focus: boolean
+    /* the focus screen's music panel is open */
+    focusMusic: boolean
     /* what the next study run is logged against */
     study: { courseId: string | null; itemId: string | null }
     bg: "med" | "cs"

@@ -70,3 +70,43 @@
 @keyframes overlay-in {
   from { opacity: 0; }
 }
+
+/* The flip clock (components/study/flip-clock.tsx). Everything scales from --flip-w, which
+   a parent may set with a utility such as [--flip-w:min(14vw,20vh)]; the cards take
+   --clk-card and --clk-card-2, the colon --ph, from the phase (legacy study.css). */
+@layer components {
+  .fc-clock { --flip-h: calc(var(--flip-w) * 1.42); --flip-fs: var(--flip-w); --flip-gap: calc(var(--flip-w) * .15); --flip-r: calc(var(--flip-w) * .13);
+    display: inline-flex; align-items: center; gap: var(--flip-gap); position: relative; }
+  .fc-big { --flip-w: clamp(52px, 8.4vw, 108px); }
+  .fc-mid { --flip-w: clamp(40px, 5vw, 58px); }
+  .fc-mini { --flip-w: 20px; --flip-fs: 19px; --flip-gap: 5px; --flip-r: 4px; }
+  .fc-pair { display: flex; gap: calc(var(--flip-gap) * .45); }
+  .fc-colon { display: flex; flex-direction: column; gap: calc(var(--flip-h) * .18); padding-inline: calc(var(--flip-gap) * .2); }
+  .fc-colon i { width: calc(var(--flip-fs) * .12); height: calc(var(--flip-fs) * .12); border-radius: 50%; background: var(--ph); transition: background .5s; }
+  .fc-running .fc-colon i { animation: fc-blink 2s ease-in-out infinite; }
+  .fc-card { position: relative; display: block; width: var(--flip-w); height: var(--flip-h); perspective: 500px; border-radius: var(--flip-r);
+    font-family: "IBM Plex Mono", ui-monospace, monospace; font-weight: 600; font-size: var(--flip-fs); color: #F4FBFA;
+    box-shadow: 0 1px 0 rgba(255,255,255,.06) inset, 0 calc(var(--flip-h) * .08) calc(var(--flip-h) * .2) rgba(0,0,0,.28); }
+  .fc-half { position: absolute; left: 0; right: 0; height: 50%; overflow: hidden; background: var(--clk-card); border-radius: var(--flip-r); transition: background .5s; }
+  .fc-half > span { position: absolute; left: 0; right: 0; height: var(--flip-h); line-height: var(--flip-h); text-align: center; letter-spacing: -.02em; }
+  .fc-top, .fc-ftop { top: 0; border-bottom-left-radius: 0; border-bottom-right-radius: 0; background: linear-gradient(var(--clk-card-2), var(--clk-card)); }
+  .fc-bot, .fc-fbot { bottom: 0; border-top-left-radius: 0; border-top-right-radius: 0; }
+  .fc-bot > span, .fc-fbot > span { top: calc(var(--flip-h) * -.5); }
+  /* the hinge: a dark line across the middle, and the pins at its ends */
+  .fc-card::after { content: ""; position: absolute; left: 0; right: 0; top: 50%; height: 2px; margin-top: -1px; background: rgba(0,0,0,.4); z-index: 5; }
+  .fc-card::before { content: ""; position: absolute; left: -2px; right: -2px; top: 50%; height: 6px; margin-top: -3px; z-index: 6; border-radius: 2px;
+    background: linear-gradient(90deg, rgba(0,0,0,.45) 0 3px, transparent 3px calc(100% - 3px), rgba(0,0,0,.45) calc(100% - 3px)); }
+  .fc-mini .fc-card { box-shadow: none; }
+  .fc-mini .fc-card::before { display: none; }
+  .fc-ftop { transform-origin: 50% 100%; z-index: 3; backface-visibility: hidden; }
+  .fc-fbot { transform-origin: 50% 0; z-index: 3; transform: rotateX(90deg); backface-visibility: hidden; }
+  .fc-flipping .fc-ftop { animation: fc-top .24s ease-in forwards; }
+  .fc-flipping .fc-fbot { animation: fc-bot .24s .24s ease-out forwards; }
+  @media (prefers-reduced-motion: reduce) {
+    .fc-flipping .fc-ftop, .fc-flipping .fc-fbot, .fc-running .fc-colon i { animation: none; }
+    .fc-ftop, .fc-fbot { display: none; }
+  }
+}
+@keyframes fc-top { to { transform: rotateX(-90deg); } }
+@keyframes fc-bot { to { transform: rotateX(0); } }
+@keyframes fc-blink { 50% { opacity: .35; } }
