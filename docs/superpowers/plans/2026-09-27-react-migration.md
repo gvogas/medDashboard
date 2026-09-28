@@ -13,7 +13,8 @@ Written 27 September 2026 to pick the work up later. The design and the stage li
   table views (`src/components/views/`, in `#stats` and `#views`); everything else is the
   legacy code in `src/legacy/`, bundled by Vite and connected through `src/bridge.ts` and `src/data/`.
 - **Checks after stage 3:** type-check clean, 580 Vitest tests + 18 node tests pass,
-  `npm run build` passes its CSP checks, production build runs under the real CSP.
+  `npm run build` passes its CSP checks. Checked in the dev server (CS dark and Med light,
+  desktop and phone width); the production build under the real CSP was last run at `d000298`.
 
 | Stage | What | State |
 |---|---|---|
