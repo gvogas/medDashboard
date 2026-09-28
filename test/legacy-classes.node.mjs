@@ -17,7 +17,7 @@ const SAME_MEANING = new Set(['sr-only']);
 function legacyClassNames() {
   const names = new Set();
   /* the markup that still carries legacy class names */
-  const markup = ['index.html', 'src/components/app.tsx'].filter(existsSync).map((f) => readFileSync(f, 'utf8')).join('\n');
+  const markup = ['index.html', 'src/components/app.tsx', 'src/components/shell.tsx'].filter(existsSync).map((f) => readFileSync(f, 'utf8')).join('\n');
   for (const m of markup.matchAll(/class(?:Name)?\s*=\s*\\?["'`]([^"'`\\]*)/g)) for (const t of m[1].split(/\s+/)) if (/^[a-z][\w-]*$/.test(t)) names.add(t);
   for (const m of markup.matchAll(/classList\.(?:add|remove|toggle|contains)\(\s*['"]([\w-]+)['"]/g)) names.add(m[1]);
   /* el.className = cond ? 'a b' : 'c': the strings it is set to, not those it is compared with */

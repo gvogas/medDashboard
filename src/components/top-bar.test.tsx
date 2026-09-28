@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest"
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react"
 import { notify } from "@/bridge"
 import { TopBar } from "@/components/top-bar"
+import { setSide } from "@/data/sidebar"
 import { stubMatchMedia } from "./test-media"
 
 // The app is not booted: the bar needs the ui, sync status, Spotify's state and
@@ -128,7 +129,6 @@ describe("the top bar", () => {
     })
 
     it("opens Settings, a new item and the sidebar", () => {
-        document.body.appendChild(Object.assign(document.createElement("aside"), { id: "side" }))
         render(<TopBar />)
         fireEvent.click(screen.getByRole("button", { name: "Settings" }))
         fireEvent.click(screen.getByRole("button", { name: "New item" }))
@@ -139,11 +139,10 @@ describe("the top bar", () => {
         expect(menu.getAttribute("aria-expanded")).toBe("false")
         fireEvent.click(menu)
         expect(actions.showSidebar).toHaveBeenCalledWith(true)
-        document.getElementById("side")!.classList.add("on")
-        act(() => notify())
+        act(() => setSide(true))   /* what showSidebar does */
         expect(menu.getAttribute("aria-expanded")).toBe("true")
         fireEvent.click(menu)
         expect(actions.showSidebar).toHaveBeenLastCalledWith(false)
-        document.getElementById("side")!.remove()
+        act(() => setSide(false))
     })
 })

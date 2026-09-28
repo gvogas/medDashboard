@@ -1,6 +1,6 @@
 // The sidebar: the brand, the Open items filters, the courses, the lab-coat pocket or ID
-// badge, and the Spotify player. It renders inside the static <aside id="side"> in
-// index.html, whose .on and inert belong to legacy setSide.
+// badge, and the Spotify player. It renders inside <App>'s <aside id="side">, whose .on
+// and inert come from data/sidebar.ts.
 
 import { MotionConfig } from "framer-motion"
 import { useCourses, useItems } from "@/data/store"

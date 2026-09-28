@@ -7,7 +7,6 @@ import { data } from "@/core/store"
 import * as sync from "@/core/sync"
 import { useTypePrefs } from "@/core/model"
 import { notify } from "@/bridge"
-import { watchOrnament } from "@/components/ornament"
 import { setSide, sideOpen, watchSidebar } from "@/data/sidebar"
 import { flush as flushTyping } from "@/data/item-edit"
 import * as spotify from "@/data/spotify/player"
@@ -35,7 +34,6 @@ export function boot() {
     /* ═════════ theme ═════════ */
     useTypePrefs(() => data.profile?.types || [])
     if (window.matchMedia) window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", followSystem)
-    watchOrnament()
 
     /* ═════════ sync ═════════ */
     /* The status shows in the top bar and Settings (src/data/sync.ts listens). */

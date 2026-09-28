@@ -16,19 +16,21 @@ vi.mock("@/core/store", () => ({}))
 
 import { onKeydown } from "@/data/keyboard"
 import { keysOpen } from "@/data/keys"
+import { showApp } from "@/data/signin"
+import { act, render } from "@testing-library/react"
+import { Page } from "@/components/shell"
 
 const press = (key: string) => {
     const e = new KeyboardEvent("keydown", { key, cancelable: true })
     Object.defineProperty(e, "target", { value: document.body })
-    onKeydown(e)
+    act(() => { onKeydown(e) })
     return e.defaultPrevented
 }
 
 beforeAll(() => {
-    document.body.appendChild(Object.assign(document.createElement("div"), { id: "app" }))
-    const search = Object.assign(document.createElement("input"), { id: "search", type: "search" })
-    document.body.appendChild(search)
-    document.body.appendChild(Object.assign(document.createElement("aside"), { id: "side" }))
+    /* signed in, with the page as <App> draws it (inert while the panel is up) */
+    showApp()
+    render(<Page><input id="search" type="search" /></Page>)
 })
 
 afterEach(() => {
@@ -66,7 +68,7 @@ describe("the shortcuts panel", () => {
     it("? opens and closes it, Escape closes it, and no shortcut runs while it is up", () => {
         expect(press("?")).toBe(true)
         expect(keysOpen()).toBe(true)
-        expect(document.getElementById("app")!.inert).toBe(true)
+        expect(document.getElementById("app")!.hasAttribute("inert")).toBe(true)
         press("n")
         expect(actions.newItem).not.toHaveBeenCalled()
         press("?")
@@ -74,6 +76,6 @@ describe("the shortcuts panel", () => {
         press("?")
         press("Escape")
         expect(keysOpen()).toBe(false)
-        expect(document.getElementById("app")!.inert).toBe(false)
+        expect(document.getElementById("app")!.hasAttribute("inert")).toBe(false)
     })
 })

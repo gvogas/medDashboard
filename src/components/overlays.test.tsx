@@ -16,10 +16,15 @@ import { closeKeys, keysOpen, openKeys } from "@/data/keys"
 import { readWithAi } from "@/data/ai-read"
 import { closeSheet, openSheet } from "@/data/overlay"
 import { Overlays } from "./overlays"
+import { Page, SheetHost } from "./shell"
 
 beforeEach(() => {
-    document.body.innerHTML = '<div id="app"><button id="opener">Open</button></div><div id="sheet"><div role="dialog" tabindex="-1" id="panel"></div></div><div id="overlays"></div>'
-    render(<Overlays />, { container: document.getElementById("overlays")! })
+    /* the page, the sheet and the overlays as <App> draws them */
+    render(<>
+        <Page><button id="opener">Open</button></Page>
+        <SheetHost><div role="dialog" tabIndex={-1} id="panel" /></SheetHost>
+        <div id="overlays"><Overlays /></div>
+    </>)
 })
 afterEach(() => { act(() => closeKeys()); cleanup(); vi.useRealTimers() })
 
@@ -32,13 +37,13 @@ describe("the shortcuts panel", () => {
         const dialog = screen.getByRole("dialog", { name: "Keyboard shortcuts" })
         expect(dialog.textContent).toContain("Previous / next week or month")
         expect(dialog.textContent).toContain("Shortcuts are off while you type in a field.")
-        expect(app().inert).toBe(true)
+        expect(app().hasAttribute("inert")).toBe(true)
         expect(document.activeElement).toBe(screen.getByRole("button", { name: "Close" }))
 
         fireEvent.click(screen.getByRole("button", { name: "Close" }))
         expect(keysOpen()).toBe(false)
         expect(screen.queryByRole("dialog", { name: "Keyboard shortcuts" })).toBeNull()
-        expect(app().inert).toBe(false)
+        expect(app().hasAttribute("inert")).toBe(false)
         expect(document.activeElement?.id).toBe("opener")
     })
 
@@ -60,7 +65,7 @@ describe("the busy card", () => {
         vi.useFakeTimers({ toFake: ["Date", "setInterval", "clearInterval"] })
         let answer!: (v: unknown) => void
         const done = vi.fn()
-        openSheet({ kind: "course", id: null })   /* the file was picked in the sheet */
+        act(() => openSheet({ kind: "course", id: null }))   /* the file was picked in the sheet */
         document.getElementById("panel")!.focus()
         let reading!: Promise<void>
         await act(async () => { reading = read(() => new Promise((r) => { answer = r }), done) })
@@ -69,8 +74,8 @@ describe("the busy card", () => {
         expect(card.textContent).toContain("outline.docx")
         expect(card.textContent).toContain("Reading the dates and grades with AI…")
         expect(fake.ui.outlineBusy).toBe(true)
-        expect(app().inert).toBe(true)
-        expect(document.getElementById("sheet")!.inert).toBe(true)
+        expect(app().hasAttribute("inert")).toBe(true)
+        expect(document.getElementById("sheet")!.hasAttribute("inert")).toBe(true)
         expect(document.activeElement).toBe(card)
         act(() => { vi.advanceTimersByTime(3000) })
         expect(card.textContent).toContain("3s")
@@ -79,9 +84,9 @@ describe("the busy card", () => {
         expect(done).toHaveBeenCalledWith({ ok: 1 })
         expect(screen.queryByRole("alertdialog")).toBeNull()
         expect(fake.ui.outlineBusy).toBe(false)
-        expect(document.getElementById("sheet")!.inert).toBe(false)
+        expect(document.getElementById("sheet")!.hasAttribute("inert")).toBe(false)
         expect(document.activeElement?.id).toBe("panel")
-        closeSheet()
+        act(() => closeSheet())
     })
 
     it("puts what went wrong in the note", async () => {

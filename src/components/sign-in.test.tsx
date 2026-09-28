@@ -1,7 +1,8 @@
 import { afterEach, describe, expect, it, vi } from "vitest"
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react"
 import { SignIn } from "@/components/sign-in"
-import { showSignInState } from "@/data/signin"
+import { showApp, showSignInState } from "@/data/signin"
+import { Page, SignInScreen } from "./shell"
 import { stubMatchMedia } from "./test-media"
 
 // session.ts opens the whole app; the form only needs its signIn(). The real
@@ -10,7 +11,6 @@ const signIn = vi.hoisted(() => vi.fn())
 vi.mock("@/data/session", () => ({ signIn }))
 
 stubMatchMedia({ reducedMotion: false })
-document.body.innerHTML = '<div id="signin" hidden></div><div id="app"></div>'
 
 const show = (opts: { error?: string; username?: string } = {}) => act(() => showSignInState(opts))
 const button = () => screen.getByRole("button") as HTMLButtonElement
@@ -21,8 +21,8 @@ afterEach(() => {
 })
 
 describe("sign-in", () => {
-    it("shows the page's container, hides the app, and focuses the username", () => {
-        render(<SignIn />)
+    it("shows the sign-in screen, hides the app, and focuses the username", () => {
+        render(<><SignInScreen><SignIn /></SignInScreen><Page /></>)
         show()
         expect(document.getElementById("signin")!.hidden).toBe(false)
         expect(document.getElementById("app")!.hidden).toBe(true)
@@ -68,5 +68,19 @@ describe("sign-in", () => {
         expect(screen.getByRole("alert").textContent).toBe("Wrong username or password.")
         expect((screen.getByLabelText("Password") as HTMLInputElement).value).toBe("")
         expect(document.activeElement?.id).toBe("loginPass")
+    })
+})
+
+describe("the sign-in screen and the app", () => {
+    it("switch as the session opens and ends", () => {
+        render(<><SignInScreen><SignIn /></SignInScreen><Page><button>Today</button></Page></>)
+        const signin = () => document.getElementById("signin")!, app = () => document.getElementById("app")!
+        act(() => showApp())
+        expect(signin().hidden).toBe(true)
+        expect(app().hidden).toBe(false)
+        show({ error: "Your session has ended. Sign in again." })
+        expect(signin().hidden).toBe(false)
+        expect(app().hidden).toBe(true)
+        expect(screen.getByRole("alert").textContent).toBe("Your session has ended. Sign in again.")
     })
 })

@@ -16,6 +16,7 @@ import { state as web } from "@/data/spotify/web-player"
 import { SpotifyPage } from "./spotify-page"
 import { SidebarPlayer } from "./sidebar-player"
 import { album, artist, fakeApi, page, playlist, resetEngine, results, setPlayer, track } from "./test-spotify"
+import { showApp } from "@/data/signin"
 
 const WEIGHTLESS = track("t1", { title: "Weightless", progressMs: 191000, url: "https://open.spotify.com/track/t1" })
 
@@ -25,6 +26,7 @@ beforeEach(() => {
     gate.until = 0
     resetEngine({ track: WEIGHTLESS, playing: true, device: "MacBook", deviceId: "mac", volume: 60, supportsVolume: true })
     document.body.innerHTML = '<div id="app"></div>'
+    showApp()   /* the page's keys work only while the app shows */
 })
 afterEach(() => { cleanup(); vi.useRealTimers() })
 

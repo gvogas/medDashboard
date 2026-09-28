@@ -1,21 +1,18 @@
 // The top bar: the sidebar button on narrow screens, the view's title, ‹ Today › in the
 // week and month views, the view dock, search, sync status, Settings and New item.
-// It renders inside index.html's <header class="bar">, whose legacy CSS lays it out
+// It renders inside <App>'s <header class="bar">, whose legacy CSS lays it out
 // (and hides it on the focus screen).
 
-import { useState, useSyncExternalStore, type ReactNode } from "react"
-import { subscribe } from "@/bridge"
+import { useState, type ReactNode } from "react"
 import { cn } from "@/lib/utils"
 import { TextureButton } from "@/components/ui/texture-button"
 import { ViewDock } from "@/components/view-dock"
 import { viewHeading } from "@/components/view-heading"
 import { ui, useUi } from "@/data/ui"
+import { useSide } from "@/data/sidebar"
 import { syncLabel, useSyncAnnouncement, useSyncStatus } from "@/data/sync"
 import { goToday, newItem, setSearch, showSidebar, step, syncNow, toggleSettings } from "@/data/actions"
 import type { SyncState } from "@/data/types"
-
-/* The sidebar's open state lives on #side (legacy setSide), which calls notify(). */
-const sideOpen = () => document.getElementById("side")?.classList.contains("on") ?? false
 
 const icon = (children: ReactNode, box = "0 0 16 16") => (
     <svg viewBox={box} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className="size-4">
@@ -35,7 +32,7 @@ const DOT: Record<SyncState, string> = {
 export function TopBar() {
     const heading = useUi(viewHeading)
     const dated = useUi((ui) => ui.view === "week" || ui.view === "month")
-    const open = useSyncExternalStore(subscribe, sideOpen)
+    const open = useSide().open
 
     return (
         <>

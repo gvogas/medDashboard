@@ -3,6 +3,7 @@
 // draws the card from useBusy(); while it is up, cover() keeps everything else inert.
 
 import { useSyncExternalStore } from "react"
+import { flushSync } from "react-dom"
 import { ApiError } from "@/core/api"
 import { pdfText } from "@/core/pdftext"
 import { cover } from "./overlay"
@@ -28,9 +29,12 @@ function hideBusy() {
     if (!busy) return
     /* the card held the keyboard: it goes back to the sheet the file was picked in */
     const had = !!document.getElementById("overlays")?.contains(document.activeElement)
-    busy = null
-    cover(false)
-    emit()
+    /* drawn now, so the sheet is no longer inert when focus goes back to it */
+    flushSync(() => {
+        busy = null
+        cover(false)
+        emit()
+    })
     if (had) document.querySelector<HTMLElement>("#sheet [role=dialog]")?.focus({ preventScroll: true })
 }
 

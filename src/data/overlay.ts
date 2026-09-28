@@ -2,7 +2,8 @@
 // the overlays above it (the shortcuts panel, the busy card; components/overlays.tsx).
 // While the sheet is open the page behind is inert, so Tab stays inside; closed, the sheet
 // is inert itself. An overlay makes both inert. The scrim belongs to the sheet while it is
-// open, and to the phone sidebar (sidebar.ts) otherwise.
+// open, and to the phone sidebar (sidebar.ts) otherwise. <App> draws all of that from
+// useSheet() and useCovered().
 
 import { useSyncExternalStore } from "react"
 import type { Item } from "./types"
@@ -27,27 +28,18 @@ let sheet: SheetState = null
 let covers = 0
 const listeners = new Set<() => void>()
 
-const el = (id: string) => document.getElementById(id)
-
-/** Which of the page and the sheet take focus, from what is open. */
-export function settle() {
-    const app = el("app"), host = el("sheet")
-    if (host) host.inert = covers > 0 || sheet === null
-    if (app) app.inert = covers > 0 || sheet !== null
-    const scrim = el("scrim")
-    if (scrim && sheet !== null) scrim.classList.add("on")
-}
-
 function emit() {
-    settle()
     for (const fn of listeners) fn()
 }
 
 /** An overlay opens (`true`) or closes over the page and the sheet. */
 export function cover(on: boolean) {
     covers = Math.max(0, covers + (on ? 1 : -1))
-    settle()
+    emit()
 }
+
+/** An overlay is up: <App> makes the page and the sheet inert. */
+export const useCovered = () => useSyncExternalStore(subscribe, () => covers > 0)
 
 /* ── the sheet ── */
 
@@ -91,8 +83,6 @@ export function closeSheet() {
     for (const fn of beforeSheetClose) fn()
     sheet = null
     askClose = null
-    const scrim = el("scrim")
-    if (scrim && !el("side")?.classList.contains("on")) scrim.classList.remove("on")
     emit()
 }
 

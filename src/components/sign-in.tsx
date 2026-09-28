@@ -1,5 +1,5 @@
-// The sign-in screen, drawn into the static #signin container. session.ts shows and
-// hides the container and passes the last error (src/data/signin.ts); submitting calls
+// The sign-in form, inside <App>'s #signin. session.ts decides when it shows and passes
+// the last error (src/data/signin.ts); submitting calls
 // its signIn(), which reloads on success or shows the form again with the reason.
 
 import { useEffect, useRef, useState, type FormEvent } from "react"

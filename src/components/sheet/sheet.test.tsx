@@ -42,6 +42,7 @@ import { launch as fireworks } from "@/lib/fireworks"
 import { closeSheet, cover, getSheet, openSheet } from "@/data/overlay"
 import { flush, TYPING_MS } from "@/data/item-edit"
 import { Sheet } from "./sheet"
+import { Page, Scrim, SheetHost } from "@/components/shell"
 import type { Item } from "@/data/types"
 
 const item = (row: Record<string, unknown>) => normalizeItem({ type: "assignment", date: "2026-09-23", status: "todo", ...row }) as Item
@@ -50,7 +51,6 @@ beforeAll(() => { vi.useFakeTimers({ toFake: ["Date", "setTimeout", "clearTimeou
 afterAll(() => { vi.useRealTimers() })
 
 beforeEach(() => {
-    document.body.innerHTML = '<div id="app"><button id="opener">Open</button></div><div id="scrim" class="scrim"></div><div id="sheet"></div>'
     fake.data.items = [item({ id: "i1", title: "Renal problem set", courseId: "anat", start: "09:00", end: "10:30",
         checklist: [{ id: "s1", text: "Read ch. 4", done: false }], links: [{ label: "Slides", url: "https://x.org" }, { label: "bad", url: "javascript:alert(1)" }] })]
     fake.data.courses = [normalizeCourse({ id: "anat", code: "ANAT", name: "Anatomy", color: "#E4749B",
@@ -65,7 +65,8 @@ afterEach(async () => {
     Object.values(actions).forEach((fn) => fn.mockClear())
 })
 
-const show = () => render(<Sheet />, { container: document.getElementById("sheet")! })
+/* the page, the scrim and the sheet as <App> draws them */
+const show = () => render(<><Page><button id="opener">Open</button></Page><Scrim /><SheetHost><Sheet /></SheetHost></>)
 const open = (s: Parameters<typeof openSheet>[0]) => act(() => openSheet(s))
 const dialog = () => screen.getByRole("dialog")
 
@@ -76,13 +77,13 @@ describe("the sheet", () => {
         opener.focus()
         open({ kind: "item", id: "i1" })
         expect(dialog().getAttribute("aria-label")).toBe("Assignment")
-        expect(document.getElementById("app")!.inert).toBe(true)
-        expect(document.getElementById("sheet")!.inert).toBe(false)
+        expect(document.getElementById("app")!.hasAttribute("inert")).toBe(true)
+        expect(document.getElementById("sheet")!.hasAttribute("inert")).toBe(false)
         expect(document.getElementById("scrim")!.classList.contains("on")).toBe(true)
 
         fireEvent.keyDown(dialog(), { key: "Escape" })
         expect(getSheet()).toBeNull()
-        expect(document.getElementById("app")!.inert).toBe(false)
+        expect(document.getElementById("app")!.hasAttribute("inert")).toBe(false)
         expect(document.activeElement).toBe(opener)
 
         open({ kind: "item", id: "i1" })
@@ -98,10 +99,10 @@ describe("the sheet", () => {
         show()
         open({ kind: "item", id: "i1" })
         act(() => cover(true))
-        expect(document.getElementById("sheet")!.inert).toBe(true)
-        expect(document.getElementById("app")!.inert).toBe(true)
+        expect(document.getElementById("sheet")!.hasAttribute("inert")).toBe(true)
+        expect(document.getElementById("app")!.hasAttribute("inert")).toBe(true)
         act(() => cover(false))
-        expect(document.getElementById("sheet")!.inert).toBe(false)
+        expect(document.getElementById("sheet")!.hasAttribute("inert")).toBe(false)
     })
 })
 

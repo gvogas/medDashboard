@@ -12,6 +12,7 @@ import { activate, control, cooldownMessage, useSpotify } from "@/data/spotify"
 import { getSheet } from "@/data/overlay"
 import { keysOpen } from "@/data/keys"
 import { getBusy } from "@/data/ai-read"
+import { getScreen } from "@/data/signin"
 import { Notice, SpotifyMark } from "./bits"
 import { NowPlaying } from "./now-playing"
 import { MusicBrowser, UpNextRecent } from "./music-browser"
@@ -35,7 +36,7 @@ export function SpotifyPage() {
             if ((e.key !== "/" && e.key !== " ") || e.defaultPrevented || e.ctrlKey || e.metaKey || e.altKey) return
             const el = e.target as HTMLElement | null
             if (el && (OWN_KEYS.test(el.tagName) || el.isContentEditable)) return
-            if (getSheet() || keysOpen() || getBusy() || document.getElementById("app")?.hidden) return
+            if (getSheet() || keysOpen() || getBusy() || getScreen() !== "app") return
             if (e.key === "/") {
                 const box = root.current?.querySelector<HTMLInputElement>("[data-music-search]")
                 if (!box) return

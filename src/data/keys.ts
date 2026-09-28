@@ -3,6 +3,7 @@
 // and when it goes, focus goes back to where it was (or its successor after a redraw).
 
 import { useSyncExternalStore } from "react"
+import { flushSync } from "react-dom"
 import { refind } from "@/lib/dom"
 import { cover } from "./overlay"
 
@@ -24,9 +25,12 @@ export function openKeys() {
 
 export function closeKeys() {
     if (!open) return
-    open = false
-    cover(false)
-    emit()
+    /* drawn now, so the page is no longer inert when focus goes back into it */
+    flushSync(() => {
+        open = false
+        cover(false)
+        emit()
+    })
     ;(refind(back) as HTMLElement | null)?.focus()
     back = null
 }

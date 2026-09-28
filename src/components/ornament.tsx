@@ -2,6 +2,8 @@
 // traces, a binary tree, a gate, a graph and code. Drawn in the theme's accent;
 // redrawn on resize and on theme or background change.
 
+import { useCallback, useEffect, useRef, useSyncExternalStore } from "react"
+
 type Pt = [number, number]
 
 function drawOn(ctx: CanvasRenderingContext2D, w: number, h: number, cs: boolean) {
@@ -104,22 +106,48 @@ export function drawOrnament(canvas: HTMLCanvasElement) {
     drawOn(ctx, w, h, cs)
 }
 
-/* index.html's #orn, taken at boot (watchOrnament) rather than when this module loads. */
-let canvas: HTMLCanvasElement | null = null
-let raf: number | null = null
+/* A theme or background change asks for a redraw: the stroke colour and the art come
+   from <html>'s attributes and CSS, which React does not see change. */
+let asked = 0
+const listeners = new Set<() => void>()
 
-/** Redraw on the next frame; several calls in one frame draw once. */
-export function schedule() {
-    if (!canvas) return
-    if (raf) cancelAnimationFrame(raf)
-    raf = requestAnimationFrame(() => { if (canvas) drawOrnament(canvas) })
+/** Redraw the ornament (setTheme and setBg call it). */
+export function redrawOrnament() {
+    asked++
+    for (const fn of listeners) fn()
 }
 
-/** At boot: take #orn and redraw it whenever its parent or the window changes size. */
-export function watchOrnament() {
-    canvas = document.getElementById("orn") as HTMLCanvasElement | null
-    const host = canvas?.parentElement
-    if (!host) return
-    if (window.ResizeObserver) new ResizeObserver(schedule).observe(host)
-    window.addEventListener("resize", schedule)
+function subscribe(fn: () => void) {
+    listeners.add(fn)
+    return () => { listeners.delete(fn) }
+}
+
+/** The canvas behind the top bar and the page, redrawn on resize and when asked. */
+export function Ornament() {
+    const ref = useRef<HTMLCanvasElement>(null)
+    const turn = useSyncExternalStore(subscribe, () => asked)
+    const raf = useRef<number | null>(null)
+
+    /* several asks in one frame draw once */
+    const schedule = useCallback(() => {
+        if (raf.current) cancelAnimationFrame(raf.current)
+        raf.current = requestAnimationFrame(() => { raf.current = null; if (ref.current) drawOrnament(ref.current) })
+    }, [])
+
+    useEffect(() => {
+        const host = ref.current?.parentElement
+        const observer = host && window.ResizeObserver ? new ResizeObserver(schedule) : null
+        if (host) observer?.observe(host)
+        window.addEventListener("resize", schedule)
+        return () => {
+            observer?.disconnect()
+            window.removeEventListener("resize", schedule)
+            if (raf.current) cancelAnimationFrame(raf.current)
+            raf.current = null
+        }
+    }, [schedule])
+
+    useEffect(() => { schedule() }, [turn, schedule])
+
+    return <canvas ref={ref} id="orn" aria-hidden="true" />
 }

@@ -1,6 +1,7 @@
 // Which screen shows, the sign-in form or the app, and what the form shows: the last
 // error and the username to keep. session.ts decides; nothing shows until boot has found
-// out whether an account is signed in. <SignIn /> reads the form's part.
+// out whether an account is signed in. <App> shows one or the other from useScreen();
+// <SignIn /> reads the form's part.
 
 import { useSyncExternalStore } from "react"
 
@@ -19,10 +20,6 @@ const listeners = new Set<() => void>()
 
 function set(next: SignInState) {
     state = next
-    /* the containers in index.html, until the app renders them from this */
-    const signin = document.getElementById("signin"), app = document.getElementById("app")
-    if (signin) signin.hidden = state.screen !== "signin"
-    if (app) app.hidden = state.screen !== "app"
     for (const fn of listeners) fn()
 }
 
@@ -41,6 +38,10 @@ export const getScreen = () => state.screen
 function subscribe(fn: () => void) {
     listeners.add(fn)
     return () => { listeners.delete(fn) }
+}
+
+export function useScreen(): Screen {
+    return useSyncExternalStore(subscribe, getScreen)
 }
 
 export function useSignInState(): SignInState {

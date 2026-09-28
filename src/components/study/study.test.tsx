@@ -33,6 +33,7 @@ vi.mock("@/core/api", () => ({ api: fake.api }))
 import { notify } from "@/bridge"
 import { normalizeCourse, normalizeItem } from "@/core/model"
 import { Views } from "@/components/views/views"
+import { ViewsHost } from "@/components/shell"
 import type { StudySession } from "@/data/types"
 
 /* Wednesday 23 September 2026, noon; the week runs Mon 21 – Sun 27. */
@@ -49,7 +50,6 @@ const session = (id: string, day: number, hour: number, minutes: number, row: Pa
 const joined = { joined: true, week: [{ name: "Ada", minutes: 300, me: false }, { name: "George", minutes: 0, me: true }, { name: "Ben", minutes: 0, me: false }], all: [{ name: "Ada", minutes: 900, me: false }, { name: "George", minutes: 45, me: true }], at: 0 }
 
 beforeEach(() => {
-    document.body.innerHTML = '<div id="views"></div>'
     fake.data.courses = [normalizeCourse({ id: "anat", code: "ANAT", name: "Anatomy", color: "#C2571A" }, 0), normalizeCourse({ id: "phys", code: "PHYS", name: "Physiology", color: "#1E628F" }, 1)]
     fake.data.items = [normalizeItem({ id: "e1", type: "exam", title: "Brachial plexus quiz", courseId: "anat", date: "2026-10-01", status: "todo" })]
     fake.data.study_sessions = [
@@ -73,7 +73,7 @@ afterEach(() => {
 
 const redraw = () => act(() => notify())
 const show = async () => {
-    const r = render(<Views />, { container: document.getElementById("views")! })
+    const r = render(<ViewsHost><Views /></ViewsHost>)
     await act(async () => {})   /* the leaderboard's first load */
     return r
 }

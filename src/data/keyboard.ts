@@ -6,6 +6,7 @@ import { getSheet, requestCloseSheet } from "./overlay"
 import { setSide, sideOpen } from "./sidebar"
 import { openKeys, closeKeys, keysOpen } from "./keys"
 import { getBusy } from "./ai-read"
+import { getScreen } from "./signin"
 import { setView } from "./study-controller"
 import { escapeFocus } from "./study-timer"
 import { newItem, goToday, step } from "./actions"
@@ -20,7 +21,7 @@ function shortcut(e: KeyboardEvent): boolean {
     if (e.ctrlKey || e.metaKey || e.altKey || e.repeat || isTyping(target) || target?.isContentEditable) return false
     if (getBusy()) return false
     if (e.key === "?") { if (keysOpen()) closeKeys(); else openKeys(); e.preventDefault(); return true }
-    if (keysOpen() || ui.focus || getSheet() || document.getElementById("app")?.hidden) return false
+    if (keysOpen() || ui.focus || getSheet() || getScreen() !== "app") return false
     const run = (fn: () => void) => { e.preventDefault(); fn(); return true }
     if (e.key === "n") return run(newItem)
     if (e.key === "t") return run(goToday)

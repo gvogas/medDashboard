@@ -4,7 +4,7 @@
 import * as store from "@/core/store"
 import { data } from "@/core/store"
 import { notify } from "@/bridge"
-import { schedule as drawOrnament } from "@/components/ornament"
+import { redrawOrnament as drawOrnament } from "@/components/ornament"
 import { ui, rememberUi } from "./ui"
 
 export function setTheme(choice: string, { persist = true }: { persist?: boolean } = {}) {

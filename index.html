@@ -34,41 +34,7 @@
 </script>
 </head>
 <body>
-
-<div class="signin" id="signin" hidden></div>
-
-<div class="app" id="app" hidden>
-
-  <!-- the sidebar: React (src/components/sidebar.tsx) renders inside; legacy setSide owns .on and inert -->
-  <aside class="side" id="side"></aside>
-
-  <div class="content">
-    <canvas id="orn" aria-hidden="true"></canvas>
-
-    <!-- The top bar: React (src/components/top-bar.tsx) renders inside. -->
-    <header class="bar"></header>
-
-    <div class="scroll" id="scroll">
-      <svg class="drape" viewBox="0 0 300 118" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true">
-        <path d="M18 8c0 26 6 30 14 40"/><path d="M52 8c0 24-5 28-11 38"/>
-        <path d="M8 10h20M42 10h20" stroke-width="5"/>
-        <path d="M32 48c7 10 3 24 16 32 16 10 40 6 58-2 22-10 38-24 60-28 20-4 36 2 44 14"/>
-        <circle cx="242" cy="86" r="17"/><circle cx="242" cy="86" r="8.5"/><path d="M228 74l-8-7"/>
-      </svg>
-      <div id="stats"></div>
-      <div id="views"></div>
-    </div>
-  </div>
-
-  <!-- The study dock and the focus screen: React (src/components/study/study-dock.tsx,
-       src/components/focus/focus-screen.tsx) renders inside, during a run. -->
-  <div id="study-dock"></div>
-  <div id="focus"></div>
-</div>
-
-<div class="scrim" id="scrim"></div>
-<div id="sheet" inert></div>
-
+<div id="root"></div>
 <script type="module" src="/src/main.tsx"></script>
 </body>
 </html>

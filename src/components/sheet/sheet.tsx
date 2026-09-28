@@ -1,10 +1,10 @@
 // The sheet: a floating Texture panel on the right for an item, a course, Settings, an
 // import, the school calendar, a study session or an achievement, over the blurred scrim
-// (index.html's, shared with the phone sidebar). What it shows comes from
+// (<App>'s, shared with the phone sidebar). What it shows comes from
 // src/data/overlay.ts, which also makes the page behind inert while it is open. Escape
 // and the scrim close it, or ask first when the course has unsaved changes.
 
-import { useEffect, useLayoutEffect, useRef, useState } from "react"
+import { useLayoutEffect, useRef, useState } from "react"
 import { cn } from "@/lib/utils"
 import { tmeta } from "@/core/model"
 import { refind } from "@/lib/dom"
@@ -52,15 +52,6 @@ export function Sheet() {
             opener.current = null
         }
     }, [open, state?.kind, state?.kind === "item" || state?.kind === "course" ? state.id : state?.kind === "session" || state?.kind === "achievement" ? state.draft.id : null])
-
-    /* the scrim is index.html's; a click on it closes the sheet */
-    useEffect(() => {
-        const scrim = document.getElementById("scrim")
-        if (!scrim || !open) return
-        const close = (e: Event) => { e.stopImmediatePropagation(); requestCloseSheet() }
-        scrim.addEventListener("click", close, true)
-        return () => scrim.removeEventListener("click", close, true)
-    }, [open])
 
     return (
         <div

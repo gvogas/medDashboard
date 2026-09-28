@@ -1,4 +1,4 @@
-// The focus screen, in index.html's #focus: while a run goes and ui.focus is on, the clock
+// The focus screen, in <App>'s #focus: while a run goes and ui.focus is on, the clock
 // takes the stage and everything else on the page is hidden (html.focusing). Dark in both
 // themes, the glow behind the clock, the break colours in a break. The top line: ← Leave,
 // the course chip, today against the goal. The stage: the phase and round, the big flip

@@ -29,6 +29,7 @@ import { notify } from "@/bridge"
 import { normalizeCourse, normalizeItem } from "@/core/model"
 import { Views } from "./views"
 import { Stats } from "./stats"
+import { StatsHost, ViewsHost } from "@/components/shell"
 
 const item = (row: Record<string, unknown>) => normalizeItem({ type: "assignment", date: "2026-09-23", status: "todo", ...row })
 
@@ -36,7 +37,6 @@ beforeAll(() => { vi.useFakeTimers({ toFake: ["Date"] }); vi.setSystemTime(new D
 afterAll(() => { vi.useRealTimers() })
 
 beforeEach(() => {
-    document.body.innerHTML = '<div id="stats"></div><div id="views"></div>'
     fake.data.courses = [normalizeCourse({ id: "anat", code: "ANAT", name: "Anatomy", color: "#C2571A", meetings: [{ id: "m1", kind: "Lecture", weekday: 3, start: "09:00", end: "10:30", room: "Hall B" }] }, 0)]
     fake.data.items = [
         item({ id: "set", title: "Renal problem set", courseId: "anat", end: "23:59" }),
@@ -55,7 +55,8 @@ afterEach(() => {
 
 const set = (patch: Partial<typeof fake.ui>) => { Object.assign(fake.ui, patch); act(() => notify()) }
 const host = (id: string) => document.getElementById(id)!
-const show = (node: React.ReactNode, id = "views") => render(<>{node}</>, { container: host(id) })
+/* in its host, as <App> draws it */
+const show = (node: React.ReactNode, id = "views") => render(id === "views" ? <ViewsHost>{node}</ViewsHost> : <StatsHost>{node}</StatsHost>)
 
 describe("the views host", () => {
     it("shows the chosen view, Study or Spotify, and hides itself for the focus screen", () => {

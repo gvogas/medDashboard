@@ -9,6 +9,7 @@ import { tmeta } from "@/core/model"
 import { prepLabel } from "@/core/prep"
 import { useUi } from "@/data/ui"
 import { useStats } from "@/data/views"
+import { statsShown } from "@/components/shell"
 import { nextQuote, openItem, openStudy } from "@/data/actions"
 
 /** How often the quote tile turns by itself, unless it is being read or motion is reduced. */
@@ -18,15 +19,11 @@ export const QUOTE_EVERY_MS = 25_000
 export const studyTime = (min: number) => (min >= 60 ? Math.floor(min / 60) + "h" + (min % 60 ? " " + String(min % 60).padStart(2, "0") : "") : min + " min")
 
 export function Stats() {
-    const shown = useUi((u) => !u.focus && u.view !== "spotify" && u.view !== "study")
+    const shown = useUi(statsShown)
     const cs = useUi((u) => u.bg === "cs")
     const s = useStats()
 
-    /* #stats is index.html's container; hide it with the tiles so its gap goes too */
-    useEffect(() => {
-        const host = document.getElementById("stats")
-        if (host) host.hidden = !shown
-    }, [shown])
+    /* <App> hides #stats with the tiles, so its gap goes too */
     if (!shown) return null
 
     const exam = s.nextExam, dd = s.daysTo

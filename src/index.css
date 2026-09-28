@@ -49,9 +49,11 @@
   --font-mono: "IBM Plex Mono", ui-monospace, monospace;
 }
 
-/* index.html's containers that React fills. #stats: the tiles in a row that wraps; on a
-   phone, one row you swipe along. */
+/* <App>'s containers. #root takes no box, so the page lays out as children of <body>, as
+   the legacy layout expects (.app is 100% of the body's height). #stats: the tiles in a
+   row that wraps; on a phone, one row you swipe along. */
 @layer components {
+  #root { display: contents; }
   #stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 9px; position: relative; z-index: 1; }
   #stats[hidden] { display: none; }
   @media (max-width: 700px) {
@@ -96,7 +98,7 @@
     --ph: var(--fx-break); --ph-soft: color-mix(in srgb, var(--fx-break) 20%, transparent); --ph-ink: var(--fx-break);
     --clk-card: var(--fx-break-card); --clk-card-2: var(--fx-break-card-2);
   }
-  /* index.html's containers for the dock and the focus screen, inside #app (so the sheet
+  /* <App>'s containers for the dock and the focus screen, inside #app (so the sheet
      makes them inert with the page); what they hold is fixed, so they take no room. */
   #study-dock, #focus { display: contents; }
   /* The focus screen (components/focus/focus-screen.tsx) covers the page; the sidebar and
