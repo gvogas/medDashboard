@@ -6,7 +6,7 @@ Written 27 September 2026 to pick the work up later. The design and the stage li
 
 ## Where it stands
 
-- Branch **`re`**, 30 commits ahead of `main`. **Nothing is pushed or
+- Branch **`re`**, 31 commits ahead of `main`. **Nothing is pushed or
   deployed**; the live site still runs the pre-React code from `main`.
 - **Done:** stages 0–4. The app runs on Vite + React + Tailwind. React owns
   the top bar, the view dock, the sidebar, sign-in, toasts, the stat tiles, the week, month
@@ -27,7 +27,7 @@ Written 27 September 2026 to pick the work up later. The design and the stage li
 | 1 | Data hooks and actions (`src/data/`) | Done (`330448a`) |
 | 2 | Sidebar, top bar, sign-in, toasts; drawer restyled with CSS | Done (merges up to `93e9f80`, polish `d000298`) |
 | 3 | Views: week, month, table; stat tiles | Done (`219df59`, spec `2026-09-27-react-views-design.md`) |
-| 4 | Drawers, in three parts | Done: 4a (`7e40ff8`), 4b (`e759bd5`), 4c (`5c056c1`–this; specs `2026-09-27-react-drawers-4a/4b/4c-design.md`). 4c still wants its browser pass |
+| 4 | Drawers, in three parts | Done: 4a (`7e40ff8`), 4b (`e759bd5`), 4c (`5c056c1`–`b1c8614`; specs `2026-09-27-react-drawers-4a/4b/4c-design.md`) |
 | 5 | Study: timer, flip clock, focus screen, history, leaderboard, achievements | **Next** |
 | 6 | Spotify: view and player | To do |
 | 7 | Cleanup: delete `src/legacy/`, one React root, Tailwind preflight on | To do |
@@ -90,9 +90,8 @@ field; **4b** Settings with its tabs, and the import and school calendar sheets;
 session and achievement sheets, the shortcuts panel and busy card (`<Overlays>`,
 `data/keys.ts`, `data/ai-read.ts`), the phone sidebar in `data/sidebar.ts`; the legacy
 `#drawer`, `drawer-base.js`, `timepicker.js` and the drawer CSS are gone.
-- **4c browser pass still to do:** log a session, edit it, delete it and Undo; an
-  achievement from a local picture with a crop, delete and Undo; the shortcuts panel; the
-  phone sidebar and scrim. It was checked only in jsdom tests.
+- 4c was checked in the dev server by hand (sessions, an achievement with a crop, Undo,
+  the shortcuts panel, the phone sidebar); the busy card only in tests.
 - Kept for the React Settings sheet until stage 7: the `.bgthumb` and `.coatpreview`
   rules in `components.css` (masked SVG art and the pocket preview).
 
