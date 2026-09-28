@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Rounds</title>
+<meta name="description" content="A med-school tracker: assignments, exams, labs, tutorials, office hours and tasks.">
+<meta name="theme-color" content="#0E7C74">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" href="/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&family=Spectral:ital,wght@1,400;1,600&display=swap">
+<link rel="stylesheet" href="/src/index.css">
+<script>
+  /* Resolve the theme and background before the app paints, so there is no flash
+     of the wrong one. "system" follows the device. The last choice is remembered in
+     this browser; the signed-in profile's choice takes over once it loads. */
+  (function () {
+    var pref = 'system', bg = 'med';
+    try { pref = localStorage.getItem('rounds.theme') || 'system'; } catch (e) {}
+    try { bg = localStorage.getItem('rounds.bg') === 'cs' ? 'cs' : 'med'; } catch (e) {}
+    window.__roundsTheme = pref;
+    window.__roundsBg = bg;
+    document.documentElement.setAttribute('data-bg', bg);
+    window.__roundsApplyTheme = function (choice) {
+      var dark = choice === 'dark' ? true
+        : choice === 'light' ? false
+        : !!(window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
+      document.documentElement.setAttribute('data-app', dark ? 'dark' : 'light');
+    };
+    window.__roundsApplyTheme(pref);
+  })();
+</script>
+</head>
+<body>
+<div id="root"></div>
+<script type="module" src="/src/main.tsx"></script>
+</body>
+</html>

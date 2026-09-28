@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { api, ApiError } from '../public/js/api.js';
-import * as store from '../public/js/store.js';
-import * as sync from '../public/js/sync.js';
-vi.mock('../public/js/store.js', () => ({
+import { api, ApiError } from '../src/core/api.ts';
+import * as store from '../src/core/store.ts';
+import * as sync from '../src/core/sync.ts';
+vi.mock('../src/core/store.ts', () => ({
  data: { profile: { id: 'u1' } }, conflicts: [], pending: vi.fn(), pendingCount: vi.fn(() => 0),
  settleOperation: vi.fn(), rejectOperation: vi.fn(), applyPage: vi.fn(), applyServerProfile: vi.fn(),
  meta: { get: vi.fn(() => 1) }, withSyncLock: vi.fn((fn) => fn()), subscribe: vi.fn(),

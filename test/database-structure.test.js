@@ -2,7 +2,7 @@ import { env } from 'cloudflare:test';
 import { describe, expect, it } from 'vitest';
 import { createUser } from './helpers.js';
 import { deleteRow, upsertRow } from '../worker/db.js';
-import { normalizeItem } from '../public/js/model.js';
+import { normalizeItem } from '../src/core/model.ts';
 
 const course = { code: 'BIO', name: 'Biology', color: '#17B3AE', instructor: '', term: '', archived: false, meetings: [] };
 

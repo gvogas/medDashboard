@@ -1,0 +1,156 @@
+/* Rounds — every stylesheet, in cascade layers: Tailwind's theme and reset (preflight),
+   the page's defaults and the theme's tokens (base), the page's frame (shell,
+   styles/shell.css), what React components share (components), and the utilities, which
+   win over all of them. */
+
+@layer theme, base, shell, components, utilities;
+
+@import "tailwindcss/theme.css" layer(theme);
+@import "tailwindcss/preflight.css" layer(base);
+@import "tailwindcss/utilities.css" layer(utilities) source(none);
+
+@import "./styles/tokens.css" layer(base);
+@import "./styles/base.css" layer(base);
+@import "./styles/shell.css" layer(shell);
+
+/* Utilities come only from the code in src/. Scanning the whole repo (docs, mockups,
+   tests) generated utilities such as .fixed from words in them. */
+@source "./";
+
+@custom-variant dark (&:where([data-app="dark"], [data-app="dark"] *));
+
+/* shadcn's colours are Rounds' tokens. shadcn's own :root variables are deliberately not
+   defined: its --accent would overwrite Rounds' --accent. Remove them after `shadcn add`. */
+@theme inline {
+  --color-background: var(--bg);
+  --color-foreground: var(--ink);
+  --color-card: var(--panel);
+  --color-card-foreground: var(--ink);
+  --color-popover: var(--panel);
+  --color-popover-foreground: var(--ink);
+  --color-muted: var(--panel-2);
+  --color-muted-foreground: var(--ink-3);
+  --color-primary: var(--accent);
+  --color-primary-foreground: var(--on-accent);
+  --color-secondary: var(--accent-soft);
+  --color-secondary-foreground: var(--accent-ink);
+  --color-accent: var(--accent-soft);
+  --color-accent-foreground: var(--accent-ink);
+  --color-border: var(--line);
+  --color-input: var(--line);
+  --color-ring: var(--accent);
+  --color-destructive: var(--crit);
+  --color-ink-2: var(--ink-2);
+  --color-line-2: var(--line-2);
+  --radius: 12px;
+  --font-sans: Figtree, system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, monospace;
+}
+
+/* <App>'s containers. #root takes no box, so the page lays out as children of <body>, as
+   the shell's layout expects (.app is 100% of the body's height). #stats: the tiles in a
+   row that wraps; on a phone, one row you swipe along. */
+@layer components {
+  #root { display: contents; }
+  #stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 9px; position: relative; z-index: 1; }
+  #stats[hidden] { display: none; }
+  @media (max-width: 700px) {
+    #stats { display: flex; overflow-x: auto; scroll-snap-type: x mandatory; margin: 0 -16px; padding: 0 16px 2px; scrollbar-width: none; }
+    #stats::-webkit-scrollbar { display: none; }
+  }
+}
+
+/* The quote tile's new quote rises in and sharpens. */
+@keyframes quote-rise {
+  from { opacity: 0; transform: translateY(7px); filter: blur(3px); }
+  to { opacity: 1; transform: none; filter: blur(0); }
+}
+
+/* The music's equaliser (components/spotify/): 3px to 12px tall, as a transform; an endless
+   height animation would lay the page out every frame. */
+@keyframes spot-eq {
+  0%, 100% { transform: scaleY(.5); }
+  50% { transform: scaleY(2); }
+}
+
+/* The shortcuts panel and the busy card fade in over the page. */
+@keyframes overlay-in {
+  from { opacity: 0; }
+}
+
+/* The study timer's colours: the phase (--ph, its soft ring and ink) and the flip clock's
+   cards. On the page they are the theme's study colours. The Ready card, the focus screen
+   and the dock are .study-fx: dark in both themes (the --fx-* tokens), with the break
+   colours in a break (data-phase="break" on the surface). */
+@layer components {
+  :root { --ph: var(--study); --ph-soft: var(--study-soft); --ph-ink: var(--study-ink); --clk-card: var(--study-card); --clk-card-2: var(--study-card-2); }
+  .study-fx {
+    --fx-bg: var(--fx-study-bg); --fx-glow: var(--fx-study-glow); --fx-ph: var(--fx-study);
+    --ph: var(--fx-study); --ph-soft: color-mix(in srgb, var(--fx-study) 20%, transparent); --ph-ink: var(--fx-study);
+    --clk-card: var(--fx-study-card); --clk-card-2: var(--fx-study-card-2);
+    --fx-ink: #EEF6F4; --fx-ink-2: rgba(238,246,244,.68); --fx-ink-3: rgba(238,246,244,.46); --fx-on-ph: #140810;
+    color-scheme: dark;
+  }
+  .study-fx[data-phase="break"] {
+    --fx-bg: var(--fx-break-bg); --fx-glow: var(--fx-break-glow); --fx-ph: var(--fx-break);
+    --ph: var(--fx-break); --ph-soft: color-mix(in srgb, var(--fx-break) 20%, transparent); --ph-ink: var(--fx-break);
+    --clk-card: var(--fx-break-card); --clk-card-2: var(--fx-break-card-2);
+  }
+  /* <App>'s containers for the dock and the focus screen, inside #app (so the sheet
+     makes them inert with the page); what they hold is fixed, so they take no room. */
+  #study-dock, #focus { display: contents; }
+  /* The focus screen (components/focus/focus-screen.tsx) covers the page; the sidebar and
+     the content behind it are hidden, so nothing there takes focus or is read out. */
+  html.focusing .side, html.focusing .content { display: none; }
+}
+
+/* The focus screen's music panel slides in from the right, or up from the bottom on a phone. */
+@keyframes focus-panel-in { from { transform: translateX(100%); } }
+@keyframes focus-sheet-in { from { transform: translateY(100%); } }
+
+/* The flip clock (components/study/flip-clock.tsx). Everything scales from --flip-w, which
+   a parent may set with a utility such as [--flip-w:min(14vw,20vh)]; the cards take
+   --clk-card and --clk-card-2, the colon --ph, from the phase (above). */
+@layer components {
+  .fc-clock { --flip-h: calc(var(--flip-w) * 1.42); --flip-fs: var(--flip-w); --flip-gap: calc(var(--flip-w) * .15); --flip-r: calc(var(--flip-w) * .13);
+    display: inline-flex; align-items: center; gap: var(--flip-gap); position: relative; }
+  .fc-big { --flip-w: clamp(52px, 8.4vw, 108px); }
+  .fc-mid { --flip-w: clamp(40px, 5vw, 58px); }
+  .fc-mini { --flip-w: 20px; --flip-fs: 19px; --flip-gap: 5px; --flip-r: 4px; }
+  .fc-pair { display: flex; gap: calc(var(--flip-gap) * .45); }
+  .fc-colon { display: flex; flex-direction: column; gap: calc(var(--flip-h) * .18); padding-inline: calc(var(--flip-gap) * .2); }
+  .fc-colon i { width: calc(var(--flip-fs) * .12); height: calc(var(--flip-fs) * .12); border-radius: 50%; background: var(--ph); transition: background .5s; }
+  .fc-running .fc-colon i { animation: fc-blink 2s ease-in-out infinite; }
+  .fc-card { position: relative; display: block; width: var(--flip-w); height: var(--flip-h); perspective: 500px; border-radius: var(--flip-r);
+    font-family: "IBM Plex Mono", ui-monospace, monospace; font-weight: 600; font-size: var(--flip-fs); color: #F4FBFA;
+    box-shadow: 0 1px 0 rgba(255,255,255,.06) inset, 0 calc(var(--flip-h) * .08) calc(var(--flip-h) * .2) rgba(0,0,0,.28); }
+  .fc-half { position: absolute; left: 0; right: 0; height: 50%; overflow: hidden; background: var(--clk-card); border-radius: var(--flip-r); transition: background .5s; }
+  .fc-half > span { position: absolute; left: 0; right: 0; height: var(--flip-h); line-height: var(--flip-h); text-align: center; letter-spacing: -.02em; }
+  .fc-top, .fc-ftop { top: 0; border-bottom-left-radius: 0; border-bottom-right-radius: 0; background: linear-gradient(var(--clk-card-2), var(--clk-card)); }
+  .fc-bot, .fc-fbot { bottom: 0; border-top-left-radius: 0; border-top-right-radius: 0; }
+  .fc-bot > span, .fc-fbot > span { top: calc(var(--flip-h) * -.5); }
+  /* the hinge: a dark line across the middle, and the pins at its ends */
+  .fc-card::after { content: ""; position: absolute; left: 0; right: 0; top: 50%; height: 2px; margin-top: -1px; background: rgba(0,0,0,.4); z-index: 5; }
+  .fc-card::before { content: ""; position: absolute; left: -2px; right: -2px; top: 50%; height: 6px; margin-top: -3px; z-index: 6; border-radius: 2px;
+    background: linear-gradient(90deg, rgba(0,0,0,.45) 0 3px, transparent 3px calc(100% - 3px), rgba(0,0,0,.45) calc(100% - 3px)); }
+  .fc-mini .fc-card { box-shadow: none; }
+  .fc-mini .fc-card::before { display: none; }
+  .fc-ftop { transform-origin: 50% 100%; z-index: 3; backface-visibility: hidden; }
+  .fc-fbot { transform-origin: 50% 0; z-index: 3; transform: rotateX(90deg); backface-visibility: hidden; }
+  .fc-flipping .fc-ftop { animation: fc-top .24s ease-in forwards; }
+  .fc-flipping .fc-fbot { animation: fc-bot .24s .24s ease-out forwards; }
+  @media (prefers-reduced-motion: reduce) {
+    .fc-flipping .fc-ftop, .fc-flipping .fc-fbot, .fc-running .fc-colon i { animation: none; }
+    .fc-ftop, .fc-fbot { display: none; }
+  }
+}
+@keyframes fc-top { to { transform: rotateX(-90deg); } }
+@keyframes fc-bot { to { transform: rotateX(0); } }
+@keyframes fc-blink { 50% { opacity: .35; } }
+
+/* A medal or sticker the unlock toast's See found pops in. */
+@keyframes ach-pop {
+  0% { transform: scale(.6); opacity: 0; }
+  40% { transform: scale(1.14); opacity: 1; }
+  100% { transform: scale(1); }
+}

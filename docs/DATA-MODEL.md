@@ -246,13 +246,13 @@ The school's academic calendar is `users.school_calendar`, JSON
 (no classes), `break` (study break, left out of week numbers), `exams`, `swap` (runs the
 `follows` weekday's timetable) or `note` (a marker). Read from a PDF by
 `POST /api/school-calendar` and checked by the person before it is saved;
-`public/js/school.js` works out each day for the views, the lecture reviews and the
+`src/legacy/js/school.js` works out each day for the views, the lecture reviews and the
 calendar feed.
 
 The goal and streak rules are `users.study_prefs`, JSON `{"goal":120,"dayMin":15,"rest":[0],"celebrate":true}`:
 a daily goal of 0–720 minutes (0 = none), 1–240 minutes to make a day count, up to six
 rest days (0 = Sunday) that never break the streak, and fireworks on or off. Streaks,
-weeks, months and the heatmap are worked out on the device (`public/js/history.js`).
+weeks, months and the heatmap are worked out on the device (`src/legacy/js/history.js`).
 
 ---
 
@@ -261,14 +261,14 @@ weeks, months and the heatmap are worked out on the device (`public/js/history.j
 Your own achievements (migration `0003_achievements.sql`). The built-in ones (study hours,
 streaks, big days, tasks, exams, grades) are never stored: they are worked out on the
 device from sessions and items, as is whether one of these is earned
-(`public/js/achievements.js`). At most 30 live rows per account; `PUT` a 31st is
+(`src/legacy/js/achievements.js`). At most 30 live rows per account; `PUT` a 31st is
 `400 too_many`.
 
 | Column | Type | Rules |
 | --- | --- | --- |
 | `user_id`, `id` | text, PK | |
 | `name` | text | 1–40 |
-| `sticker` | text | the picture itself: a `data:image/{webp,png,jpeg};base64,` URL, at most 90,000 characters. Cut to a circle and shrunk to 256px or less in the browser (`public/js/sticker.js`). Served only through the API, to its owner. |
+| `sticker` | text | the picture itself: a `data:image/{webp,png,jpeg};base64,` URL, at most 90,000 characters. Cut to a circle and shrunk to 256px or less in the browser (`src/legacy/js/sticker.js`). Served only through the API, to its owner. |
 | `rule` | text | `hours` \| `grade` |
 | `course_id` | text | `hours` only: the course whose study time counts. A plain reference; a deleted course leaves it locked. |
 | `item_id` | text | `grade` only: the exam or quiz. A deleted one leaves it locked. |

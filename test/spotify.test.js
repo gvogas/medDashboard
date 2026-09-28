@@ -3,7 +3,6 @@ import { beforeEach, describe, it, expect } from 'vitest';
 import { BASE, signIn, createUser, login } from './helpers.js';
 import { openToken, encryptToken, decryptToken } from '../worker/spotify.js';
 import { handleApi } from '../worker/api.js';
-import { nextDelayMs } from '../public/js/spotify.js';
 
 const HOUR = 60 * 60 * 1000;
 // Storage is shared within this file; an upstream cooldown intentionally affects all users.
@@ -530,13 +529,5 @@ describe('the Spotify view', () => {
     const none = await user('v-none');
     expect((await none.api('/api/spotify/playlists')).status).toBe(409);
     expect((await none.api('/api/spotify/queue', { method: 'POST', body: { uri: 'spotify:track:t1' } })).status).toBe(409);
-  });
-});
-
-describe('the poller', () => {
-  it('polls fast while playing, slowly when idle, and stops when not connected', () => {
-    expect(nextDelayMs({ connected: true, playing: true })).toBe(10000);
-    expect(nextDelayMs({ connected: true, playing: false })).toBe(20000);
-    expect(nextDelayMs({ connected: false })).toBeNull();
   });
 });

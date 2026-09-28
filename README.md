@@ -23,7 +23,10 @@ biomolecule layer behind the board.
 ## What's here
 
 ```
-public/                   the app: index.html, css/, js/, manifest, service worker, icons
+index.html                the page; Vite builds it and everything it loads into dist/
+src/                      the front end: React components (components/), src/legacy/ (the app
+                          before React, moving over stage by stage), bridge.ts between them
+public/                   static files copied as they are: headers, service worker, manifest, icons
 worker/                   the API: routes, auth, validation, D1 queries, rate limits, Spotify proxy
 scripts/                  add-user, build, deploy checks (secrets, database), CSP hash, Spotify key
 migrations/               the D1 schema, one file per change
@@ -90,8 +93,8 @@ Needs Node and Wrangler (`npm i -g wrangler`, then `wrangler login` once).
 npm install
 npm run db:local        # apply the schema to the local D1
 npm run db:check        # read-only integrity checks and table counts
-npm run dev             # http://localhost:8787
-npm run dev:built       # the same, serving the built, versioned site
+npm run dev             # http://127.0.0.1:8787 (Vite, with the Worker inside it)
+npm run dev:built       # the same, serving the production build
 npm test                # regression tests against the Worker, a local D1 and a fake Spotify
 ```
 
@@ -161,7 +164,7 @@ free accounts still see what is playing. Tokens live in D1, the refresh token
 encrypted under `SPOTIFY_TOKEN_KEYS`, which is separate from `SESSION_SECRET`: rotating
 the session secret signs people out but leaves Spotify connected.
 
-If you ever edit the inline script in `public/index.html`, run `npm run csp:update` to
+If you ever edit the inline script in `index.html`, run `npm run csp:update` to
 write its new hash into `public/_headers`, or the page's security policy will block it.
 `npm run build` refuses to build while the hash is stale.
 

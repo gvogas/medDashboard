@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { achievements, nextUp } from '../public/js/achievements.js';
-import { normalizePrefs } from '../public/js/model.js';
+import { achievements, nextUp } from '../src/core/achievements.ts';
+import { normalizePrefs } from '../src/core/model.ts';
 import { noon } from './helpers.js';
 
 /* A session at a local day and hour, so the tests hold in any time zone. */

@@ -3,7 +3,7 @@
 // object containing only known fields, in API (camelCase) shape.
 
 import { HttpError } from './http.js';
-import { SCHOOL_KINDS, SCHOOL_LIMITS, validDate } from '../public/js/school.js';
+import { SCHOOL_KINDS, SCHOOL_LIMITS, validDate } from '../src/core/school.ts';
 
 const COLOURS = ['#E4749B', '#8B5CC7', '#17B3AE', '#79B6EA', '#BCA6E6'];   /* the coat's */
 const COURSE_COLOURS = [...COLOURS, '#F08A6C', '#E8B33A', '#4FBF8B', '#8FAE86', '#4F74D9', '#B8457E', '#7D8A99'];
@@ -152,7 +152,7 @@ export function validateProfile(body) {
   };
 }
 
-/* The school's academic calendar: semesters and special days (public/js/school.js).
+/* The school's academic calendar: semesters and special days (src/core/school.ts).
    An empty object is none. */
 function schoolDate(v, field) {
   if (!validDate(v)) fail(field);
@@ -272,7 +272,7 @@ export function validateItem(body) {
     completedAt: optInt(body.completedAt, 'completedAt'),
   };
   if (out.recur === 'weekly' && out.weekday === null) fail('weekday');
-  // The client sets a weekday only on a weekly item (normalizeItem in public/js/model.js).
+  // The client sets a weekday only on a weekly item (normalizeItem in src/core/model.ts).
   if (out.recur === null && out.weekday !== null) fail('weekday');
   if (out.start && out.end && out.end <= out.start) fail('end');
   if (out.recurUntil && out.recurUntil < out.date) fail('recurUntil');

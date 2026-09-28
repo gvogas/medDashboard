@@ -9,7 +9,7 @@ const respond = (body, status = 200) => vi.stubGlobal('fetch', vi.fn(async () =>
 
 beforeEach(async () => {
   vi.resetModules();
-  client = await import('../public/js/api.js');
+  client = await import('../src/core/api.ts');
 });
 afterEach(() => { client.resetRequests(); vi.unstubAllGlobals(); vi.useRealTimers(); });
 

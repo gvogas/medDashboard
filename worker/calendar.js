@@ -15,7 +15,7 @@
 import { HttpError } from './http.js';
 import { claimLimit, rateLimited } from './limits.js';
 import { sameString, hex } from './auth.js';
-import { normalizeSchool, classWeekday, dayInfo, weekdayOf } from '../public/js/school.js';
+import { normalizeSchool, classWeekday, dayInfo, weekdayOf } from '../src/core/school.ts';
 
 const FEED_LIMIT = 60;                     /* fetches an hour per link; calendars poll a few times a day */
 const HOUR_MS = 60 * 60 * 1000;

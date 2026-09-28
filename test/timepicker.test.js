@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { parseTime, stepTime } from '../public/js/timepicker.js';
+import { parseTime, stepTime } from '../src/lib/time.ts';
 
 describe('parseTime', () => {
   it('accepts what people actually type', () => {

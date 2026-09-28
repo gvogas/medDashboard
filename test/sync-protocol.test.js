@@ -72,7 +72,7 @@ describe('revision and sequence protocol', () => {
   const api=await signIn();
   const course={code:'A',name:'Course',color:'#E4749B',instructor:'',term:'',archived:false,meetings:[]};
   await api('/api/courses/a',{method:'PUT',body:course});
-  const { normalizeItem }=await import('../public/js/model.js');
+  const { normalizeItem }=await import('../src/core/model.ts');
   await api('/api/items/a',{method:'PUT',body:normalizeItem({id:'a',title:'Work',courseId:'a',date:'2026-10-01'})});
   await api('/api/courses/a',{method:'PUT',body:{...course,name:'Changed'}});
   const res=await api('/api/courses/a',{method:'DELETE',headers:{'if-match':'"1"'}});
