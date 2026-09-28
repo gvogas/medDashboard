@@ -17,7 +17,7 @@ const emit = (event) => { const s = read(); for (const fn of listeners) fn(s, ev
 
 export const active = () => !!run;
 export function read(now = Date.now()) {
-  return run ? { ...timer.read(run, now), courseId: run.courseId, itemId: run.itemId, flow: run.flow } : null;
+  return run ? { ...timer.read(run, now), courseId: run.courseId, itemId: run.itemId, flow: run.flow, startedAt: run.startedAt } : null;
 }
 
 /** On sign-in: resume a run this device was in the middle of. */

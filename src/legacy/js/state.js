@@ -19,6 +19,7 @@ export const ui = {
   /* the Spotify view: home | playlist | album | artist | queue | search, and the filter inside a list */
   spotify: { pane: 'home', playlistId: null, albumId: null, artistId: null, q: '', filter: '' },
   focus: false,            /* the focus screen is up: the study clock and Spotify, nothing else */
+  focusMusic: false,       /* the focus screen's music panel is open */
   study: { courseId: null, itemId: null },   /* what the next study run is logged against */
   /* the Study tab's history: which week and month are shown, Week or Month for the
      sessions, the day picked on the month's calendar or the heatmap, and a deleted
