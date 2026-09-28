@@ -80,16 +80,17 @@ export const Calendar = () => (
 
 const RING = 2 * Math.PI * 34
 
-/** A ring filling toward the goal: `part` of `whole` minutes. */
-export function GoalRing({ part, whole }: { part: number; whole: number }) {
+/** A ring filling toward the goal: `part` of `whole` minutes. On the dark study surfaces
+    (`fx`: the focus screen, the dock) it takes the phase colour. `className` sets its size. */
+export function GoalRing({ part, whole, tone = "page", className }: { part: number; whole: number; tone?: "page" | "fx"; className?: string }) {
     const f = whole ? Math.min(1, part / whole) : 0
     return (
         <svg viewBox="0 0 80 80" role="meter" aria-label="Daily goal" aria-valuemin={0} aria-valuemax={whole} aria-valuenow={Math.min(part, whole)}
-            className="size-14 flex-none max-[520px]:size-11">
-            <circle cx="40" cy="40" r="34" fill="none" strokeWidth="9" className="stroke-line-2" />
+            className={cn("flex-none", className ?? "size-14 max-[520px]:size-11")}>
+            <circle cx="40" cy="40" r="34" fill="none" strokeWidth="9" className={tone === "fx" ? "stroke-white/15" : "stroke-line-2"} />
             <circle cx="40" cy="40" r="34" fill="none" strokeWidth="9" strokeLinecap="round" transform="rotate(-90 40 40)"
                 strokeDasharray={(RING * f).toFixed(1) + " " + RING.toFixed(1)}
-                className="stroke-[var(--study)] transition-[stroke-dasharray] duration-400 motion-reduce:transition-none" />
+                className={cn(tone === "fx" ? "stroke-[var(--ph)]" : "stroke-[var(--study)]", "transition-[stroke-dasharray] duration-400 motion-reduce:transition-none")} />
         </svg>
     )
 }

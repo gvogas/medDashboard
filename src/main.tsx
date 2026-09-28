@@ -16,6 +16,7 @@ import { Stats } from "@/components/views/stats"
 import { Views } from "@/components/views/views"
 import { Sheet } from "@/components/sheet/sheet"
 import { Overlays } from "@/components/overlays"
+import { StudyDock } from "@/components/study/study-dock"
 
 function mount(el: Element | null, node: ReactNode) {
     if (el) createRoot(el).render(<StrictMode>{node}</StrictMode>)
@@ -32,6 +33,8 @@ mount(document.getElementById("stats"), <Stats />)
 mount(document.getElementById("views"), <Views />)
 /* #sheet: the sheet, for an item, a course, Settings, a study session or an achievement (outside #app, which is inert while it is open) */
 mount(document.getElementById("sheet"), <Sheet />)
+/* #study-dock: the corner dock during a run, off the focus screen */
+mount(document.getElementById("study-dock"), <StudyDock />)
 
 /* The shortcuts panel and the busy card: over everything, outside #app and #sheet, which
    they make inert while up. */

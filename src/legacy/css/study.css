@@ -1,5 +1,5 @@
-/* Rounds — the study timer: flip clock, the Study page's start panel and flow, focus screen, corner clock,
-   and the unlock toast's badge. The rest of the Study page is React (src/components/study/).
+/* Rounds — the study timer's focus screen and its flip clock, and the unlock toast's badge.
+   The Study page (its timer cards too) and the corner dock are React (src/components/study/).
    Colours come from tokens.css (--study-*, --break-*, --fx-*). */
 
 .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
@@ -7,8 +7,6 @@
 /* ═════════ the phase colour ═════════ */
 :root{--ph:var(--study);--ph-soft:var(--study-soft);--ph-ink:var(--study-ink);--clk-card:var(--study-card);--clk-card-2:var(--study-card-2)}
 :root[data-phase="break"]{--ph:var(--break);--ph-soft:var(--break-soft);--ph-ink:var(--break-ink);--clk-card:var(--break-card);--clk-card-2:var(--break-card-2)}
-/* the Study tab's clock is always a Study clock: nothing is running */
-.study-start{--ph:var(--study);--ph-soft:var(--study-soft);--ph-ink:var(--study-ink);--clk-card:var(--study-card);--clk-card-2:var(--study-card-2)}
 html.focusing{--fx-bg:var(--fx-study-bg);--fx-glow:var(--fx-study-glow);--ph:var(--fx-study);--ph-soft:color-mix(in srgb,var(--fx-study) 20%,transparent);--ph-ink:var(--fx-study);--clk-card:var(--fx-study-card);--clk-card-2:var(--fx-study-card-2)}
 html.focusing[data-phase="break"]{--fx-bg:var(--fx-break-bg);--fx-glow:var(--fx-break-glow);--ph:var(--fx-break);--ph-soft:color-mix(in srgb,var(--fx-break) 20%,transparent);--ph-ink:var(--fx-break);--clk-card:var(--fx-break-card);--clk-card-2:var(--fx-break-card-2)}
 
@@ -58,58 +56,6 @@ html.focusing[data-phase="break"]{--fx-bg:var(--fx-break-bg);--fx-glow:var(--fx-
 .fseg.break{--seg:var(--break);--seg-soft:var(--break-soft)}
 .fseg.now{box-shadow:0 0 0 2px var(--seg-ring,var(--panel)),0 0 0 3.5px var(--seg)}
 .fstrip-lab{display:flex;justify-content:space-between;gap:10px;font-size:11.5px;color:var(--ink-3)}
-
-/* ═════════ the Study page's timer: the start panel and the flow, in React's #studyTimer ═════════ */
-#studyTimer .panel{padding:18px}
-#studyTimer .panel+.panel{margin-top:0}
-#studyTimer h3{margin:0;font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-2);font-weight:600}
-#studyTimer .hint{font-size:12.5px;color:var(--ink-2);text-align:center;margin:0}
-.study-start{display:flex;flex-direction:column;align-items:center;gap:16px;padding-block:26px}
-.study-pick{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;width:100%}
-.study-pick select{flex:1 1 190px;max-width:280px;font-size:13px;padding:7px 10px;border:1px solid var(--line);border-radius:9px;background:var(--panel-2);color:var(--ink)}
-.btn.go{display:inline-flex;align-items:center;gap:8px;border-radius:99px;padding:11px 22px;font-size:14px;font-weight:700;background:var(--study);color:#fff;box-shadow:0 8px 20px -8px var(--study)}
-.btn.go:hover{background:var(--study-ink)}
-.btn.go svg{width:14px;height:14px}
-:root[data-app="dark"] .btn.go{color:#1A0A12}
-
-/* your flow */
-.study-flow .fhead{display:flex;justify-content:space-between;align-items:baseline;gap:8px;flex-wrap:wrap;margin-bottom:12px}
-.study-flow .fhead span{font-size:12px;color:var(--ink-3)}
-.fsteps{display:flex;flex-direction:column;gap:6px;margin:0 0 12px;padding:0;list-style:none}
-.fsteps .step{display:grid;grid-template-columns:18px 1fr auto auto;gap:10px;align-items:center;padding:6px 8px;border-radius:10px;border:1px solid var(--line-2);background:var(--panel-2)}
-.fsteps .step.study{--seg:var(--study);--seg-soft:var(--study-soft);--seg-ink:var(--study-ink)}
-.fsteps .step.break{--seg:var(--break);--seg-soft:var(--break-soft);--seg-ink:var(--break-ink)}
-.fsteps .n{font-size:11px;color:var(--ink-3);text-align:right;font-variant-numeric:tabular-nums}
-.fsteps .kind{display:inline-flex;align-items:center;gap:8px;justify-self:start;border:0;border-radius:7px;padding:5px 11px 5px 9px;background:var(--seg-soft);color:var(--seg-ink);font-weight:700;font-size:12.5px}
-.fsteps .kind::before{content:"";width:8px;height:8px;border-radius:50%;background:var(--seg)}
-.fsteps .mins{display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--ink-3)}
-.fsteps .mins input,.study-flow .reps input{width:62px;text-align:right;font-size:13px;padding:5px 8px;border:1px solid var(--line);border-radius:8px;background:var(--panel);color:var(--ink)}
-#studyTimer .del{border:0;background:none;color:var(--ink-3);border-radius:6px;width:26px;height:26px;display:grid;place-items:center;padding:0}
-#studyTimer .del svg{width:14px;height:14px}
-#studyTimer .del:hover{background:var(--line-2);color:var(--ink)}
-#studyTimer .del[disabled]{opacity:.3;cursor:default}
-.study-flow .adds{display:flex;gap:8px;flex-wrap:wrap}
-.study-flow .add{display:inline-flex;align-items:center;gap:7px;border:1px dashed var(--line);background:none;border-radius:9px;padding:6px 12px;font-size:12.5px;font-weight:600}
-.study-flow .add::before{content:"";width:8px;height:8px;border-radius:50%;background:currentColor}
-.study-flow .add.study{color:var(--study-ink)}
-.study-flow .add.break{color:var(--break-ink)}
-.study-flow .add[disabled]{opacity:.4;cursor:default}
-.study-flow .reps{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:14px;padding-top:14px;border-top:1px solid var(--line-2);font-size:13px}
-.study-flow .reps .sum{margin-left:auto;font-size:12px;color:var(--ink-3)}
-.study-flow .presets{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:12px}
-.study-flow .presets span{font-size:12px;color:var(--ink-3)}
-.study-flow .presets button{border:1px solid var(--line);background:var(--panel);border-radius:99px;padding:4px 11px;font-size:12px;font-weight:600;color:var(--ink-2)}
-.study-flow .presets button:hover{border-color:var(--ink-3);color:var(--ink)}
-
-/* ═════════ the daily goal's ring, in the corner clock ═════════ */
-.goal-ring{flex:none}
-.goal-ring .track,.goal-ring .fill{fill:none;stroke-width:9}
-.goal-ring .fill{stroke-linecap:round;transition:stroke-dasharray .4s}
-.goal-ring.mini{width:30px;height:30px}
-.goal-ring.mini .track{stroke:rgba(255,255,255,.14)}
-.goal-ring.mini .fill{stroke:var(--ph)}
-.dock-ring{display:grid;place-items:center}
-@media (prefers-reduced-motion:reduce){.goal-ring .fill{transition:none}}
 
 /* ═════════ the unlock toast's badge: a medal in its group's colour, or your sticker ═════════ */
 .g-hours{--g:var(--study);--g-soft:var(--study-soft);--g-ink:var(--study-ink)}
@@ -168,17 +114,3 @@ html.focusing #viewRoot{
   --accent:var(--ph);--accent-soft:color-mix(in srgb,var(--ph) 18%,transparent);--accent-ink:var(--ph);--on-accent:#140810;
   --shadow-1:none;--shadow-2:0 16px 40px rgba(0,0,0,.5)}
 @media (max-width:700px){html.focusing #viewRoot[data-view="spotify"]{height:calc(100dvh - 60px)}}
-
-/* ═════════ the corner clock, while you are out of the focus screen ═════════ */
-.study-dock{position:fixed;right:18px;bottom:calc(18px + env(safe-area-inset-bottom, 0px));z-index:30;
-  display:flex;align-items:center;gap:12px;padding:8px 8px 8px 12px;border-radius:14px;color:#EEF6F4;
-  background:var(--fx-study-card);box-shadow:0 12px 30px -8px rgba(0,0,0,.45);transition:background .6s;
-  --ph:var(--fx-study);--ph-soft:color-mix(in srgb,var(--fx-study) 22%,transparent);--ph-ink:var(--fx-study);
-  --clk-card:var(--fx-study-card-2);--clk-card-2:color-mix(in srgb,var(--fx-study-card-2) 85%,#fff)}
-html[data-phase="break"] .study-dock{background:var(--fx-break-card);
-  --ph:var(--fx-break);--ph-soft:color-mix(in srgb,var(--fx-break) 22%,transparent);--ph-ink:var(--fx-break);
-  --clk-card:var(--fx-break-card-2);--clk-card-2:color-mix(in srgb,var(--fx-break-card-2) 85%,#fff)}
-.study-dock[hidden]{display:none}
-.study-dock .back{border:0;background:rgba(255,255,255,.1);color:#EEF6F4;border-radius:9px;padding:6px 11px;font-size:12px;font-weight:700}
-.study-dock .back:hover{background:rgba(255,255,255,.18)}
-@media (max-width:640px){.study-dock{left:12px;right:12px;bottom:calc(12px + env(safe-area-inset-bottom, 0px));justify-content:space-between}}

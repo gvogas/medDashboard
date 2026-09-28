@@ -71,9 +71,31 @@
   from { opacity: 0; }
 }
 
+/* The study timer's colours: the phase (--ph, its soft ring and ink) and the flip clock's
+   cards. On the page they are the theme's study colours. The Ready card, the focus screen
+   and the dock are .study-fx: dark in both themes (the --fx-* tokens), with the break
+   colours in a break (data-phase="break" on the surface). */
+@layer components {
+  .study-fx {
+    --fx-bg: var(--fx-study-bg); --fx-glow: var(--fx-study-glow);
+    --ph: var(--fx-study); --ph-soft: color-mix(in srgb, var(--fx-study) 20%, transparent); --ph-ink: var(--fx-study);
+    --clk-card: var(--fx-study-card); --clk-card-2: var(--fx-study-card-2);
+    --fx-ink: #EEF6F4; --fx-ink-2: rgba(238,246,244,.68); --fx-ink-3: rgba(238,246,244,.46); --fx-on-ph: #140810;
+    color-scheme: dark;
+  }
+  .study-fx[data-phase="break"] {
+    --fx-bg: var(--fx-break-bg); --fx-glow: var(--fx-break-glow);
+    --ph: var(--fx-break); --ph-soft: color-mix(in srgb, var(--fx-break) 20%, transparent); --ph-ink: var(--fx-break);
+    --clk-card: var(--fx-break-card); --clk-card-2: var(--fx-break-card-2);
+  }
+  /* index.html's containers for the dock and the focus screen, inside #app (so the sheet
+     makes them inert with the page); what they hold is fixed, so they take no room. */
+  #study-dock, #focus { display: contents; }
+}
+
 /* The flip clock (components/study/flip-clock.tsx). Everything scales from --flip-w, which
    a parent may set with a utility such as [--flip-w:min(14vw,20vh)]; the cards take
-   --clk-card and --clk-card-2, the colon --ph, from the phase (legacy study.css). */
+   --clk-card and --clk-card-2, the colon --ph, from the phase (above). */
 @layer components {
   .fc-clock { --flip-h: calc(var(--flip-w) * 1.42); --flip-fs: var(--flip-w); --flip-gap: calc(var(--flip-w) * .15); --flip-r: calc(var(--flip-w) * .13);
     display: inline-flex; align-items: center; gap: var(--flip-gap); position: relative; }

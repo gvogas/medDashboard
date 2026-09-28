@@ -1,11 +1,11 @@
-// The study timer: the focus screen, the flow, study-session deletes that wait for Undo
+// The study timer: the focus screen, study-session deletes that wait for Undo
 // (item and course deletes wait the same way), the daily goal, and the celebrations.
 // The Study page's history, its Undo and the leaderboard are React (src/data/study.ts).
 
 import * as store from './store.js';
 import { data } from './store.js';
 import { ui, rememberUi } from './state.js';
-import { normalizeFlow, normalizePrefs, FLOW_PRESETS } from './model.js';
+import { normalizePrefs } from './model.js';
 import { today } from './dates.js';
 import { esc } from './dom.js';
 import { render, renderView } from './views/render.js';
@@ -15,7 +15,7 @@ import { minutesByDay, streak } from './history.js';
 import { achievements, ownAchievements } from './achievements.js';
 import { launch as fireworks } from './fireworks.js';
 import * as focus from './focus.js';
-import { paint as paintStudy, clearRun, flow as studyFlow } from './views/study.js';
+import { paint as paintStudy, clearRun } from './views/study.js';
 
 /* ═════════ the study timer ═════════ */
 export function onFocusTick(s, event) {
@@ -155,58 +155,11 @@ function showAchievement(id) {
   });
 }
 
-/* Every change to the flow saves it to the profile, so it follows you to other devices. */
-async function saveFlow(next) {
-  await store.saveProfile({ studyFlow: normalizeFlow(next) });
-  renderView();
-}
-
+/* The focus screen's buttons (the Study page's cards and the dock are React). */
 export async function studyClick(e) {
-  let el;
-  if (e.target.closest('[data-study-start]')) {
-    if (!ui.study.courseId || focus.active()) return true;
-    await focus.begin(studyFlow(), ui.study.courseId, ui.study.itemId);
-    return true;
-  }
   if (e.target.closest('[data-study-pause]')) { await focus.togglePause(); return true; }
   if (e.target.closest('[data-study-skip]')) { await focus.skip(); return true; }
   if (e.target.closest('[data-study-stop]')) { await focus.stop(); return true; }
   if (e.target.closest('[data-study-leave]')) { leaveFocus(); return true; }
-  if (e.target.closest('[data-study-back]')) { openFocus(); return true; }
-  const f = studyFlow();
-  if ((el = e.target.closest('[data-study-kind]'))) {
-    const step = f.steps[+el.dataset.studyKind];
-    if (step) step[0] = step[0] === 'study' ? 'break' : 'study';
-    /* a flow needs a Study step: switching the only one is refused by normalizeFlow */
-    if (f.steps.some(([k]) => k === 'study')) await saveFlow(f);
-    return true;
-  }
-  if ((el = e.target.closest('[data-study-del]'))) {
-    f.steps.splice(+el.dataset.studyDel, 1);
-    if (f.steps.some(([k]) => k === 'study')) await saveFlow(f);
-    return true;
-  }
-  if ((el = e.target.closest('[data-study-add]'))) {
-    if (f.steps.length < 12) { f.steps.push([el.dataset.studyAdd, el.dataset.studyAdd === 'study' ? 25 : 5]); await saveFlow(f); }
-    return true;
-  }
-  if ((el = e.target.closest('[data-study-preset]'))) {
-    const preset = FLOW_PRESETS[+el.dataset.studyPreset];
-    if (preset) await saveFlow(structuredClone(preset[1]));
-    return true;
-  }
-  return false;
-}
-
-export async function studyChange(target) {
-  if (target.id === 'studyCourse') { ui.study.courseId = target.value; ui.study.itemId = null; renderView(); return true; }
-  if (target.id === 'studyItem') { ui.study.itemId = target.value || null; return true; }
-  if (target.id === 'studyRounds' || target.dataset?.studyMin !== undefined) {
-    const f = studyFlow();
-    if (target.id === 'studyRounds') f.rounds = +target.value;
-    else if (f.steps[+target.dataset.studyMin]) f.steps[+target.dataset.studyMin][1] = +target.value;
-    await saveFlow(f);
-    return true;
-  }
   return false;
 }

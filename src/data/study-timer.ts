@@ -7,14 +7,15 @@ import { useMemo, useSyncExternalStore } from "react"
 import * as focus from "@/legacy/js/focus.js"
 import * as store from "@/legacy/js/store.js"
 import { data } from "@/legacy/js/store.js"
-import { isOpen, normalizeFlow, FLOW_PRESETS } from "@/legacy/js/model.js"
-import { iso } from "@/legacy/js/dates.js"
+import { isOpen, normalizeFlow, normalizePrefs, FLOW_PRESETS } from "@/legacy/js/model.js"
+import { iso, today as todayIso } from "@/legacy/js/dates.js"
 import { minutesByDay } from "@/legacy/js/history.js"
 import { renderView } from "@/legacy/js/views/render.js"
 import { openFocus, leaveFocus } from "@/legacy/js/study-controller.js"
 import { notify, subscribe as subscribeBridge } from "@/bridge"
-import { useProfile } from "./store"
-import { ui } from "./ui"
+import { useCourses, useItems, useProfile, useStudySessions } from "./store"
+import { shownSessions } from "./study"
+import { ui, useUi } from "./ui"
 import type { Course, Flow, Item, Profile, StepKind, StudySession } from "./types"
 
 export { openFocus, leaveFocus }
@@ -100,8 +101,41 @@ export function pickFor(courses: Course[], items: Item[], study: { courseId: str
     return { courseId, itemId }
 }
 
+/** What the Ready card offers: the live courses, the picked course's open items (soonest
+    first), and what the next run is logged against. */
+export function useStudyPick() {
+    const courses = useCourses(), items = useItems()
+    const study = useUi((u) => u.study)
+    return useMemo(() => {
+        const pick = pickFor(courses, items, study)
+        return {
+            ...pick,
+            courses: courses.filter((c) => !c.archived),
+            items: items.filter((it) => it.courseId === pick.courseId && isOpen(it)).sort((a, b) => a.date.localeCompare(b.date)),
+        }
+        /* ui.study is changed in place: its two ids are the dependency */
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [courses, items, study.courseId, study.itemId])
+}
+
+/** Pick the course for the next run; its item goes back to none. */
+export function pickCourse(id: string) {
+    ui.study.courseId = id
+    ui.study.itemId = null
+    notify()
+}
+
+/** Pick one of the course's open items for the next run, or none. */
+export function pickItem(id: string | null) {
+    ui.study.itemId = id || null
+    notify()
+}
+
 /** Start a run on the saved flow. Call it inside the click, so full screen and sound are allowed. */
 export async function startRun(): Promise<boolean> {
+    if (focus.active()) return false
+    /* a step's minutes typed and then Start clicked: the box saves as it loses focus, just before */
+    await flowSaving
     if (focus.active()) return false
     const { courseId, itemId } = pickFor(data.courses as Course[], data.items as Item[], ui.study)
     ui.study.courseId = courseId
@@ -136,9 +170,13 @@ export function useFlow(): Flow {
     return useMemo(() => savedFlow(profile), [profile])
 }
 
-/* Every change saves the flow to the profile, so it follows you to other devices. */
+/* Every change saves the flow to the profile, so it follows you to other devices. The
+   last save is kept so a run started meanwhile waits for it. */
+let flowSaving: Promise<unknown> = Promise.resolve()
 async function saveFlow(next: Flow): Promise<boolean> {
-    await store.saveProfile({ studyFlow: normalizeFlow(next) })
+    const saving = store.saveProfile({ studyFlow: normalizeFlow(next) })
+    flowSaving = saving.catch(() => {})
+    await saving
     renderView()
     return true
 }
@@ -237,6 +275,14 @@ export const doneAt = (r: Run, now = Date.now()) => (r.paused ? now : r.at) + r.
 export function todaySoFar(sessions: StudySession[], r: Run | null, today: string): number {
     const logged = minutesByDay(sessions).get(today) || 0
     return logged + (r && iso(new Date(r.startedAt)) === today ? Math.floor(r.studyMs / MIN) : 0)
+}
+
+/** Today's study against the daily goal (0 with none), with this run's study so far. */
+export function useToday(r: Run | null): { goal: number; minutes: number } {
+    const sessions = useStudySessions(), profile = useProfile()
+    const undo = useUi((u) => u.hist.undo)
+    const goal = (normalizePrefs(profile?.studyPrefs) as { goal: number }).goal
+    return { goal, minutes: todaySoFar(shownSessions(sessions, undo), r, todayIso()) }
 }
 
 /** "MM:SS", rounded up to the second, as the flip clock shows it. */

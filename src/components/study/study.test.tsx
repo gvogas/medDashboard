@@ -3,7 +3,8 @@ import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testi
 import { stubMatchMedia } from "@/components/test-media"
 
 // The legacy app is not booted: the page reads a fake store and ui through the real
-// study.ts and leaderboard.ts; the sheets, the timer slot's drawing and the API are fakes.
+// study.ts and leaderboard.ts; the sheets, the legacy redraw and the API are fakes. The
+// timer cards are tested in timer-cards.test.tsx.
 const fake = vi.hoisted(() => ({
     data: {
         items: [] as unknown[], courses: [] as { id: string }[], quotes: [] as unknown[], study_sessions: [] as { id: string }[],
@@ -12,7 +13,7 @@ const fake = vi.hoisted(() => ({
     ui: {
         view: "study", focus: false, bg: "med", search: "", types: {}, course: "all",
         hist: { weekOffset: 0, tab: "week", monthOffset: 0, focusDay: null as string | null, undo: null as unknown },
-        lb: null as unknown, lbTab: "week",
+        lb: null as unknown, lbTab: "week", study: { courseId: null as string | null, itemId: null as string | null },
     },
     termStart: null as string | null,
     api: { leaderboard: vi.fn(), leaderboardJoin: vi.fn() },
@@ -28,14 +29,10 @@ vi.mock("@/legacy/js/store.js", () => ({
 }))
 vi.mock("@/legacy/js/query.js", () => ({ termStart: () => fake.termStart, schoolCal: () => null }))
 vi.mock("@/legacy/js/api.js", () => ({ api: fake.api }))
-/* the timer slot: the legacy code draws the start panel into it by id */
-vi.mock("@/legacy/js/views/study.js", () => ({
-    renderStudyTimer: vi.fn(() => { const el = document.getElementById("studyTimer"); if (el) el.innerHTML = "<section><h3>Your flow</h3></section>" }),
-}))
+vi.mock("@/legacy/js/views/render.js", () => ({ render: vi.fn(), renderView: vi.fn() }))
 
 import { notify } from "@/bridge"
 import { normalizeCourse, normalizeItem } from "@/legacy/js/model.js"
-import { renderStudyTimer } from "@/legacy/js/views/study.js"
 import { Views } from "@/components/views/views"
 import type { StudySession } from "@/data/types"
 
@@ -87,17 +84,14 @@ const tile = (name: string) => screen.getAllByRole("group", { name })[0]
 const history = () => region("History")
 
 describe("the Study page", () => {
-    it("shows the tiles, the timer slot and the three cards, one column's worth in order when narrow", async () => {
+    it("shows the tiles, the timer cards and the three cards, one column's worth in order when narrow", async () => {
         await show()
         for (const name of ["Streak", "Today", "This term"]) expect(tile(name)).toBeTruthy()
-        for (const name of ["History", "Achievements", "Leaderboard"]) expect(region(name)).toBeTruthy()
-        const slot = document.getElementById("studyTimer")!
-        expect(renderStudyTimer).toHaveBeenCalledTimes(1)
-        expect(slot.textContent).toBe("Your flow")
-        /* React never redraws the slot: what the legacy code drew stays */
-        redraw()
-        expect(slot.textContent).toBe("Your flow")
-        /* narrow: timer, History, achievements, leaderboard */
+        for (const name of ["Ready", "Your flow", "History", "Achievements", "Leaderboard"]) expect(region(name)).toBeTruthy()
+        /* Ready over Your flow, as one piece of the column */
+        const slot = region("Ready").parentElement!
+        expect(slot.contains(region("Your flow"))).toBe(true)
+        /* narrow: the timer cards, History, achievements, leaderboard */
         const order = (el: Element) => Number(/max-\[900px\]:order-(\d)/.exec(el.closest("[class*='max-[900px]:order-']")!.className)?.[1])
         expect([slot, history(), region("Achievements"), region("Leaderboard")].map(order)).toEqual([1, 2, 3, 4])
         /* wide: the timer and the leaderboard on the left, History and achievements on the right */
