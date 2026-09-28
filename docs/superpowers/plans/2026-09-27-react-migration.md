@@ -6,12 +6,13 @@ Written 27 September 2026 to pick the work up later. The design and the stage li
 
 ## Where it stands
 
-- Branch **`re`**, 15 commits ahead of `main` (last: `d000298`). **Nothing is pushed or
+- Branch **`re`**, 19 commits ahead of `main`. **Nothing is pushed or
   deployed**; the live site still runs the pre-React code from `main`.
-- **Done:** stages 0, 1 and 2. The app runs on Vite + React + Tailwind. React owns the top
-  bar, the view dock, the sidebar, sign-in and toasts; everything else is the legacy code in
-  `src/legacy/`, bundled by Vite and connected through `src/bridge.ts` and `src/data/`.
-- **Checks at `d000298`:** type-check clean, 547 Vitest tests + 18 node tests pass,
+- **Done:** stages 0–3. The app runs on Vite + React + Tailwind. React owns the top
+  bar, the view dock, the sidebar, sign-in, toasts, the stat tiles and the week, month and
+  table views (`src/components/views/`, in `#stats` and `#views`); everything else is the
+  legacy code in `src/legacy/`, bundled by Vite and connected through `src/bridge.ts` and `src/data/`.
+- **Checks after stage 3:** type-check clean, 580 Vitest tests + 18 node tests pass,
   `npm run build` passes its CSP checks, production build runs under the real CSP.
 
 | Stage | What | State |
@@ -19,8 +20,8 @@ Written 27 September 2026 to pick the work up later. The design and the stage li
 | 0 | Vite, TS, Tailwind, shadcn; magnetic dock | Done (`5b8cb72`, table fix `c9e278d`) |
 | 1 | Data hooks and actions (`src/data/`) | Done (`330448a`) |
 | 2 | Sidebar, top bar, sign-in, toasts; drawer restyled with CSS | Done (merges up to `93e9f80`, polish `d000298`) |
-| 3 | Views: week, month, table; stat tiles | **Next** |
-| 4 | Drawers: container and contents | To do |
+| 3 | Views: week, month, table; stat tiles | Done (`219df59`, spec `2026-09-27-react-views-design.md`) |
+| 4 | Drawers: container and contents | **Next** |
 | 5 | Study: timer, flip clock, focus screen, history, leaderboard, achievements | To do |
 | 6 | Spotify: view and player | To do |
 | 7 | Cleanup: delete `src/legacy/`, one React root, Tailwind preflight on | To do |
@@ -56,7 +57,7 @@ Written 27 September 2026 to pick the work up later. The design and the stage li
       migrations, and deploys with `wrangler deploy`). Installed copies pick up the new
       service worker on their next load.
 
-## Stage 3: the views (next)
+## Stage 3: the views (done)
 
 Brainstorm a short design first, then spec, then build (the usual flow).
 
@@ -112,7 +113,6 @@ renders once in `src/components/sidebar.tsx`). Keep the CSP hosts for the SDK an
 
 ## Known issues and notes
 
-- The stat tiles overflow at phone width (legacy; stage 3).
 - `magnetic-dock`, `texture-card`, `texture-button`, `text-gif` are vendored in
   `src/components/ui/` and adapted; cult-ui's registry was down, so they came from its
   GitHub source. `scripts/make-wordmark-gif.py` regenerates `public/wordmark.gif`.

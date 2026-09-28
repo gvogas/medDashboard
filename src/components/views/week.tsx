@@ -116,18 +116,19 @@ function ItemCard({ inst }: { inst: Instance }) {
             onClick={() => openItem(it.id)}
             style={accent(tmetaColor(it))}
             className={cn(
-                "flex w-full cursor-pointer items-start gap-2.5 rounded-lg border border-border bg-card py-2 pr-2.5 pl-0 text-left font-[inherit] shadow-[0_1px_2px_rgba(0,0,0,.05)]",
+                /* the bar, the text, the chips; on a phone the chips go under the text */
+                "grid w-full cursor-pointer grid-cols-[3px_minmax(0,1fr)_auto] items-start gap-x-2.5 gap-y-1.5 rounded-lg border border-border bg-card py-2 pr-2.5 pl-1.5 text-left font-[inherit] shadow-[0_1px_2px_rgba(0,0,0,.05)] max-[520px]:grid-cols-[3px_minmax(0,1fr)]",
                 "transition-[border-color,box-shadow] hover:border-[color-mix(in_srgb,var(--c)_50%,var(--line))] hover:shadow-[0_2px_8px_rgba(0,0,0,.08)]",
                 done && "opacity-60",
             )}
         >
-            <i aria-hidden="true" className="ml-1.5 w-[3px] self-stretch rounded-full bg-[var(--c)]" />
+            <i aria-hidden="true" className="row-span-2 h-full w-[3px] rounded-full bg-[var(--c)]" />
             <span className="flex min-w-0 flex-1 flex-col">
                 <span className={cn("text-[13px] font-semibold text-foreground", done && it.type === "task" && "line-through")}>{it.title}</span>
                 {bits.length > 0 && <span className="truncate text-[11.5px] text-muted-foreground">{bits.join(" · ")}</span>}
                 <Steps item={it} />
             </span>
-            <span className="flex flex-none flex-wrap justify-end gap-1">
+            <span className="flex flex-wrap justify-end gap-1 max-[520px]:col-start-2 max-[520px]:justify-start">
                 <TypeChip type={it.type} />
                 {isOverdue(it) || it.status !== "todo"
                     ? <StatusChip item={it} />
