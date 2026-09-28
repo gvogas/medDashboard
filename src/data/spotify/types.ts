@@ -68,7 +68,7 @@ export interface WebState { status: WebStatus; deviceId: string | null }
 
 /** Which part of the music is open: `ui.spotify` in the legacy state. */
 export interface SpotifyPlace {
-    pane: "home" | "playlist" | "album" | "artist" | "queue" | "search"
+    pane: "home" | "playlist" | "album" | "artist" | "queue" | "recent" | "search"
     playlistId: string | null
     albumId: string | null
     artistId: string | null

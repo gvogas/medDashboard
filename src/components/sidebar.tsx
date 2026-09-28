@@ -1,17 +1,15 @@
 // The sidebar: the brand, the Open items filters, the courses, the lab-coat pocket or ID
-// badge, and the slot the legacy Spotify badge draws into. It renders inside the static
-// <aside id="side"> in index.html, whose .on and inert belong to legacy setSide.
+// badge, and the Spotify player. It renders inside the static <aside id="side"> in
+// index.html, whose .on and inert belong to legacy setSide.
 
-import { memo, useLayoutEffect } from "react"
 import { MotionConfig } from "framer-motion"
-import { renderPlayer } from "@/legacy/js/views/player.js"
-import { state as spotifyState } from "@/legacy/js/spotify.js"
 import { useCourses, useItems } from "@/data/store"
 import { useUi } from "@/data/ui"
 import { openCourse, setCourse } from "@/data/actions"
 import { Coat } from "./sidebar-coat"
 import { Count, counts, Heading, Pip, Row } from "./sidebar-parts"
 import { TypeList } from "./sidebar-types"
+import { SidebarPlayer } from "./spotify/sidebar-player"
 
 export function Sidebar() {
     return (
@@ -25,7 +23,7 @@ export function Sidebar() {
                 <CourseList />
                 <div className="mt-auto flex flex-col gap-3 pt-2">
                     <Coat />
-                    <Player />
+                    <SidebarPlayer />
                 </div>
             </div>
         </MotionConfig>
@@ -74,10 +72,3 @@ function CourseList() {
         </section>
     )
 }
-
-/* Legacy renderPlayer draws into #player by id and sets its hidden and data attributes;
-   this renders it once and never again, then draws what Spotify already knows. */
-const Player = memo(function Player() {
-    useLayoutEffect(() => { renderPlayer(spotifyState) }, [])
-    return <div id="player" className="player" hidden />
-})
