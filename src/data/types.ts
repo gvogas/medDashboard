@@ -107,6 +107,45 @@ export interface Flow { steps: [StepKind, number][]; rounds: number }
 /** The study prefs, as normalizePrefs in legacy/js/model.js returns them. */
 export interface StudyPrefs { goal: number; dayMin: number; rest: number[]; celebrate: boolean }
 
+/** A badge as legacy achievements.js works it out: built in, or one of your own (with its sticker). */
+export interface Badge {
+    id: string
+    group: string
+    tier: string
+    name: string
+    blurb: string
+    goal: number
+    have: number
+    /* how far along, 0 to 1 */
+    frac: number
+    earned: boolean
+    earnedOn: string | null
+    progress: string
+    /* your own only */
+    ownId?: string
+    sticker?: string
+}
+
+/** The History card on the Study page: its tab, the week and month shown, the day picked, a delete Undo can take back. */
+export type HistTab = "week" | "month" | "term"
+export interface SessionUndo { session: StudySession; timer: ReturnType<typeof setTimeout> }
+export interface Hist { weekOffset: number; tab: HistTab; monthOffset: number; focusDay: string | null; undo: SessionUndo | null }
+
+/** The leaderboard as the server sent it, or loading, offline or failed; your row is `me`. */
+export interface LbRow { name: string; minutes: number; me: boolean }
+export interface Leaderboard {
+    joined?: boolean
+    week?: LbRow[]
+    all?: LbRow[]
+    /* when it was last asked for */
+    at?: number
+    loading?: boolean
+    busy?: boolean
+    offline?: boolean
+    error?: string | null
+}
+export type LbTab = "week" | "all"
+
 /** What the week and month show: both lists, the dated items only, or the classes only. */
 export type Schedule = "all" | "deadlines" | "classes"
 export type SortKey = "title" | "type" | "course" | "date" | "status"
@@ -127,6 +166,10 @@ export interface Ui {
     focusMusic: boolean
     /* what the next study run is logged against */
     study: { courseId: string | null; itemId: string | null }
+    /* the Study page: the History card and the leaderboard */
+    hist: Hist
+    lb: Leaderboard | null
+    lbTab: LbTab
     bg: "med" | "cs"
     theme: string
     schedule: Schedule

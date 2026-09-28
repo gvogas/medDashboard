@@ -6,7 +6,7 @@ import { useSyncExternalStore } from "react"
 import * as store from "@/legacy/js/store.js"
 import { conflicts, data } from "@/legacy/js/store.js"
 import { getVersion, notify, subscribe } from "@/bridge"
-import type { Course, Item, Profile, Quote, SavedCopy, StudySession } from "./types"
+import type { Achievement, Course, Item, Profile, Quote, SavedCopy, StudySession } from "./types"
 
 /* Events after which the data may differ. save-error leaves it as it was. */
 const WAKE = new Set(["change", "synced", "hidden", "remote", "signed-out"])
@@ -17,12 +17,15 @@ const courses = () => data.courses as Course[]
 const profile = () => data.profile as Profile | null
 const quotes = () => data.quotes as Quote[]
 const sessions = () => data.study_sessions as StudySession[]
+const achievements = () => data.achievements as Achievement[]
 
 export const useItems = () => useSyncExternalStore(subscribe, items)
 export const useCourses = () => useSyncExternalStore(subscribe, courses)
 export const useProfile = () => useSyncExternalStore(subscribe, profile)
 export const useQuotes = () => useSyncExternalStore(subscribe, quotes)
 export const useStudySessions = () => useSyncExternalStore(subscribe, sessions)
+/** Your own achievements (the built-in badges are worked out from the data, in study.ts). */
+export const useAchievements = () => useSyncExternalStore(subscribe, achievements)
 
 /** Edits the server turned down, kept on this device. The store changes this list in place,
     so the bridge's version is the snapshot. */

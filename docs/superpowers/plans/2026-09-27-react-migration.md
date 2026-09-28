@@ -6,20 +6,24 @@ Written 27 September 2026 to pick the work up later. The design and the stage li
 
 ## Where it stands
 
-- Branch **`re`**, 31 commits ahead of `main`. **Nothing is pushed or
+- Branch **`re`**, 36 commits ahead of `main`. **Nothing is pushed or
   deployed**; the live site still runs the pre-React code from `main`.
-- **Done:** stages 0–4. The app runs on Vite + React + Tailwind. React owns
+- **Done:** stages 0–4 and 5a. The app runs on Vite + React + Tailwind. React owns
   the top bar, the view dock, the sidebar, sign-in, toasts, the stat tiles, the week, month
-  and table views (`src/components/views/`, in `#stats` and `#views`) and the sheet: item,
+  and table views (`src/components/views/`, in `#stats` and `#views`), the Study page
+  but its timer (`src/components/study/`, in `#views`: the tiles, History, achievements,
+  the leaderboard; the start panel and flow are legacy, in its `#studyTimer` slot) and the sheet: item,
   course, Settings, import, school calendar, study session and achievement
   (`src/components/sheet/`, in `#sheet`), and the shortcuts panel and busy card
   (`src/components/overlays.tsx`, in `#overlays`); the legacy `#drawer` is gone;
   everything else is the legacy code in `src/legacy/`, bundled by Vite and connected
   through `src/bridge.ts` and `src/data/`.
-- **Checks after 4c:** type-check clean, 656 Vitest tests + 18 node tests pass,
-  `npm run build` passes its CSP checks. Checked in the dev server (Settings in Med dark
-  and light, desktop and phone width; an import from pasted CSV, cancelled); the school
-  sheet only in tests. The production build under the real CSP was last run at `d000298`.
+- **Checks after 5a:** type-check clean, 710 Vitest tests + 18 node tests pass,
+  `npm run build` passes its CSP checks. 5a is checked in tests only so far: its browser
+  pass (the spec's list: Med and CS, light and dark, desktop and phone width) is still to
+  do. 4c was checked in the dev server (Settings in Med dark and light, desktop and phone
+  width; an import from pasted CSV, cancelled); the school sheet only in tests. The
+  production build under the real CSP was last run at `d000298`.
 
 | Stage | What | State |
 |---|---|---|
@@ -28,8 +32,8 @@ Written 27 September 2026 to pick the work up later. The design and the stage li
 | 2 | Sidebar, top bar, sign-in, toasts; drawer restyled with CSS | Done (merges up to `93e9f80`, polish `d000298`) |
 | 3 | Views: week, month, table; stat tiles | Done (`219df59`, spec `2026-09-27-react-views-design.md`) |
 | 4 | Drawers, in three parts | Done: 4a (`7e40ff8`), 4b (`e759bd5`), 4c (`5c056c1`–`b1c8614`; specs `2026-09-27-react-drawers-4a/4b/4c-design.md`) |
-| 5 | Study: timer, flip clock, focus screen, history, leaderboard, achievements | **Next** |
-| 6 | Spotify: view and player | To do |
+| 5 | Study, in two parts: 5a the history, achievements and leaderboard; 5b the timer, flip clock, focus screen and dock | 5a done (`5916e68`–`ae04e91` and the CSS cleanup after; spec `2026-09-28-react-study-5a-design.md`); **5b next** |
+| 6 | Spotify: view and player | **Next, built together with 5b** (spec `2026-09-28-react-study-5b-spotify-6-design.md`) |
 | 7 | Cleanup: delete `src/legacy/`, one React root, Tailwind preflight on | To do |
 
 ## Resuming
@@ -100,10 +104,20 @@ session and achievement sheets, the shortcuts panel and busy card (`<Overlays>`,
 
 ## Stage 5: study
 
-`views/study.js`, `flipclock.js`, `focus.js`, `timer.js`, `study-controller.js`,
-`history.js`, `achievements.js`, `leaderboard.js`, `#focusClock`, `#studyDock`. The focus
-screen is a page layout (`html.focusing`). The dock's study badge already reads through
-the bridge.
+- **5a (done):** the Study page is React (`src/components/study/`): the tiles, one History
+  card (Week, Month, Term), achievements and the leaderboard, over `src/data/study.ts` and
+  `src/data/leaderboard.ts`. `history.js` and `achievements.js` still do the arithmetic.
+  `views/achievements.js` and `views/leaderboard.js` are gone; `views/study.js` keeps
+  the start panel and the flow (`renderStudyTimer`, into the `#studyTimer` slot React
+  renders once), the focus screen's clock side and the per-tick paint. Session deletes
+  still wait in `study-controller.js` (`deleteWithUndo`, `commitUndo`); Undo is
+  `undoSessionDelete` in `study.ts`. The unlock toast's See finds its medal a frame
+  after switching to Study.
+- **5b (next, with stage 6):** the timer cards replace the `#studyTimer` slot, then the
+  focus screen, the corner dock and the music; see
+  `2026-09-28-react-study-5b-spotify-6-design.md`. `flipclock.js`, `focus.js`,
+  `timer.js`, `#focusClock`, `#studyDock`; the focus screen is a page layout
+  (`html.focusing`). The dock's study badge already reads through the bridge.
 
 ## Stage 6: Spotify
 

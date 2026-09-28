@@ -21,10 +21,10 @@ export const ui = {
   focus: false,            /* the focus screen is up: the study clock and Spotify, nothing else */
   focusMusic: false,       /* the focus screen's music panel is open */
   study: { courseId: null, itemId: null },   /* what the next study run is logged against */
-  /* the Study tab's history: which week and month are shown, Week or Month for the
-     sessions, the day picked on the month's calendar or the heatmap, and a deleted
+  /* the Study page's History card: which week and month are shown, the Week, Month or
+     Term tab, the day picked on the month's calendar or the heatmap, and a deleted
      session that can still be undone */
-  hist: { weekOffset: 0, range: 'week', monthOffset: 0, focusDay: null, undo: null },
+  hist: { weekOffset: 0, tab: 'week', monthOffset: 0, focusDay: null, undo: null },
   lb: null,                /* the leaderboard from the server: {joined, week, all, at}, or loading/offline/error */
   lbTab: 'week',           /* the leaderboard's This week / All-time switch */
   schoolBusy: false,       /* a school calendar is being read */

@@ -1,16 +1,16 @@
-// The study timer and history: the focus screen, study-session deletes that can be
-// undone (item and course deletes wait the same way), the daily goal and the flow.
+// The study timer: the focus screen, the flow, study-session deletes that wait for Undo
+// (item and course deletes wait the same way), the daily goal, and the celebrations.
+// The Study page's history, its Undo and the leaderboard are React (src/data/study.ts).
 
 import * as store from './store.js';
 import { data } from './store.js';
 import { ui, rememberUi } from './state.js';
 import { normalizeFlow, normalizePrefs, FLOW_PRESETS } from './model.js';
-import { parse, today } from './dates.js';
+import { today } from './dates.js';
 import { esc } from './dom.js';
 import { render, renderView } from './views/render.js';
 import { getSheet } from '../../data/overlay.ts';
 import { toast } from './views/toast.js';
-import { openSettings, openSession, openAchievement } from '../../data/actions.ts';
 import { minutesByDay, streak } from './history.js';
 import { achievements, ownAchievements } from './achievements.js';
 import { launch as fireworks } from './fireworks.js';
@@ -51,10 +51,11 @@ export function leaveFocus() {
   render(); paintStudy(false);
 }
 
-/* ── the history: deletes that can be undone, a day picked on the heatmap, the goal ── */
+/* ── the history: deletes that can be undone, the goal ── */
 
-/* A delete waits six seconds so Undo can take it back; the session is only hidden
-   meanwhile. Another delete, or leaving the page, makes the waiting one final. */
+/* A delete waits six seconds so Undo (the History card's, undoSessionDelete in
+   src/data/study.ts) can take it back; the session is only hidden meanwhile. Another
+   delete, or leaving the page, makes the waiting one final. */
 const UNDO_MS = 6000;
 export function deleteWithUndo(id) {
   const session = data.study_sessions.find((x) => x.id === id);
@@ -70,13 +71,6 @@ export function commitUndo() {
   ui.hist.undo = null;
   /* a failed save already shows its own toast */
   return store.deleteStudySession(u.session.id).then(() => { if (ui.view === 'study') renderView(); }, () => {});
-}
-function undoDelete() {
-  const u = ui.hist.undo;
-  if (!u) return;
-  clearTimeout(u.timer);
-  ui.hist.undo = null;
-  renderView();
 }
 
 /* An item or course delete waits the same six seconds, the row hidden from every view
@@ -106,17 +100,6 @@ async function undoLater() {
   clearTimeout(d.timer);
   await store.hide(d.key, false);
   render();
-}
-
-/** The heatmap: show that day's sessions, in its month. */
-function showDay(day) {
-  const d = parse(day), now = parse(today());
-  ui.hist.range = 'month';
-  ui.hist.monthOffset = (d.getFullYear() - now.getFullYear()) * 12 + d.getMonth() - now.getMonth();
-  ui.hist.focusDay = day;
-  renderView();
-  /* after this click has finished with the page */
-  requestAnimationFrame(() => document.getElementById('hday-' + day)?.scrollIntoView({ block: 'center', behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' }));
 }
 
 const studyPrefs = () => normalizePrefs(data.profile?.studyPrefs);
@@ -161,12 +144,15 @@ export function celebrateAchievements({ quiet = false } = {}) {
 
 function showAchievement(id) {
   if (ui.view !== 'study') { ui.view = 'study'; rememberUi(); render(); }
-  const el = document.getElementById('ach-' + id);
-  if (!el) return;
-  el.scrollIntoView({ block: 'center', behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
-  el.classList.remove('pop');
-  void el.offsetWidth;
-  el.classList.add('pop');
+  /* the Study page is React's, drawn by the next frame when it was not showing */
+  requestAnimationFrame(() => {
+    const el = document.getElementById('ach-' + id);
+    if (!el) return;
+    el.scrollIntoView({ block: 'center', behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
+    el.classList.remove('pop');
+    void el.offsetWidth;
+    el.classList.add('pop');
+  });
 }
 
 /* Every change to the flow saves it to the profile, so it follows you to other devices. */
@@ -187,26 +173,6 @@ export async function studyClick(e) {
   if (e.target.closest('[data-study-stop]')) { await focus.stop(); return true; }
   if (e.target.closest('[data-study-leave]')) { leaveFocus(); return true; }
   if (e.target.closest('[data-study-back]')) { openFocus(); return true; }
-  if ((el = e.target.closest('[data-study-sessdel]'))) { deleteWithUndo(el.dataset.studySessdel); return true; }
-  if (e.target.closest('[data-hist-undo]')) { undoDelete(); return true; }
-  if ((el = e.target.closest('[data-hist-edit]'))) { openSession(el.dataset.histEdit); return true; }
-  if (e.target.closest('[data-hist-log]')) { openSession(null); return true; }
-  if (e.target.closest('[data-hist-goal]')) { openSettings('goalGrp'); return true; }
-  if ((el = e.target.closest('[data-hist-week]'))) {
-    const n = +el.dataset.histWeek;
-    ui.hist.weekOffset = n ? Math.min(0, ui.hist.weekOffset + n) : 0;
-    renderView(); return true;
-  }
-  if ((el = e.target.closest('[data-hist-range]'))) { ui.hist.range = el.dataset.histRange; ui.hist.focusDay = null; renderView(); return true; }
-  if ((el = e.target.closest('[data-hist-month]'))) {
-    ui.hist.monthOffset = Math.min(0, ui.hist.monthOffset + +el.dataset.histMonth);
-    ui.hist.focusDay = null;
-    renderView(); return true;
-  }
-  if ((el = e.target.closest('[data-hist-pick]'))) { ui.hist.focusDay = el.dataset.histPick; renderView(); document.querySelector('[data-hist-pick="' + el.dataset.histPick + '"]')?.focus(); return true; }
-  if ((el = e.target.closest('[data-hist-day]'))) { showDay(el.dataset.histDay); return true; }
-  if (e.target.closest('[data-ach-new]')) { openAchievement(null); return true; }
-  if ((el = e.target.closest('[data-ach-edit]'))) { openAchievement(el.dataset.achEdit); return true; }
   const f = studyFlow();
   if ((el = e.target.closest('[data-study-kind]'))) {
     const step = f.steps[+el.dataset.studyKind];

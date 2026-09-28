@@ -27,7 +27,7 @@ function mount(el: Element | null, node: ReactNode) {
 mount(document.querySelector("header.bar"), <TopBar />)
 mount(document.getElementById("side"), <Sidebar />)
 mount(document.getElementById("signin"), <SignIn />)
-/* #stats and #views: the stat tiles and the week, month or table (hidden otherwise). */
+/* #stats and #views: the stat tiles and the week, month, table or Study page (hidden otherwise). */
 mount(document.getElementById("stats"), <Stats />)
 mount(document.getElementById("views"), <Views />)
 /* #sheet: the sheet, for an item, a course, Settings, a study session or an achievement (outside #app, which is inert while it is open) */

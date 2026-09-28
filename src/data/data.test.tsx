@@ -6,7 +6,7 @@ const fake = vi.hoisted(() => {
     const storeListeners = new Set<(e: { type: string }) => void>()
     const statusListeners = new Set<(s: unknown) => void>()
     return {
-        data: { items: [] as unknown[], courses: [] as unknown[], profile: null as unknown },
+        data: { items: [] as unknown[], courses: [] as unknown[], achievements: [] as unknown[], profile: null as unknown },
         storeListeners,
         emit: (type: string) => { for (const fn of storeListeners) fn({ type }) },
         status: { state: "idle", pending: 0, message: "" },
@@ -29,7 +29,7 @@ vi.mock("@/legacy/js/sync.js", () => ({
 vi.mock("@/legacy/js/state.js", () => ({ ui: fake.ui }))
 
 import { notify } from "@/bridge"
-import { useCourses, useItems } from "./store"
+import { useAchievements, useCourses, useItems } from "./store"
 import { useUi } from "./ui"
 import { useSyncAnnouncement, useSyncStatus, syncLabel } from "./sync"
 
@@ -47,6 +47,14 @@ describe("store hooks", () => {
         expect(screen.getByText("2 items")).toBeTruthy()
         expect(renders.items).toBe(before.items + 1)
         expect(renders.courses).toBe(before.courses)
+    })
+
+    it("read your own achievements as the store reloads them", () => {
+        function Mine() { return <p>{useAchievements().length} of your own</p> }
+        render(<Mine />)
+        expect(screen.getByText("0 of your own")).toBeTruthy()
+        act(() => { fake.data.achievements = [{ id: "a1" }]; fake.emit("synced") })
+        expect(screen.getByText("1 of your own")).toBeTruthy()
     })
 
     it("ignore a save error, which leaves the data as it was", () => {

@@ -1,5 +1,6 @@
 // Times as the app keeps them, HH:MM: reading what people type, and nudging by a quarter
-// hour. Used by the React time field (components/sheet/time-field.tsx) and the CSV importer.
+// hour. Used by the React time field (components/sheet/time-field.tsx) and the CSV importer;
+// and lengths of study, for the Study page and the legacy timer.
 
 export const STEP = 15
 
@@ -38,4 +39,10 @@ export function nearestSlot(value: string): string {
     const v = parseTime(value) || "09:00"
     const [h, m] = v.split(":").map(Number)
     return pad(h) + ":" + pad(Math.floor(m / STEP) * STEP)
+}
+
+/** A length of study: "2h 05m", "45m". */
+export function duration(minutes: number): string {
+    const h = Math.floor(minutes / 60), m = minutes % 60
+    return h ? h + "h " + String(m).padStart(2, "0") + "m" : m + "m"
 }
