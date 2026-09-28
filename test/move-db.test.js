@@ -17,17 +17,11 @@ it('copies an old-schema database into a fresh one, row for row, with the change
   const from = env.MIGRATION_DB, to = env.MOVE_DB;
   await applyD1Migrations(from, env.LEGACY_MIGRATIONS);
   await applyD1Migrations(to, env.TEST_MIGRATIONS);
-  // The rows below are written with today's worker/db.js, which also saves a course's
-  // grade target and a session's note; the old schema only needs the columns for that,
-  // and the copy leaves them.
-  await from.prepare('ALTER TABLE courses ADD COLUMN target INTEGER').run();
-  await from.prepare("ALTER TABLE study_sessions ADD COLUMN note TEXT NOT NULL DEFAULT ''").run();
-  await from.prepare('ALTER TABLE study_sessions ADD COLUMN manual INTEGER NOT NULL DEFAULT 0').run();
 
   for (const id of ['ana', 'ben']) {
-    await from.prepare("INSERT INTO users (id, username, password_hash, types, study_flow, created_at, updated_at) VALUES (?, ?, 'hash', '[{\"id\":\"c-quiz1\",\"label\":\"Quiz\",\"color\":\"#B03A7A\",\"kind\":\"graded\"}]', '{\"steps\":[[\"study\",50],[\"break\",10]],\"rounds\":3}', 100, 100)")
-      .bind(id, id).run();
-    await upsertRow(from, 'courses', id, 'bio', normalizeCourse({ id: 'bio', code: 'BIO', name: "Biology 'n' more", color: '#17B3AE', meetings: [{ id: 'm', kind: 'Lecture', weekday: 1, start: '09:00', end: '10:00', room: 'Hall B' }] }), 200);
+    await from.prepare("INSERT INTO users (id, username, password_hash, types, study_flow, feed_gen, study_prefs, school_calendar, leaderboard, created_at, updated_at) VALUES (?, ?, 'hash', '[{\"id\":\"c-quiz1\",\"label\":\"Quiz\",\"color\":\"#B03A7A\",\"kind\":\"graded\"}]', '{\"steps\":[[\"study\",50],[\"break\",10]],\"rounds\":3}', ?, '{\"goal\":105}', '{\"semesters\":[]}', ?, 100, 100)")
+      .bind(id, id, id === 'ana' ? 2 : null, id === 'ana' ? 1 : 0).run();
+    await upsertRow(from, 'courses', id, 'bio', normalizeCourse({ id: 'bio', code: 'BIO', name: "Biology 'n' more", color: '#17B3AE', target: 85, meetings: [{ id: 'm', kind: 'Lecture', weekday: 1, start: '09:00', end: '10:00', room: 'Hall B' }] }), 200);
     await upsertRow(from, 'items', id, 'mid', normalizeItem({
       id: 'mid', title: 'Midterm: α & β', type: 'exam', courseId: 'bio', date: '2026-10-05', start: '09:00', end: '10:00',
       where: 'Hall B', status: 'graded', grade: 87.5, weight: 20, notes: "Line one\nline 'two'",
@@ -35,7 +29,8 @@ it('copies an old-schema database into a fresh one, row for row, with the change
     }), 210);
     await upsertRow(from, 'items', id, 'q', normalizeItem({ id: 'q', title: 'Quiz', type: 'c-quiz1', date: '2026-10-06' }), 220);
     await upsertRow(from, 'quotes', id, 'k', { text: 'Keep going', source: '' }, 230);
-    await upsertRow(from, 'study_sessions', id, 's1', { courseId: 'bio', itemId: 'mid', startedAt: 1000, studyMinutes: 50, roundsDone: 1 }, 235);
+    await upsertRow(from, 'study_sessions', id, 's1', { courseId: 'bio', itemId: 'mid', startedAt: 1000, studyMinutes: 50, roundsDone: 1, note: "Krebs cycle, 'again'", manual: true }, 235);
+    await upsertRow(from, 'achievements', id, 'a1', { name: 'Bio buff', sticker: 'data:image/png;base64,iVBORw0KGgo=', rule: 'hours', courseId: 'bio', itemId: null, target: 10 }, 236);
   }
   const gone = await upsertRow(from, 'items', 'ana', 'old', normalizeItem({ id: 'old', title: 'Old' }), 240);
   await deleteRow(from, 'items', 'ana', 'old', 250, gone.revision);
@@ -65,17 +60,18 @@ it('copies an old-schema database into a fresh one, row for row, with the change
   expect(next.revision).toBe(source.state.head + 1);
   /* and the twelve colours are accepted there */
   await upsertRow(to, 'courses', 'ana', 'c12', normalizeCourse({ id: 'c12', code: 'SL', name: 'Slate', color: '#7D8A99' }), 310);
-  /* and so are quizzes and a grade target, which the old schema had no room for */
+  /* and so are quizzes and a grade target */
   expect((await upsertRow(to, 'items', 'ana', 'q2', normalizeItem({ id: 'q2', title: 'Quiz 2', type: 'quiz', date: '2026-10-08' }), 320)).type).toBe('quiz');
   expect((await upsertRow(to, 'courses', 'ana', 'tg', normalizeCourse({ id: 'tg', code: 'TG', name: 'Target', color: '#7D8A99', target: 80 }), 330)).target).toBe(80);
+  /* and a grade-rule achievement, beside the copied one */
+  expect((await upsertRow(to, 'achievements', 'ana', 'a2', { name: 'Ace', sticker: 'data:image/png;base64,iVBORw0KGgo=', rule: 'grade', courseId: null, itemId: 'mid', target: 90 }, 340)).rule).toBe('grade');
 });
 
 it('names every source column the copy would leave behind, so a move stops before losing data', async () => {
   const columns = async (db) => (await db.prepare(COLUMNS_QUERY).all()).results;
-  /* the old-schema source above, with the three columns the test added to it */
-  expect(uncopied(await columns(env.MIGRATION_DB))).toEqual(['courses.target', 'study_sessions.note', 'study_sessions.manual']);
-  /* today's schema has tables and columns TABLES does not name yet: the next move must add them first */
-  const current = uncopied(await columns(env.DB));
-  for (const col of ['achievements.sticker', 'users.study_prefs', 'users.school_calendar', 'study_sessions.note']) expect(current).toContain(col);
-  expect(current.some((c) => /^(login_throttle|request_limits|sync_state|d1_migrations)\./.test(c))).toBe(false);
+  /* the old-schema source above and today's schema: TABLES names every column of both */
+  expect(uncopied(await columns(env.MIGRATION_DB))).toEqual([]);
+  expect(uncopied(await columns(env.DB))).toEqual([]);
+  /* and a column added later is caught, not dropped */
+  expect(uncopied([...await columns(env.DB), { tbl: 'users', col: 'shoe_size' }])).toEqual(['users.shoe_size']);
 });

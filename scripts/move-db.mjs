@@ -1,9 +1,9 @@
 #!/usr/bin/env node
-// Copy every account, course, item, quote, study session, Spotify connection and the change feed
+// Copy every account, course, item, quote, study session, achievement, Spotify connection and the change feed
 // from one D1 database into a fresh one built from migrations/0001_schema.sql, then
 // read both back and compare. The source is only read.
 //
-//   node scripts/move-db.mjs --from rounds-v2 --to rounds-v3 [--remote]
+//   node scripts/move-db.mjs --from rounds-v3 --to rounds-v4 [--remote]
 import { spawnSync } from 'node:child_process';
 import { mkdtempSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -20,18 +20,24 @@ if (!from || !to || from === to) {
 }
 
 // Run the local wrangler with this same Node, no shell, and judge by its JSON: on
-// Windows it sometimes trips an assertion while shutting down, after the work is done.
+// Windows it sometimes trips an assertion while shutting down, after the work is done,
+// and now and then before it has printed anything. A read (--command, always a SELECT
+// here) is then run again; the write (--file) never is.
 const wrangler = fileURLToPath(new URL('../node_modules/wrangler/bin/wrangler.js', import.meta.url));
 function d1(db, ...rest) {
-  const result = spawnSync(process.execPath, [wrangler, 'd1', 'execute', db, remote ? '--remote' : '--local', '--json', '-y', ...rest], {
-    cwd: fileURLToPath(new URL('../', import.meta.url)), encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'],
-    timeout: 300_000, maxBuffer: 64 * 1024 * 1024,
-  });
-  try {
-    const rows = JSON.parse(result.stdout.slice(result.stdout.indexOf('[')));
-    if (rows.every((r) => r.success !== false)) return rows;
-  } catch {}
-  throw new Error(`wrangler d1 execute ${db} failed:\n${(result.stderr || result.stdout || '').trim()}`);
+  for (let attempt = 1; ; attempt++) {
+    const result = spawnSync(process.execPath, [wrangler, 'd1', 'execute', db, remote ? '--remote' : '--local', '--json', '-y', ...rest], {
+      cwd: fileURLToPath(new URL('../', import.meta.url)), encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'],
+      timeout: 300_000, maxBuffer: 64 * 1024 * 1024,
+    });
+    try {
+      const rows = JSON.parse(result.stdout.slice(result.stdout.indexOf('[')));
+      if (rows.every((r) => r.success !== false)) return rows;
+    } catch {}
+    if (rest[0] === '--command' && !result.stdout.trim() && attempt < 3) continue;
+    const how = result.error ? result.error.message : result.signal ? `killed by ${result.signal}` : `exit ${result.status}`;
+    throw new Error(`wrangler d1 execute ${db} failed (${how}):\n${(result.stderr || result.stdout || '').trim()}`);
+  }
 }
 
 function dump(db) {

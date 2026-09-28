@@ -4,11 +4,12 @@
 /* What moves, in an order the foreign keys accept. Throttles, request windows,
    OAuth attempts and refresh leases are short-lived, so they start empty. */
 export const TABLES = {
-  users: ['id', 'username', 'password_hash', 'pw_gen', 'display_name', 'coat_name', 'coat_role', 'coat_color', 'theme', 'bg', 'term_start', 'types', 'study_flow', 'created_at', 'updated_at', 'revision'],
-  courses: ['user_id', 'id', 'code', 'name', 'color', 'instructor', 'term', 'archived', 'meetings', 'created_at', 'updated_at', 'deleted_at', 'revision'],
+  users: ['id', 'username', 'password_hash', 'pw_gen', 'display_name', 'coat_name', 'coat_role', 'coat_color', 'theme', 'bg', 'term_start', 'types', 'study_flow', 'feed_gen', 'study_prefs', 'school_calendar', 'leaderboard', 'created_at', 'updated_at', 'revision'],
+  courses: ['user_id', 'id', 'code', 'name', 'color', 'instructor', 'term', 'archived', 'meetings', 'target', 'created_at', 'updated_at', 'deleted_at', 'revision'],
   items: ['user_id', 'id', 'type', 'title', 'course_id', 'date', 'start', 'end', 'location', 'status', 'grade', 'weight', 'notes', 'checklist', 'links', 'recur', 'weekday', 'recur_until', 'dept', 'completed_at', 'created_at', 'updated_at', 'deleted_at', 'revision'],
   quotes: ['user_id', 'id', 'text', 'source', 'created_at', 'updated_at', 'deleted_at', 'revision'],
-  study_sessions: ['user_id', 'id', 'course_id', 'item_id', 'started_at', 'study_minutes', 'rounds_done', 'created_at', 'updated_at', 'deleted_at', 'revision'],
+  study_sessions: ['user_id', 'id', 'course_id', 'item_id', 'started_at', 'study_minutes', 'rounds_done', 'note', 'manual', 'created_at', 'updated_at', 'deleted_at', 'revision'],
+  achievements: ['user_id', 'id', 'name', 'sticker', 'rule', 'course_id', 'item_id', 'target', 'created_at', 'updated_at', 'deleted_at', 'revision'],
   spotify_tokens: ['user_id', 'refresh_token', 'access_token', 'expires_at', 'updated_at'],
   changes: ['seq', 'user_id', 'kind', 'row_id', 'payload', 'deleted_at'],
 };
