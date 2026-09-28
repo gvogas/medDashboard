@@ -56,13 +56,17 @@ const host = (id: string) => document.getElementById(id)!
 const show = (node: React.ReactNode, id = "views") => render(<>{node}</>, { container: host(id) })
 
 describe("the views host", () => {
-    it("shows the chosen view and hides itself for Spotify, Study and the focus screen", () => {
+    it("shows the chosen view or the Spotify page, and hides itself for Study and the focus screen", () => {
         show(<Views />)
         expect(screen.getByRole("region", { name: "Schedule" })).toBeTruthy()
         set({ view: "month" })
         expect(screen.getByRole("region", { name: "Month" })).toBeTruthy()
         set({ view: "table" })
         expect(screen.getByRole("region", { name: "All items" })).toBeTruthy()
+        expect(host("views").classList.contains("own-scroll")).toBe(true)
+        set({ view: "spotify" })
+        expect(screen.getByText("Checking your connection…")).toBeTruthy()      /* Spotify has not answered yet */
+        expect(host("views").hidden).toBe(false)
         expect(host("views").classList.contains("own-scroll")).toBe(true)
         set({ view: "study" })
         expect(host("views").hidden).toBe(true)

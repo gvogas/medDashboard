@@ -1,13 +1,17 @@
-// The Spotify view's markup: rows, the playlist column, the open list and the top bar,
-// drawn from the session cache in spotify-data.js.
+// The legacy Spotify view's markup, beside the focus screen's clock only: rows, the
+// playlist column, the open list and the top bar, drawn from the session cache in
+// spotify-data.js.
 
 import { ui } from '../state.js';
 import { spotifyRetryAt } from '../api.js';
 import { state as player } from '../spotify.js';
 import { state as web } from '../web-player.js';
 import { esc } from '../dom.js';
-import { SPOTIFY_MARK } from './player.js';
 import { cache, busy, note, cooldownMessage } from './spotify-data.js';
+
+export const SPOTIFY_MARK = '<svg class="spot" viewBox="0 0 24 24" aria-hidden="true">'
+  + '<circle cx="12" cy="12" r="12" fill="currentColor"/>'
+  + '<path d="M6.2 9.4c3.9-1.1 8.4-.8 11.7 1.2M6.9 12.5c3.2-.9 6.9-.6 9.7 1M7.5 15.4c2.5-.7 5.3-.5 7.6.8" fill="none" stroke="#fff" stroke-width="1.7" stroke-linecap="round"/></svg>';
 
 export function mmss(ms) {
   const s = Math.round(ms / 1000);
@@ -76,7 +80,7 @@ export function navHtml() {
   const pl = cache.playlists, cur = ui.spotify.pane, id = ui.spotify.playlistId;
   const item = (attrs, on, inner) => '<button class="spl' + (on ? ' on' : '') + '" type="button" ' + attrs + '>' + inner + '</button>';
   let h = '<div class="panel spot-nav"><div class="ph">Your music</div>';
-  h += item('data-spot-pane="home"', cur === 'home', '<span class="ico">◷</span><span class="nm">Recently played</span>');
+  h += item('data-spot-pane="home"', cur === 'home' || cur === 'recent', '<span class="ico">◷</span><span class="nm">Recently played</span>');
   h += item('data-spot-pane="queue"', cur === 'queue', '<span class="ico">≡</span><span class="nm">Queue</span>');
   h += item('data-spot-pl="liked"', cur === 'playlist' && id === 'liked', '<span class="ico">♥</span><span class="nm">Liked Songs</span>');
   h += '<div class="ph sub">Playlists' + (pl ? '<em>' + pl.total + '</em>' : '') + refreshBtn('playlists', 'Refresh playlists') + '</div>';

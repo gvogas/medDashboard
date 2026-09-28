@@ -34,15 +34,17 @@ export async function onKeydown(e) {
     if (e.defaultPrevented) return;   /* a field used it, like the time picker closing its list */
     if (keysOpen()) { closeKeys(); return; }
     if ($('side').classList.contains('on')) { setSide(false); return; }
-    if (ui.view === 'spotify' && spotView.devicesOpen()) { spotView.closeDevices(); return; }
+    if (ui.focus && spotView.devicesOpen()) { spotView.closeDevices(); return; }   /* the Spotify page closes its own */
     /* the sheet takes Escape itself when focus is inside it; this is for when it is not */
     if (getSheet()) { requestCloseSheet(); return; }
     if (ui.focus) leaveFocus();
     return;
   }
   if (shortcut(e)) return;
-  /* The Spotify view: / to search, space to play or pause, when not typing or on a button. */
-  if (ui.view === 'spotify' && !e.ctrlKey && !e.metaKey && !e.altKey && !/^(input|textarea|select|button|a)$/i.test(e.target.tagName)
+  /* The legacy Spotify view beside the focus screen's clock: / to search, space to play or
+     pause, when not typing or on a button. The Spotify page takes these keys itself
+     (components/spotify/spotify-page.tsx) before they get here. */
+  if (ui.focus && ui.view === 'spotify' && !e.ctrlKey && !e.metaKey && !e.altKey && !/^(input|textarea|select|button|a)$/i.test(e.target.tagName)
       && !e.target.isContentEditable && !getSheet()) {
     if (e.key === '/') {
       const box = document.querySelector('[data-spot-q]');
@@ -55,7 +57,7 @@ export async function onKeydown(e) {
       return;
     }
   }
-  if (e.key === '/' && !/input|textarea|select/i.test(e.target.tagName)) {
+  if (e.key === '/' && !e.defaultPrevented && !/input|textarea|select/i.test(e.target.tagName)) {
     e.preventDefault(); $('search')?.focus(); return;   /* the top bar's search box */
   }
 }
