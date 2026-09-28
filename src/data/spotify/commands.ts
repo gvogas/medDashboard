@@ -1,7 +1,6 @@
 // What the music asks Spotify to do: play, queue, shuffle, repeat, devices and volume.
 // Shuffle, repeat and the volume answer the click before Spotify does; the state changes
-// here and whoever draws it follows (React through useSpotify(), the legacy view through
-// onControls).
+// here and whoever draws it follows (React, through useSpotify()).
 
 import { api } from "@/core/api"
 import { state as player, poll, onRoundsIfIdle } from "./player"
@@ -9,16 +8,6 @@ import { state as web } from "./web-player"
 import { cache, rerender, say, explain, load, queueChanged, playFrom } from "./library"
 import { changed } from "./signal"
 import type { Device, Repeat } from "./types"
-
-let legacySync = () => {}
-
-/** The legacy view's one callback for shuffle and repeat changing without a poll. */
-export function onControls(fn: () => void) { legacySync = fn }
-
-function controlsChanged() {
-    legacySync()
-    changed()
-}
 
 /**
  * Play a track, a context, or a track within a list Spotify has no context for
@@ -58,11 +47,11 @@ export async function queueAdd(uri: string): Promise<boolean> {
 export async function toggleShuffle() {
     const was = player.shuffle
     player.shuffle = !was
-    controlsChanged()
+    changed()
     try {
         await api.spotifyShuffle(!was)
         setTimeout(poll, 300)
-    } catch (e) { player.shuffle = was; controlsChanged(); say(explain(e)) }
+    } catch (e) { player.shuffle = was; changed(); say(explain(e)) }
 }
 
 const NEXT_REPEAT: Record<Repeat, Repeat> = { off: "context", context: "track", track: "off" }
@@ -73,11 +62,11 @@ export const nextRepeat = (r: string): Repeat => NEXT_REPEAT[r as Repeat] || "of
 export async function cycleRepeat() {
     const was = player.repeat, next = nextRepeat(was)
     player.repeat = next
-    controlsChanged()
+    changed()
     try {
         await api.spotifyRepeat(next)
         setTimeout(poll, 300)
-    } catch (e) { player.repeat = was; controlsChanged(); say(explain(e)) }
+    } catch (e) { player.repeat = was; changed(); say(explain(e)) }
 }
 
 /** Open the device picker ("Play on"), or close it. */

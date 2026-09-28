@@ -8,19 +8,21 @@ export interface ToastOptions {
     /** A button (Undo, or `label`) that hides the toast and calls this. */
     undo?: (() => void) | null
     label?: string
-    /** Trusted markup from our own code (the achievement medal), shown in front. */
-    badge?: string
+    /** The achievement just earned, shown in front: your sticker, or the medal in its group's colour. */
+    badge?: ToastBadge | null
     error?: boolean
     /** How long it stays, in ms. */
     ms?: number
 }
+
+export interface ToastBadge { sticker?: string | null; group: string; tier: string }
 
 export interface Toast {
     id: number
     text: string
     undo: (() => void) | null
     label: string
-    badge: string
+    badge: ToastBadge | null
     error: boolean
 }
 
@@ -33,7 +35,7 @@ function emit() {
     for (const fn of listeners) fn()
 }
 
-export function toast(text: string, { undo = null, label = "Undo", badge = "", error = false, ms = 6000 }: ToastOptions = {}) {
+export function toast(text: string, { undo = null, label = "Undo", badge = null, error = false, ms = 6000 }: ToastOptions = {}) {
     clearTimeout(timer)
     current = { id: nextId++, text, undo, label, badge, error }
     timer = setTimeout(hideToast, ms)

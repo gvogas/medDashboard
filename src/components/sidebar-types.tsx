@@ -47,7 +47,7 @@ export function TypeList() {
 
     const onKeyDown = (e: KeyboardEvent) => {
         if (e.key !== "Escape" || !editing || e.isDefaultPrevented()) return
-        e.preventDefault()                     // the legacy Escape handler stands aside
+        e.preventDefault()                     // the page's Escape handler (keyboard.ts) stands aside
         leave()
     }
 

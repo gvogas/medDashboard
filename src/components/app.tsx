@@ -2,7 +2,7 @@
 // screen or the app (the sidebar; the content with the ornament, the top bar and the
 // page; the study dock and the focus screen), then the scrim, the sheet, the overlays and
 // the toaster. What is shown, open or inert comes from src/data/ (signin.ts, sidebar.ts,
-// overlay.ts, the ui). The ids and class names are the legacy CSS's and the tests'.
+// overlay.ts, the ui). The ids and class names are styles/shell.css's and the tests'.
 
 import { useLayoutEffect } from "react"
 import { focusAfterSide, useSide } from "@/data/sidebar"

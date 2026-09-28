@@ -13,8 +13,9 @@ import { useBadges } from "@/data/study"
 import { openAchievement } from "@/data/actions"
 import type { Badge } from "@/data/types"
 
-/* Each group's colour, as --g (the ring and tick), --g-soft (the medal) and --g-ink (its words). */
-const TONE: Record<string, string> = {
+/* Each group's colour, as --g (the ring and tick), --g-soft (the medal) and --g-ink (its
+   words). The unlock toast's medal (toaster.tsx) takes it too. */
+export const TONE: Record<string, string> = {
     hours: "[--g:var(--study)] [--g-soft:var(--study-soft)] [--g-ink:var(--study-ink)]",
     streak: "[--g:#E08A3C] [--g-soft:var(--amber-bg)] [--g-ink:var(--amber-ink)] dark:[--g:#E9A25E]",
     days: "[--g:var(--accent)] [--g-soft:var(--accent-soft)] [--g-ink:var(--accent-ink)]",
@@ -24,7 +25,7 @@ const TONE: Record<string, string> = {
     own: "[--g:var(--coat)] [--g-soft:color-mix(in_srgb,var(--coat)_16%,var(--panel))] [--g-ink:color-mix(in_srgb,var(--coat)_70%,var(--ink))]",
 }
 
-/* The unlock toast's See adds .pop to the medal's <li> (showAchievement in study-controller.js). */
+/* The unlock toast's See adds .pop to the medal's <li> (showAchievement in data/study-controller.ts). */
 const POP = "group-[.pop]:motion-safe:animate-[ach-pop_1.4s_ease-out_1]"
 
 export function AchievementsCard({ className }: { className?: string }) {

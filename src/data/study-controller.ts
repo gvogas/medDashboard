@@ -9,7 +9,6 @@ import { normalizePrefs } from "@/core/model"
 import { today } from "@/core/dates"
 import { minutesByDay, streak } from "@/core/history"
 import { achievements, ownAchievements } from "@/core/achievements"
-import { esc } from "@/lib/dom"
 import { launch as fireworks } from "@/lib/fireworks"
 import { notify } from "@/bridge"
 import * as run from "./run"
@@ -108,8 +107,7 @@ export function celebrateAchievements({ quiet = false }: { quiet?: boolean } = {
     if (!fresh.length) return
     const b = fresh[0], more = fresh.length - 1
     toast("Achievement unlocked: " + b.name + (more ? " and " + more + " more" : ""), {
-        badge: b.sticker ? '<img class="stk" src="' + esc(b.sticker) + '" alt="" width="36" height="36">'
-            : '<span class="md g-' + b.group + '" aria-hidden="true">' + esc(b.tier) + "</span>",
+        badge: { sticker: b.sticker, group: b.group, tier: b.tier },
         label: "See", undo: () => showAchievement(b.id), ms: 8000,
     })
     if (studyPrefs().celebrate) fireworks(window.innerWidth / 2, window.innerHeight * 0.7, { rockets: 5 })

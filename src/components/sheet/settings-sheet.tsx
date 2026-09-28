@@ -175,7 +175,7 @@ function YouTab({ profile }: { profile: Profile }) {
                                 "flex cursor-pointer flex-col gap-1 rounded-[10px] border border-border bg-muted p-2 text-left font-[inherit] text-[11px] text-muted-foreground",
                                 bg === id && "border-[var(--accent)] bg-accent",
                             )}>
-                            {/* the art is legacy CSS (a masked SVG), kept until stage 7 */}
+                            {/* the art is a masked SVG, in styles/shell.css */}
                             <span className="bgthumb" data-thumb={id} aria-hidden="true" />
                             <b className={cn("text-[12px]", bg === id ? "text-accent-foreground" : "text-ink-2")}>{label}</b>
                             <span>{text}</span>
@@ -216,7 +216,7 @@ function Coat({ profile }: { profile: Profile }) {
                 <Swatches value={colour} colors={COAT_PALETTE.map((p: { hex: string; name: string }) => ({ ...p, name: p.name + " coat" }))} onChange={(color) => void saveCoat({ color })} />
                 <span className="col-start-2 text-[11px] text-muted-foreground">{colourName(colour)}</span>
             </Fields>
-            {/* the pocket's look is legacy CSS, shared with the sidebar's coat */}
+            {/* the pocket, as the sidebar's coat shows it (styles/shell.css) */}
             <div className="coatpreview">
                 <i className="pen" aria-hidden="true" />
                 {/* the name as the sidebar's pocket shows it */}

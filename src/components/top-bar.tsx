@@ -1,6 +1,6 @@
 // The top bar: the sidebar button on narrow screens, the view's title, ‹ Today › in the
 // week and month views, the view dock, search, sync status, Settings and New item.
-// It renders inside <App>'s <header class="bar">, whose legacy CSS lays it out
+// It renders inside <App>'s <header class="bar">, which styles/shell.css lays out
 // (and hides it on the focus screen).
 
 import { useState, type ReactNode } from "react"

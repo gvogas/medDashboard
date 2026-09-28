@@ -1,23 +1,21 @@
-/* Rounds — every stylesheet, in cascade layers.
-   The legacy CSS is layered below Tailwind's utilities, so a utility on a React element
-   always wins over an old global rule such as button{color:inherit}. Tailwind's reset
-   (preflight) stays off until the legacy CSS is gone. */
+/* Rounds — every stylesheet, in cascade layers: Tailwind's theme and reset (preflight),
+   the page's defaults and the theme's tokens (base), the page's frame (shell,
+   styles/shell.css), what React components share (components), and the utilities, which
+   win over all of them. */
 
-@layer theme, legacy, components, utilities;
+@layer theme, base, shell, components, utilities;
 
 @import "tailwindcss/theme.css" layer(theme);
+@import "tailwindcss/preflight.css" layer(base);
 @import "tailwindcss/utilities.css" layer(utilities) source(none);
 
-@import "./legacy/css/tokens.css" layer(legacy);
-@import "./legacy/css/layout.css" layer(legacy);
-@import "./legacy/css/components.css" layer(legacy);
-@import "./legacy/css/study.css" layer(legacy);
+@import "./styles/tokens.css" layer(base);
+@import "./styles/base.css" layer(base);
+@import "./styles/shell.css" layer(shell);
 
-/* Utilities come only from the React code in src/. Scanning the whole repo (docs,
-   mockups, tests) generated utilities such as .fixed from words in them, and one hit a
-   legacy class of the same name. test/legacy-classes.node.mjs keeps the names apart. */
+/* Utilities come only from the code in src/. Scanning the whole repo (docs, mockups,
+   tests) generated utilities such as .fixed from words in them. */
 @source "./";
-@source not "./legacy";
 
 @custom-variant dark (&:where([data-app="dark"], [data-app="dark"] *));
 
@@ -50,7 +48,7 @@
 }
 
 /* <App>'s containers. #root takes no box, so the page lays out as children of <body>, as
-   the legacy layout expects (.app is 100% of the body's height). #stats: the tiles in a
+   the shell's layout expects (.app is 100% of the body's height). #stats: the tiles in a
    row that wraps; on a phone, one row you swipe along. */
 @layer components {
   #root { display: contents; }

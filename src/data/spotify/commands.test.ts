@@ -31,7 +31,7 @@ describe("shuffle and repeat", () => {
     it("answer the click at once, then send it", async () => {
         const { commands, player, calls, settle } = await fresh()
         const sync = vi.fn()
-        commands.onControls(sync)
+        ;(await import("./signal")).subscribe(sync)
         const p = commands.toggleShuffle()
         expect(player.shuffle).toBe(true)
         expect(sync).toHaveBeenCalledOnce()
@@ -48,12 +48,12 @@ describe("shuffle and repeat", () => {
     it("go back and say why when Spotify refuses", async () => {
         const { commands, library, player, settle } = await fresh(() => json({ error: "premium_required" }, 403))
         const sync = vi.fn()
-        commands.onControls(sync)
+        ;(await import("./signal")).subscribe(sync)
         const p = commands.cycleRepeat()
         await settle()
         await p
         expect(player.repeat).toBe("off")
-        expect(sync).toHaveBeenCalledTimes(2)
+        expect(sync).toHaveBeenCalledTimes(3)   /* the click, going back, and the note */
         expect(library.note).toEqual({ text: "That needs Spotify Premium.", ok: false })
         await vi.advanceTimersByTimeAsync(4000)
         expect(library.note).toBeNull()

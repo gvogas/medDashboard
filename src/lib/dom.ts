@@ -1,9 +1,5 @@
-// Small helpers over the DOM: escaping text for trusted markup, telling whether a control
+// Small helpers over the DOM: telling whether a control
 // takes typed text, and finding a control again after a redraw replaced it.
-
-export function esc(s: unknown): string {
-    return String(s == null ? "" : s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!)
-}
 
 /** The parts of an element isTyping() looks at, so it can be tested without a DOM. */
 type Typed = { tagName?: string; type?: string; isContentEditable?: boolean }

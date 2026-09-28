@@ -1,0 +1,33 @@
+/* Rounds — the page's defaults, after Tailwind's reset (preflight): the body's font and
+   colours, the focus ring, and the scrollbars. In the `base` layer. */
+
+/* ═════════ scrollbars: a capsule running down an IV line ═════════ */
+*{scrollbar-width:thin;scrollbar-color:#CE6D90 var(--scroll-track)}
+::-webkit-scrollbar{width:13px;height:13px;background:transparent}
+::-webkit-scrollbar-track{
+  background-image:linear-gradient(90deg,transparent 0 5px,var(--scroll-track) 5px 8px,transparent 8px 13px);
+  background-color:transparent;
+}
+::-webkit-scrollbar-track:horizontal{
+  background-image:linear-gradient(180deg,transparent 0 5px,var(--scroll-track) 5px 8px,transparent 8px 13px);
+}
+::-webkit-scrollbar-thumb{
+  border:3px solid transparent;background-clip:padding-box;border-radius:999px;
+  background-image:linear-gradient(180deg,#E4749B 0 50%,#17B3AE 50% 100%);
+}
+::-webkit-scrollbar-thumb:horizontal{background-image:linear-gradient(90deg,#E4749B 0 50%,#17B3AE 50% 100%)}
+::-webkit-scrollbar-thumb:hover{border-width:2px}
+::-webkit-scrollbar-corner{background:transparent}
+
+html,body{height:100%}
+body{
+  margin:0; background:var(--bg); color:var(--ink);
+  font-family:"Figtree", ui-sans-serif, system-ui, sans-serif;
+  font-size:14px; line-height:1.5; -webkit-font-smoothing:antialiased; overflow:hidden;
+}
+button{cursor:pointer}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+input[aria-invalid="true"]{border-color:var(--red-ink);outline-color:var(--red-ink)}
+/* a key: the shortcuts panel's (components/overlays.tsx), and the base under the
+   utilities on the others (the search box's /, Settings' ?) */
+kbd{display:inline-block;min-width:22px;padding:2px 6px;border:1px solid var(--line);border-bottom-width:2px;border-radius:6px;background:var(--panel-2);font:600 12px/1.3 "IBM Plex Mono",ui-monospace,monospace;text-align:center;color:var(--ink)}

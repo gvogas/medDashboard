@@ -13,7 +13,7 @@ const GRAVITY = 260              // px/s²
 function ensureCanvas() {
     if (canvas) return
     canvas = document.createElement("canvas")
-    canvas.className = "fx-canvas"
+    canvas.className = "pointer-events-none fixed inset-0 z-[70] h-screen w-screen"
     canvas.setAttribute("aria-hidden", "true")
     document.body.appendChild(canvas)
     ctx = canvas.getContext("2d")

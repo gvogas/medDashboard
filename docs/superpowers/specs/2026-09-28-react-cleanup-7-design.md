@@ -65,11 +65,14 @@ views; dock and focus screen), the scrim, the sheet, the overlays and the toaste
 
 - `src/legacy/css/tokens.css` → `src/styles/tokens.css`, unchanged, as the theme.
 - `layout.css`, `components.css`, `study.css` go. What React still uses from them moves:
-  the page base (body font, scrollbars, focus ring, `.mono`) into `src/index.css`'s base
-  layer; the shell's layout into Tailwind on `<App>`; the coat, pocket, background thumbs
-  and medal colours (art that is awkward as utilities) into `src/styles/art.css` in the
-  components layer. Dead rules (`.panel`, `.ph`, `.empty`, `[data-layout]`, `.info`,
-  `.swatch`, `.fx-canvas` unless used) are dropped.
+  the page base (body font, scrollbars, focus ring, the `kbd` look) into `src/styles/base.css` in the
+  base layer, after preflight; the shell's layout (the coat's weave, the phone rules) and
+  the Settings sheet's art (background thumbs, the pocket preview) into
+  `src/styles/shell.css`, in a `shell` layer where the `legacy` layer was, so nothing
+  changes places in the cascade. (Built that way rather than as utilities on `<App>`: the
+  weave and the phone rules read better as CSS.) The unlock toast's medal becomes React
+  with the Study page's group colours; the fireworks canvas takes utilities. Dead rules (`.panel`, `.ph`, `.empty`, `[data-layout]`, `.info`,
+  `.swatch`, `.btn`, `.seg`, `.pocket`, `.mono`…) are dropped.
 - Tailwind's preflight on; the `legacy` layer removed; `@source not "./legacy"` removed;
   `test/legacy-classes.node.mjs` removed. `test/syntax.node.mjs` checks the service worker only.
 - Preflight zeroes margins, sets `border: 0 solid`, makes images block and buttons

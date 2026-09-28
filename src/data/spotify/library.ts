@@ -382,7 +382,7 @@ function searchMore(kind: string) {
     })
 }
 
-/** The filter inside the open list. The legacy view hides rows itself; React redraws. */
+/** The filter inside the open list. */
 export function setFilter(value: string) {
     place().filter = value
     changed()

@@ -4,7 +4,7 @@ import { showApp, showSignInState } from "@/data/signin"
 import { App } from "./app"
 import { stubMatchMedia } from "./test-media"
 
-// The whole page with nothing signed in and no data: what the legacy CSS and the inert
+// The whole page with nothing signed in and no data: what styles/shell.css and the inert
 // rules rely on is the order of the containers and which of them show.
 stubMatchMedia({ reducedMotion: true })
 

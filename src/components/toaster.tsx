@@ -7,6 +7,7 @@ import { hideToast, runToastAction, useToast, type Toast } from "@/data/toast"
 import { TextureCard } from "@/components/ui/texture-card"
 import { TextureButton } from "@/components/ui/texture-button"
 import { cn } from "@/lib/utils"
+import { TONE } from "@/components/study/achievements"
 
 export function Toaster() {
     const t = useToast()
@@ -36,9 +37,11 @@ function Card({ t }: { t: Toast }) {
             )}
         >
             <TextureCard className="bg-card shadow-[var(--shadow-2)]">
-                <div className={cn("toast-badge flex items-center gap-2 py-1.5 pr-1.5 pl-4 text-sm", t.error ? "text-destructive" : "text-foreground")}>
+                <div className={cn("flex items-center gap-2 py-1.5 pr-1.5 pl-4 text-sm", t.error ? "text-destructive" : "text-foreground")}>
                     {t.error && <span aria-hidden="true" className="size-2 shrink-0 rounded-full bg-destructive" />}
-                    {t.badge && <span className="contents" dangerouslySetInnerHTML={{ __html: t.badge }} />}
+                    {t.badge && (t.badge.sticker
+                        ? <img src={t.badge.sticker} alt="" width={36} height={36} className="-ml-1.5 block size-9 flex-none drop-shadow-[0_2px_3px_rgba(0,0,0,.25)]" />
+                        : <span aria-hidden="true" className={cn("-ml-1.5 grid size-8 flex-none place-items-center rounded-full bg-[var(--g-soft)] text-[10.5px] font-extrabold text-[var(--g-ink)] shadow-[inset_0_0_0_2px_var(--g)]", TONE[t.badge.group])}>{t.badge.tier}</span>)}
                     <span className="flex-1 leading-snug">{t.text}</span>
                     {t.undo && (
                         <TextureButton type="button" variant="minimal" size="sm" className="w-auto shrink-0" onClick={runToastAction}>

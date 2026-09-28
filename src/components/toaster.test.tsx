@@ -29,11 +29,14 @@ describe("the toaster", () => {
         expect(screen.getByText("Restored")).toBeTruthy()
     })
 
-    it("uses the given label, shows a trusted badge, and dismisses with ✕", () => {
+    it("uses the given label, shows the medal or the sticker, and dismisses with ✕", () => {
         render(<Toaster />)
-        act(() => toast("Achievement unlocked: Early bird", { undo: () => {}, label: "See", badge: '<span class="md g-days">I</span>' }))
+        act(() => toast("Achievement unlocked: Early bird", { undo: () => {}, label: "See", badge: { group: "days", tier: "I" } }))
         expect(screen.getByRole("button", { name: "See" })).toBeTruthy()
-        expect(document.querySelector(".md.g-days")?.textContent).toBe("I")
+        expect(screen.getByText("I").getAttribute("aria-hidden")).toBe("true")
+        act(() => toast("Achievement unlocked: Mine", { badge: { sticker: "/s.png", group: "own", tier: "" } }))
+        expect(document.querySelector('img[src="/s.png"]')).toBeTruthy()
+        act(() => toast("Achievement unlocked: Early bird", { undo: () => {}, label: "See", badge: { group: "days", tier: "I" } }))
         expect(screen.getByRole("status").textContent).toContain("Early bird")
         fireEvent.click(screen.getByRole("button", { name: "Dismiss" }))
         expect(screen.queryByText(/Early bird/)).toBeNull()

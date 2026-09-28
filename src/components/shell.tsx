@@ -1,6 +1,6 @@
 // <App>'s containers whose attributes are state: shown or hidden, open, inert. What they
 // hold is passed in, so the tests can draw one with only what they need. The ids and
-// class names are the legacy CSS's and the tests'.
+// class names are styles/shell.css's and the tests'.
 
 import type { MouseEvent, ReactNode } from "react"
 import { useScreen } from "@/data/signin"
