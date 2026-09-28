@@ -22,8 +22,6 @@ vi.mock("@/legacy/js/views/render.js", async () => {
 })
 vi.mock("@/data/sidebar", () => ({ setSide: vi.fn() }))
 vi.mock("@/legacy/js/study-controller.js", () => ({ setView: vi.fn() }))
-vi.mock("@/legacy/js/views/player.js", () => ({ renderPlayer: vi.fn() }))
-vi.mock("@/legacy/js/spotify.js", () => ({ state: { loaded: false } }))
 vi.mock("@/data/actions", async (importOriginal) => ({
     ...(await importOriginal<typeof import("@/data/actions")>()),
     reorderTypes: vi.fn(async () => {}),
@@ -196,6 +194,6 @@ describe("the coat", () => {
         expect(screen.getAllByText("Dr Demo")).toHaveLength(2)             // the pocket and the badge; CSS shows one
         expect(screen.getByText("@demo")).toBeTruthy()
         expect(screen.getByRole("button", { name: "Edit the name on the coat" })).toBeTruthy()
-        expect(document.getElementById("player")?.hidden).toBe(true)
+        expect(screen.queryByRole("region", { name: "Spotify" })).toBeNull()   // the player waits for Spotify's first answer
     })
 })

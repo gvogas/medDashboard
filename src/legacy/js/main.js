@@ -14,7 +14,6 @@ import { flush as flushTyping } from '../../data/item-edit.ts';
 import { openCourse, openSettings } from '../../data/actions.ts';
 import * as spotify from './spotify.js';
 import * as web from './web-player.js';
-import { renderPlayer } from './views/player.js';
 import * as spotView from './views/spotify-view.js';
 import * as focus from './focus.js';
 import { followSystem } from './theme.js';
@@ -42,25 +41,26 @@ document.addEventListener('pointerdown', pointerPressed, true);
 for (const type of ['pointerup', 'pointercancel']) document.addEventListener(type, pointerReleased, true);
 sync.onUnauthenticated(() => showSignIn('Your session has ended. Sign in again.'));
 
-/* ═════════ the Spotify badge on the coat ═════════ */
+/* ═════════ Spotify ═════════ */
+/* The sidebar player and the Spotify page are React (components/spotify/) and redraw
+   through useSpotify(); the legacy view is left only beside the focus screen's clock. */
 spotify.onState((s, kind) => {
-  renderPlayer(s, kind);
   if (kind !== 'state') return;
   if (s.connected) web.start(); else if (s.loaded) web.stop();     /* the tab is a device only while connected */
-  if (ui.view === 'spotify' || ui.focus) spotView.onPlayerState();
+  if (ui.focus) spotView.onPlayerState();
   notify();   /* the top bar shows the device, Settings the connection */
 });
 web.onChange(() => {
-  renderPlayer(spotify.state);
   notify();   /* Settings says whether this tab is a device */
 });
-spotView.onChange(() => { if (ui.view === 'spotify' || ui.focus) renderView(); });   /* the view keeps its own scroll and caret */
+spotView.onChange(() => { if (ui.focus) renderView(); });   /* the view keeps its own scroll and caret */
 spotify.onUnauthenticated(() => showSignIn('Your session has ended. Sign in again.'));
 
 /* ═════════ session ═════════ */
 store.subscribe(onStoreEvent);
 window.addEventListener('storage', onStorage);
 
+/* the focus screen's legacy Spotify search */
 document.addEventListener('submit', (e) => {
   if (!e.target.matches('[data-spot-form]')) return;
   e.preventDefault();
@@ -84,6 +84,8 @@ async function onClick(e) {
   if ((el = e.target.closest('[data-newcourse]'))) { openCourse(null); return; }
   if ((el = e.target.closest('[data-editcourse]'))) { openCourse(el.dataset.editcourse); return; }
   if (await studyClick(e)) return;
+  /* The focus screen's legacy Spotify view (the Spotify page and the sidebar player are
+     React): its controls, then its lists and device list. */
   if ((el = e.target.closest('[data-spotify]'))) {
     const act = el.dataset.spotify;
     if (act !== 'connect') web.activate();          /* inside the click, so the tab may make sound */
@@ -93,7 +95,7 @@ async function onClick(e) {
     else spotify.control(act);
     return;
   }
-  if (spotView.devicesOpen() && !e.target.closest('.spot-devs, [data-spot-devices]')) spotView.closeDevices();
+  if (ui.focus && spotView.devicesOpen() && !e.target.closest('.spot-devs, [data-spot-devices]')) spotView.closeDevices();
   if ((el = e.target.closest('[data-spot-pane]'))) { el.dataset.spotPane === 'queue' ? spotView.openQueue(true) : spotView.openHome(); return; }
   if ((el = e.target.closest('[data-spot-pl]'))) { spotView.openPlaylist(el.dataset.spotPl, el.dataset.spotName); return; }
   if ((el = e.target.closest('[data-spot-album]'))) { spotView.openAlbum(el.dataset.spotAlbum); return; }

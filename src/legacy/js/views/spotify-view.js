@@ -1,14 +1,15 @@
-// The Spotify view: search, playlists, albums, artists, the queue, devices and volume.
-// Data is fetched through the Worker and cached for the session in spotify-data.js; the
-// badge's poller owns "now playing", and this view follows it without redrawing the page.
+// The legacy Spotify view, now drawn only beside the focus screen's clock until the focus
+// screen is React's (the Spotify page is components/spotify/): search, playlists, albums,
+// artists, the queue, devices and volume. Data is fetched through the Worker and cached
+// for the session in spotify-data.js; the poller owns "now playing", and this view follows
+// it without redrawing the page.
 
 import { api } from '../api.js';
 import { ui } from '../state.js';
 import { state as player } from '../spotify.js';
 import { $, setHTML } from '../dom.js';
-import { SPOTIFY_MARK } from './player.js';
 import { cache, busy, due, load, rerender, ensureMe, ensurePlaylists, ensureRecent, openQueue } from './spotify-data.js';
-import { topHtml, navHtml, mainHtml, EQ, mmss, isNow } from './spotify-html.js';
+import { topHtml, navHtml, mainHtml, EQ, mmss, isNow, SPOTIFY_MARK } from './spotify-html.js';
 import { syncVolume, syncControls } from './spotify-commands.js';
 
 /* The loaders and commands live beside this file; main.js and the tests reach them here. */
@@ -57,7 +58,7 @@ export function renderSpotifyView() {
   }
   ensurePlaylists();
   ensureMe();
-  if (ui.spotify.pane === 'home') ensureRecent();
+  if (ui.spotify.pane === 'home' || ui.spotify.pane === 'recent') ensureRecent();
   if (ui.spotify.pane === 'queue' && !cache.queue && !busy.has('queue') && due('queue')) openQueue();
   return '<div class="spot-view">' + topHtml() + '<div class="spot-cols">' + navHtml() + mainHtml() + '</div></div>';
 }
@@ -113,7 +114,7 @@ function markNow(root) {
 /** The poller learned something: update only what depends on it. */
 export function onPlayerState() {
   const root = $('viewRoot');
-  if ((ui.view !== 'spotify' && !ui.focus) || !root) return;
+  if (!ui.focus || !root) return;
   if (!root.querySelector('.spot-view') && player.loaded) { rerender(); return; }   /* was "connecting…" or "not connected" */
   if (!player.connected) { rerender(); return; }
   syncVolume();

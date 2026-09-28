@@ -1,6 +1,6 @@
-// The views still drawn here: Spotify and the focus screen, in #viewRoot, and the Study
-// page's start panel and flow, in the slot the React page leaves for them. The top bar,
-// the stat tiles, the week, month and table and the rest of the Study page are React
+// The views still drawn here: the focus screen, in #viewRoot, and the Study page's start
+// panel and flow, in the slot the React page leaves for them. The top bar, the stat tiles,
+// the week, month and table, the rest of the Study page and the Spotify page are React
 // (src/components/); notify() tells them to redraw.
 
 import { ui } from '../state.js';
@@ -19,12 +19,12 @@ function drawView() {
   $('focusClock').hidden = !focusing;
   /* the Study page is React's, in #views; only its timer slot is drawn here */
   if (!focusing && ui.view === 'study') renderStudyTimer();
-  /* The focus screen is a layout of the page: the study clock beside the Spotify view. */
-  const legacy = focusing || ui.view === 'spotify';
-  root.hidden = !legacy;
-  if (!legacy) { root.replaceChildren(); return; }
-  if (focusing) renderFocus();
-  root.className = 'own-scroll';   /* the Spotify view scrolls its own rows */
+  /* The focus screen is a layout of the page: the study clock beside the legacy Spotify
+     view (until the focus screen is React's; the Spotify page is components/spotify/). */
+  root.hidden = !focusing;
+  if (!focusing) { root.replaceChildren(); return; }
+  renderFocus();
+  root.className = 'own-scroll';   /* the focus screen's music scrolls its own rows */
   root.dataset.view = 'spotify';
   renderSpotifyInto(root);
 }

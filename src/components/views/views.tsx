@@ -1,28 +1,32 @@
-// The week, month, table or Study page, in index.html's #views. Spotify and the focus
-// screen are still drawn by the legacy code into #viewRoot beside it; each container has
-// one owner, and the one not in use is hidden.
+// The week, month, table, Study or Spotify page, in index.html's #views. The focus screen
+// is still drawn by the legacy code into #viewRoot beside it; each container has one owner,
+// and the one not in use is hidden.
 
 import { useEffect } from "react"
 import { useUi } from "@/data/ui"
+import { SpotifyPage } from "@/components/spotify/spotify-page"
 import { WeekView } from "./week"
 import { MonthView } from "./month"
 import { TableView } from "./table"
 import { StudyView } from "@/components/study/study-view"
 
-export function Views() {
-    const view = useUi((u) => (u.focus ? null : u.view === "week" || u.view === "month" || u.view === "table" || u.view === "study" ? u.view : null))
+const OURS = ["week", "month", "table", "study", "spotify"]
 
-    /* the table scrolls its own rows, as #viewRoot's own-scroll did */
+export function Views() {
+    const view = useUi((u) => (u.focus ? null : OURS.includes(u.view) ? u.view : null))
+
+    /* the table and the Spotify page scroll their own rows, as #viewRoot's own-scroll did */
     useEffect(() => {
         const host = document.getElementById("views")
         if (!host) return
         host.hidden = view === null
-        host.classList.toggle("own-scroll", view === "table")
+        host.classList.toggle("own-scroll", view === "table" || view === "spotify")
     }, [view])
 
     if (view === "week") return <WeekView />
     if (view === "month") return <MonthView />
     if (view === "table") return <TableView />
     if (view === "study") return <StudyView />
+    if (view === "spotify") return <SpotifyPage />
     return null
 }
