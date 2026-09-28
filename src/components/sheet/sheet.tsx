@@ -4,20 +4,23 @@
 // src/data/overlay.ts, which also makes the page behind inert while it is open. Escape
 // and the scrim close it, or ask first when the course has unsaved changes.
 
-import { useLayoutEffect, useRef, useState } from "react"
+import { Suspense, useLayoutEffect, useRef, useState } from "react"
 import { cn } from "@/lib/utils"
 import { tmeta } from "@/core/model"
 import { refind } from "@/lib/dom"
 import { requestCloseSheet, useSheet, type SheetState } from "@/data/overlay"
-import { ItemSheet } from "./item-sheet"
-import { CourseSheet } from "./course-sheet"
-import { SettingsSheet } from "./settings-sheet"
-import { ImportSheet } from "./import-sheet"
-import { SchoolSheet } from "./school-sheet"
-import { SessionSheet } from "./session-sheet"
-import { AchievementSheet } from "./achievement-sheet"
+import { lazyNamed } from "@/lib/lazy"
 import * as store from "@/core/store"
 import type { Item } from "@/data/types"
+
+/* Each sheet loads on first use (lib/lazy.ts), and all of them once the browser is idle. */
+const ItemSheet = lazyNamed(() => import("./item-sheet"), "ItemSheet")
+const CourseSheet = lazyNamed(() => import("./course-sheet"), "CourseSheet")
+const SettingsSheet = lazyNamed(() => import("./settings-sheet"), "SettingsSheet")
+const ImportSheet = lazyNamed(() => import("./import-sheet"), "ImportSheet")
+const SchoolSheet = lazyNamed(() => import("./school-sheet"), "SchoolSheet")
+const SessionSheet = lazyNamed(() => import("./session-sheet"), "SessionSheet")
+const AchievementSheet = lazyNamed(() => import("./achievement-sheet"), "AchievementSheet")
 
 /** What the dialog is called: the item's type, "New assignment", "Course". */
 export function sheetLabel(s: Exclude<SheetState, null>): string {
@@ -74,14 +77,16 @@ export function Sheet() {
                 open ? "translate-x-0" : "translate-x-[calc(100%+80px)]",
             )}
         >
-            {shown?.kind === "item" && <ItemSheet key={shown.id} id={shown.id} />}
-            {shown?.kind === "new-item" && <ItemSheet key={shown.draft.id} draft={shown.draft} />}
-            {shown?.kind === "course" && <CourseSheet key={shown.id ?? "new"} id={shown.id} />}
-            {shown?.kind === "settings" && <SettingsSheet tab={shown.tab} focus={shown.focus} />}
-            {shown?.kind === "import" && <ImportSheet key={shown.name} plan={shown.plan} name={shown.name} />}
-            {shown?.kind === "school" && <SchoolSheet draft={shown.draft} />}
-            {shown?.kind === "session" && <SessionSheet key={shown.draft.id} draft={shown.draft} />}
-            {shown?.kind === "achievement" && <AchievementSheet key={shown.draft.id} draft={shown.draft} />}
+            <Suspense fallback={null}>
+                {shown?.kind === "item" && <ItemSheet key={shown.id} id={shown.id} />}
+                {shown?.kind === "new-item" && <ItemSheet key={shown.draft.id} draft={shown.draft} />}
+                {shown?.kind === "course" && <CourseSheet key={shown.id ?? "new"} id={shown.id} />}
+                {shown?.kind === "settings" && <SettingsSheet tab={shown.tab} focus={shown.focus} />}
+                {shown?.kind === "import" && <ImportSheet key={shown.name} plan={shown.plan} name={shown.name} />}
+                {shown?.kind === "school" && <SchoolSheet draft={shown.draft} />}
+                {shown?.kind === "session" && <SessionSheet key={shown.draft.id} draft={shown.draft} />}
+                {shown?.kind === "achievement" && <AchievementSheet key={shown.draft.id} draft={shown.draft} />}
+            </Suspense>
         </div>
     )
 }

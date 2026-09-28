@@ -19,6 +19,7 @@ import { setTheme, setBg } from "./theme"
 import { celebrateStudy, celebrateAchievements, finishDelete, commitUndo } from "./study-controller"
 import { refreshAfterSync } from "./sync-status"
 import { ui } from "./ui"
+import { preloadIdle } from "@/lib/lazy"
 
 function rememberedSession(): ServerProfile | null {
     try { return JSON.parse(localStorage.getItem("rounds.session") || "null") } catch { return null }
@@ -48,6 +49,7 @@ async function start(profile: ServerProfile) {
     sync.init()
     sync.syncNow()
     spotify.start()
+    preloadIdle()                                /* the other pages and the sheets */
     const back = spotifyReturn()
     if (back) { ui.spotifyNote = back; openSettings("spotifyGrp") }
 }
