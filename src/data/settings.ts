@@ -2,7 +2,7 @@
 // tab a deep link opens, the calendar feed's link, a saved copy's values, and the coat
 // colour. From legacy views/drawer-settings.js.
 
-import { DEFAULT_COAT } from "@/legacy/js/model.js"
+import { DEFAULT_COAT } from "@/core/model"
 import type { Profile } from "./types"
 
 export type SettingsTab = "you" | "study" | "spotify" | "account"

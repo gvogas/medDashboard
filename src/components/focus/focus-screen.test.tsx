@@ -2,7 +2,7 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vite
 import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react"
 import { stubMatchMedia } from "@/components/test-media"
 
-// The focus screen over the real study-timer.ts, focus.js and timer.js, and the real
+// The focus screen over the real study-timer.ts, focus.js and core/timer.ts, and the real
 // Spotify engine behind the music pill and panel (with a fake Worker). The store is in
 // memory: the meta store where focus.js keeps the run, the sessions it logs, the profile.
 // Esc goes through the legacy keyboard.js, as on the page.
@@ -14,7 +14,7 @@ const fake = vi.hoisted(() => ({
         profile: null as Record<string, unknown> | null,
     },
 }))
-vi.mock("@/legacy/js/store.js", () => ({
+vi.mock("@/core/store", () => ({
     data: fake.data,
     conflicts: [],
     subscribe: () => () => {},
@@ -36,14 +36,14 @@ vi.mock("@/legacy/js/study-controller.js", () => ({ setView: vi.fn() }))
 vi.mock("@/data/sidebar", () => ({ setSide: vi.fn() }))
 vi.mock("@/data/actions", () => ({ openCourse: vi.fn(), openSettings: vi.fn(), newItem: vi.fn(), goToday: vi.fn(), step: vi.fn() }))
 const api = vi.hoisted(() => ({}) as ReturnType<typeof import("@/components/spotify/test-spotify").fakeApi>)
-vi.mock("@/legacy/js/api.js", async (importOriginal) => ({
-    ...(await importOriginal<typeof import("@/legacy/js/api.js")>()),
+vi.mock("@/core/api", async (importOriginal) => ({
+    ...(await importOriginal<typeof import("@/core/api")>()),
     api,
     spotifyRetryAt: () => 0,
 }))
 
 import * as focus from "@/legacy/js/focus.js"
-import { normalizeCourse, normalizeItem } from "@/legacy/js/model.js"
+import { normalizeCourse, normalizeItem } from "@/core/model"
 import { onKeydown } from "@/legacy/js/keyboard.js"
 import { getStudyBadge, notify } from "@/bridge"
 import { ui } from "@/data/ui"

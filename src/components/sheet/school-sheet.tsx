@@ -3,8 +3,8 @@
 
 import { useEffect, useRef, useState } from "react"
 import { cn } from "@/lib/utils"
-import { DOW, shortDate, today } from "@/legacy/js/dates.js"
-import { KIND_LABELS, normalizeSchool, SCHOOL_KINDS, SCHOOL_LIMITS, weekOf } from "@/legacy/js/school.js"
+import { DOW, shortDate, today } from "@/core/dates"
+import { KIND_LABELS, normalizeSchool, SCHOOL_KINDS, SCHOOL_LIMITS, weekOf } from "@/core/school"
 import { closeSheet, replaceSheet } from "@/data/overlay"
 import { dayOk, footHint, groupDays, moveFrom, saveSchool, termOk, valid, type DayKind, type SchoolDraft, type SpecialDay, type Term } from "@/data/school-edit"
 import { Button, CONTROL, Note, RemoveButton, Section, SheetBody, SheetFoot, SheetHead } from "./fields"

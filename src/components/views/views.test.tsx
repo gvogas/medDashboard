@@ -19,14 +19,14 @@ vi.mock("@/legacy/js/state.js", () => ({ ui: fake.ui }))
 vi.mock("@/legacy/js/query.js", () => ({ schoolCal: () => null }))
 /* the Study page has its own tests (components/study/study.test.tsx) */
 vi.mock("@/components/study/study-view", () => ({ StudyView: () => <p>The Study page</p> }))
-vi.mock("@/legacy/js/store.js", () => ({
+vi.mock("@/core/store", () => ({
     data: fake.data,
     course: (id: string | null) => (fake.data.courses as { id: string }[]).find((c) => c.id === id) || null,
     subscribe: () => () => {},
 }))
 
 import { notify } from "@/bridge"
-import { normalizeCourse, normalizeItem } from "@/legacy/js/model.js"
+import { normalizeCourse, normalizeItem } from "@/core/model"
 import { Views } from "./views"
 import { Stats } from "./stats"
 

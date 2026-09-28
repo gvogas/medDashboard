@@ -5,7 +5,7 @@
 
 import { useEffect, useRef } from "react"
 import { cn } from "@/lib/utils"
-import { addDays, dayMonth, iso, monday } from "@/legacy/js/dates.js"
+import { addDays, dayMonth, iso, monday } from "@/core/dates"
 import { Panel } from "@/components/views/bits"
 import { Button, Segmented } from "@/components/sheet/fields"
 import { joinLeaderboard, lbHours, lbStale, loadLeaderboard, setLbTab, useLeaderboard, type LbRank } from "@/data/leaderboard"

@@ -1,8 +1,8 @@
 // The top bar's title and the line under it, for the view on screen.
 
-import { parse, addDays, monday, iso, DOW, MON } from "@/legacy/js/dates.js"
+import { parse, addDays, monday, iso, DOW, MON } from "@/core/dates"
 import { schoolCal } from "@/legacy/js/query.js"
-import { weekOf } from "@/legacy/js/school.js"
+import { weekOf } from "@/core/school"
 import { weekLabel } from "@/legacy/js/views/school-bits.js"
 import { state as spotify } from "@/data/spotify/player"
 import type { Ui } from "@/data/types"

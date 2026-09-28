@@ -1,7 +1,7 @@
 // The engine's pure parts: when the poller asks again, where a click sends music, what a
 // failure says, and how pages and rows are put together.
 import { afterEach, describe, expect, it, vi } from "vitest"
-import { ApiError } from "@/legacy/js/api.js"
+import { ApiError } from "@/core/api"
 import { nextDelayMs } from "./player"
 import { playTarget } from "./web-player"
 import { appendPage, canOpen, cooldownMessage, explain, findText, matchesFilter, playFrom, withAlbum } from "./library"

@@ -11,7 +11,8 @@ class FakePlayer {
     connect = vi.fn()
     disconnect = vi.fn()
     activateElement = vi.fn()
-    constructor(public options: { name: string; volume: number; getOAuthToken: (give: (t: string) => void) => void }) { FakePlayer.made.push(this) }
+    options: { name: string; volume: number; getOAuthToken: (give: (t: string) => void) => void }
+    constructor(options: FakePlayer["options"]) { this.options = options; FakePlayer.made.push(this) }
     addListener(event: string, fn: Handler) { this.handlers[event] = fn }
 }
 

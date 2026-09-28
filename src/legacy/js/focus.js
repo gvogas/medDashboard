@@ -2,9 +2,9 @@
 // The run record lives in IndexedDB's meta store, so a reload picks it up; only the
 // finished session syncs. Views draw from read(); main.js listens with onTick().
 
-import * as store from './store.js';
-import * as timer from './timer.js';
-import { uid } from './model.js';
+import * as store from '../../core/store.ts';
+import * as timer from '../../core/timer.ts';
+import { uid } from '../../core/model.ts';
 
 const KEY = 'studyRun';
 let run = null;            /* timer.start() plus { id, courseId, itemId } */

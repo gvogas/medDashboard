@@ -5,8 +5,8 @@
 
 import { useMemo, useSyncExternalStore } from "react"
 import { getVersion, notify, subscribe } from "@/bridge"
-import { api } from "@/legacy/js/api.js"
-import { monday } from "@/legacy/js/dates.js"
+import { api } from "@/core/api"
+import { monday } from "@/core/dates"
 import { useStudySessions } from "./store"
 import { ui } from "./ui"
 import type { Leaderboard, LbRow, LbTab, StudySession } from "./types"

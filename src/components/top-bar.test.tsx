@@ -28,7 +28,7 @@ vi.mock("@/legacy/js/state.js", () => ({ ui: fake.ui }))
 vi.mock("@/data/spotify/player", () => ({ state: fake.spotify }))
 vi.mock("@/legacy/js/query.js", () => ({ schoolCal: () => null }))
 vi.mock("@/legacy/js/study-controller.js", () => ({ setView: vi.fn() }))
-vi.mock("@/legacy/js/sync.js", () => ({
+vi.mock("@/core/sync", () => ({
     status: fake.status,
     onStatus: (fn: (s: unknown) => void) => fake.statusListeners.add(fn),
 }))

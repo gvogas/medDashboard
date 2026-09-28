@@ -3,45 +3,49 @@
 // prefs, get every badge back with whether it is earned, the day it was, and how far
 // along a locked one is. Nothing is stored; a badge follows the data it came from.
 
-import { iso, parse, addDays } from './dates.js';
-import { minutesByDay, runs } from './history.js';
-import { isComplete, isTest } from './model.js';
+import { iso } from './dates.ts';
+import { minutesByDay, runs } from './history.ts';
+import { isComplete, isTest } from './model.ts';
+import type { Achievement, Badge, Course, Item, StudyPrefs, StudySession } from './types.ts';
 
-export const GROUPS = [
+type Sessions = Pick<StudySession, 'startedAt' | 'studyMinutes' | 'courseId'>[];
+type Done = Pick<Item, 'id' | 'type' | 'status' | 'grade' | 'date' | 'completedAt' | 'updatedAt'>;
+
+export const GROUPS: [string, string][] = [
   ['hours', 'Study hours'], ['streak', 'Streak'], ['days', 'Big days'],
   ['tasks', 'Tasks done'], ['exams', 'Exams'], ['grades', 'Grades'],
 ];
 
-const HOURS = [[1, 'First hour'], [10, '10 hours'], [25, '25 hours'], [50, '50 hours'], [100, 'Century'], [250, '250 hours']];
-const STREAKS = [[3, '3 in a row'], [7, 'Full week'], [30, 'Month strong'], [100, '100 days']];
-const TASKS = [[1, 'First tick'], [10, '10 done'], [50, '50 done'], [100, '100 done']];
-const EXAMS = [[1, 'First exam'], [5, '5 exams'], [10, '10 exams'], [25, '25 exams']];
-const GRADES = [[80, 'Solid'], [90, 'Top marks'], [100, 'Perfect']];
+const HOURS: [number, string][] = [[1, 'First hour'], [10, '10 hours'], [25, '25 hours'], [50, '50 hours'], [100, 'Century'], [250, '250 hours']];
+const STREAKS: [number, string][] = [[3, '3 in a row'], [7, 'Full week'], [30, 'Month strong'], [100, '100 days']];
+const TASKS: [number, string][] = [[1, 'First tick'], [10, '10 done'], [50, '50 done'], [100, '100 done']];
+const EXAMS: [number, string][] = [[1, 'First exam'], [5, '5 exams'], [10, '10 exams'], [25, '25 exams']];
+const GRADES: [number, string][] = [[80, 'Solid'], [90, 'Top marks'], [100, 'Perfect']];
 const MARATHON = 240;
 
-const r1 = (n) => Math.round(n * 10) / 10;
-const plural = (n, one) => n + ' ' + one + (n === 1 ? '' : 's');
+const r1 = (n: number) => Math.round(n * 10) / 10;
+const plural = (n: number, one: string) => n + ' ' + one + (n === 1 ? '' : 's');
 
 /** The local day an item was finished: when it was marked, else last saved, else its date. */
-const doneDay = (it) => {
+const doneDay = (it: Done): string => {
   const at = it.completedAt ?? it.updatedAt;
   return typeof at === 'number' ? iso(new Date(at)) : it.date;
 };
 
-function badge(group, id, tier, name, blurb, goal, have, earnedOn, progress) {
+function badge(group: string, id: string | number, tier: string, name: string, blurb: string, goal: number, have: number, earnedOn: string | null | undefined, progress: string): Badge {
   return { id: group + '-' + id, group, tier, name, blurb, goal, have, frac: goal ? Math.min(1, Math.max(0, have / goal)) : 0,
     earned: !!earnedOn, earnedOn: earnedOn || null, progress };
 }
 
 /** Days in date order with a running total: the first day the total reaches `min` minutes. */
-function crossedOn(days, min) {
+function crossedOn(days: [string, number][], min: number): string | null {
   let sum = 0;
   for (const [d, m] of days) { sum += m; if (sum >= min) return d; }
   return null;
 }
 
 /** The nth item finished (1-based) in the order they were done: its day, or null. */
-function nthDone(list, n) {
+function nthDone(list: string[], n: number): string | null {
   return list.length >= n ? list[n - 1] : null;
 }
 
@@ -49,12 +53,12 @@ function nthDone(list, n) {
  * Every built-in badge, in group order:
  * {id, group, tier, name, blurb, goal, have, frac, earned, earnedOn, progress}.
  */
-export function achievements(sessions, items, prefs, todayIso) {
+export function achievements(sessions: Sessions, items: Done[], prefs: Pick<StudyPrefs, 'goal' | 'dayMin' | 'rest'>, todayIso: string): Badge[] {
   const byDay = minutesByDay(sessions.filter((s) => s.studyMinutes > 0));
   const days = [...byDay].sort((a, b) => a[0].localeCompare(b[0]));
   const totalMin = days.reduce((a, [, m]) => a + m, 0);
   const best = days.reduce((a, [, m]) => Math.max(a, m), 0);
-  const out = [];
+  const out: Badge[] = [];
 
   const hours = r1(totalMin / 60);
   for (const [h, name] of HOURS) {
@@ -91,7 +95,7 @@ export function achievements(sessions, items, prefs, todayIso) {
       n, exams.length, nthDone(exams, n), exams.length + ' / ' + n));
   }
 
-  const graded = done.filter((d) => isTest(d.it.type) && d.it.status === 'graded' && typeof d.it.grade === 'number');
+  const graded = done.filter((d): d is { it: Done & { grade: number }; day: string } => isTest(d.it.type) && d.it.status === 'graded' && typeof d.it.grade === 'number');
   const top = graded.reduce((a, d) => Math.max(a, d.it.grade), 0);
   for (const [g, name] of GRADES) {
     out.push(badge('grades', g, g === 100 ? '100' : g + '+', name, 'Score ' + (g === 100 ? '100' : g + ' or more') + ' on an exam or quiz',
@@ -101,7 +105,7 @@ export function achievements(sessions, items, prefs, todayIso) {
 }
 
 /** The locked badges closest to done, grades and an unset goal left out. */
-export function nextUp(list, n = 3) {
+export function nextUp(list: Badge[], n = 3): Badge[] {
   return list.filter((b) => !b.earned && b.group !== 'grades' && b.goal > 0)
     .sort((a, b) => b.frac - a.frac).slice(0, n);
 }
@@ -112,16 +116,16 @@ export function nextUp(list, n = 3) {
  * day they did. Grade: the exam or quiz is graded target or more, dated when it was.
  * A course or item that is gone leaves it locked.
  */
-export function ownAchievements(own, sessions, items, courses = []) {
+export function ownAchievements(own: Achievement[], sessions: Sessions, items: Done[], courses: Pick<Course, 'id'>[] = []): Badge[] {
   return own.map((a) => {
     const base = { sticker: a.sticker, rule: a.rule, courseId: a.courseId, itemId: a.itemId };
-    const make = (have, earnedOn, progress) => ({
+    const make = (have: number, earnedOn: string | null, progress: string): Badge => ({
       ...badge('own', a.id, '', a.name, '', a.target, have, earnedOn, progress), id: 'own-' + a.id, ownId: a.id, ...base });
     if (a.rule === 'grade') {
       const it = items.find((x) => x.id === a.itemId);
       if (!it) return make(0, null, 'Exam removed');
       const graded = it.status === 'graded' && typeof it.grade === 'number';
-      const have = graded ? it.grade : 0;
+      const have = graded ? it.grade as number : 0;
       return make(have, graded && have >= a.target ? doneDay(it) : null,
         graded ? 'Got ' + r1(have) + ', need ' + a.target : 'Not graded yet');
     }

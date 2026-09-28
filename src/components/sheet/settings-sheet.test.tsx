@@ -31,7 +31,7 @@ const api = vi.hoisted(() => ({
 }))
 const legacy = vi.hoisted(() => ({ setTheme: vi.fn(), setBg: vi.fn(), savePrefs: vi.fn(), runReviews: vi.fn(), writeSetting: vi.fn(), saveRows: vi.fn(), saveProfile: vi.fn(), render: vi.fn() }))
 
-vi.mock("@/legacy/js/store.js", () => ({
+vi.mock("@/core/store", () => ({
     data: fake.data, conflicts: fake.conflicts,
     course: () => null, item: () => null,
     saveRows: legacy.saveRows, saveProfile: legacy.saveProfile,
@@ -39,11 +39,11 @@ vi.mock("@/legacy/js/store.js", () => ({
 }))
 vi.mock("@/legacy/js/state.js", () => ({ ui: fake.ui }))
 vi.mock("@/legacy/js/query.js", () => ({ schoolCal: () => null, termStart: () => null }))
-vi.mock("@/legacy/js/sync.js", () => ({ status: { state: "idle", pending: 0, message: "", lastPull: null }, onStatus: () => {} }))
+vi.mock("@/core/sync", () => ({ status: { state: "idle", pending: 0, message: "", lastPull: null }, onStatus: () => {} }))
 vi.mock("@/data/spotify/player", () => ({ state: fake.spotify }))
 vi.mock("@/data/spotify/web-player", () => ({ state: { status: "ready" } }))
-vi.mock("@/legacy/js/api.js", () => ({ api, spotifyRetryAt: () => 0 }))
-vi.mock("@/legacy/js/reviews.js", () => ({ readSetting: () => fake.review, writeSetting: legacy.writeSetting, nextReview: () => null }))
+vi.mock("@/core/api", () => ({ api, spotifyRetryAt: () => 0 }))
+vi.mock("@/core/reviews", () => ({ readSetting: () => fake.review, writeSetting: legacy.writeSetting, nextReview: () => null }))
 vi.mock("@/legacy/js/sync-status.js", () => ({ runReviews: legacy.runReviews }))
 vi.mock("@/legacy/js/study-controller.js", () => ({ savePrefs: legacy.savePrefs }))
 vi.mock("@/legacy/js/theme.js", () => ({ setTheme: legacy.setTheme, setBg: legacy.setBg }))

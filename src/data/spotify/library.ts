@@ -2,14 +2,14 @@
 // loads, pane changes and search that fill that cache. The open place is `ui.spotify` in
 // the legacy state, shared by the legacy view, the focus panel and the Spotify page.
 
-import { api, ApiError, retryDelayMs, spotifyRetryAt } from "@/legacy/js/api.js"
+import { api, ApiError, retryDelayMs, spotifyRetryAt } from "@/core/api"
 import { ui as legacyUi } from "@/legacy/js/state.js"
 import { changed } from "./signal"
 import type { Album, Artist, Device, Page, Playlist, SearchKind, SearchResults, SpotifyNote, SpotifyPlace, Track } from "./types"
 
 const place = () => (legacyUi as unknown as { spotify: SpotifyPlace }).spotify
-/* api.js is plain JavaScript: say what its search takes, a kind and an offset for the next page of one kind */
-const searchPage = (q: string, type: string | null = null, offset: number | null = 0): Promise<Omit<SearchResults, "q">> => api.spotifySearch(q, type as null, offset as number)
+/* A search, or the next page of one kind: the kind, and the offset it starts from */
+const searchPage = (q: string, type: string | null = null, offset: number | null = 0): Promise<Omit<SearchResults, "q">> => api.spotifySearch(q, type, offset)
 
 export interface Cache {
     /* the Spotify account, to tell its playlists from others' */
@@ -80,7 +80,7 @@ const MESSAGES: Record<string, string> = {
 export function explain(e: unknown): string {
     if (!(e instanceof ApiError)) return MESSAGES.offline
     if (e.status === 429) return cooldownMessage(spotifyRetryAt() || Date.now() + retryDelayMs(e))
-    return MESSAGES[e.body?.error] || MESSAGES.spotify_unavailable
+    return MESSAGES[e.body?.error as string] || MESSAGES.spotify_unavailable
 }
 
 export function cooldownMessage(until: number) {

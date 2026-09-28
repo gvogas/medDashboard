@@ -4,7 +4,7 @@
 
 import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent } from "react"
 import { Reorder, useDragControls } from "framer-motion"
-import { TYPE_KINDS } from "@/legacy/js/model.js"
+import { TYPE_KINDS } from "@/core/model"
 import { useItems, useProfile } from "@/data/store"
 import { useUi } from "@/data/ui"
 import {

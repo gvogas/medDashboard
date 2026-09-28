@@ -1,12 +1,12 @@
 // The school calendar: read from a PDF with AI, checked and fixed in the school sheet
-// (semesters and special days), saved on the profile. legacy/js/school.js says what each
+// (semesters and special days), saved on the profile. core/school.ts says what each
 // day is. From legacy views/drawer-school.js.
 
-import * as store from "@/legacy/js/store.js"
-import { today } from "@/legacy/js/dates.js"
-import { normalizeSchool, validDate } from "@/legacy/js/school.js"
+import * as store from "@/core/store"
+import { today } from "@/core/dates"
+import { normalizeSchool, validDate } from "@/core/school"
 import { schoolCal } from "@/legacy/js/query.js"
-import { api } from "@/legacy/js/api.js"
+import { api } from "@/core/api"
 import { readWithAi } from "./ai-read"
 import { render } from "@/legacy/js/views/render.js"
 import { toast } from "./toast"

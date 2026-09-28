@@ -15,7 +15,7 @@ const fake = vi.hoisted(() => {
     }
     return { data, listeners, put, ui: { bg: "med", view: "study", course: "all", search: "", types: {}, study: { courseId: null, itemId: null } } }
 })
-vi.mock("@/legacy/js/store.js", () => ({
+vi.mock("@/core/store", () => ({
     data: fake.data,
     item: (id: string) => fake.data.items.find((x) => x.id === id) || null,
     course: () => null,
@@ -25,13 +25,13 @@ vi.mock("@/legacy/js/store.js", () => ({
     subscribe: (fn: (e: { type: string }) => void) => { fake.listeners.add(fn); return () => fake.listeners.delete(fn) },
 }))
 vi.mock("@/legacy/js/state.js", () => ({ ui: fake.ui, rememberUi: vi.fn() }))
-vi.mock("@/legacy/js/sync.js", () => ({ status: { state: "idle", pending: 0, message: "" }, onStatus: () => {}, syncNow: vi.fn() }))
+vi.mock("@/core/sync", () => ({ status: { state: "idle", pending: 0, message: "" }, onStatus: () => {}, syncNow: vi.fn() }))
 vi.mock("@/legacy/js/views/render.js", () => ({ render: vi.fn(), renderView: vi.fn() }))
 vi.mock("@/legacy/js/study-controller.js", () => ({ deleteWithUndo: vi.fn(), deleteLater: vi.fn(), setView: vi.fn() }))
 vi.mock("@/legacy/js/fireworks.js", () => ({ launch: vi.fn() }))
-vi.mock("@/legacy/js/api.js", () => ({ api: {}, spotifyRetryAt: () => 0 }))
+vi.mock("@/core/api", () => ({ api: {}, spotifyRetryAt: () => 0 }))
 vi.mock("@/data/ai-read", () => ({ readWithAi: vi.fn() }))
-vi.mock("@/legacy/js/sticker.js", () => ({
+vi.mock("@/core/sticker", () => ({
     readPicture: vi.fn(async (file: File) => (file.name.endsWith(".heic") ? null : { width: 400, height: 300 })),
     drawSticker: vi.fn(),
     dragCrop: vi.fn((crop: { x: number }, _pic: unknown, dx: number) => ({ ...crop, x: crop.x + dx / 100 })),
@@ -44,10 +44,10 @@ vi.mock("@/data/spotify/player", () => ({ state: { loaded: true, connected: fals
 vi.mock("@/data/spotify/web-player", () => ({ state: { status: "off" } }))
 vi.mock("@/legacy/js/sync-status.js", () => ({ runReviews: vi.fn() }))
 
-import * as store from "@/legacy/js/store.js"
-import * as sticker from "@/legacy/js/sticker.js"
+import * as store from "@/core/store"
+import * as sticker from "@/core/sticker"
 import { deleteLater, deleteWithUndo } from "@/legacy/js/study-controller.js"
-import { normalizeCourse, normalizeItem } from "@/legacy/js/model.js"
+import { normalizeCourse, normalizeItem } from "@/core/model"
 import { toast } from "@/data/toast"
 import { closeSheet, getSheet } from "@/data/overlay"
 import { openAchievement, openSession } from "@/data/actions"

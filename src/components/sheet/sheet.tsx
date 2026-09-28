@@ -6,7 +6,7 @@
 
 import { useEffect, useLayoutEffect, useRef, useState } from "react"
 import { cn } from "@/lib/utils"
-import { tmeta } from "@/legacy/js/model.js"
+import { tmeta } from "@/core/model"
 import { refind } from "@/legacy/js/dom.js"
 import { requestCloseSheet, useSheet, type SheetState } from "@/data/overlay"
 import { ItemSheet } from "./item-sheet"
@@ -16,7 +16,7 @@ import { ImportSheet } from "./import-sheet"
 import { SchoolSheet } from "./school-sheet"
 import { SessionSheet } from "./session-sheet"
 import { AchievementSheet } from "./achievement-sheet"
-import * as store from "@/legacy/js/store.js"
+import * as store from "@/core/store"
 import type { Item } from "@/data/types"
 
 /** What the dialog is called: the item's type, "New assignment", "Course". */

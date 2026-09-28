@@ -7,7 +7,7 @@ const fake = vi.hoisted(() => ({
     profile: [] as unknown[],
     cal: null as unknown,
 }))
-vi.mock("@/legacy/js/store.js", () => ({
+vi.mock("@/core/store", () => ({
     data: fake.data,
     course: (id: string) => fake.data.courses.find((c) => c.id === id) || null,
     saveRows: vi.fn(async (rows: typeof fake.rows) => { fake.rows.push(...rows) }),
@@ -17,9 +17,9 @@ vi.mock("@/legacy/js/store.js", () => ({
 vi.mock("@/legacy/js/query.js", () => ({ schoolCal: () => fake.cal, termStart: () => fake.data.profile?.termStart ?? null }))
 vi.mock("@/data/ai-read", () => ({ readWithAi: vi.fn() }))
 vi.mock("@/legacy/js/views/render.js", () => ({ render: vi.fn() }))
-vi.mock("@/legacy/js/api.js", () => ({ api: {} }))
+vi.mock("@/core/api", () => ({ api: {} }))
 
-import { normalizeCourse } from "@/legacy/js/model.js"
+import { normalizeCourse } from "@/core/model"
 import { feedLink, hm, savedValues, syncLine, TAB_OF, themeLabel, toggleRest } from "./settings"
 import { commitImport, importCount, type ImportPlan } from "./import-edit"
 import { dayOk, footHint, groupDays, moveFrom, toSave, valid, type SchoolDraft } from "./school-edit"

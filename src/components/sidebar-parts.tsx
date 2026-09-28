@@ -2,7 +2,7 @@
 // colour pip and count chip, and what counts as an open item.
 
 import type { ReactNode } from "react"
-import { isOpen } from "@/legacy/js/model.js"
+import { isOpen } from "@/core/model"
 import { cn } from "@/lib/utils"
 import type { Item } from "@/data/types"
 

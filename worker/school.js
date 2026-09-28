@@ -7,7 +7,7 @@
 
 import { HttpError } from './http.js';
 import { DAYS, dayIndex, modelJson, askModel } from './outline.js';
-import { normalizeSchool, SCHOOL_KINDS } from '../src/legacy/js/school.js';
+import { normalizeSchool, SCHOOL_KINDS } from '../src/core/school.ts';
 
 const SCHEMA = {
   type: 'object',

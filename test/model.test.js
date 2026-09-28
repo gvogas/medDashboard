@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { normalizeItem, normalizeCourse, normalizeAchievement, shiftEnd } from '../src/legacy/js/model.js';
+import { normalizeItem, normalizeCourse, normalizeAchievement, shiftEnd } from '../src/core/model.ts';
 import { validateItem, validateCourse } from '../worker/validate.js';
 
 describe('normalizeItem keeps times and dates the server accepts', () => {

@@ -4,11 +4,11 @@ import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest
 const fake = vi.hoisted(() => ({
     ui: { hist: { weekOffset: 0, tab: "week", monthOffset: 0, focusDay: null as string | null, undo: null as unknown } },
 }))
-vi.mock("@/legacy/js/store.js", () => ({ data: { items: [], courses: [], quotes: [], study_sessions: [], achievements: [], profile: null }, subscribe: () => () => {} }))
+vi.mock("@/core/store", () => ({ data: { items: [], courses: [], quotes: [], study_sessions: [], achievements: [], profile: null }, subscribe: () => () => {} }))
 vi.mock("@/legacy/js/state.js", () => ({ ui: fake.ui }))
 vi.mock("@/legacy/js/query.js", () => ({ termStart: () => null, schoolCal: () => null }))
 
-import { normalizeItem, normalizePrefs } from "@/legacy/js/model.js"
+import { normalizeItem, normalizePrefs } from "@/core/model"
 import { badges, monthOf, pickDay, rangeLabel, setHistTab, shownSessions, stepHist, studyTiles, termOf, undoSessionDelete, weekOf } from "./study"
 import type { Achievement, Item, StudyPrefs, StudySession } from "./types"
 

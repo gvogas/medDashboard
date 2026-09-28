@@ -5,9 +5,9 @@ const fake = vi.hoisted(() => ({
     ui: { lb: null as unknown, lbTab: "week" },
     api: { leaderboard: vi.fn(), leaderboardJoin: vi.fn() },
 }))
-vi.mock("@/legacy/js/store.js", () => ({ data: { study_sessions: [] }, subscribe: () => () => {} }))
+vi.mock("@/core/store", () => ({ data: { study_sessions: [] }, subscribe: () => () => {} }))
 vi.mock("@/legacy/js/state.js", () => ({ ui: fake.ui }))
-vi.mock("@/legacy/js/api.js", () => ({ api: fake.api }))
+vi.mock("@/core/api", () => ({ api: fake.api }))
 
 import { joinLeaderboard, lbHours, lbRows, lbStale, loadLeaderboard, setLbTab, weekStart, LOAD_ERROR, SAVE_ERROR } from "./leaderboard"
 import type { Leaderboard, StudySession } from "./types"

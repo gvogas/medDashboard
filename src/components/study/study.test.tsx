@@ -21,18 +21,18 @@ const fake = vi.hoisted(() => ({
 const actions = vi.hoisted(() => ({ openSession: vi.fn(), deleteSession: vi.fn(), openAchievement: vi.fn(), openSettings: vi.fn() }))
 vi.mock("@/data/actions", () => actions)
 vi.mock("@/legacy/js/state.js", () => ({ ui: fake.ui }))
-vi.mock("@/legacy/js/store.js", () => ({
+vi.mock("@/core/store", () => ({
     data: fake.data,
     course: (id: string | null) => fake.data.courses.find((c) => c.id === id) || null,
     item: (id: string | null) => (fake.data.items as { id: string }[]).find((c) => c.id === id) || null,
     subscribe: () => () => {},
 }))
 vi.mock("@/legacy/js/query.js", () => ({ termStart: () => fake.termStart, schoolCal: () => null }))
-vi.mock("@/legacy/js/api.js", () => ({ api: fake.api }))
+vi.mock("@/core/api", () => ({ api: fake.api }))
 vi.mock("@/legacy/js/views/render.js", () => ({ render: vi.fn(), renderView: vi.fn() }))
 
 import { notify } from "@/bridge"
-import { normalizeCourse, normalizeItem } from "@/legacy/js/model.js"
+import { normalizeCourse, normalizeItem } from "@/core/model"
 import { Views } from "@/components/views/views"
 import type { StudySession } from "@/data/types"
 

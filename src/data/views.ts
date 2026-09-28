@@ -4,16 +4,15 @@
 
 import { useMemo, useSyncExternalStore } from "react"
 import { getVersion, subscribe } from "@/bridge"
-import { isOpen, isOverdue, isTest, normalizePrefs, occurrences, statusLabel, tmeta } from "@/legacy/js/model.js"
-import { addDays, diffDays, dur, iso, monday, parse, today as todayIso, DOW, MON } from "@/legacy/js/dates.js"
-import { classWeekday, dayInfo, weekOf } from "@/legacy/js/school.js"
+import { isOpen, isOverdue, isTest, normalizePrefs, occurrences, statusLabel, tmeta } from "@/core/model"
+import { addDays, diffDays, dur, iso, monday, parse, today as todayIso, DOW, MON } from "@/core/dates"
+import { classWeekday, dayInfo, weekOf } from "@/core/school"
+import type { SchoolCalendar } from "@/core/school"
 import { weekLabel } from "@/legacy/js/views/school-bits.js"
 import { schoolCal } from "@/legacy/js/query.js"
-import { minutesByDay, streak } from "@/legacy/js/history.js"
+import { minutesByDay, streak } from "@/core/history"
 
-/* history.js is untyped JS; its defaults make TypeScript read `rest` as never[]. */
-const streakOf = streak as unknown as (byDay: Map<string, number>, today: string, rules: { dayMin: number; rest: number[] }) => { current: number }
-import { prepPace } from "@/legacy/js/prep.js"
+import { prepPace } from "@/core/prep"
 import { useCourses, useItems, useProfile, useQuotes, useStudySessions } from "./store"
 import { ui } from "./ui"
 import type { Course, Item, Meeting, Quote, Schedule, SortKey, StudySession } from "./types"
@@ -81,9 +80,9 @@ const byWeekday = (list: ClassSlot[]) => {
 
 /* ── the school calendar ── */
 
-/** A day as the school calendar sees it (legacy school.js dayInfo). */
+/** A day as the school calendar sees it (dayInfo in core/school.ts). */
 export interface DayInfo { kind: "class" | "swap" | "off" | "break" | "exams" | "none"; label: string; notes: string[]; follows?: number }
-export type SchoolCal = object | null
+export type SchoolCal = SchoolCalendar | null
 
 const infoOf = (cal: SchoolCal, date: string): DayInfo | null => (cal ? (dayInfo(cal, date) as DayInfo) : null)
 /** The kind a day is tinted by: off, break, exams or none; null for an ordinary day. */
@@ -309,7 +308,7 @@ export function stats(items: Item[], sessions: StudySession[], studyPrefs: unkno
         daysTo: nextExam ? diffDays(today, nextExam.date) : null,
         prep: nextExam ? prepPace(nextExam, today) : null,
         openAssignments, dueThisWeek, overdue,
-        study: { minutes: byDay.get(today) || 0, goal: p.goal, streak: streakOf(byDay, today, p).current },
+        study: { minutes: byDay.get(today) || 0, goal: p.goal, streak: streak(byDay, today, p).current },
     }
 }
 

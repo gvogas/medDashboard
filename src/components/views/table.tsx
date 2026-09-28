@@ -2,9 +2,9 @@
 // scrolls on its own; on a phone each row becomes a small card.
 
 import { cn } from "@/lib/utils"
-import { isComplete } from "@/legacy/js/model.js"
-import { hhmm, parse, DOW, MON } from "@/legacy/js/dates.js"
-import { course as courseOf } from "@/legacy/js/store.js"
+import { isComplete } from "@/core/model"
+import { hhmm, parse, DOW, MON } from "@/core/dates"
+import { course as courseOf } from "@/core/store"
 import { useTable } from "@/data/views"
 import { openItem, sortTable } from "@/data/actions"
 import type { Course, Item, SortKey } from "@/data/types"

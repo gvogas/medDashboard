@@ -1,15 +1,21 @@
 // One sync cycle per account across tabs. Every uploaded operation is persisted.
-import { api, ApiError, retryDelayMs } from './api.js';
-import * as store from './store.js';
-import { untouchedReview } from './reviews.js';
-export const status = { state: 'idle', pending: 0, lastPull: null, message: '' };
-const listeners = new Set();
-let initialized = false, paused = false, running = null, controller = null, timer;
-let signedOut = () => {}, pulled = () => {};
-export const onStatus = (fn) => listeners.add(fn);
-export const onPulled = (fn) => { pulled = fn; };
-export const onUnauthenticated = (fn) => { signedOut = fn; };
-function state(value, message = '') {
+import { api, ApiError, retryDelayMs } from './api.ts';
+import * as store from './store.ts';
+import { untouchedReview } from './reviews.ts';
+import type { PendingOp, Row } from './db.ts';
+import type { ServerProfile } from './store.ts';
+import type { SyncState, SyncStatus } from './types.ts';
+
+/** One sync cycle: its cancel signal, the account it is for, and the edits it held back. */
+interface Cycle { signal: AbortSignal; account: string; failed: PendingOp[] }
+export const status: SyncStatus & { lastPull: number | null } = { state: 'idle', pending: 0, lastPull: null, message: '' };
+const listeners = new Set<(s: typeof status) => void>();
+let initialized = false, paused = false, running: Promise<boolean> | null = null, controller: AbortController | null = null, timer: ReturnType<typeof setTimeout> | undefined;
+let signedOut: () => void = () => {}, pulled: () => unknown = () => {};
+export const onStatus = (fn: (s: typeof status) => void) => listeners.add(fn);
+export const onPulled = (fn: () => unknown): void => { pulled = fn; };
+export const onUnauthenticated = (fn: () => void): void => { signedOut = fn; };
+function state(value: SyncState, message = '') {
   Object.assign(status, { state: value, message, pending: store.pendingCount() });
   for (const fn of listeners) fn(status);
 }
@@ -18,7 +24,7 @@ function schedule(ms = 600) {
   clearTimeout(timer);
   timer = setTimeout(syncNow, ms);
 }
-export function init() {
+export function init(): void {
   paused = false;
   schedule(0);
   if (initialized) return;
@@ -33,9 +39,9 @@ export function init() {
   window.addEventListener('offline', () => { if (!paused) state('offline'); });
   setInterval(() => { if (document.visibilityState === 'visible') syncNow(); }, 300000);
 }
-export function stop() { paused = true; clearTimeout(timer); controller?.abort(); }
-export async function drain() { await running; }
-const active = (cycle) => !paused && !cycle.signal.aborted && store.data.profile?.id === cycle.account;
+export function stop(): void { paused = true; clearTimeout(timer); controller?.abort(); }
+export async function drain(): Promise<void> { await running; }
+const active = (cycle: Cycle) => !paused && !cycle.signal.aborted && store.data.profile?.id === cycle.account;
 /* Answers that end the cycle: the next one retries every edit. Any other failure holds
    back only its own edit, so one edit the server keeps failing on cannot stop the rest
    from uploading, nor this device from downloading. */
@@ -43,8 +49,8 @@ const STOPS = [401, 408, 428, 429, 503];
 /* An edit that failed this many cycles, each with a working download (so the server was
    up), is set aside with the saved copies. */
 const MAX_TRIES = 3;
-const tries = new Map();   /* op token → cycles it failed in */
-async function serverCopy(op, e) {
+const tries = new Map<string, number>();   /* op token → cycles it failed in */
+async function serverCopy(op: PendingOp, e?: { body?: ApiError['body'] }): Promise<Row | null | undefined> {
   if (e?.body?.current !== undefined) return e.body.current;
   try {
     const [kind, id] = op.key.split(/:(.*)/s);
@@ -54,7 +60,7 @@ async function serverCopy(op, e) {
     return null;
   }
 }
-async function pushAll(cycle) {
+async function pushAll(cycle: Cycle): Promise<boolean> {
   const operations = await store.pending();
   // New courses before items; course deletion after pending item writes.
   operations.sort((a, b) => rank(a) - rank(b));
@@ -62,7 +68,7 @@ async function pushAll(cycle) {
     if (!active(cycle)) return false;
     try {
       if (op.reviewRequired) throw new ApiError(409, { error: 'legacy_edit' });
-      let saved;
+      let saved: Row | undefined;
       if (op.key === 'profile') saved = await api.saveMe({ ...op.body, revision: op.revision });
       else {
         const [kind, id] = op.key.split(/:(.*)/s);
@@ -92,7 +98,7 @@ async function pushAll(cycle) {
   return active(cycle);
 }
 /** Count a failed cycle against each held-back edit; set aside those out of tries. */
-async function holdBack(cycle) {
+async function holdBack(cycle: Cycle): Promise<void> {
   for (const op of cycle.failed) {
     const n = (tries.get(op.token) || 0) + 1;
     if (n < MAX_TRIES) { tries.set(op.token, n); continue; }
@@ -102,9 +108,9 @@ async function holdBack(cycle) {
     await store.rejectOperation(op, current, 'The server kept failing to save this edit.');
   }
 }
-function rank(op) { return op.key.startsWith('courses:') ? (op.op === 'put' ? 0 : 3) : 1; }
-async function pullAll(cycle) {
-  let cursor = (await store.meta.get('syncCursor')) || 0;
+function rank(op: PendingOp): number { return op.key.startsWith('courses:') ? (op.op === 'put' ? 0 : 3) : 1; }
+async function pullAll(cycle: Cycle): Promise<boolean> {
+  let cursor = (await store.meta.get('syncCursor') as number | undefined) || 0;
   let reset = cursor === 0;
   let complete = false;
   // Bound resets as well as ordinary pages, then yield the account's sync lock.
@@ -125,12 +131,12 @@ async function pullAll(cycle) {
   Promise.resolve().then(pulled).catch(() => {});   /* a failed save shows its own toast */
   return complete;
 }
-export async function syncNow() {
+export async function syncNow(): Promise<boolean> {
   if (paused || !store.data.profile) return false;
   if (running) return running;
   clearTimeout(timer);
   controller = new AbortController();
-  const cycle = { signal: controller.signal, account: store.data.profile.id, failed: [] };
+  const cycle: Cycle = { signal: controller.signal, account: store.data.profile.id, failed: [] };
   running = (async () => {
     try {
       return await store.withSyncLock(async () => {
@@ -156,7 +162,7 @@ export async function syncNow() {
       if (!active(cycle)) return false;
       if (e instanceof ApiError && e.status === 401) { stop(); state('signed-out'); signedOut(); }
       else if (e instanceof ApiError && e.status === 428) { state('error', 'Reload Rounds to finish the update. Your edits are saved.'); }
-      else { state(e instanceof ApiError ? 'error' : 'offline', e.message); schedule(retryDelayMs(e)); }
+      else { state(e instanceof ApiError ? 'error' : 'offline', (e as Error).message); schedule(retryDelayMs(e)); }
       return false;
     }
   })();
@@ -170,11 +176,11 @@ export async function syncNow() {
    everywhere, a reset password) never shows its data. A remembered account still opens
    from this device when offline, when the server fails, or when it is slow to answer. */
 const BOOT_WAIT_MS = 1500;
-export async function startingProfile(remembered) {
+export async function startingProfile(remembered: ServerProfile | null): Promise<ServerProfile | null> {
   if (!remembered) { try { return await api.me(); } catch { return null; } }
   if (typeof navigator !== 'undefined' && navigator.onLine === false) return remembered;
-  let timer;
-  const slow = new Promise((resolve) => { timer = setTimeout(() => resolve(remembered), BOOT_WAIT_MS); });
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const slow = new Promise<ServerProfile>((resolve) => { timer = setTimeout(() => resolve(remembered), BOOT_WAIT_MS); });
   try { return await Promise.race([api.me(), slow]); }
   catch (e) { return e instanceof ApiError && e.status === 401 ? null : remembered; }
   finally { clearTimeout(timer); }

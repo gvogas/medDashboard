@@ -5,8 +5,8 @@
 
 import { useEffect, useId, useLayoutEffect, useRef, useState } from "react"
 import { cn } from "@/lib/utils"
-import { isTest } from "@/legacy/js/model.js"
-import { dragCrop, drawSticker, readPicture, stickerData } from "@/legacy/js/sticker.js"
+import { isTest } from "@/core/model"
+import { dragCrop, drawSticker, readPicture, stickerData } from "@/core/sticker"
 import { useCourses, useItems, useStudySessions } from "@/data/store"
 import { closeSheet, replaceSheet } from "@/data/overlay"
 import { footHint, NAME_MAX, saveAchievementDraft, standing, switchRule, TOP, validAchievement, type AchievementDraft, type Rule } from "@/data/achievement-edit"

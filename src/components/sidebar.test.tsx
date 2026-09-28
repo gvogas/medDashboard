@@ -3,18 +3,18 @@ import { act, cleanup, fireEvent, render, screen, within } from "@testing-librar
 import { stubMatchMedia } from "./test-media"
 
 /* The legacy app is not booted: a store with data, a ui, and redraws that only notify.
-   model.js, query.js and the actions are the real ones, so the filter logic is too. */
+   core/model.ts, query.js and the actions are the real ones, so the filter logic is too. */
 const fake = vi.hoisted(() => ({
     data: { items: [] as unknown[], courses: [] as unknown[], profile: null as unknown },
     ui: { view: "week", search: "", types: {} as Record<string, boolean>, course: "all", bg: "med", anchor: "2026-09-28", settings: false },
 }))
-vi.mock("@/legacy/js/store.js", () => ({
+vi.mock("@/core/store", () => ({
     data: fake.data,
     subscribe: () => () => {},
     saveProfile: vi.fn(async () => {}),
     course: (id: string) => (fake.data.courses as { id: string }[]).find((c) => c.id === id),
 }))
-vi.mock("@/legacy/js/sync.js", () => ({ status: { state: "idle", pending: 0, message: "" }, onStatus: () => {}, syncNow: vi.fn() }))
+vi.mock("@/core/sync", () => ({ status: { state: "idle", pending: 0, message: "" }, onStatus: () => {}, syncNow: vi.fn() }))
 vi.mock("@/legacy/js/state.js", () => ({ ui: fake.ui }))
 vi.mock("@/legacy/js/views/render.js", async () => {
     const { notify } = await import("@/bridge")
@@ -29,14 +29,15 @@ vi.mock("@/data/actions", async (importOriginal) => ({
     openCourse: vi.fn(),
 }))
 
-import { useTypePrefs } from "@/legacy/js/model.js"
+import { useTypePrefs } from "@/core/model"
 import { reorderTypes, openCourse } from "@/data/actions"
-import { saveProfile } from "@/legacy/js/store.js"
+import { saveProfile } from "@/core/store"
 import { Sidebar } from "./sidebar"
+import type { TypePref } from "@/data/types"
 
 stubMatchMedia({ reducedMotion: true })
 
-let prefs: unknown[] = []
+let prefs: TypePref[] = []
 useTypePrefs(() => prefs)
 
 const item = (id: string, type: string, status: string, courseId: string | null = null, recur: string | null = null) =>

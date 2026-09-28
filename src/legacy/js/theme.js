@@ -1,8 +1,8 @@
 // The theme (light, dark or the system's) and the Med or CS background art; both are
 // saved to the profile so they follow the account to other devices.
 
-import * as store from './store.js';
-import { data } from './store.js';
+import * as store from '../../core/store.ts';
+import { data } from '../../core/store.ts';
 import { ui, rememberUi } from './state.js';
 import { render } from './views/render.js';
 import { notify } from '../../bridge.ts';

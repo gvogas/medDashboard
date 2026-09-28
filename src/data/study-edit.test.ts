@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from "vitest"
 const fake = vi.hoisted(() => ({
     data: { items: [] as unknown[], courses: [{ id: "anat", code: "ANAT", name: "Anatomy", archived: false }], study_sessions: [] as unknown[], achievements: [] as unknown[], profile: null },
 }))
-vi.mock("@/legacy/js/store.js", () => ({ data: fake.data, subscribe: () => () => {}, saveStudySession: vi.fn(), saveAchievement: vi.fn() }))
+vi.mock("@/core/store", () => ({ data: fake.data, subscribe: () => () => {}, saveStudySession: vi.fn(), saveAchievement: vi.fn() }))
 vi.mock("@/legacy/js/views/render.js", () => ({ render: vi.fn() }))
 vi.mock("@/legacy/js/state.js", () => ({ ui: { study: { courseId: null, itemId: null } } }))
 

@@ -1,7 +1,7 @@
 // Fireworks from a point on the page. A fixed canvas over everything that only
 // exists, and only draws, while sparks are alive: idle cost is zero.
 
-import { HEXES } from './model.js';
+import { HEXES } from '../../core/model.ts';
 
 let canvas = null, ctx = null, raf = null, last = 0;
 const rockets = [], sparks = [];

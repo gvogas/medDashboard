@@ -3,9 +3,9 @@
 
 import { useState } from "react"
 import { cn } from "@/lib/utils"
-import { dueSoon, isComplete, isOpen, isOverdue, isTest, tmeta } from "@/legacy/js/model.js"
-import { diffDays, hhmm, parse, today, DOW } from "@/legacy/js/dates.js"
-import { course as courseOf } from "@/legacy/js/store.js"
+import { dueSoon, isComplete, isOpen, isOverdue, isTest, tmeta } from "@/core/model"
+import { diffDays, hhmm, parse, today, DOW } from "@/core/dates"
+import { course as courseOf } from "@/core/store"
 import { useUi } from "@/data/ui"
 import { useWeek, tintOf, type Day, type Entry, type Instance } from "@/data/views"
 import { newItemOn, openItem, quickAddTask, toggleTask } from "@/data/actions"

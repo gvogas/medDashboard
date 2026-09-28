@@ -1,9 +1,17 @@
 // Exam prep: fill an exam's checklist with the lectures it covers, and say how fast
 // the remaining topics need to go.
 
-import { parse, addDays, iso, diffDays, shortDate } from './dates.js';
-import { lectureDates } from './reviews.js';
-import { uid } from './model.js';
+import { parse, addDays, iso, diffDays, shortDate } from './dates.ts';
+import { lectureDates } from './reviews.ts';
+import { uid } from './model.ts';
+import type { SchoolCalendar } from './school.ts';
+import type { ChecklistEntry, Course, Item } from './types.ts';
+
+/** How an exam's prep is going, from prepPace. */
+export interface Pace { done: number; total: number; days: number; pace: number; hot: boolean }
+
+/** What an exam window reads of an item. */
+type Dated = Pick<Item, 'id' | 'type' | 'date' | 'courseId'>;
 
 const MAX_STEPS = 50;
 const LOOKBACK_DAYS = 70;
@@ -12,7 +20,7 @@ const LOOKBACK_DAYS = 70;
  * The lectures an exam covers: from the day after the course's previous exam (or term
  * start, or ten weeks back, whichever is latest) up to the day before the exam.
  */
-export function examWindow(exam, items, termStart) {
+export function examWindow(exam: Dated, items: Dated[], termStart: string | null | undefined): { from: string; to: string } {
   const before = iso(addDays(parse(exam.date), -1));
   let from = iso(addDays(parse(exam.date), -LOOKBACK_DAYS));
   if (termStart && termStart > from) from = termStart;
@@ -29,7 +37,7 @@ export function examWindow(exam, items, termStart) {
  * The exam's checklist with a step per lecture appended; existing text is not repeated.
  * Returns { checklist, added, left } — left is how many did not fit under the cap.
  */
-export function fillTopics(exam, course, items, termStart, cal = null) {
+export function fillTopics(exam: Dated & Pick<Item, 'checklist'>, course: Pick<Course, 'id' | 'code' | 'archived' | 'meetings'>, items: Dated[], termStart: string | null | undefined, cal: SchoolCalendar | null = null): { checklist: ChecklistEntry[]; added: number; left: number } {
   const { from, to } = examWindow(exam, items, termStart);
   const list = (exam.checklist || []).slice();
   const have = new Set(list.map((s) => s.text.trim().toLowerCase()));
@@ -46,7 +54,7 @@ export function fillTopics(exam, course, items, termStart, cal = null) {
 }
 
 /** { done, total, days, pace, hot } for an open exam with steps, else null. Today counts as a day. */
-export function prepPace(exam, today) {
+export function prepPace(exam: Pick<Item, 'date' | 'checklist'>, today: string): Pace | null {
   const cl = exam.checklist || [];
   if (!cl.length) return null;
   const done = cl.filter((s) => s.done).length;
@@ -55,6 +63,6 @@ export function prepPace(exam, today) {
   return { done, total: cl.length, days, pace, hot: pace > 3 };
 }
 
-export function prepLabel(p) {
+export function prepLabel(p: Pace | null): string {
   return p ? p.done + '/' + p.total + ' topics · ' + p.pace + '/day' : '';
 }

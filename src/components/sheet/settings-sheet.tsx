@@ -4,15 +4,16 @@
 
 import { useEffect, useId, useRef, useState, type ReactNode } from "react"
 import { cn } from "@/lib/utils"
-import { COAT_PALETTE, colourName, normalizePrefs } from "@/legacy/js/model.js"
-import { shortDate, today } from "@/legacy/js/dates.js"
-import { schoolStatus } from "@/legacy/js/school.js"
+import { COAT_PALETTE, colourName, normalizePrefs } from "@/core/model"
+import { shortDate, today } from "@/core/dates"
+import { schoolStatus } from "@/core/school"
+import type { SchoolCalendar } from "@/core/school"
 import { schoolCal } from "@/legacy/js/query.js"
-import { status as syncStatus } from "@/legacy/js/sync.js"
+import { status as syncStatus } from "@/core/sync"
 import { state as spotify } from "@/data/spotify/player"
 import { state as web } from "@/data/spotify/web-player"
-import { api, spotifyRetryAt } from "@/legacy/js/api.js"
-import { readSetting, writeSetting } from "@/legacy/js/reviews.js"
+import { api, spotifyRetryAt } from "@/core/api"
+import { readSetting, writeSetting } from "@/core/reviews"
 import { runReviews } from "@/legacy/js/sync-status.js"
 import { savePrefs } from "@/legacy/js/study-controller.js"
 import { setBg, setTheme } from "@/legacy/js/theme.js"
@@ -379,7 +380,7 @@ function School() {
     const asking = useUi((u) => u.schoolAsk)
     const note = useUi((u) => u.schoolNote)
     useProfile()   /* the calendar lives on the profile */
-    const cal = schoolCal() as { name: string; terms: unknown[]; days: unknown[] } | null
+    const cal = schoolCal() as SchoolCalendar | null
     const keep = useRef<HTMLButtonElement>(null)
     useEffect(() => { if (asking) keep.current?.focus() }, [asking])
     const ask = (on: boolean) => { ui.schoolAsk = on; notify() }

@@ -3,16 +3,16 @@
 // celebrations. The Study page, the timer and the focus screen are React (src/data/study.ts,
 // src/data/study-timer.ts).
 
-import * as store from './store.js';
-import { data } from './store.js';
+import * as store from '../../core/store.ts';
+import { data } from '../../core/store.ts';
 import { ui, rememberUi } from './state.js';
-import { normalizePrefs } from './model.js';
-import { today } from './dates.js';
+import { normalizePrefs } from '../../core/model.ts';
+import { today } from '../../core/dates.ts';
 import { esc } from './dom.js';
 import { render, renderView } from './views/render.js';
 import { toast } from './views/toast.js';
-import { minutesByDay, streak } from './history.js';
-import { achievements, ownAchievements } from './achievements.js';
+import { minutesByDay, streak } from '../../core/history.ts';
+import { achievements, ownAchievements } from '../../core/achievements.ts';
 import { launch as fireworks } from './fireworks.js';
 import * as focus from './focus.js';
 import { openFocus } from '../../data/study-timer.ts';

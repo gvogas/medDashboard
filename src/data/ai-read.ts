@@ -3,8 +3,8 @@
 // draws the card from useBusy(); while it is up, cover() keeps everything else inert.
 
 import { useSyncExternalStore } from "react"
-import { ApiError } from "@/legacy/js/api.js"
-import { pdfText } from "@/legacy/js/pdftext.js"
+import { ApiError } from "@/core/api"
+import { pdfText } from "@/core/pdftext"
 import { cover } from "./overlay"
 import { ui } from "./ui"
 import type { Note, Ui } from "./types"

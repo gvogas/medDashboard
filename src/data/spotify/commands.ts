@@ -3,7 +3,7 @@
 // here and whoever draws it follows (React through useSpotify(), the legacy view through
 // onControls).
 
-import { api } from "@/legacy/js/api.js"
+import { api } from "@/core/api"
 import { state as player, poll, onRoundsIfIdle } from "./player"
 import { state as web } from "./web-player"
 import { cache, rerender, say, explain, load, queueChanged, playFrom } from "./library"

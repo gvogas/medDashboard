@@ -2,8 +2,8 @@ import { describe, it, expect } from 'vitest';
 import { SELF } from 'cloudflare:test';
 import { signIn, BASE, feed, noon } from './helpers.js';
 import { validateAchievement } from '../worker/validate.js';
-import { ownAchievements } from '../src/legacy/js/achievements.js';
-import { normalizeAchievement } from '../src/legacy/js/model.js';
+import { ownAchievements } from '../src/core/achievements.ts';
+import { normalizeAchievement } from '../src/core/model.ts';
 
 /* a tiny but real sticker: a 1×1 PNG */
 const PNG = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';

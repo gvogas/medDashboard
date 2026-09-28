@@ -8,14 +8,47 @@
 //   notes:   ['…'],                               what was trimmed or dropped, and why
 // }
 
-import { KINDS, HEXES, TYPES, uid, classEnd } from '../model.js';
-import { parse, DOW, iso, addDays, monday } from '../dates.js';
+import { KINDS, HEXES, TYPES, uid, classEnd } from '../model.ts';
+import { parse, DOW, iso, addDays, monday } from '../dates.ts';
+import type { Course, Item, Meeting } from '../types.ts';
+import type { IcsEvent } from './ics.ts';
+
+/** A CSV row, or one planOutline makes: a class from an outline has its kind and weekday. */
+export interface ImportRow { type: string; course: string; courseName?: string; title: string; date: string; start: string; end: string; room?: string; weight: number | null; kind?: string; weekday?: number }
+
+/** What the plan is checked against: the store's courses and items. */
+export interface PlanData { courses?: Pick<Course, 'id' | 'code' | 'name' | 'color' | 'meetings'>[]; items?: Pick<Item, 'type' | 'title' | 'date' | 'start' | 'courseId' | 'recur' | 'weekday'>[] }
+
+export interface PlanMeeting extends Meeting { include: boolean }
+export interface PlanCourse {
+  id: string; code: string; name: string; color: string; isNew: boolean; meetings: PlanMeeting[];
+  /* the classes it already has, while planning */
+  existing?: Meeting[];
+  /* a new course from an outline */
+  instructor?: string; term?: string; keep?: boolean;
+}
+/** An item to create, ready for normalizeItem(). */
+export interface PlanRow { type: string; title: string; courseId: string | null; date: string; start: string; end: string; where: string; status: string; weight: number | null; recur?: 'weekly'; weekday?: number }
+export interface PlanItem { include: boolean; duplicate?: boolean; week?: number; row: PlanRow }
+export interface Plan { courses: PlanCourse[]; items: PlanItem[]; notes: string[]; week1?: string; termStart?: string }
+
+/** A course outline as the Worker reads it (worker/outline.js). */
+export interface Outline {
+  code?: string; name?: string; instructor?: string; term?: string; termStart?: string; truncated?: boolean;
+  classes: { kind: string; weekday: number; start: string; end: string; room: string }[];
+  officeHours?: { weekday: number; start: string; end: string; room?: string }[];
+  assessments: { type: string; title: string; date?: string; week?: number; start: string; end: string; room?: string; weight: number | null }[];
+}
+
+/* A class or a single item on its way into the plan. */
+interface PlanClass { code: string; name: string; title: string; weekdays: number[]; start: string; end: string; room?: string; kind: string }
+interface PlanSingle { code: string; name?: string; explicit: boolean; title: string; date: string; start: string; end: string; room?: string; weight: number | null; type: string }
 
 const MAX_MEETINGS = 12;
 const ITEM_TYPES = Object.keys(TYPES);
-const CLASS_TYPES = { class: 'Lecture', lecture: 'Lecture', seminar: 'Seminar', tutorial: 'Tutorial', pbl: 'PBL', clinical: 'Clinical' };
+const CLASS_TYPES: Record<string, string> = { class: 'Lecture', lecture: 'Lecture', seminar: 'Seminar', tutorial: 'Tutorial', pbl: 'PBL', clinical: 'Clinical' };
 
-export function guessKind(text) {
+export function guessKind(text: unknown): string {
   const t = String(text).toLowerCase();
   if (/\bpbl\b|problem[- ]based/.test(t)) return 'PBL';
   if (/\blab\b|laborator|practical/.test(t)) return 'Lab';
@@ -25,7 +58,7 @@ export function guessKind(text) {
   return 'Lecture';
 }
 
-export function guessType(text) {
+export function guessType(text: unknown): string {
   const t = String(text).toLowerCase();
   if (/\bquiz(zes)?\b/.test(t)) return 'quiz';
   if (/\b(exam|osce|test|midterm|mid-term|final)s?\b/.test(t)) return 'exam';
@@ -35,34 +68,34 @@ export function guessType(text) {
 }
 
 /** The course code a summary starts with: its first word, upper-cased, at most 8 characters. */
-export function codeToken(summary) {
+export function codeToken(summary: unknown): string {
   const m = String(summary).trim().match(/^[A-Za-z0-9][A-Za-z0-9-]*/);
   return m ? m[0].toUpperCase().slice(0, 8) : '';
 }
 
-const clip = (s, n) => String(s || '').trim().slice(0, n);
+const clip = (s: unknown, n: number) => String(s || '').trim().slice(0, n);
 
 /**
  * events: from parseIcs (source 'ics') or parseCsv (source 'csv').
  * data:   the store's { courses, items }.
  */
-export function planImport(events, data, source) {
-  const notes = [];
-  const byCode = new Map();          /* CODE → plan course */
-  const courses = [];
+export function planImport(events: (IcsEvent | ImportRow)[], data: PlanData, source: 'ics' | 'csv'): Plan {
+  const notes: string[] = [];
+  const byCode = new Map<string, PlanCourse>();          /* CODE → plan course */
+  const courses: PlanCourse[] = [];
   const existing = data.courses || [];
 
-  const findCourse = (code) => {
+  const findCourse = (code: string) => {
     if (!code) return null;
     if (byCode.has(code)) return byCode.get(code);
     const hit = existing.find((c) => c.code.toUpperCase() === code);
     if (!hit) return null;
-    const pc = { id: hit.id, code: hit.code, name: hit.name, color: hit.color, isNew: false, meetings: [], existing: hit.meetings || [] };
+    const pc: PlanCourse = { id: hit.id, code: hit.code, name: hit.name, color: hit.color, isNew: false, meetings: [], existing: hit.meetings || [] };
     byCode.set(code, pc); courses.push(pc);
     return pc;
   };
-  const proposeCourse = (code, name) => {
-    const pc = {
+  const proposeCourse = (code: string, name: string | undefined) => {
+    const pc: PlanCourse = {
       id: uid(), code, name: clip(name || code, 80), isNew: true, meetings: [], existing: [],
       color: HEXES[(existing.length + courses.filter((c) => c.isNew).length) % HEXES.length],
     };
@@ -70,12 +103,13 @@ export function planImport(events, data, source) {
     return pc;
   };
 
-  const classes = [], singles = [];
-  for (const ev of events) {
+  const classes: PlanClass[] = [], singles: PlanSingle[] = [];
+  /* the source says which each event is: a CSV or outline row, or a calendar event */
+  for (const ev of events as (ImportRow & IcsEvent)[]) {
     if (source === 'csv') {
       const t = ev.type;
-      const weekday = Number.isInteger(ev.weekday) ? ev.weekday : ev.date ? parse(ev.date).getDay() : -1;
-      if (CLASS_TYPES[t] && weekday >= 0) classes.push({ code: clip(ev.course, 8).toUpperCase(), name: ev.courseName || ev.course, title: ev.title, weekdays: [weekday], start: ev.start, end: ev.end, room: ev.room, kind: KINDS.includes(ev.kind) ? ev.kind : t === 'class' ? guessKind(ev.title) : CLASS_TYPES[t] });
+      const weekday = Number.isInteger(ev.weekday) ? ev.weekday as number : ev.date ? parse(ev.date).getDay() : -1;
+      if (CLASS_TYPES[t] && weekday >= 0) classes.push({ code: clip(ev.course, 8).toUpperCase(), name: ev.courseName || ev.course, title: ev.title, weekdays: [weekday], start: ev.start, end: ev.end, room: ev.room, kind: KINDS.includes(ev.kind as string) ? ev.kind as string : t === 'class' ? guessKind(ev.title) : CLASS_TYPES[t] });
       else if (ev.title && ev.date) singles.push({ code: clip(ev.course, 8).toUpperCase(), name: ev.courseName, explicit: !!ev.course, title: ev.title, date: ev.date, start: ev.start, end: ev.end, room: ev.room, weight: ev.weight, type: ITEM_TYPES.includes(t) ? t : guessType(ev.title) });
       else notes.push('Skipped a row without a title or a readable date.');
     } else if (ev.weekly) {
@@ -94,9 +128,9 @@ export function planImport(events, data, source) {
     for (const weekday of cl.weekdays) {
       /* as saved, so a class already imported without an end is known again */
       const end = classEnd(cl.start, cl.end);
-      const same = (m) => m.weekday === weekday && m.start === cl.start && m.end === end;
-      if (pc.existing.some(same) || pc.meetings.some(same)) continue;
-      if (pc.existing.length + pc.meetings.length >= MAX_MEETINGS) {
+      const same = (m: Meeting) => m.weekday === weekday && m.start === cl.start && m.end === end;
+      if (pc.existing!.some(same) || pc.meetings.some(same)) continue;
+      if (pc.existing!.length + pc.meetings.length >= MAX_MEETINGS) {
         notes.push(pc.code + ' already has 12 classes; dropped ' + DOW[weekday] + ' ' + cl.start + '.');
         continue;
       }
@@ -105,7 +139,7 @@ export function planImport(events, data, source) {
   }
 
   const seen = new Set((data.items || []).map((it) => [it.courseId || '', it.title.trim().toLowerCase(), it.date].join('|')));
-  const items = [];
+  const items: PlanItem[] = [];
   for (const s of singles) {
     const pc = s.code ? (findCourse(s.code) || (s.explicit ? proposeCourse(s.code, s.name || s.code) : null)) : null;
     const courseId = pc ? pc.id : null;
@@ -125,12 +159,12 @@ export function planImport(events, data, source) {
 }
 
 /** The Monday of week `n`, counting the week that contains `week1` as week 1. */
-export function weekDate(week1, n) {
+export function weekDate(week1: string, n: number): string {
   return iso(addDays(monday(parse(week1)), (n - 1) * 7));
 }
 
 /** The first date on or after `from` that falls on `weekday`. */
-function onOrAfter(from, weekday) {
+function onOrAfter(from: string, weekday: number): string {
   let d = parse(from);
   for (let i = 0; i < 7 && d.getDay() !== weekday; i++) d = addDays(d, 1);
   return iso(d);
@@ -144,12 +178,12 @@ function onOrAfter(from, weekday) {
  * week, so nothing is shown later than it is — and wait unticked until week 1 is known.
  * Assessments with neither are listed in the notes.
  */
-export function planOutline(o, data, termStart = '') {
+export function planOutline(o: Outline, data: PlanData, termStart = ''): Plan {
   const code = (o.code || String(o.name || '').replace(/[^A-Za-z0-9]/g, '').slice(0, 4) || 'NEW').toUpperCase().slice(0, 8);
   const name = o.name || code;
-  const rows = [
+  const rows: ImportRow[] = [
     ...o.classes.map((c) => ({ type: 'class', kind: c.kind, weekday: c.weekday, course: code, courseName: name, title: c.kind, date: '', start: c.start, end: c.end, room: c.room, weight: null })),
-    ...o.assessments.filter((a) => a.date).map((a) => ({ type: a.type, course: code, courseName: name, title: a.title, date: a.date, start: a.start, end: a.end, room: a.room, weight: a.weight })),
+    ...o.assessments.filter((a) => a.date).map((a) => ({ type: a.type, course: code, courseName: name, title: a.title, date: a.date as string, start: a.start, end: a.end, room: a.room, weight: a.weight })),
   ];
   const plan = planImport(rows, data, 'csv');
   let pc = plan.courses.find((c) => c.code.toUpperCase() === code);
@@ -180,7 +214,7 @@ export function planOutline(o, data, termStart = '') {
   for (const a of o.assessments.filter((x) => !x.date && x.week)) {
     plan.items.push({
       include: !!plan.week1, duplicate: false, week: a.week,
-      row: { type: a.type, title: a.title, courseId: pc.id, date: plan.week1 ? weekDate(plan.week1, a.week) : '', start: a.start, end: a.end, where: a.room || '', status: 'todo', weight: a.weight },
+      row: { type: a.type, title: a.title, courseId: pc.id, date: plan.week1 ? weekDate(plan.week1, a.week!) : '', start: a.start, end: a.end, where: a.room || '', status: 'todo', weight: a.weight },
     });
   }
   const undated = o.assessments.filter((a) => !a.date && !a.week);
@@ -193,7 +227,7 @@ export function planOutline(o, data, termStart = '') {
 }
 
 /** Set week 1 and date every week-numbered item from it; newly dated ones get ticked. */
-export function setWeek1(plan, week1) {
+export function setWeek1(plan: Plan, week1: string | null | undefined): void {
   plan.week1 = week1 || '';
   for (const it of plan.items) {
     if (!it.week) continue;
@@ -205,10 +239,10 @@ export function setWeek1(plan, week1) {
 }
 
 /** "3 new courses · 14 classes · 9 items", counting only what is ticked. */
-export function planSummary(plan) {
+export function planSummary(plan: Plan): string {
   const nc = plan.courses.filter((c) => c.isNew && (c.keep || c.meetings.some((m) => m.include) || plan.items.some((i) => i.include && i.row.courseId === c.id))).length;
   const nm = plan.courses.reduce((n, c) => n + c.meetings.filter((m) => m.include).length, 0);
   const ni = plan.items.filter((i) => i.include).length;
-  const part = (n, one, many) => n + ' ' + (n === 1 ? one : many);
+  const part = (n: number, one: string, many: string) => n + ' ' + (n === 1 ? one : many);
   return [nc ? part(nc, 'new course', 'new courses') : '', part(nm, 'class', 'classes'), part(ni, 'item', 'items')].filter(Boolean).join(' · ');
 }

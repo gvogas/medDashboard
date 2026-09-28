@@ -4,7 +4,7 @@
 // actions are the engine's own functions, re-exported.
 
 import { useSyncExternalStore } from "react"
-import { spotifyRetryAt } from "@/legacy/js/api.js"
+import { spotifyRetryAt } from "@/core/api"
 import { ui as legacyUi } from "@/legacy/js/state.js"
 import { state as player } from "./player"
 import { state as web, playTarget } from "./web-player"

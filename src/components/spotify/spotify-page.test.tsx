@@ -4,13 +4,13 @@ import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testi
 
 const api = vi.hoisted(() => ({}) as ReturnType<typeof import("./test-spotify").fakeApi>)
 const gate = vi.hoisted(() => ({ until: 0 }))
-vi.mock("@/legacy/js/api.js", async (importOriginal) => ({
-    ...(await importOriginal<typeof import("@/legacy/js/api.js")>()),
+vi.mock("@/core/api", async (importOriginal) => ({
+    ...(await importOriginal<typeof import("@/core/api")>()),
     api,
     spotifyRetryAt: () => (gate.until > Date.now() ? gate.until : 0),
 }))
 
-import { ApiError } from "@/legacy/js/api.js"
+import { ApiError } from "@/core/api"
 import { cooldownMessage } from "@/data/spotify"
 import { state as web } from "@/data/spotify/web-player"
 import { SpotifyPage } from "./spotify-page"

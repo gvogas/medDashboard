@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { validateItem, validateProfile } from '../worker/validate.js';
 import { upsertRow } from '../worker/db.js';
 import { createUser, signIn } from './helpers.js';
-import { normalizeItem, typeList, typePrefsFrom, useTypePrefs, statusesFor, baseOf, tmeta, pluralOf } from '../src/legacy/js/model.js';
+import { normalizeItem, typeList, typePrefsFrom, useTypePrefs, statusesFor, baseOf, tmeta, pluralOf } from '../src/core/model.ts';
 
 const item = { type: 'task', title: 'Study', date: '2026-09-22', status: 'todo' };
 const profile = { coat: { color: '#E4749B' }, theme: 'system' };

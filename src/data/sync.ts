@@ -1,8 +1,8 @@
-// Sync status for React. legacy/js/sync.js changes one status object in place and its
+// Sync status for React. core/sync.ts changes one status object in place and its
 // onStatus has no unsubscribe, so one listener here copies it and wakes the hooks.
 
 import { useSyncExternalStore } from "react"
-import * as sync from "@/legacy/js/sync.js"
+import * as sync from "@/core/sync"
 import { notify, subscribe } from "@/bridge"
 import type { SyncState, SyncStatus } from "./types"
 

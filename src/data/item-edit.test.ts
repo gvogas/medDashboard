@@ -2,7 +2,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest
 
 /* A store in memory: saving replaces the row, as a reload does. */
 const fake = vi.hoisted(() => ({ items: [] as { id: string }[], saved: [] as unknown[] }))
-vi.mock("@/legacy/js/store.js", () => ({
+vi.mock("@/core/store", () => ({
     data: { get items() { return fake.items } },
     item: (id: string) => fake.items.find((x) => x.id === id) || null,
     saveItem: async (row: { id: string }) => { fake.saved.push(row); fake.items = fake.items.map((x) => (x.id === row.id ? row : x)) },
@@ -10,7 +10,7 @@ vi.mock("@/legacy/js/store.js", () => ({
 }))
 vi.mock("@/legacy/js/fireworks.js", () => ({ launch: vi.fn() }))
 
-import { httpUrl, normalizeCourse, normalizeItem } from "@/legacy/js/model.js"
+import { httpUrl, normalizeCourse, normalizeItem } from "@/core/model"
 import { autoTitleFor, countdown, deriveEdit, editNow, flush, linkUrl, pendingFor, typeInto, TYPING_MS } from "./item-edit"
 import { courseChanged, forSaving, newCourse } from "./course-edit"
 import type { Course, Item } from "./types"

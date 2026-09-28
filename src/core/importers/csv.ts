@@ -3,12 +3,15 @@
 // Unknown columns are ignored; missing ones come back as ''. Dates are normalised to
 // YYYY-MM-DD (DD/MM/YYYY is accepted); times to HH:MM when they parse.
 
-import { parseTime } from '../../../lib/time.ts';
-import { validDate } from '../school.js';
+import { parseTime } from '../../lib/time.ts';
+import { validDate } from '../school.ts';
 
-function records(text, sep) {
-  const rows = [];
-  let row = [], field = '', quoted = false;
+/** A row as read: every column a string, except the date normalised and the weight a number or null. */
+export interface CsvRow { type: string; course: string; title: string; date: string; start: string; end: string; room: string; weight: number | null }
+
+function records(text: string, sep: string): string[][] {
+  const rows: string[][] = [];
+  let row: string[] = [], field = '', quoted = false;
   const s = String(text).replace(/^﻿/, '');
   for (let i = 0; i < s.length; i++) {
     const c = s[i];
@@ -31,33 +34,34 @@ function records(text, sep) {
 }
 
 /** 'YYYY-MM-DD' from 2026-9-14 or 14/09/2026, or '' for anything else, 31/02 included. */
-export function normDate(v) {
+export function normDate(v: unknown): string {
   const s = String(v || '').trim();
-  let m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/), out = '';
+  let m: RegExpMatchArray | null = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/), out = '';
   if (m) out = m[1] + '-' + m[2].padStart(2, '0') + '-' + m[3].padStart(2, '0');
   else if ((m = s.match(/^(\d{1,2})[/.](\d{1,2})[/.](\d{4})$/))) out = m[3] + '-' + m[2].padStart(2, '0') + '-' + m[1].padStart(2, '0');
   return validDate(out) ? out : '';
 }
 
-const COLUMNS = ['type', 'course', 'title', 'date', 'start', 'end', 'room', 'weight'];
+const COLUMNS = ['type', 'course', 'title', 'date', 'start', 'end', 'room', 'weight'] as const;
 
-export function parseCsv(text) {
+export function parseCsv(text: string): CsvRow[] {
   const firstLine = String(text).split(/\r?\n/, 1)[0] || '';
   const sep = (firstLine.match(/;/g) || []).length > (firstLine.match(/,/g) || []).length ? ';' : ',';
   const [header, ...body] = records(text, sep);
   if (!header) return [];
-  const index = {};
+  const index: Record<string, number> = {};
   header.forEach((h, i) => { index[h.trim().toLowerCase()] = i; });
   return body.map((r) => {
-    const get = (k) => (index[k] === undefined ? '' : String(r[index[k]] ?? '').trim());
-    const out = {};
+    const get = (k: string) => (index[k] === undefined ? '' : String(r[index[k]] ?? '').trim());
+    /* every column read as text first; the weight becomes a number below */
+    const out = {} as Omit<CsvRow, 'weight'> & { weight: string | number | null };
     for (const k of COLUMNS) out[k] = get(k);
     out.type = out.type.toLowerCase();
     out.date = normDate(out.date);
     out.start = out.start ? parseTime(out.start) || '' : '';
     out.end = out.end ? parseTime(out.end) || '' : '';
-    const w = parseFloat(out.weight);
+    const w = parseFloat(out.weight as string);
     out.weight = Number.isFinite(w) && w > 0 && w <= 100 ? w : null;
-    return out;
+    return out as CsvRow;
   });
 }

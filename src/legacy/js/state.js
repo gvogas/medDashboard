@@ -1,7 +1,7 @@
 // UI state: what is open, what is filtered, how the table is sorted. Never synced.
 // The view and theme are remembered per browser as a convenience.
 
-import { today } from './dates.js';
+import { today } from '../../core/dates.ts';
 
 const KEY = 'rounds.ui';
 

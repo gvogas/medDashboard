@@ -1,5 +1,5 @@
 // For the music's component tests: a fake Worker for the engine (each test file mocks
-// "@/legacy/js/api.js" with `fakeApi()`), what it answers, and a fresh engine per test.
+// "@/core/api" with `fakeApi()`), what it answers, and a fresh engine per test.
 // The engine itself is the real one: its loads, its cache and its commands.
 
 import { act } from "@testing-library/react"

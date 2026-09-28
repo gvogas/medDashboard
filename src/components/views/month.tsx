@@ -2,8 +2,8 @@
 // timetable below. A day opens its week; a class opens its course.
 
 import { cn } from "@/lib/utils"
-import { tmeta } from "@/legacy/js/model.js"
-import { hhmm } from "@/legacy/js/dates.js"
+import { tmeta } from "@/core/model"
+import { hhmm } from "@/core/dates"
 import { useMonth, cellLabel, tintOf, type Cell, type Chip, type TimetableDay } from "@/data/views"
 import { goToDay, openCourse } from "@/data/actions"
 import { accent, classTitle, ClassText, HeadNote, Panel, ScheduleTabs, SchoolTags, TINT } from "./bits"

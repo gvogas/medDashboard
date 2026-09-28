@@ -1,15 +1,15 @@
 // Redraws a sync brings in (held while someone types or clicks), and the spaced reviews
 // a pull may bring due. The sync status itself is React's (src/components/top-bar.tsx).
 
-import * as store from './store.js';
-import { data } from './store.js';
+import * as store from '../../core/store.ts';
+import { data } from '../../core/store.ts';
 import { ui } from './state.js';
-import { normalizeItem } from './model.js';
-import { today } from './dates.js';
+import { normalizeItem } from '../../core/model.ts';
+import { today } from '../../core/dates.ts';
 import { schoolCal } from './query.js';
 import { isTyping } from './dom.js';
 import { render } from './views/render.js';
-import { readSetting, writeSetting, dueReviews } from './reviews.js';
+import { readSetting, writeSetting, dueReviews } from '../../core/reviews.ts';
 
 /* A redraw replaces every field, so one arriving from a sync while someone types would
    lose their text. Hold it until they leave the field, and until any click has landed:

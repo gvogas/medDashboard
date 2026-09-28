@@ -2,16 +2,16 @@
 // legacy state and redraws through the legacy code, so saving, the offline queue, sync
 // and the drawers behave as before.
 
-import * as store from "@/legacy/js/store.js"
-import { data } from "@/legacy/js/store.js"
-import * as sync from "@/legacy/js/sync.js"
-import { isOpen, normalizeItem, typeList, typePrefsFrom, uid, TYPE_COLOURS, MAX_CUSTOM_TYPES, ACHIEVEMENT_LIMIT } from "@/legacy/js/model.js"
+import * as store from "@/core/store"
+import { data } from "@/core/store"
+import * as sync from "@/core/sync"
+import { isOpen, normalizeItem, typeList, typePrefsFrom, uid, TYPE_COLOURS, MAX_CUSTOM_TYPES, ACHIEVEMENT_LIMIT } from "@/core/model"
 import { typeOn } from "@/legacy/js/query.js"
-import { addDays, iso, parse, today } from "@/legacy/js/dates.js"
+import { addDays, iso, parse, today } from "@/core/dates"
 import { render, renderView } from "@/legacy/js/views/render.js"
 import { setSide } from "./sidebar"
 import { openKeys } from "./keys"
-import { api } from "@/legacy/js/api.js"
+import { api } from "@/core/api"
 import { toast } from "./toast"
 import { applyCoat, TAB_OF, type SettingsTab } from "./settings"
 import { rememberUi } from "@/legacy/js/state.js"

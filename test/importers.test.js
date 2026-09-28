@@ -1,8 +1,8 @@
 import { describe, it, expect } from 'vitest';
-import { parseIcs } from '../src/legacy/js/importers/ics.js';
-import { parseCsv, normDate } from '../src/legacy/js/importers/csv.js';
-import { planImport, planOutline, planSummary, setWeek1, weekDate, guessKind, guessType, codeToken } from '../src/legacy/js/importers/plan.js';
-import { normalizeCourse } from '../src/legacy/js/model.js';
+import { parseIcs } from '../src/core/importers/ics.ts';
+import { parseCsv, normDate } from '../src/core/importers/csv.ts';
+import { planImport, planOutline, planSummary, setWeek1, weekDate, guessKind, guessType, codeToken } from '../src/core/importers/plan.ts';
+import { normalizeCourse } from '../src/core/model.ts';
 
 const pad = (n) => String(n).padStart(2, '0');
 

@@ -2,10 +2,10 @@
 // beside them (session, theme, sync-status, study-controller, keyboard) decide what happens.
 // The study timer's run and its focus screen are React's (src/data/study-timer.ts).
 
-import * as store from './store.js';
-import { data } from './store.js';
-import * as sync from './sync.js';
-import { useTypePrefs } from './model.js';
+import * as store from '../../core/store.ts';
+import { data } from '../../core/store.ts';
+import * as sync from '../../core/sync.ts';
+import { useTypePrefs } from '../../core/model.ts';
 import { $ } from './dom.js';
 import { notify } from '../../bridge.ts';
 import { setSide, watchSidebar } from '../../data/sidebar.ts';

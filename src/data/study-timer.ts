@@ -1,16 +1,16 @@
 // The study timer: the running run, what starts, pauses and stops it, the focus screen
-// it opens, and the flow it follows. The run itself stays in legacy/js/focus.js (timer.js
+// it opens, and the flow it follows. The run itself stays in legacy/js/focus.js (core/timer.ts
 // does the arithmetic); useRun() reads it on each of focus.js's ticks, which also keep
 // the tab's title and the Study icon's badge. The helpers below are pure, so the cards,
 // the focus screen and the dock draw from the same numbers.
 
 import { useMemo, useSyncExternalStore } from "react"
 import * as focus from "@/legacy/js/focus.js"
-import * as store from "@/legacy/js/store.js"
-import { data } from "@/legacy/js/store.js"
-import { isOpen, normalizeFlow, normalizePrefs, FLOW_PRESETS } from "@/legacy/js/model.js"
-import { iso, today as todayIso } from "@/legacy/js/dates.js"
-import { minutesByDay } from "@/legacy/js/history.js"
+import * as store from "@/core/store"
+import { data } from "@/core/store"
+import { isOpen, normalizeFlow, normalizePrefs, FLOW_PRESETS } from "@/core/model"
+import { iso, today as todayIso } from "@/core/dates"
+import { minutesByDay } from "@/core/history"
 import { rememberUi } from "@/legacy/js/state.js"
 import { renderView } from "@/legacy/js/views/render.js"
 import { notify, setStudyBadge, subscribe as subscribeBridge } from "@/bridge"

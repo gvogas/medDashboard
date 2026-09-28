@@ -18,11 +18,11 @@ const fake = vi.hoisted(() => {
         ui: { view: "week", search: "" },
     }
 })
-vi.mock("@/legacy/js/store.js", () => ({
+vi.mock("@/core/store", () => ({
     data: fake.data,
     subscribe: (fn: (e: { type: string }) => void) => { fake.storeListeners.add(fn); return () => fake.storeListeners.delete(fn) },
 }))
-vi.mock("@/legacy/js/sync.js", () => ({
+vi.mock("@/core/sync", () => ({
     status: fake.status,
     onStatus: (fn: (s: unknown) => void) => fake.statusListeners.add(fn),
 }))

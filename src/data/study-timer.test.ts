@@ -3,7 +3,7 @@ import { StrictMode } from "react"
 import { act, renderHook } from "@testing-library/react"
 
 /* A store in memory: the device's meta store (where focus.js keeps the run), saved
-   sessions, and a profile that saving replaces, as a reload does. focus.js and timer.js
+   sessions, and a profile that saving replaces, as a reload does. focus.js and core/timer.ts
    are the real engine. */
 const fake = vi.hoisted(() => ({
     meta: new Map<string, unknown>(),
@@ -17,7 +17,7 @@ const fake = vi.hoisted(() => ({
         profile: null as Record<string, unknown> | null,
     },
 }))
-vi.mock("@/legacy/js/store.js", () => ({
+vi.mock("@/core/store", () => ({
     data: fake.data,
     subscribe: () => () => {},
     meta: {

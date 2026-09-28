@@ -1,10 +1,10 @@
-// Hooks over the legacy store (legacy/js/store.js). Every write reloads the store, which
+// Hooks over the store (core/store.ts). Every write reloads the store, which
 // replaces each collection array and the profile, so the reference itself is the
 // snapshot: a component redraws when its collection changed and not otherwise.
 
 import { useSyncExternalStore } from "react"
-import * as store from "@/legacy/js/store.js"
-import { conflicts, data } from "@/legacy/js/store.js"
+import * as store from "@/core/store"
+import { conflicts, data } from "@/core/store"
 import { getVersion, notify, subscribe } from "@/bridge"
 import type { Achievement, Course, Item, Profile, Quote, SavedCopy, StudySession } from "./types"
 

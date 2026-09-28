@@ -2,10 +2,10 @@
 // hours on one course or a grade on one exam or quiz. The draft lives in the sheet's
 // state (overlay.ts); the picture being cropped lives only in the sheet component.
 
-import * as store from "@/legacy/js/store.js"
-import { uid } from "@/legacy/js/model.js"
-import { dayMonth } from "@/legacy/js/dates.js"
-import { ownAchievements } from "@/legacy/js/achievements.js"
+import * as store from "@/core/store"
+import { uid } from "@/core/model"
+import { dayMonth } from "@/core/dates"
+import { ownAchievements } from "@/core/achievements"
 import { render } from "@/legacy/js/views/render.js"
 import { closeSheet } from "./overlay"
 import type { Achievement, Course, Item, StudySession } from "./types"

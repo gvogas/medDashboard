@@ -2,7 +2,7 @@
 // the course, its weekly classes and its assessments. Nothing is saved here; the
 // browser shows the result in the import preview and saves what the person ticks.
 //
-// PDFs arrive as text: the browser reads them with PDF.js (src/legacy/js/pdftext.js),
+// PDFs arrive as text: the browser reads them with PDF.js (src/core/pdftext.ts),
 // because toMarkdown drops the text of many tables. Word and other files still go
 // through toMarkdown here.
 //

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { ApiError, retryDelayMs } from '../src/legacy/js/api.js';
+import { ApiError, retryDelayMs } from '../src/core/api.ts';
 
 describe('retryDelayMs', () => {
   it('waits as long as Spotify asked on a rate limit', () => {

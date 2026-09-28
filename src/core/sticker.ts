@@ -5,8 +5,14 @@
 const STICKER_MAX = 90_000;   /* characters; worker/validate.js holds the same line */
 const EDGE = 0.07;            /* the white edge, as a share of the size */
 
+/** Where the picture sits in the circle: x, y from -1 to 1, zoom from 1. */
+export interface Crop { x: number; y: number; zoom: number }
+
+/** A picture as a canvas draws it. */
+export type Picture = CanvasImageSource & { width: number; height: number };
+
 /** The picture in a file, upright; null when the browser cannot read it (HEIC on most). */
-export async function readPicture(file) {
+export async function readPicture(file: Blob | null | undefined): Promise<ImageBitmap | null> {
   if (!file || !/^image\//.test(file.type || 'image/')) return null;
   try { return await createImageBitmap(file, { imageOrientation: 'from-image' }); } catch { return null; }
 }
@@ -15,8 +21,8 @@ export async function readPicture(file) {
  * Draw the sticker on `canvas` (square): `crop` is {x, y, zoom}, where zoom 1 fills the
  * circle with the picture's short side and x, y (-1 to 1) slide it within what is left.
  */
-export function drawSticker(canvas, pic, { x = 0, y = 0, zoom = 1 } = {}) {
-  const size = canvas.width, ctx = canvas.getContext('2d');
+export function drawSticker(canvas: HTMLCanvasElement, pic: Picture, { x = 0, y = 0, zoom = 1 }: Partial<Crop> = {}): void {
+  const size = canvas.width, ctx = canvas.getContext('2d')!;
   const r = size / 2, inner = r * (1 - EDGE);
   ctx.clearRect(0, 0, size, size);
   ctx.fillStyle = '#fff';
@@ -32,16 +38,16 @@ export function drawSticker(canvas, pic, { x = 0, y = 0, zoom = 1 } = {}) {
 }
 
 /** How far a drag of (dx, dy) pixels on a `shown`-pixel preview moves the crop. */
-export function dragCrop(crop, pic, dx, dy, shown) {
+export function dragCrop(crop: Crop, pic: Picture, dx: number, dy: number, shown: number): Crop {
   const inner = shown / 2 * (1 - EDGE);
   const scale = (inner * 2 / Math.min(pic.width, pic.height)) * crop.zoom;
   const spareX = Math.max(1, (pic.width * scale - inner * 2) / 2), spareY = Math.max(1, (pic.height * scale - inner * 2) / 2);
-  const clamp = (v) => Math.max(-1, Math.min(1, v));
+  const clamp = (v: number) => Math.max(-1, Math.min(1, v));
   return { ...crop, x: clamp(crop.x - dx / spareX), y: clamp(crop.y - dy / spareY) };
 }
 
 /** The finished sticker as a data: URL under STICKER_MAX, or null if it will not fit. */
-export function stickerData(pic, crop) {
+export function stickerData(pic: Picture, crop: Partial<Crop>): string | null {
   for (const size of [256, 208, 160]) {
     const canvas = document.createElement('canvas');
     canvas.width = canvas.height = size;

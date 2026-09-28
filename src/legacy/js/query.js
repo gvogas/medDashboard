@@ -1,10 +1,10 @@
 // Derived lists over the store, filtered by the UI state. Computed on every render.
 
-import { data, course } from './store.js';
+import { data, course } from '../../core/store.ts';
 import { ui } from './state.js';
-import { tmeta, occurrences } from './model.js';
-import { normalizeSchool, currentTerm } from './school.js';
-import { today } from './dates.js';
+import { tmeta, occurrences } from '../../core/model.ts';
+import { normalizeSchool, currentTerm } from '../../core/school.ts';
+import { today } from '../../core/dates.ts';
 
 /* The school calendar, read once per saved version of the profile. */
 let school = { raw: undefined, cal: null };

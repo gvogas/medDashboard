@@ -1,7 +1,16 @@
 // The only file that knows the API's URLs. Same-origin, cookie session.
 
+import type { Row } from './db.ts';
+import type { Page, ServerProfile } from './store.ts';
+
+/** An error's body as the Worker sends it: its code, and for some the server's copy or a wait. */
+export interface ErrorBody { error?: string; retryAfter?: unknown; current?: Row | null; [field: string]: unknown }
+
 export class ApiError extends Error {
-  constructor(status, body, retryAfter = null) {
+  status: number;
+  body: ErrorBody | null;
+  retryAfter: number | null;
+  constructor(status: number, body: ErrorBody | null, retryAfter: number | null = null) {
     super(body?.error || `HTTP ${status}`);
     this.status = status;
     this.body = body;
@@ -11,7 +20,7 @@ export class ApiError extends Error {
 
 /** How long to leave a failed request before trying it again by itself: what a rate
     limit asked for, else 30 s. */
-export function retryDelayMs(e) {
+export function retryDelayMs(e: unknown): number {
   if (e instanceof ApiError && e.status === 429) {
     for (const value of [e.retryAfter, e.body?.retryAfter]) {
       const seconds = Number(value);
@@ -29,24 +38,24 @@ let spotifyTail = Promise.resolve();
 let spotifyLastAt = 0;
 let spotifyBlockedUntil = 0;
 /** The current tab's retry deadline, also used by the Spotify view. */
-export function spotifyRetryAt() { return spotifyBlockedUntil > Date.now() ? spotifyBlockedUntil : 0; }
-const spotifyInFlight = new Map();
+export function spotifyRetryAt(): number { return spotifyBlockedUntil > Date.now() ? spotifyBlockedUntil : 0; }
+const spotifyInFlight = new Map<string, ReturnType<typeof send>>();
 let sessionRequests = new AbortController();
-let accountId = null;
-export function bindAccount(id) {
+let accountId: string | null = null;
+export function bindAccount(id: string | null): void {
   if (accountId !== id) resetRequests();
   accountId = id;
 }
 
 /** Cancel in-flight and queued calls before changing accounts. */
-export function resetRequests() {
+export function resetRequests(): void {
   sessionRequests.abort();
   sessionRequests = new AbortController();
   spotifyInFlight.clear();
   spotifyTail = Promise.resolve();
 }
 
-function spotifyRequest(method, path, body) {
+function spotifyRequest(method: string, path: string, body?: unknown) {
   const signal = sessionRequests.signal;
   const shared = method === 'GET' ? spotifyInFlight.get(path) : null;
   if (shared) return shared;
@@ -77,13 +86,15 @@ function spotifyRequest(method, path, body) {
 }
 
 /** Resolves to JSON (or null for 204). Invalid replies never acknowledge a write. */
-export function request(method, path, body, headers) {
+export function request(method: string, path: string, body?: unknown, headers?: Record<string, string>) {
   /* Account operations and the local connection check remain available during an API cooldown. */
   if (path.startsWith('/api/spotify/') && !['/api/spotify/token', '/api/spotify/status'].includes(path)) return spotifyRequest(method, path, body);
   return send(method, path, body, headers);
 }
 
-async function send(method, path, body, extraHeaders = {}) {
+/* The answer is JSON as the Worker sends it (typed `any`, as Response.json() is): each
+   caller says what it expects, and the record and sync answers are checked here. */
+async function send(method: string, path: string, body?: unknown, extraHeaders: Record<string, string> = {}) {
   const session = sessionRequests.signal;
   const controller = new AbortController();
   const { signal } = controller;
@@ -119,28 +130,28 @@ async function send(method, path, body, extraHeaders = {}) {
   }
 }
 
-const match = (revision = 0) => ({ 'if-match': `"${revision}"` });
+const match = (revision: number | undefined = 0) => ({ 'if-match': `"${revision}"` });
 function invalidResponse() {
   const error = new ApiError(502, { error: 'invalid_response' });
   error.message = 'The server returned an invalid response. Your edits are still saved on this device.';
   return error;
 }
-const validRecord = (row) => row && typeof row.id === 'string' && row.id.length > 0
-  && Number.isSafeInteger(row.revision) && row.revision > 0;
-async function record(response, id, previousRevision = 0) {
-  const row = await response;
-  if (!validRecord(row) || (id != null && row.id !== id) || row.revision <= previousRevision) throw invalidResponse();
-  return row;
+const validRecord = (row: Row | null | undefined): row is Row => !!row && typeof row.id === 'string' && row.id.length > 0
+  && Number.isSafeInteger(row.revision) && row.revision! > 0;
+async function record<T = Row>(response: Promise<unknown>, id?: string | null, previousRevision: number | undefined = 0): Promise<T> {
+  const row = await response as Row | null;
+  if (!validRecord(row) || (id != null && row.id !== id) || row.revision! <= previousRevision) throw invalidResponse();
+  return row as T;
 }
-async function empty(response) {
+async function empty(response: Promise<unknown>): Promise<null> {
   if (await response !== null) throw invalidResponse();
   return null;
 }
-async function changes(cursor) {
+async function changes(cursor: number): Promise<Page & { reset: boolean; more: boolean }> {
   const page = await request('GET', `/api/sync?v=2&cursor=${cursor}`);
   if (!page || typeof page.reset !== 'boolean' || typeof page.more !== 'boolean'
     || !Number.isSafeInteger(page.cursor) || page.cursor < 0 || !Array.isArray(page.changes)
-    || !page.changes.every((change) => change && ['courses', 'items', 'quotes', 'study_sessions', 'achievements'].includes(change.kind) && validRecord(change.row))) throw invalidResponse();
+    || !page.changes.every((change: { kind: string; row: Row } | null) => change && ['courses', 'items', 'quotes', 'study_sessions', 'achievements'].includes(change.kind) && validRecord(change.row))) throw invalidResponse();
   if (page.reset
     ? cursor === 0 || page.cursor !== 0 || page.more || page.changes.length > 0
     : page.cursor < cursor || (page.more && page.cursor === cursor)) throw invalidResponse();
@@ -148,40 +159,40 @@ async function changes(cursor) {
 }
 
 export const api = {
-  me: () => record(request('GET', '/api/me'), accountId),
-  saveMe: (profile) => record(request('PUT', '/api/me', profile, match(profile.revision)), accountId || profile.id, profile.revision),
-  login: (username, password) => record(request('POST', '/api/login', { username, password })),
+  me: () => record<ServerProfile & Row>(request('GET', '/api/me'), accountId),
+  saveMe: (profile: Record<string, unknown> & { id?: string; revision?: number }) => record<ServerProfile & Row>(request('PUT', '/api/me', profile, match(profile.revision)), accountId || profile.id, profile.revision),
+  login: (username: string, password: string) => record<ServerProfile & Row>(request('POST', '/api/login', { username, password })),
   signOut: () => empty(request('DELETE', '/api/session')),
   sync: changes,
-  get: (kind, id) => record(request('GET', `/api/${kind}/${encodeURIComponent(id)}`), id),
-  put: (kind, id, row) => record(request('PUT', `/api/${kind}/${encodeURIComponent(id)}`, row, match(row.revision)), id, row.revision),
+  get: (kind: string, id: string) => record(request('GET', `/api/${kind}/${encodeURIComponent(id)}`), id),
+  put: (kind: string, id: string, row: { revision?: number; [field: string]: unknown }) => record(request('PUT', `/api/${kind}/${encodeURIComponent(id)}`, row, match(row.revision)), id, row.revision),
   revokeAll: () => empty(request('POST', '/api/session/revoke-all')),
-  del: (kind, id, revision = 0) => empty(request('DELETE', `/api/${kind}/${encodeURIComponent(id)}`, undefined, match(revision))),
+  del: (kind: string, id: string, revision = 0) => empty(request('DELETE', `/api/${kind}/${encodeURIComponent(id)}`, undefined, match(revision))),
   calendarFeed: () => request('GET', '/api/calendar'),
   calendarRenew: () => request('POST', '/api/calendar'),
   calendarStop: () => empty(request('DELETE', '/api/calendar')),
-  leaderboard: (since) => request('GET', `/api/leaderboard?since=${since}`),
-  leaderboardJoin: (joined) => empty(request('PUT', '/api/leaderboard', { joined })),
-  readOutline: (file, { name, today, termStart }) => request('POST', '/api/outline?' + new URLSearchParams({ name, today, ...(termStart ? { termStart } : {}) }), file),
-  readSchool: (file, { name, today }) => request('POST', '/api/school-calendar?' + new URLSearchParams({ name, today }), file),
+  leaderboard: (since: string | number) => request('GET', `/api/leaderboard?since=${since}`),
+  leaderboardJoin: (joined: boolean) => empty(request('PUT', '/api/leaderboard', { joined })),
+  readOutline: (file: Blob, { name, today, termStart }: { name: string; today: string; termStart?: string }) => request('POST', '/api/outline?' + new URLSearchParams({ name, today, ...(termStart ? { termStart } : {}) }), file),
+  readSchool: (file: Blob, { name, today }: { name: string; today: string }) => request('POST', '/api/school-calendar?' + new URLSearchParams({ name, today }), file),
   spotifyPlayer: () => request('GET', '/api/spotify/player'),
   spotifyStatus: () => request('GET', '/api/spotify/status'),
-  spotifyControl: (action, deviceId) => request('POST', `/api/spotify/player/${action}` + (deviceId ? `?deviceId=${encodeURIComponent(deviceId)}` : '')),
+  spotifyControl: (action: string, deviceId?: string | null) => request('POST', `/api/spotify/player/${action}` + (deviceId ? `?deviceId=${encodeURIComponent(deviceId)}` : '')),
   spotifyToken: () => request('GET', '/api/spotify/token'),
-  spotifyTransfer: (deviceId, play = true) => request('POST', '/api/spotify/transfer', { deviceId, play }),
+  spotifyTransfer: (deviceId: string | null, play = true) => request('POST', '/api/spotify/transfer', { deviceId, play }),
   spotifyDevices: () => request('GET', '/api/spotify/devices'),
-  spotifyShuffle: (state) => request('PUT', '/api/spotify/shuffle', { state }),
-  spotifyRepeat: (state) => request('PUT', '/api/spotify/repeat', { state }),
+  spotifyShuffle: (state: boolean) => request('PUT', '/api/spotify/shuffle', { state }),
+  spotifyRepeat: (state: string) => request('PUT', '/api/spotify/repeat', { state }),
   spotifyMe: () => request('GET', '/api/spotify/me'),
   spotifyRecent: () => request('GET', '/api/spotify/recent'),
-  spotifyAlbumTracks: (id, offset = 0) => request('GET', `/api/spotify/albums/${encodeURIComponent(id)}/tracks?offset=${offset}`),
-  spotifyArtistAlbums: (id, offset = 0) => request('GET', `/api/spotify/artists/${encodeURIComponent(id)}/albums?offset=${offset}`),
+  spotifyAlbumTracks: (id: string, offset = 0) => request('GET', `/api/spotify/albums/${encodeURIComponent(id)}/tracks?offset=${offset}`),
+  spotifyArtistAlbums: (id: string, offset = 0) => request('GET', `/api/spotify/artists/${encodeURIComponent(id)}/albums?offset=${offset}`),
   spotifyDisconnect: () => request('DELETE', '/api/spotify'),
-  spotifySearch: (q, type = null, offset = 0) => request('GET', `/api/spotify/search?q=${encodeURIComponent(q)}` + (type ? `&type=${type}&offset=${offset}` : '')),
+  spotifySearch: (q: string, type: string | null = null, offset: number | null = 0) => request('GET', `/api/spotify/search?q=${encodeURIComponent(q)}` + (type ? `&type=${type}&offset=${offset}` : '')),
   spotifyPlaylists: (offset = 0) => request('GET', `/api/spotify/playlists?offset=${offset}`),
-  spotifyPlaylistTracks: (id, offset = 0) => request('GET', `/api/spotify/playlists/${encodeURIComponent(id)}/tracks?offset=${offset}`),
+  spotifyPlaylistTracks: (id: string, offset = 0) => request('GET', `/api/spotify/playlists/${encodeURIComponent(id)}/tracks?offset=${offset}`),
   spotifyQueue: () => request('GET', '/api/spotify/queue'),
-  spotifyQueueAdd: (uri) => request('POST', '/api/spotify/queue', { uri }),
-  spotifyPlay: (what) => request('POST', '/api/spotify/play', what),
-  spotifyVolume: (percent) => request('PUT', '/api/spotify/volume', { percent }),
+  spotifyQueueAdd: (uri: string) => request('POST', '/api/spotify/queue', { uri }),
+  spotifyPlay: (what: Record<string, unknown>) => request('POST', '/api/spotify/play', what),
+  spotifyVolume: (percent: number | null) => request('PUT', '/api/spotify/volume', { percent }),
 };

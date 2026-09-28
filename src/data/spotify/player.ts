@@ -1,7 +1,7 @@
 // Polls the Worker for what is playing on the signed-in user's Spotify and sends
 // the controls. Owns one timer and the last state; the badge and the views only render it.
 
-import { api, ApiError, retryDelayMs } from "@/legacy/js/api.js"
+import { api, ApiError, retryDelayMs } from "@/core/api"
 import * as web from "./web-player"
 import { changed } from "./signal"
 import type { PlayerState } from "./types"

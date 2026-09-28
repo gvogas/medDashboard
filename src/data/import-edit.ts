@@ -1,30 +1,27 @@
 // Importing: a calendar, CSV or course outline read into a plan, shown in the import sheet
 // with a tick per row, and written only on Import. The parsing and planning stay in
-// legacy/js/importers/; this is what the sheet does with a plan. From legacy
+// core/importers/; this is what the sheet does with a plan. From legacy
 // views/drawer-import.js.
 
-import * as store from "@/legacy/js/store.js"
-import { data } from "@/legacy/js/store.js"
-import { classRoom, normalizeCourse, normalizeItem } from "@/legacy/js/model.js"
-import { today } from "@/legacy/js/dates.js"
+import * as store from "@/core/store"
+import { data } from "@/core/store"
+import { classRoom, normalizeCourse, normalizeItem } from "@/core/model"
+import { today } from "@/core/dates"
 import { schoolCal, termStart } from "@/legacy/js/query.js"
-import { parseIcs } from "@/legacy/js/importers/ics.js"
-import { parseCsv } from "@/legacy/js/importers/csv.js"
-import { planImport, planOutline } from "@/legacy/js/importers/plan.js"
-import { api } from "@/legacy/js/api.js"
+import { parseIcs } from "@/core/importers/ics"
+import { parseCsv } from "@/core/importers/csv"
+import { planImport, planOutline } from "@/core/importers/plan"
+import type { Outline, Plan } from "@/core/importers/plan"
+import { api } from "@/core/api"
 import { readWithAi } from "./ai-read"
 import { notify } from "@/bridge"
 import { ui } from "./ui"
 import { openSheet } from "./overlay"
-import type { Course, Item, Meeting, Profile } from "./types"
+import type { Course, Item, Profile } from "./types"
 
-export interface PlanMeeting extends Meeting { include: boolean }
-export interface PlanCourse {
-    id: string; code: string; name: string; color: string; instructor?: string; term?: string
-    isNew: boolean; keep: boolean; meetings: PlanMeeting[]
-}
-export interface PlanItem { row: Item; include: boolean; duplicate?: boolean; week?: number }
-export interface ImportPlan { courses: PlanCourse[]; items: PlanItem[]; notes: string[]; week1?: string | null; termStart?: string | null }
+/* The plan's shapes are the importer's (core/importers/plan.ts). */
+export type { PlanCourse, PlanItem, PlanMeeting } from "@/core/importers/plan"
+export type ImportPlan = Plan
 
 export const MAX_BYTES = 2_000_000
 
@@ -69,7 +66,7 @@ export function readOutlineFile(file: File) {
             outline_unreadable: "The outline could not be understood. Try again, or import a CSV instead.",
         },
         call: (body: Blob) => api.readOutline(body, { name: file.name, today: today(), termStart: termStart() || "" }),
-        done: (outline: unknown) => openSheet({ kind: "import", plan: planOutline(outline, data, termStart() || "") as ImportPlan, name: file.name }),
+        done: (outline: Outline) => openSheet({ kind: "import", plan: planOutline(outline, data, termStart() || "") as ImportPlan, name: file.name }),
     })
 }
 

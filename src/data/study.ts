@@ -1,34 +1,23 @@
 // What the Study page shows: the three tiles, the History card's week, month and term, and
-// the achievements, worked out from the logged sessions. Legacy history.js and
-// achievements.js still do the arithmetic; the selectors here shape it for the page. Pure:
+// the achievements, worked out from the logged sessions. core/history.ts and
+// core/achievements.ts do the arithmetic; the selectors here shape it for the page. Pure:
 // each takes the sessions, the prefs and today, so it can be tested on its own. The hooks
 // and the History card's actions are at the end.
 
 import { useMemo, useSyncExternalStore } from "react"
 import { getVersion, notify, subscribe } from "@/bridge"
-import { dayOf, heatRange, level, minutesByDay, month, streak, week } from "@/legacy/js/history.js"
-import { achievements, nextUp, ownAchievements } from "@/legacy/js/achievements.js"
-import { normalizePrefs } from "@/legacy/js/model.js"
+import { dayOf, heatRange, level, minutesByDay, month, streak, week } from "@/core/history"
+import { achievements, nextUp, ownAchievements } from "@/core/achievements"
+import { normalizePrefs } from "@/core/model"
 import { termStart as currentTermStart } from "@/legacy/js/query.js"
-import { addDays, dayMonth, iso, parse, shortDate, today as todayIso, DOW, MON } from "@/legacy/js/dates.js"
+import { addDays, dayMonth, iso, parse, shortDate, today as todayIso, DOW, MON } from "@/core/dates"
 import { duration } from "@/lib/time"
 import { useAchievements, useCourses, useItems, useProfile, useStudySessions } from "./store"
 import { ui } from "./ui"
 import type { Achievement, Badge, Course, HistTab, Item, SessionUndo, StudyPrefs, StudySession } from "./types"
 
-/* history.js is untyped JS; these are the shapes it returns. A course split is
-   [courseId, minutes] pairs, most first, with "" for no course. */
+/* A course split is [courseId, minutes] pairs, most first, with "" for no course. */
 type Split = [string, number][]
-interface RawWeek { from: string; to: string; days: { date: string; total: number; byCourse: Split }[]; total: number; count: number; perCourse: Split; sessions: StudySession[] }
-interface RawMonth { total: number; count: number; daysStudied: number; groups: { date: string; total: number; sessions: StudySession[] }[] }
-interface Range { from: string; to: string; weeks: number; since: string | null }
-
-const weekIn = week as unknown as (sessions: StudySession[], anyDay: string) => RawWeek
-const monthIn = month as unknown as (sessions: StudySession[], year: number, monthIndex: number) => RawMonth
-const streakOf = streak as unknown as (byDay: Map<string, number>, today: string, rules: { dayMin: number; rest: number[] }) => { current: number; longest: number; today: boolean }
-const byDayOf = minutesByDay as unknown as (sessions: StudySession[]) => Map<string, number>
-const rangeOf = heatRange as unknown as (termStart: string | null, today: string) => Range
-const levelOf = level as unknown as (minutes: number, goal?: number) => number
 
 const plural = (n: number, one: string) => n + " " + one + (n === 1 ? "" : "s")
 const sum = (list: StudySession[]) => list.reduce((a, s) => a + s.studyMinutes, 0)
@@ -67,8 +56,8 @@ export interface Tiles {
 
 /** The streak, today against the goal, and the term so far (the last 12 weeks with no term start). */
 export function studyTiles(sessions: StudySession[], prefs: StudyPrefs, termStart: string | null, today: string): Tiles {
-    const byDay = byDayOf(sessions), st = streakOf(byDay, today, prefs), minutes = byDay.get(today) || 0
-    const range = rangeOf(termStart, today), term = inRange(sessions, range.from, today)
+    const byDay = minutesByDay(sessions), st = streak(byDay, today, prefs), minutes = byDay.get(today) || 0
+    const range = heatRange(termStart, today), term = inRange(sessions, range.from, today)
     const left = Math.max(0, prefs.goal - minutes)
     return {
         streak: {
@@ -108,7 +97,7 @@ export interface WeekHist {
  */
 export function weekOf(sessions: StudySession[], offset: number, today: string, goal = 0): WeekHist {
     const anchor = iso(addDays(parse(today), 7 * offset))
-    const w = weekIn(sessions, anchor), before = weekIn(sessions, iso(addDays(parse(anchor), -7)))
+    const w = week(sessions, anchor), before = week(sessions, iso(addDays(parse(anchor), -7)))
     const max = Math.max(60, goal ? goal * 1.25 : 0, ...w.days.map((d) => d.total))
     const diff = w.total - before.total
     const compare = !before.total ? "" : " · " + (diff === 0 ? "same as" : duration(Math.abs(diff)) + (diff > 0 ? " more than" : " less than")) + " the week before"
@@ -168,7 +157,7 @@ export interface MonthHist {
  */
 export function monthOf(sessions: StudySession[], offset: number, focusDay: string | null, today: string, goal = 0): MonthHist {
     const now = parse(today), at = new Date(now.getFullYear(), now.getMonth() + offset, 1)
-    const m = monthIn(sessions, at.getFullYear(), at.getMonth())
+    const m = month(sessions, at.getFullYear(), at.getMonth())
     const first = iso(at), last = iso(new Date(at.getFullYear(), at.getMonth() + 1, 0)), ym = first.slice(0, 7)
     const byDate = new Map(m.groups.map((g) => [g.date, g]))
     const pick = focusDay && focusDay.startsWith(ym) ? focusDay : today.startsWith(ym) ? today : m.groups[0]?.date ?? null
@@ -178,7 +167,7 @@ export function monthOf(sessions: StudySession[], offset: number, focusDay: stri
     for (let d = 1; d <= parse(last).getDate(); d++) {
         const date = iso(new Date(at.getFullYear(), at.getMonth(), d)), g = byDate.get(date), minutes = g?.total || 0
         cells.push({
-            date, day: d, future: date > today, minutes, split: g ? perCourse(g.sessions) : [], level: levelOf(minutes, goal),
+            date, day: d, future: date > today, minutes, split: g ? perCourse(g.sessions) : [], level: level(minutes, goal),
             isToday: date === today, picked: date === pick, met: !!goal && minutes >= goal,
             label: shortDate(date) + ", " + (minutes ? duration(minutes) : "no study"),
         })
@@ -215,7 +204,7 @@ export interface TermHist {
  * that starts in it, and the first with its own.
  */
 export function termOf(sessions: StudySession[], prefs: StudyPrefs, termStart: string | null, today: string, focusDay: string | null = null): TermHist {
-    const range = rangeOf(termStart, today), start = parse(range.from), byDay = byDayOf(sessions)
+    const range = heatRange(termStart, today), start = parse(range.from), byDay = minutesByDay(sessions)
     const weeks: HeatWeek[] = []
     for (let w = 0; w < range.weeks; w++) {
         const mon = addDays(start, w * 7)
@@ -227,7 +216,7 @@ export function termOf(sessions: StudySession[], prefs: StudyPrefs, termStart: s
             days: dates.map((d) => {
                 const date = iso(d), minutes = byDay.get(date) || 0
                 return {
-                    date, future: date > today, minutes, level: levelOf(minutes, prefs.goal), isToday: date === today, picked: date === focusDay,
+                    date, future: date > today, minutes, level: level(minutes, prefs.goal), isToday: date === today, picked: date === focusDay,
                     label: shortDate(date) + ", " + (minutes ? duration(minutes) : "no study"),
                 }
             }),

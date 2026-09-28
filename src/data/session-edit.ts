@@ -2,11 +2,11 @@
 // Anki on a phone), or a logged one changed. Either way it counts toward the streak and
 // the goal. The draft lives in the sheet's state (overlay.ts) until it is saved.
 
-import * as store from "@/legacy/js/store.js"
-import { data } from "@/legacy/js/store.js"
-import { uid } from "@/legacy/js/model.js"
-import { iso, shortDate, today } from "@/legacy/js/dates.js"
-import { minutesByDay, streak } from "@/legacy/js/history.js"
+import * as store from "@/core/store"
+import { data } from "@/core/store"
+import { uid } from "@/core/model"
+import { iso, shortDate, today } from "@/core/dates"
+import { minutesByDay, streak } from "@/core/history"
 import { duration } from "@/lib/time"
 import { render } from "@/legacy/js/views/render.js"
 import { parseTime } from "@/lib/time"
@@ -31,8 +31,6 @@ export interface SessionDraft {
 export const QUICK = [15, 25, 30, 45, 60, 90]
 export const MAX_MINUTES = 720
 
-/* history.js is untyped JS; its streak takes the prefs as normalizePrefs gives them */
-const streakOf = streak as unknown as (byDay: Map<string, number>, now: string, prefs: StudyPrefs) => { current: number }
 const pad = (n: number) => String(n).padStart(2, "0")
 const clock = (d: Date) => pad(d.getHours()) + ":" + pad(d.getMinutes())
 
@@ -73,7 +71,7 @@ export function impact(d: SessionDraft, sessions: StudySession[], prefs: StudyPr
     const after = new Map(before)
     const day = (after.get(d.date) || 0) + d.minutes
     after.set(d.date, day)
-    const st = streakOf(after, now, prefs), was = streakOf(before, now, prefs)
+    const st = streak(after, now, prefs), was = streak(before, now, prefs)
     const parts = [d.date === now && prefs.goal
         ? "Today goes to " + duration(day) + " of " + duration(prefs.goal) + "."
         : shortDate(d.date) + " goes to " + duration(day) + "."]

@@ -2,7 +2,7 @@
 // entered together, and a half-edited timetable should not reach the board. From legacy
 // views/drawer-course.js.
 
-import { HEXES, normalizeCourse, uid } from "@/legacy/js/model.js"
+import { HEXES, normalizeCourse, uid } from "@/core/model"
 import type { Course, Meeting } from "./types"
 
 export const MAX_CLASSES = 12

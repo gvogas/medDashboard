@@ -1,10 +1,10 @@
 // Boot, sign-in and sign-out: opening the account's local store, starting sync and
 // Spotify, and starting over when the account changes in another tab.
 
-import { api, ApiError, resetRequests, bindAccount } from './api.js';
-import * as store from './store.js';
-import { data } from './store.js';
-import * as sync from './sync.js';
+import { api, ApiError, resetRequests, bindAccount } from '../../core/api.ts';
+import * as store from '../../core/store.ts';
+import { data } from '../../core/store.ts';
+import * as sync from '../../core/sync.ts';
 import { ui } from './state.js';
 import { render } from './views/render.js';
 import { closeSheet } from '../../data/overlay.ts';

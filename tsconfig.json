@@ -9,6 +9,8 @@
     "noEmit": true,
     "skipLibCheck": true,
     "isolatedModules": true,
+    "allowImportingTsExtensions": true,
+    "erasableSyntaxOnly": true,
     "allowJs": true,
     "checkJs": false,
     "types": ["vite/client"],

@@ -3,7 +3,7 @@
 // refresh token never reaches the page. Rounds only plays here after a click.
 // See docs/superpowers/specs/2026-09-22-spotify-web-playback-design.md.
 
-import { api } from "@/legacy/js/api.js"
+import { api } from "@/core/api"
 import { changed } from "./signal"
 import type { WebState, WebStatus } from "./types"
 

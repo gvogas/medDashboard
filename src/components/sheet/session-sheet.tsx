@@ -4,8 +4,8 @@
 
 import { useId, useMemo } from "react"
 import { cn } from "@/lib/utils"
-import { isOpen, normalizePrefs } from "@/legacy/js/model.js"
-import { today } from "@/legacy/js/dates.js"
+import { isOpen, normalizePrefs } from "@/core/model"
+import { today } from "@/core/dates"
 import { duration } from "@/lib/time"
 import { useCourses, useItems, useProfile, useStudySessions } from "@/data/store"
 import { closeSheet, replaceSheet } from "@/data/overlay"

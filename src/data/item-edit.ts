@@ -3,11 +3,11 @@
 // sheet (components/sheet/item-sheet.tsx) is the only form now.
 
 import { useSyncExternalStore } from "react"
-import * as store from "@/legacy/js/store.js"
-import { data } from "@/legacy/js/store.js"
-import { classRoom, normalizeItem, shiftEnd, statusesFor } from "@/legacy/js/model.js"
-import { diffDays, parse, today, DOW } from "@/legacy/js/dates.js"
-import { nextReview } from "@/legacy/js/reviews.js"
+import * as store from "@/core/store"
+import { data } from "@/core/store"
+import { classRoom, normalizeItem, shiftEnd, statusesFor } from "@/core/model"
+import { diffDays, parse, today, DOW } from "@/core/dates"
+import { nextReview } from "@/core/reviews"
 import { launch as fireworks } from "@/legacy/js/fireworks.js"
 import { useItems } from "./store"
 import type { Course, Item } from "./types"

@@ -13,7 +13,7 @@ const fake = vi.hoisted(() => {
     return { data, listeners, put, ui: { bg: "med", view: "week", course: "all", search: "", types: {} } }
 })
 const actions = vi.hoisted(() => ({ deleteItem: vi.fn(), deleteCourse: vi.fn(), openCourse: vi.fn() }))
-vi.mock("@/legacy/js/store.js", () => ({
+vi.mock("@/core/store", () => ({
     data: fake.data,
     item: (id: string) => fake.data.items.find((x) => x.id === id) || null,
     course: (id: string) => fake.data.courses.find((x) => x.id === id) || null,
@@ -23,22 +23,22 @@ vi.mock("@/legacy/js/store.js", () => ({
 }))
 vi.mock("@/legacy/js/state.js", () => ({ ui: fake.ui }))
 vi.mock("@/legacy/js/query.js", () => ({ schoolCal: () => null, termStart: () => "2026-09-01" }))
-vi.mock("@/legacy/js/reviews.js", () => ({ nextReview: () => null }))
+vi.mock("@/core/reviews", () => ({ nextReview: () => null }))
 vi.mock("@/legacy/js/fireworks.js", () => ({ launch: vi.fn() }))
 vi.mock("@/data/actions", () => actions)
 /* what Settings reads, for the sheet to load */
 vi.mock("@/legacy/js/theme.js", () => ({ setTheme: vi.fn(), setBg: vi.fn() }))
 vi.mock("@/legacy/js/study-controller.js", () => ({ savePrefs: vi.fn() }))
 vi.mock("@/legacy/js/sync-status.js", () => ({ runReviews: vi.fn() }))
-vi.mock("@/legacy/js/sync.js", () => ({ status: { state: "idle", pending: 0, message: "" }, onStatus: () => {} }))
+vi.mock("@/core/sync", () => ({ status: { state: "idle", pending: 0, message: "" }, onStatus: () => {} }))
 vi.mock("@/data/spotify/player", () => ({ state: { loaded: true, connected: false } }))
 vi.mock("@/data/spotify/web-player", () => ({ state: { status: "off" } }))
-vi.mock("@/legacy/js/api.js", () => ({ api: {}, spotifyRetryAt: () => 0 }))
+vi.mock("@/core/api", () => ({ api: {}, spotifyRetryAt: () => 0 }))
 vi.mock("@/data/ai-read", () => ({ readWithAi: vi.fn() }))
 vi.mock("@/legacy/js/views/render.js", () => ({ render: vi.fn(), renderView: vi.fn() }))
 
-import * as store from "@/legacy/js/store.js"
-import { normalizeCourse, normalizeItem } from "@/legacy/js/model.js"
+import * as store from "@/core/store"
+import { normalizeCourse, normalizeItem } from "@/core/model"
 import { launch as fireworks } from "@/legacy/js/fireworks.js"
 import { closeSheet, cover, getSheet, openSheet } from "@/data/overlay"
 import { flush, TYPING_MS } from "@/data/item-edit"

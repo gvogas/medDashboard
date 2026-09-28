@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
-import { lectureDates, reviewId, reviewStep, firstReviews, nextReview, dueReviews } from '../src/legacy/js/reviews.js';
-import { shortDate } from '../src/legacy/js/dates.js';
-import { examWindow, fillTopics, prepPace, prepLabel } from '../src/legacy/js/prep.js';
+import { lectureDates, reviewId, reviewStep, firstReviews, nextReview, dueReviews } from '../src/core/reviews.ts';
+import { shortDate } from '../src/core/dates.ts';
+import { examWindow, fillTopics, prepPace, prepLabel } from '../src/core/prep.ts';
 
 const pharm = {
   id: 'c-pharm', code: 'PHARM', archived: false,

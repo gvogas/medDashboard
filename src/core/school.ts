@@ -3,49 +3,70 @@
 // another weekday's timetable, and plain markers. Pure and time-zone free: every date is
 // a 'YYYY-MM-DD' string worked on in UTC, so the Worker's calendar feed shares it.
 
-export const SCHOOL_KINDS = ['off', 'break', 'exams', 'swap', 'note'];
-export const KIND_LABELS = { off: 'No classes', break: 'Study break', exams: 'Exams', swap: 'Follows another day', note: 'Marker' };
+export type SchoolKind = 'off' | 'break' | 'exams' | 'swap' | 'note';
+export const SCHOOL_KINDS: SchoolKind[] = ['off', 'break', 'exams', 'swap', 'note'];
+export const KIND_LABELS: Record<SchoolKind, string> = { off: 'No classes', break: 'Study break', exams: 'Exams', swap: 'Follows another day', note: 'Marker' };
 export const SCHOOL_LIMITS = { terms: 4, days: 80, name: 80, term: 40, label: 60 };
+
+/** A semester: its name and its first and last day of classes. */
+export interface Term { name: string; start: string; end: string }
+/** A special day or run of days; a swap day says which weekday's classes it follows. */
+export interface SchoolDay { from: string; to: string; kind: SchoolKind; label: string; follows?: number }
+export interface SchoolCalendar { name: string; terms: Term[]; days: SchoolDay[] }
+
+/** What a school day is, from dayInfo. */
+export interface DayInfo {
+  kind: SchoolKind | 'none' | 'class';
+  label: string;
+  follows?: number;
+  notes: string[];
+  term: Term | null;
+}
+
+/** Where a week sits in the school year, from weekOf. */
+export interface WeekInfo { term: Term; kind: 'week' | 'break' | 'exams'; week: number | null; of: number | null }
 
 const DAY = 86_400_000;
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
-const ms = (d) => Date.UTC(+d.slice(0, 4), +d.slice(5, 7) - 1, +d.slice(8, 10));
-const iso = (t) => new Date(t).toISOString().slice(0, 10);
-export const validDate = (d) => typeof d === 'string' && DATE.test(d) && iso(ms(d)) === d;
-const plusDays = (d, n) => iso(ms(d) + n * DAY);
-export const weekdayOf = (d) => new Date(ms(d)).getUTCDay();
-const mondayOf = (d) => plusDays(d, -((weekdayOf(d) + 6) % 7));
-const cut = (v, n) => (typeof v === 'string' ? v.replace(/\s+/g, ' ').trim().slice(0, n) : '');
+const ms = (d: string) => Date.UTC(+d.slice(0, 4), +d.slice(5, 7) - 1, +d.slice(8, 10));
+const iso = (t: number) => new Date(t).toISOString().slice(0, 10);
+export const validDate = (d: unknown): d is string => typeof d === 'string' && DATE.test(d) && iso(ms(d)) === d;
+const plusDays = (d: string, n: number) => iso(ms(d) + n * DAY);
+export const weekdayOf = (d: string): number => new Date(ms(d)).getUTCDay();
+const mondayOf = (d: string) => plusDays(d, -((weekdayOf(d) + 6) % 7));
+const cut = (v: unknown, n: number) => (typeof v === 'string' ? v.replace(/\s+/g, ' ').trim().slice(0, n) : '');
+const isKind = (k: unknown): k is SchoolKind => SCHOOL_KINDS.includes(k as SchoolKind);
 
 /** A stored or read calendar made safe: {name, terms, days}, or null when it has no semester. */
-export function normalizeSchool(raw) {
+export function normalizeSchool(raw: unknown): SchoolCalendar | null {
   if (!raw || typeof raw !== 'object') return null;
-  const terms = (Array.isArray(raw.terms) ? raw.terms : [])
-    .filter((t) => t && validDate(t.start) && validDate(t.end) && t.start <= t.end)
+  const r = raw as { name?: unknown; terms?: unknown; days?: unknown };
+  const terms = (Array.isArray(r.terms) ? r.terms as Record<string, unknown>[] : [])
+    .filter((t): t is { name?: unknown; start: string; end: string } => t && validDate(t.start) && validDate(t.end) && t.start <= t.end)
     .map((t) => ({ name: cut(t.name, SCHOOL_LIMITS.term) || 'Semester', start: t.start, end: t.end }))
     .sort((a, b) => a.start.localeCompare(b.start)).slice(0, SCHOOL_LIMITS.terms);
   if (!terms.length) return null;
-  const days = (Array.isArray(raw.days) ? raw.days : [])
-    .filter((d) => d && validDate(d.from) && SCHOOL_KINDS.includes(d.kind))
+  const days = (Array.isArray(r.days) ? r.days as Record<string, unknown>[] : [])
+    .filter((d): d is { from: string; to?: unknown; kind: SchoolKind; label?: unknown; follows?: unknown } => d && validDate(d.from) && isKind(d.kind))
     .map((d) => {
       const to = validDate(d.to) && d.to >= d.from ? d.to : d.from;
-      const out = { from: d.from, to, kind: d.kind, label: cut(d.label, SCHOOL_LIMITS.label) };
-      if (d.kind === 'swap') out.follows = Number.isInteger(d.follows) && d.follows >= 0 && d.follows <= 6 ? d.follows : 1;
+      const out: SchoolDay = { from: d.from, to, kind: d.kind, label: cut(d.label, SCHOOL_LIMITS.label) };
+      if (d.kind === 'swap') out.follows = Number.isInteger(d.follows) && (d.follows as number) >= 0 && (d.follows as number) <= 6 ? d.follows as number : 1;
       return out;
     })
     .sort((a, b) => a.from.localeCompare(b.from)).slice(0, SCHOOL_LIMITS.days);
-  return { name: cut(raw.name, SCHOOL_LIMITS.name), terms, days };
+  return { name: cut(r.name, SCHOOL_LIMITS.name), terms, days };
 }
 
 /** The semester whose classes run on `date`, or null. */
-const termOf = (cal, date) => cal?.terms.find((t) => t.start <= date && date <= t.end) || null;
+const termOf = (cal: SchoolCalendar | null, date: string) => cal?.terms.find((t) => t.start <= date && date <= t.end) || null;
 
 /**
  * What kind of school day `date` is: {kind, label, follows, notes, term}. kind is
  * 'off', 'break' or 'exams' from a special day; 'none' outside every semester; 'swap'
  * when it runs the `follows` weekday's classes; else 'class'. notes are marker labels.
  */
-export function dayInfo(cal, date) {
+export function dayInfo(cal: SchoolCalendar | null, date: string): DayInfo {
   const hits = cal ? cal.days.filter((d) => d.from <= date && date <= d.to) : [];
   const notes = hits.filter((d) => d.kind === 'note').map((d) => d.label).filter(Boolean);
   const term = termOf(cal, date);
@@ -58,16 +79,17 @@ export function dayInfo(cal, date) {
 }
 
 /** Whose timetable runs on `date`: a weekday 0–6, or null for no classes. No calendar: its own. */
-export function classWeekday(cal, date) {
+export function classWeekday(cal: SchoolCalendar | null, date: string): number | null {
   if (!cal) return weekdayOf(date);
   const info = dayInfo(cal, date);
-  return info.kind === 'class' ? weekdayOf(date) : info.kind === 'swap' ? info.follows : null;
+  /* a swap day always has `follows`: normalizeSchool sets it */
+  return info.kind === 'class' ? weekdayOf(date) : info.kind === 'swap' ? info.follows as number : null;
 }
 
 /* A semester's weeks, Monday to Sunday. A week is not counted when every weekday of it
    inside the semester is a study break. */
-function weeksOf(cal, term) {
-  const out = [];
+function weeksOf(cal: SchoolCalendar, term: Term) {
+  const out: { monday: string; week: number | null }[] = [];
   let n = 0;
   for (let mon = mondayOf(term.start); mon <= term.end; mon = plusDays(mon, 7)) {
     const weekdays = [0, 1, 2, 3, 4].map((i) => plusDays(mon, i)).filter((d) => d >= term.start && d <= term.end);
@@ -82,7 +104,7 @@ function weeksOf(cal, term) {
  * kind 'week' is a numbered week ("Week 7 of 16"); 'break' a study break week, with
  * `week` the number the next week will have; 'exams' an exam week after classes end.
  */
-export function weekOf(cal, date) {
+export function weekOf(cal: SchoolCalendar | null, date: string): WeekInfo | null {
   if (!cal) return null;
   const mon = mondayOf(date), days = [0, 1, 2, 3, 4, 5, 6].map((i) => plusDays(mon, i));
   const term = days.map((d) => termOf(cal, d)).find(Boolean);
@@ -101,19 +123,19 @@ export function weekOf(cal, date) {
 }
 
 /** The semester that counts now: the latest to have started by `today`, else the next one. */
-export function currentTerm(cal, today) {
+export function currentTerm(cal: SchoolCalendar | null, today: string): Term | null {
   if (!cal) return null;
   return [...cal.terms].reverse().find((t) => t.start <= today) || cal.terms[0];
 }
 
 /** The term start the app goes by: the school calendar's current semester, else the one set. */
-export function termStartFor(profile, today) {
+export function termStartFor(profile: { schoolCalendar?: unknown; termStart?: string | null } | null | undefined, today: string): string | null {
   const cal = normalizeSchool(profile?.schoolCalendar);
-  return cal ? currentTerm(cal, today).start : profile?.termStart || null;
+  return cal ? currentTerm(cal, today)!.start : profile?.termStart || null;
 }
 
 /** One line about where `today` is in the school year, for Settings. */
-export function schoolStatus(cal, today, fmt = (d) => d) {
+export function schoolStatus(cal: SchoolCalendar | null, today: string, fmt: (d: string) => string = (d) => d): string {
   if (!cal) return '';
   const w = weekOf(cal, today), last = cal.terms[cal.terms.length - 1];
   if (w?.kind === 'week' && w.week) return w.term.name + ' · week ' + w.week + ' of ' + w.of;

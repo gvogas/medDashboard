@@ -6,9 +6,9 @@
 import { useEffect, useRef, useState, type CSSProperties, type KeyboardEvent, type ReactNode } from "react"
 import { cn } from "@/lib/utils"
 import { duration } from "@/lib/time"
-import { dayOf } from "@/legacy/js/history.js"
-import { shortDate, DOW } from "@/legacy/js/dates.js"
-import { course as courseOf, item as itemOf } from "@/legacy/js/store.js"
+import { dayOf } from "@/core/history"
+import { shortDate, DOW } from "@/core/dates"
+import { course as courseOf, item as itemOf } from "@/core/store"
 import { accent, Panel } from "@/components/views/bits"
 import { Segmented } from "@/components/sheet/fields"
 import {

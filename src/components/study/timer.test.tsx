@@ -2,7 +2,7 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vite
 import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react"
 import { stubMatchMedia } from "@/components/test-media"
 
-// The timer cards and the corner dock over the real study-timer.ts, focus.js and timer.js,
+// The timer cards and the corner dock over the real study-timer.ts, focus.js and core/timer.ts,
 // with a store in memory: the device's meta store (where focus.js keeps the run), the
 // sessions it logs, and a profile that saving replaces, as a reload does.
 const fake = vi.hoisted(() => ({
@@ -14,7 +14,7 @@ const fake = vi.hoisted(() => ({
     },
     profileSaves: [] as Record<string, unknown>[],
 }))
-vi.mock("@/legacy/js/store.js", () => ({
+vi.mock("@/core/store", () => ({
     data: fake.data,
     conflicts: [],
     subscribe: () => () => {},
@@ -40,7 +40,7 @@ const actions = vi.hoisted(() => ({ openCourse: vi.fn(), openSettings: vi.fn() }
 vi.mock("@/data/actions", () => actions)
 
 import * as focus from "@/legacy/js/focus.js"
-import { normalizeCourse, normalizeItem } from "@/legacy/js/model.js"
+import { normalizeCourse, normalizeItem } from "@/core/model"
 import { notify } from "@/bridge"
 import { ui } from "@/data/ui"
 import { leaveFocus } from "@/data/study-timer"

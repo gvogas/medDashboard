@@ -1,11 +1,11 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest"
 
 /* The selectors are pure; only the hooks at the end of views.ts touch the store. */
-vi.mock("@/legacy/js/store.js", () => ({ data: { items: [], courses: [], quotes: [], study_sessions: [], profile: null }, subscribe: () => () => {} }))
+vi.mock("@/core/store", () => ({ data: { items: [], courses: [], quotes: [], study_sessions: [], profile: null }, subscribe: () => () => {} }))
 vi.mock("@/legacy/js/query.js", () => ({ schoolCal: () => null }))
 
-import { normalizeCourse, normalizeItem } from "@/legacy/js/model.js"
-import { normalizeSchool } from "@/legacy/js/school.js"
+import { normalizeCourse, normalizeItem } from "@/core/model"
+import { normalizeSchool } from "@/core/school"
 import {
     cellLabel, classes, instances, monthCells, officeHours, quoteAt, stats, tableRows, tasks, timetable, weekDays,
     type Filters, type ViewInput,

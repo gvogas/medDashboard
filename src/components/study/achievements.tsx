@@ -5,9 +5,9 @@
 
 import type { ReactNode } from "react"
 import { cn } from "@/lib/utils"
-import { dayMonth } from "@/legacy/js/dates.js"
-import { GROUPS } from "@/legacy/js/achievements.js"
-import { ACHIEVEMENT_LIMIT } from "@/legacy/js/model.js"
+import { dayMonth } from "@/core/dates"
+import { GROUPS } from "@/core/achievements"
+import { ACHIEVEMENT_LIMIT } from "@/core/model"
 import { Panel } from "@/components/views/bits"
 import { useBadges } from "@/data/study"
 import { openAchievement } from "@/data/actions"
