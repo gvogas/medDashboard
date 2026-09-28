@@ -13,6 +13,8 @@ import { CourseSheet } from "./course-sheet"
 import { SettingsSheet } from "./settings-sheet"
 import { ImportSheet } from "./import-sheet"
 import { SchoolSheet } from "./school-sheet"
+import { SessionSheet } from "./session-sheet"
+import { AchievementSheet } from "./achievement-sheet"
 import * as store from "@/legacy/js/store.js"
 import type { Item } from "@/data/types"
 
@@ -48,7 +50,7 @@ export function Sheet() {
             ;(refind(opener.current) as HTMLElement | null)?.focus()
             opener.current = null
         }
-    }, [open, state?.kind, state?.kind === "item" ? state.id : state?.kind === "course" ? state.id : null])
+    }, [open, state?.kind, state?.kind === "item" || state?.kind === "course" ? state.id : state?.kind === "session" || state?.kind === "achievement" ? state.draft.id : null])
 
     /* the scrim is index.html's; a click on it closes the sheet */
     useEffect(() => {
@@ -86,6 +88,8 @@ export function Sheet() {
             {shown?.kind === "settings" && <SettingsSheet tab={shown.tab} focus={shown.focus} />}
             {shown?.kind === "import" && <ImportSheet key={shown.name} plan={shown.plan} name={shown.name} />}
             {shown?.kind === "school" && <SchoolSheet draft={shown.draft} />}
+            {shown?.kind === "session" && <SessionSheet key={shown.draft.id} draft={shown.draft} />}
+            {shown?.kind === "achievement" && <AchievementSheet key={shown.draft.id} draft={shown.draft} />}
         </div>
     )
 }

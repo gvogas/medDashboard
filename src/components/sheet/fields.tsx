@@ -46,8 +46,8 @@ export const Section = ({ title, note, children }: { title: ReactNode; note?: Re
 
 const BUTTON = "inline-flex cursor-pointer items-center justify-center gap-1.5 rounded-[10px] border px-3.5 py-[7px] font-[inherit] text-[12.5px] leading-tight transition-[filter,color,border-color] disabled:cursor-default"
 
-/** The sheet's buttons: the accent gradient, the quiet ghost, or the crit colour. */
-export function Button({ variant = "primary", className, ...props }: ComponentProps<"button"> & { variant?: "primary" | "ghost" | "danger" }) {
+/** The sheet's buttons: the accent gradient, the study colour, the quiet ghost, or the crit colour. */
+export function Button({ variant = "primary", className, ...props }: ComponentProps<"button"> & { variant?: "primary" | "study" | "ghost" | "danger" }) {
     return (
         <button
             type="button"
@@ -55,6 +55,7 @@ export function Button({ variant = "primary", className, ...props }: ComponentPr
             className={cn(
                 BUTTON,
                 variant === "primary" && "border-[color-mix(in_srgb,var(--accent)_72%,#000)] bg-[linear-gradient(color-mix(in_srgb,var(--accent)_90%,#fff),color-mix(in_srgb,var(--accent)_92%,#000))] font-[650] text-primary-foreground shadow-[var(--shadow-1),inset_0_1px_0_rgba(255,255,255,.28)] hover:brightness-[1.07] active:brightness-[.94]",
+                variant === "study" && "border-[color-mix(in_srgb,var(--study)_72%,#000)] bg-[linear-gradient(color-mix(in_srgb,var(--study)_90%,#fff),color-mix(in_srgb,var(--study)_92%,#000))] font-[650] text-primary-foreground shadow-[0_8px_20px_-8px_var(--study),inset_0_1px_0_rgba(255,255,255,.28)] hover:brightness-[1.07] active:brightness-[.94]",
                 variant === "ghost" && "border-border bg-[linear-gradient(var(--panel),var(--panel-2))] font-[550] text-ink-2 shadow-[var(--shadow-1),inset_0_1px_0_var(--rim-hi)] hover:border-[color-mix(in_srgb,var(--accent)_50%,var(--line))] hover:text-foreground",
                 variant === "danger" && "border-[color-mix(in_srgb,var(--crit)_72%,#000)] bg-[linear-gradient(color-mix(in_srgb,var(--crit)_90%,#fff),color-mix(in_srgb,var(--crit)_92%,#000))] font-[650] text-[var(--on-crit)]",
                 "disabled:border-transparent disabled:bg-[var(--disabled)] disabled:shadow-none disabled:brightness-100",

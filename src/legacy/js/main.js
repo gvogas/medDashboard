@@ -13,8 +13,6 @@ import { drawer, scrim, closeDrawer } from './views/drawer-base.js';
 import { setSide, watchSidebar } from '../../data/sidebar.ts';
 import { flush as flushTyping } from '../../data/item-edit.ts';
 import { openCourse, openSettings } from '../../data/actions.ts';
-import { renderSessionDrawer, editSession, saveSessionDraft } from './views/drawer-session.js';
-import { achievementClick, editAchievement } from './views/drawer-achievement.js';
 import { leaderboardClick } from './views/leaderboard.js';
 import * as spotify from './spotify.js';
 import * as web from './web-player.js';
@@ -24,7 +22,7 @@ import * as focus from './focus.js';
 import { followSystem } from './theme.js';
 import { refreshAfterSync, runHeldRefresh, pointerPressed, pointerReleased, runReviews } from './sync-status.js';
 import { boot, showSignIn, signOut, onStoreEvent, onStorage } from './session.js';
-import { onFocusTick, commitUndo, finishDelete, deleteWithUndo, studyClick, studyChange } from './study-controller.js';
+import { onFocusTick, commitUndo, finishDelete, studyClick, studyChange } from './study-controller.js';
 import { onKeydown } from './keyboard.js';
 
 /* what is typed in the item sheet is saved before the page goes */
@@ -89,7 +87,6 @@ async function onClick(e) {
   if ((el = e.target.closest('[data-newcourse]'))) { openCourse(null); return; }
   if ((el = e.target.closest('[data-editcourse]'))) { openCourse(el.dataset.editcourse); return; }
   if (await studyClick(e)) return;
-  if (await achievementClick(e)) return;
   if (await leaderboardClick(e)) return;
   if ((el = e.target.closest('[data-spotify]'))) {
     const act = el.dataset.spotify;
@@ -114,19 +111,6 @@ async function onClick(e) {
   if (e.target.closest('[data-spot-devices]')) { spotView.toggleDevices(); return; }
   if ((el = e.target.closest('[data-spot-device]'))) { web.activate(); spotView.pickDevice(el.dataset.spotDevice); return; }
 
-  if ((el = e.target.closest('[data-act]'))) {
-    const act = el.dataset.act;
-    if (act === 'close' || act === 'cancel') closeDrawer();
-    else if (act === 'keep' && ui.sessionDraft) {
-      ui.confirm = null;
-      renderSessionDrawer();
-      drawer.querySelector('[data-act$="delete"]')?.focus();
-    }
-    else if (act === 'session-save') saveSessionDraft();
-    else if (act === 'session-delete') { ui.confirm = 'session'; renderSessionDrawer(); drawer.querySelector('[data-act="keep"]')?.focus(); }
-    else if (act === 'session-delete-yes' && ui.sessionDraft) { const id = ui.sessionDraft.id; closeDrawer(); deleteWithUndo(id); }
-    return;
-  }
   if (!e.target.closest('#side') && !e.target.closest('#menuBtn') && $('side').classList.contains('on')) setSide(false);
 }
 
@@ -135,8 +119,6 @@ scrim.addEventListener('click', () => { if (drawer.classList.contains('on')) clo
 
 document.addEventListener('input', async (e) => {
   const d = e.target.dataset || {};
-  if ('sd' in d) { editSession(d.sd, e.target.value); return; }     /* the Log study drawer */
-  if ('ach' in d) { editAchievement(d.ach, e.target.value); return; } /* the achievement drawer */
   if ('spotVol' in d) { spotView.setVolume(+e.target.value); return; }
   if ('spotQ' in d) { spotView.typed(e.target.value); return; }
   if ('spotFilter' in d) { spotView.setFilter(e.target.value); return; }

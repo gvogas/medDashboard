@@ -6,12 +6,11 @@ import { data } from './store.js';
 import { ui, rememberUi } from './state.js';
 import { normalizeFlow, normalizePrefs, FLOW_PRESETS } from './model.js';
 import { parse, today } from './dates.js';
-import { $, esc } from './dom.js';
+import { esc } from './dom.js';
 import { render, renderView } from './views/render.js';
 import { drawerOpen } from './views/drawer-base.js';
-import { openSession, editSession } from './views/drawer-session.js';
 import { toast } from './views/toast.js';
-import { openSettings } from '../../data/actions.ts';
+import { openSettings, openSession, openAchievement } from '../../data/actions.ts';
 import { minutesByDay, streak } from './history.js';
 import { achievements, ownAchievements } from './achievements.js';
 import { launch as fireworks } from './fireworks.js';
@@ -206,7 +205,8 @@ export async function studyClick(e) {
   }
   if ((el = e.target.closest('[data-hist-pick]'))) { ui.hist.focusDay = el.dataset.histPick; renderView(); document.querySelector('[data-hist-pick="' + el.dataset.histPick + '"]')?.focus(); return true; }
   if ((el = e.target.closest('[data-hist-day]'))) { showDay(el.dataset.histDay); return true; }
-  if ((el = e.target.closest('[data-sd-mins]'))) { editSession('minutes', el.dataset.sdMins); $('sd-min').value = el.dataset.sdMins; return true; }
+  if (e.target.closest('[data-ach-new]')) { openAchievement(null); return true; }
+  if ((el = e.target.closest('[data-ach-edit]'))) { openAchievement(el.dataset.achEdit); return true; }
   const f = studyFlow();
   if ((el = e.target.closest('[data-study-kind]'))) {
     const step = f.steps[+el.dataset.studyKind];
