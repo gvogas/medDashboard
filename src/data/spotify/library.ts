@@ -50,14 +50,8 @@ export const busy = new Set<string>()             /* what is being fetched: guar
 export let note: SpotifyNote | null = null        /* a short line under the top row */
 let noteTimer: ReturnType<typeof setTimeout> | undefined
 let typeTimer: ReturnType<typeof setTimeout> | undefined
-let legacyRedraw = () => {}
-
-/** The legacy view's one callback, drawing it again. */
-export function onChange(fn: () => void) { legacyRedraw = fn }
-
-/** Something here changed: the legacy view draws again, React redraws. */
+/** Something here changed: React redraws. */
 export function rerender() {
-    legacyRedraw()
     changed()
 }
 

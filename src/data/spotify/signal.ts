@@ -1,7 +1,7 @@
 // One change signal for the whole engine: the poller, the Rounds device, the library and
 // the commands call changed() whenever something they hold has moved, and useSpotify()
-// redraws on it. The legacy view keeps its own single callbacks (onState, onChange…),
-// which each module calls as before; this is only for React.
+// redraws on it. The poller's onState and the device's onChange are for the legacy
+// wiring in main.js (the Rounds device starting and stopping, the top bar and Settings).
 
 const listeners = new Set<() => void>()
 let version = 0

@@ -73,10 +73,6 @@ button{cursor:pointer}
 }
 :root[data-bg="cs"] .pocket{display:none}
 
-/* the equaliser beside the playing track in the focus screen's legacy Spotify view (.eqs):
-   3px to 12px tall, as a transform: an endless height animation would lay the page out every frame */
-@keyframes eq{0%,100%{transform:scaleY(.5)}50%{transform:scaleY(2)}}
-
 /* ─── content ─── */
 /* min-height:0 matters — without it a grid item refuses to shrink below its
    content, the scroll area never gets a height, and tall views can't scroll. */

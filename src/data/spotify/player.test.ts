@@ -48,10 +48,6 @@ describe("Spotify connection on startup", () => {
             if (connected) expect(player.state.stale).toBe(true)
         })
         expect(paths()).toEqual(connected ? ["/api/spotify/status", "/api/spotify/player"] : ["/api/spotify/status"])
-        const { renderSpotifyView } = await import("@/legacy/js/views/spotify-view.js")
-        const html = renderSpotifyView()
-        expect(html).toContain(connected ? "Try again after" : 'href="/api/spotify/connect"')
-        expect(html).not.toContain('data-spotify="connect"')
     })
 })
 

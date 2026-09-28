@@ -4,7 +4,7 @@ import { parse, addDays, monday, iso, DOW, MON } from "@/legacy/js/dates.js"
 import { schoolCal } from "@/legacy/js/query.js"
 import { weekOf } from "@/legacy/js/school.js"
 import { weekLabel } from "@/legacy/js/views/school-bits.js"
-import { state as spotify } from "@/legacy/js/spotify.js"
+import { state as spotify } from "@/data/spotify/player"
 import type { Ui } from "@/data/types"
 
 export interface Heading { title: string; sub: string }

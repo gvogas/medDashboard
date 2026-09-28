@@ -40,8 +40,8 @@ vi.mock("@/legacy/js/sticker.js", () => ({
 vi.mock("@/data/toast", () => ({ toast: vi.fn() }))
 /* what Settings reads, for the sheet to load */
 vi.mock("@/legacy/js/theme.js", () => ({ setTheme: vi.fn(), setBg: vi.fn() }))
-vi.mock("@/legacy/js/spotify.js", () => ({ state: { loaded: true, connected: false } }))
-vi.mock("@/legacy/js/web-player.js", () => ({ state: { status: "off" } }))
+vi.mock("@/data/spotify/player", () => ({ state: { loaded: true, connected: false } }))
+vi.mock("@/data/spotify/web-player", () => ({ state: { status: "off" } }))
 vi.mock("@/legacy/js/sync-status.js", () => ({ runReviews: vi.fn() }))
 
 import * as store from "@/legacy/js/store.js"

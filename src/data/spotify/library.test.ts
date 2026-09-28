@@ -1,5 +1,4 @@
-// The loads and the session cache, through a fake Worker; the first two draw the legacy view
-// through its shims, as the page still does until the Spotify UI is React's.
+// The loads and the session cache, through a fake Worker.
 import { afterEach, describe, expect, it, vi } from "vitest"
 
 const json = (body: unknown, status = 200, headers: Record<string, string> = {}) =>
@@ -17,70 +16,6 @@ async function fresh(route: (path: string) => Response | Promise<Response>) {
     return { library, ui, asked }
 }
 
-/* Drawing the Spotify view starts its loads; a load's redraw must not draw inside the
-   draw and start the next load, or the two ping-pong until the stack overflows. */
-describe("spotify view redraws", () => {
-    it("keeps the retry deadline visible and cached tracks intact throughout a long cooldown", async () => {
-        vi.resetModules()
-        vi.useFakeTimers()
-        const fetcher = vi.fn(async (path: string) => path.includes("/playlists/pl1/tracks")
-            ? json({ items: [], total: 0, next: null })
-            : json({ error: "rate_limited", retryAfter: 41233 }, 429, { "retry-after": "41233" }))
-        vi.stubGlobal("fetch", fetcher)
-        const { api, spotifyRetryAt } = await import("@/legacy/js/api.js")
-        const { state: player } = await import("@/legacy/js/spotify.js")
-        const view = await import("@/legacy/js/views/spotify-view.js")
-        Object.assign(player, { loaded: true, connected: true })
-
-        view.openPlaylist("pl1", "Study mix")
-        await api.spotifyPlaylistTracks("pl1") // share the view's in-flight load
-        const blocked = api.spotifyQueue().catch((error: unknown) => error)
-        await vi.advanceTimersByTimeAsync(1500)
-        expect(((await blocked) as { status: number }).status).toBe(429)
-        const deadline = spotifyRetryAt()
-        expect(deadline).toBeGreaterThan(Date.now())
-        view.refresh("list")
-        expect(view.renderSpotifyView()).toContain("Nothing in here yet.")
-
-        view.openPlaylist("missing", "Unavailable mix")
-        await vi.advanceTimersByTimeAsync(6001) // the ordinary error toast has expired
-        const html = view.renderSpotifyView()
-        expect(html).toContain("Try again after")
-        expect(html).toContain("Waiting for the Spotify request limit to reset.")
-        expect(html).not.toContain("Asking Spotify")
-        expect(fetcher).toHaveBeenCalledTimes(2)
-        expect(spotifyRetryAt()).toBe(deadline)
-        vi.setSystemTime(deadline + 1)
-        expect(spotifyRetryAt()).toBe(0)
-    })
-
-    it("draws the home pane without recursing, asking for each list once", async () => {
-        const asked: string[] = []
-        vi.stubGlobal("fetch", async (path: string) => {
-            asked.push(path)
-            const body = path.includes("/me") && !path.includes("/me/") ? { id: "u", name: "U" } : { items: [], total: 0, next: null }
-            return json(body)
-        })
-        vi.resetModules()
-        const { state: player } = await import("@/legacy/js/spotify.js")
-        const view = await import("@/legacy/js/views/spotify-view.js")
-        const { ui } = await import("@/legacy/js/state.js")
-        ui.spotify.pane = "home"
-        Object.assign(player, { loaded: true, connected: true })
-
-        let draws = 0
-        view.onChange(() => { draws++; view.renderSpotifyView() })
-        expect(() => view.renderSpotifyView()).not.toThrow()
-        await vi.waitFor(() => expect(asked.filter((p) => p.includes("/me")).length).toBe(1), { timeout: 8000 })
-        await new Promise((r) => setTimeout(r, 200))
-
-        const count = (part: string) => asked.filter((p) => p.startsWith(part)).length
-        expect(count("/api/spotify/playlists")).toBe(1)
-        expect(count("/api/spotify/recent")).toBe(1)
-        expect(draws).toBeLessThan(20)
-    }, 15000)
-})
-
 describe("the library", () => {
     it("asks for recently played once, and stops asking when it needs a reconnect", async () => {
         const { library, asked } = await fresh(() => json({ error: "reconnect_needed" }, 403))
@@ -96,7 +31,7 @@ describe("the library", () => {
         vi.useFakeTimers()
         const { library, asked } = await fresh(() => json({ error: "spotify_unavailable" }, 502))
         const redraws = vi.fn()
-        library.onChange(redraws)
+        ;(await import("./signal")).subscribe(redraws)
         library.ensurePlaylists()
         expect(library.busy.has("playlists")).toBe(true)
         await vi.advanceTimersByTimeAsync(0)
