@@ -5,7 +5,6 @@ import { ui } from './state.js';
 import { $, isTyping } from './dom.js';
 import { closeDrawer, drawerOpen, setSide } from './views/drawer-base.js';
 import { getSheet, requestCloseSheet } from '../../data/overlay.ts';
-import { addQuote } from './views/drawer-settings.js';
 import { openKeys, closeKeys, keysOpen } from './views/keys.js';
 import * as spotify from './spotify.js';
 import * as web from './web-player.js';
@@ -58,7 +57,4 @@ export async function onKeydown(e) {
   if (e.key === '/' && !/input|textarea|select/i.test(e.target.tagName)) {
     e.preventDefault(); $('search')?.focus(); return;   /* the top bar's search box */
   }
-  if (e.key !== 'Enter') return;
-
-  if (e.target.id === 'qText' || e.target.id === 'qSrc') { e.preventDefault(); addQuote(); return; }
 }

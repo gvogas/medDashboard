@@ -54,6 +54,7 @@ export interface Profile {
     types: TypePref[]
     schoolCalendar?: unknown
     studyPrefs?: unknown
+    termStart?: string | null
 }
 
 /** A type as the profile stores it: built-ins only carry what differs from their default. */
@@ -105,4 +106,22 @@ export interface Ui {
     schedule: Schedule
     sort: { key: SortKey; dir: 1 | -1 }
     quoteIx: number
+    /* Settings: the last tab, what AI reads and imports said, and its questions */
+    settingsTab: "you" | "study" | "spotify" | "account"
+    importNote: Note | null
+    schoolNote: Note | null
+    spotifyNote: "connected" | "error" | null
+    outlineBusy: boolean
+    schoolBusy: boolean
+    schoolAsk: boolean
+    signoutAsk: { everywhere: boolean } | null
+    feed: Feed | null
 }
+
+export interface Note { text: string; error: boolean }
+
+/** An edit the server turned down, kept so it can be restored or discarded. */
+export interface SavedCopy { id: string; key: string; op: string; reason: string; body: Record<string, unknown> | null }
+
+/** The calendar feed as Settings knows it. */
+export interface Feed { loading?: boolean; on?: boolean; url?: string; busy?: boolean; copied?: boolean; error?: string | null; confirm?: "renew" | "stop" | null }

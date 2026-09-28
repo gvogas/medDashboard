@@ -70,7 +70,7 @@ export async function readWithAi(file, { what, title, stage, flag, note, errors,
     ui[flag] = false; hideBusy();
     const code = err instanceof ApiError ? err.body?.error : null;
     ui[note] = { text: errors[code] || AI_ERRORS[code] || (err instanceof ApiError ? 'The ' + what + ' could not be read (' + (code || err.status) + ').' : 'You seem to be offline. Reading ' + what + 's needs a connection.'), error: true };
-    if (ui.settings) refresh();
+    refresh();
   }
 }
 

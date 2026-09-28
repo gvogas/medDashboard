@@ -5,7 +5,7 @@ import * as store from './store.js';
 import { data } from './store.js';
 import { ui, rememberUi } from './state.js';
 import { render } from './views/render.js';
-import { renderSettings } from './views/drawer-settings.js';
+import { notify } from '../../bridge.ts';
 import { schedule as drawOrnament } from './ornament.js';
 
 export function setTheme(choice, { persist = true } = {}) {
@@ -14,7 +14,7 @@ export function setTheme(choice, { persist = true } = {}) {
   rememberUi();
   /* a failed save shows its own toast */
   if (persist && data.profile && data.profile.theme !== ui.theme) store.saveProfile({ theme: ui.theme }).catch(() => {});
-  if (ui.settings) renderSettings();
+  notify();                           /* Settings shows the choice */
   drawOrnament();                     /* the ornament layer is drawn in the theme's teal */
 }
 export function followSystem() { if (ui.theme === 'system') setTheme('system', { persist: false }); }
@@ -26,6 +26,6 @@ export function setBg(choice, { persist = true } = {}) {
   rememberUi();
   if (persist && data.profile && data.profile.bg !== ui.bg) store.saveProfile({ bg: ui.bg }).catch(() => {});
   if (data.profile) render();          /* the sidebar, stats and type lists change with it */
-  if (ui.settings) renderSettings();
+  notify();
   drawOrnament();
 }

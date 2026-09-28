@@ -9,7 +9,9 @@ import { ui } from './state.js';
 import { render } from './views/render.js';
 import { closeDrawer } from './views/drawer-base.js';
 import { toast } from './views/toast.js';
-import { openSettings, renderSettings, applyCoat } from './views/drawer-settings.js';
+import { applyCoat } from '../../data/settings.ts';
+import { openSettings } from '../../data/actions.ts';
+import { notify } from '../../bridge.ts';
 import * as spotify from './spotify.js';
 import * as web from './web-player.js';
 import { renderSignIn, hideSignIn } from './views/signin.js';
@@ -36,7 +38,7 @@ async function start(profile) {
   hideSignIn();
   setTheme(data.profile.theme || ui.theme, { persist: false });
   setBg(data.profile.bg || ui.bg, { persist: false });
-  applyCoat();
+  applyCoat(data.profile);
   ui.quoteIx = data.quotes.length ? Math.floor(Math.random() * data.quotes.length) : 0;
   await focus.load();
   if (focus.active()) ui.focus = true;       /* a run this device was in the middle of */
@@ -90,7 +92,7 @@ export async function signOut({ everywhere = false, force = false } = {}) {
   await commitUndo();
   await finishDelete();
   await store.reload();
-  if (!force && (store.pendingCount() || store.conflicts.length)) { ui.signoutAsk = { everywhere }; renderSettings(); return; }
+  if (!force && (store.pendingCount() || store.conflicts.length)) { ui.signoutAsk = { everywhere }; notify(); return; }
   ui.signoutAsk = null;
   sync.stop();
   spotify.stop();

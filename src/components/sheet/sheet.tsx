@@ -10,6 +10,9 @@ import { refind } from "@/legacy/js/dom.js"
 import { requestCloseSheet, useSheet, type SheetState } from "@/data/overlay"
 import { ItemSheet } from "./item-sheet"
 import { CourseSheet } from "./course-sheet"
+import { SettingsSheet } from "./settings-sheet"
+import { ImportSheet } from "./import-sheet"
+import { SchoolSheet } from "./school-sheet"
 import * as store from "@/legacy/js/store.js"
 import type { Item } from "@/data/types"
 
@@ -17,6 +20,9 @@ import type { Item } from "@/data/types"
 export function sheetLabel(s: Exclude<SheetState, null>): string {
     if (s.kind === "course") return s.id ? "Course" : "New course"
     if (s.kind === "new-item") return "New " + tmeta(s.draft.type).label.toLowerCase()
+    if (s.kind === "settings") return "Settings"
+    if (s.kind === "import") return "Import"
+    if (s.kind === "school") return "School calendar"
     const it = store.item(s.id) as Item | null
     return it ? tmeta(it.type).label : "Item"
 }
@@ -75,6 +81,9 @@ export function Sheet() {
             {shown?.kind === "item" && <ItemSheet key={shown.id} id={shown.id} />}
             {shown?.kind === "new-item" && <ItemSheet key={shown.draft.id} draft={shown.draft} />}
             {shown?.kind === "course" && <CourseSheet key={shown.id ?? "new"} id={shown.id} />}
+            {shown?.kind === "settings" && <SettingsSheet tab={shown.tab} focus={shown.focus} />}
+            {shown?.kind === "import" && <ImportSheet key={shown.name} plan={shown.plan} name={shown.name} />}
+            {shown?.kind === "school" && <SchoolSheet draft={shown.draft} />}
         </div>
     )
 }

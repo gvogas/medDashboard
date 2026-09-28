@@ -9,14 +9,17 @@ import { isOpen, normalizeItem, typeList, typePrefsFrom, uid, TYPE_COLOURS, MAX_
 import { typeOn } from "@/legacy/js/query.js"
 import { addDays, iso, parse, today } from "@/legacy/js/dates.js"
 import { render, renderView } from "@/legacy/js/views/render.js"
-import { closeDrawer, setSide } from "@/legacy/js/views/drawer-base.js"
-import { openSettings as openSettingsDrawer } from "@/legacy/js/views/drawer-settings.js"
+import { setSide } from "@/legacy/js/views/drawer-base.js"
+import { openKeys } from "@/legacy/js/views/keys.js"
+import { api } from "@/legacy/js/api.js"
+import { toast } from "./toast"
+import { applyCoat, TAB_OF, type SettingsTab } from "./settings"
 import { rememberUi } from "@/legacy/js/state.js"
 import { launch as fireworks } from "@/legacy/js/fireworks.js"
 import { notify } from "@/bridge"
 import { deleteLater, setView } from "@/legacy/js/study-controller.js"
 import { celebrate, chainReview, setStatus, touch } from "./item-edit"
-import { closeSheet, openSheet } from "./overlay"
+import { closeSheet, getSheet, openSheet, replaceSheet } from "./overlay"
 import { ui } from "./ui"
 import type { Course, Item, ItemType, Schedule, SortKey } from "./types"
 
@@ -155,9 +158,74 @@ export async function deleteCourse(id: string) {
     closeSheet()
     await deleteLater("courses", id, c.code || c.name || "Course", () => store.deleteCourse(id))
 }
-/** Settings, opened at a field (as the coat's pencil does), or shut if it is open. */
-export const openSettings = (focusId?: string) => openSettingsDrawer(focusId)
-export const toggleSettings = () => (ui.settings ? closeDrawer() : openSettingsDrawer())
+/* ── Settings ── */
+
+/** Settings, opened at a field or group (as the coat's pencil does), on the tab it lives on. */
+export function openSettings(focus?: string) {
+    const tab = (focus && TAB_OF[focus]) || ui.settingsTab || "you"
+    ui.settingsTab = tab
+    openSheet({ kind: "settings", tab, focus: focus ?? null })
+}
+/** The gear: Settings, or shut if it is open. */
+export const toggleSettings = () => (getSheet()?.kind === "settings" ? closeSheet() : openSettings())
+
+export function setSettingsTab(tab: SettingsTab) {
+    ui.settingsTab = tab
+    replaceSheet({ kind: "settings", tab, focus: null })
+}
+
+/** A quote added, and shown on the tile at once. */
+export async function addQuote(text: string, source: string) {
+    const t = text.trim().replace(/^[“"']|[”"']$/g, "")
+    if (!t) return false
+    await store.saveQuote({ id: uid(), text: t, source: source.trim() })
+    ui.quoteIx = data.quotes.length - 1
+    notify()
+    return true
+}
+export async function removeQuote(id: string) {
+    await store.deleteQuote(id)
+    if (ui.quoteIx >= data.quotes.length) ui.quoteIx = 0
+    notify()
+}
+
+/** The coat's name, line or colour; the colour tints the sidebar at once. */
+export async function saveCoat(patch: { name?: string; role?: string; color?: string }) {
+    await store.saveProfile({ coat: patch })
+    if (patch.color) applyCoat(store.data.profile)
+    notify()
+}
+
+/** Everything on this device, the unsynced edits and the saved copies, as a file. */
+export async function exportData() {
+    await store.reload()
+    const blob = new Blob([JSON.stringify({ ...store.data, pending: await store.pending(), conflicts: store.conflicts }, null, 2)], { type: "application/json" })
+    const url = URL.createObjectURL(blob), link = document.createElement("a")
+    link.href = url
+    link.download = "rounds-backup.json"
+    link.click()
+    setTimeout(() => URL.revokeObjectURL(url), 1000)
+}
+
+/** A saved copy: restore the edit to try it again, or discard it. */
+export async function resolveConflict(id: string, restore: boolean) {
+    try { await store.resolveConflict(id, restore) } catch (error) { toast((error as Error).message, { error: true, ms: 8000 }) }
+    notify()
+}
+
+export async function disconnectSpotify() {
+    try { await api.spotifyDisconnect() } catch { toast("Spotify could not be disconnected. Try again when you are online.", { error: true, ms: 8000 }); return }
+    location.reload()
+}
+
+/** Sign out; with unsynced edits or saved copies the first press asks (in Settings), `force` erases them. */
+/* session.js is loaded by main.js; imported here only when needed, it keeps this module
+   free of the boot code (and light to test) */
+export const signOut = async (opts: { everywhere?: boolean; force?: boolean } = {}) => (await import("@/legacy/js/session.js")).signOut(opts)
+export function keepSignedIn() { ui.signoutAsk = null; notify() }
+
+export function showShortcuts() { closeSheet(); openKeys() }
+
 export const showSidebar = (open: boolean) => setSide(open)
 export const syncNow = () => sync.syncNow()
 
@@ -217,7 +285,7 @@ export function nextQuote(from?: Element): boolean {
     }
     const n = (data.quotes as unknown[]).length
     if (n < 2) {
-        if (from) openSettingsDrawer("qText")
+        if (from) openSettings("qText")
         return false
     }
     ui.quoteIx = (ui.quoteIx + 1) % n

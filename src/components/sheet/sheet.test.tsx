@@ -27,6 +27,16 @@ vi.mock("@/legacy/js/views/study.js", () => ({ studiedFor: () => 0, duration: (m
 vi.mock("@/legacy/js/reviews.js", () => ({ nextReview: () => null }))
 vi.mock("@/legacy/js/fireworks.js", () => ({ launch: vi.fn() }))
 vi.mock("@/data/actions", () => actions)
+/* what Settings reads, for the sheet to load */
+vi.mock("@/legacy/js/theme.js", () => ({ setTheme: vi.fn(), setBg: vi.fn() }))
+vi.mock("@/legacy/js/study-controller.js", () => ({ savePrefs: vi.fn() }))
+vi.mock("@/legacy/js/sync-status.js", () => ({ runReviews: vi.fn() }))
+vi.mock("@/legacy/js/sync.js", () => ({ status: { state: "idle", pending: 0, message: "" }, onStatus: () => {} }))
+vi.mock("@/legacy/js/spotify.js", () => ({ state: { loaded: true, connected: false } }))
+vi.mock("@/legacy/js/web-player.js", () => ({ state: { status: "off" } }))
+vi.mock("@/legacy/js/api.js", () => ({ api: {}, spotifyRetryAt: () => 0 }))
+vi.mock("@/legacy/js/views/busy.js", () => ({ readWithAi: vi.fn() }))
+vi.mock("@/legacy/js/views/render.js", () => ({ render: vi.fn(), renderView: vi.fn() }))
 
 import * as store from "@/legacy/js/store.js"
 import { normalizeCourse, normalizeItem } from "@/legacy/js/model.js"

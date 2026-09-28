@@ -49,9 +49,7 @@ export function hideDrawer() {
 }
 
 export function resetDrawerState() {
-  ui.confirm = null; ui.settings = false; ui.importPlan = null; ui.sessionDraft = null; ui.achDraft = null; ui.schoolDraft = null; ui.signoutAsk = null;
-  /* questions asked in Settings are not still asked when it opens again */
-  ui.schoolAsk = false; if (ui.feed) ui.feed.confirm = null;
+  ui.confirm = null; ui.sessionDraft = null; ui.achDraft = null;
 }
 
 /** Run before the drawer closes, e.g. to save what is still being typed. */
@@ -60,9 +58,6 @@ export const beforeClose = new Set();
 export function closeDrawer() {
   for (const fn of beforeClose) fn();
   resetDrawerState();
-  ui.spotifyNote = null;
-  ui.importNote = null;
-  ui.schoolNote = null;
   render();
   hideDrawer();
 }
@@ -71,8 +66,8 @@ export function drawerHasFocus() {
   return drawer.contains(document.activeElement) && /input|textarea|select/i.test(document.activeElement.tagName);
 }
 
-/** Is any drawer open: the React sheet, settings, an import, a study session, an achievement or the school calendar. */
-export const drawerOpen = () => !!(overlay.getSheet() || ui.settings || ui.importPlan || ui.sessionDraft || ui.achDraft || ui.schoolDraft);
+/** Is any drawer open: the React sheet (an item, a course, Settings, an import, the school calendar), a study session or an achievement. */
+export const drawerOpen = () => !!(overlay.getSheet() || ui.sessionDraft || ui.achDraft);
 
 /* The React sheet opening closes this drawer the usual way. */
 overlay.onLegacyClose(() => closeDrawer());

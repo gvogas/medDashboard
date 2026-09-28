@@ -14,7 +14,6 @@ vi.mock("@/legacy/js/views/keys.js", () => ({ keysOpen: () => false, openKeys: v
 vi.mock("@/legacy/js/store.js", () => ({}))
 vi.mock("@/legacy/js/views/render.js", () => ({}))
 vi.mock("@/legacy/js/views/sidebar.js", () => ({}))
-vi.mock("@/legacy/js/views/drawer-settings.js", () => ({}))
 vi.mock("@/legacy/js/views/types-nav.js", () => ({}))
 vi.mock("@/legacy/js/spotify.js", () => ({}))
 vi.mock("@/legacy/js/web-player.js", () => ({}))

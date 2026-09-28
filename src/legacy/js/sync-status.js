@@ -9,7 +9,6 @@ import { today } from './dates.js';
 import { schoolCal } from './query.js';
 import { isTyping } from './dom.js';
 import { render } from './views/render.js';
-import { renderSettings } from './views/drawer-settings.js';
 import { readSetting, writeSetting, dueReviews } from './reviews.js';
 
 /* A redraw replaces every field, so one arriving from a sync while someone types would
@@ -19,7 +18,7 @@ let heldRefresh = false, pointerDown = false;
 export function refreshAfterSync() {
   if (isTyping(document.activeElement) || pointerDown) { heldRefresh = true; return; }
   heldRefresh = false;
-  render(); if (ui.settings) renderSettings();
+  render();
 }
 export const runHeldRefresh = () => setTimeout(() => { if (heldRefresh) refreshAfterSync(); });
 export function pointerPressed() { pointerDown = true; }

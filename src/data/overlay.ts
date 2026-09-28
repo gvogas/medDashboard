@@ -7,11 +7,17 @@
 
 import { useSyncExternalStore } from "react"
 import type { Item } from "./types"
+import type { SettingsTab } from "./settings"
+import type { ImportPlan } from "./import-edit"
+import type { SchoolDraft } from "./school-edit"
 
 export type SheetState =
     | { kind: "item"; id: string }
     | { kind: "new-item"; draft: Item }
     | { kind: "course"; id: string | null }
+    | { kind: "settings"; tab: SettingsTab; focus: string | null }
+    | { kind: "import"; plan: ImportPlan; name: string }
+    | { kind: "school"; draft: SchoolDraft }
     | null
 
 let sheet: SheetState = null
@@ -82,7 +88,13 @@ export function openSheet(next: Exclude<SheetState, null>) {
 /** A new item's draft, edited: it lives only here until it is saved. */
 export function updateDraft(draft: Item) {
     if (sheet?.kind !== "new-item") return
-    sheet = { kind: "new-item", draft }
+    replaceSheet({ kind: "new-item", draft })
+}
+
+/** The same sheet with new state (a tab, a draft), without the saving and closing that opening does. */
+export function replaceSheet(next: Exclude<SheetState, null>) {
+    if (sheet?.kind !== next.kind) return
+    sheet = next
     emit()
 }
 

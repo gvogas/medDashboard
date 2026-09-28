@@ -7,17 +7,15 @@ const KEY = 'rounds.ui';
 
 export const ui = {
   view: 'week', anchor: today(), search: '', types: {}, course: 'all',
-  sel: null, draft: null, courseDraft: null, courseMode: null, confirm: null,
-  settings: false, settingsTab: 'you', focusField: null,
+  confirm: null,           /* the session or achievement drawer is asking before a delete */
+  settingsTab: 'you',      /* the Settings tab last shown */
   sort: { key: 'date', dir: 1 },
   theme: (typeof window !== 'undefined' && window.__roundsTheme) || 'system',
   bg: (typeof window !== 'undefined' && window.__roundsBg) || 'med',     /* background art: 'med' | 'cs' */
   quoteIx: 0,
   schedule: 'all',         /* the week and month show 'all', 'deadlines' or 'classes' */
-  importPlan: null,        /* the import preview: { plan, name } */
-  fillNote: null,          /* what "Fill topics" did, shown in the exam drawer until it closes */
-  importNote: null,
-  outlineBusy: false,      /* a course outline is being read */        /* the last import's result or error, shown once in Settings */
+  importNote: null,        /* {text, error}: the last import's result or error, shown once in Settings */
+  outlineBusy: false,      /* a course outline is being read */
   spotifyNote: null,       /* 'connected' | 'error' after the Spotify round trip, shown once in Settings */
   /* the Spotify view: home | playlist | album | artist | queue | search, and the filter inside a list */
   spotify: { pane: 'home', playlistId: null, albumId: null, artistId: null, q: '', filter: '' },
@@ -31,11 +29,11 @@ export const ui = {
   achDraft: null,          /* the New / Edit achievement drawer */
   lb: null,                /* the leaderboard from the server: {joined, week, all, at}, or loading/offline/error */
   lbTab: 'week',           /* the leaderboard's This week / All-time switch */
-  schoolDraft: null,       /* the school calendar review drawer */
   schoolBusy: false,       /* a school calendar is being read */
   schoolNote: null,        /* {text, error}: the last school calendar read, in Settings */
   schoolAsk: false,        /* Settings is asking before removing the school calendar */
   signoutAsk: null,        /* sign-out waits on a warning about unsynced edits: { everywhere } */
+  feed: null,              /* the calendar feed as Settings last heard it, once a session */
 };
 
 try {

@@ -11,7 +11,7 @@ import { render, renderView } from './views/render.js';
 import { drawerOpen } from './views/drawer-base.js';
 import { openSession, editSession } from './views/drawer-session.js';
 import { toast } from './views/toast.js';
-import { openSettings, renderSettings } from './views/drawer-settings.js';
+import { openSettings } from '../../data/actions.ts';
 import { minutesByDay, streak } from './history.js';
 import { achievements, ownAchievements } from './achievements.js';
 import { launch as fireworks } from './fireworks.js';
@@ -123,7 +123,6 @@ function showDay(day) {
 const studyPrefs = () => normalizePrefs(data.profile?.studyPrefs);
 export async function savePrefs(patch) {
   await store.saveProfile({ studyPrefs: { ...studyPrefs(), ...patch } });
-  if (ui.settings) renderSettings();
   renderView();
 }
 
@@ -208,13 +207,6 @@ export async function studyClick(e) {
   if ((el = e.target.closest('[data-hist-pick]'))) { ui.hist.focusDay = el.dataset.histPick; renderView(); document.querySelector('[data-hist-pick="' + el.dataset.histPick + '"]')?.focus(); return true; }
   if ((el = e.target.closest('[data-hist-day]'))) { showDay(el.dataset.histDay); return true; }
   if ((el = e.target.closest('[data-sd-mins]'))) { editSession('minutes', el.dataset.sdMins); $('sd-min').value = el.dataset.sdMins; return true; }
-  if ((el = e.target.closest('[data-goal-step]'))) { const p = studyPrefs(); await savePrefs({ goal: Math.max(0, Math.min(720, p.goal + +el.dataset.goalStep)) }); return true; }
-  if ((el = e.target.closest('[data-goal-set]'))) { await savePrefs({ goal: +el.dataset.goalSet }); return true; }
-  if ((el = e.target.closest('[data-rest]'))) {
-    const d = +el.dataset.rest, rest = studyPrefs().rest;
-    await savePrefs({ rest: rest.includes(d) ? rest.filter((x) => x !== d) : rest.length < 6 ? [...rest, d] : rest });
-    return true;
-  }
   const f = studyFlow();
   if ((el = e.target.closest('[data-study-kind]'))) {
     const step = f.steps[+el.dataset.studyKind];
