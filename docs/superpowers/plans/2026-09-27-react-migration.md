@@ -25,9 +25,9 @@ Written 27 September 2026 to pick the work up later. The design and the stage li
   console error. In the dev server the same, plus 5a's History (tabs, delete and Undo, a
   heatmap day), the leaderboard's Join and Leave, and a run logged and shown in History.
   A release review of the whole diff found no critical or important defects; its minor
-  findings are fixed in `d822893`. **Not yet seen:** the look (themes, light and dark,
-  phone width) and Spotify with a real account: the automation browser counted as a
-  hidden tab, so screenshots failed and Spotify never polled.
+  findings are fixed in `d822893`. The automation browser counted as a hidden tab, so the
+  look and Spotify with a real account were not checked by the agent; the owner looked and
+  signed it off on 28 September.
 
 | Stage | What | State |
 |---|---|---|
