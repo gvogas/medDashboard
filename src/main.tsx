@@ -14,6 +14,7 @@ import { SignIn } from "@/components/sign-in"
 import { Toaster } from "@/components/toaster"
 import { Stats } from "@/components/views/stats"
 import { Views } from "@/components/views/views"
+import { Sheet } from "@/components/sheet/sheet"
 
 function mount(el: Element | null, node: ReactNode) {
     if (el) createRoot(el).render(<StrictMode>{node}</StrictMode>)
@@ -28,6 +29,8 @@ mount(document.getElementById("signin"), <SignIn />)
 /* #stats and #views: the stat tiles and the week, month or table (hidden otherwise). */
 mount(document.getElementById("stats"), <Stats />)
 mount(document.getElementById("views"), <Views />)
+/* #sheet: the item and course sheet, beside the legacy #drawer (outside #app, which is inert while it is open) */
+mount(document.getElementById("sheet"), <Sheet />)
 
 /* The toaster gets its own container at the end of <body>, outside #app, so a drawer
    that makes #app inert leaves the toast's buttons usable. */

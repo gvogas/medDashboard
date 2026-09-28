@@ -10,15 +10,15 @@ import { typeOn } from "@/legacy/js/query.js"
 import { addDays, iso, parse, today } from "@/legacy/js/dates.js"
 import { render, renderView } from "@/legacy/js/views/render.js"
 import { closeDrawer, setSide } from "@/legacy/js/views/drawer-base.js"
-import { celebrate, chainReview, newItem as openNewItem, openItem as openItemDrawer, setStatus, touch } from "@/legacy/js/views/drawer-item.js"
-import { openCourse as openCourseDrawer } from "@/legacy/js/views/drawer-course.js"
 import { openSettings as openSettingsDrawer } from "@/legacy/js/views/drawer-settings.js"
 import { rememberUi } from "@/legacy/js/state.js"
 import { launch as fireworks } from "@/legacy/js/fireworks.js"
 import { notify } from "@/bridge"
-import { setView } from "@/legacy/js/study-controller.js"
+import { deleteLater, setView } from "@/legacy/js/study-controller.js"
+import { celebrate, chainReview, setStatus, touch } from "./item-edit"
+import { closeSheet, openSheet } from "./overlay"
 import { ui } from "./ui"
-import type { Item, ItemType, Schedule, SortKey } from "./types"
+import type { Course, Item, ItemType, Schedule, SortKey } from "./types"
 
 export { setView }
 
@@ -130,10 +130,31 @@ export async function reorderTypes(ids: string[]) {
 
 /* ── drawers, the sidebar on phones, sync ── */
 
-export const newItem = () => openNewItem(ui.anchor)
-export const newItemOn = (date: string) => openNewItem(date)
-export const openItem = (id: string) => openItemDrawer(id)
-export const openCourse = (id: string | null) => openCourseDrawer(id)
+/** A new item in the sheet, on a day (the week shown, by default), in the course shown. */
+export function newItemOn(date: string, type = "assignment") {
+    openSheet({ kind: "new-item", draft: normalizeItem({ id: uid(), type, title: "", courseId: ui.course === "all" ? null : ui.course, date, status: "todo" }) as Item })
+}
+export const newItem = () => newItemOn(ui.anchor)
+export const openItem = (id: string) => openSheet({ kind: "item", id })
+
+/** Delete now; the toast's Undo brings it back for a few seconds. */
+export async function deleteItem(id: string) {
+    const it = store.item(id) as Item | null
+    if (!it) return
+    closeSheet()
+    await deleteLater("items", id, "“" + (it.title.trim() || "Item") + "”", () => store.deleteItem(id))
+}
+/** A course in the sheet; null for a new one. */
+export const openCourse = (id: string | null) => openSheet({ kind: "course", id })
+
+/** Delete now, with Undo; its items lose their course. The course filter goes back to All if it was this one. */
+export async function deleteCourse(id: string) {
+    const c = store.course(id) as Course | null
+    if (!c) return
+    if (ui.course === id) ui.course = "all"
+    closeSheet()
+    await deleteLater("courses", id, c.code || c.name || "Course", () => store.deleteCourse(id))
+}
 /** Settings, opened at a field (as the coat's pencil does), or shut if it is open. */
 export const openSettings = (focusId?: string) => openSettingsDrawer(focusId)
 export const toggleSettings = () => (ui.settings ? closeDrawer() : openSettingsDrawer())

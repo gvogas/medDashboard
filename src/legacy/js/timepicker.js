@@ -1,44 +1,14 @@
-import { setHTML } from './dom.js';
 // A time field you can type into or pick from: `<input class="tp">` holding HH:MM.
 // Typing "830", "8:30", "8pm" all land on a valid time; a popover lists quarter
 // hours; ↑/↓ nudge by fifteen minutes. Sets the input's value and fires `input`,
-// so the drawers' existing handlers see it like any other field.
+// so the drawers' existing handlers see it like any other field. Only the legacy session
+// drawer still uses it; the React drawers have components/sheet/time-field.tsx.
 
-const STEP = 15;
-
-function pad(n) {
-  return String(n).padStart(2, '0');
-}
-
-/** "8", "830", "8:30", "8pm" → "08:30" etc. '' for blank, null for nonsense. */
-export function parseTime(raw) {
-  const s = String(raw ?? '').trim().toLowerCase();
-  if (!s) return '';
-  const m = s.match(/^(\d{1,2})(?:[:.h]\s*(\d{1,2})|(\d{2}))?\s*([ap])?\.?m?\.?$/);
-  if (!m) return null;
-  let h = +m[1];
-  const min = m[2] != null ? +m[2] : m[3] != null ? +m[3] : 0;
-  if (m[4] === 'p' && h < 12) h += 12;
-  if (m[4] === 'a' && h === 12) h = 0;
-  if (h > 23 || min > 59) return null;
-  return pad(h) + ':' + pad(min);
-}
-
-/** Nudge by a quarter hour, snapping to the grid, clamped to the day. */
-export function stepTime(value, dir) {
-  const v = parseTime(value);
-  if (!v) return '09:00';
-  const [h, m] = v.split(':').map(Number);
-  let total = h * 60 + m;
-  total = dir > 0 ? Math.floor(total / STEP) * STEP + STEP : Math.ceil(total / STEP) * STEP - STEP;
-  total = Math.max(0, Math.min(23 * 60 + 45, total));
-  return pad(Math.floor(total / 60)) + ':' + pad(total % 60);
-}
+import { setHTML } from './dom.js';
+import { parseTime, stepTime, SLOTS, nearestSlot } from '../../lib/time.ts';
+export { parseTime, stepTime };
 
 // ── DOM wiring: one popover, delegated events ─────────────────────────────
-
-const SLOTS = [];
-for (let t = 0; t < 24 * 60; t += STEP) SLOTS.push(pad(Math.floor(t / 60)) + ':' + pad(t % 60));
 
 let pop = null;
 let active = null;
@@ -75,9 +45,7 @@ function place(input) {
 }
 
 function highlight(input) {
-  const v = parseTime(input.value) || '09:00';
-  const [h, m] = v.split(':').map(Number);
-  const nearest = pad(h) + ':' + pad(Math.floor(m / STEP) * STEP);
+  const nearest = nearestSlot(input.value);
   pop.querySelectorAll('.on').forEach((b) => b.classList.remove('on'));
   const hit = pop.querySelector('[data-tp="' + nearest + '"]');
   if (hit) { hit.classList.add('on'); hit.scrollIntoView({ block: 'center' }); }

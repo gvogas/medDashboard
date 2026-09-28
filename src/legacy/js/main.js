@@ -3,22 +3,21 @@
 
 import { api } from './api.js';
 import * as store from './store.js';
-import { data, course } from './store.js';
+import { data } from './store.js';
 import * as sync from './sync.js';
 import { ui } from './state.js';
-import { uid, tmeta, useTypePrefs } from './model.js';
-import { schoolCal, termStart } from './query.js';
+import { useTypePrefs } from './model.js';
 import { $, restoreFocus } from './dom.js';
 import { render, renderView } from './views/render.js';
 import { notify } from '../../bridge.ts';
-import { drawer, scrim, closeDrawer, drawerHasFocus, beforeClose, setSide, narrow } from './views/drawer-base.js';
-import { current, saveDraft, touch, touchSoon, flushTouch, renderItemDrawer, noteStartBase, onItemInput } from './views/drawer-item.js';
+import { drawer, scrim, closeDrawer, drawerHasFocus, setSide, narrow } from './views/drawer-base.js';
+import { flush as flushTyping } from '../../data/item-edit.ts';
+import { openCourse } from '../../data/actions.ts';
 import { openKeys } from './views/keys.js';
 import { renderSessionDrawer, editSession, saveSessionDraft } from './views/drawer-session.js';
 import { achievementClick, editAchievement } from './views/drawer-achievement.js';
 import { leaderboardClick } from './views/leaderboard.js';
 import { schoolClick, editSchool, readSchoolFile } from './views/drawer-school.js';
-import { openCourse, renderCourseDrawer, saveCourseDraft, leaveDrawer, onCourseInput } from './views/drawer-course.js';
 import { toast } from './views/toast.js';
 import { openSettings, renderSettings, refreshSyncNote, applyCoat, refreshSpotifyGroup, feedAction, addQuote } from './views/drawer-settings.js';
 import * as spotify from './spotify.js';
@@ -26,20 +25,17 @@ import * as web from './web-player.js';
 import { renderPlayer } from './views/player.js';
 import * as spotView from './views/spotify-view.js';
 import { readSetting, writeSetting } from './reviews.js';
-import { fillTopics } from './prep.js';
 import { previewImport, editImport, commitImport, readOutlineFile } from './views/drawer-import.js';
 import * as focus from './focus.js';
 import { setTheme, setBg, followSystem } from './theme.js';
 import { refreshAfterSync, runHeldRefresh, pointerPressed, pointerReleased, runReviews } from './sync-status.js';
 import { boot, showSignIn, signOut, onStoreEvent, onStorage } from './session.js';
-import { onFocusTick, commitUndo, finishDelete, deleteWithUndo, deleteLater, studyClick, studyChange, savePrefs } from './study-controller.js';
+import { onFocusTick, commitUndo, finishDelete, deleteWithUndo, studyClick, studyChange, savePrefs } from './study-controller.js';
 import { onKeydown } from './keyboard.js';
 
-beforeClose.add(flushTouch);
-document.addEventListener('focusin', noteStartBase);
-document.addEventListener('focusout', (e) => { if (drawer.contains(e.target)) flushTouch(); });
-window.addEventListener('pagehide', flushTouch);
-document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') { flushTouch(); commitUndo(); finishDelete().catch(() => {}); } });
+/* what is typed in the item sheet is saved before the page goes */
+window.addEventListener('pagehide', () => { flushTyping(); });
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') { flushTyping(); commitUndo(); finishDelete().catch(() => {}); } });
 
 /* ═════════ theme ═════════ */
 useTypePrefs(() => data.profile?.types || []);
@@ -99,17 +95,6 @@ async function onClick(e) {
   let el;
   if ((el = e.target.closest('[data-newcourse]'))) { openCourse(null); return; }
   if ((el = e.target.closest('[data-editcourse]'))) { openCourse(el.dataset.editcourse); return; }
-  if ((el = e.target.closest('[data-color]'))) {
-    if (ui.courseDraft) { ui.courseDraft.color = el.dataset.color; renderCourseDrawer(); }
-    return;
-  }
-  if ((el = e.target.closest('[data-mx]'))) {
-    if (ui.courseDraft) {
-      ui.courseDraft.meetings = ui.courseDraft.meetings.filter((m) => m.id !== el.dataset.mx);
-      renderCourseDrawer();
-    }
-    return;
-  }
   if (await studyClick(e)) return;
   if (await achievementClick(e)) return;
   if (await leaderboardClick(e)) return;
@@ -150,48 +135,17 @@ async function onClick(e) {
   }
 
   if ((el = e.target.closest('[data-act]'))) {
-    const act = el.dataset.act, it = current();
-    if (act === 'close') leaveDrawer();
-    else if (act === 'cancel') closeDrawer();
-    else if (act === 'save') saveDraft();
-    else if (act === 'delete') { ui.confirm = 'item'; renderItemDrawer(); drawer.querySelector('[data-act="keep"]')?.focus(); }
-    else if (act === 'keep') {
-      const was = ui.confirm;
+    const act = el.dataset.act;
+    if (act === 'close' || act === 'cancel') closeDrawer();
+    else if (act === 'keep' && ui.sessionDraft) {
       ui.confirm = null;
-      ui.sessionDraft ? renderSessionDrawer() : ui.courseDraft ? renderCourseDrawer() : renderItemDrawer();
-      drawer.querySelector(was === 'discard' ? '.dtitle' : '[data-act$="delete"]')?.focus();
+      renderSessionDrawer();
+      drawer.querySelector('[data-act$="delete"]')?.focus();
     }
     else if (act === 'session-save') saveSessionDraft();
     else if (act === 'session-delete') { ui.confirm = 'session'; renderSessionDrawer(); drawer.querySelector('[data-act="keep"]')?.focus(); }
-    else if (act === 'session-delete-yes' && ui.sessionDraft) { const id = ui.sessionDraft.id; closeDrawer(); deleteWithUndo(id); }
-    else if (act === 'delete-yes' && it) {
-      const id = it.id, name = it.title.trim() || 'Item';
-      closeDrawer();
-      deleteLater('items', id, '“' + name + '”', () => store.deleteItem(id));
-    }
-    else if (act === 'addmtg' && ui.courseDraft) {
-      ui.courseDraft.meetings = ui.courseDraft.meetings || [];
-      ui.courseDraft.meetings.push({ id: uid(), kind: 'Lecture', weekday: 1, start: '09:00', end: '10:00', room: '' });
-      renderCourseDrawer();
-    }
     else if (act === 'addquote') addQuote();
-    else if (act === 'course-save') saveCourseDraft();
-    else if (act === 'course-delete') { ui.confirm = 'course'; renderCourseDrawer(); drawer.querySelector('[data-act="keep"]')?.focus(); }
-    else if (act === 'course-delete-yes' && ui.courseDraft) {
-      const c = ui.courseDraft;
-      if (ui.course === c.id) ui.course = 'all';
-      closeDrawer();
-      deleteLater('courses', c.id, c.code || c.name || 'Course', () => store.deleteCourse(c.id));
-    }
-    else if (act === 'fill-topics' && it) {
-      const c = course(it.courseId); if (!c) return;
-      const r = fillTopics(it, c, data.items, termStart(), schoolCal());
-      it.checklist = r.checklist;
-      if (r.added) await touch(it);
-      ui.fillNote = r.added ? 'Added ' + r.added + ' lecture' + (r.added === 1 ? '' : 's') + '.' + (r.left ? ' ' + r.left + ' more did not fit under the 50-step limit.' : '')
-        : r.left ? 'The list is full: 50 steps is the most an item can hold.' : 'Every lecture before this ' + tmeta(it.type).label.toLowerCase() + ' is already listed.';
-      renderItemDrawer(); renderView();
-    }
+    else if (act === 'session-delete-yes' && ui.sessionDraft) { const id = ui.sessionDraft.id; closeDrawer(); deleteWithUndo(id); }
     else if (act === 'import-paste') {
       const box = $('importText');
       const text = box ? box.value : '';
@@ -233,31 +187,13 @@ async function onClick(e) {
     }
     return;
   }
-  if ((el = e.target.closest('[data-cl]'))) {
-    const s = current(); if (!s) return;
-    s.checklist.forEach((x) => { if (x.id === el.dataset.cl) x.done = !x.done; });
-    await touch(s);
-    renderItemDrawer(); renderView(); return;
-  }
-  if ((el = e.target.closest('[data-clx]'))) {
-    const s2 = current(); if (!s2) return;
-    s2.checklist = s2.checklist.filter((x) => x.id !== el.dataset.clx);
-    await touch(s2);
-    renderItemDrawer(); renderView(); return;
-  }
-  if ((el = e.target.closest('[data-linkx]'))) {
-    const s3 = current(); if (!s3) return;
-    s3.links.splice(+el.dataset.linkx, 1);
-    await touch(s3);
-    renderItemDrawer(); return;
-  }
   if (!e.target.closest('#side') && !e.target.closest('#menuBtn') && $('side').classList.contains('on')) setSide(false);
 }
 
 narrow.addEventListener('change', () => setSide(false));
 setSide(false);
 
-scrim.addEventListener('click', () => { if ($('side').classList.contains('on') && !drawer.classList.contains('on')) setSide(false); else leaveDrawer(); });
+scrim.addEventListener('click', () => { if ($('side').classList.contains('on') && !drawer.classList.contains('on')) setSide(false); else closeDrawer(); });   /* the React sheet takes its own scrim clicks */
 
 document.addEventListener('input', async (e) => {
   const d = e.target.dataset || {};
@@ -284,14 +220,6 @@ document.addEventListener('input', async (e) => {
     notify(); return;
   }
 
-  if (onCourseInput(e, d)) return;         /* the course drawer */
-  if (d.f) { await onItemInput(e, d); return; }   /* item fields */
-  if (d.cltext) {
-    const s = current(); if (!s) return;
-    s.checklist.forEach((x) => { if (x.id === d.cltext) x.text = e.target.value; });
-    touchSoon(s, 'checklist');
-    return;
-  }
 });
 
 document.addEventListener('change', async (e) => {

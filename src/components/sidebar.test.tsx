@@ -21,8 +21,6 @@ vi.mock("@/legacy/js/views/render.js", async () => {
     return { render: vi.fn(() => notify()), renderView: vi.fn(() => notify()) }
 })
 vi.mock("@/legacy/js/views/drawer-base.js", () => ({ closeDrawer: vi.fn(), setSide: vi.fn() }))
-vi.mock("@/legacy/js/views/drawer-item.js", () => ({ newItem: vi.fn() }))
-vi.mock("@/legacy/js/views/drawer-course.js", () => ({ openCourse: vi.fn() }))
 vi.mock("@/legacy/js/views/drawer-settings.js", () => ({ openSettings: vi.fn() }))
 vi.mock("@/legacy/js/study-controller.js", () => ({ setView: vi.fn() }))
 vi.mock("@/legacy/js/views/player.js", () => ({ renderPlayer: vi.fn() }))

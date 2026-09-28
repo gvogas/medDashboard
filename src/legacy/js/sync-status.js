@@ -9,7 +9,6 @@ import { today } from './dates.js';
 import { schoolCal } from './query.js';
 import { isTyping } from './dom.js';
 import { render } from './views/render.js';
-import { renderItemDrawer } from './views/drawer-item.js';
 import { renderSettings } from './views/drawer-settings.js';
 import { readSetting, writeSetting, dueReviews } from './reviews.js';
 
@@ -20,7 +19,7 @@ let heldRefresh = false, pointerDown = false;
 export function refreshAfterSync() {
   if (isTyping(document.activeElement) || pointerDown) { heldRefresh = true; return; }
   heldRefresh = false;
-  render(); if (ui.sel) renderItemDrawer(); if (ui.settings) renderSettings();
+  render(); if (ui.settings) renderSettings();
 }
 export const runHeldRefresh = () => setTimeout(() => { if (heldRefresh) refreshAfterSync(); });
 export function pointerPressed() { pointerDown = true; }

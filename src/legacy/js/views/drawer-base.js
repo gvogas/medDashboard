@@ -1,9 +1,12 @@
-// The slide-in drawer and its scrim, shared by the item, course and settings panels.
+// The legacy slide-in drawer, for Settings and the drawers not yet moved to React (the
+// item and course are the React sheet, components/sheet/). What takes focus, this drawer,
+// the sheet or an overlay, is decided in src/data/overlay.ts for both.
 
 import { ui } from '../state.js';
 import { $, refind, setHTML } from '../dom.js';
 import { render } from './render.js';
 import { notify } from '../../../bridge.ts';
+import * as overlay from '../../../data/overlay.ts';
 
 export const drawer = $('drawer');
 export const scrim = $('scrim');
@@ -12,28 +15,19 @@ export const scrim = $('scrim');
    stays inside; when it closes, focus goes back to what opened it. Closed, it is inert
    itself, so its buttons leave the Tab order although it is only slid off-screen. */
 let opener = null;
-let covers = 0;   /* overlays above everything, drawer included: the shortcuts, the busy card */
 
-/** Which of the page and the drawer take focus, from what is open. */
-function settle() {
-  const open = drawer.classList.contains('on');
-  drawer.inert = covers > 0 || !open;
-  $('app').inert = covers > 0 || open;
-}
-/** An overlay opens (`true`) or closes over the page and the drawer. */
-export function cover(on) {
-  covers = Math.max(0, covers + (on ? 1 : -1));
-  settle();
-}
+/** An overlay (the shortcuts, the busy card) opens (`true`) or closes over everything. */
+export const cover = overlay.cover;
 
 export function showDrawer(html) {
   const opening = !drawer.classList.contains('on');
   const had = drawer.contains(document.activeElement) ? document.activeElement : null;
   if (opening) opener = document.activeElement;
+  overlay.legacyDrawer(true);   /* closes the React sheet, saving what it had pending */
   setHTML(drawer, html);
   drawer.setAttribute('aria-label', drawer.querySelector('.dhead .kind')?.textContent || 'Details');
   drawer.classList.add('on');
-  settle();
+  overlay.settle();
   scrim.classList.add('on');
   /* callers may focus a field right after; only take focus if nothing inside has it */
   if (opening) requestAnimationFrame(() => { if (!drawer.contains(document.activeElement)) drawer.focus(); });
@@ -48,14 +42,14 @@ export function showDrawer(html) {
 export function hideDrawer() {
   const wasOpen = drawer.classList.contains('on');
   drawer.classList.remove('on');
-  settle();
-  scrim.classList.remove('on');
+  overlay.legacyDrawer(false);
+  if (!overlay.getSheet()) scrim.classList.remove('on');
   if (wasOpen) refind(opener)?.focus();   /* a redraw may have replaced the opener: its successor */
   opener = null;
 }
 
 export function resetDrawerState() {
-  ui.sel = null; ui.draft = null; ui.courseDraft = null; ui.courseMode = null; ui.confirm = null; ui.settings = false; ui.importPlan = null; ui.fillNote = null; ui.sessionDraft = null; ui.achDraft = null; ui.schoolDraft = null; ui.signoutAsk = null;
+  ui.confirm = null; ui.settings = false; ui.importPlan = null; ui.sessionDraft = null; ui.achDraft = null; ui.schoolDraft = null; ui.signoutAsk = null;
   /* questions asked in Settings are not still asked when it opens again */
   ui.schoolAsk = false; if (ui.feed) ui.feed.confirm = null;
 }
@@ -77,8 +71,11 @@ export function drawerHasFocus() {
   return drawer.contains(document.activeElement) && /input|textarea|select/i.test(document.activeElement.tagName);
 }
 
-/** Is any drawer open: an item, a course, settings, an import, a study session, an achievement or the school calendar. */
-export const drawerOpen = () => !!(ui.sel || ui.draft || ui.courseDraft || ui.settings || ui.importPlan || ui.sessionDraft || ui.achDraft || ui.schoolDraft);
+/** Is any drawer open: the React sheet, settings, an import, a study session, an achievement or the school calendar. */
+export const drawerOpen = () => !!(overlay.getSheet() || ui.settings || ui.importPlan || ui.sessionDraft || ui.achDraft || ui.schoolDraft);
+
+/* The React sheet opening closes this drawer the usual way. */
+overlay.onLegacyClose(() => closeDrawer());
 
 /* On narrow screens the sidebar slides over the page. Closed, it is inert, so Tab does
    not wander through it off-screen; open, it takes focus and Escape closes it. */
@@ -89,7 +86,7 @@ export function setSide(open) {
   side.inert = narrow.matches && !open;
   /* open over the page, the page behind is dimmed and out of reach */
   document.querySelector('.content').inert = narrow.matches && open;
-  if (!drawer.classList.contains('on')) scrim.classList.toggle('on', narrow.matches && open);
+  if (!drawer.classList.contains('on') && !overlay.getSheet()) scrim.classList.toggle('on', narrow.matches && open);
   notify();   /* the top bar's menu button (React) reads .on for aria-expanded */
   if (open) side.querySelector('button, input')?.focus();
   else if (side.contains(document.activeElement)) btn?.focus();
