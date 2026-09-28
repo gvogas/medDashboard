@@ -12,7 +12,7 @@ import { parseIcs } from "@/legacy/js/importers/ics.js"
 import { parseCsv } from "@/legacy/js/importers/csv.js"
 import { planImport, planOutline } from "@/legacy/js/importers/plan.js"
 import { api } from "@/legacy/js/api.js"
-import { readWithAi } from "@/legacy/js/views/busy.js"
+import { readWithAi } from "./ai-read"
 import { notify } from "@/bridge"
 import { ui } from "./ui"
 import { openSheet } from "./overlay"
@@ -63,7 +63,7 @@ export function importPasted(text: string) {
 /** A course outline, read by the Worker with AI, then previewed. */
 export function readOutlineFile(file: File) {
     return readWithAi(file, {
-        what: "outline", title: undefined, stage: "Reading the dates and grades with AI…", flag: "outlineBusy", note: "importNote", refresh: notify,
+        what: "outline", stage: "Reading the dates and grades with AI…", flag: "outlineBusy", note: "importNote", refresh: notify,
         errors: {
             outline_empty: "No text was found in that file. A scanned outline needs to be a text PDF.",
             outline_unreadable: "The outline could not be understood. Try again, or import a CSV instead.",

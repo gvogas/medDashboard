@@ -5,23 +5,25 @@
 import * as store from "@/legacy/js/store.js"
 import { data } from "@/legacy/js/store.js"
 import * as sync from "@/legacy/js/sync.js"
-import { isOpen, normalizeItem, typeList, typePrefsFrom, uid, TYPE_COLOURS, MAX_CUSTOM_TYPES } from "@/legacy/js/model.js"
+import { isOpen, normalizeItem, typeList, typePrefsFrom, uid, TYPE_COLOURS, MAX_CUSTOM_TYPES, ACHIEVEMENT_LIMIT } from "@/legacy/js/model.js"
 import { typeOn } from "@/legacy/js/query.js"
 import { addDays, iso, parse, today } from "@/legacy/js/dates.js"
 import { render, renderView } from "@/legacy/js/views/render.js"
-import { setSide } from "@/legacy/js/views/drawer-base.js"
-import { openKeys } from "@/legacy/js/views/keys.js"
+import { setSide } from "./sidebar"
+import { openKeys } from "./keys"
 import { api } from "@/legacy/js/api.js"
 import { toast } from "./toast"
 import { applyCoat, TAB_OF, type SettingsTab } from "./settings"
 import { rememberUi } from "@/legacy/js/state.js"
 import { launch as fireworks } from "@/legacy/js/fireworks.js"
 import { notify } from "@/bridge"
-import { deleteLater, setView } from "@/legacy/js/study-controller.js"
+import { deleteLater, deleteWithUndo, setView } from "@/legacy/js/study-controller.js"
 import { celebrate, chainReview, setStatus, touch } from "./item-edit"
 import { closeSheet, getSheet, openSheet, replaceSheet } from "./overlay"
+import { newSession, sessionDraft } from "./session-edit"
+import { achievementDraft, newAchievement } from "./achievement-edit"
 import { ui } from "./ui"
-import type { Course, Item, ItemType, Schedule, SortKey } from "./types"
+import type { Achievement, Course, Item, ItemType, Schedule, SortKey, StudySession } from "./types"
 
 export { setView }
 
@@ -158,6 +160,39 @@ export async function deleteCourse(id: string) {
     closeSheet()
     await deleteLater("courses", id, c.code || c.name || "Course", () => store.deleteCourse(id))
 }
+
+/* ── study sessions and achievements ── */
+
+/** A session to edit by id, or a new one (on `courseId` when given) to log by hand. */
+export function openSession(id: string | null, courseId?: string | null) {
+    const s = id ? (data.study_sessions as StudySession[]).find((x) => x.id === id) : null
+    if (id && !s) return
+    openSheet({ kind: "session", draft: s ? sessionDraft(s) : newSession(courseId) })
+}
+
+/** Delete now; the Study view's Undo brings it back for a few seconds. */
+export function deleteSession(id: string) {
+    closeSheet()
+    deleteWithUndo(id)
+}
+
+/** An achievement to edit by id, or a new one while there is room for it. */
+export function openAchievement(id: string | null) {
+    const list = data.achievements as Achievement[]
+    const a = id ? list.find((x) => x.id === id) : null
+    if (id && !a) return
+    if (!a && list.length >= ACHIEVEMENT_LIMIT) { toast("You have " + ACHIEVEMENT_LIMIT + " achievements, the most there can be."); return }
+    openSheet({ kind: "achievement", draft: a ? achievementDraft(a) : newAchievement(data.courses as Course[]) })
+}
+
+/** Delete now, with the toast's Undo. */
+export async function deleteAchievement(id: string) {
+    const a = (data.achievements as Achievement[]).find((x) => x.id === id)
+    if (!a) return
+    closeSheet()
+    await deleteLater("achievements", id, "“" + (a.name.trim() || "Achievement") + "”", () => store.deleteAchievement(id))
+}
+
 /* ── Settings ── */
 
 /** Settings, opened at a field or group (as the coat's pencil does), on the tab it lives on. */

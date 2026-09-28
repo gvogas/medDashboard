@@ -15,7 +15,7 @@ vi.mock("@/legacy/js/store.js", () => ({
     subscribe: () => () => {},
 }))
 vi.mock("@/legacy/js/query.js", () => ({ schoolCal: () => fake.cal, termStart: () => fake.data.profile?.termStart ?? null }))
-vi.mock("@/legacy/js/views/busy.js", () => ({ readWithAi: vi.fn() }))
+vi.mock("@/data/ai-read", () => ({ readWithAi: vi.fn() }))
 vi.mock("@/legacy/js/views/render.js", () => ({ render: vi.fn() }))
 vi.mock("@/legacy/js/api.js", () => ({ api: {} }))
 

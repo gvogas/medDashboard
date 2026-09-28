@@ -9,7 +9,8 @@ import { useTypePrefs } from './model.js';
 import { $, restoreFocus } from './dom.js';
 import { render, renderView } from './views/render.js';
 import { notify } from '../../bridge.ts';
-import { drawer, scrim, closeDrawer, setSide, narrow } from './views/drawer-base.js';
+import { drawer, scrim, closeDrawer } from './views/drawer-base.js';
+import { setSide, watchSidebar } from '../../data/sidebar.ts';
 import { flush as flushTyping } from '../../data/item-edit.ts';
 import { openCourse, openSettings } from '../../data/actions.ts';
 import { renderSessionDrawer, editSession, saveSessionDraft } from './views/drawer-session.js';
@@ -129,10 +130,8 @@ async function onClick(e) {
   if (!e.target.closest('#side') && !e.target.closest('#menuBtn') && $('side').classList.contains('on')) setSide(false);
 }
 
-narrow.addEventListener('change', () => setSide(false));
-setSide(false);
-
-scrim.addEventListener('click', () => { if ($('side').classList.contains('on') && !drawer.classList.contains('on')) setSide(false); else closeDrawer(); });   /* the React sheet takes its own scrim clicks */
+watchSidebar();
+scrim.addEventListener('click', () => { if (drawer.classList.contains('on')) closeDrawer(); });   /* the legacy drawer's; the sheet and the sidebar take their own */
 
 document.addEventListener('input', async (e) => {
   const d = e.target.dataset || {};

@@ -9,8 +9,9 @@ const setView = vi.hoisted(() => vi.fn())
 vi.mock("@/data/actions", () => actions)
 vi.mock("@/legacy/js/state.js", () => ({ ui }))
 vi.mock("@/legacy/js/study-controller.js", () => ({ setView, leaveFocus: vi.fn() }))
-vi.mock("@/legacy/js/views/drawer-base.js", () => ({ drawerOpen: () => false, setSide: vi.fn(), closeDrawer: vi.fn() }))
-vi.mock("@/legacy/js/views/keys.js", () => ({ keysOpen: () => false, openKeys: vi.fn(), closeKeys: vi.fn() }))
+vi.mock("@/legacy/js/views/drawer-base.js", () => ({ drawerOpen: () => false, closeDrawer: vi.fn() }))
+vi.mock("@/data/sidebar", () => ({ setSide: vi.fn() }))
+vi.mock("@/data/ai-read", () => ({ getBusy: () => null }))
 vi.mock("@/legacy/js/store.js", () => ({}))
 vi.mock("@/legacy/js/views/render.js", () => ({}))
 vi.mock("@/legacy/js/views/sidebar.js", () => ({}))
@@ -20,6 +21,7 @@ vi.mock("@/legacy/js/web-player.js", () => ({}))
 vi.mock("@/legacy/js/views/spotify-view.js", () => ({}))
 
 import { onKeydown } from "@/legacy/js/keyboard.js"
+import { keysOpen } from "@/data/keys"
 
 const press = (key: string) => {
     const e = new KeyboardEvent("keydown", { key, cancelable: true })
@@ -32,6 +34,7 @@ beforeAll(() => {
     document.body.appendChild(Object.assign(document.createElement("div"), { id: "app" }))
     const search = Object.assign(document.createElement("input"), { id: "search", type: "search" })
     document.body.appendChild(search)
+    document.body.appendChild(Object.assign(document.createElement("aside"), { id: "side" }))
 })
 
 afterEach(() => {
@@ -62,5 +65,21 @@ describe("single-key shortcuts", () => {
         expect(setView).toHaveBeenCalledWith("table")
         press("/")
         expect(document.activeElement?.id).toBe("search")
+    })
+})
+
+describe("the shortcuts panel", () => {
+    it("? opens and closes it, Escape closes it, and no shortcut runs while it is up", () => {
+        expect(press("?")).toBe(true)
+        expect(keysOpen()).toBe(true)
+        expect(document.getElementById("app")!.inert).toBe(true)
+        press("n")
+        expect(actions.newItem).not.toHaveBeenCalled()
+        press("?")
+        expect(keysOpen()).toBe(false)
+        press("?")
+        press("Escape")
+        expect(keysOpen()).toBe(false)
+        expect(document.getElementById("app")!.inert).toBe(false)
     })
 })

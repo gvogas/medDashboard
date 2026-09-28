@@ -20,7 +20,7 @@ vi.mock("@/legacy/js/views/render.js", async () => {
     const { notify } = await import("@/bridge")
     return { render: vi.fn(() => notify()), renderView: vi.fn(() => notify()) }
 })
-vi.mock("@/legacy/js/views/drawer-base.js", () => ({ closeDrawer: vi.fn(), setSide: vi.fn() }))
+vi.mock("@/data/sidebar", () => ({ setSide: vi.fn() }))
 vi.mock("@/legacy/js/study-controller.js", () => ({ setView: vi.fn() }))
 vi.mock("@/legacy/js/views/player.js", () => ({ renderPlayer: vi.fn() }))
 vi.mock("@/legacy/js/spotify.js", () => ({ state: { loaded: false } }))

@@ -10,6 +10,8 @@ import type { Item } from "./types"
 import type { SettingsTab } from "./settings"
 import type { ImportPlan } from "./import-edit"
 import type { SchoolDraft } from "./school-edit"
+import type { SessionDraft } from "./session-edit"
+import type { AchievementDraft } from "./achievement-edit"
 
 export type SheetState =
     | { kind: "item"; id: string }
@@ -18,6 +20,8 @@ export type SheetState =
     | { kind: "settings"; tab: SettingsTab; focus: string | null }
     | { kind: "import"; plan: ImportPlan; name: string }
     | { kind: "school"; draft: SchoolDraft }
+    | { kind: "session"; draft: SessionDraft }
+    | { kind: "achievement"; draft: AchievementDraft }
     | null
 
 let sheet: SheetState = null

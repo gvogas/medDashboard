@@ -35,7 +35,7 @@ vi.mock("@/legacy/js/sync.js", () => ({ status: { state: "idle", pending: 0, mes
 vi.mock("@/legacy/js/spotify.js", () => ({ state: { loaded: true, connected: false } }))
 vi.mock("@/legacy/js/web-player.js", () => ({ state: { status: "off" } }))
 vi.mock("@/legacy/js/api.js", () => ({ api: {}, spotifyRetryAt: () => 0 }))
-vi.mock("@/legacy/js/views/busy.js", () => ({ readWithAi: vi.fn() }))
+vi.mock("@/data/ai-read", () => ({ readWithAi: vi.fn() }))
 vi.mock("@/legacy/js/views/render.js", () => ({ render: vi.fn(), renderView: vi.fn() }))
 
 import * as store from "@/legacy/js/store.js"

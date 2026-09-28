@@ -85,6 +85,21 @@ export interface StudySession {
     manual: boolean
 }
 
+/** An achievement of your own: a sticker, earned by hours on a course or a grade on an exam. */
+export interface Achievement {
+    id: string
+    name: string
+    sticker: string
+    rule: "hours" | "grade"
+    courseId: string | null
+    itemId: string | null
+    target: number
+    createdAt?: number | null
+}
+
+/** The study prefs, as normalizePrefs in legacy/js/model.js returns them. */
+export interface StudyPrefs { goal: number; dayMin: number; rest: number[]; celebrate: boolean }
+
 /** What the week and month show: both lists, the dated items only, or the classes only. */
 export type Schedule = "all" | "deadlines" | "classes"
 export type SortKey = "title" | "type" | "course" | "date" | "status"
@@ -101,6 +116,8 @@ export interface Ui {
     course: string
     settings: boolean
     focus: boolean
+    /* what the next study run is logged against */
+    study: { courseId: string | null; itemId: string | null }
     bg: "med" | "cs"
     theme: string
     schedule: Schedule

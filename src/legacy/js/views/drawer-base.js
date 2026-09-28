@@ -5,7 +5,6 @@
 import { ui } from '../state.js';
 import { $, refind, setHTML } from '../dom.js';
 import { render } from './render.js';
-import { notify } from '../../../bridge.ts';
 import * as overlay from '../../../data/overlay.ts';
 
 export const drawer = $('drawer');
@@ -15,9 +14,6 @@ export const scrim = $('scrim');
    stays inside; when it closes, focus goes back to what opened it. Closed, it is inert
    itself, so its buttons leave the Tab order although it is only slid off-screen. */
 let opener = null;
-
-/** An overlay (the shortcuts, the busy card) opens (`true`) or closes over everything. */
-export const cover = overlay.cover;
 
 export function showDrawer(html) {
   const opening = !drawer.classList.contains('on');
@@ -71,18 +67,3 @@ export const drawerOpen = () => !!(overlay.getSheet() || ui.sessionDraft || ui.a
 
 /* The React sheet opening closes this drawer the usual way. */
 overlay.onLegacyClose(() => closeDrawer());
-
-/* On narrow screens the sidebar slides over the page. Closed, it is inert, so Tab does
-   not wander through it off-screen; open, it takes focus and Escape closes it. */
-export const narrow = window.matchMedia('(max-width:900px)');
-export function setSide(open) {
-  const side = $('side'), btn = $('menuBtn');
-  side.classList.toggle('on', open);
-  side.inert = narrow.matches && !open;
-  /* open over the page, the page behind is dimmed and out of reach */
-  document.querySelector('.content').inert = narrow.matches && open;
-  if (!drawer.classList.contains('on') && !overlay.getSheet()) scrim.classList.toggle('on', narrow.matches && open);
-  notify();   /* the top bar's menu button (React) reads .on for aria-expanded */
-  if (open) side.querySelector('button, input')?.focus();
-  else if (side.contains(document.activeElement)) btn?.focus();
-}

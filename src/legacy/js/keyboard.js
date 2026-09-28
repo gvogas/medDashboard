@@ -3,9 +3,11 @@
 
 import { ui } from './state.js';
 import { $, isTyping } from './dom.js';
-import { closeDrawer, drawerOpen, setSide } from './views/drawer-base.js';
+import { closeDrawer, drawerOpen } from './views/drawer-base.js';
 import { getSheet, requestCloseSheet } from '../../data/overlay.ts';
-import { openKeys, closeKeys, keysOpen } from './views/keys.js';
+import { setSide } from '../../data/sidebar.ts';
+import { openKeys, closeKeys, keysOpen } from '../../data/keys.ts';
+import { getBusy } from '../../data/ai-read.ts';
 import * as spotify from './spotify.js';
 import * as web from './web-player.js';
 import * as spotView from './views/spotify-view.js';
@@ -13,10 +15,11 @@ import { leaveFocus, setView } from './study-controller.js';
 import { newItem, goToday, step } from '../../data/actions.ts';
 
 /* Single keys, when nothing is being typed and no drawer or the focus screen is up:
-   the list is views/keys.js. Each does what its top-bar button does; a number shows a view. */
+   the list is components/overlays.tsx. Each does what its top-bar button does; a number shows a view. */
 const VIEW_KEYS = { 1: 'week', 2: 'month', 3: 'table', 4: 'spotify', 5: 'study' };
 function shortcut(e) {
   if (e.ctrlKey || e.metaKey || e.altKey || e.repeat || isTyping(e.target) || e.target.isContentEditable) return false;
+  if (getBusy()) return false;
   if (e.key === '?') { keysOpen() ? closeKeys() : openKeys(); e.preventDefault(); return true; }
   if (keysOpen() || ui.focus || drawerOpen() || $('app').hidden) return false;
   const run = (fn) => { e.preventDefault(); fn(); return true; };
