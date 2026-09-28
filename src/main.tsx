@@ -30,7 +30,7 @@ mount(document.getElementById("signin"), <SignIn />)
 /* #stats and #views: the stat tiles and the week, month or table (hidden otherwise). */
 mount(document.getElementById("stats"), <Stats />)
 mount(document.getElementById("views"), <Views />)
-/* #sheet: the item and course sheet, beside the legacy #drawer (outside #app, which is inert while it is open) */
+/* #sheet: the sheet, for an item, a course, Settings, a study session or an achievement (outside #app, which is inert while it is open) */
 mount(document.getElementById("sheet"), <Sheet />)
 
 /* The shortcuts panel and the busy card: over everything, outside #app and #sheet, which
@@ -39,7 +39,7 @@ const overlays = document.body.appendChild(document.createElement("div"))
 overlays.id = "overlays"
 mount(overlays, <Overlays />)
 
-/* The toaster gets its own container at the end of <body>, outside #app, so a drawer
+/* The toaster gets its own container at the end of <body>, outside #app, so the sheet
    that makes #app inert leaves the toast's buttons usable. */
 const toaster = document.body.appendChild(document.createElement("div"))
 toaster.id = "toaster"

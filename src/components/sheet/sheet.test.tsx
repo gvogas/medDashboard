@@ -41,7 +41,7 @@ vi.mock("@/legacy/js/views/render.js", () => ({ render: vi.fn(), renderView: vi.
 import * as store from "@/legacy/js/store.js"
 import { normalizeCourse, normalizeItem } from "@/legacy/js/model.js"
 import { launch as fireworks } from "@/legacy/js/fireworks.js"
-import { closeSheet, cover, getSheet, legacyDrawer, onLegacyClose, openSheet } from "@/data/overlay"
+import { closeSheet, cover, getSheet, openSheet } from "@/data/overlay"
 import { flush, TYPING_MS } from "@/data/item-edit"
 import { Sheet } from "./sheet"
 import type { Item } from "@/data/types"
@@ -52,7 +52,7 @@ beforeAll(() => { vi.useFakeTimers({ toFake: ["Date", "setTimeout", "clearTimeou
 afterAll(() => { vi.useRealTimers() })
 
 beforeEach(() => {
-    document.body.innerHTML = '<div id="app"><button id="opener">Open</button></div><div id="scrim" class="scrim"></div><aside id="drawer"></aside><div id="sheet"></div>'
+    document.body.innerHTML = '<div id="app"><button id="opener">Open</button></div><div id="scrim" class="scrim"></div><div id="sheet"></div>'
     fake.data.items = [item({ id: "i1", title: "Renal problem set", courseId: "anat", start: "09:00", end: "10:30",
         checklist: [{ id: "s1", text: "Read ch. 4", done: false }], links: [{ label: "Slides", url: "https://x.org" }, { label: "bad", url: "javascript:alert(1)" }] })]
     fake.data.courses = [normalizeCourse({ id: "anat", code: "ANAT", name: "Anatomy", color: "#E4749B",
@@ -96,20 +96,12 @@ describe("the sheet", () => {
         expect(getSheet()).toBeNull()
     })
 
-    it("and the legacy drawer close each other; an overlay makes both inert", () => {
-        const closeLegacy = vi.fn(() => legacyDrawer(false))
-        onLegacyClose(closeLegacy)
+    it("goes inert under an overlay", () => {
         show()
-        act(() => legacyDrawer(true))
-        open({ kind: "item", id: "i1" })
-        expect(closeLegacy).toHaveBeenCalledOnce()
-        act(() => legacyDrawer(true))
-        expect(getSheet()).toBeNull()
-        act(() => legacyDrawer(false))
-
         open({ kind: "item", id: "i1" })
         act(() => cover(true))
         expect(document.getElementById("sheet")!.inert).toBe(true)
+        expect(document.getElementById("app")!.inert).toBe(true)
         act(() => cover(false))
         expect(document.getElementById("sheet")!.inert).toBe(false)
     })

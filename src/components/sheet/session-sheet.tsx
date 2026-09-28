@@ -80,7 +80,7 @@ export function SessionSheet({ draft: d }: { draft: SessionDraft }) {
                     <TextArea id={f + "note"} rows={3} maxLength={200} value={d.note} placeholder="Anki, 120 cards · chapters 3–4 · practice questions"
                         onChange={(e) => edit({ note: e.target.value })} className="min-h-[72px]" />
                 </Section>
-                <p role="status" className="m-0 text-[12px] text-[var(--study-ink)]">{line}</p>
+                <p role="status" className="m-0 rounded-[9px] bg-[var(--study-soft)] px-3 py-2.5 text-[12.5px] text-[var(--study-ink)]">{line}</p>
             </SheetBody>
 
             <SheetFoot hint={ok ? (d.isNew ? "Ready to log" : "Unsaved changes") : "Not ready yet"}>

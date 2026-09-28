@@ -1,9 +1,9 @@
-// What is on top of the page, and so what takes focus: the React sheet (item and course,
-// components/sheet/), the legacy #drawer (Settings and the drawers not moved yet), and
-// the overlays above both (the shortcuts panel, the busy card). While a sheet or drawer
-// is open the page behind is inert, so Tab stays inside; one that is closed is inert
-// itself. The legacy drawer (views/drawer-base.js) reports through here, so there is one
-// answer while the two coexist. This module imports nothing from the legacy code.
+// What is on top of the page, and so what takes focus: the sheet (components/sheet/) and
+// the overlays above it (the shortcuts panel, the busy card; components/overlays.tsx).
+// While the sheet is open the page behind is inert, so Tab stays inside; closed, the sheet
+// is inert itself. An overlay makes both inert. The scrim belongs to the sheet while it is
+// open, and to the phone sidebar (sidebar.ts) otherwise. This module imports nothing from
+// the legacy code.
 
 import { useSyncExternalStore } from "react"
 import type { Item } from "./types"
@@ -26,17 +26,15 @@ export type SheetState =
 
 let sheet: SheetState = null
 let covers = 0
-let legacyOpen = false
 const listeners = new Set<() => void>()
 
 const el = (id: string) => document.getElementById(id)
 
-/** Which of the page, the drawer and the sheet take focus, from what is open. */
+/** Which of the page and the sheet take focus, from what is open. */
 export function settle() {
-    const app = el("app"), drawer = el("drawer"), host = el("sheet")
-    if (drawer) drawer.inert = covers > 0 || !legacyOpen
+    const app = el("app"), host = el("sheet")
     if (host) host.inert = covers > 0 || sheet === null
-    if (app) app.inert = covers > 0 || legacyOpen || sheet !== null
+    if (app) app.inert = covers > 0 || sheet !== null
     const scrim = el("scrim")
     if (scrim && sheet !== null) scrim.classList.add("on")
 }
@@ -46,26 +44,13 @@ function emit() {
     for (const fn of listeners) fn()
 }
 
-/** An overlay opens (`true`) or closes over the page, the drawer and the sheet. */
+/** An overlay opens (`true`) or closes over the page and the sheet. */
 export function cover(on: boolean) {
     covers = Math.max(0, covers + (on ? 1 : -1))
     settle()
 }
 
-/* ── the legacy drawer ── */
-
-let closeLegacy: () => void = () => {}
-/** drawer-base.js: how to close the legacy drawer when the sheet opens. */
-export function onLegacyClose(fn: () => void) { closeLegacy = fn }
-
-/** drawer-base.js: the legacy drawer opened or closed. Opening it closes the sheet first. */
-export function legacyDrawer(open: boolean) {
-    if (open && sheet !== null) closeSheet()
-    legacyOpen = open
-    settle()
-}
-
-/* ── the React sheet ── */
+/* ── the sheet ── */
 
 export const getSheet = () => sheet
 export const useSheet = () => useSyncExternalStore(subscribe, getSheet)
@@ -80,9 +65,8 @@ export const beforeSheetClose = new Set<() => void>()
 let askClose: (() => void) | null = null
 export function onRequestClose(fn: (() => void) | null) { askClose = fn }
 
-/** Open the sheet on an item, a new item or a course, closing the legacy drawer. */
+/** Open the sheet, saving what the one open before had pending. */
 export function openSheet(next: Exclude<SheetState, null>) {
-    if (legacyOpen) closeLegacy()
     for (const fn of beforeSheetClose) fn()
     sheet = next
     askClose = null
@@ -109,7 +93,7 @@ export function closeSheet() {
     sheet = null
     askClose = null
     const scrim = el("scrim")
-    if (scrim && !legacyOpen && !el("side")?.classList.contains("on")) scrim.classList.remove("on")
+    if (scrim && !el("side")?.classList.contains("on")) scrim.classList.remove("on")
     emit()
 }
 

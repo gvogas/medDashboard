@@ -8,7 +8,7 @@ import { normalizeFlow, normalizePrefs, FLOW_PRESETS } from './model.js';
 import { parse, today } from './dates.js';
 import { esc } from './dom.js';
 import { render, renderView } from './views/render.js';
-import { drawerOpen } from './views/drawer-base.js';
+import { getSheet } from '../../data/overlay.ts';
 import { toast } from './views/toast.js';
 import { openSettings, openSession, openAchievement } from '../../data/actions.ts';
 import { minutesByDay, streak } from './history.js';
@@ -26,7 +26,7 @@ export function onFocusTick(s, event) {
     clearRun();
     render();
     return;
-  } else if (event === 'step' && s.kind === 'study' && !ui.focus && !drawerOpen()) {
+  } else if (event === 'step' && s.kind === 'study' && !ui.focus && !getSheet()) {
     ui.focus = true;                       /* a new Study step pulls you back in */
     render();
   }

@@ -7,7 +7,7 @@ import { data } from './store.js';
 import * as sync from './sync.js';
 import { ui } from './state.js';
 import { render } from './views/render.js';
-import { closeDrawer } from './views/drawer-base.js';
+import { closeSheet } from '../../data/overlay.ts';
 import { toast } from './views/toast.js';
 import { applyCoat } from '../../data/settings.ts';
 import { openSettings } from '../../data/actions.ts';
@@ -109,7 +109,7 @@ export async function signOut({ everywhere = false, force = false } = {}) {
   const id = data.profile?.id;
   spotify.stop();
   web.stop();
-  closeDrawer();
+  closeSheet();
   if (id) {
     try { await store.wipe(id); }
     catch (e) { alert('You are signed out, but local cleanup is still pending. ' + e.message); }

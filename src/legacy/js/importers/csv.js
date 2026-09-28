@@ -3,7 +3,7 @@
 // Unknown columns are ignored; missing ones come back as ''. Dates are normalised to
 // YYYY-MM-DD (DD/MM/YYYY is accepted); times to HH:MM when they parse.
 
-import { parseTime } from '../timepicker.js';
+import { parseTime } from '../../../lib/time.ts';
 import { validDate } from '../school.js';
 
 function records(text, sep) {

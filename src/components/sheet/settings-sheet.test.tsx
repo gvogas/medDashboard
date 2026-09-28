@@ -60,7 +60,7 @@ import type { SchoolDraft } from "@/data/school-edit"
 import { Sheet } from "./sheet"
 
 beforeEach(() => {
-    document.body.innerHTML = '<div id="app"></div><div id="scrim"></div><aside id="drawer"></aside><div id="sheet"></div>'
+    document.body.innerHTML = '<div id="app"></div><div id="scrim"></div><div id="sheet"></div>'
     render(<Sheet />, { container: document.getElementById("sheet")! })
 })
 afterEach(() => {

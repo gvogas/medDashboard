@@ -3,7 +3,6 @@
 
 import { ui } from './state.js';
 import { $, isTyping } from './dom.js';
-import { closeDrawer, drawerOpen } from './views/drawer-base.js';
 import { getSheet, requestCloseSheet } from '../../data/overlay.ts';
 import { setSide } from '../../data/sidebar.ts';
 import { openKeys, closeKeys, keysOpen } from '../../data/keys.ts';
@@ -21,7 +20,7 @@ function shortcut(e) {
   if (e.ctrlKey || e.metaKey || e.altKey || e.repeat || isTyping(e.target) || e.target.isContentEditable) return false;
   if (getBusy()) return false;
   if (e.key === '?') { keysOpen() ? closeKeys() : openKeys(); e.preventDefault(); return true; }
-  if (keysOpen() || ui.focus || drawerOpen() || $('app').hidden) return false;
+  if (keysOpen() || ui.focus || getSheet() || $('app').hidden) return false;
   const run = (fn) => { e.preventDefault(); fn(); return true; };
   if (e.key === 'n') return run(newItem);
   if (e.key === 't') return run(goToday);
@@ -38,14 +37,13 @@ export async function onKeydown(e) {
     if (ui.view === 'spotify' && spotView.devicesOpen()) { spotView.closeDevices(); return; }
     /* the sheet takes Escape itself when focus is inside it; this is for when it is not */
     if (getSheet()) { requestCloseSheet(); return; }
-    if (drawerOpen()) { closeDrawer(); return; }
     if (ui.focus) leaveFocus();
     return;
   }
   if (shortcut(e)) return;
   /* The Spotify view: / to search, space to play or pause, when not typing or on a button. */
   if (ui.view === 'spotify' && !e.ctrlKey && !e.metaKey && !e.altKey && !/^(input|textarea|select|button|a)$/i.test(e.target.tagName)
-      && !e.target.isContentEditable && !drawerOpen()) {
+      && !e.target.isContentEditable && !getSheet()) {
     if (e.key === '/') {
       const box = document.querySelector('[data-spot-q]');
       if (box) { e.preventDefault(); box.focus(); box.select(); return; }

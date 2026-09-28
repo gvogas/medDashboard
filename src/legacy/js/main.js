@@ -9,7 +9,6 @@ import { useTypePrefs } from './model.js';
 import { $, restoreFocus } from './dom.js';
 import { render, renderView } from './views/render.js';
 import { notify } from '../../bridge.ts';
-import { drawer, scrim, closeDrawer } from './views/drawer-base.js';
 import { setSide, watchSidebar } from '../../data/sidebar.ts';
 import { flush as flushTyping } from '../../data/item-edit.ts';
 import { openCourse, openSettings } from '../../data/actions.ts';
@@ -75,12 +74,11 @@ focus.onTick(onFocusTick);
 
 /* ═════════ events ═════════ */
 /* Most clicks redraw what was clicked. Focus then goes back to the same control in the
-   new markup, or to the drawer itself when that control is gone (a question answered),
-   so a keyboard user is not dropped to the top of the page. */
+   new markup, so a keyboard user is not dropped to the top of the page. */
 document.addEventListener('click', async (e) => {
-  const was = document.activeElement, inDrawer = drawer.contains(was);
+  const was = document.activeElement;
   await onClick(e);
-  restoreFocus(was, inDrawer && drawer.classList.contains('on') ? drawer : null);
+  restoreFocus(was);
 });
 async function onClick(e) {
   let el;
@@ -115,7 +113,6 @@ async function onClick(e) {
 }
 
 watchSidebar();
-scrim.addEventListener('click', () => { if (drawer.classList.contains('on')) closeDrawer(); });   /* the legacy drawer's; the sheet and the sidebar take their own */
 
 document.addEventListener('input', async (e) => {
   const d = e.target.dataset || {};

@@ -1,5 +1,5 @@
 // Times as the app keeps them, HH:MM: reading what people type, and nudging by a quarter
-// hour. Shared by the React time field and the legacy one (legacy/js/timepicker.js).
+// hour. Used by the React time field (components/sheet/time-field.tsx) and the CSV importer.
 
 export const STEP = 15
 

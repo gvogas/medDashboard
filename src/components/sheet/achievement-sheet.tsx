@@ -174,7 +174,7 @@ export function AchievementSheet({ draft: d }: { draft: AchievementDraft }) {
                         <span className="text-muted-foreground">{d.rule === "hours" ? "hours studied" : "or more"}</span>
                     </span>
                 </Fields>
-                <p role="status" className="m-0 text-[12px] text-[var(--study-ink)]">{standing(d, sessions, items, courses)}</p>
+                <p role="status" className="m-0 rounded-[9px] bg-accent px-3 py-2.5 text-[12.5px] text-accent-foreground">{standing(d, sessions, items, courses)}</p>
             </SheetBody>
 
             <SheetFoot hint={footHint(d, cropping)}>

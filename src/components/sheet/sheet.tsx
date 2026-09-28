@@ -1,5 +1,6 @@
-// The sheet: a floating Texture panel on the right for an item or a course, over the
-// blurred scrim (index.html's, shared with the legacy drawer). What it shows comes from
+// The sheet: a floating Texture panel on the right for an item, a course, Settings, an
+// import, the school calendar, a study session or an achievement, over the blurred scrim
+// (index.html's, shared with the phone sidebar). What it shows comes from
 // src/data/overlay.ts, which also makes the page behind inert while it is open. Escape
 // and the scrim close it, or ask first when the course has unsaved changes.
 

@@ -7,7 +7,6 @@ const KEY = 'rounds.ui';
 
 export const ui = {
   view: 'week', anchor: today(), search: '', types: {}, course: 'all',
-  confirm: null,           /* the session or achievement drawer is asking before a delete */
   settingsTab: 'you',      /* the Settings tab last shown */
   sort: { key: 'date', dir: 1 },
   theme: (typeof window !== 'undefined' && window.__roundsTheme) || 'system',
@@ -25,8 +24,6 @@ export const ui = {
      sessions, the day picked on the month's calendar or the heatmap, and a deleted
      session that can still be undone */
   hist: { weekOffset: 0, range: 'week', monthOffset: 0, focusDay: null, undo: null },
-  sessionDraft: null,      /* the Log study / Edit session drawer */
-  achDraft: null,          /* the New / Edit achievement drawer */
   lb: null,                /* the leaderboard from the server: {joined, week, all, at}, or loading/offline/error */
   lbTab: 'week',           /* the leaderboard's This week / All-time switch */
   schoolBusy: false,       /* a school calendar is being read */
