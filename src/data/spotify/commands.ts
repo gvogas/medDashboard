@@ -4,14 +4,11 @@
 // onControls).
 
 import { api } from "@/legacy/js/api.js"
-import { ui as legacyUi } from "@/legacy/js/state.js"
 import { state as player, poll, onRoundsIfIdle } from "./player"
 import { state as web } from "./web-player"
-import { cache, rerender, say, explain, load, openQueue, playFrom } from "./library"
+import { cache, rerender, say, explain, load, queueChanged, playFrom } from "./library"
 import { changed } from "./signal"
 import type { Device, Repeat } from "./types"
-
-const pane = () => (legacyUi as unknown as { spotify: { pane: string } }).spotify.pane
 
 let legacySync = () => {}
 
@@ -53,8 +50,7 @@ export async function queueAdd(uri: string): Promise<boolean> {
         queued.add(uri)
         setTimeout(() => { queued.delete(uri); changed() }, 1500)
         changed()
-        if (pane() === "queue") openQueue(true)
-        else cache.queue = null                     /* stale now; reloaded when the pane is opened */
+        queueChanged()                              /* reloaded where it shows, else when it is opened */
         return true
     } catch (e) { say(explain(e)); return false }
 }

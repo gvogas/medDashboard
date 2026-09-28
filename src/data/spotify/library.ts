@@ -103,6 +103,9 @@ export function say(text: string, ms = 4000, ok = false) {
 
 export const due = (what: string) => Date.now() >= (retryAt[what] || 0)
 
+/** Forget when failed loads may be tried again (for tests: a fresh engine). */
+export function forgetRetries() { for (const k of Object.keys(retryAt)) delete retryAt[k] }
+
 /** `quiet(e)` may take a failure itself and return true, so no note is shown. */
 export async function load(what: string, fn: () => Promise<void>, quiet: (e: unknown) => boolean = () => false) {
     busy.add(what)
@@ -274,6 +277,34 @@ export function openQueue(refresh = false) {
     load("queue", async () => { cache.queue = await api.spotifyQueue() })
 }
 
+/** Recently played, as its own place (the focus panel's Recent tab). */
+export function openRecent() {
+    go("recent")
+    rerender()
+}
+
+/* How many parts of the page show the queue outside the queue pane (the Spotify page's
+   Up next): while any do, a change to what is queued reloads it rather than dropping it. */
+let queueWatchers = 0
+export function watchQueue() {
+    queueWatchers++
+    return () => { queueWatchers-- }
+}
+const queueShown = () => place().pane === "queue" || queueWatchers > 0
+
+/** Load the queue without moving the open place; `fresh` reloads one already loaded. */
+export function ensureQueue(fresh = false) {
+    if ((cache.queue && !fresh) || busy.has("queue") || (!fresh && !due("queue"))) return
+    load("queue", async () => { cache.queue = await api.spotifyQueue() })
+}
+
+/** What is queued has changed (a track added): reload it where it shows, else forget it. */
+export function queueChanged() {
+    if (!queueShown()) { cache.queue = null; return }
+    if (place().pane === "queue") openQueue(true)
+    else ensureQueue(true)
+}
+
 let lastUri: string | null | undefined        /* the track the poller last reported, to notice a change */
 
 /**
@@ -284,7 +315,7 @@ export function followTrack(uri: string | null) {
     if (uri === lastUri) return
     const moved = lastUri !== undefined
     lastUri = uri
-    if (moved && place().pane === "queue" && !busy.has("queue") && due("queue")) load("queue", async () => { cache.queue = await api.spotifyQueue() })
+    if (moved && queueShown() && !busy.has("queue") && due("queue")) load("queue", async () => { cache.queue = await api.spotifyQueue() })
 }
 
 /** A refresh button: the playlist list, the open list, the queue, or recently played. */
@@ -292,7 +323,7 @@ export function refresh(what: string) {
     // Keep the visible cache while the shared request gate is waiting out a 429.
     if (spotifyRetryAt()) { rerender(); return }
     if (what === "playlists") { cache.playlists = null; delete retryAt.playlists; ensurePlaylists(); return }
-    if (what === "queue") { openQueue(true); return }
+    if (what === "queue") { if (place().pane === "queue") openQueue(true); else ensureQueue(true); return }
     if (what === "recent") { cache.recent = null; delete retryAt.recent; ensureRecent(); return }
     const key = listKey()
     if (key) { delete cache.tracks[key]; loadList(key) }

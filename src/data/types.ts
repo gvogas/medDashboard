@@ -1,6 +1,8 @@
 // The shapes the legacy store keeps, from the normalizers in legacy/js/model.js and
 // store.js. Only what React reads is typed; the store may carry more.
 
+import type { SpotifyPlace } from "./spotify/types"
+
 export type View = "week" | "month" | "table" | "spotify" | "study"
 export type ItemStatus = "todo" | "submitted" | "graded" | "done" | "missed" | (string & {})
 
@@ -125,6 +127,8 @@ export interface Ui {
     focus: boolean
     /* the focus screen's music panel is open */
     focusMusic: boolean
+    /* which part of the music is open, shared by the Spotify page and the focus panel */
+    spotify: SpotifyPlace
     /* what the next study run is logged against */
     study: { courseId: string | null; itemId: string | null }
     bg: "med" | "cs"

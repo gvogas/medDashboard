@@ -72,7 +72,7 @@ export { nextDelayMs, start, stop, poll, control, previous, playHere, disconnect
 export { activate, playTarget } from "./web-player"
 export {
     cooldownMessage, explain, say, due, ensureMe, ensurePlaylists, ensureRecent, openHome, openPlaylist, openAlbum,
-    openArtist, openQueue, more, refresh, search, typed, setFilter, followTrack, listKey,
+    openArtist, openQueue, openRecent, ensureQueue, watchQueue, more, refresh, search, typed, setFilter, followTrack, listKey,
     withAlbum, appendPage, canOpen, findText, matchesFilter, playFrom,
 } from "./library"
 export {

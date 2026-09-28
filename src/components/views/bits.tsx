@@ -26,7 +26,7 @@ export function onActivate(run: () => void) {
 
 /* The Texture card nests four borders; to fill the height, each level is a flex column.
    Written out in full: Tailwind finds classes by reading the source. */
-const FILL = [
+export const FILL = [
     "flex min-h-0 flex-1 flex-col",
     "[&>div]:flex [&>div]:min-h-0 [&>div]:flex-1 [&>div]:flex-col",
     "[&>div>div]:flex [&>div>div]:min-h-0 [&>div>div]:flex-1 [&>div>div]:flex-col",
