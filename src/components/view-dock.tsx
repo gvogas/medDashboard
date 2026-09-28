@@ -1,12 +1,12 @@
 // The view switcher in the top bar: Week, Month, Table, Spotify, Study.
-// The legacy code owns the view (ui.view); this reads it through the bridge and changes
-// it with setView, the same call the 1–5 keys make.
+// The view is the UI state's (ui.view); this reads it through the bridge and changes it
+// with setView, the same call the 1–5 keys make.
 
 import { useSyncExternalStore, type ReactNode } from "react"
 import { MagneticDock, type DockItemData } from "@/components/ui/magnetic-dock"
 import { subscribe, getStudyBadge } from "@/bridge"
-import { ui } from "@/legacy/js/state.js"
-import { setView } from "@/legacy/js/study-controller.js"
+import { ui } from "@/data/ui"
+import { setView } from "@/data/study-controller"
 
 type View = "week" | "month" | "table" | "spotify" | "study"
 

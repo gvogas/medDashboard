@@ -4,7 +4,7 @@
 // any React code uses that utility. This keeps the two sets of names apart.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync, readdirSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { compile } from 'tailwindcss';
 
@@ -16,7 +16,8 @@ const SAME_MEANING = new Set(['sr-only']);
 
 function legacyClassNames() {
   const names = new Set();
-  const markup = [...files('src/legacy/js'), 'index.html'].map((f) => readFileSync(f, 'utf8')).join('\n');
+  /* the markup that still carries legacy class names */
+  const markup = ['index.html', 'src/components/app.tsx'].filter(existsSync).map((f) => readFileSync(f, 'utf8')).join('\n');
   for (const m of markup.matchAll(/class(?:Name)?\s*=\s*\\?["'`]([^"'`\\]*)/g)) for (const t of m[1].split(/\s+/)) if (/^[a-z][\w-]*$/.test(t)) names.add(t);
   for (const m of markup.matchAll(/classList\.(?:add|remove|toggle|contains)\(\s*['"]([\w-]+)['"]/g)) names.add(m[1]);
   /* el.className = cond ? 'a b' : 'c': the strings it is set to, not those it is compared with */

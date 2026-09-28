@@ -8,7 +8,7 @@ import { data } from "@/core/store"
 import { classRoom, normalizeItem, shiftEnd, statusesFor } from "@/core/model"
 import { diffDays, parse, today, DOW } from "@/core/dates"
 import { nextReview } from "@/core/reviews"
-import { launch as fireworks } from "@/legacy/js/fireworks.js"
+import { launch as fireworks } from "@/lib/fireworks"
 import { useItems } from "./store"
 import type { Course, Item } from "./types"
 
@@ -153,7 +153,7 @@ export async function editNow(id: string, patch: Partial<Item>) {
     emit()
 }
 
-/** Save a row changed in place by legacy code (a task ticked on the board). */
+/** Save a row changed in place (a task ticked on the board). */
 export async function touch(it: Item) {
     const typed = pendingFor(it.id)
     if (typed) { Object.assign(it, typed); clearTimeout(pending!.timer); pending = null }

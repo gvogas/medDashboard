@@ -2,10 +2,10 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vite
 import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react"
 import { stubMatchMedia } from "@/components/test-media"
 
-// The focus screen over the real study-timer.ts, focus.js and core/timer.ts, and the real
+// The focus screen over the real study-timer.ts, run.ts and core/timer.ts, and the real
 // Spotify engine behind the music pill and panel (with a fake Worker). The store is in
-// memory: the meta store where focus.js keeps the run, the sessions it logs, the profile.
-// Esc goes through the legacy keyboard.js, as on the page.
+// memory: the meta store where run.ts keeps the run, the sessions it logs, the profile.
+// Esc goes through data/keyboard.ts, as on the page.
 const fake = vi.hoisted(() => ({
     meta: new Map<string, unknown>(),
     data: {
@@ -27,13 +27,9 @@ vi.mock("@/core/store", () => ({
     saveStudySession: async (s: Record<string, unknown>) => { fake.data.study_sessions = [...fake.data.study_sessions, s] },
     saveProfile: async (patch: Record<string, unknown>) => { fake.data.profile = { ...fake.data.profile, ...structuredClone(patch) } },
 }))
-vi.mock("@/legacy/js/views/render.js", async () => {
-    const { notify } = await import("@/bridge")
-    return { render: notify, renderView: notify }
-})
-vi.mock("@/legacy/js/query.js", () => ({ termStart: () => null, schoolCal: () => null }))
-vi.mock("@/legacy/js/study-controller.js", () => ({ setView: vi.fn() }))
-vi.mock("@/data/sidebar", () => ({ setSide: vi.fn() }))
+vi.mock("@/data/query", () => ({ termStart: () => null, schoolCal: () => null }))
+vi.mock("@/data/study-controller", () => ({ setView: vi.fn() }))
+vi.mock("@/data/sidebar", () => ({ setSide: vi.fn(), sideOpen: () => false }))
 vi.mock("@/data/actions", () => ({ openCourse: vi.fn(), openSettings: vi.fn(), newItem: vi.fn(), goToday: vi.fn(), step: vi.fn() }))
 const api = vi.hoisted(() => ({}) as ReturnType<typeof import("@/components/spotify/test-spotify").fakeApi>)
 vi.mock("@/core/api", async (importOriginal) => ({
@@ -42,9 +38,9 @@ vi.mock("@/core/api", async (importOriginal) => ({
     spotifyRetryAt: () => 0,
 }))
 
-import * as focus from "@/legacy/js/focus.js"
+import * as focus from "@/data/run"
 import { normalizeCourse, normalizeItem } from "@/core/model"
-import { onKeydown } from "@/legacy/js/keyboard.js"
+import { onKeydown } from "@/data/keyboard"
 import { getStudyBadge, notify } from "@/bridge"
 import { ui } from "@/data/ui"
 import { closeSheet, openSheet } from "@/data/overlay"

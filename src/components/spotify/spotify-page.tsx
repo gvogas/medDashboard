@@ -29,7 +29,7 @@ export function SpotifyPage() {
     const latest = useRef(s)
     useEffect(() => { latest.current = s })
 
-    /* Before the legacy keys (capture), which leave a key this took alone. */
+    /* Before data/keyboard.ts (capture), which leave a key this took alone. */
     useEffect(() => {
         const onKey = (e: KeyboardEvent) => {
             if ((e.key !== "/" && e.key !== " ") || e.defaultPrevented || e.ctrlKey || e.metaKey || e.altKey) return

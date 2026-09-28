@@ -33,14 +33,13 @@ export type LbTab = "week" | "all"
 export type Schedule = "all" | "deadlines" | "classes"
 export type SortKey = "title" | "type" | "course" | "date" | "status"
 
-/** The parts of legacy ui (legacy/js/state.js) that React reads or sets. */
+/** The UI state (ui.ts): what is open, filtered and sorted. */
 export interface Ui {
     view: View
     anchor: string
     search: string
     types: Record<string, boolean>
     course: string
-    settings: boolean
     focus: boolean
     /* the focus screen's music panel is open */
     focusMusic: boolean

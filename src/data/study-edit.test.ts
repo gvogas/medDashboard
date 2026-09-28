@@ -5,8 +5,7 @@ const fake = vi.hoisted(() => ({
     data: { items: [] as unknown[], courses: [{ id: "anat", code: "ANAT", name: "Anatomy", archived: false }], study_sessions: [] as unknown[], achievements: [] as unknown[], profile: null },
 }))
 vi.mock("@/core/store", () => ({ data: fake.data, subscribe: () => () => {}, saveStudySession: vi.fn(), saveAchievement: vi.fn() }))
-vi.mock("@/legacy/js/views/render.js", () => ({ render: vi.fn() }))
-vi.mock("@/legacy/js/state.js", () => ({ ui: { study: { courseId: null, itemId: null } } }))
+vi.mock("@/data/ui", async () => (await import("@/data/fake-ui")).fakeUi({ study: { courseId: null, itemId: null } }))
 
 import { impact, newSession, sessionDraft, startedAtOf, validSession, type SessionDraft } from "./session-edit"
 import { footHint, newAchievement, standing, switchRule, validAchievement, type AchievementDraft } from "./achievement-edit"

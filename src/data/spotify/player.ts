@@ -39,7 +39,7 @@ export function nextDelayMs(s: { connected: boolean; playing?: boolean }): numbe
     return s.playing ? 10000 : 20000
 }
 
-/** The legacy page's one callback; React reads through useSpotify(). */
+/** boot.ts's one callback; React reads through useSpotify(). */
 export function onState(fn: (s: PlayerState, kind: StateKind) => void) { listener = fn }
 export function onUnauthenticated(fn: () => void) { onSignedOut = fn }
 

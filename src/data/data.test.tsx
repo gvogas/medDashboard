@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest"
 import { act, cleanup, render, screen } from "@testing-library/react"
 
-/* Fakes for the legacy modules: a store that emits events, sync with a status, a ui. */
+/* Fakes for the core modules: a store that emits events, sync with a status, a ui. */
 const fake = vi.hoisted(() => {
     const storeListeners = new Set<(e: { type: string }) => void>()
     const statusListeners = new Set<(s: unknown) => void>()
@@ -26,7 +26,7 @@ vi.mock("@/core/sync", () => ({
     status: fake.status,
     onStatus: (fn: (s: unknown) => void) => fake.statusListeners.add(fn),
 }))
-vi.mock("@/legacy/js/state.js", () => ({ ui: fake.ui }))
+vi.mock("@/data/ui", async () => (await import("@/data/fake-ui")).fakeUi(fake.ui))
 
 import { notify } from "@/bridge"
 import { useAchievements, useCourses, useItems } from "./store"
@@ -68,7 +68,7 @@ describe("store hooks", () => {
 })
 
 describe("useUi", () => {
-    it("reads the legacy ui again after a legacy redraw", () => {
+    it("reads the ui again after a notify()", () => {
         function View() { return <p>{useUi((u) => u.view)}</p> }
         render(<View />)
         expect(screen.getByText("week")).toBeTruthy()

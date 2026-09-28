@@ -1,5 +1,5 @@
 // What the week, month and table views and the stat tiles show, worked out from the
-// collections and the filters. Pure: nothing here reads the DOM or the legacy `ui`, so
+// collections and the filters. Pure: nothing here reads the DOM or the `ui` object, so
 // each selector can be tested on its own. The hooks at the end feed them the live data.
 
 import { useMemo, useSyncExternalStore } from "react"
@@ -8,8 +8,8 @@ import { isOpen, isOverdue, isTest, normalizePrefs, occurrences, statusLabel, tm
 import { addDays, diffDays, dur, iso, monday, parse, today as todayIso, DOW, MON } from "@/core/dates"
 import { classWeekday, dayInfo, weekOf } from "@/core/school"
 import type { SchoolCalendar } from "@/core/school"
-import { weekLabel } from "@/legacy/js/views/school-bits.js"
-import { schoolCal } from "@/legacy/js/query.js"
+import { weekLabel } from "@/lib/school-bits"
+import { schoolCal } from "@/data/query"
 import { minutesByDay, streak } from "@/core/history"
 
 import { prepPace } from "@/core/prep"
@@ -91,8 +91,7 @@ export const tintOf = (info: DayInfo | null) => (info && info.kind !== "class" &
 /** "Weeks 6 – 11 · Autumn 2026" for the month's rows, or "" without a calendar. */
 export function weekRange(cal: SchoolCal, dates: string[]): string {
     if (!cal) return ""
-    type W = { kind: string; week?: number; term: { name: string } } | null
-    const weeks = dates.map((d) => weekOf(cal, d) as W)
+    const weeks = dates.map((d) => weekOf(cal, d))
     const first = weeks.find((w) => w && w.kind === "week" && w.week)
     if (!first) {
         const other = weeks.find(Boolean)
@@ -324,7 +323,7 @@ export function quoteAt(quotes: Quote[], ix: number): { quote: Quote; ix: number
 const filtersOf = (): Filters => ({ search: ui.search, types: ui.types, course: ui.course })
 
 /**
- * The live input for the views. The legacy `ui` is changed in place, so the version the
+ * The live input for the views. The `ui` object is changed in place, so the version the
  * bridge bumps on every redraw is part of the key; the collections are new arrays when
  * the store reloads.
  */

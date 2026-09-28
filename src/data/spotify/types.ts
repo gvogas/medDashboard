@@ -66,7 +66,7 @@ export interface PlayerState {
 export type WebStatus = "off" | "loading" | "ready" | "unsupported" | "needs_reconnect" | "no_premium"
 export interface WebState { status: WebStatus; deviceId: string | null }
 
-/** Which part of the music is open: `ui.spotify` in the legacy state. */
+/** Which part of the music is open: `ui.spotify` in the UI state. */
 export interface SpotifyPlace {
     pane: "home" | "playlist" | "album" | "artist" | "queue" | "recent" | "search"
     playlistId: string | null

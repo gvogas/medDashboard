@@ -1,7 +1,7 @@
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest"
 import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react"
 
-// The legacy app is not booted: the views read a fake store and ui, and their buttons
+// The app is not booted: the views read a fake store and ui, and their buttons
 // call the actions, which are fakes here.
 const fake = vi.hoisted(() => ({
     data: { items: [] as unknown[], courses: [] as unknown[], quotes: [] as unknown[], study_sessions: [] as unknown[], profile: null as unknown },
@@ -15,8 +15,8 @@ const actions = vi.hoisted(() => ({
     goToDay: vi.fn(), openCourse: vi.fn(), sortTable: vi.fn(), nextQuote: vi.fn(), openStudy: vi.fn(),
 }))
 vi.mock("@/data/actions", () => actions)
-vi.mock("@/legacy/js/state.js", () => ({ ui: fake.ui }))
-vi.mock("@/legacy/js/query.js", () => ({ schoolCal: () => null }))
+vi.mock("@/data/ui", async () => (await import("@/data/fake-ui")).fakeUi(fake.ui))
+vi.mock("@/data/query", () => ({ schoolCal: () => null }))
 /* the Study page has its own tests (components/study/study.test.tsx) */
 vi.mock("@/components/study/study-view", () => ({ StudyView: () => <p>The Study page</p> }))
 vi.mock("@/core/store", () => ({

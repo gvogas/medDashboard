@@ -5,10 +5,9 @@
 import * as store from "@/core/store"
 import { today } from "@/core/dates"
 import { normalizeSchool, validDate } from "@/core/school"
-import { schoolCal } from "@/legacy/js/query.js"
+import { schoolCal } from "@/data/query"
 import { api } from "@/core/api"
 import { readWithAi } from "./ai-read"
-import { render } from "@/legacy/js/views/render.js"
 import { toast } from "./toast"
 import { notify } from "@/bridge"
 import { ui } from "./ui"
@@ -85,7 +84,7 @@ export async function saveSchool(s: SchoolDraft) {
     if (!valid(s)) return
     await store.saveProfile({ schoolCalendar: toSave(s) })
     closeSheet()
-    render()
+    notify()
     toast("School calendar saved")
 }
 
@@ -93,5 +92,5 @@ export async function saveSchool(s: SchoolDraft) {
 export async function removeSchool() {
     await store.saveProfile({ schoolCalendar: {} })
     ui.schoolNote = { text: "School calendar removed.", error: false }
-    render()
+    notify()
 }

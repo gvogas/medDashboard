@@ -1,9 +1,9 @@
 // The top bar's title and the line under it, for the view on screen.
 
 import { parse, addDays, monday, iso, DOW, MON } from "@/core/dates"
-import { schoolCal } from "@/legacy/js/query.js"
+import { schoolCal } from "@/data/query"
 import { weekOf } from "@/core/school"
-import { weekLabel } from "@/legacy/js/views/school-bits.js"
+import { weekLabel } from "@/lib/school-bits"
 import { state as spotify } from "@/data/spotify/player"
 import type { Ui } from "@/data/types"
 

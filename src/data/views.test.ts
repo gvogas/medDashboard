@@ -2,7 +2,7 @@ import { afterAll, beforeAll, describe, expect, it, vi } from "vitest"
 
 /* The selectors are pure; only the hooks at the end of views.ts touch the store. */
 vi.mock("@/core/store", () => ({ data: { items: [], courses: [], quotes: [], study_sessions: [], profile: null }, subscribe: () => () => {} }))
-vi.mock("@/legacy/js/query.js", () => ({ schoolCal: () => null }))
+vi.mock("@/data/query", () => ({ schoolCal: () => null }))
 
 import { normalizeCourse, normalizeItem } from "@/core/model"
 import { normalizeSchool } from "@/core/school"

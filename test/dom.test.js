@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { isTyping } from '../src/legacy/js/dom.js';
+import { isTyping } from '../src/lib/dom.ts';
 
 const el = (tagName, type = '') => ({ tagName, type, isContentEditable: false });
 

@@ -1,5 +1,5 @@
 // The week board: seven days, each a date column beside its classes and items in time
-// order, with office hours and tasks alongside. Items open in the legacy drawer.
+// order, with office hours and tasks alongside. Items open in the sheet.
 
 import { useState } from "react"
 import { cn } from "@/lib/utils"

@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest"
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react"
 import { Toaster } from "@/components/toaster"
-import { toast, hideToast } from "@/legacy/js/views/toast.js"
+import { toast, hideToast } from "@/data/toast"
 import { stubMatchMedia } from "./test-media"
 
 stubMatchMedia({ reducedMotion: false })

@@ -2,8 +2,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { StrictMode } from "react"
 import { act, renderHook } from "@testing-library/react"
 
-/* A store in memory: the device's meta store (where focus.js keeps the run), saved
-   sessions, and a profile that saving replaces, as a reload does. focus.js and core/timer.ts
+/* A store in memory: the device's meta store (where run.ts keeps the run), saved
+   sessions, and a profile that saving replaces, as a reload does. run.ts and core/timer.ts
    are the real engine. */
 const fake = vi.hoisted(() => ({
     meta: new Map<string, unknown>(),
@@ -34,10 +34,7 @@ vi.mock("@/core/store", () => ({
         fake.data.profile = { ...fake.data.profile, ...structuredClone(patch) }
     },
 }))
-const legacy = vi.hoisted(() => ({ renderView: vi.fn() }))
-vi.mock("@/legacy/js/views/render.js", () => ({ render: legacy.renderView, renderView: legacy.renderView }))
-
-import * as focus from "@/legacy/js/focus.js"
+import * as focus from "@/data/run"
 import { getStudyBadge, notify, subscribe } from "@/bridge"
 import {
     addStep, applyPreset, clockTime, delStep, doneAt, escapeFocus, leaveFocus, openFocus, flowTotals, nextLine, pickFor, setRounds, setStepKind, setStepMinutes, skip, startRun,
@@ -45,6 +42,10 @@ import {
 } from "./study-timer"
 import { ui } from "./ui"
 import type { Course, Flow, Item, StudySession } from "./types"
+
+/* every redraw goes through the bridge */
+const redraw = vi.fn()
+subscribe(redraw)
 
 const MIN = 60_000
 const T0 = new Date(2026, 8, 28, 14, 0).getTime()
@@ -70,7 +71,7 @@ function runAt(flow: Flow, into: number, extra: Partial<Run> = {}): Run {
 const session = (startedAt: number, studyMinutes: number): StudySession =>
     ({ id: String(startedAt), courseId: "anat", itemId: null, startedAt, studyMinutes, roundsDone: 0, note: "", manual: false })
 
-/* promises inside focus.js (the meta store, the session save) settle */
+/* promises inside run.ts (the meta store, the session save) settle */
 const settle = () => act(async () => { for (let i = 0; i < 20; i++) await Promise.resolve() })
 
 describe("the flow's totals", () => {
@@ -200,12 +201,12 @@ describe("what a run is logged against", () => {
 describe("editing the flow", () => {
     const flow = () => fake.data.profile!.studyFlow as Flow
     const set = (f: Flow) => { fake.data.profile = { id: "me", studyFlow: structuredClone(f) } }
-    beforeEach(() => { set(CLASSIC); fake.profileSaves = []; legacy.renderView.mockClear() })
+    beforeEach(() => { set(CLASSIC); fake.profileSaves = []; redraw.mockClear() })
 
     it("switches a step between Study and Break, and saves it", async () => {
         expect(await setStepKind(1)).toBe(true)
         expect(flow().steps).toEqual([["study", 25], ["study", 5]])
-        expect(legacy.renderView).toHaveBeenCalled()
+        expect(redraw).toHaveBeenCalled()
         expect(await setStepKind(0)).toBe(true)
         expect(flow().steps).toEqual([["break", 25], ["study", 5]])
     })
@@ -475,7 +476,7 @@ describe("a run", () => {
         ui.focus = false
         await begin(CLASSIC)
         expect(ui.focus).toBe(true)
-        expect(legacy.renderView).toHaveBeenCalled()
+        expect(redraw).toHaveBeenCalled()
         await act(() => stopRun())
         expect(ui).toMatchObject({ focus: false, view: "study" })
     })

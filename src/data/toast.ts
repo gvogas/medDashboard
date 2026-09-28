@@ -1,6 +1,6 @@
 // The one toast on screen: a delete that can still be undone, an error that used to be a
-// blocking alert, or an achievement just earned. Legacy code calls toast() through the
-// shim in legacy/js/views/toast.js; <Toaster /> shows it. A new one replaces the old.
+// blocking alert, or an achievement just earned. Anything may call toast();
+// <Toaster /> shows it. A new one replaces the old.
 
 import { useSyncExternalStore } from "react"
 

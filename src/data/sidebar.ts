@@ -1,6 +1,6 @@
 // The sidebar on narrow screens slides over the page. Closed, it is inert, so Tab does not
 // wander through it off-screen; open, it takes focus, the page behind is inert, and the
-// scrim shows (unless the sheet, which owns the scrim while open, is up). Escape (keyboard.js),
+// scrim shows (unless the sheet, which owns the scrim while open, is up). Escape (keyboard.ts),
 // the scrim and a click outside close it.
 
 import { notify } from "@/bridge"

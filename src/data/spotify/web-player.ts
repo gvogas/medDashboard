@@ -29,7 +29,7 @@ export const state: WebState = { status: "off", deviceId: null }
 let player: SdkPlayer | null = null
 let listener: (s: WebState) => void = () => {}
 
-/** The legacy badge's one callback; React reads through useSpotify(). */
+/** boot.ts's one callback; React reads through useSpotify(). */
 export function onChange(fn: (s: WebState) => void) { listener = fn }
 
 function set(status: WebStatus, deviceId: string | null = null) {

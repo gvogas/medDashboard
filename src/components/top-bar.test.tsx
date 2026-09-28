@@ -4,7 +4,7 @@ import { notify } from "@/bridge"
 import { TopBar } from "@/components/top-bar"
 import { stubMatchMedia } from "./test-media"
 
-// The legacy app is not booted: the bar needs the ui, sync status, Spotify's state and
+// The app is not booted: the bar needs the ui, sync status, Spotify's state and
 // the school calendar, and its buttons call the actions, which are fakes here.
 const fake = vi.hoisted(() => {
     const statusListeners = new Set<(s: unknown) => void>()
@@ -24,10 +24,10 @@ const actions = vi.hoisted(() => ({
     toggleSettings: vi.fn(), showSidebar: vi.fn(), syncNow: vi.fn(),
 }))
 vi.mock("@/data/actions", () => actions)
-vi.mock("@/legacy/js/state.js", () => ({ ui: fake.ui }))
+vi.mock("@/data/ui", async () => (await import("@/data/fake-ui")).fakeUi(fake.ui))
 vi.mock("@/data/spotify/player", () => ({ state: fake.spotify }))
-vi.mock("@/legacy/js/query.js", () => ({ schoolCal: () => null }))
-vi.mock("@/legacy/js/study-controller.js", () => ({ setView: vi.fn() }))
+vi.mock("@/data/query", () => ({ schoolCal: () => null }))
+vi.mock("@/data/study-controller", () => ({ setView: vi.fn() }))
 vi.mock("@/core/sync", () => ({
     status: fake.status,
     onStatus: (fn: (s: unknown) => void) => fake.statusListeners.add(fn),

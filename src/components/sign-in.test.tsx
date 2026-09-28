@@ -1,18 +1,18 @@
 import { afterEach, describe, expect, it, vi } from "vitest"
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react"
 import { SignIn } from "@/components/sign-in"
-import { renderSignIn } from "@/legacy/js/views/signin.js"
+import { showSignInState } from "@/data/signin"
 import { stubMatchMedia } from "./test-media"
 
-// session.js boots the whole legacy app; the form only needs its signIn(). The real
+// session.ts opens the whole app; the form only needs its signIn(). The real
 // one answers a failure by showing the form again with the reason, as this fake does.
 const signIn = vi.hoisted(() => vi.fn())
-vi.mock("@/legacy/js/session.js", () => ({ signIn }))
+vi.mock("@/data/session", () => ({ signIn }))
 
 stubMatchMedia({ reducedMotion: false })
 document.body.innerHTML = '<div id="signin" hidden></div><div id="app"></div>'
 
-const show = (opts: { error?: string; username?: string } = {}) => act(() => renderSignIn(opts))
+const show = (opts: { error?: string; username?: string } = {}) => act(() => showSignInState(opts))
 const button = () => screen.getByRole("button") as HTMLButtonElement
 
 afterEach(() => {
@@ -52,7 +52,7 @@ describe("sign-in", () => {
 
     it("sends the fields, waits with the button disabled, and is ready again after a failure", async () => {
         let fail = () => {}
-        signIn.mockImplementation(() => new Promise<void>((resolve) => { fail = () => { renderSignIn({ error: "Wrong username or password.", username: "maya" }); resolve() } }))
+        signIn.mockImplementation(() => new Promise<void>((resolve) => { fail = () => { showSignInState({ error: "Wrong username or password.", username: "maya" }); resolve() } }))
         render(<SignIn />)
         show()
         fireEvent.change(screen.getByLabelText("Username"), { target: { value: "maya" } })

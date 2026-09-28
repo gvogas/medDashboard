@@ -4,8 +4,8 @@ import { fireEvent, render, screen } from "@testing-library/react"
 import { ViewDock } from "@/components/view-dock"
 import { stubMatchMedia } from "./test-media"
 
-vi.mock("@/legacy/js/state.js", () => ({ ui: { view: "week" } }))
-vi.mock("@/legacy/js/study-controller.js", () => ({ setView: vi.fn() }))
+vi.mock("@/data/ui", async () => (await import("@/data/fake-ui")).fakeUi({ view: "week" }))
+vi.mock("@/data/study-controller", () => ({ setView: vi.fn() }))
 
 stubMatchMedia({ reducedMotion: true })
 

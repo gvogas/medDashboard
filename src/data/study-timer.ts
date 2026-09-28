@@ -1,18 +1,17 @@
 // The study timer: the running run, what starts, pauses and stops it, the focus screen
-// it opens, and the flow it follows. The run itself stays in legacy/js/focus.js (core/timer.ts
-// does the arithmetic); useRun() reads it on each of focus.js's ticks, which also keep
+// it opens, and the flow it follows. The run itself is run.ts's (core/timer.ts
+// does the arithmetic); useRun() reads it on each of run.ts's ticks, which also keep
 // the tab's title and the Study icon's badge. The helpers below are pure, so the cards,
 // the focus screen and the dock draw from the same numbers.
 
 import { useMemo, useSyncExternalStore } from "react"
-import * as focus from "@/legacy/js/focus.js"
+import * as focus from "./run"
 import * as store from "@/core/store"
 import { data } from "@/core/store"
 import { isOpen, normalizeFlow, normalizePrefs, FLOW_PRESETS } from "@/core/model"
 import { iso, today as todayIso } from "@/core/dates"
 import { minutesByDay } from "@/core/history"
-import { rememberUi } from "@/legacy/js/state.js"
-import { renderView } from "@/legacy/js/views/render.js"
+import { rememberUi } from "@/data/ui"
 import { notify, setStudyBadge, subscribe as subscribeBridge } from "@/bridge"
 import { getSheet } from "./overlay"
 import { useCourses, useItems, useProfile, useStudySessions } from "./store"
@@ -46,7 +45,7 @@ export interface Run {
 
 /* ── the running run, as an external store ── */
 
-/* focus.js ticks four times a second; a new snapshot is taken only when something shown
+/* run.ts ticks four times a second; a new snapshot is taken only when something shown
    changes (at most once a second, and on every step, start and end), so between those
    getSnapshot returns the same object. */
 let run: Run | null = null
@@ -55,7 +54,7 @@ const listeners = new Set<() => void>()
 
 function readRun(): Run | null {
     const now = Date.now()
-    const s = focus.read(now) as unknown as Omit<Run, "at"> | null
+    const s = focus.read(now)
     return s ? { ...s, at: now } : null
 }
 
@@ -88,7 +87,7 @@ focus.onTick((s: { kind: StepKind } | null, event: string) => {
         moved = true
     } else if (event === "step" && s?.kind === "study" && !ui.focus && !getSheet()) { ui.focus = true; moved = true }
     refresh(event !== "tick")
-    if (moved) renderView()
+    if (moved) notify()
 })
 
 function getRun(): Run | null {
@@ -173,7 +172,7 @@ export const stopRun = (): Promise<void> => focus.stop()
 export function openFocus() {
     ui.focus = true
     focus.fullscreen(true)
-    renderView()
+    notify()
 }
 
 /** Leave the focus screen; the run goes on in the dock. The Study view would open it
@@ -182,7 +181,7 @@ export function leaveFocus() {
     ui.focus = false
     focus.fullscreen(false)
     if (ui.view === "study") { ui.view = "week"; rememberUi() }
-    renderView()
+    notify()
 }
 
 /** Esc on the focus screen: the music panel shuts first, then the screen is left. */
@@ -218,7 +217,7 @@ async function saveFlow(next: Flow): Promise<boolean> {
     const saving = store.saveProfile({ studyFlow: normalizeFlow(next) })
     flowSaving = saving.catch(() => {})
     try { await saving } catch { return false }    /* the store shows the save error */
-    renderView()
+    notify()
     return true
 }
 

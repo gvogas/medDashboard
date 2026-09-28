@@ -1,6 +1,6 @@
 // What the app knows about itself: the eight built-in types and the person's own,
 // their status sets, the course colours, and the derived predicates. Nothing here
-// touches the DOM or storage; the type list is read through a getter main.js sets.
+// touches the DOM or storage; the type list is read through a getter boot.ts sets.
 
 import { diffDays, today, parse, addDays, iso } from './dates.ts';
 import type { Achievement, ChecklistEntry, Course, Flow, Item, ItemType, Meeting, Quote, StepKind, StudyPrefs, StudySession, TypePref } from './types.ts';
@@ -43,7 +43,7 @@ const FALLBACK: TypeMeta = { label: 'Item', plural: 'Items', color: '#4C7370' };
 
 type TypePrefs = () => TypePref[] | null | undefined;
 let prefsOf: TypePrefs = () => [];
-/** main.js points this at the profile's type list, so every view reads the current one. */
+/** boot.ts points this at the profile's type list, so every view reads the current one. */
 export function useTypePrefs(get: TypePrefs): void { prefsOf = get; }
 
 /* A stored row may carry anything here; like a property lookup, it is read as a string. */

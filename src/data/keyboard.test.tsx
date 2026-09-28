@@ -1,23 +1,20 @@
-// The single-key shortcuts in legacy/js/keyboard.js call the actions directly.
+// The single-key shortcuts in data/keyboard.ts call the actions directly.
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest"
 
 const ui = vi.hoisted(() => ({ view: "week", focus: false }))
 const actions = vi.hoisted(() => ({ newItem: vi.fn(), goToday: vi.fn(), step: vi.fn() }))
 const setView = vi.hoisted(() => vi.fn())
 
-// Everything else keyboard.js imports needs the booted app; none of it runs for these keys.
+// Everything else keyboard.ts imports needs the booted app; none of it runs for these keys.
 vi.mock("@/data/actions", () => actions)
-vi.mock("@/legacy/js/state.js", () => ({ ui }))
-vi.mock("@/legacy/js/study-controller.js", () => ({ setView }))
+vi.mock("@/data/ui", async () => (await import("@/data/fake-ui")).fakeUi(ui))
+vi.mock("@/data/study-controller", () => ({ setView }))
 vi.mock("@/data/study-timer", () => ({ escapeFocus: vi.fn() }))
-vi.mock("@/data/sidebar", () => ({ setSide: vi.fn() }))
+vi.mock("@/data/sidebar", () => ({ setSide: vi.fn(), sideOpen: () => false }))
 vi.mock("@/data/ai-read", () => ({ getBusy: () => null }))
 vi.mock("@/core/store", () => ({}))
-vi.mock("@/legacy/js/views/render.js", () => ({}))
-vi.mock("@/legacy/js/views/sidebar.js", () => ({}))
-vi.mock("@/legacy/js/views/types-nav.js", () => ({}))
 
-import { onKeydown } from "@/legacy/js/keyboard.js"
+import { onKeydown } from "@/data/keyboard"
 import { keysOpen } from "@/data/keys"
 
 const press = (key: string) => {

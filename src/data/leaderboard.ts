@@ -1,7 +1,7 @@
 // The leaderboard on the Study page: study hours this week and all-time for everyone who
 // has joined. Joining is opt-in, and someone who has not joined sees nobody. The totals
 // come from the server; your own row uses this device's sessions, so a session that has
-// not synced yet still counts. What the server said is kept in the legacy ui (`ui.lb`).
+// not synced yet still counts. What the server said is kept in the UI state (`ui.lb`).
 
 import { useMemo, useSyncExternalStore } from "react"
 import { getVersion, notify, subscribe } from "@/bridge"

@@ -10,7 +10,7 @@ const fake = vi.hoisted(() => {
 })
 vi.mock("@/core/api", () => ({ ApiError: fake.ApiError }))
 vi.mock("@/core/pdftext", () => ({ pdfText: vi.fn(async () => "the text") }))
-vi.mock("@/legacy/js/state.js", () => ({ ui: fake.ui }))
+vi.mock("@/data/ui", async () => (await import("@/data/fake-ui")).fakeUi(fake.ui))
 
 import { closeKeys, keysOpen, openKeys } from "@/data/keys"
 import { readWithAi } from "@/data/ai-read"

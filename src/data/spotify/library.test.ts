@@ -11,7 +11,7 @@ async function fresh(route: (path: string) => Response | Promise<Response>) {
     const asked: string[] = []
     vi.stubGlobal("fetch", vi.fn(async (path: string) => { asked.push(path); return route(path) }))
     const library = await import("./library")
-    const { ui } = await import("@/legacy/js/state.js")
+    const { ui } = await import("@/data/ui")
     Object.assign(ui.spotify, { pane: "home", playlistId: null, albumId: null, artistId: null, q: "", filter: "" })
     return { library, ui, asked }
 }

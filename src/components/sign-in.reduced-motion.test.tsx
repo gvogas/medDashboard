@@ -4,7 +4,7 @@ import { render, screen } from "@testing-library/react"
 import { SignIn } from "@/components/sign-in"
 import { stubMatchMedia } from "./test-media"
 
-vi.mock("@/legacy/js/session.js", () => ({ signIn: vi.fn() }))
+vi.mock("@/data/session", () => ({ signIn: vi.fn() }))
 
 stubMatchMedia({ reducedMotion: true })
 

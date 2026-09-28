@@ -2,8 +2,7 @@
 // the overlays above it (the shortcuts panel, the busy card; components/overlays.tsx).
 // While the sheet is open the page behind is inert, so Tab stays inside; closed, the sheet
 // is inert itself. An overlay makes both inert. The scrim belongs to the sheet while it is
-// open, and to the phone sidebar (sidebar.ts) otherwise. This module imports nothing from
-// the legacy code.
+// open, and to the phone sidebar (sidebar.ts) otherwise.
 
 import { useSyncExternalStore } from "react"
 import type { Item } from "./types"

@@ -8,7 +8,7 @@ import { uid } from "@/core/model"
 import { iso, shortDate, today } from "@/core/dates"
 import { minutesByDay, streak } from "@/core/history"
 import { duration } from "@/lib/time"
-import { render } from "@/legacy/js/views/render.js"
+import { notify } from "@/bridge"
 import { parseTime } from "@/lib/time"
 import { closeSheet } from "./overlay"
 import { ui } from "./ui"
@@ -89,5 +89,5 @@ export async function saveSession(d: SessionDraft) {
         startedAt: startedAtOf(d), studyMinutes: d.minutes,
     })
     closeSheet()
-    render()
+    notify()
 }

@@ -9,7 +9,7 @@ import { getVersion, notify, subscribe } from "@/bridge"
 import { dayOf, heatRange, level, minutesByDay, month, streak, week } from "@/core/history"
 import { achievements, nextUp, ownAchievements } from "@/core/achievements"
 import { normalizePrefs } from "@/core/model"
-import { termStart as currentTermStart } from "@/legacy/js/query.js"
+import { termStart as currentTermStart } from "@/data/query"
 import { addDays, dayMonth, iso, parse, shortDate, today as todayIso, DOW, MON } from "@/core/dates"
 import { duration } from "@/lib/time"
 import { useAchievements, useCourses, useItems, useProfile, useStudySessions } from "./store"
@@ -247,7 +247,7 @@ export function badges(sessions: StudySession[], items: Item[], prefs: StudyPref
 
 /**
  * The sessions shown, the prefs, the term start and today. The History card's state is
- * the legacy `ui`, changed in place, so the bridge's version is part of the key; it
+ * the `ui` object, changed in place, so the bridge's version is part of the key; it
  * also catches the day rolling over on a redraw.
  */
 function useStudyInput() {
@@ -290,7 +290,7 @@ export const useBadges = () => {
     return useMemo(() => badges(input.sessions, items, input.prefs, input.today, own, courses), [input, items, own, courses])
 }
 
-/* ── the History card's actions: each changes the legacy ui and redraws ── */
+/* ── the History card's actions: each changes the ui and redraws ── */
 
 /** Week, Month or Term; a day picked before is let go. The tab lasts the session. */
 export function setHistTab(tab: HistTab) {

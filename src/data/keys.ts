@@ -3,7 +3,7 @@
 // and when it goes, focus goes back to where it was (or its successor after a redraw).
 
 import { useSyncExternalStore } from "react"
-import { refind } from "@/legacy/js/dom.js"
+import { refind } from "@/lib/dom"
 import { cover } from "./overlay"
 
 let open = false

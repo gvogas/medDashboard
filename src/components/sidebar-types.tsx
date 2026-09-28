@@ -1,6 +1,6 @@
 // "Open items": a filter per item type with its count, and the editor behind ✎ where
 // types are reordered (drag, or ↑/↓ on the handle), renamed, recoloured, hidden, deleted
-// and added. Every edit saves through the actions, which redraw the legacy views.
+// and added. Every edit saves through the actions, which redraw the views.
 
 import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent } from "react"
 import { Reorder, useDragControls } from "framer-motion"

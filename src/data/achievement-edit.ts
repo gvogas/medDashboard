@@ -6,7 +6,7 @@ import * as store from "@/core/store"
 import { uid } from "@/core/model"
 import { dayMonth } from "@/core/dates"
 import { ownAchievements } from "@/core/achievements"
-import { render } from "@/legacy/js/views/render.js"
+import { notify } from "@/bridge"
 import { closeSheet } from "./overlay"
 import type { Achievement, Course, Item, StudySession } from "./types"
 
@@ -70,5 +70,5 @@ export async function saveAchievementDraft(d: AchievementDraft) {
         courseId: d.rule === "hours" ? d.courseId : null, itemId: d.rule === "grade" ? d.itemId : null, target: d.target,
     })
     closeSheet()
-    render()
+    notify()
 }

@@ -1,10 +1,10 @@
 import { afterEach, describe, expect, it, vi } from "vitest"
 
-/* state.js reads what this browser remembered when it loads, so each case loads it afresh. */
+/* ui.ts reads what this browser remembered when it loads, so each case loads it afresh. */
 const load = async (saved: unknown) => {
     localStorage.setItem("rounds.ui", JSON.stringify(saved))
     vi.resetModules()
-    return (await import("@/legacy/js/state.js")) as { ui: { schedule: string }; rememberUi: () => void }
+    return await import("@/data/ui")
 }
 
 afterEach(() => localStorage.clear())

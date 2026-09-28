@@ -1,6 +1,6 @@
 // Times as the app keeps them, HH:MM: reading what people type, and nudging by a quarter
 // hour. Used by the React time field (components/sheet/time-field.tsx) and the CSV importer;
-// and lengths of study, for the Study page and the legacy timer.
+// and lengths of study, for the Study page and the timer.
 
 export const STEP = 15
 

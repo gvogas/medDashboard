@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react"
 import { stubMatchMedia } from "./test-media"
 
-/* The legacy app is not booted: a store with data, a ui, and redraws that only notify.
+/* The app is not booted: a store with data, a ui, and redraws that only notify.
    core/model.ts, query.js and the actions are the real ones, so the filter logic is too. */
 const fake = vi.hoisted(() => ({
     data: { items: [] as unknown[], courses: [] as unknown[], profile: null as unknown },
@@ -15,13 +15,9 @@ vi.mock("@/core/store", () => ({
     course: (id: string) => (fake.data.courses as { id: string }[]).find((c) => c.id === id),
 }))
 vi.mock("@/core/sync", () => ({ status: { state: "idle", pending: 0, message: "" }, onStatus: () => {}, syncNow: vi.fn() }))
-vi.mock("@/legacy/js/state.js", () => ({ ui: fake.ui }))
-vi.mock("@/legacy/js/views/render.js", async () => {
-    const { notify } = await import("@/bridge")
-    return { render: vi.fn(() => notify()), renderView: vi.fn(() => notify()) }
-})
+vi.mock("@/data/ui", async () => (await import("@/data/fake-ui")).fakeUi(fake.ui))
 vi.mock("@/data/sidebar", () => ({ setSide: vi.fn() }))
-vi.mock("@/legacy/js/study-controller.js", () => ({ setView: vi.fn() }))
+vi.mock("@/data/study-controller", () => ({ setView: vi.fn() }))
 vi.mock("@/data/actions", async (importOriginal) => ({
     ...(await importOriginal<typeof import("@/data/actions")>()),
     reorderTypes: vi.fn(async () => {}),

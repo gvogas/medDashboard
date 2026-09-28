@@ -2,8 +2,8 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } 
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react"
 import { stubMatchMedia } from "@/components/test-media"
 
-// The legacy app is not booted: the page reads a fake store and ui through the real
-// study.ts and leaderboard.ts; the sheets, the legacy redraw and the API are fakes. The
+// The app is not booted: the page reads a fake store and ui through the real
+// study.ts and leaderboard.ts; the sheets and the API are fakes. The
 // timer cards are tested in timer-cards.test.tsx.
 const fake = vi.hoisted(() => ({
     data: {
@@ -20,16 +20,15 @@ const fake = vi.hoisted(() => ({
 }))
 const actions = vi.hoisted(() => ({ openSession: vi.fn(), deleteSession: vi.fn(), openAchievement: vi.fn(), openSettings: vi.fn() }))
 vi.mock("@/data/actions", () => actions)
-vi.mock("@/legacy/js/state.js", () => ({ ui: fake.ui }))
+vi.mock("@/data/ui", async () => (await import("@/data/fake-ui")).fakeUi(fake.ui))
 vi.mock("@/core/store", () => ({
     data: fake.data,
     course: (id: string | null) => fake.data.courses.find((c) => c.id === id) || null,
     item: (id: string | null) => (fake.data.items as { id: string }[]).find((c) => c.id === id) || null,
     subscribe: () => () => {},
 }))
-vi.mock("@/legacy/js/query.js", () => ({ termStart: () => fake.termStart, schoolCal: () => null }))
+vi.mock("@/data/query", () => ({ termStart: () => fake.termStart, schoolCal: () => null }))
 vi.mock("@/core/api", () => ({ api: fake.api }))
-vi.mock("@/legacy/js/views/render.js", () => ({ render: vi.fn(), renderView: vi.fn() }))
 
 import { notify } from "@/bridge"
 import { normalizeCourse, normalizeItem } from "@/core/model"

@@ -111,7 +111,7 @@ function Search() {
                 <circle cx="7" cy="7" r="4.5" />
                 <path d="M10.5 10.5 14 14" />
             </svg>
-            {/* id="search": the / key focuses it (legacy keyboard.js). */}
+            {/* id="search": the / key focuses it (data/keyboard.ts). */}
             <input
                 type="search"
                 id="search"

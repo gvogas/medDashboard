@@ -5,10 +5,10 @@ import { useState } from "react"
 import { cn } from "@/lib/utils"
 import { typeList } from "@/core/model"
 import { DOW, shortDate } from "@/core/dates"
-import { termStart } from "@/legacy/js/query.js"
+import { termStart } from "@/data/query"
 import { planSummary, setWeek1 } from "@/core/importers/plan"
 import { data } from "@/core/store"
-import { render } from "@/legacy/js/views/render.js"
+import { notify } from "@/bridge"
 import { useUi, ui } from "@/data/ui"
 import { commitImport, importCount, type ImportPlan, type PlanItem } from "@/data/import-edit"
 import { openSettings } from "@/data/actions"
@@ -36,7 +36,7 @@ export function ImportSheet({ plan: initial, name }: { plan: ImportPlan; name: s
         setBusy(true)
         let note
         try { note = { text: await commitImport(plan), error: false } } catch (error) { note = { text: "The import stopped part-way: " + (error as Error).message, error: true } }
-        render()
+        notify()
         ui.importNote = note
         openSettings("importGrp")
     }

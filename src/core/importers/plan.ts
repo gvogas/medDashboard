@@ -1,6 +1,6 @@
 // Turn parsed .ics events or CSV rows into an import plan the preview can show:
 // courses (existing or proposed) with the classes to add, and items to create.
-// Nothing here writes; main.js saves the ticked rows after the preview.
+// Nothing here writes; the import sheet saves the ticked rows after the preview.
 //
 // plan = {
 //   courses: [{ id, code, name, color, isNew, meetings: [{ id, kind, weekday, start, end, room, include }] }],

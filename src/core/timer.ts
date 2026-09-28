@@ -1,6 +1,6 @@
 // The study timer's clock: where a run is in its flow, from timestamps alone. No DOM
 // and no ticking counter, so a sleeping phone or a throttled tab comes back right, and
-// a reload resumes the run. The run record is kept on this device (focus.js).
+// a reload resumes the run. The run record is kept on this device (run.ts).
 //
 // run = { flow, startedAt, pausedAt, pausedMs, skippedMs, skippedStudyMs }
 //   pausedAt        when the current pause began, or null while running

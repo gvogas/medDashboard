@@ -8,7 +8,7 @@ vi.mock("@/core/store", () => ({
     saveItem: async (row: { id: string }) => { fake.saved.push(row); fake.items = fake.items.map((x) => (x.id === row.id ? row : x)) },
     subscribe: () => () => {},
 }))
-vi.mock("@/legacy/js/fireworks.js", () => ({ launch: vi.fn() }))
+vi.mock("@/lib/fireworks", () => ({ launch: vi.fn() }))
 
 import { httpUrl, normalizeCourse, normalizeItem } from "@/core/model"
 import { autoTitleFor, countdown, deriveEdit, editNow, flush, linkUrl, pendingFor, typeInto, TYPING_MS } from "./item-edit"

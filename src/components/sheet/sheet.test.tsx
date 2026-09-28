@@ -2,7 +2,7 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } 
 import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react"
 
 // A store in memory that reloads (new arrays) and tells its listeners on every save, as
-// the real one does; the delete actions and the legacy modules the sheet reads are fakes.
+// the real one does; the delete actions and the controllers the sheet reads are fakes.
 const fake = vi.hoisted(() => {
     const listeners = new Set<(e: { type: string }) => void>()
     const data = { items: [] as { id: string }[], courses: [] as { id: string }[], study_sessions: [] as unknown[], quotes: [], profile: null }
@@ -21,25 +21,24 @@ vi.mock("@/core/store", () => ({
     saveCourse: vi.fn(async (row: { id: string }) => fake.put("courses", row)),
     subscribe: (fn: (e: { type: string }) => void) => { fake.listeners.add(fn); return () => fake.listeners.delete(fn) },
 }))
-vi.mock("@/legacy/js/state.js", () => ({ ui: fake.ui }))
-vi.mock("@/legacy/js/query.js", () => ({ schoolCal: () => null, termStart: () => "2026-09-01" }))
+vi.mock("@/data/ui", async () => (await import("@/data/fake-ui")).fakeUi(fake.ui))
+vi.mock("@/data/query", () => ({ schoolCal: () => null, termStart: () => "2026-09-01" }))
 vi.mock("@/core/reviews", () => ({ nextReview: () => null }))
-vi.mock("@/legacy/js/fireworks.js", () => ({ launch: vi.fn() }))
+vi.mock("@/lib/fireworks", () => ({ launch: vi.fn() }))
 vi.mock("@/data/actions", () => actions)
 /* what Settings reads, for the sheet to load */
-vi.mock("@/legacy/js/theme.js", () => ({ setTheme: vi.fn(), setBg: vi.fn() }))
-vi.mock("@/legacy/js/study-controller.js", () => ({ savePrefs: vi.fn() }))
-vi.mock("@/legacy/js/sync-status.js", () => ({ runReviews: vi.fn() }))
+vi.mock("@/data/theme", () => ({ setTheme: vi.fn(), setBg: vi.fn() }))
+vi.mock("@/data/study-controller", () => ({ savePrefs: vi.fn() }))
+vi.mock("@/data/sync-status", () => ({ runReviews: vi.fn() }))
 vi.mock("@/core/sync", () => ({ status: { state: "idle", pending: 0, message: "" }, onStatus: () => {} }))
 vi.mock("@/data/spotify/player", () => ({ state: { loaded: true, connected: false } }))
 vi.mock("@/data/spotify/web-player", () => ({ state: { status: "off" } }))
 vi.mock("@/core/api", () => ({ api: {}, spotifyRetryAt: () => 0 }))
 vi.mock("@/data/ai-read", () => ({ readWithAi: vi.fn() }))
-vi.mock("@/legacy/js/views/render.js", () => ({ render: vi.fn(), renderView: vi.fn() }))
 
 import * as store from "@/core/store"
 import { normalizeCourse, normalizeItem } from "@/core/model"
-import { launch as fireworks } from "@/legacy/js/fireworks.js"
+import { launch as fireworks } from "@/lib/fireworks"
 import { closeSheet, cover, getSheet, openSheet } from "@/data/overlay"
 import { flush, TYPING_MS } from "@/data/item-edit"
 import { Sheet } from "./sheet"

@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react"
 
-// The legacy app is not booted. A store in memory, and fakes for what Settings calls:
+// The app is not booted. A store in memory, and fakes for what Settings calls:
 // the actions, savePrefs, the theme, the reviews, the calendar feed's API.
 const fake = vi.hoisted(() => {
     const listeners = new Set<(e: { type: string }) => void>()
@@ -37,19 +37,18 @@ vi.mock("@/core/store", () => ({
     saveRows: legacy.saveRows, saveProfile: legacy.saveProfile,
     subscribe: (fn: (e: { type: string }) => void) => { fake.listeners.add(fn); return () => fake.listeners.delete(fn) },
 }))
-vi.mock("@/legacy/js/state.js", () => ({ ui: fake.ui }))
-vi.mock("@/legacy/js/query.js", () => ({ schoolCal: () => null, termStart: () => null }))
+vi.mock("@/data/ui", async () => (await import("@/data/fake-ui")).fakeUi(fake.ui))
+vi.mock("@/data/query", () => ({ schoolCal: () => null, termStart: () => null }))
 vi.mock("@/core/sync", () => ({ status: { state: "idle", pending: 0, message: "", lastPull: null }, onStatus: () => {} }))
 vi.mock("@/data/spotify/player", () => ({ state: fake.spotify }))
 vi.mock("@/data/spotify/web-player", () => ({ state: { status: "ready" } }))
 vi.mock("@/core/api", () => ({ api, spotifyRetryAt: () => 0 }))
 vi.mock("@/core/reviews", () => ({ readSetting: () => fake.review, writeSetting: legacy.writeSetting, nextReview: () => null }))
-vi.mock("@/legacy/js/sync-status.js", () => ({ runReviews: legacy.runReviews }))
-vi.mock("@/legacy/js/study-controller.js", () => ({ savePrefs: legacy.savePrefs }))
-vi.mock("@/legacy/js/theme.js", () => ({ setTheme: legacy.setTheme, setBg: legacy.setBg }))
+vi.mock("@/data/sync-status", () => ({ runReviews: legacy.runReviews }))
+vi.mock("@/data/study-controller", () => ({ savePrefs: legacy.savePrefs }))
+vi.mock("@/data/theme", () => ({ setTheme: legacy.setTheme, setBg: legacy.setBg }))
 vi.mock("@/data/ai-read", () => ({ readWithAi: vi.fn() }))
-vi.mock("@/legacy/js/views/render.js", () => ({ render: legacy.render, renderView: vi.fn() }))
-vi.mock("@/legacy/js/fireworks.js", () => ({ launch: vi.fn() }))
+vi.mock("@/lib/fireworks", () => ({ launch: vi.fn() }))
 vi.mock("@/data/actions", () => actions)
 
 import { notify } from "@/bridge"

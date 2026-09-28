@@ -1,15 +1,59 @@
-// The legacy UI state (legacy/js/state.js) is one object changed in place, with no events.
-// Everything that changes it then redraws, and every redraw calls the bridge's notify(),
-// whose counter is the snapshot here.
+// UI state: what is open, what is filtered, how the table is sorted. Never synced. The
+// view and the week and month's schedule are remembered per browser as a convenience, and
+// the theme and background too, for index.html's script to apply before the first paint.
+// It is one object changed in place, with no events: everything that changes it then
+// calls the bridge's notify(), whose counter is the snapshot useUi() reads.
 
 import { useSyncExternalStore } from "react"
-import { ui as legacyUi } from "@/legacy/js/state.js"
+import { today } from "@/core/dates"
 import { getVersion, subscribe } from "@/bridge"
 import type { Ui } from "./types"
 
-export const ui = legacyUi as unknown as Ui
+const KEY = "rounds.ui"
 
-/** Read from the UI state; the component redraws after every legacy redraw. */
+export const ui: Ui = {
+    view: "week", anchor: today(), search: "", types: {}, course: "all",
+    settingsTab: "you",      /* the Settings tab last shown */
+    sort: { key: "date", dir: 1 },
+    theme: (typeof window !== "undefined" && window.__roundsTheme) || "system",
+    bg: typeof window !== "undefined" && window.__roundsBg === "cs" ? "cs" : "med",     /* background art */
+    quoteIx: 0,
+    schedule: "all",         /* the week and month show 'all', 'deadlines' or 'classes' */
+    importNote: null,        /* the last import's result or error, shown once in Settings */
+    outlineBusy: false,      /* a course outline is being read */
+    spotifyNote: null,       /* 'connected' | 'error' after the Spotify round trip, shown once in Settings */
+    /* the music (the Spotify page, the focus screen's): which list is open, and the filter inside it */
+    spotify: { pane: "home", playlistId: null, albumId: null, artistId: null, q: "", filter: "" },
+    focus: false,            /* the focus screen is up: the study clock and Spotify, nothing else */
+    focusMusic: false,       /* the focus screen's music panel is open */
+    study: { courseId: null, itemId: null },   /* what the next study run is logged against */
+    /* the Study page's History card: which week and month are shown, the Week, Month or
+       Term tab, the day picked on the month's calendar or the heatmap, and a deleted
+       session that can still be undone */
+    hist: { weekOffset: 0, tab: "week", monthOffset: 0, focusDay: null, undo: null },
+    lb: null,                /* the leaderboard from the server, or loading/offline/error */
+    lbTab: "week",           /* the leaderboard's This week / All-time switch */
+    schoolBusy: false,       /* a school calendar is being read */
+    schoolNote: null,        /* the last school calendar read, in Settings */
+    schoolAsk: false,        /* Settings is asking before removing the school calendar */
+    signoutAsk: null,        /* sign-out waits on a warning about unsynced edits */
+    feed: null,              /* the calendar feed as Settings last heard it, once a session */
+}
+
+try {
+    const saved = JSON.parse(localStorage.getItem(KEY) || "{}") as { view?: string; schedule?: string; monthDeadlines?: boolean }
+    if (["week", "month", "table", "spotify", "study"].includes(saved.view!)) ui.view = saved.view as Ui["view"]
+    if (["all", "deadlines", "classes"].includes(saved.schedule!)) ui.schedule = saved.schedule as Ui["schedule"]
+    else if (saved.monthDeadlines === false) ui.schedule = "classes"   /* the month's old Deadlines toggle */
+} catch {}
+
+export function rememberUi() {
+    try { localStorage.setItem(KEY, JSON.stringify({ view: ui.view, schedule: ui.schedule })) } catch {}
+    try { localStorage.setItem("rounds.theme", ui.theme) } catch {}
+    try { localStorage.setItem("rounds.bg", ui.bg) } catch {}
+}
+
+/** Read from the UI state; the component redraws after every notify(). */
 export function useUi<T>(select: (ui: Ui) => T): T {
     useSyncExternalStore(subscribe, getVersion)
     return select(ui)

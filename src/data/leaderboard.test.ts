@@ -6,7 +6,7 @@ const fake = vi.hoisted(() => ({
     api: { leaderboard: vi.fn(), leaderboardJoin: vi.fn() },
 }))
 vi.mock("@/core/store", () => ({ data: { study_sessions: [] }, subscribe: () => () => {} }))
-vi.mock("@/legacy/js/state.js", () => ({ ui: fake.ui }))
+vi.mock("@/data/ui", async () => (await import("@/data/fake-ui")).fakeUi(fake.ui))
 vi.mock("@/core/api", () => ({ api: fake.api }))
 
 import { joinLeaderboard, lbHours, lbRows, lbStale, loadLeaderboard, setLbTab, weekStart, LOAD_ERROR, SAVE_ERROR } from "./leaderboard"

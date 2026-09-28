@@ -5,12 +5,12 @@
 // clock, the round strip, what comes next and when the run is done, Skip, pause and
 // Stop & log. The music: a pill at the bottom that opens a glass side panel (a bottom
 // sheet on a phone); the stage re-centres in what is left. Space pauses, M opens or shuts
-// the music; Esc (legacy keyboard.js, escapeFocus) shuts the music, then leaves.
+// the music; Esc (data/keyboard.ts, escapeFocus) shuts the music, then leaves.
 
 import { useEffect, useLayoutEffect, useRef, type ReactNode } from "react"
 import { cn } from "@/lib/utils"
 import { duration } from "@/lib/time"
-import { isTyping } from "@/legacy/js/dom.js"
+import { isTyping } from "@/lib/dom"
 import { accent } from "@/components/views/bits"
 import { FlipClock } from "@/components/study/flip-clock"
 import { GoalRing } from "@/components/study/tiles"
@@ -52,7 +52,7 @@ function FocusScreen({ run }: { run: Run }) {
     const courses = useCourses(), items = useItems()
     const root = useRef<HTMLDivElement>(null)
 
-    /* Space, M and /, when no sheet, overlay or box has them (Esc is keyboard.js's). */
+    /* Space, M and /, when no sheet, overlay or box has them (Esc is data/keyboard.ts's). */
     useEffect(() => {
         const onKey = (e: KeyboardEvent) => {
             if (e.defaultPrevented || e.ctrlKey || e.metaKey || e.altKey || e.repeat) return

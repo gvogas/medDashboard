@@ -7,7 +7,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react"
 import { cn } from "@/lib/utils"
 import { tmeta } from "@/core/model"
-import { refind } from "@/legacy/js/dom.js"
+import { refind } from "@/lib/dom"
 import { requestCloseSheet, useSheet, type SheetState } from "@/data/overlay"
 import { ItemSheet } from "./item-sheet"
 import { CourseSheet } from "./course-sheet"

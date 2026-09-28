@@ -4,11 +4,11 @@ import { notify, setStudyBadge } from "@/bridge"
 import { ViewDock } from "@/components/view-dock"
 import { stubMatchMedia } from "./test-media"
 
-// The legacy app is not booted here: the dock only needs the view and setView.
+// The app is not booted here: the dock only needs the view and setView.
 const ui = vi.hoisted(() => ({ view: "week" }))
 const setView = vi.hoisted(() => vi.fn())
-vi.mock("@/legacy/js/state.js", () => ({ ui }))
-vi.mock("@/legacy/js/study-controller.js", () => ({ setView }))
+vi.mock("@/data/ui", async () => (await import("@/data/fake-ui")).fakeUi(ui))
+vi.mock("@/data/study-controller", () => ({ setView }))
 
 stubMatchMedia({ reducedMotion: false })
 
@@ -29,7 +29,7 @@ describe("the view dock", () => {
         expect(screen.getByRole("group", { name: "Views" })).toBeTruthy()
     })
 
-    it("follows the view when the legacy code re-renders", () => {
+    it("follows the view after a notify()", () => {
         render(<ViewDock />)
         ui.view = "table"
         act(() => notify())

@@ -5,7 +5,7 @@
 
 import { useSyncExternalStore } from "react"
 import { spotifyRetryAt } from "@/core/api"
-import { ui as legacyUi } from "@/legacy/js/state.js"
+import { ui } from "@/data/ui"
 import { state as player } from "./player"
 import { state as web, playTarget } from "./web-player"
 import { busy, cache, note, type Cache } from "./library"
@@ -50,7 +50,7 @@ function read(): SpotifySnapshot {
         player: { ...player, track: now ? { ...now } : null },
         web: { ...web },
         target: playTarget(player, web),
-        place: { ...(legacyUi as unknown as { spotify: SpotifyPlace }).spotify },
+        place: { ...ui.spotify },
         cache: { ...cache },
         busy: new Set(busy),
         note,

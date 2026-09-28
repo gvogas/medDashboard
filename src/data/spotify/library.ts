@@ -1,13 +1,13 @@
 // The music's data: what it fetched through the Worker, cached for the session, and the
 // loads, pane changes and search that fill that cache. The open place is `ui.spotify` in
-// the legacy state, shared by the legacy view, the focus panel and the Spotify page.
+// the UI state, shared by the focus panel and the Spotify page.
 
 import { api, ApiError, retryDelayMs, spotifyRetryAt } from "@/core/api"
-import { ui as legacyUi } from "@/legacy/js/state.js"
+import { ui } from "@/data/ui"
 import { changed } from "./signal"
 import type { Album, Artist, Device, Page, Playlist, SearchKind, SearchResults, SpotifyNote, SpotifyPlace, Track } from "./types"
 
-const place = () => (legacyUi as unknown as { spotify: SpotifyPlace }).spotify
+const place = (): SpotifyPlace => ui.spotify
 /* A search, or the next page of one kind: the kind, and the offset it starts from */
 const searchPage = (q: string, type: string | null = null, offset: number | null = 0): Promise<Omit<SearchResults, "q">> => api.spotifySearch(q, type, offset)
 

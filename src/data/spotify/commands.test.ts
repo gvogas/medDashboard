@@ -19,7 +19,7 @@ async function fresh(route: (path: string) => Response = () => json(null, 204)) 
     const library = await import("./library")
     const { state: player } = await import("./player")
     const { state: web } = await import("./web-player")
-    const { ui } = await import("@/legacy/js/state.js")
+    const { ui } = await import("@/data/ui")
     Object.assign(ui.spotify, { pane: "home", playlistId: null, albumId: null, artistId: null, q: "", filter: "" })
     Object.assign(player, { loaded: true, connected: true, device: "Phone", deviceId: "phone1", shuffle: false, repeat: "off", volume: 50, supportsVolume: true })
     /* let the gate's 1.5 s gap pass between calls */

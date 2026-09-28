@@ -1,10 +1,10 @@
-// The sign-in screen, drawn into the static #signin container. session.js shows and
+// The sign-in screen, drawn into the static #signin container. session.ts shows and
 // hides the container and passes the last error (src/data/signin.ts); submitting calls
 // its signIn(), which reloads on success or shows the form again with the reason.
 
 import { useEffect, useRef, useState, type FormEvent } from "react"
 import { useReducedMotion } from "framer-motion"
-import { signIn } from "@/legacy/js/session.js"
+import { signIn } from "@/data/session"
 import { useSignInState } from "@/data/signin"
 import { TextGif } from "@/components/ui/text-gif"
 import { TextureCard } from "@/components/ui/texture-card"
@@ -24,7 +24,7 @@ export function SignIn() {
     const passRef = useRef<HTMLInputElement>(null)
     const reduced = useReducedMotion()
 
-    // Each time session.js shows the screen: keep the username, clear the password,
+    // Each time session.ts shows the screen: keep the username, clear the password,
     // stop waiting, and focus the field to type in next.
     useEffect(() => {
         setUsername(kept)

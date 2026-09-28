@@ -1,27 +1,28 @@
-// What React components (and the legacy keyboard) do to the app. Each one changes the
-// legacy state and redraws through the legacy code, so saving, the offline queue, sync
-// and the drawers behave as before.
+// What the components and the keyboard do to the app. Each one changes the store or the
+// UI state and calls notify(), so saving, the offline queue, sync and the sheets behave
+// as before.
 
 import * as store from "@/core/store"
 import { data } from "@/core/store"
 import * as sync from "@/core/sync"
 import { isOpen, normalizeItem, typeList, typePrefsFrom, uid, TYPE_COLOURS, MAX_CUSTOM_TYPES, ACHIEVEMENT_LIMIT } from "@/core/model"
-import { typeOn } from "@/legacy/js/query.js"
+import { typeOn } from "@/data/query"
 import { addDays, iso, parse, today } from "@/core/dates"
-import { render, renderView } from "@/legacy/js/views/render.js"
 import { setSide } from "./sidebar"
 import { openKeys } from "./keys"
 import { api } from "@/core/api"
 import { toast } from "./toast"
 import { applyCoat, TAB_OF, type SettingsTab } from "./settings"
-import { rememberUi } from "@/legacy/js/state.js"
-import { launch as fireworks } from "@/legacy/js/fireworks.js"
+import { rememberUi } from "@/data/ui"
+import { launch as fireworks } from "@/lib/fireworks"
 import { notify } from "@/bridge"
-import { deleteLater, deleteWithUndo, setView } from "@/legacy/js/study-controller.js"
+import { deleteLater, deleteWithUndo, setView } from "@/data/study-controller"
 import { celebrate, chainReview, setStatus, touch } from "./item-edit"
 import { closeSheet, getSheet, openSheet, replaceSheet } from "./overlay"
 import { newSession, sessionDraft } from "./session-edit"
 import { achievementDraft, newAchievement } from "./achievement-edit"
+/* session.ts imports openSettings from here: a cycle, but each side calls the other only later */
+import { signOut as endSession } from "./session"
 import { ui } from "./ui"
 import type { Achievement, Course, Item, ItemType, Schedule, SortKey, StudySession } from "./types"
 
@@ -31,14 +32,14 @@ export { setView }
 
 export function goToday() {
     ui.anchor = today()
-    render()
+    notify()
 }
 
 /** A week back or on, or a month in the month view. */
 export function step(dir: -1 | 1) {
     const a = parse(ui.anchor)
     ui.anchor = ui.view === "month" ? iso(new Date(a.getFullYear(), a.getMonth() + dir, 1)) : iso(addDays(a, 7 * dir))
-    render()
+    notify()
 }
 
 let searchTimer: ReturnType<typeof setTimeout> | undefined
@@ -46,7 +47,7 @@ let searchTimer: ReturnType<typeof setTimeout> | undefined
 export function setSearch(text: string) {
     ui.search = text
     clearTimeout(searchTimer)
-    searchTimer = setTimeout(renderView, 120)
+    searchTimer = setTimeout(notify, 120)
 }
 
 /* ── the sidebar's filters ── */
@@ -63,21 +64,21 @@ export function toggleType(id: string) {
     if (typeOn(id) && on === all.length) all.forEach((t) => { ui.types[t] = t === id })
     else if (typeOn(id) && on === 1) all.forEach((t) => { ui.types[t] = true })
     else ui.types[id] = !typeOn(id)
-    render()
+    notify()
 }
 
 export const isTypeOn = (id: string): boolean => typeOn(id)
 
 export function setCourse(id: string) {
     ui.course = id
-    render()
+    notify()
 }
 
 /* ── the type list's editor: every change saves the whole list to the profile ── */
 
 async function saveTypes(list: ItemType[]) {
     await store.saveProfile({ types: typePrefsFrom(list) })
-    render()
+    notify()
 }
 
 async function editType(id: string, change: (t: ItemType, list: ItemType[], i: number) => boolean | void) {
@@ -254,9 +255,7 @@ export async function disconnectSpotify() {
 }
 
 /** Sign out; with unsynced edits or saved copies the first press asks (in Settings), `force` erases them. */
-/* session.js is loaded by main.js; imported here only when needed, it keeps this module
-   free of the boot code (and light to test) */
-export const signOut = async (opts: { everywhere?: boolean; force?: boolean } = {}) => (await import("@/legacy/js/session.js")).signOut(opts)
+export const signOut = (opts: { everywhere?: boolean; force?: boolean } = {}) => endSession(opts)
 export function keepSignedIn() { ui.signoutAsk = null; notify() }
 
 export function showShortcuts() { closeSheet(); openKeys() }
@@ -278,7 +277,7 @@ export function goToDay(date: string) {
     ui.anchor = date
     ui.view = "week"
     rememberUi()
-    render()
+    notify()
 }
 
 /** Sort the table by a column; the same column again flips the order. */
@@ -297,7 +296,7 @@ export async function toggleTask(id: string, from?: Element) {
     setStatus(it, finishing ? "done" : "todo")
     await touch(it)
     await chainReview(it)
-    render()
+    notify()
 }
 
 /** A task for today, in the course being shown. */
@@ -305,7 +304,7 @@ export async function quickAddTask(title: string) {
     const text = title.trim()
     if (!text) return
     await store.saveItem(normalizeItem({ id: uid(), type: "task", title: text, courseId: ui.course === "all" ? null : ui.course, date: today(), status: "todo" }))
-    render()
+    notify()
 }
 
 /**

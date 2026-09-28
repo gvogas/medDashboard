@@ -8,15 +8,15 @@ import { COAT_PALETTE, colourName, normalizePrefs } from "@/core/model"
 import { shortDate, today } from "@/core/dates"
 import { schoolStatus } from "@/core/school"
 import type { SchoolCalendar } from "@/core/school"
-import { schoolCal } from "@/legacy/js/query.js"
+import { schoolCal } from "@/data/query"
 import { status as syncStatus } from "@/core/sync"
 import { state as spotify } from "@/data/spotify/player"
 import { state as web } from "@/data/spotify/web-player"
 import { api, spotifyRetryAt } from "@/core/api"
 import { readSetting, writeSetting } from "@/core/reviews"
-import { runReviews } from "@/legacy/js/sync-status.js"
-import { savePrefs } from "@/legacy/js/study-controller.js"
-import { setBg, setTheme } from "@/legacy/js/theme.js"
+import { runReviews } from "@/data/sync-status"
+import { savePrefs } from "@/data/study-controller"
+import { setBg, setTheme } from "@/data/theme"
 import { notify } from "@/bridge"
 import { useConflicts, useItems, useCourses, useProfile, useQuotes } from "@/data/store"
 import { useSyncStatus } from "@/data/sync"
@@ -505,7 +505,7 @@ const SpotifyMark = () => (
 
 function SpotifyTab() {
     const note = useUi((u) => u.spotifyNote)
-    useUi((u) => u.view)   /* redrawn as the player's state changes (main.js notifies) */
+    useUi((u) => u.view)   /* redrawn as the player's state changes (boot.ts notifies) */
     const on = spotify.connected, retry = spotifyRetryAt()
     let who: ReactNode, action: ReactNode = null
     if (!spotify.loaded) {

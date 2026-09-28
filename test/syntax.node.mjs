@@ -1,18 +1,10 @@
-// Every browser module must parse. Most of src/legacy/js needs a DOM, so the vitest suites
-// never import it; this catches a syntax error there before it blanks the app.
+// The service worker is plain JavaScript served as it is, outside Vite and the type
+// check, so this catches a syntax error there before it stops the app from loading.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readdirSync } from 'node:fs';
-import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
 
-function files(dir) {
-  return readdirSync(dir, { withFileTypes: true }).flatMap((e) => e.isDirectory() ? files(join(dir, e.name)) : e.name.endsWith('.js') ? [join(dir, e.name)] : []);
-}
-
-test('every legacy module and the service worker parse', () => {
-  for (const file of [...files('src/legacy/js'), 'public/sw.js']) {
-    const r = spawnSync(process.execPath, ['--check', file], { encoding: 'utf8' });
-    assert.equal(r.status, 0, file + '\n' + r.stderr);
-  }
+test('the service worker parses', () => {
+  const r = spawnSync(process.execPath, ['--check', 'public/sw.js'], { encoding: 'utf8' });
+  assert.equal(r.status, 0, 'public/sw.js\n' + r.stderr);
 });

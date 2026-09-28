@@ -24,11 +24,10 @@ vi.mock("@/core/store", () => ({
     deleteAchievement: vi.fn(),
     subscribe: (fn: (e: { type: string }) => void) => { fake.listeners.add(fn); return () => fake.listeners.delete(fn) },
 }))
-vi.mock("@/legacy/js/state.js", () => ({ ui: fake.ui, rememberUi: vi.fn() }))
+vi.mock("@/data/ui", async () => (await import("@/data/fake-ui")).fakeUi(fake.ui))
 vi.mock("@/core/sync", () => ({ status: { state: "idle", pending: 0, message: "" }, onStatus: () => {}, syncNow: vi.fn() }))
-vi.mock("@/legacy/js/views/render.js", () => ({ render: vi.fn(), renderView: vi.fn() }))
-vi.mock("@/legacy/js/study-controller.js", () => ({ deleteWithUndo: vi.fn(), deleteLater: vi.fn(), setView: vi.fn() }))
-vi.mock("@/legacy/js/fireworks.js", () => ({ launch: vi.fn() }))
+vi.mock("@/data/study-controller", () => ({ deleteWithUndo: vi.fn(), deleteLater: vi.fn(), setView: vi.fn() }))
+vi.mock("@/lib/fireworks", () => ({ launch: vi.fn() }))
 vi.mock("@/core/api", () => ({ api: {}, spotifyRetryAt: () => 0 }))
 vi.mock("@/data/ai-read", () => ({ readWithAi: vi.fn() }))
 vi.mock("@/core/sticker", () => ({
@@ -39,14 +38,14 @@ vi.mock("@/core/sticker", () => ({
 }))
 vi.mock("@/data/toast", () => ({ toast: vi.fn() }))
 /* what Settings reads, for the sheet to load */
-vi.mock("@/legacy/js/theme.js", () => ({ setTheme: vi.fn(), setBg: vi.fn() }))
+vi.mock("@/data/theme", () => ({ setTheme: vi.fn(), setBg: vi.fn() }))
 vi.mock("@/data/spotify/player", () => ({ state: { loaded: true, connected: false } }))
 vi.mock("@/data/spotify/web-player", () => ({ state: { status: "off" } }))
-vi.mock("@/legacy/js/sync-status.js", () => ({ runReviews: vi.fn() }))
+vi.mock("@/data/sync-status", () => ({ runReviews: vi.fn() }))
 
 import * as store from "@/core/store"
 import * as sticker from "@/core/sticker"
-import { deleteLater, deleteWithUndo } from "@/legacy/js/study-controller.js"
+import { deleteLater, deleteWithUndo } from "@/data/study-controller"
 import { normalizeCourse, normalizeItem } from "@/core/model"
 import { toast } from "@/data/toast"
 import { closeSheet, getSheet } from "@/data/overlay"

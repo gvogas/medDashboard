@@ -1,6 +1,6 @@
-// The only coupling between React and the legacy code while the move is in progress.
-// The legacy side calls notify() after it renders and setStudyBadge() as the timer runs;
-// React components subscribe. This module imports nothing, so either side can use it.
+// The change signal. The store and the UI state are plain objects changed in place, so
+// whatever changes them calls notify(), and the timer calls setStudyBadge() as it runs;
+// the hooks in src/data/ subscribe. This module imports nothing, so anything can use it.
 
 type Listener = () => void;
 const listeners = new Set<Listener>();
@@ -12,7 +12,7 @@ export function subscribe(fn: Listener): () => void {
   return () => { listeners.delete(fn); };
 }
 
-/** Something React may show has changed: the legacy `ui`, the store, or sync status. */
+/** Something React may show has changed: the UI state, the store, or sync status. */
 export function notify(): void {
   version++;
   for (const fn of listeners) fn();

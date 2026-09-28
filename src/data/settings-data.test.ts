@@ -14,9 +14,8 @@ vi.mock("@/core/store", () => ({
     saveProfile: vi.fn(async (patch: unknown) => { fake.profile.push(patch) }),
     subscribe: () => () => {},
 }))
-vi.mock("@/legacy/js/query.js", () => ({ schoolCal: () => fake.cal, termStart: () => fake.data.profile?.termStart ?? null }))
+vi.mock("@/data/query", () => ({ schoolCal: () => fake.cal, termStart: () => fake.data.profile?.termStart ?? null }))
 vi.mock("@/data/ai-read", () => ({ readWithAi: vi.fn() }))
-vi.mock("@/legacy/js/views/render.js", () => ({ render: vi.fn() }))
 vi.mock("@/core/api", () => ({ api: {} }))
 
 import { normalizeCourse } from "@/core/model"
