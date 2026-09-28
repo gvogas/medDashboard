@@ -1,5 +1,6 @@
-/* Rounds — components: panels, drawer, settings. The stat tiles and the week, month and
-   table views are React (src/components/views/). */
+/* Rounds — components: panels, the legacy drawer (the session and achievement drawers),
+   the Spotify view. The stat tiles, the views and the sheet (item, course, Settings,
+   import, school calendar) are React (src/components/). */
 /* ─── panels ─── */
 .panel{background:var(--panel);border:1px solid var(--line);border-radius:12px;position:relative;overflow:hidden;min-width:0}
 .panel+.panel{margin-top:13px}
@@ -136,8 +137,7 @@ input[aria-invalid="true"]{border-color:var(--red-ink);outline-color:var(--red-i
   display:flex;align-items:center;gap:8px;
 }
 .dsec h4 em{font-style:normal;margin-left:auto;font-size:11px;font-weight:500;letter-spacing:0;text-transform:none;color:var(--ink-3)}
-.addline{display:flex;gap:6px}
-.addline input{flex:1;min-width:0;border:1px solid var(--line);border-radius:10px;padding:6px 9px;font-size:12.5px;background:var(--panel-2)}
+
 /* Texture buttons in the drawer and the overlay cards: the primary is an accent gradient
    with a light inner highlight; ghost is the quiet panel gradient; danger is the crit colour.
    Sizes stay with the base rule and its local tweaks, only the surface changes. */
@@ -169,18 +169,12 @@ input[aria-invalid="true"]{border-color:var(--red-ink);outline-color:var(--red-i
   outline:none;border-color:var(--accent);box-shadow:0 0 0 3px color-mix(in srgb, var(--accent) 24%, transparent);
 }
 .drawer input[aria-invalid="true"]:focus-visible{border-color:var(--red-ink);box-shadow:0 0 0 3px color-mix(in srgb, var(--red-ink) 24%, transparent)}
-.links{display:flex;flex-direction:column;gap:4px}
-/* colour swatches (the coat in Settings) */
-.swatchrow{display:flex;gap:7px;flex-wrap:wrap}
+
 .swatch{
   width:26px;height:26px;border-radius:8px;border:2px solid transparent;padding:0;background:var(--c);
   box-shadow:inset 0 0 0 1px rgba(20,48,45,.10);
 }
 .swatch[aria-pressed="true"]{border-color:var(--ink);box-shadow:0 0 0 2px #fff inset}
-.swatchname{font-size:11px;color:var(--ink-3);grid-column:2}
-.warnline{
-  font-size:11.5px;color:var(--warn-ink);background:var(--warn-bg);border:1px solid var(--warn-line);border-radius:8px;padding:7px 9px;
-}
 
 .info{
   position:fixed;right:14px;top:56px;width:min(372px,calc(100vw - 28px));background:var(--panel);
@@ -191,57 +185,13 @@ input[aria-invalid="true"]{border-color:var(--red-ink);outline-color:var(--red-i
 .info ul b{color:var(--ink);font-weight:600}
 .info .foot{display:flex;gap:7px;align-items:center;margin-top:11px;padding-top:11px;border-top:1px solid var(--line-2);flex-wrap:wrap}
 
-/* ── settings ── */
-.setgrp{display:flex;flex-direction:column;gap:8px;padding-bottom:14px;border-bottom:1px solid var(--line-2)}
-.setgrp:last-child{border-bottom:0;padding-bottom:0}
-.setgrp h4{
-  margin:0;font-size:12.5px;letter-spacing:0;text-transform:none;color:var(--ink-2);font-weight:650;
-  display:flex;align-items:center;gap:8px;
-}
-.setgrp h4 em{font-style:normal;margin-left:auto;font-size:11px;font-weight:500;letter-spacing:0;text-transform:none;color:var(--ink-3)}
-.setgrp .note{font-size:11.5px;color:var(--ink-3)}
-.spotrow{display:flex;align-items:center;gap:9px;font-size:12.5px}
-.spotrow .spot{width:16px;height:16px;color:var(--spotify);flex:none}
-.spotrow .who{flex:1;min-width:0}
-.spotrow .who b{display:block;font-weight:600}
-.spotrow .who span{font-size:11px;color:var(--ink-3)}
-.spotrow .btn{padding:5px 10px;font-size:12px;text-decoration:none;flex:none}
-.setgrp .note.err{color:var(--crit)}
-/* the Settings tabs: the view switcher's pill, under the drawer head */
-.settabs{margin:10px 16px 0}
-.settabs button{display:inline-flex;align-items:center;justify-content:center;gap:5px;padding:5px 6px}
-.settabs .count{font-style:normal;font-size:10px;line-height:15px;min-width:15px;padding:0 4px;border-radius:8px;background:var(--crit);color:#fff;font-weight:600}
-.settabs .dot{width:6px;height:6px;border-radius:50%;background:var(--crit)}
-.themeseg{display:flex;gap:6px}
-.themeseg button{
-  flex:1;border:1px solid var(--line);background:var(--panel-2);border-radius:9px;padding:9px 6px;
-  display:flex;flex-direction:column;align-items:center;gap:5px;font-size:11.5px;color:var(--ink-2);
-}
-.themeseg button[aria-pressed="true"]{border-color:var(--accent);color:var(--accent-ink);background:var(--accent-soft);font-weight:600}
-.themeseg .sw{width:100%;height:20px;border-radius:5px;border:1px solid var(--line);overflow:hidden;display:flex}
-.themeseg .sw i{flex:1}
-/* the Background picker: a line-art thumbnail of each, in the current accent */
-.bgseg{display:grid;grid-template-columns:1fr 1fr;gap:6px}
-.bgseg button{
-  border:1px solid var(--line);background:var(--panel-2);border-radius:9px;padding:7px;
-  display:flex;flex-direction:column;align-items:stretch;gap:3px;text-align:left;font-size:11px;color:var(--ink-3);
-}
-.bgseg button b{font-size:12px;color:var(--ink-2)}
-.bgseg button[aria-pressed="true"]{border-color:var(--accent);background:var(--accent-soft)}
-.bgseg button[aria-pressed="true"] b{color:var(--accent-ink)}
+/* Art the React Settings sheet still uses (settings-sheet.tsx): the background
+   thumbnails, masked SVGs, and the coat's pocket preview. */
 .bgthumb{display:block;height:44px;border-radius:6px;background:var(--bg);border:1px solid var(--line);position:relative;overflow:hidden}
 .bgthumb::before{content:"";position:absolute;inset:0;background:var(--accent);opacity:.7;-webkit-mask:var(--art) center/cover no-repeat;mask:var(--art) center/cover no-repeat}
 .bgthumb[data-thumb="med"]{--art:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 120 44' fill='none' stroke='black' stroke-width='1.3'%3E%3Cpath d='M-4 30c10-14 20-14 30 0s20 14 30 0 20-14 30 0 20 14 30 0'/%3E%3Cpath d='M-4 30c10 14 20 14 30 0s20-14 30 0 20 14 30 0 20-14 30 0'/%3E%3Cpath d='M84 6l7 4v8l-7 4-7-4v-8z'/%3E%3Cpath d='M98 2l7 4v8l-7 4-7-4V6z'/%3E%3Ccircle cx='18' cy='10' r='5'/%3E%3C/svg%3E")}
 .bgthumb[data-thumb="cs"]{--art:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 120 44' fill='none' stroke='black' stroke-width='1.3' stroke-linecap='round'%3E%3Cpath d='M-2 8h26l8 8h22M-2 14h22l8 8h22M-2 20h18l8 8h22'/%3E%3Ccircle cx='56' cy='16' r='2'/%3E%3Ccircle cx='52' cy='22' r='2'/%3E%3Ccircle cx='48' cy='28' r='2'/%3E%3Ccircle cx='96' cy='6' r='3'/%3E%3Cpath d='M94 8l-8 9M98 8l8 9'/%3E%3Ccircle cx='85' cy='20' r='3'/%3E%3Ccircle cx='107' cy='20' r='3'/%3E%3Cpath d='M70 38h4M84 30v12M88 30v12'/%3E%3Cpath d='M104 32l-4 4 4 4M112 32l4 4-4 4'/%3E%3C/svg%3E")}
-.qrow{
-  display:grid;grid-template-columns:minmax(0,1fr) auto;gap:6px;align-items:start;
-  border:1px solid var(--line);border-radius:9px;padding:7px 9px;background:var(--panel-2);
-}
-.qrow .qtext{font-family:"Spectral",Georgia,serif;font-style:italic;font-size:12.5px;overflow-wrap:anywhere}
-.qrow .qsrc{font-size:10.5px;color:var(--ink-3);margin-top:2px}
-.qrow .x{border:0;background:transparent;color:var(--ink-3);font-size:14px;padding:0 3px}
-.qrow .x:hover{color:var(--crit)}
-.qlist{display:flex;flex-direction:column;gap:6px}
+
 .coatpreview{
   position:relative;border:1px solid color-mix(in srgb, var(--coat) 26%, var(--line));
   border-top-width:2px;border-top-color:color-mix(in srgb, var(--coat) 40%, var(--line));
@@ -266,7 +216,6 @@ input[aria-invalid="true"]{border-color:var(--red-ink);outline-color:var(--red-i
 .signin{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;padding:24px;z-index:5;
   background:radial-gradient(1200px 600px at 20% 10%,color-mix(in srgb,var(--accent) 16%,transparent),transparent),var(--bg)}
 .signin[hidden]{display:none}
-
 
 /* ═════════ time picker ═════════ */
 .tp{font-family:"IBM Plex Mono",ui-monospace,monospace;font-variant-numeric:tabular-nums;letter-spacing:.02em;text-align:center;width:72px}
@@ -295,36 +244,6 @@ input[aria-invalid="true"]{border-color:var(--red-ink);outline-color:var(--red-i
 [data-layout="ed524873"] { display:flex;gap:6px;flex-wrap:wrap; }
 [data-layout="f7add123"] { margin-left:auto;font-size:11px;color:var(--ink-3); }
 [data-layout="f87fcd11"] { flex:none; }
-
-.saved-copy { margin-block: 10px; }
-.saved-copy dl { overflow-wrap: anywhere; max-height: 240px; overflow: auto; font-size: 12px; }
-.saved-copy dt { font-weight: 600; margin-top: 6px; }
-.saved-copy dd { margin-left: 0; white-space: pre-wrap; }
-
-/* ── study tools: exam prep, grades, reviews setting, import ── */
-.dnote{display:block;font-size:11.5px;color:var(--ink-3);margin-bottom:6px}
-
-.dnote.ok{color:var(--good)}
-.dnote.bad{color:var(--crit)}
-.checkline{display:flex;align-items:center;gap:8px;font-size:12.5px}
-.filepick{position:relative;align-self:flex-start;cursor:pointer}
-.filepick input{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%}
-.filepick:focus-within{outline:2px solid var(--accent);outline-offset:2px}
-.imp-paste summary{font-size:11.5px;color:var(--ink-3);cursor:pointer}
-.imp-paste textarea{width:100%;margin:6px 0;border:1px solid var(--line);border-radius:7px;padding:6px 8px;background:var(--panel-2);font:12px/1.4 "IBM Plex Mono",ui-monospace,monospace;resize:vertical}
-
-.imp-sum{font-size:13px;font-weight:600;margin-bottom:8px}
-.imp-group h4 .pip{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px;background:var(--c,var(--ink-3))}
-.imp-row{display:flex;align-items:center;gap:8px;padding:4px 0;font-size:12.5px;border-bottom:1px solid var(--line-2);min-width:0}
-.imp-row:last-child{border-bottom:0}
-.imp-row input[type=checkbox]{flex:none}
-.imp-row select{flex:none;max-width:110px;border:1px solid transparent;border-radius:6px;padding:2px 4px;background:var(--panel-2);font-size:12px}
-.imp-row .imp-kind{flex:none;min-width:62px;color:var(--ink-2)}
-.imp-row .imp-title{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.imp-row .imp-title em{font-style:normal;font-size:10.5px;color:var(--amber-ink)}
-.imp-row .imp-where{margin-left:auto;flex:none;font-size:11px;color:var(--ink-3);max-width:40%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.imp-row.dup .imp-title{color:var(--ink-3)}
-.filepick.busy{opacity:.7;cursor:progress}
 
 /* ═════════ phone ═════════ */
 /* The whole page scrolls instead of one short box under the header and stats; the
@@ -355,14 +274,6 @@ input[aria-invalid="true"]{border-color:var(--red-ink);outline-color:var(--red-i
 .keys dd{margin:0}
 .keys p{margin:12px 0 0;font-size:11.5px;color:var(--ink-3)}
 kbd{display:inline-block;min-width:22px;padding:2px 6px;border:1px solid var(--line);border-bottom-width:2px;border-radius:6px;background:var(--panel-2);font:600 12px/1.3 "IBM Plex Mono",ui-monospace,monospace;text-align:center;color:var(--ink)}
-.keys-btn kbd{min-width:0;padding:0 5px;font-size:11px;margin-left:4px}
-@media (hover:none){.keys-btn{display:none}}
-
-/* Settings › Study › Calendar feed */
-.feedrow{display:flex;gap:6px;margin:4px 0 8px}
-.feedrow input{flex:1;min-width:0;border:1px solid var(--line);border-radius:7px;padding:5px 8px;font:12px "IBM Plex Mono",ui-monospace,monospace;background:var(--panel-2);color:var(--ink-2)}
-.feedconfirm{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin:8px 0;font-size:12.5px}
-.feedconfirm span{flex:1 1 200px}
 
 /* ─── wait screen while an outline is read ─── */
 .busy-screen{position:fixed;inset:0;z-index:65;display:grid;place-items:center;padding:16px;
@@ -386,33 +297,3 @@ kbd{display:inline-block;min-width:22px;padding:2px 6px;border:1px solid var(--l
   .icon-btn{min-width:40px;min-height:40px}
 }
 
-/* Settings, and the drawer that checks a calendar before it is saved */
-.school-now{display:flex;flex-direction:column;gap:1px;font-size:12.5px;color:var(--ink-2)}
-.school-now b{font-size:13.5px;color:var(--ink)}
-.sdrawer .sc-name{font:inherit;font-size:16px;font-weight:700;border:1px solid transparent;border-radius:7px;padding:4px 7px;background:var(--panel-2);color:var(--ink);width:100%}
-.sc-term{border:1px solid var(--line);border-radius:12px;padding:9px 10px;display:grid;grid-template-columns:auto minmax(0,1fr);gap:6px 10px;align-items:center;font-size:12.5px}
-.sc-term.bad,.sc-day.bad{border-color:var(--red-line);background:var(--red-bg)}
-.sc-term .sc-row1{grid-column:1/-1;display:flex;gap:6px}
-.sc-term label{font-size:11.5px;font-weight:550;letter-spacing:0;text-transform:none;color:var(--ink-3)}
-.sc-term .sum{grid-column:1/-1;font-size:11.5px;color:var(--ink-2)}
-.sdrawer input,.sdrawer select{font:inherit;font-size:12.5px;border:1px solid transparent;border-radius:6px;padding:3px 6px;background:var(--panel-2);color:var(--ink);min-width:0}
-.sdrawer input:hover,.sdrawer select:hover{border-color:var(--line)}
-.sc-term .nm{flex:1;font-weight:700;font-size:13.5px}
-.sc-dates{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
-.sc-dates span{color:var(--ink-3)}
-.sc-semh{font-size:12px;font-weight:700;margin-top:6px}
-.sc-day{display:grid;grid-template-columns:128px minmax(0,1fr) 26px;gap:4px 8px;align-items:start;padding:7px 4px;border-top:1px solid var(--line-2);border-radius:6px}
-.sc-when{display:flex;flex-direction:column;gap:3px}
-.sc-when input{font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:11px}
-.sc-when input.same{opacity:.55}
-.sc-what{display:flex;flex-direction:column;gap:3px;min-width:0}
-.sc-kinds{display:flex;gap:4px;flex-wrap:wrap}
-.sc-kinds select{font-size:11px}
-.sc-day.k-off .sc-kinds select:first-child{color:var(--ink-2)}
-.sc-day.k-break .sc-kinds select:first-child{color:var(--good)}
-.sc-day.k-exams .sc-kinds select:first-child{color:var(--amber-ink)}
-.sc-day.k-swap .sc-kinds select:first-child{color:var(--accent-ink)}
-.sdrawer .x{border:0;background:none;color:var(--ink-3);border-radius:6px;width:26px;height:26px;padding:0}
-.sdrawer .x:hover{background:var(--line-2);color:var(--ink)}
-.sc-add{align-self:flex-start;border:1px dashed var(--line);background:none;border-radius:8px;padding:5px 11px;font-size:12px;font-weight:600;color:var(--ink-2)}
-.sdrawer .note{font-size:11.5px;color:var(--ink-2)}

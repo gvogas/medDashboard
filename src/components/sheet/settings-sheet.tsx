@@ -218,7 +218,8 @@ function Coat({ profile }: { profile: Profile }) {
             {/* the pocket's look is legacy CSS, shared with the sidebar's coat */}
             <div className="coatpreview">
                 <i className="pen" aria-hidden="true" />
-                <div className="embroidery">{profile.coat?.name}</div>
+                {/* the name as the sidebar's pocket shows it */}
+                <div className="embroidery">{profile.coat?.name || profile.displayName || "Your name"}</div>
                 <div className="role">{profile.coat?.role}</div>
                 <svg className="tuck" viewBox="0 0 60 34" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" aria-hidden="true">
                     <path d="M4 6c0 9 7 8 9 14s7 9 14 8 12-6 18-6" /><path d="M11 4c0 7 4 8 6 12" />

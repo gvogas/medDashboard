@@ -6,17 +6,18 @@ Written 27 September 2026 to pick the work up later. The design and the stage li
 
 ## Where it stands
 
-- Branch **`re`**, 23 commits ahead of `main`. **Nothing is pushed or
+- Branch **`re`**, 26 commits ahead of `main`. **Nothing is pushed or
   deployed**; the live site still runs the pre-React code from `main`.
-- **Done:** stages 0–3 and part 4a. The app runs on Vite + React + Tailwind. React owns
+- **Done:** stages 0–3 and parts 4a–4b. The app runs on Vite + React + Tailwind. React owns
   the top bar, the view dock, the sidebar, sign-in, toasts, the stat tiles, the week, month
-  and table views (`src/components/views/`, in `#stats` and `#views`) and the item and
-  course sheet (`src/components/sheet/`, in `#sheet`); everything else is the legacy code
-  in `src/legacy/`, bundled by Vite and connected through `src/bridge.ts` and `src/data/`.
-- **Checks after 4a:** type-check clean, 605 Vitest tests + 18 node tests pass,
-  `npm run build` passes its CSP checks. Checked in the dev server (the item and course
-  sheets in CS dark, desktop and phone width); the production build under the real CSP
-  was last run at `d000298`.
+  and table views (`src/components/views/`, in `#stats` and `#views`) and the sheet: item,
+  course, Settings, import and school calendar (`src/components/sheet/`, in `#sheet`);
+  everything else is the legacy code in `src/legacy/`, bundled by Vite and connected
+  through `src/bridge.ts` and `src/data/`.
+- **Checks after 4b:** type-check clean, 629 Vitest tests + 18 node tests pass,
+  `npm run build` passes its CSP checks. Checked in the dev server (Settings in Med dark
+  and light, desktop and phone width; an import from pasted CSV, cancelled); the school
+  sheet only in tests. The production build under the real CSP was last run at `d000298`.
 
 | Stage | What | State |
 |---|---|---|
@@ -24,7 +25,7 @@ Written 27 September 2026 to pick the work up later. The design and the stage li
 | 1 | Data hooks and actions (`src/data/`) | Done (`330448a`) |
 | 2 | Sidebar, top bar, sign-in, toasts; drawer restyled with CSS | Done (merges up to `93e9f80`, polish `d000298`) |
 | 3 | Views: week, month, table; stat tiles | Done (`219df59`, spec `2026-09-27-react-views-design.md`) |
-| 4 | Drawers, in three parts | 4a done (`7e40ff8`, spec `2026-09-27-react-drawers-4a-design.md`); **4b next** |
+| 4 | Drawers, in three parts | 4a done (`7e40ff8`), 4b done (`e759bd5`; specs `2026-09-27-react-drawers-4a/4b-design.md`); **4c next** |
 | 5 | Study: timer, flip clock, focus screen, history, leaderboard, achievements | To do |
 | 6 | Spotify: view and player | To do |
 | 7 | Cleanup: delete `src/legacy/`, one React root, Tailwind preflight on | To do |
@@ -83,9 +84,12 @@ Brainstorm a short design first, then spec, then build (the usual flow).
 ## Stage 4: drawers
 
 Split in three (see the 4a spec): **4a** (done) the sheet container, item and course,
-time field; **4b** Settings with its tabs, and the import and school calendar drawers;
-**4c** the session and achievement drawers, the shortcuts panel and busy screen, then
-the legacy `#drawer`, `timepicker.js` and the drawer CSS go.
+time field; **4b** (done) Settings with its tabs, and the import and school calendar
+drawers; **4c** the session and achievement drawers, the shortcuts panel and busy screen, then
+the legacy `#drawer`, `timepicker.js` and the drawer CSS go. The legacy busy screen is
+used by the outline and school calendar reads (`readWithAi` in `views/busy.js`).
+- Kept for the React Settings sheet until stage 7: the `.bgthumb` and `.coatpreview`
+  rules in `components.css` (masked SVG art and the pocket preview).
 
 - While they coexist, `src/data/overlay.ts` decides what takes focus for the sheet, the
   legacy drawer and the overlays; opening one closes the other. 4b and 4c open their
