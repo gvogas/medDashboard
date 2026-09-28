@@ -17,6 +17,8 @@ const actions = vi.hoisted(() => ({
 vi.mock("@/data/actions", () => actions)
 vi.mock("@/legacy/js/state.js", () => ({ ui: fake.ui }))
 vi.mock("@/legacy/js/query.js", () => ({ schoolCal: () => null }))
+/* the Study page has its own tests (components/study/study.test.tsx) */
+vi.mock("@/components/study/study-view", () => ({ StudyView: () => <p>The Study page</p> }))
 vi.mock("@/legacy/js/store.js", () => ({
     data: fake.data,
     course: (id: string | null) => (fake.data.courses as { id: string }[]).find((c) => c.id === id) || null,
@@ -56,7 +58,7 @@ const host = (id: string) => document.getElementById(id)!
 const show = (node: React.ReactNode, id = "views") => render(<>{node}</>, { container: host(id) })
 
 describe("the views host", () => {
-    it("shows the chosen view and hides itself for Spotify, Study and the focus screen", () => {
+    it("shows the chosen view and hides itself for Spotify and the focus screen", () => {
         show(<Views />)
         expect(screen.getByRole("region", { name: "Schedule" })).toBeTruthy()
         set({ view: "month" })
@@ -65,6 +67,12 @@ describe("the views host", () => {
         expect(screen.getByRole("region", { name: "All items" })).toBeTruthy()
         expect(host("views").classList.contains("own-scroll")).toBe(true)
         set({ view: "study" })
+        expect(screen.getByText("The Study page")).toBeTruthy()
+        expect(host("views").hidden).toBe(false)
+        expect(host("views").classList.contains("own-scroll")).toBe(false)
+        set({ view: "spotify" })
+        expect(host("views").hidden).toBe(true)
+        set({ view: "study", focus: true })
         expect(host("views").hidden).toBe(true)
         set({ view: "week", focus: true })
         expect(host("views").hidden).toBe(true)

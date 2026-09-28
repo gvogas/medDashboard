@@ -12,7 +12,6 @@ import { notify } from '../../bridge.ts';
 import { setSide, watchSidebar } from '../../data/sidebar.ts';
 import { flush as flushTyping } from '../../data/item-edit.ts';
 import { openCourse, openSettings } from '../../data/actions.ts';
-import { leaderboardClick } from './views/leaderboard.js';
 import * as spotify from './spotify.js';
 import * as web from './web-player.js';
 import { renderPlayer } from './views/player.js';
@@ -85,7 +84,6 @@ async function onClick(e) {
   if ((el = e.target.closest('[data-newcourse]'))) { openCourse(null); return; }
   if ((el = e.target.closest('[data-editcourse]'))) { openCourse(el.dataset.editcourse); return; }
   if (await studyClick(e)) return;
-  if (await leaderboardClick(e)) return;
   if ((el = e.target.closest('[data-spotify]'))) {
     const act = el.dataset.spotify;
     if (act !== 'connect') web.activate();          /* inside the click, so the tab may make sound */

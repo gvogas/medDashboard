@@ -70,3 +70,10 @@
 @keyframes overlay-in {
   from { opacity: 0; }
 }
+
+/* A medal or sticker the unlock toast's See found pops in. */
+@keyframes ach-pop {
+  0% { transform: scale(.6); opacity: 0; }
+  40% { transform: scale(1.14); opacity: 1; }
+  100% { transform: scale(1); }
+}
