@@ -6,24 +6,28 @@ Written 27 September 2026 to pick the work up later. The design and the stage li
 
 ## Where it stands
 
-- Branch **`re`**, 36 commits ahead of `main`. **Nothing is pushed or
+- Branch **`re`**, 51 commits ahead of `main`. **Nothing is pushed or
   deployed**; the live site still runs the pre-React code from `main`.
-- **Done:** stages 0–4 and 5a. The app runs on Vite + React + Tailwind. React owns
-  the top bar, the view dock, the sidebar, sign-in, toasts, the stat tiles, the week, month
-  and table views (`src/components/views/`, in `#stats` and `#views`), the Study page
-  but its timer (`src/components/study/`, in `#views`: the tiles, History, achievements,
-  the leaderboard; the start panel and flow are legacy, in its `#studyTimer` slot) and the sheet: item,
-  course, Settings, import, school calendar, study session and achievement
-  (`src/components/sheet/`, in `#sheet`), and the shortcuts panel and busy card
-  (`src/components/overlays.tsx`, in `#overlays`); the legacy `#drawer` is gone;
-  everything else is the legacy code in `src/legacy/`, bundled by Vite and connected
-  through `src/bridge.ts` and `src/data/`.
-- **Checks after 5a:** type-check clean, 710 Vitest tests + 18 node tests pass,
-  `npm run build` passes its CSP checks. 5a is checked in tests only so far: its browser
-  pass (the spec's list: Med and CS, light and dark, desktop and phone width) is still to
-  do. 4c was checked in the dev server (Settings in Med dark and light, desktop and phone
-  width; an import from pasted CSV, cancelled); the school sheet only in tests. The
-  production build under the real CSP was last run at `d000298`.
+- **Done:** stages 0–6. The app runs on Vite + React + Tailwind. React owns the top bar,
+  the view dock, the sidebar and its Spotify player, sign-in, toasts, the stat tiles, every
+  view (week, month, table, Study, Spotify; `src/components/views/`, `study/`, `spotify/`,
+  in `#stats` and `#views`), the focus screen (`src/components/focus/`, in `#focus`),
+  the corner dock (in `#study-dock`), the sheet (`src/components/sheet/`, in `#sheet`),
+  and the shortcuts panel and busy card (`src/components/overlays.tsx`). The Spotify
+  engine is TypeScript (`src/data/spotify/`). What is left of `src/legacy/` is the
+  store, sync, the importers, the run engine (`focus.js`, `timer.js`),
+  `study-controller.js`, `keyboard.js`, `main.js` and a `render.js` that is only
+  `notify()`, connected through `src/bridge.ts` and `src/data/`.
+- **Checks after 5 and 6** (`d822893`): type-check clean, 886 Vitest tests + 18 node tests
+  pass, `npm run build` passes its CSP checks. The production build (`npm run dev:built`,
+  the real CSP) was driven through every view, a whole run (focus screen, music panel,
+  Esc, the dock, a break, Stop & log) and the Log study sheet with no CSP violation or
+  console error. In the dev server the same, plus 5a's History (tabs, delete and Undo, a
+  heatmap day), the leaderboard's Join and Leave, and a run logged and shown in History.
+  A release review of the whole diff found no critical or important defects; its minor
+  findings are fixed in `d822893`. **Not yet seen:** the look (themes, light and dark,
+  phone width) and Spotify with a real account: the automation browser counted as a
+  hidden tab, so screenshots failed and Spotify never polled.
 
 | Stage | What | State |
 |---|---|---|
@@ -32,9 +36,9 @@ Written 27 September 2026 to pick the work up later. The design and the stage li
 | 2 | Sidebar, top bar, sign-in, toasts; drawer restyled with CSS | Done (merges up to `93e9f80`, polish `d000298`) |
 | 3 | Views: week, month, table; stat tiles | Done (`219df59`, spec `2026-09-27-react-views-design.md`) |
 | 4 | Drawers, in three parts | Done: 4a (`7e40ff8`), 4b (`e759bd5`), 4c (`5c056c1`–`b1c8614`; specs `2026-09-27-react-drawers-4a/4b/4c-design.md`) |
-| 5 | Study, in two parts: 5a the history, achievements and leaderboard; 5b the timer, flip clock, focus screen and dock | 5a done (`5916e68`–`ae04e91` and the CSS cleanup after; spec `2026-09-28-react-study-5a-design.md`); **5b next** |
-| 6 | Spotify: view and player | **Next, built together with 5b** (spec `2026-09-28-react-study-5b-spotify-6-design.md`) |
-| 7 | Cleanup: delete `src/legacy/`, one React root, Tailwind preflight on | To do |
+| 5 | Study, in two parts: 5a the history, achievements and leaderboard; 5b the timer, flip clock, focus screen and dock | Done: 5a (merge `7d39ef8`, spec `2026-09-28-react-study-5a-design.md`), 5b (`40672d5`, `d818b42`, `ad0d29e`; spec `2026-09-28-react-study-5b-spotify-6-design.md`) |
+| 6 | Spotify: view and player | Done with 5b (`5d0b7f0`, `6f5e4de`, `fbc107b`, `9b89919`); review fixes `d822893` |
+| 7 | Cleanup: delete `src/legacy/`, one React root, Tailwind preflight on | **Next** |
 
 ## Resuming
 
@@ -113,21 +117,28 @@ session and achievement sheets, the shortcuts panel and busy card (`<Overlays>`,
   still wait in `study-controller.js` (`deleteWithUndo`, `commitUndo`); Undo is
   `undoSessionDelete` in `study.ts`. The unlock toast's See finds its medal a frame
   after switching to Study.
-- **5b (next, with stage 6):** the timer cards replace the `#studyTimer` slot, then the
-  focus screen, the corner dock and the music; see
-  `2026-09-28-react-study-5b-spotify-6-design.md`. `flipclock.js`, `focus.js`,
-  `timer.js`, `#focusClock`, `#studyDock`; the focus screen is a page layout
-  (`html.focusing`). The dock's study badge already reads through the bridge.
+- **5b (done, with stage 6):** the Ready and Your flow cards (`study/timer-cards.tsx`),
+  the corner dock (`study/study-dock.tsx`) and the focus screen (`focus/focus-screen.tsx`,
+  with the music pill and side panel), over `src/data/study-timer.ts` (the run, the flow
+  edits, the title and badge) and `study/flip-clock.tsx`. `focus.js` and `timer.js`
+  stay as the engine; `focus.prime()` takes full screen and sound inside the Start click.
+  `views/study.js`, `flipclock.js`, `#focusClock`, `#studyDock` and `#viewRoot` are gone.
 
-## Stage 6: Spotify
+## Stage 6: Spotify (done)
 
-`spotify.js`, `web-player.js`, `views/spotify-view.js` (+ `spotify-data`, `-html`,
-`-commands`), and the sidebar player (`views/player.js`, now drawn into a slot React
-renders once in `src/components/sidebar.tsx`). Keep the CSP hosts for the SDK and artwork.
+The engine is `src/data/spotify/` (`player.ts`, `web-player.ts`, `library.ts`,
+`commands.ts`, `useSpotify()`). The page (`spotify/spotify-page.tsx`: `<NowPlaying>`
+and Up next / Recent on the left, `<MusicBrowser>` on the right), the sidebar player and
+the focus screen's panel share the parts in `src/components/spotify/`. The legacy view,
+`views/player.js` and the shims are gone. The CSP hosts for the SDK and artwork are kept.
 
 ## Stage 7: cleanup
 
 - Delete `src/legacy/js` and the legacy CSS; keep the tokens (`tokens.css`) as the theme.
+  Left to move: the store, sync, the importers, `focus.js`/`timer.js`, `study-controller.js`,
+  `keyboard.js`, `main.js`, `session.js`, and `render.js` (only `notify()`, imported widely).
+  Dead CSS kept until then: `.panel`, `.ph`, `.empty` in `components.css`; `keepFocus` and
+  `restoreFocus` in `dom.js`.
 - One React root instead of the static containers in `index.html`; keep the inline theme
   script and its CSP hash.
 - Turn Tailwind's preflight on; remove the `legacy` cascade layer and
