@@ -52,7 +52,7 @@ function FocusScreen({ run }: { run: Run }) {
     const courses = useCourses(), items = useItems()
     const root = useRef<HTMLDivElement>(null)
 
-    /* Space and M, when no sheet, overlay or box has them (Esc is keyboard.js's). */
+    /* Space, M and /, when no sheet, overlay or box has them (Esc is keyboard.js's). */
     useEffect(() => {
         const onKey = (e: KeyboardEvent) => {
             if (e.defaultPrevented || e.ctrlKey || e.metaKey || e.altKey || e.repeat) return
@@ -66,6 +66,11 @@ function FocusScreen({ run }: { run: Run }) {
             } else if (e.key === "m" || e.key === "M") {
                 e.preventDefault()
                 toggleMusic()
+            } else if (e.key === "/") {
+                /* the music's search box: the panel opens first if it is shut */
+                e.preventDefault()
+                toggleMusic(true)
+                requestAnimationFrame(() => root.current?.querySelector<HTMLInputElement>("[data-music-search]")?.focus())
             }
         }
         document.addEventListener("keydown", onKey)

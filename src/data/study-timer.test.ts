@@ -9,6 +9,7 @@ const fake = vi.hoisted(() => ({
     meta: new Map<string, unknown>(),
     sessions: [] as Record<string, unknown>[],
     profileSaves: [] as Record<string, unknown>[],
+    failSaves: false,
     data: {
         items: [] as unknown[],
         courses: [] as unknown[],
@@ -23,8 +24,12 @@ vi.mock("@/legacy/js/store.js", () => ({
         get: async (key: string) => structuredClone(fake.meta.get(key) ?? null),
         set: async (key: string, value: unknown) => { fake.meta.set(key, structuredClone(value)) },
     },
-    saveStudySession: async (s: Record<string, unknown>) => { fake.sessions.push(s) },
+    saveStudySession: async (s: Record<string, unknown>) => {
+        if (fake.failSaves) throw new Error("save failed")
+        fake.sessions.push(s)
+    },
     saveProfile: async (patch: Record<string, unknown>) => {
+        if (fake.failSaves) throw new Error("save failed")
         fake.profileSaves.push(patch)
         fake.data.profile = { ...fake.data.profile, ...structuredClone(patch) }
     },
@@ -246,6 +251,13 @@ describe("editing the flow", () => {
         expect(await delStep(9)).toBe(false)
     })
 
+    it("says a flow that could not be saved was not", async () => {
+        fake.failSaves = true
+        try {
+            await expect(setRounds(3)).resolves.toBe(false)
+        } finally { fake.failSaves = false }
+    })
+
     it("repeats 1 to 12 rounds", async () => {
         expect(await setRounds(0)).toBe(true)
         expect(flow().rounds).toBe(1)
@@ -345,6 +357,37 @@ describe("a run", () => {
         await tickFor(3 * MIN)
         await act(() => skip())
         expect(result.current).toMatchObject({ kind: "break", index: 1, leftMs: 5 * MIN, studyMs: 3 * MIN })
+    })
+
+    it("asks for full screen inside the Start click, before any wait, and not without a course", async () => {
+        const fullscreen = vi.fn(() => Promise.resolve())
+        document.documentElement.requestFullscreen = fullscreen
+        fake.data.courses = []
+        await act(async () => { await startRun() })
+        expect(fullscreen).not.toHaveBeenCalled()
+        fake.data.courses = [anat]
+        let started: Promise<boolean> = Promise.resolve(false)
+        act(() => { started = startRun() })
+        expect(fullscreen).toHaveBeenCalledOnce()      /* before startRun's first await settles */
+        await act(async () => { await started })
+        expect(focus.active()).toBe(true)
+    })
+
+    it("keeps a run it could not log, paused where it stopped, for the next load", async () => {
+        const { result } = renderHook(() => useRun())
+        await begin(CLASSIC)
+        await tickFor(3 * MIN)
+        fake.failSaves = true
+        try { await act(() => stopRun()) } finally { fake.failSaves = false }
+        expect(result.current).toBeNull()
+        expect(fake.sessions).toEqual([])
+        expect(fake.meta.get("studyRun")).toMatchObject({ pausedAt: T0 + 3 * MIN })
+        await tickFor(10 * MIN)                        /* time away adds nothing */
+        await act(() => focus.load())
+        expect(result.current).toMatchObject({ paused: true, studyMs: 3 * MIN })
+        await act(() => stopRun())
+        expect(fake.sessions).toEqual([expect.objectContaining({ studyMinutes: 3 })])
+        expect(fake.meta.get("studyRun")).toBeNull()
     })
 
     it("logs the whole minutes studied on Stop & log, and is none after", async () => {

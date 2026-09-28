@@ -38,8 +38,7 @@ export async function onKeydown(e) {
     return;
   }
   if (shortcut(e)) return;
-  /* The focus screen takes Space and M itself (components/focus/focus-screen.tsx), and
-     its music takes / (components/spotify/music-browser.tsx). */
+  /* The focus screen takes Space, M and / itself (components/focus/focus-screen.tsx). */
   if (ui.focus) return;
   if (e.key === '/' && !e.defaultPrevented && !/input|textarea|select/i.test(e.target.tagName)) {
     e.preventDefault(); $('search')?.focus(); return;   /* the top bar's search box */

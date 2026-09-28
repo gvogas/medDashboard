@@ -37,7 +37,7 @@ function Tracks({ s, items, contextUri = null, list = null, filter = "" }: { s: 
 export function QueueList({ s, cooling }: ListProps) {
     /* on screen: a track added or the track moving on reloads it */
     useEffect(() => watchQueue(), [])
-    useEffect(() => { ensureQueue() }, [s, cooling])
+    useEffect(() => { if (!document.hidden) ensureQueue() }, [s, cooling])
     const q = s.cache.queue
     if (!q) return <Loading what="Queue" cooling={cooling} />
     return (
@@ -59,7 +59,7 @@ export const QueueActions = () => <Refresh onClick={() => refresh("queue")} labe
 /* ── Recently played ── */
 
 export function RecentList({ s, cooling }: ListProps) {
-    useEffect(() => { ensureRecent() }, [s, cooling])
+    useEffect(() => { if (!document.hidden) ensureRecent() }, [s, cooling])
     const r = s.cache.recent
     if (s.cache.recentBlocked) {
         return (
@@ -86,7 +86,7 @@ export const RecentActions = ({ s }: { s: SpotifySnapshot }) =>
 
 /** Liked Songs and the playlists as covers: three across `compact`, else as many as fit. */
 export function Library({ s, cooling, compact }: ListProps & { compact: boolean }) {
-    useEffect(() => { ensurePlaylists() }, [s, cooling])
+    useEffect(() => { if (!document.hidden) ensurePlaylists() }, [s, cooling])
     const pl = s.cache.playlists
     const grid = cn("grid gap-3 px-3.5 py-3", compact ? "grid-cols-3" : "grid-cols-[repeat(auto-fill,minmax(118px,1fr))]")
     return (
@@ -178,6 +178,7 @@ function TrackPane({ s, cooling, keyName, page, contextUri, list, emptyText }: L
 function useReopen(s: SpotifySnapshot, cooling: boolean) {
     const { pane, playlistId, albumId, artistId } = s.place
     useEffect(() => {
+        if (document.hidden) return
         if (pane === "playlist" && playlistId && !s.cache.tracks[playlistId] && !s.busy.has("tracks") && due("tracks")) openPlaylist(playlistId)
         else if (pane === "album" && albumId && !s.cache.tracks["album:" + albumId] && !s.busy.has("tracks") && due("tracks")) openAlbum(albumId)
         else if (pane === "artist" && artistId && !s.cache.artistAlbums[artistId] && !s.busy.has("artist") && due("artist")) openArtist(artistId)

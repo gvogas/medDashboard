@@ -50,12 +50,16 @@ function tick() {
   } else emit('tick');
 }
 
-/** Begin a run. Called inside the Start click, so full screen and sound are allowed. */
+/** Full screen and sound, which the browser allows only inside a click: before any wait. */
+export function prime() {
+  unlockAudio();
+  fullscreen(true);
+}
+
+/** Begin a run, after prime() in the Start click. */
 export async function begin(flow, courseId, itemId) {
   run = { ...timer.start(flow), id: uid(), courseId, itemId: itemId || null };
   lastStep = stepKey();
-  unlockAudio();
-  fullscreen(true);
   await save();
   holdScreen();
   ensureTicking();
@@ -89,19 +93,26 @@ async function finish() {
   fullscreen(false);
   // Another tab of this device may have logged this run already.
   const stored = await store.meta.get(KEY);
-  if (stored?.id === ended.id) {
-    await store.meta.set(KEY, null);
-    const s = timer.read(ended);
-    const minutes = timer.loggedMinutes(s);
-    if (minutes >= 1) {
-      await store.saveStudySession({
-        id: ended.id, courseId: ended.courseId, itemId: ended.itemId,
-        startedAt: ended.startedAt, studyMinutes: minutes, roundsDone: s.roundsDone,
-      });
+  try {
+    if (stored?.id === ended.id) {
+      const s = timer.read(ended);
+      const minutes = timer.loggedMinutes(s);
+      /* the session first: if it fails, the kept run is still there on the next load */
+      if (minutes >= 1) {
+        await store.saveStudySession({
+          id: ended.id, courseId: ended.courseId, itemId: ended.itemId,
+          startedAt: ended.startedAt, studyMinutes: minutes, roundsDone: s.roundsDone,
+        });
+      }
+      await store.meta.set(KEY, null);
     }
+    if (!ended.pausedAt && timer.read(ended).done) chime('done');
+  } catch {
+    /* kept paused where it stopped, so it neither loses nor gains minutes before it is logged */
+    if (ended.pausedAt === null) await store.meta.set(KEY, timer.pause(ended)).catch(() => {});
+  } finally {
+    emit('end');   /* the page leaves the run behind either way */
   }
-  if (!ended.pausedAt && timer.read(ended).done) chime('done');
-  emit('end');
 }
 
 /* ── the screen: full screen and a wake lock, both optional ── */

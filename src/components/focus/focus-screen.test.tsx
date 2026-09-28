@@ -306,6 +306,14 @@ describe("the music", () => {
         expect(panel()).toBeNull()
     })
 
+    it("/ opens the panel if it is shut and goes to the music's search box", async () => {
+        await begin()
+        expect(key("/")).toBe(true)
+        expect(panel()).not.toBeNull()
+        act(() => { vi.advanceTimersByTime(50) })     /* the next frame */
+        expect(document.activeElement?.hasAttribute("data-music-search")).toBe(true)
+    })
+
     it("Esc shuts the panel first, then leaves", async () => {
         await begin()
         key("m")

@@ -91,7 +91,7 @@ export function MusicBrowser({ compact = false }: { compact?: boolean }) {
     const what = shown(s.place.pane, compact)
     const tab: Tab | null = what === "queue" || what === "recent" ? what : what === "search" ? null : "library"
     /* who the account is: only its own playlists (and those it collaborates on) open */
-    useEffect(() => { ensureMe() }, [s, cooling])
+    useEffect(() => { if (!document.hidden) ensureMe() }, [s, cooling])
 
     /* Each list keeps its scroll: back from a playlist to the library lands where you were. */
     const scroller = useRef<HTMLDivElement>(null)

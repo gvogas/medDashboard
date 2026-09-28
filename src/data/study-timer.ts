@@ -151,6 +151,8 @@ export function pickItem(id: string | null) {
 /** Start a run on the saved flow. Call it inside the click, so full screen and sound are allowed. */
 export async function startRun(): Promise<boolean> {
     if (focus.active()) return false
+    if (!pickFor(data.courses as Course[], data.items as Item[], ui.study).courseId) return false
+    focus.prime()      /* inside the click: a wait below could lose the browser's permission */
     /* a step's minutes typed and then Start clicked: the box saves as it loses focus, just before */
     await flowSaving
     if (focus.active()) return false
@@ -215,7 +217,7 @@ let flowSaving: Promise<unknown> = Promise.resolve()
 async function saveFlow(next: Flow): Promise<boolean> {
     const saving = store.saveProfile({ studyFlow: normalizeFlow(next) })
     flowSaving = saving.catch(() => {})
-    await saving
+    try { await saving } catch { return false }    /* the store shows the save error */
     renderView()
     return true
 }
