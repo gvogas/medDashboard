@@ -111,7 +111,7 @@ async function undoLater() {
 /** The heatmap: show that day's sessions, in its month. */
 function showDay(day) {
   const d = parse(day), now = parse(today());
-  ui.hist.range = 'month';
+  ui.hist.tab = 'month';
   ui.hist.monthOffset = (d.getFullYear() - now.getFullYear()) * 12 + d.getMonth() - now.getMonth();
   ui.hist.focusDay = day;
   renderView();
@@ -197,7 +197,7 @@ export async function studyClick(e) {
     ui.hist.weekOffset = n ? Math.min(0, ui.hist.weekOffset + n) : 0;
     renderView(); return true;
   }
-  if ((el = e.target.closest('[data-hist-range]'))) { ui.hist.range = el.dataset.histRange; ui.hist.focusDay = null; renderView(); return true; }
+  if ((el = e.target.closest('[data-hist-range]'))) { ui.hist.tab = el.dataset.histRange; ui.hist.focusDay = null; renderView(); return true; }
   if ((el = e.target.closest('[data-hist-month]'))) {
     ui.hist.monthOffset = Math.min(0, ui.hist.monthOffset + +el.dataset.histMonth);
     ui.hist.focusDay = null;

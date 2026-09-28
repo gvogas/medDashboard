@@ -71,11 +71,12 @@ export function impact(d: SessionDraft, sessions: StudySession[], prefs: StudyPr
     if (!validSession(d, now)) return d.date > now ? "Pick a day up to today." : "Enter a day, a start time and 1 to 720 minutes."
     const before: Map<string, number> = minutesByDay(sessions.filter((s) => s.id !== d.id))
     const after = new Map(before)
-    after.set(d.date, (after.get(d.date) || 0) + d.minutes)
+    const day = (after.get(d.date) || 0) + d.minutes
+    after.set(d.date, day)
     const st = streakOf(after, now, prefs), was = streakOf(before, now, prefs)
     const parts = [d.date === now && prefs.goal
-        ? "Today goes to " + duration(after.get(d.date)) + " of " + duration(prefs.goal) + "."
-        : shortDate(d.date) + " goes to " + duration(after.get(d.date)) + "."]
+        ? "Today goes to " + duration(day) + " of " + duration(prefs.goal) + "."
+        : shortDate(d.date) + " goes to " + duration(day) + "."]
     if (st.current > was.current) parts.push("Your streak goes to " + st.current + " day" + (st.current === 1 ? "" : "s") + ".")
     else if (st.current) parts.push("Your " + st.current + "-day streak is safe.")
     return parts.join(" ")

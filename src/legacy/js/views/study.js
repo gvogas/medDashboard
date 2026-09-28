@@ -14,6 +14,7 @@ import { clockHtml, setClocks } from './flipclock.js';
 import { achievementsHtml } from './achievements.js';
 import { leaderboardHtml } from './leaderboard.js';
 import { setStudyBadge } from '../../../bridge.ts';
+import { duration } from '../../../lib/time.ts';
 import { achievements, ownAchievements } from '../achievements.js';
 
 const MIN = 60_000;
@@ -26,11 +27,7 @@ const ICON = {
   x: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="m4.5 4.5 7 7m0-7-7 7"/></svg>',
 };
 
-/** "2h 05m", "45m". */
-export function duration(minutes) {
-  const h = Math.floor(minutes / 60), m = minutes % 60;
-  return h ? h + 'h ' + String(m).padStart(2, '0') + 'm' : m + 'm';
-}
+export { duration };
 
 export const flow = () => normalizeFlow(data.profile?.studyFlow);
 const flowMinutes = (f, kind) => f.steps.reduce((a, [k, m]) => a + (!kind || k === kind ? m : 0), 0) * f.rounds;
@@ -290,7 +287,7 @@ function monthHtml(m, at) {
 function sessionsHtml(all) {
   const h = ui.hist, now = parse(today());
   let head, body;
-  if (h.range === 'week') {
+  if (h.tab !== 'month') {
     const w = week(all, iso(addDays(now, 7 * h.weekOffset)));
     head = '<span class="rng">' + range(w.from, w.to) + ' · newest first</span>';
     body = w.sessions.length ? w.sessions.map((s) => rowHtml(s, true)).join('') : '<p class="hint">No study logged this week.</p>';
@@ -306,8 +303,8 @@ function sessionsHtml(all) {
   return '<section class="panel st-sess">'
     + '<div class="st-head"><h3>Sessions</h3>'
     + '<span class="seg" role="group" aria-label="Show sessions for">'
-    + '<button type="button" data-hist-range="week" aria-pressed="' + (h.range === 'week') + '">Week</button>'
-    + '<button type="button" data-hist-range="month" aria-pressed="' + (h.range === 'month') + '">Month</button></span>'
+    + '<button type="button" data-hist-range="week" aria-pressed="' + (h.tab !== 'month') + '">Week</button>'
+    + '<button type="button" data-hist-range="month" aria-pressed="' + (h.tab === 'month') + '">Month</button></span>'
     + '<span class="sp"></span>' + head
     + '<button type="button" class="btn ghost logbtn" data-hist-log>' + PLUS + 'Log study</button></div>'
     + '<div class="sess">' + body + '</div>'
