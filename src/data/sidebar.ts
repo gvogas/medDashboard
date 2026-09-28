@@ -7,7 +7,7 @@ import { useSyncExternalStore } from "react"
 import { notify } from "@/bridge"
 
 const QUERY = "(max-width:900px)"
-export const narrow = () => typeof window.matchMedia === "function" ? window.matchMedia(QUERY) : null
+const narrow = () => typeof window.matchMedia === "function" ? window.matchMedia(QUERY) : null
 const isNarrow = () => !!narrow()?.matches
 
 export interface SideState {

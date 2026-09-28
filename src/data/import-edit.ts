@@ -17,7 +17,7 @@ import { readWithAi } from "./ai-read"
 import { notify } from "@/bridge"
 import { ui } from "./ui"
 import { openSheet } from "./overlay"
-import type { Course, Item, Profile } from "./types"
+import type { Course, Item } from "./types"
 
 /* The plan's shapes are the importer's (core/importers/plan.ts). */
 export type { PlanCourse, PlanItem, PlanMeeting } from "@/core/importers/plan"
@@ -95,7 +95,7 @@ export async function commitImport(plan: ImportPlan): Promise<string> {
     const meets = new Map(rows.map((r) => [r.row.id, r.row as Course]))
     for (const it of plan.items) {
         if (!it.include || !it.row.date) continue
-        const row = normalizeItem(it.row) as Item
+        const row = normalizeItem(it.row)
         if (!row.where) row.where = classRoom(row, meets.get(row.courseId ?? "") || store.course(row.courseId))
         rows.push({ kind: "items", row })
         items++
@@ -103,7 +103,7 @@ export async function commitImport(plan: ImportPlan): Promise<string> {
     if (rows.length) await store.saveRows(rows)
     /* An outline that says when teaching starts sets the term start, if none is set yet. */
     const start = plan.week1 || plan.termStart
-    const profile = data.profile as Profile | null
+    const profile = data.profile
     if (start && profile && !profile.termStart && !schoolCal()) await store.saveProfile({ termStart: start })
     return "Imported " + classes + " class" + (classes === 1 ? "" : "es") + " and " + items + " item" + (items === 1 ? "" : "s") + "."
 }

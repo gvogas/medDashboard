@@ -17,7 +17,7 @@ import { getSheet } from "./overlay"
 import { useCourses, useItems, useProfile, useStudySessions } from "./store"
 import { shownSessions } from "./study"
 import { ui, useUi } from "./ui"
-import type { Course, Flow, Item, Profile, StepKind, StudySession } from "./types"
+import type { Course, Flow, Item, StepKind, StudySession } from "./types"
 
 const MIN = 60_000
 export const MAX_STEPS = 12
@@ -150,12 +150,12 @@ export function pickItem(id: string | null) {
 /** Start a run on the saved flow. Call it inside the click, so full screen and sound are allowed. */
 export async function startRun(): Promise<boolean> {
     if (focus.active()) return false
-    if (!pickFor(data.courses as Course[], data.items as Item[], ui.study).courseId) return false
+    if (!pickFor(data.courses, data.items, ui.study).courseId) return false
     focus.prime()      /* inside the click: a wait below could lose the browser's permission */
     /* a step's minutes typed and then Start clicked: the box saves as it loses focus, just before */
     await flowSaving
     if (focus.active()) return false
-    const { courseId, itemId } = pickFor(data.courses as Course[], data.items as Item[], ui.study)
+    const { courseId, itemId } = pickFor(data.courses, data.items, ui.study)
     ui.study.courseId = courseId
     ui.study.itemId = itemId
     if (!courseId) return false
@@ -199,7 +199,7 @@ export function toggleMusic(open = !ui.focusMusic) {
 
 /* ── the flow ── */
 
-const savedFlow = (profile = data.profile as Profile | null): Flow => normalizeFlow(profile?.studyFlow) as Flow
+const savedFlow = (profile = data.profile): Flow => normalizeFlow(profile?.studyFlow)
 const copy = (f: Flow): Flow => structuredClone(f)
 const hasStudy = (f: Flow) => f.steps.some(([k]) => k === "study")
 const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, Math.round(v)))
@@ -266,7 +266,7 @@ export function setRounds(n: number): Promise<boolean> {
 }
 
 /** The Quick start presets: [name, flow]. */
-export const PRESETS = FLOW_PRESETS as unknown as readonly [string, Flow][]
+export const PRESETS: readonly [string, Flow][] = FLOW_PRESETS
 
 /** Replace the flow with a Quick start preset. */
 export function applyPreset(i: number): Promise<boolean> {

@@ -12,7 +12,7 @@ import { notify } from "@/bridge"
 import { parseTime } from "@/lib/time"
 import { closeSheet } from "./overlay"
 import { ui } from "./ui"
-import type { Course, StudyPrefs, StudySession } from "./types"
+import type { StudyPrefs, StudySession } from "./types"
 
 export interface SessionDraft {
     isNew: boolean
@@ -37,7 +37,7 @@ const clock = (d: Date) => pad(d.getHours()) + ":" + pad(d.getMinutes())
 /** A new session for the last half hour, on `courseId`, else the timer's course, else the first live one. */
 export function newSession(courseId?: string | null, now = new Date()): SessionDraft {
     const start = new Date(now.getTime() - 30 * 60_000)
-    const live = (data.courses as Course[]).find((c) => !c.archived)
+    const live = data.courses.find((c) => !c.archived)
     return {
         isNew: true, base: null, id: uid(), date: iso(start), time: clock(start), minutes: 30,
         courseId: courseId || ui.study?.courseId || live?.id || null, itemId: null, note: "",

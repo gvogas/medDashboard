@@ -1,8 +1,9 @@
 // The background layer. Med: two helices, a steroid, benzenes, a lipid. CS: circuit
 // traces, a binary tree, a gate, a graph and code. Drawn in the theme's accent;
-// redrawn on resize and on theme or background change.
+// redrawn on resize and on theme or background change (data/ornament.ts).
 
-import { useCallback, useEffect, useRef, useSyncExternalStore } from "react"
+import { useCallback, useEffect, useRef } from "react"
+import { useOrnamentTurn } from "@/data/ornament"
 
 type Pt = [number, number]
 
@@ -106,26 +107,10 @@ export function drawOrnament(canvas: HTMLCanvasElement) {
     drawOn(ctx, w, h, cs)
 }
 
-/* A theme or background change asks for a redraw: the stroke colour and the art come
-   from <html>'s attributes and CSS, which React does not see change. */
-let asked = 0
-const listeners = new Set<() => void>()
-
-/** Redraw the ornament (setTheme and setBg call it). */
-export function redrawOrnament() {
-    asked++
-    for (const fn of listeners) fn()
-}
-
-function subscribe(fn: () => void) {
-    listeners.add(fn)
-    return () => { listeners.delete(fn) }
-}
-
 /** The canvas behind the top bar and the page, redrawn on resize and when asked. */
 export function Ornament() {
     const ref = useRef<HTMLCanvasElement>(null)
-    const turn = useSyncExternalStore(subscribe, () => asked)
+    const turn = useOrnamentTurn()
     const raf = useRef<number | null>(null)
 
     /* several asks in one frame draw once */

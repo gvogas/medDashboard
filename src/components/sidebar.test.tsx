@@ -3,7 +3,7 @@ import { act, cleanup, fireEvent, render, screen, within } from "@testing-librar
 import { stubMatchMedia } from "./test-media"
 
 /* The app is not booted: a store with data, a ui, and redraws that only notify.
-   core/model.ts, query.js and the actions are the real ones, so the filter logic is too. */
+   core/model.ts, data/query.ts and the actions are the real ones, so the filter logic is too. */
 const fake = vi.hoisted(() => ({
     data: { items: [] as unknown[], courses: [] as unknown[], profile: null as unknown },
     ui: { view: "week", search: "", types: {} as Record<string, boolean>, course: "all", bg: "med", anchor: "2026-09-28", settings: false },

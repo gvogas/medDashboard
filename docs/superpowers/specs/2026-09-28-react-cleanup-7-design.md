@@ -38,8 +38,8 @@ and the vendored `vendor/pdfjs.mjs` (kept as it is). Each becomes `.ts`.
 | `sync-status.js` | `src/data/sync-status.ts` |
 | `study-controller.js` | `src/data/study-controller.ts` |
 | `keyboard.js` | `src/data/keyboard.ts` |
-| `dom.js` | only what is still used (`isTyping`, `esc` if needed) in `src/lib/dom.ts`; `setHTML`, `refind`, `keepFocus`, `restoreFocus` go |
-| `ornament.js` | `src/components/ornament.tsx`, a canvas drawn from a ref |
+| `dom.js` | what is still used in `src/lib/dom.ts`: `isTyping`, and `refind` (focus goes back to the same control after a redraw: `keys.ts`, the sheet); `esc`, `setHTML`, `keepFocus`, `restoreFocus` go |
+| `ornament.js` | `src/components/ornament.tsx`, a canvas drawn from a ref; the redraw signal in `src/data/ornament.ts` |
 | `main.js` | `src/boot.ts`, imported first by `main.tsx` |
 
 `src/bridge.ts` (`notify`, `subscribe`, `getVersion`, the study badge) stays as the

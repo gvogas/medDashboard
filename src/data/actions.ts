@@ -24,7 +24,7 @@ import { achievementDraft, newAchievement } from "./achievement-edit"
 /* session.ts imports openSettings from here: a cycle, but each side calls the other only later */
 import { signOut as endSession } from "./session"
 import { ui } from "./ui"
-import type { Achievement, Course, Item, ItemType, Schedule, SortKey, StudySession } from "./types"
+import type { Course, Item, ItemType, Schedule, SortKey } from "./types"
 
 export { setView }
 
@@ -52,7 +52,7 @@ export function setSearch(text: string) {
 
 /* ── the sidebar's filters ── */
 
-export const itemTypes = (): ItemType[] => typeList(ui.bg, data.items as Item[])
+export const itemTypes = (): ItemType[] => typeList(ui.bg, data.items)
 
 /**
  * Click a type. With every type showing, show only this one; if it is the only one
@@ -121,7 +121,7 @@ export const toggleTypeHidden = (id: string) => editType(id, (t) => {
 })
 
 /** Only a type of your own that no item uses. */
-export const canDeleteType = (t: ItemType) => t.custom && !(data.items as Item[]).some((it) => it.type === t.id)
+export const canDeleteType = (t: ItemType) => t.custom && !data.items.some((it) => it.type === t.id)
 export const deleteType = (id: string) => editType(id, (t, list, i) => {
     if (!canDeleteType(t)) return false
     list.splice(i, 1)
@@ -166,7 +166,7 @@ export async function deleteCourse(id: string) {
 
 /** A session to edit by id, or a new one (on `courseId` when given) to log by hand. */
 export function openSession(id: string | null, courseId?: string | null) {
-    const s = id ? (data.study_sessions as StudySession[]).find((x) => x.id === id) : null
+    const s = id ? data.study_sessions.find((x) => x.id === id) : null
     if (id && !s) return
     openSheet({ kind: "session", draft: s ? sessionDraft(s) : newSession(courseId) })
 }
@@ -179,16 +179,16 @@ export function deleteSession(id: string) {
 
 /** An achievement to edit by id, or a new one while there is room for it. */
 export function openAchievement(id: string | null) {
-    const list = data.achievements as Achievement[]
+    const list = data.achievements
     const a = id ? list.find((x) => x.id === id) : null
     if (id && !a) return
     if (!a && list.length >= ACHIEVEMENT_LIMIT) { toast("You have " + ACHIEVEMENT_LIMIT + " achievements, the most there can be."); return }
-    openSheet({ kind: "achievement", draft: a ? achievementDraft(a) : newAchievement(data.courses as Course[]) })
+    openSheet({ kind: "achievement", draft: a ? achievementDraft(a) : newAchievement(data.courses) })
 }
 
 /** Delete now, with the toast's Undo. */
 export async function deleteAchievement(id: string) {
-    const a = (data.achievements as Achievement[]).find((x) => x.id === id)
+    const a = data.achievements.find((x) => x.id === id)
     if (!a) return
     closeSheet()
     await deleteLater("achievements", id, "“" + (a.name.trim() || "Achievement") + "”", () => store.deleteAchievement(id))

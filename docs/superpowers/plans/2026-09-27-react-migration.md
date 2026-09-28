@@ -6,28 +6,28 @@ Written 27 September 2026 to pick the work up later. The design and the stage li
 
 ## Where it stands
 
-- Branch **`re`**, 51 commits ahead of `main`. **Nothing is pushed or
-  deployed**; the live site still runs the pre-React code from `main`.
-- **Done:** stages 0–6. The app runs on Vite + React + Tailwind. React owns the top bar,
-  the view dock, the sidebar and its Spotify player, sign-in, toasts, the stat tiles, every
-  view (week, month, table, Study, Spotify; `src/components/views/`, `study/`, `spotify/`,
-  in `#stats` and `#views`), the focus screen (`src/components/focus/`, in `#focus`),
-  the corner dock (in `#study-dock`), the sheet (`src/components/sheet/`, in `#sheet`),
-  and the shortcuts panel and busy card (`src/components/overlays.tsx`). The Spotify
-  engine is TypeScript (`src/data/spotify/`). What is left of `src/legacy/` is the
-  store, sync, the importers, the run engine (`focus.js`, `timer.js`),
-  `study-controller.js`, `keyboard.js`, `main.js` and a `render.js` that is only
-  `notify()`, connected through `src/bridge.ts` and `src/data/`.
-- **Checks after 5 and 6** (`d822893`): type-check clean, 886 Vitest tests + 18 node tests
-  pass, `npm run build` passes its CSP checks. The production build (`npm run dev:built`,
-  the real CSP) was driven through every view, a whole run (focus screen, music panel,
-  Esc, the dock, a break, Stop & log) and the Log study sheet with no CSP violation or
-  console error. In the dev server the same, plus 5a's History (tabs, delete and Undo, a
-  heatmap day), the leaderboard's Join and Leave, and a run logged and shown in History.
-  A release review of the whole diff found no critical or important defects; its minor
-  findings are fixed in `d822893`. The automation browser counted as a hidden tab, so the
-  look and Spotify with a real account were not checked by the agent; the owner looked and
-  signed it off on 28 September.
+- Branch **`re`**, 57 commits ahead of `main`. **Nothing is deployed**; the live site
+  still runs the pre-React code from `main`. (`re` was pushed once, at stage 4.)
+- **Done:** stages 0–7. The app is Vite + React + Tailwind (preflight on) in TypeScript, with
+  one React root (`<App>`, `src/components/app.tsx`). `src/legacy/` is gone: the logic
+  shared with the Worker and the tests is `src/core/`, the controllers and hooks are
+  `src/data/`, and the CSS is `src/index.css` with `src/styles/` (tokens, base, shell).
+  Spec: `docs/superpowers/specs/2026-09-28-react-cleanup-7-design.md`.
+- **Checks after 7** (`98be862` and the review fixes after it): type-check clean, 889
+  Vitest tests + 17 node tests pass, `npm run build` passes its CSP checks. Every
+  element's box and computed style was recorded before and after preflight in every view,
+  the item sheet, Settings, the shortcuts panel and the phone sidebar, in dark and light,
+  Med and CS, wide and at phone width; the only differences left are stray 3px dashed
+  borders gone (the History goal line, the CS badge's barcode row), the item sheet's date
+  field 2px shorter, and the browser's own button padding where sizes are fixed. The
+  production build (`npm run dev:built`, real CSP) was driven through every view, the item
+  sheet, all four Settings tabs, the shortcuts panel and a run (focus screen, Esc to the
+  dock, back, Stop & log) with no CSP violation or console error. A fresh clone runs
+  `npm ci && npm run build && npx wrangler deploy --dry-run` cleanly. A review of the
+  whole stage found nothing critical or important; its minor points are fixed.
+- **Earlier checks** (`d822893`, after 5 and 6): the same suites and the production build
+  through a whole run, History, the leaderboard; the owner looked and signed off on 28
+  September.
 
 | Stage | What | State |
 |---|---|---|
@@ -38,7 +38,7 @@ Written 27 September 2026 to pick the work up later. The design and the stage li
 | 4 | Drawers, in three parts | Done: 4a (`7e40ff8`), 4b (`e759bd5`), 4c (`5c056c1`–`b1c8614`; specs `2026-09-27-react-drawers-4a/4b/4c-design.md`) |
 | 5 | Study, in two parts: 5a the history, achievements and leaderboard; 5b the timer, flip clock, focus screen and dock | Done: 5a (merge `7d39ef8`, spec `2026-09-28-react-study-5a-design.md`), 5b (`40672d5`, `d818b42`, `ad0d29e`; spec `2026-09-28-react-study-5b-spotify-6-design.md`) |
 | 6 | Spotify: view and player | Done with 5b (`5d0b7f0`, `6f5e4de`, `fbc107b`, `9b89919`); review fixes `d822893` |
-| 7 | Cleanup: delete `src/legacy/`, one React root, Tailwind preflight on | **Next** |
+| 7 | Cleanup: `src/legacy/` gone (to TypeScript), one React root, Tailwind preflight on | Done (`d0b6ed0`, `bc36cc2`, `d8b03e6`, `98be862`, review fixes) |
 
 ## Resuming
 
@@ -58,7 +58,7 @@ Written 27 September 2026 to pick the work up later. The design and the stage li
 6. Keep files LF (a CRLF in `index.html` breaks the CSP hash). Look inside a folder before
    deleting it; gitignored folders here have held hand-made files.
 
-## Shipping stages 0–2 (can happen before stage 3)
+## Shipping
 
 - [ ] Go through the site in your own browser: every view, filters, courses, search, the
       type editor, drawers, toast Undo, sign-out and sign-in, a phone-width window.
@@ -67,6 +67,12 @@ Written 27 September 2026 to pick the work up later. The design and the stage li
 - [ ] **Med theme and light mode:** most checks were in CS dark; give Med light and dark a
       proper look.
 - [ ] Offline: load, go offline, reload; the service worker should open the app.
+- [ ] **Cloudflare's Git build:** it built the pushed `re` on 27 September and failed
+      ("assets.directory … dist/client does not exist") because its build command is empty
+      and only `vite build` makes `dist/client`. In the dashboard (Workers → rounds →
+      Settings → Build) set the build command to `npm run build`, or turn the Git build off
+      and keep deploying with `npm run deploy`; a Git build skips the checks and the remote
+      migrations. `.node-version` (24) sets its Node.
 - [ ] Merge `re` into `main`, then `npm run deploy` (it runs the checks, applies remote
       migrations, and deploys with `wrangler deploy`). Installed copies pick up the new
       service worker on their next load.
@@ -132,19 +138,15 @@ and Up next / Recent on the left, `<MusicBrowser>` on the right), the sidebar pl
 the focus screen's panel share the parts in `src/components/spotify/`. The legacy view,
 `views/player.js` and the shims are gone. The CSP hosts for the SDK and artwork are kept.
 
-## Stage 7: cleanup
+## Stage 7: cleanup (done)
 
-- Delete `src/legacy/js` and the legacy CSS; keep the tokens (`tokens.css`) as the theme.
-  Left to move: the store, sync, the importers, `focus.js`/`timer.js`, `study-controller.js`,
-  `keyboard.js`, `main.js`, `session.js`, and `render.js` (only `notify()`, imported widely).
-  Dead CSS kept until then: `.panel`, `.ph`, `.empty` in `components.css`; `keepFocus` and
-  `restoreFocus` in `dom.js`.
-- One React root instead of the static containers in `index.html`; keep the inline theme
-  script and its CSP hash.
-- Turn Tailwind's preflight on; remove the `legacy` cascade layer and
-  `test/legacy-classes.node.mjs`.
-- Move `ornament.js` (the background art) into a component.
-- Remove the bridge once nothing legacy is left.
+In four parts: the core logic to TypeScript in `src/core/` (relative `.ts` imports and
+erasable syntax only, since `worker/` and plain Node load it); the controllers to
+`src/data/` (`boot.ts` is the old `main.js`); one React root, with what the static
+containers had (hidden, inert, the phone sidebar's `.on`, the scrim) drawn from state and
+the ornament a component; and the CSS, with preflight on and the frame's rules in
+`src/styles/shell.css` in a `shell` layer where the `legacy` one was. `src/bridge.ts`
+stays as the change signal (the store and `ui` are still objects changed in place).
 
 ## Known issues and notes
 

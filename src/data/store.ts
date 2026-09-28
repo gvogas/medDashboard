@@ -6,18 +6,18 @@ import { useSyncExternalStore } from "react"
 import * as store from "@/core/store"
 import { conflicts, data } from "@/core/store"
 import { getVersion, notify, subscribe } from "@/bridge"
-import type { Achievement, Course, Item, Profile, Quote, SavedCopy, StudySession } from "./types"
+import type { SavedCopy } from "./types"
 
 /* Events after which the data may differ. save-error leaves it as it was. */
 const WAKE = new Set(["change", "synced", "hidden", "remote", "signed-out"])
 store.subscribe((e: { type: string }) => { if (WAKE.has(e.type)) notify() })
 
-const items = () => data.items as Item[]
-const courses = () => data.courses as Course[]
-const profile = () => data.profile as Profile | null
-const quotes = () => data.quotes as Quote[]
-const sessions = () => data.study_sessions as StudySession[]
-const achievements = () => data.achievements as Achievement[]
+const items = () => data.items
+const courses = () => data.courses
+const profile = () => data.profile
+const quotes = () => data.quotes
+const sessions = () => data.study_sessions
+const achievements = () => data.achievements
 
 export const useItems = () => useSyncExternalStore(subscribe, items)
 export const useCourses = () => useSyncExternalStore(subscribe, courses)
@@ -31,5 +31,5 @@ export const useAchievements = () => useSyncExternalStore(subscribe, achievement
     so the bridge's version is the snapshot. */
 export function useConflicts(): SavedCopy[] {
     useSyncExternalStore(subscribe, getVersion)
-    return conflicts as SavedCopy[]
+    return conflicts
 }
