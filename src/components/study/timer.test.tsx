@@ -31,12 +31,10 @@ vi.mock("@/legacy/js/store.js", () => ({
         fake.data.profile = { ...fake.data.profile, ...structuredClone(patch) }
     },
 }))
-const legacy = vi.hoisted(() => ({ openFocus: vi.fn(), leaveFocus: vi.fn() }))
 vi.mock("@/legacy/js/views/render.js", async () => {
     const { notify } = await import("@/bridge")
     return { render: notify, renderView: notify }
 })
-vi.mock("@/legacy/js/study-controller.js", () => legacy)
 vi.mock("@/legacy/js/query.js", () => ({ termStart: () => null, schoolCal: () => null }))
 const actions = vi.hoisted(() => ({ openCourse: vi.fn(), openSettings: vi.fn() }))
 vi.mock("@/data/actions", () => actions)
@@ -45,6 +43,7 @@ import * as focus from "@/legacy/js/focus.js"
 import { normalizeCourse, normalizeItem } from "@/legacy/js/model.js"
 import { notify } from "@/bridge"
 import { ui } from "@/data/ui"
+import { leaveFocus } from "@/data/study-timer"
 import { TimerCards } from "./timer-cards"
 import { StudyDock } from "./study-dock"
 import type { Flow } from "@/data/types"
@@ -156,11 +155,14 @@ describe("the Ready card", () => {
         await start()
         expect(focus.active()).toBe(true)
         expect(focus.read()).toMatchObject({ courseId: "anat", itemId: "e1", kind: "study", round: 1, leftMs: 25 * MIN, flow: CLASSIC })
-        expect(document.documentElement.requestFullscreen).toHaveBeenCalled()
-        /* a second Start does nothing; the card offers the focus screen back instead */
+        expect(document.documentElement.requestFullscreen).toHaveBeenCalledOnce()
+        expect(ui.focus).toBe(true)
+        /* off the focus screen, a second Start is not offered: the card goes back to it instead */
+        act(() => leaveFocus())
         expect(ready.queryByRole("button", { name: "Start focus" })).toBeNull()
         fireEvent.click(ready.getByRole("button", { name: "Back to focus" }))
-        expect(legacy.openFocus).toHaveBeenCalledOnce()
+        expect(ui.focus).toBe(true)
+        expect(document.documentElement.requestFullscreen).toHaveBeenCalledTimes(2)
     })
 
     it("starts on minutes typed a moment before Start, saved as the box lost focus", async () => {
@@ -284,6 +286,8 @@ describe("the flow card", () => {
 describe("the corner dock", () => {
     const dock = () => screen.queryByRole("region", { name: "Study timer" })
     const both = () => render(<><TimerCards /><StudyDock /></>)
+    /* Start opens the focus screen; the dock is for when you leave it */
+    const startAndLeave = async () => { await start(); act(() => leaveFocus()) }
 
     it("is not there without a run", () => {
         render(<StudyDock />)
@@ -295,11 +299,9 @@ describe("the corner dock", () => {
         both()
         await start()
         /* the focus screen is up: no dock */
-        ui.focus = true
-        act(() => notify())
+        expect(ui.focus).toBe(true)
         expect(dock()).toBeNull()
-        ui.focus = false
-        act(() => notify())
+        act(() => leaveFocus())
         const d = within(dock()!)
         expect(d.getByRole("timer").textContent).toContain("25 minutes 0 seconds left")
         expect(d.getByText("Study · round 1 of 4")).toBeTruthy()
@@ -314,24 +316,24 @@ describe("the corner dock", () => {
 
     it("pauses and resumes the run", async () => {
         both()
-        await start()
+        await startAndLeave()
         const d = within(dock()!)
-        fireEvent.click(d.getByRole("button", { name: "Pause" }))
+        fireEvent.click(d.getByRole("button", { name: "Pause timer" }))
         await settle()
         expect(focus.read()!.paused).toBe(true)
         expect(d.getByText("Study · round 1 of 4 · paused")).toBeTruthy()
         await tickFor(5 * MIN)
         expect(d.getByRole("timer").textContent).toContain("25 minutes 0 seconds left")
-        fireEvent.click(d.getByRole("button", { name: "Resume" }))
+        fireEvent.click(d.getByRole("button", { name: "Resume timer" }))
         await settle()
         expect(focus.read()!.paused).toBe(false)
-        expect(d.getByRole("button", { name: "Pause" })).toBeTruthy()
+        expect(d.getByRole("button", { name: "Pause timer" })).toBeTruthy()
     })
 
     it("turns to the break colours in a break, and has no ring without a goal", async () => {
         fake.data.profile = { id: "me", studyFlow: { steps: [["study", 1], ["break", 5]], rounds: 1 } }
         both()
-        await start()
+        await startAndLeave()
         await tickFor(61_000)
         expect(dock()!.dataset.phase).toBe("break")
         expect(within(dock()!).getByText("Break · round 1 of 1")).toBeTruthy()
@@ -340,14 +342,16 @@ describe("the corner dock", () => {
 
     it("goes back to the focus screen", async () => {
         both()
-        await start()
+        await startAndLeave()
+        expect(ui.view).toBe("week")
         fireEvent.click(within(dock()!).getByRole("button", { name: "Focus" }))
-        expect(legacy.openFocus).toHaveBeenCalledOnce()
+        expect(ui.focus).toBe(true)
+        expect(dock()).toBeNull()
     })
 
     it("goes when the run is stopped", async () => {
         both()
-        await start()
+        await startAndLeave()
         expect(dock()).not.toBeNull()
         await act(() => focus.stop())
         await settle()

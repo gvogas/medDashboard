@@ -27,9 +27,6 @@ vi.mock("@/legacy/js/store.js", () => ({
 vi.mock("@/legacy/js/state.js", () => ({ ui: fake.ui, rememberUi: vi.fn() }))
 vi.mock("@/legacy/js/sync.js", () => ({ status: { state: "idle", pending: 0, message: "" }, onStatus: () => {}, syncNow: vi.fn() }))
 vi.mock("@/legacy/js/views/render.js", () => ({ render: vi.fn(), renderView: vi.fn() }))
-vi.mock("@/legacy/js/views/study.js", () => ({
-    duration: (m: number) => { const h = Math.floor(m / 60); return h ? h + "h " + String(m % 60).padStart(2, "0") + "m" : m + "m" },
-}))
 vi.mock("@/legacy/js/study-controller.js", () => ({ deleteWithUndo: vi.fn(), deleteLater: vi.fn(), setView: vi.fn() }))
 vi.mock("@/legacy/js/fireworks.js", () => ({ launch: vi.fn() }))
 vi.mock("@/legacy/js/api.js", () => ({ api: {}, spotifyRetryAt: () => 0 }))

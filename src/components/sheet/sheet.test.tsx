@@ -23,7 +23,6 @@ vi.mock("@/legacy/js/store.js", () => ({
 }))
 vi.mock("@/legacy/js/state.js", () => ({ ui: fake.ui }))
 vi.mock("@/legacy/js/query.js", () => ({ schoolCal: () => null, termStart: () => "2026-09-01" }))
-vi.mock("@/legacy/js/views/study.js", () => ({ studiedFor: () => 0, duration: (m: number) => m + " min" }))
 vi.mock("@/legacy/js/reviews.js", () => ({ nextReview: () => null }))
 vi.mock("@/legacy/js/fireworks.js", () => ({ launch: vi.fn() }))
 vi.mock("@/data/actions", () => actions)

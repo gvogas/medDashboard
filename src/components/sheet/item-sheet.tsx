@@ -10,8 +10,9 @@ import * as store from "@/legacy/js/store.js"
 import { GRADABLE } from "@/legacy/js/grades.js"
 import { fillTopics, prepLabel, prepPace } from "@/legacy/js/prep.js"
 import { schoolCal, termStart } from "@/legacy/js/query.js"
-import { duration, studiedFor } from "@/legacy/js/views/study.js"
-import { useCourses, useItems } from "@/data/store"
+import { duration } from "@/lib/time"
+import { useCourses, useItems, useStudySessions } from "@/data/store"
+import { studiedFor } from "@/data/study"
 import { useUi } from "@/data/ui"
 import { beforeSheetClose, closeSheet, updateDraft } from "@/data/overlay"
 import { celebrate, chainReview, countdown, deriveEdit, editNow, flush, linkUrl, typeInto, useItemView, type ItemField } from "@/data/item-edit"
@@ -35,7 +36,8 @@ export function ItemSheet({ id, draft }: { id?: string; draft?: Item }) {
     const it = draft ?? stored
     const isNew = !!draft
     const courses = useCourses()
-    useItems()   /* the type list counts items; studied time and topics read them */
+    useItems()   /* the type list counts items; topics read them */
+    const sessions = useStudySessions()
     const bg = useUi((u) => u.bg)
     const [fillNote, setFillNote] = useState("")
     const f = useId()
@@ -76,7 +78,7 @@ export function ItemSheet({ id, draft }: { id?: string; draft?: Item }) {
     const statuses = statusesFor(it.type) as [string, string][]
     const prep = !isNew && isTest(it.type) && isOpen(it) ? prepPace(it, today()) : null
     const lectures = !!c && (c.meetings || []).some((x) => x.kind === "Lecture")
-    const studied = isNew ? 0 : studiedFor(it.id)
+    const studied = isNew ? 0 : studiedFor(sessions, it.id)
     const weekday = it.recur === "weekly" ? it.weekday ?? 0 : parse(it.date).getDay()
     const next = c && (c.meetings || []).length ? [...c.meetings].sort((a, b) => (a.weekday + 6) % 7 - (b.weekday + 6) % 7)[0] : null
 

@@ -29,14 +29,13 @@ vi.mock("@/legacy/js/store.js", () => ({
         fake.data.profile = { ...fake.data.profile, ...structuredClone(patch) }
     },
 }))
-const legacy = vi.hoisted(() => ({ renderView: vi.fn(), openFocus: vi.fn(), leaveFocus: vi.fn() }))
+const legacy = vi.hoisted(() => ({ renderView: vi.fn() }))
 vi.mock("@/legacy/js/views/render.js", () => ({ render: legacy.renderView, renderView: legacy.renderView }))
-vi.mock("@/legacy/js/study-controller.js", () => ({ openFocus: legacy.openFocus, leaveFocus: legacy.leaveFocus }))
 
 import * as focus from "@/legacy/js/focus.js"
-import { notify, subscribe } from "@/bridge"
+import { getStudyBadge, notify, subscribe } from "@/bridge"
 import {
-    addStep, applyPreset, delStep, doneAt, flowTotals, nextLine, pickFor, setRounds, setStepKind, setStepMinutes, skip, startRun,
+    addStep, applyPreset, clockTime, delStep, doneAt, escapeFocus, leaveFocus, openFocus, flowTotals, nextLine, pickFor, setRounds, setStepKind, setStepMinutes, skip, startRun,
     stopRun, stripSegments, tickTitle, timeText, todaySoFar, toggleMusic, togglePause, useFlow, useRun, type Run,
 } from "./study-timer"
 import { ui } from "./ui"
@@ -416,6 +415,28 @@ describe("a run", () => {
         expect(fake.sessions).toEqual([expect.objectContaining({ id: "r2", studyMinutes: 100, roundsDone: 4 })])
     })
 
+    it("titles the tab and badges the Study icon with the time left, and clears both at the end", async () => {
+        await begin({ steps: [["study", 1], ["break", 1]], rounds: 1 })
+        expect(document.title).toBe("01:00 · Study")
+        expect(getStudyBadge()).toBe("01:00")
+        await tickFor(61_000)
+        expect(document.title).toBe("00:59 · Break")
+        expect(getStudyBadge()).toBe("00:59")
+        await act(() => stopRun())
+        expect(document.title).toBe("Rounds")
+        expect(getStudyBadge()).toBeNull()
+    })
+
+    it("opens the focus screen on Start, and goes to the Study page when it ends", async () => {
+        ui.view = "week"
+        ui.focus = false
+        await begin(CLASSIC)
+        expect(ui.focus).toBe(true)
+        expect(legacy.renderView).toHaveBeenCalled()
+        await act(() => stopRun())
+        expect(ui).toMatchObject({ focus: false, view: "study" })
+    })
+
     it("is gone after sign-out forgets it", async () => {
         const { result } = renderHook(() => useRun())
         await begin(CLASSIC)
@@ -423,6 +444,41 @@ describe("a run", () => {
         focus.reset()
         act(() => notify())
         expect(result.current).toBeNull()
+    })
+})
+
+describe("the focus screen", () => {
+    const fullscreen = vi.fn(() => Promise.resolve())
+    beforeEach(() => {
+        document.documentElement.requestFullscreen = fullscreen
+        fullscreen.mockClear()
+        Object.assign(ui, { focus: false, focusMusic: false, view: "week" })
+    })
+
+    it("opens in full screen, and leaving it keeps the view, but not the Study view", () => {
+        openFocus()
+        expect(ui.focus).toBe(true)
+        expect(fullscreen).toHaveBeenCalledOnce()
+        leaveFocus()
+        expect(ui).toMatchObject({ focus: false, view: "week" })
+        ui.view = "study"
+        openFocus()
+        leaveFocus()
+        expect(ui).toMatchObject({ focus: false, view: "week" })
+    })
+
+    it("shuts the music panel on Esc before it is left", () => {
+        openFocus()
+        toggleMusic(true)
+        escapeFocus()
+        expect(ui).toMatchObject({ focus: true, focusMusic: false })
+        escapeFocus()
+        expect(ui.focus).toBe(false)
+    })
+
+    it("tells the time the run is done as the clock does", () => {
+        expect(clockTime(new Date(2026, 8, 28, 15, 40, 59).getTime())).toBe("15:40")
+        expect(clockTime(new Date(2026, 8, 29, 7, 5).getTime())).toBe("07:05")
     })
 })
 

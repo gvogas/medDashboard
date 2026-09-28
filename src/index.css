@@ -83,22 +83,30 @@
    and the dock are .study-fx: dark in both themes (the --fx-* tokens), with the break
    colours in a break (data-phase="break" on the surface). */
 @layer components {
+  :root { --ph: var(--study); --ph-soft: var(--study-soft); --ph-ink: var(--study-ink); --clk-card: var(--study-card); --clk-card-2: var(--study-card-2); }
   .study-fx {
-    --fx-bg: var(--fx-study-bg); --fx-glow: var(--fx-study-glow);
+    --fx-bg: var(--fx-study-bg); --fx-glow: var(--fx-study-glow); --fx-ph: var(--fx-study);
     --ph: var(--fx-study); --ph-soft: color-mix(in srgb, var(--fx-study) 20%, transparent); --ph-ink: var(--fx-study);
     --clk-card: var(--fx-study-card); --clk-card-2: var(--fx-study-card-2);
     --fx-ink: #EEF6F4; --fx-ink-2: rgba(238,246,244,.68); --fx-ink-3: rgba(238,246,244,.46); --fx-on-ph: #140810;
     color-scheme: dark;
   }
   .study-fx[data-phase="break"] {
-    --fx-bg: var(--fx-break-bg); --fx-glow: var(--fx-break-glow);
+    --fx-bg: var(--fx-break-bg); --fx-glow: var(--fx-break-glow); --fx-ph: var(--fx-break);
     --ph: var(--fx-break); --ph-soft: color-mix(in srgb, var(--fx-break) 20%, transparent); --ph-ink: var(--fx-break);
     --clk-card: var(--fx-break-card); --clk-card-2: var(--fx-break-card-2);
   }
   /* index.html's containers for the dock and the focus screen, inside #app (so the sheet
      makes them inert with the page); what they hold is fixed, so they take no room. */
   #study-dock, #focus { display: contents; }
+  /* The focus screen (components/focus/focus-screen.tsx) covers the page; the sidebar and
+     the content behind it are hidden, so nothing there takes focus or is read out. */
+  html.focusing .side, html.focusing .content { display: none; }
 }
+
+/* The focus screen's music panel slides in from the right, or up from the bottom on a phone. */
+@keyframes focus-panel-in { from { transform: translateX(100%); } }
+@keyframes focus-sheet-in { from { transform: translateY(100%); } }
 
 /* The flip clock (components/study/flip-clock.tsx). Everything scales from --flip-w, which
    a parent may set with a utility such as [--flip-w:min(14vw,20vh)]; the cards take

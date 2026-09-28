@@ -34,6 +34,10 @@ const plural = (n: number, one: string) => n + " " + one + (n === 1 ? "" : "s")
 const sum = (list: StudySession[]) => list.reduce((a, s) => a + s.studyMinutes, 0)
 const pct = (part: number, whole: number) => Math.round((part / whole) * 1000) / 10
 
+/** Minutes studied for one item, over every session linked to it (the item sheet shows it). */
+export const studiedFor = (sessions: StudySession[], itemId: string) =>
+    sessions.reduce((a, s) => a + (s.itemId === itemId ? s.studyMinutes : 0), 0)
+
 /** Sessions shown: every one but a delete that Undo can still take back. */
 export const shownSessions = (sessions: StudySession[], undo: SessionUndo | null) =>
     undo ? sessions.filter((s) => s.id !== undo.session.id) : sessions

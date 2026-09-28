@@ -6,9 +6,6 @@ const fake = vi.hoisted(() => ({
 }))
 vi.mock("@/legacy/js/store.js", () => ({ data: fake.data, subscribe: () => () => {}, saveStudySession: vi.fn(), saveAchievement: vi.fn() }))
 vi.mock("@/legacy/js/views/render.js", () => ({ render: vi.fn() }))
-vi.mock("@/legacy/js/views/study.js", () => ({
-    duration: (m: number) => { const h = Math.floor(m / 60); return h ? h + "h " + String(m % 60).padStart(2, "0") + "m" : m + "m" },
-}))
 vi.mock("@/legacy/js/state.js", () => ({ ui: { study: { courseId: null, itemId: null } } }))
 
 import { impact, newSession, sessionDraft, startedAtOf, validSession, type SessionDraft } from "./session-edit"

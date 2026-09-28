@@ -1,6 +1,5 @@
-// The week, month, table, Study or Spotify page, in index.html's #views. The focus screen
-// is still drawn by the legacy code into #viewRoot beside it; each container has one owner,
-// and the one not in use is hidden.
+// The week, month, table, Study or Spotify page, in index.html's #views. On the focus
+// screen (components/focus/, in #focus) nothing shows here.
 
 import { useEffect } from "react"
 import { useUi } from "@/data/ui"
@@ -15,7 +14,7 @@ const OURS = ["week", "month", "table", "study", "spotify"]
 export function Views() {
     const view = useUi((u) => (u.focus ? null : OURS.includes(u.view) ? u.view : null))
 
-    /* the table and the Spotify page scroll their own rows, as #viewRoot's own-scroll did */
+    /* the table and the Spotify page scroll their own rows */
     useEffect(() => {
         const host = document.getElementById("views")
         if (!host) return

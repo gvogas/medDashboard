@@ -98,7 +98,7 @@ button{cursor:pointer}
 .btn.danger:hover{background:color-mix(in srgb, var(--crit) 82%, #000)}
 /* the frame never scrolls — the view region inside it does */
 .scroll{flex:1;min-height:0;overflow:hidden;padding:14px 16px 14px;display:flex;flex-direction:column;gap:13px}
-#viewRoot,#views{flex:1;min-height:0;overflow-y:auto;overflow-x:hidden;padding-right:2px}
-#viewRoot.own-scroll,#views.own-scroll{overflow:hidden;display:flex;flex-direction:column}
-#viewRoot[hidden],#views[hidden]{display:none}
+#views{flex:1;min-height:0;overflow-y:auto;overflow-x:hidden;padding-right:2px}
+#views.own-scroll{overflow:hidden;display:flex;flex-direction:column}
+#views[hidden]{display:none}
 .drape{position:absolute;right:6px;top:-10px;width:270px;max-width:46%;height:auto;color:var(--accent);opacity:var(--orn-art);pointer-events:none;z-index:0}

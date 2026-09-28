@@ -1,6 +1,7 @@
-// The study timer: the focus screen, study-session deletes that wait for Undo
-// (item and course deletes wait the same way), the daily goal, and the celebrations.
-// The Study page's history, its Undo and the leaderboard are React (src/data/study.ts).
+// Showing a view (the Study view during a run is its focus screen), study-session deletes
+// that wait for Undo (item and course deletes wait the same way), the daily goal, and the
+// celebrations. The Study page, the timer and the focus screen are React (src/data/study.ts,
+// src/data/study-timer.ts).
 
 import * as store from './store.js';
 import { data } from './store.js';
@@ -9,46 +10,17 @@ import { normalizePrefs } from './model.js';
 import { today } from './dates.js';
 import { esc } from './dom.js';
 import { render, renderView } from './views/render.js';
-import { getSheet } from '../../data/overlay.ts';
 import { toast } from './views/toast.js';
 import { minutesByDay, streak } from './history.js';
 import { achievements, ownAchievements } from './achievements.js';
 import { launch as fireworks } from './fireworks.js';
 import * as focus from './focus.js';
-import { paint as paintStudy, clearRun } from './views/study.js';
-
-/* ═════════ the study timer ═════════ */
-export function onFocusTick(s, event) {
-  if (event === 'start') { ui.focus = true; render(); }
-  else if (event === 'end') {
-    ui.focus = false;
-    ui.view = 'study'; rememberUi();
-    clearRun();
-    render();
-    return;
-  } else if (event === 'step' && s.kind === 'study' && !ui.focus && !getSheet()) {
-    ui.focus = true;                       /* a new Study step pulls you back in */
-    render();
-  }
-  paintStudy(event !== 'start');
-}
+import { openFocus } from '../../data/study-timer.ts';
 
 /** Show a view: the dock and the 1–5 keys. Study while a run is going opens its focus screen. */
 export function setView(view) {
   if (view === 'study' && focus.active()) { openFocus(); return; }
   ui.view = view; rememberUi(); render();
-}
-
-export function openFocus() {
-  ui.focus = true;
-  focus.fullscreen(true);
-  render(); paintStudy(false);
-}
-export function leaveFocus() {
-  ui.focus = false;
-  focus.fullscreen(false);
-  if (ui.view === 'study') { ui.view = 'week'; rememberUi(); }
-  render(); paintStudy(false);
 }
 
 /* ── the history: deletes that can be undone, the goal ── */
@@ -153,13 +125,4 @@ function showAchievement(id) {
     void el.offsetWidth;
     el.classList.add('pop');
   });
-}
-
-/* The focus screen's buttons (the Study page's cards and the dock are React). */
-export async function studyClick(e) {
-  if (e.target.closest('[data-study-pause]')) { await focus.togglePause(); return true; }
-  if (e.target.closest('[data-study-skip]')) { await focus.skip(); return true; }
-  if (e.target.closest('[data-study-stop]')) { await focus.stop(); return true; }
-  if (e.target.closest('[data-study-leave]')) { leaveFocus(); return true; }
-  return false;
 }

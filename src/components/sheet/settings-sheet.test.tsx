@@ -49,7 +49,6 @@ vi.mock("@/legacy/js/study-controller.js", () => ({ savePrefs: legacy.savePrefs 
 vi.mock("@/legacy/js/theme.js", () => ({ setTheme: legacy.setTheme, setBg: legacy.setBg }))
 vi.mock("@/data/ai-read", () => ({ readWithAi: vi.fn() }))
 vi.mock("@/legacy/js/views/render.js", () => ({ render: legacy.render, renderView: vi.fn() }))
-vi.mock("@/legacy/js/views/study.js", () => ({ studiedFor: () => 0, duration: String }))
 vi.mock("@/legacy/js/fireworks.js", () => ({ launch: vi.fn() }))
 vi.mock("@/data/actions", () => actions)
 

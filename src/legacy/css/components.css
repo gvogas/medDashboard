@@ -174,8 +174,7 @@ input[aria-invalid="true"]{border-color:var(--red-ink);outline-color:var(--red-i
   .bar{backdrop-filter:none;gap:8px;padding:10px 16px}
   .seg button{padding:8px 10px}
   .scroll{flex:none;overflow:visible;padding-bottom:84px}
-  #viewRoot,#viewRoot.own-scroll,#views,#views.own-scroll{flex:none;overflow:visible;display:block;padding-right:0}
-  #viewRoot[data-view="spotify"]{height:calc(100dvh - 32px);display:flex;flex-direction:column;overflow:hidden}
+  #views,#views.own-scroll{flex:none;overflow:visible;display:block;padding-right:0}
 }
 
 /* a key, in the shortcuts panel (components/overlays.tsx) */

@@ -37,7 +37,7 @@ export function StudyDock() {
             <button
                 type="button"
                 onClick={() => void togglePause()}
-                aria-label={run.paused ? "Resume" : "Pause"}
+                aria-label={run.paused ? "Resume timer" : "Pause timer"}
                 className="grid size-8 flex-none cursor-pointer place-items-center rounded-full border-0 bg-white/10 text-[var(--fx-ink)] hover:bg-white/20 [&_svg]:size-3.5"
             >
                 {run.paused ? <PlayIcon /> : <PauseIcon />}

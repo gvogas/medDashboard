@@ -17,7 +17,6 @@ import * as web from './web-player.js';
 import { renderSignIn, hideSignIn } from './views/signin.js';
 import { schedule as drawOrnament } from './ornament.js';
 import * as focus from './focus.js';
-import { paint as paintStudy } from './views/study.js';
 import { setTheme, setBg } from './theme.js';
 import { celebrateStudy, celebrateAchievements, finishDelete, commitUndo } from './study-controller.js';
 import { refreshAfterSync } from './sync-status.js';
@@ -43,7 +42,6 @@ async function start(profile) {
   await focus.load();
   if (focus.active()) ui.focus = true;       /* a run this device was in the middle of */
   render();
-  paintStudy(false);
   drawOrnament();
   celebrateStudy();                             /* the first look only records where today stands */
   celebrateAchievements();

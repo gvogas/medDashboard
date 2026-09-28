@@ -7,10 +7,8 @@ import { getSheet, requestCloseSheet } from '../../data/overlay.ts';
 import { setSide } from '../../data/sidebar.ts';
 import { openKeys, closeKeys, keysOpen } from '../../data/keys.ts';
 import { getBusy } from '../../data/ai-read.ts';
-import * as spotify from './spotify.js';
-import * as web from './web-player.js';
-import * as spotView from './views/spotify-view.js';
-import { leaveFocus, setView } from './study-controller.js';
+import { setView } from './study-controller.js';
+import { escapeFocus } from '../../data/study-timer.ts';
 import { newItem, goToday, step } from '../../data/actions.ts';
 
 /* Single keys, when nothing is being typed and no drawer or the focus screen is up:
@@ -34,29 +32,15 @@ export async function onKeydown(e) {
     if (e.defaultPrevented) return;   /* a field used it, like the time picker closing its list */
     if (keysOpen()) { closeKeys(); return; }
     if ($('side').classList.contains('on')) { setSide(false); return; }
-    if (ui.focus && spotView.devicesOpen()) { spotView.closeDevices(); return; }   /* the Spotify page closes its own */
     /* the sheet takes Escape itself when focus is inside it; this is for when it is not */
     if (getSheet()) { requestCloseSheet(); return; }
-    if (ui.focus) leaveFocus();
+    if (ui.focus) escapeFocus();          /* the music panel first, then the focus screen */
     return;
   }
   if (shortcut(e)) return;
-  /* The legacy Spotify view beside the focus screen's clock: / to search, space to play or
-     pause, when not typing or on a button. The Spotify page takes these keys itself
-     (components/spotify/spotify-page.tsx) before they get here. */
-  if (ui.focus && ui.view === 'spotify' && !e.ctrlKey && !e.metaKey && !e.altKey && !/^(input|textarea|select|button|a)$/i.test(e.target.tagName)
-      && !e.target.isContentEditable && !getSheet()) {
-    if (e.key === '/') {
-      const box = document.querySelector('[data-spot-q]');
-      if (box) { e.preventDefault(); box.focus(); box.select(); return; }
-    }
-    if (e.key === ' ' && spotify.state.connected && !e.repeat) {
-      e.preventDefault();
-      web.activate();
-      spotify.control(spotify.state.playing ? 'pause' : 'play');
-      return;
-    }
-  }
+  /* The focus screen takes Space and M itself (components/focus/focus-screen.tsx), and
+     its music takes / (components/spotify/music-browser.tsx). */
+  if (ui.focus) return;
   if (e.key === '/' && !e.defaultPrevented && !/input|textarea|select/i.test(e.target.tagName)) {
     e.preventDefault(); $('search')?.focus(); return;   /* the top bar's search box */
   }

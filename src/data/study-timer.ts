@@ -1,7 +1,8 @@
-// The study timer: the running run, what starts, pauses and stops it, and the flow it
-// follows. The run itself stays in legacy/js/focus.js (timer.js does the arithmetic);
-// useRun() reads it on each of focus.js's ticks. The helpers below are pure, so the
-// cards, the focus screen and the dock draw from the same numbers.
+// The study timer: the running run, what starts, pauses and stops it, the focus screen
+// it opens, and the flow it follows. The run itself stays in legacy/js/focus.js (timer.js
+// does the arithmetic); useRun() reads it on each of focus.js's ticks, which also keep
+// the tab's title and the Study icon's badge. The helpers below are pure, so the cards,
+// the focus screen and the dock draw from the same numbers.
 
 import { useMemo, useSyncExternalStore } from "react"
 import * as focus from "@/legacy/js/focus.js"
@@ -10,15 +11,14 @@ import { data } from "@/legacy/js/store.js"
 import { isOpen, normalizeFlow, normalizePrefs, FLOW_PRESETS } from "@/legacy/js/model.js"
 import { iso, today as todayIso } from "@/legacy/js/dates.js"
 import { minutesByDay } from "@/legacy/js/history.js"
+import { rememberUi } from "@/legacy/js/state.js"
 import { renderView } from "@/legacy/js/views/render.js"
-import { openFocus, leaveFocus } from "@/legacy/js/study-controller.js"
-import { notify, subscribe as subscribeBridge } from "@/bridge"
+import { notify, setStudyBadge, subscribe as subscribeBridge } from "@/bridge"
+import { getSheet } from "./overlay"
 import { useCourses, useItems, useProfile, useStudySessions } from "./store"
 import { shownSessions } from "./study"
 import { ui, useUi } from "./ui"
 import type { Course, Flow, Item, Profile, StepKind, StudySession } from "./types"
-
-export { openFocus, leaveFocus }
 
 const MIN = 60_000
 export const MAX_STEPS = 12
@@ -64,15 +64,32 @@ const keyOf = (r: Run | null) => (r
         Math.floor(r.at / 1000), r.courseId, r.itemId].join()
     : "")
 
+/* A new snapshot also retitles the tab ("24:13 · Study") and badges the Study icon. */
 function refresh(force: boolean) {
     const next = readRun(), key = keyOf(next)
     if (!force && key === runKey) return
     run = next
     runKey = key
+    document.title = tickTitle(run)
+    setStudyBadge(run ? timeText(run.leftMs) : null)
     for (const fn of listeners) fn()
 }
 
-focus.onTick((_s: unknown, event: string) => refresh(event !== "tick"))
+/* What a run does to the page: Start opens the focus screen; a new Study step pulls you
+   back into it (unless a sheet is open); Stop & log, or the flow's end, goes to the
+   Study page, where the session now shows. */
+focus.onTick((s: { kind: StepKind } | null, event: string) => {
+    let moved = false
+    if (event === "start") { ui.focus = true; moved = true }
+    else if (event === "end") {
+        ui.focus = false
+        ui.view = "study"
+        rememberUi()
+        moved = true
+    } else if (event === "step" && s?.kind === "study" && !ui.focus && !getSheet()) { ui.focus = true; moved = true }
+    refresh(event !== "tick")
+    if (moved) renderView()
+})
 
 function getRun(): Run | null {
     /* focus.reset() on sign-out forgets the run without a tick; a run begun before this
@@ -149,6 +166,28 @@ export const togglePause = (): Promise<void> => focus.togglePause()
 export const skip = (): Promise<void> => focus.skip()
 /** Stop & log: the study time done so far is saved as a session. */
 export const stopRun = (): Promise<void> => focus.stop()
+
+/** Back to the focus screen (the dock's Focus, or the Study view during a run), full screen again. */
+export function openFocus() {
+    ui.focus = true
+    focus.fullscreen(true)
+    renderView()
+}
+
+/** Leave the focus screen; the run goes on in the dock. The Study view would open it
+    again, so from there you land on the week. */
+export function leaveFocus() {
+    ui.focus = false
+    focus.fullscreen(false)
+    if (ui.view === "study") { ui.view = "week"; rememberUi() }
+    renderView()
+}
+
+/** Esc on the focus screen: the music panel shuts first, then the screen is left. */
+export function escapeFocus() {
+    if (ui.focusMusic) toggleMusic(false)
+    else leaveFocus()
+}
 
 /** Open or shut the focus screen's music panel. */
 export function toggleMusic(open = !ui.focusMusic) {
@@ -289,6 +328,12 @@ export function useToday(r: Run | null): { goal: number; minutes: number } {
 export function timeText(ms: number): string {
     const t = Math.max(0, Math.ceil(ms / 1000)), m = Math.min(99, Math.floor(t / 60)), s = t % 60
     return String(m).padStart(2, "0") + ":" + String(s).padStart(2, "0")
+}
+
+/** A time of day as the clock shows it: "15:40". */
+export function clockTime(ms: number): string {
+    const d = new Date(ms)
+    return String(d.getHours()).padStart(2, "0") + ":" + String(d.getMinutes()).padStart(2, "0")
 }
 
 /** The tab's title: the time left and the phase during a run. */
