@@ -84,7 +84,10 @@ function Slots({ anchor, value, onPick }: { anchor: HTMLInputElement; value: str
         document.addEventListener("scroll", put, true)
         return () => { window.removeEventListener("resize", put); document.removeEventListener("scroll", put, true) }
     }, [anchor])
-    useEffect(() => { list.current?.querySelector("[aria-selected=true]")?.scrollIntoView?.({ block: "center" }) }, [near])
+    /* the nearest time in the middle, once the list has its height (not on every scroll:
+       the list's own scrolling would pull it back) */
+    const placed = place.top !== undefined
+    useEffect(() => { if (placed) list.current?.querySelector("[aria-selected=true]")?.scrollIntoView?.({ block: "center" }) }, [near, placed])
 
     return (
         <div

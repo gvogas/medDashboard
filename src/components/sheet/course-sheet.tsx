@@ -2,7 +2,7 @@
 // and for a course with weighted items, the grades so far and what the rest needs. It is
 // a draft until Save; leaving with changes asks first.
 
-import { useEffect, useId, useMemo, useState } from "react"
+import { useEffect, useId, useMemo, useRef, useState } from "react"
 import { cn } from "@/lib/utils"
 import { colourName, KINDS, PALETTE } from "@/legacy/js/model.js"
 import { dur, DOW } from "@/legacy/js/dates.js"
@@ -31,6 +31,7 @@ export function CourseSheet({ id }: { id: string | null }) {
     /* what-if scores: never saved, gone when the sheet closes */
     const [whatIf, setWhatIf] = useState<Record<string, number>>({})
     const f = useId()
+    const keep = useRef<HTMLButtonElement>(null)
     const isNew = !stored
     const changed = courseChanged(draft, stored)
 
@@ -39,6 +40,9 @@ export function CourseSheet({ id }: { id: string | null }) {
         onRequestClose(() => { if (changed && !asking) setAsking(true); else closeSheet() })
         return () => onRequestClose(null)
     }, [changed, asking])
+
+    /* asked, the keyboard goes to Keep editing */
+    useEffect(() => { if (asking) keep.current?.focus() }, [asking])
 
     const edit = (change: Partial<Course>) => { setDraft((d) => ({ ...d, ...change })); setAsking(false) }
     const editClass = (mid: string, change: Partial<Meeting>) => edit({ meetings: draft.meetings.map((m) => (m.id === mid ? { ...m, ...change } : m)) })
@@ -118,7 +122,7 @@ export function CourseSheet({ id }: { id: string | null }) {
 
             {asking ? (
                 <SheetFoot hint={"Discard your changes to " + (draft.name.trim() || "this course") + "?"}>
-                    <Button variant="ghost" autoFocus onClick={() => setAsking(false)}>Keep editing</Button>
+                    <Button ref={keep} variant="ghost" onClick={() => setAsking(false)}>Keep editing</Button>
                     <Button variant="danger" onClick={closeSheet}>Discard</Button>
                 </SheetFoot>
             ) : (

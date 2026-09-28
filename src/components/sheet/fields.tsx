@@ -108,7 +108,8 @@ export const TextArea = ({ className, ...props }: ComponentProps<"textarea">) =>
     <textarea {...props} className={cn(CONTROL, "min-h-[92px] resize-y border-border px-3 py-2.5 text-[13px] leading-[1.55]", className)} />
 )
 
-/** A textarea that grows with what is typed: the sheet's big title. */
+/** A textarea that grows with what is typed: the sheet's big title. Its bottom padding,
+    part of the height it measures, keeps the descenders from being clipped. */
 export function TitleArea({ className, value, ...props }: ComponentProps<"textarea"> & { value: string }) {
     const ref = useRef<HTMLTextAreaElement>(null)
     useLayoutEffect(() => {
@@ -123,7 +124,7 @@ export function TitleArea({ className, value, ...props }: ComponentProps<"textar
             rows={1}
             value={value}
             {...props}
-            className={cn("w-full resize-none overflow-hidden rounded-md border-0 bg-transparent p-0 font-[inherit] text-[22px] leading-[1.22] font-[750] tracking-[-.02em] text-foreground outline-none placeholder:text-muted-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)]", className)}
+            className={cn("w-full resize-none overflow-hidden rounded-md border-0 bg-transparent px-0 pt-0 pb-1 font-[inherit] text-[22px] leading-[1.22] font-[750] tracking-[-.02em] text-foreground outline-none placeholder:text-muted-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)]", className)}
         />
     )
 }
