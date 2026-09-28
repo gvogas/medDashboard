@@ -1,12 +1,9 @@
-// The page: sidebar, stats and whichever view is chosen. The top bar is React
-// (src/components/top-bar.tsx); notify() tells it to redraw.
+// The views still drawn here: Spotify, Study and the focus screen, in #viewRoot. The top
+// bar, the stat tiles and the week, month and table are React (src/components/); notify()
+// tells them to redraw.
 
 import { ui } from '../state.js';
 import { $, keepFocus, setHTML } from '../dom.js';
-import { renderStats } from './stats.js';
-import { renderWeek } from './week.js';
-import { renderMonth } from './month.js';
-import { renderTable } from './table.js';
 import { renderSpotifyInto } from './spotify-view.js';
 import { renderStudy, renderFocus } from './study.js';
 import { notify } from '../../../bridge.ts';
@@ -22,19 +19,16 @@ function drawView() {
   const root = $('viewRoot'), focusing = ui.focus;
   document.documentElement.classList.toggle('focusing', focusing);
   $('focusClock').hidden = !focusing;
-  $('stats').hidden = ui.view === 'spotify' || ui.view === 'study';
+  /* the week, month and table are React's, in #views */
+  const legacy = focusing || ui.view === 'spotify' || ui.view === 'study';
+  root.hidden = !legacy;
+  if (!legacy) { root.replaceChildren(); return; }
   if (focusing) renderFocus();
-  root.className = focusing || ui.view === 'table' || ui.view === 'spotify' ? 'own-scroll' : '';   /* these scroll their own rows */
+  root.className = focusing || ui.view === 'spotify' ? 'own-scroll' : '';   /* these scroll their own rows */
   root.dataset.view = focusing ? 'spotify' : ui.view;
   if (showsSpotify()) { renderSpotifyInto(root); return; }
-  if (ui.view === 'study') { setHTML(root, renderStudy()); return; }
-  setHTML(root, ui.view === 'week' ? renderWeek() : ui.view === 'month' ? renderMonth() : renderTable());
+  setHTML(root, renderStudy());
 }
 
-export function render() {
-  keepFocus(() => {
-    renderStats();
-    drawView();
-  });
-  notify();
-}
+/** Everything else on the page is React and redraws on notify(), so this is renderView. */
+export const render = renderView;

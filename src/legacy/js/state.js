@@ -13,7 +13,7 @@ export const ui = {
   theme: (typeof window !== 'undefined' && window.__roundsTheme) || 'system',
   bg: (typeof window !== 'undefined' && window.__roundsBg) || 'med',     /* background art: 'med' | 'cs' */
   quoteIx: 0,
-  monthDeadlines: true,    /* the month view shows dated items beside the classes */
+  schedule: 'all',         /* the week and month show 'all', 'deadlines' or 'classes' */
   importPlan: null,        /* the import preview: { plan, name } */
   fillNote: null,          /* what "Fill topics" did, shown in the exam drawer until it closes */
   importNote: null,
@@ -41,11 +41,12 @@ export const ui = {
 try {
   const saved = JSON.parse(localStorage.getItem(KEY) || '{}');
   if (['week', 'month', 'table', 'spotify', 'study'].includes(saved.view)) ui.view = saved.view;
-  if (typeof saved.monthDeadlines === 'boolean') ui.monthDeadlines = saved.monthDeadlines;
+  if (['all', 'deadlines', 'classes'].includes(saved.schedule)) ui.schedule = saved.schedule;
+  else if (saved.monthDeadlines === false) ui.schedule = 'classes';   /* the month's old Deadlines toggle */
 } catch {}
 
 export function rememberUi() {
-  try { localStorage.setItem(KEY, JSON.stringify({ view: ui.view, monthDeadlines: ui.monthDeadlines })); } catch {}
+  try { localStorage.setItem(KEY, JSON.stringify({ view: ui.view, schedule: ui.schedule })); } catch {}
   try { localStorage.setItem('rounds.theme', ui.theme); } catch {}
   try { localStorage.setItem('rounds.bg', ui.bg); } catch {}
 }

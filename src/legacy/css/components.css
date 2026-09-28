@@ -1,49 +1,6 @@
-/* Rounds — components: stats, panels, month, table, drawer, settings. */
-/* ─── stats ─── */
-.stats[hidden]{display:none}
-.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:9px;position:relative;z-index:1}
-.stat{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:9px 12px;position:relative;overflow:hidden;min-width:0}
-.stat .lab{font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-2)}
-.stat .val{font-size:22px;font-weight:700;line-height:1.25;font-variant-numeric:tabular-nums}
-.stat .val small{font-size:11px;font-weight:500;color:var(--ink-2)}
-.stat .foot{font-size:10.5px;color:var(--ink-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.stat.hot{border-color:var(--red-line);background:var(--hot-bg)}
-.stat.hot .val{color:var(--crit)}
-.stat.hot .lab{color:var(--hot-lab)}
-.stat .foot .ttag{font-size:9.5px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--hot-lab);margin-right:5px}
-.ecg{display:block;width:100%;height:16px;color:var(--crit);margin-top:1px}
-.mol{position:absolute;right:-12px;bottom:-16px;width:74px;height:74px;color:var(--accent);opacity:calc(.6*var(--orn-art))}
-
-/* quote tile — sits in the stats strip, click for the next one */
-.stat.qcard{
-  grid-column:span 2;display:flex;flex-direction:column;justify-content:center;gap:5px;
-  text-align:left;padding:11px 14px 12px;font:inherit;cursor:pointer;
-  background:linear-gradient(135deg, var(--panel) 40%, color-mix(in srgb, var(--accent) 7%, var(--panel)));
-  border-color:color-mix(in srgb, var(--accent) 24%, var(--line));
-}
-.stat.qcard:hover{border-color:color-mix(in srgb, var(--accent) 52%, var(--line))}
-.stat.qcard .qm{
-  position:absolute;right:9px;top:-10px;font-family:"Spectral",Georgia,serif;font-size:62px;line-height:1;
-  color:color-mix(in srgb, var(--accent) 15%, transparent);pointer-events:none;
-}
-.stat.qcard .qt{
-  font-family:"Spectral",Georgia,serif;font-style:italic;font-size:13.5px;line-height:1.45;color:var(--ink);
-  display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;
-  padding-right:26px;text-wrap:pretty;
-}
-.stat.qcard .qs{
-  display:flex;align-items:baseline;gap:8px;font-size:9.5px;letter-spacing:.11em;text-transform:uppercase;
-  color:var(--ink-3);
-}
-.stat.qcard .qs::before{content:"—";letter-spacing:0;opacity:.7}
-.stat.qcard .qs em{margin-left:auto;font-style:normal;letter-spacing:.04em;opacity:.8;font-variant-numeric:tabular-nums}
-.stat.qcard.empty .qt{color:var(--ink-3)}
-@media (max-width:560px){.stat.qcard{grid-column:span 2}}
-
+/* Rounds — components: panels, drawer, settings. The stat tiles and the week, month and
+   table views are React (src/components/views/). */
 /* ─── panels ─── */
-.cols{display:grid;grid-template-columns:minmax(0,1fr) 256px;gap:13px;align-items:start}
-@media (max-width:1040px){.cols{grid-template-columns:minmax(0,1fr)}}
-.aside-col{display:grid;gap:13px;min-width:0}
 .panel{background:var(--panel);border:1px solid var(--line);border-radius:12px;position:relative;overflow:hidden;min-width:0}
 .panel+.panel{margin-top:13px}
 .ph{
@@ -51,38 +8,6 @@
   font-size:11px;letter-spacing:.12em;text-transform:uppercase;font-weight:600;color:var(--ink-2);
 }
 .ph em{font-style:normal;margin-left:auto;font-size:10px;color:var(--ink-3);letter-spacing:.04em}
-.helix-rule{display:block;width:100%;height:11px;color:var(--accent);opacity:calc(.8*var(--orn-art))}
-
-.day{
-  padding:6px 13px 5px;font-size:10px;letter-spacing:.14em;text-transform:uppercase;font-weight:600;
-  color:var(--ink-2);background:var(--panel-2);border-top:1px solid var(--line);border-bottom:1px solid var(--line);
-  display:flex;gap:8px;align-items:center;
-}
-.day.is-today{color:var(--accent-ink);background:var(--accent-soft)}
-.day .today-tag{font-size:9px;letter-spacing:.1em;border:1px solid currentColor;border-radius:999px;padding:0 5px}
-.day .free{font-size:10px;letter-spacing:.04em;text-transform:none;color:var(--ink-3);font-weight:500}
-.dayclasses{display:flex;flex-wrap:wrap;gap:4px;padding:6px 13px;border-bottom:1px solid var(--line-2)}
-.dayclasses .mchip{width:auto;max-width:100%;font-size:11px}
-.day .add{margin-left:auto;border:0;background:transparent;color:var(--ink-3);font-size:14px;line-height:1;padding:0 2px}
-.day .add:hover{color:var(--accent)}
-
-.row{
-  display:grid;grid-template-columns:50px minmax(0,1fr) auto;gap:11px;padding:9px 13px;align-items:baseline;
-  width:100%;border:0;background:transparent;text-align:left;border-left:3px solid transparent;
-}
-.row+.row{border-top:1px solid var(--line-2)}
-.row:hover{background:var(--panel-2)}
-.row.tint{border-left-color:var(--c)}
-.row.complete{background:var(--done)}
-.row.complete:hover{background:var(--done-2)}
-.row.complete+.row.complete{border-top-color:var(--done-line)}
-.row .when{font-size:11px;color:var(--ink-2);padding-top:1px}
-.row .what{min-width:0}
-.row .t{font-weight:600;display:block;overflow-wrap:anywhere}
-.row .m{font-size:11px;color:var(--ink-2);display:block;overflow-wrap:anywhere}
-.row.complete .m{color:var(--done-ink)}
-.row .t.struck{text-decoration:line-through;color:var(--ink-2);font-weight:500}
-.badges{display:flex;gap:5px;align-items:center;flex-wrap:wrap;justify-content:flex-end}
 .chip{
   font-size:10.5px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;padding:2px 8px;
   border-radius:999px;white-space:nowrap;background:var(--chip-bg);color:var(--chip-ink);border:1px solid transparent;
@@ -92,25 +17,9 @@
 .chip.st-submitted,.chip.st-graded,.chip.st-done{background:var(--pink-bg);color:var(--pink-ink)}
 .chip.st-missed{background:var(--red-bg);color:var(--red-ink)}
 .chip.overdue{background:var(--red-bg);color:var(--red-ink);border-color:var(--red-line)}
-.chip.soon{background:var(--amber-bg);color:var(--amber-ink)}
 .empty{padding:22px 14px;text-align:center;color:var(--ink-3);font-size:12.5px}
 .empty b{display:block;color:var(--ink-2);font-weight:600;margin-bottom:3px}
 
-.oh{width:100%;border-collapse:collapse;font-size:11.5px}
-.oh th{text-align:left;font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;font-weight:600;color:var(--ink-3);padding:6px 13px}
-.oh td{padding:7px 13px;vertical-align:top}
-.oh tr+tr td{border-top:1px solid var(--line-2)}
-.oh tbody tr:hover{background:var(--panel-2);cursor:pointer}
-.oh .w{white-space:nowrap;color:var(--ink-2);font-size:11px}
-.oh .dept{color:var(--ink-3)}
-.oh .next{position:relative;padding-left:31px}
-.oh .next .mini-scope{position:absolute;left:11px;top:6px;width:15px;height:15px;color:var(--accent);opacity:calc(var(--orn-art)+.4)}
-
-.task{display:flex;gap:9px;padding:7px 13px;align-items:flex-start;font-size:12.5px}
-.task+.task{border-top:1px solid var(--line-2)}
-.task:hover{background:var(--panel-2)}
-.task.done{background:var(--done)}
-.task.done:hover{background:var(--done-2)}
 .box{
   width:14px;height:14px;flex:none;margin-top:2px;border-radius:4px;border:1.5px solid var(--box-line);
   background:transparent;padding:0;display:grid;place-items:center;position:relative;
@@ -118,81 +27,6 @@
 .box[aria-pressed="true"]{background:#D2748F;border-color:#D2748F}
 .box svg{width:9px;height:9px;color:#fff;opacity:0}
 .box[aria-pressed="true"] svg{opacity:1}
-.task .tx{flex:1;min-width:0;overflow-wrap:anywhere;cursor:pointer;border:0;background:transparent;padding:0;text-align:left;font:inherit;color:inherit}
-.task.done .tx{text-decoration:line-through;color:var(--done-ink)}
-.task .meta{font-size:10.5px;color:var(--ink-3)}
-.steroid{position:absolute;right:8px;bottom:6px;width:88px;height:58px;color:var(--accent);opacity:calc(.5*var(--orn-art));pointer-events:none}
-.quick{display:flex;gap:7px;padding:9px 13px;border-top:1px solid var(--line-2)}
-.quick input{flex:1;min-width:0;border:1px solid var(--line);border-radius:7px;padding:5px 9px;font-size:12px;background:var(--panel-2)}
-
-/* ─── month: class schedule ─── */
-.month{display:grid;grid-template-columns:repeat(7,minmax(0,1fr))}
-.mhead{font-size:9.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-3);font-weight:600;padding:8px;border-bottom:1px solid var(--line);text-align:center}
-.cell{
-  min-height:92px;border-right:1px solid var(--line-2);border-bottom:1px solid var(--line-2);
-  padding:5px 6px;display:flex;flex-direction:column;gap:3px;background:transparent;text-align:left;border-top:0;border-left:0;
-}
-.cell:nth-child(7n){border-right:0}
-.cell:hover{background:var(--panel-2)}
-.cell.out{background:var(--cell-out);color:var(--ink-3)}
-.cell .dnum{font-size:11px;color:var(--ink-2);font-variant-numeric:tabular-nums;display:flex;align-items:center;gap:4px}
-.cell.is-today .dnum{color:var(--on-accent);background:var(--accent);border-radius:999px;width:19px;height:19px;justify-content:center;font-weight:600}
-.mchip{
-  display:block;font-size:10.5px;padding:2px 5px;border-radius:5px;width:100%;text-align:left;border:0;
-  background:color-mix(in srgb, var(--c) 13%, var(--panel));color:color-mix(in srgb, var(--c) 84%, var(--ink));
-  overflow:hidden;white-space:nowrap;text-overflow:ellipsis;border-left:2px solid var(--c);
-}
-.mchip b{font-weight:600}
-.mchip .rm{color:color-mix(in srgb, var(--c) 50%, var(--ink-2))}
-.more{font-size:10px;color:var(--ink-3);padding-left:4px}
-.mchip.due{background:color-mix(in srgb, var(--c) 24%, var(--panel));font-weight:600;border-left-width:3px}
-.ph-toggle{
-  border:1px solid var(--line);background:var(--panel);border-radius:999px;padding:2px 9px;margin-left:6px;
-  font:inherit;font-size:10px;letter-spacing:.06em;color:var(--ink-2);
-}
-.ph-toggle[aria-pressed="true"]{background:var(--accent-soft);border-color:var(--accent);color:var(--accent-ink)}
-@media (max-width:700px){.cell{min-height:70px;padding:4px}.mchip{font-size:9.5px}}
-
-/* weekly timetable strip */
-.tt{display:grid;grid-template-columns:repeat(auto-fit,minmax(148px,1fr));gap:0}
-.ttcol{border-right:1px solid var(--line-2);padding:0 0 8px}
-.ttcol:last-child{border-right:0}
-.ttday{
-  font-size:9.5px;letter-spacing:.12em;text-transform:uppercase;font-weight:600;color:var(--ink-2);
-  padding:8px 11px 7px;background:var(--panel-2);border-bottom:1px solid var(--line-2);display:flex;gap:6px;
-}
-.ttday em{font-style:normal;margin-left:auto;color:var(--ink-3);letter-spacing:0;text-transform:none;font-weight:500}
-.ttcard{
-  margin:7px 9px 0;padding:7px 9px;border-radius:9px;border:1px solid var(--line);border-left:3px solid var(--c);
-  background:var(--panel);width:calc(100% - 18px);text-align:left;
-}
-.ttcard:hover{border-color:var(--c)}
-.ttcard .tm{font-size:10.5px;color:var(--ink-2);font-family:"IBM Plex Mono",ui-monospace,monospace;font-variant-numeric:tabular-nums}
-.ttcard .nm{font-weight:600;font-size:12.5px;display:block;overflow-wrap:anywhere}
-.ttcard .rm{font-size:11px;color:var(--ink-2);display:block}
-.ttcard .kd{font-size:9.5px;letter-spacing:.08em;text-transform:uppercase;color:color-mix(in srgb, var(--c) 72%, var(--ink))}
-.ttnone{font-size:11.5px;color:var(--ink-3);padding:9px 11px}
-
-/* ─── table ─── */
-/* only the rows scroll: the panel fills the frame, the header row stays put */
-.panel.fill{display:flex;flex-direction:column;min-height:0;flex:1}
-.tablewrap{flex:1;min-height:0;overflow:auto;overscroll-behavior:contain}
-table.tbl{width:100%;border-collapse:collapse;font-size:12.5px;min-width:680px}
-table.tbl th{
-  text-align:left;font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-2);font-weight:600;
-  padding:9px 12px;border-bottom:1px solid var(--line);white-space:nowrap;background:var(--panel-2);position:sticky;top:0;
-}
-table.tbl th button{border:0;background:transparent;font:inherit;color:inherit;padding:0;display:inline-flex;gap:4px;align-items:center}
-table.tbl th .ar{color:var(--accent)}
-table.tbl td{padding:9px 12px;border-bottom:1px solid var(--line-2);vertical-align:top}
-table.tbl tbody tr:hover{background:var(--panel-2);cursor:pointer}
-table.tbl tbody tr.complete{background:var(--done)}
-table.tbl tbody tr.complete:hover{background:var(--done-2)}
-table.tbl tbody tr.complete td{border-bottom-color:var(--done-line)}
-table.tbl td.num{white-space:nowrap;color:var(--ink-2);font-size:11.5px}
-.course-tag{display:inline-flex;align-items:center;gap:5px;font-size:11.5px;color:var(--ink-2);white-space:nowrap}
-.course-tag i{width:7px;height:7px;border-radius:2px;background:var(--c);flex:none}
-
 /* ─── the Spotify view ─── */
 .spot-view{display:flex;flex-direction:column;gap:12px;min-height:0;flex:1}
 .spot-top{display:flex;align-items:center;gap:12px;flex-wrap:wrap;position:relative;z-index:3}
@@ -376,21 +210,6 @@ input[aria-invalid="true"]{border-color:var(--red-ink);outline-color:var(--red-i
 .meter.pink{background:linear-gradient(90deg,#EFAEC3,#D9648C)}
 .meter.pink.full{background:linear-gradient(90deg,#DE7A9C,#C8517A)}
 @media (prefers-reduced-motion:reduce){.meter{transition:none}}
-/* CS stat cards: a blocky, terminal-style bar and a code-comment quote tile */
-:root[data-bg="cs"] .stat .meterwrap{border-radius:2px;height:8px}
-:root[data-bg="cs"] .stat .meter{border-radius:0;background:repeating-linear-gradient(90deg, var(--accent) 0 6px, transparent 6px 8px)}
-:root[data-bg="cs"] .stat.qcard .qm{font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:40px;font-weight:600;top:2px;right:10px}
-:root[data-bg="cs"] .stat.qcard .qt{font-family:"IBM Plex Mono",ui-monospace,monospace;font-style:normal;font-size:12px;line-height:1.55}
-:root[data-bg="cs"] .stat.qcard .qs{font-family:"IBM Plex Mono",ui-monospace,monospace;text-transform:none;letter-spacing:0}
-:root[data-bg="cs"] .stat.qcard .qs::before{content:"//"}
-/* checklist progress next to a row's step count */
-.steps{display:inline-flex;align-items:center;gap:6px;font-size:10.5px;color:var(--ink-2);margin-top:4px}
-.stepbar{width:54px;height:5px;border-radius:999px;background:var(--line-2);overflow:hidden;flex:none}
-.stepbar i{display:block;height:100%;border-radius:999px;background:linear-gradient(90deg,#EFAEC3,#D9648C)}
-.stepbar i.full{background:linear-gradient(90deg,#DE7A9C,#C8517A)}
-.row.complete .stepbar{background:var(--done-track)}
-td .steps{margin-top:3px}
-
 /* course editor bits */
 .swatchrow{display:flex;gap:7px;flex-wrap:wrap}
 .swatch{
@@ -511,28 +330,6 @@ td .steps{margin-top:3px}
 .tp-pop button:hover{background:var(--panel-2)}
 .tp-pop button.on{background:var(--accent-soft);color:var(--accent-ink);font-weight:600}
 
-/* ═════════ quote tile: a little life ═════════ */
-.stat.qcard{overflow:hidden}
-/* a faint band of light drifting across the paper — one compositor-only transform */
-.stat.qcard::after{
-  content:"";position:absolute;top:-60%;bottom:-60%;left:-40%;width:45%;pointer-events:none;
-  background:linear-gradient(100deg, transparent 0%, color-mix(in srgb, var(--accent) 9%, transparent) 50%, transparent 100%);
-  transform:translateX(-120%) rotate(8deg);animation:qSheen 11s ease-in-out infinite;
-}
-/* the big quotation mark breathes, slowly */
-.stat.qcard .qm{animation:qBreathe 7s ease-in-out infinite;transform-origin:center}
-.stat.qcard:hover .qm{color:color-mix(in srgb, var(--accent) 28%, transparent);transition:color .4s}
-/* when the quote changes: the words rise in and sharpen, the mark blooms */
-.stat.qcard.swap .qt,.stat.qcard.swap .qs{animation:qIn .6s cubic-bezier(.2,.7,.2,1) both}
-.stat.qcard.swap .qs{animation-delay:.12s}
-.stat.qcard.swap .qm{animation:qBloom .7s cubic-bezier(.2,.7,.2,1) both, qBreathe 7s ease-in-out .7s infinite}
-@keyframes qSheen{0%,55%{transform:translateX(-120%) rotate(8deg)}100%{transform:translateX(420%) rotate(8deg)}}
-@keyframes qBreathe{0%,100%{transform:translateY(0) scale(1)}50%{transform:translateY(-2px) scale(1.04)}}
-@keyframes qIn{from{opacity:0;transform:translateY(7px);filter:blur(3px)}to{opacity:1;transform:none;filter:blur(0)}}
-@keyframes qBloom{from{opacity:0;transform:scale(.6) rotate(-8deg)}to{opacity:1;transform:none}}
-@media (prefers-reduced-motion:reduce){
-  .stat.qcard::after,.stat.qcard .qm,.stat.qcard.swap .qt,.stat.qcard.swap .qs,.stat.qcard.swap .qm{animation:none}
-}
 .fx-canvas{position:fixed;inset:0;width:100vw;height:100vh;pointer-events:none;z-index:70}
 
 /* Shared presentation rules extracted from view markup. */
@@ -542,9 +339,7 @@ td .steps{margin-top:3px}
 [data-layout="4fb706c9"] { flex-direction:column;gap:6px; }
 [data-layout="544c3831"] { font-size:11.5px;color:var(--ink-3); }
 [data-layout="69374f35"] { display:flex;gap:6px; }
-[data-layout="6e8bcfac"] { font-weight:600; }
 [data-layout="798c9fe1"] { flex:0 0 96px; }
-[data-layout="ae860f94"] { color:var(--ink-3); }
 [data-layout="b282c623"] { color:var(--good); }
 [data-layout="c75d1a93"] { font-weight:500;display:inline; }
 [data-layout="d5cb2920"] { width:14px;height:14px;accent-color:var(--accent); }
@@ -619,26 +414,8 @@ td .steps{margin-top:3px}
   .bar{backdrop-filter:none;gap:8px;padding:10px 16px}
   .seg button{padding:8px 10px}
   .scroll{flex:none;overflow:visible;padding-bottom:84px}
-  #viewRoot,#viewRoot.own-scroll{flex:none;overflow:visible;display:block;padding-right:0}
+  #viewRoot,#viewRoot.own-scroll,#views,#views.own-scroll{flex:none;overflow:visible;display:block;padding-right:0}
   #viewRoot[data-view="spotify"]{height:calc(100dvh - 32px);display:flex;flex-direction:column;overflow:hidden}
-
-  /* stats: one row you swipe along */
-  .stats{display:flex;overflow-x:auto;scroll-snap-type:x mandatory;margin:0 -16px;padding:0 16px 2px;scrollbar-width:none}
-  .stats::-webkit-scrollbar{display:none}
-  .stat{flex:0 0 136px;scroll-snap-align:start}
-  .stat.qcard{flex-basis:250px}
-
-  /* table: a card per item */
-  .tablewrap{overflow:visible}
-  table.tbl{min-width:0}
-  table.tbl thead{display:none}
-  table.tbl,table.tbl tbody{display:block}
-  table.tbl tr{display:flex;flex-wrap:wrap;align-items:center;gap:5px 10px;position:relative;padding:11px 13px;border-bottom:1px solid var(--line-2)}
-  table.tbl td{display:block;padding:0;border:0}
-  table.tbl td:first-child{flex:1 1 100%;padding-right:96px;font-size:13.5px}
-  table.tbl td:last-child:not(:first-child){position:absolute;top:10px;right:13px}
-  table.tbl td.none{display:none}
-  table.tbl tbody tr.complete td{border:0}
 }
 
 /* the keyboard shortcuts panel (views/keys.js) */
@@ -685,31 +462,11 @@ kbd{display:inline-block;min-width:22px;padding:2px 6px;border:1px solid var(--l
 
 /* ── touch screens: every small control gets a finger-sized hit area; the look is unchanged ── */
 @media (pointer:coarse){
-  .box::after,.day .add::after,.cl-item .x::after{content:"";position:absolute;inset:-14px}
-  .day .add,.cl-item .x{position:relative}
+  .box::after,.cl-item .x::after{content:"";position:absolute;inset:-14px}
+  .cl-item .x{position:relative}
   .icon-btn{min-width:40px;min-height:40px}
   .cl-item .x{opacity:1;padding:4px 8px}
 }
-
-/* ─── the school calendar: days off, the break, exams, markers, week numbers ─── */
-.cell.sd-off{background:repeating-linear-gradient(135deg,var(--cell-out) 0 6px,transparent 6px 12px)}
-.cell.sd-break{background:color-mix(in srgb,var(--good) 10%,var(--panel))}
-.cell.sd-exams{background:var(--amber-bg)}
-.cell.sd-none{background:var(--cell-out)}
-.cell.sd-none .dnum{color:var(--ink-3)}
-.sdtag{display:inline-flex;align-items:center;gap:4px;max-width:100%;font-size:9.5px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;border-radius:4px;padding:1px 5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:none}
-.sdtag.off{background:var(--chip-bg);color:var(--ink-2)}
-.sdtag.break{background:color-mix(in srgb,var(--good) 20%,var(--panel));color:var(--good)}
-.sdtag.exams{background:color-mix(in srgb,var(--warn) 22%,var(--panel));color:var(--amber-ink)}
-.sdtag.swap{background:var(--accent-soft);color:var(--accent-ink)}
-.sdtag.note{background:none;color:var(--ink-3);padding-left:0;text-transform:none;letter-spacing:0;font-weight:600}
-.sdtag.note::before{content:"";width:6px;height:6px;border-radius:50%;background:var(--ink-3);flex:none}
-.cell .gone{font-size:10px;color:var(--ink-3);font-style:italic;padding-left:2px}
-.ph .wkr{margin-left:10px;font-size:10.5px;letter-spacing:.04em;font-weight:700;color:var(--accent-ink);background:var(--accent-soft);border-radius:99px;padding:2px 9px;text-transform:none}
-.day .sdtag{font-size:9px}
-.day.sd-off,.day.sd-none{background:repeating-linear-gradient(135deg,var(--cell-out) 0 6px,transparent 6px 12px)}
-.day.sd-break{background:color-mix(in srgb,var(--good) 10%,var(--panel))}
-.day.sd-exams{background:var(--amber-bg)}
 
 /* Settings, and the drawer that checks a calendar before it is saved */
 .school-now{display:flex;flex-direction:column;gap:1px;font-size:12.5px;color:var(--ink-2)}

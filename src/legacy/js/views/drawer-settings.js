@@ -10,7 +10,7 @@ import { state as web } from '../web-player.js';
 import { SPOTIFY_MARK } from './player.js';
 import { api, spotifyRetryAt } from '../api.js';
 import { readSetting } from '../reviews.js';
-import { renderQuote } from './stats.js';
+import { notify } from '../../../bridge.ts';
 import { schoolGroup } from './drawer-school.js';
 
 export function openSettings(focus) {
@@ -359,5 +359,5 @@ export async function addQuote() {
   await saveQuote({ id: uid(), text: t.value.trim().replace(/^[“"']|[”"']$/g, ''), source: s ? s.value.trim() : '' });
   ui.quoteIx = data.quotes.length - 1;
   ui.focusField = 'qText';
-  renderSettings(); renderQuote();
+  renderSettings(); notify();
 }

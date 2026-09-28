@@ -1,12 +1,10 @@
 // The keyboard: single-key shortcuts, Escape closing whatever is on top, Enter in the
 // small add-a-thing boxes.
 
-import * as store from './store.js';
 import { ui } from './state.js';
-import { uid, normalizeItem, httpUrl } from './model.js';
-import { today } from './dates.js';
+import { uid, httpUrl } from './model.js';
 import { $, isTyping } from './dom.js';
-import { render, renderView } from './views/render.js';
+import { renderView } from './views/render.js';
 import { drawerOpen, setSide } from './views/drawer-base.js';
 import { current, saveDraft, touch, renderItemDrawer } from './views/drawer-item.js';
 import { leaveDrawer, saveCourseDraft } from './views/drawer-course.js';
@@ -44,8 +42,6 @@ export async function onKeydown(e) {
     return;
   }
   if (shortcut(e)) return;
-  /* Rows that open an item (table and office-hour rows) take Enter and Space like a button. */
-  if ((e.key === 'Enter' || e.key === ' ') && e.target.matches?.('tr[data-id][tabindex]')) { e.preventDefault(); e.target.click(); return; }
   /* The Spotify view: / to search, space to play or pause, when not typing or on a button. */
   if (ui.view === 'spotify' && !e.ctrlKey && !e.metaKey && !e.altKey && !/^(input|textarea|select|button|a)$/i.test(e.target.tagName)
       && !e.target.isContentEditable && !drawerOpen()) {
@@ -89,12 +85,6 @@ export async function onKeydown(e) {
     renderItemDrawer(); return;
   }
   if (e.target.id === 'qText' || e.target.id === 'qSrc') { e.preventDefault(); addQuote(); return; }
-  if (e.target.id === 'quickTask' && e.target.value.trim()) {
-    await store.saveItem(normalizeItem({ id: uid(), type: 'task', title: e.target.value.trim(), courseId: ui.course === 'all' ? null : ui.course, date: today(), status: 'todo' }));
-    render();
-    const q = $('quickTask'); if (q) q.focus();
-    return;
-  }
   if (ui.draft && e.target.classList.contains('dtitle')) { e.preventDefault(); saveDraft(); return; }
   if (ui.courseDraft && e.target.classList.contains('dtitle')) { e.preventDefault(); saveCourseDraft(); return; }
 }

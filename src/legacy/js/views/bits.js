@@ -1,23 +1,6 @@
-// Small HTML fragments shared by the week board, the table and the drawers.
+// Small HTML fragments shared by the drawers.
 
 import { esc } from '../dom.js';
-import { isOverdue, statusLabel } from '../model.js';
-
-/* checklist progress — the bar fills in pink as steps get ticked */
-export function stepsHtml(it) {
-  const cl = it.checklist || [];
-  if (!cl.length) return '';
-  const done = cl.filter((x) => x.done).length;
-  return '<span class="steps"><span class="stepbar"><i class="' + (done === cl.length ? 'full' : '') + '" data-width="'
-    + Math.round(done / cl.length * 100) + '"></i></span>'
-    + (done === cl.length ? 'all ' + cl.length + ' steps done' : done + ' of ' + cl.length + ' steps') + '</span>';
-}
-
-export function statusChip(it) {
-  if (isOverdue(it)) return '<span class="chip overdue">Overdue</span>';
-  return '<span class="chip st-' + esc(it.status) + '">' + esc(statusLabel(it))
-    + (it.status === 'graded' && typeof it.grade === 'number' ? ' ' + it.grade + '%' : '') + '</span>';
-}
 
 export const CHECK_SVG = '<svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M2 6.5l2.6 2.6L10 3.5"/></svg>';
 

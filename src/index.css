@@ -48,3 +48,20 @@
   --font-sans: Figtree, system-ui, sans-serif;
   --font-mono: "IBM Plex Mono", ui-monospace, monospace;
 }
+
+/* index.html's containers that React fills. #stats: the tiles in a row that wraps; on a
+   phone, one row you swipe along. */
+@layer components {
+  #stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 9px; position: relative; z-index: 1; }
+  #stats[hidden] { display: none; }
+  @media (max-width: 700px) {
+    #stats { display: flex; overflow-x: auto; scroll-snap-type: x mandatory; margin: 0 -16px; padding: 0 16px 2px; scrollbar-width: none; }
+    #stats::-webkit-scrollbar { display: none; }
+  }
+}
+
+/* The quote tile's new quote rises in and sharpens. */
+@keyframes quote-rise {
+  from { opacity: 0; transform: translateY(7px); filter: blur(3px); }
+  to { opacity: 1; transform: none; filter: blur(0); }
+}

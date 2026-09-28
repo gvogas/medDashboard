@@ -54,7 +54,7 @@ export default defineConfig(async () => {
           resolve: { alias: { '@': path.resolve(import.meta.dirname, 'src') } },
           test: {
             name: 'dom',
-            include: ['src/**/*.test.tsx'],
+            include: ['src/**/*.test.{ts,tsx}'],
             environment: 'jsdom',
             // The first test in a file waits for React and Framer Motion to load.
             testTimeout: 20_000,

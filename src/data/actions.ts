@@ -5,18 +5,22 @@
 import * as store from "@/legacy/js/store.js"
 import { data } from "@/legacy/js/store.js"
 import * as sync from "@/legacy/js/sync.js"
-import { typeList, typePrefsFrom, uid, TYPE_COLOURS, MAX_CUSTOM_TYPES } from "@/legacy/js/model.js"
+import { isOpen, normalizeItem, typeList, typePrefsFrom, uid, TYPE_COLOURS, MAX_CUSTOM_TYPES } from "@/legacy/js/model.js"
 import { typeOn } from "@/legacy/js/query.js"
 import { addDays, iso, parse, today } from "@/legacy/js/dates.js"
 import { render, renderView } from "@/legacy/js/views/render.js"
 import { closeDrawer, setSide } from "@/legacy/js/views/drawer-base.js"
-import { newItem as openNewItem } from "@/legacy/js/views/drawer-item.js"
+import { celebrate, chainReview, newItem as openNewItem, openItem as openItemDrawer, setStatus, touch } from "@/legacy/js/views/drawer-item.js"
 import { openCourse as openCourseDrawer } from "@/legacy/js/views/drawer-course.js"
 import { openSettings as openSettingsDrawer } from "@/legacy/js/views/drawer-settings.js"
+import { rememberUi } from "@/legacy/js/state.js"
+import { launch as fireworks } from "@/legacy/js/fireworks.js"
+import { notify } from "@/bridge"
+import { setView } from "@/legacy/js/study-controller.js"
 import { ui } from "./ui"
-import type { Item, ItemType } from "./types"
+import type { Item, ItemType, Schedule, SortKey } from "./types"
 
-export { setView } from "@/legacy/js/study-controller.js"
+export { setView }
 
 /* ── the date and the view ── */
 
@@ -127,9 +131,77 @@ export async function reorderTypes(ids: string[]) {
 /* ── drawers, the sidebar on phones, sync ── */
 
 export const newItem = () => openNewItem(ui.anchor)
+export const newItemOn = (date: string) => openNewItem(date)
+export const openItem = (id: string) => openItemDrawer(id)
 export const openCourse = (id: string | null) => openCourseDrawer(id)
 /** Settings, opened at a field (as the coat's pencil does), or shut if it is open. */
 export const openSettings = (focusId?: string) => openSettingsDrawer(focusId)
 export const toggleSettings = () => (ui.settings ? closeDrawer() : openSettingsDrawer())
 export const showSidebar = (open: boolean) => setSide(open)
 export const syncNow = () => sync.syncNow()
+
+/* ── the views ── */
+
+/** Everything, the deadlines or the classes, on the week and month; remembered. */
+export function setSchedule(tab: Schedule) {
+    ui.schedule = tab
+    rememberUi()
+    notify()
+}
+
+/** A month cell: that day's week. */
+export function goToDay(date: string) {
+    ui.anchor = date
+    ui.view = "week"
+    rememberUi()
+    render()
+}
+
+/** Sort the table by a column; the same column again flips the order. */
+export function sortTable(key: SortKey) {
+    if (ui.sort.key === key) ui.sort.dir = ui.sort.dir === 1 ? -1 : 1
+    else ui.sort = { key, dir: 1 }
+    notify()
+}
+
+/** Tick a task off or back on. Finishing one celebrates from `from` and books its next review. */
+export async function toggleTask(id: string, from?: Element) {
+    const it = store.item(id) as Item | null
+    if (!it) return
+    const finishing = isOpen(it)
+    if (finishing && from) celebrate(from)
+    setStatus(it, finishing ? "done" : "todo")
+    await touch(it)
+    await chainReview(it)
+    render()
+}
+
+/** A task for today, in the course being shown. */
+export async function quickAddTask(title: string) {
+    const text = title.trim()
+    if (!text) return
+    await store.saveItem(normalizeItem({ id: uid(), type: "task", title: text, courseId: ui.course === "all" ? null : ui.course, date: today(), status: "todo" }))
+    render()
+}
+
+/**
+ * The quote tile: the next quote, with fireworks from `from` when clicked. With fewer
+ * than two there is nothing to turn to, so a click opens Settings at the quote field.
+ * Returns whether it turned.
+ */
+export function nextQuote(from?: Element): boolean {
+    if (from) {
+        const r = from.getBoundingClientRect()
+        fireworks(r.left + r.width / 2, r.top + 4)
+    }
+    const n = (data.quotes as unknown[]).length
+    if (n < 2) {
+        if (from) openSettingsDrawer("qText")
+        return false
+    }
+    ui.quoteIx = (ui.quoteIx + 1) % n
+    notify()
+    return true
+}
+
+export const openStudy = () => setView("study")

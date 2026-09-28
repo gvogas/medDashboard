@@ -12,6 +12,8 @@ import { TopBar } from "@/components/top-bar"
 import { Sidebar } from "@/components/sidebar"
 import { SignIn } from "@/components/sign-in"
 import { Toaster } from "@/components/toaster"
+import { Stats } from "@/components/views/stats"
+import { Views } from "@/components/views/views"
 
 function mount(el: Element | null, node: ReactNode) {
     if (el) createRoot(el).render(<StrictMode>{node}</StrictMode>)
@@ -23,6 +25,9 @@ function mount(el: Element | null, node: ReactNode) {
 mount(document.querySelector("header.bar"), <TopBar />)
 mount(document.getElementById("side"), <Sidebar />)
 mount(document.getElementById("signin"), <SignIn />)
+/* #stats and #views: the stat tiles and the week, month or table (hidden otherwise). */
+mount(document.getElementById("stats"), <Stats />)
+mount(document.getElementById("views"), <Views />)
 
 /* The toaster gets its own container at the end of <body>, outside #app, so a drawer
    that makes #app inert leaves the toast's buttons usable. */

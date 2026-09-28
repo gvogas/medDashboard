@@ -5,21 +5,19 @@ import { api } from './api.js';
 import * as store from './store.js';
 import { data, course } from './store.js';
 import * as sync from './sync.js';
-import { ui, rememberUi } from './state.js';
-import { uid, isOpen, tmeta, useTypePrefs } from './model.js';
+import { ui } from './state.js';
+import { uid, tmeta, useTypePrefs } from './model.js';
 import { schoolCal, termStart } from './query.js';
 import { $, restoreFocus } from './dom.js';
 import { render, renderView } from './views/render.js';
 import { notify } from '../../bridge.ts';
-import { renderStats, renderQuote, nextQuote } from './views/stats.js';
 import { drawer, scrim, closeDrawer, drawerHasFocus, beforeClose, setSide, narrow } from './views/drawer-base.js';
-import { openItem, newItem, current, saveDraft, touch, touchSoon, flushTouch, renderItemDrawer, noteStartBase, onItemInput, celebrate, setStatus, chainReview } from './views/drawer-item.js';
+import { current, saveDraft, touch, touchSoon, flushTouch, renderItemDrawer, noteStartBase, onItemInput } from './views/drawer-item.js';
 import { openKeys } from './views/keys.js';
 import { renderSessionDrawer, editSession, saveSessionDraft } from './views/drawer-session.js';
 import { achievementClick, editAchievement } from './views/drawer-achievement.js';
 import { leaderboardClick } from './views/leaderboard.js';
 import { schoolClick, editSchool, readSchoolFile } from './views/drawer-school.js';
-import { launch as fireworks } from './fireworks.js';
 import { openCourse, renderCourseDrawer, saveCourseDraft, leaveDrawer, onCourseInput } from './views/drawer-course.js';
 import { toast } from './views/toast.js';
 import { openSettings, renderSettings, refreshSyncNote, applyCoat, refreshSpotifyGroup, feedAction, addQuote } from './views/drawer-settings.js';
@@ -73,15 +71,6 @@ web.onChange(() => {
 });
 spotView.onChange(() => { if (ui.view === 'spotify' || ui.focus) renderView(); });   /* the view keeps its own scroll and caret */
 spotify.onUnauthenticated(() => showSignIn('Your session has ended. Sign in again.'));
-
-/* ═════════ the quote tile turns its own page ═════════ */
-const QUOTE_EVERY_MS = 25000;
-setInterval(() => {
-  if (document.visibilityState !== 'visible' || !data.profile) return;
-  if (document.querySelector('.qcard:hover, .qcard:focus-within')) return;   /* being read: leave it */
-  if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return;
-  nextQuote();
-}, QUOTE_EVERY_MS);
 
 /* ═════════ session ═════════ */
 store.subscribe(onStoreEvent);
@@ -148,12 +137,6 @@ async function onClick(e) {
   if (e.target.closest('[data-spot-repeat]')) { spotView.cycleRepeat(); return; }
   if (e.target.closest('[data-spot-devices]')) { spotView.toggleDevices(); return; }
   if ((el = e.target.closest('[data-spot-device]'))) { web.activate(); spotView.pickDevice(el.dataset.spotDevice); return; }
-  if ((el = e.target.closest('[data-quotenext]'))) {
-    const r = el.getBoundingClientRect();
-    fireworks(r.left + r.width / 2, r.top + 4);
-    if (!nextQuote()) openSettings('qText');
-    return;
-  }
   if ((el = e.target.closest('[data-themeset]'))) { setTheme(el.dataset.themeset); return; }
   if ((el = e.target.closest('[data-bgset]'))) { setBg(el.dataset.bgset); return; }
   if ((el = e.target.closest('[data-coatcolor]'))) {
@@ -163,30 +146,7 @@ async function onClick(e) {
   if ((el = e.target.closest('[data-qx]'))) {
     await store.deleteQuote(el.dataset.qx);
     if (ui.quoteIx >= data.quotes.length) ui.quoteIx = 0;
-    renderSettings(); renderQuote(); return;
-  }
-  if ((el = e.target.closest('[data-add]'))) { e.stopPropagation(); newItem(el.dataset.add); return; }
-  if ((el = e.target.closest('[data-toggle]'))) {
-    const it = store.item(el.dataset.toggle);
-    if (it) {
-      const finishing = isOpen(it);
-      if (finishing) celebrate(el);
-      setStatus(it, finishing ? 'done' : 'todo');
-      await touch(it);
-      await chainReview(it);
-    }
-    render(); return;
-  }
-  if ((el = e.target.closest('.row, tbody tr[data-id], .task .tx, .oh tbody tr'))) {
-    const host = el.dataset.id ? el : el.closest('[data-id]');
-    if (host && host.dataset.id) { openItem(host.dataset.id); return; }
-  }
-  if (e.target.closest('[data-monthdeadlines]')) { ui.monthDeadlines = !ui.monthDeadlines; rememberUi(); renderView(); return; }
-  if ((el = e.target.closest('[data-day]'))) { ui.anchor = el.dataset.day; ui.view = 'week'; rememberUi(); render(); return; }
-  if ((el = e.target.closest('[data-sort]'))) {
-    const k = el.dataset.sort;
-    if (ui.sort.key === k) ui.sort.dir *= -1; else { ui.sort.key = k; ui.sort.dir = 1; }
-    renderView(); return;
+    renderSettings(); notify(); return;
   }
 
   if ((el = e.target.closest('[data-act]'))) {
@@ -230,7 +190,7 @@ async function onClick(e) {
       if (r.added) await touch(it);
       ui.fillNote = r.added ? 'Added ' + r.added + ' lecture' + (r.added === 1 ? '' : 's') + '.' + (r.left ? ' ' + r.left + ' more did not fit under the 50-step limit.' : '')
         : r.left ? 'The list is full: 50 steps is the most an item can hold.' : 'Every lecture before this ' + tmeta(it.type).label.toLowerCase() + ' is already listed.';
-      renderItemDrawer(); renderStats(); renderView();
+      renderItemDrawer(); renderView();
     }
     else if (act === 'import-paste') {
       const box = $('importText');
@@ -277,7 +237,7 @@ async function onClick(e) {
     const s = current(); if (!s) return;
     s.checklist.forEach((x) => { if (x.id === el.dataset.cl) x.done = !x.done; });
     await touch(s);
-    renderItemDrawer(); renderStats(); renderView(); return;
+    renderItemDrawer(); renderView(); return;
   }
   if ((el = e.target.closest('[data-clx]'))) {
     const s2 = current(); if (!s2) return;

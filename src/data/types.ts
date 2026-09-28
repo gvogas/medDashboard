@@ -53,6 +53,7 @@ export interface Profile {
     coat: Coat
     types: TypePref[]
     schoolCalendar?: unknown
+    studyPrefs?: unknown
 }
 
 /** A type as the profile stores it: built-ins only carry what differs from their default. */
@@ -70,6 +71,23 @@ export interface ItemType {
     hiddenSet: boolean
 }
 
+export interface Quote { id: string; text: string; source: string }
+
+export interface StudySession {
+    id: string
+    courseId: string | null
+    itemId: string | null
+    startedAt: number
+    studyMinutes: number
+    roundsDone: number
+    note: string
+    manual: boolean
+}
+
+/** What the week and month show: both lists, the dated items only, or the classes only. */
+export type Schedule = "all" | "deadlines" | "classes"
+export type SortKey = "title" | "type" | "course" | "date" | "status"
+
 export type SyncState = "idle" | "pending" | "syncing" | "offline" | "error" | "signed-out"
 export interface SyncStatus { state: SyncState; pending: number; message: string }
 
@@ -84,4 +102,7 @@ export interface Ui {
     focus: boolean
     bg: "med" | "cs"
     theme: string
+    schedule: Schedule
+    sort: { key: SortKey; dir: 1 | -1 }
+    quoteIx: number
 }
