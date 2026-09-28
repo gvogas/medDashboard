@@ -20,6 +20,21 @@ export default defineConfig({
   // http://127.0.0.1:8787 is the redirect URI registered with Spotify. If the port is
   // taken, fail rather than move to another one.
   server: { host: '127.0.0.1', port: 8787, strictPort: true },
-  // pdf.js (1.6 MB, its own chunk) loads only when a PDF is read.
-  build: { assetsInlineLimit: 0, chunkSizeWarningLimit: 1700 },
+  // pdf.js (1.6 MB, its own chunk) loads only when a PDF is read. React and Motion get
+  // chunks of their own: they change far less often than the app, so a deploy leaves
+  // them in the browser's cache (/assets/* is immutable, public/_headers).
+  build: {
+    assetsInlineLimit: 0,
+    chunkSizeWarningLimit: 1700,
+    rolldownOptions: {
+      output: {
+        advancedChunks: {
+          groups: [
+            { name: 'react', test: /node_modules[\\/](react|react-dom|scheduler)[\\/]/ },
+            { name: 'motion', test: /node_modules[\\/](framer-motion|motion-dom|motion-utils)[\\/]/ },
+          ],
+        },
+      },
+    },
+  },
 });

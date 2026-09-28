@@ -132,19 +132,17 @@ runs once per database.
 
 | File | What it adds |
 | --- | --- |
-| `0001_init.sql` | Users, courses, items and quotes |
-| `0002_login_throttle.sql` | The table that counts wrong passwords, for lockouts |
-| `0003_password_generation.sql` | A counter that powers "sign out everywhere" |
+| `0001_schema.sql` | Everything, in one piece (see [DATA-MODEL.md](DATA-MODEL.md)) |
 
 To change the database:
 
-1. Add a new file with the next number, such as `0004_something.sql`. Never edit a
+1. Add a new file with the next number, such as `0002_something.sql`. Never edit a
    file that has already run.
 2. Apply it locally with `npm run db:local`, then test.
 3. Deploy. `npm run deploy` applies it to the live database first.
 
 To see what the live database is missing, run
-`npx wrangler d1 migrations list rounds --remote`. "No migrations to apply!" means
+`npx wrangler d1 migrations list DB --remote`. "No migrations to apply!" means
 it's up to date. To apply migrations to live without deploying code, use
 `npm run db:remote`.
 
@@ -246,7 +244,7 @@ the right-hand column says.
 
 | What you see | What it means | What to do |
 | --- | --- | --- |
-| Sign-in failed (internal) | The server hit an error, usually because the live database is missing a migration | Run `npx wrangler d1 migrations list rounds --remote`, then `npm run db:remote` if anything is listed |
+| Sign-in failed (internal) | The server hit an error, usually because the live database is missing a migration | Run `npx wrangler d1 migrations list DB --remote`, then `npm run db:remote` if anything is listed |
 | Wrong username or password | No such account on this site, or the password is wrong | Local and live accounts are separate. Create or reset the account with `npm run user:add` (add `--remote` for live) |
 | Too many attempts. Try again in N min. | 5 or more wrong passwords | Wait it out, or reset the password |
 | You seem to be offline. | The browser couldn't reach the server | Check your internet. Locally, make sure `npm run dev` is still running |
@@ -275,7 +273,7 @@ Run every command in PowerShell from the project folder.
 | `npm run db:local` | Applies new migrations to the local database | Local |
 | `npm run deploy` | Applies new migrations to live, checks the live database, then publishes the site and API | Live |
 | `npm run db:remote` | Applies new migrations to live without deploying code | Live |
-| `npx wrangler d1 migrations list rounds --remote` | Shows migrations the live database is missing | Live, read-only |
+| `npx wrangler d1 migrations list DB --remote` | Shows migrations the live database is missing | Live, read-only |
 | `npx wrangler deployments list` | Shows when each version went live | Live, read-only |
 | `npx wrangler rollback` | Puts the previous code version back | Live |
 | `npx wrangler tail` | Streams live server errors | Live, read-only |

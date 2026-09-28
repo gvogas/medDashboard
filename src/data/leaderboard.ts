@@ -76,7 +76,9 @@ export async function loadLeaderboard() {
         const b: unknown = await api.leaderboard(weekStart())
         if (!valid(b)) throw new Error("invalid")
         set({ joined: b.joined, week: b.week, all: b.all, at: Date.now() })
-    } catch {
+    } catch (e) {
+        /* cancelled because the account changed: nothing failed, so the next load asks again */
+        if ((e as Error)?.name === "AbortError") { set({ ...ui.lb, loading: false, at: 0 }); return }
         set(navigator.onLine === false ? { offline: true, at: Date.now() } : { ...ui.lb, loading: false, error: LOAD_ERROR })
     }
 }

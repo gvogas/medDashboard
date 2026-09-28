@@ -56,6 +56,7 @@ export default defineConfig(async () => {
             name: 'dom',
             include: ['src/**/*.test.{ts,tsx}'],
             environment: 'jsdom',
+            setupFiles: ['./src/test-setup.ts'],
             // The first test in a file waits for React and Framer Motion to load, and the run
             // tests play whole flows on a clock that ticks four times a second: twenty minutes of
             // it takes about as many seconds on a busy machine.

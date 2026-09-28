@@ -1,6 +1,7 @@
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest"
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react"
 import { stubMatchMedia } from "@/components/test-media"
+import { showApp, showSignInState } from "@/data/signin"
 
 // The app is not booted: the page reads a fake store and ui through the real
 // study.ts and leaderboard.ts; the sheets and the API are fakes. The
@@ -50,6 +51,7 @@ const session = (id: string, day: number, hour: number, minutes: number, row: Pa
 const joined = { joined: true, week: [{ name: "Ada", minutes: 300, me: false }, { name: "George", minutes: 0, me: true }, { name: "Ben", minutes: 0, me: false }], all: [{ name: "Ada", minutes: 900, me: false }, { name: "George", minutes: 45, me: true }], at: 0 }
 
 beforeEach(() => {
+    showApp()
     fake.data.courses = [normalizeCourse({ id: "anat", code: "ANAT", name: "Anatomy", color: "#C2571A" }, 0), normalizeCourse({ id: "phys", code: "PHYS", name: "Physiology", color: "#1E628F" }, 1)]
     fake.data.items = [normalizeItem({ id: "e1", type: "exam", title: "Brachial plexus quiz", courseId: "anat", date: "2026-10-01", status: "todo" })]
     fake.data.study_sessions = [
@@ -303,6 +305,14 @@ describe("the leaderboard", () => {
         expect(lb().textContent).toContain("Loading…")
         await act(async () => { answer({ joined: false, week: [], all: [] }) })
         expect(lb().textContent).toContain("See who has studied the most this week.")
+    })
+
+    it("waits for the app to show before asking, so booting does not cancel it", async () => {
+        showSignInState()
+        await show()
+        expect(fake.api.leaderboard).not.toHaveBeenCalled()
+        await act(async () => { showApp() })
+        expect(fake.api.leaderboard).toHaveBeenCalledTimes(1)
     })
 
     it("joins: busy while it goes, then the list, with focus on Leave", async () => {

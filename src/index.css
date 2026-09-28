@@ -9,6 +9,21 @@
 @import "tailwindcss/preflight.css" layer(base);
 @import "tailwindcss/utilities.css" layer(utilities) source(none);
 
+/* The fonts are served with the app, not from Google: no request to another site before
+   the first paint, and the service worker keeps them offline. Latin subsets only, and
+   only the weights and styles the app uses; Spectral is only ever italic. */
+@import "@fontsource-variable/figtree/wght.css";
+@import "@fontsource/ibm-plex-mono/latin-400.css";
+@import "@fontsource/ibm-plex-mono/latin-500.css";
+@import "@fontsource/ibm-plex-mono/latin-600.css";
+@import "@fontsource/ibm-plex-mono/latin-ext-400.css";
+@import "@fontsource/ibm-plex-mono/latin-ext-500.css";
+@import "@fontsource/ibm-plex-mono/latin-ext-600.css";
+@import "@fontsource/spectral/latin-400-italic.css";
+@import "@fontsource/spectral/latin-600-italic.css";
+@import "@fontsource/spectral/latin-ext-400-italic.css";
+@import "@fontsource/spectral/latin-ext-600-italic.css";
+
 @import "./styles/tokens.css" layer(base);
 @import "./styles/base.css" layer(base);
 @import "./styles/shell.css" layer(shell);
@@ -43,7 +58,7 @@
   --color-ink-2: var(--ink-2);
   --color-line-2: var(--line-2);
   --radius: 12px;
-  --font-sans: Figtree, system-ui, sans-serif;
+  --font-sans: "Figtree Variable", Figtree, system-ui, sans-serif;
   --font-mono: "IBM Plex Mono", ui-monospace, monospace;
 }
 

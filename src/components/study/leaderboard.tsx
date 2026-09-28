@@ -10,6 +10,7 @@ import { Panel } from "@/components/views/bits"
 import { Button, Segmented } from "@/components/sheet/fields"
 import { joinLeaderboard, lbHours, lbStale, loadLeaderboard, setLbTab, useLeaderboard, type LbRank } from "@/data/leaderboard"
 import { ui } from "@/data/ui"
+import { useScreen } from "@/data/signin"
 import type { LbTab } from "@/data/types"
 
 const TABS = [["week", "This week"], ["all", "All-time"]] as const
@@ -22,8 +23,14 @@ export function LeaderboardCard({ className }: { className?: string }) {
     /* after Join or Leave, focus goes to the other one (the same one when it failed) */
     const refocus = useRef<{ to: "join" | "leave"; from: "join" | "leave" } | null>(null)
 
+    /* The page is drawn, hidden, before boot knows the account; asking then would be
+       cancelled when the account is bound (core/api.ts), so wait for the app to show. */
+    const screen = useScreen()
     useEffect(() => {
-        if (lbStale()) void loadLeaderboard()
+        if (screen === "app" && lbStale()) void loadLeaderboard()
+    }, [screen])
+
+    useEffect(() => {
         const online = () => { if (ui.lb?.offline) void loadLeaderboard() }
         window.addEventListener("online", online)
         return () => window.removeEventListener("online", online)

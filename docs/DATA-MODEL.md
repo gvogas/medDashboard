@@ -14,11 +14,12 @@ achievements     your own achievements: an uploaded sticker and what earns it
 ```
 
 The schema is [`migrations/0001_schema.sql`](../migrations/0001_schema.sql), in one
-piece. Twice in September 2026 the live data moved into a fresh database built from it
+piece. Three times in September 2026 the live data moved into a fresh database built from it
 (`node scripts/move-db.mjs --from <old> --to <new> --remote`): first `rounds` into
 `rounds-v2`, replacing ten migrations of patches, then `rounds-v2` into `rounds-v3`,
-folding in the study timer, quizzes, grade targets and the calendar feed. The old
-databases were deleted once the move was checked. The schema the last move copied from is kept as a test
+folding in the study timer, quizzes, grade targets and the calendar feed, then
+`rounds-v3` into `rounds-v4`, folding in study history, achievements, the school
+calendar and the leaderboard. The databases before `rounds-v3` have been deleted. The schema the last move copied from is kept as a test
 fixture in `test/fixtures/legacy-migrations/`. Later changes are new numbered files.
 
 ## Structure at a glance
@@ -221,7 +222,7 @@ Storing any of these would mean a write every midnight. They cost nothing to com
 ## `study_sessions`
 
 One row per finished study-timer run, or per stretch logged by hand from Log study
-(`note` and `manual`: migration `0002_study_history.sql`). Only study time is logged,
+(`note` and `manual`). Only study time is logged,
 never breaks; a run with under a minute of study saves nothing. The run in
 progress lives in the browser's IndexedDB on that device and does not sync.
 
@@ -258,7 +259,7 @@ weeks, months and the heatmap are worked out on the device (`src/legacy/js/histo
 
 ## `achievements`
 
-Your own achievements (migration `0003_achievements.sql`). The built-in ones (study hours,
+Your own achievements. The built-in ones (study hours,
 streaks, big days, tasks, exams, grades) are never stored: they are worked out on the
 device from sessions and items, as is whether one of these is earned
 (`src/legacy/js/achievements.js`). At most 30 live rows per account; `PUT` a 31st is
@@ -394,7 +395,7 @@ signs everyone out.
 
 ## Sync
 
-Migration `0006_sync_revisions.sql` adds `revision` to profiles and tracker rows,
+Profiles and tracker rows carry a `revision`, with
 `changes` for the latest change to each record, and `sync_state.floor` for the oldest
 supported incremental cursor.
 
