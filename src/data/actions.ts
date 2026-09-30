@@ -238,7 +238,7 @@ export async function exportData() {
     const blob = new Blob([JSON.stringify({ ...store.data, pending: await store.pending(), conflicts: store.conflicts }, null, 2)], { type: "application/json" })
     const url = URL.createObjectURL(blob), link = document.createElement("a")
     link.href = url
-    link.download = "rounds-backup.json"
+    link.download = "term-backup.json"
     link.click()
     setTimeout(() => URL.revokeObjectURL(url), 1000)
 }
@@ -308,7 +308,7 @@ export async function quickAddTask(title: string) {
 }
 
 /**
- * The quote tile: the next quote, with fireworks from `from` when clicked. With fewer
+ * The quote in the sidebar's foot: the next quote, with fireworks from `from` when clicked. With fewer
  * than two there is nothing to turn to, so a click opens Settings at the quote field.
  * Returns whether it turned.
  */

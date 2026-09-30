@@ -5,7 +5,7 @@ import { stubMatchMedia } from "./test-media"
 /* The app is not booted: a store with data, a ui, and redraws that only notify.
    core/model.ts, data/query.ts and the actions are the real ones, so the filter logic is too. */
 const fake = vi.hoisted(() => ({
-    data: { items: [] as unknown[], courses: [] as unknown[], profile: null as unknown },
+    data: { items: [] as unknown[], courses: [] as unknown[], quotes: [] as unknown[], study_sessions: [] as unknown[], profile: null as unknown },
     ui: { view: "week", search: "", types: {} as Record<string, boolean>, course: "all", bg: "med", anchor: "2026-09-28", settings: false },
 }))
 vi.mock("@/core/store", () => ({
@@ -185,10 +185,21 @@ describe("the courses", () => {
     })
 })
 
+describe("the frame", () => {
+    it("reads Term, with the theme, the pages and the foot", () => {
+        render(<Sidebar />)
+        expect(screen.getByText("Term")).toBeTruthy()
+        expect(screen.getByText("Medicine")).toBeTruthy()
+        expect(screen.getByRole("navigation", { name: "Pages" })).toBeTruthy()
+        expect(screen.getByRole("button", { name: "Settings" })).toBeTruthy()
+        expect(screen.getByText("Add a quote in Settings")).toBeTruthy()
+    })
+})
+
 describe("the coat", () => {
     it("embroiders the display name when the coat has none, and badges the username", () => {
         render(<Sidebar />)
-        expect(screen.getAllByText("Dr Demo")).toHaveLength(2)             // the pocket and the badge; CSS shows one
+        expect(screen.getAllByText("Dr Demo")).toHaveLength(3)             // the pocket and the badge (CSS shows one), and the foot
         expect(screen.getByText("@demo")).toBeTruthy()
         expect(screen.getByRole("button", { name: "Edit the name on the coat" })).toBeTruthy()
         expect(screen.queryByRole("region", { name: "Spotify" })).toBeNull()   // the player waits for Spotify's first answer

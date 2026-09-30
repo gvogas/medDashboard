@@ -23,7 +23,7 @@ export function getVersion(): number {
   return version;
 }
 
-/** The running study timer's time left, shown on the dock's Study icon; null when none. */
+/** The running study timer's time left, shown beside Study in the side nav; null when none. */
 export function setStudyBadge(text: string | null): void {
   if (text === studyBadge) return;
   studyBadge = text;

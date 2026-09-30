@@ -1,60 +1,51 @@
-/* Rounds — palette tokens. Split from prototype.html; the look is unchanged. */
+/* Term — palette tokens. */
 /* ════════════════════════════════════════════════
    ROUNDS · Ward Board palette, light and dark
    The theme is resolved in script and stamped as
    data-app="light|dark" on the root element.
    ════════════════════════════════════════════════ */
 :root{
-  --bg:#EEF4F3; --panel:#FFFFFF; --panel-2:#F6FAF9;
-  --ink:#14302D; --ink-2:#496662; --ink-3:#587470;
-  --line:#DBE6E4; --line-2:#EDF3F2;
-  --accent:#0E7C74; --accent-soft:#D8EDEA; --accent-ink:#0A5B55; --on-accent:#FFFFFF;
-  --good:#2F8757; --crit:#C0392B; --on-crit:#FFFFFF; --warn:#B77505;
-  --done:#FCEDF2; --done-2:#F8DFE8; --done-line:#F0CFDB; --done-ink:#8A5A6B; --done-track:#F3D3DE;
-  --chip-bg:#EDF3F2; --chip-ink:#4F6D69;
+  --bg:#F6F5F1; --panel:#FFFFFF; --panel-2:#FBFAF8;
+  --ink:#1C1C1A; --ink-2:#55534E; --ink-3:#6E6B64;
+  --line:#E6E3DC; --line-2:#EFEDE8;
+  --accent:#0F5F58; --accent-soft:#EEF5F3; --accent-ink:#0A4540; --on-accent:#FFFFFF;
+  --good:#2F7A4F; --crit:#A8322A; --on-crit:#FFFFFF; --warn:#8A5300;
+  --done:#FBE8EF; --done-2:#F8DFE8; --done-line:#F2D3DF; --done-ink:#874A60; --done-track:#F3D3DE; --side-bg:#EFEEE9; --done-bar-a:#EFAEC3; --done-bar-b:#D9648C;
+  --chip-bg:#F1EFEA; --chip-ink:#55534E;
   --pink-bg:#FBE3EC; --pink-ink:#9C4D66;
   --red-bg:#FBE9E7; --red-ink:#C0392B; --red-line:#F0C9C4;
   --amber-bg:#FCF2DF; --amber-ink:#93660E;
-  --hot-bg:#FEF7F6; --hot-lab:#A6584F;
   --warn-bg:#FDF1EF; --warn-line:#F3D5CF; --warn-ink:#8A4A3E;
-  --bar-bg:rgba(255,255,255,.82);
-  --weave-1:rgba(20,48,45,.035); --weave-2:rgba(20,48,45,.025);
   --pocket-a:#FBFDFC; --pocket-b:#F3F8F7;
-  --cell-out:#FAFCFC; --box-line:#7A938F; --disabled:#C3D6D3;
-  --scroll-track:#E4EDEB; --orn-stroke:#0E7C74;
+  --box-line:#7A938F; --disabled:#C3D6D3;
   --coat:#17B3AE;   /* the lab coat's colour, set from Settings */
   --spotify:#1DB954;   /* Spotify's own green, in every theme */
-  --orn-bg:.20; --orn-art:.42; --orn-weave:1;
-  --shadow-1:0 1px 2px rgba(20,48,45,.08);
-  --shadow-2:0 2px 6px rgba(20,48,45,.08), 0 14px 34px rgba(20,48,45,.10);
+  --shadow-1:0 1px 2px rgba(28,28,26,.06);
+  --shadow-2:0 2px 6px rgba(28,28,26,.06), 0 24px 60px rgba(28,28,26,.16);
   /* Texture: a light rim above a dark one; the floating sheet's lift; the scrim behind it */
-  --rim-hi:rgba(255,255,255,.9); --rim-lo:rgba(20,48,45,.10);
-  --lift:0 2px 6px rgba(20,48,45,.08), 0 24px 60px rgba(20,48,45,.20);
-  --scrim:rgba(8,26,24,.40);
+  --rim-hi:rgba(255,255,255,.9);
+  --lift:0 2px 6px rgba(28,28,26,.06), 0 24px 60px rgba(28,28,26,.16);
+  --scrim:rgba(28,28,26,.28);
   color-scheme:light;
 }
 
 :root[data-app="dark"]{
-  --bg:#0A1214; --panel:#111D1E; --panel-2:#162425;
-  --ink:#DFEAE8; --ink-2:#94ABA8; --ink-3:#768D8A;
-  --line:#22322F; --line-2:#1B2A28;
-  --accent:#3FBFB2; --accent-soft:#11302D; --accent-ink:#7FD8CE; --on-accent:#04201D;
-  --good:#4FB37A; --crit:#EE7A68; --on-crit:#04201D; --warn:#DCA23F;
-  --done:#2B1A22; --done-2:#35202A; --done-line:#4A2C38; --done-ink:#E2A7BA; --done-track:#4A2C38;
-  --chip-bg:#1C2B29; --chip-ink:#94ABA8;
+  --bg:#121312; --panel:#1B1C1A; --panel-2:#222320;
+  --ink:#ECEAE4; --ink-2:#B9B6AE; --ink-3:#9A978F;
+  --line:#2E2F2B; --line-2:#262724;
+  --accent:#5CC2B6; --accent-soft:#16302D; --accent-ink:#8FDAD0; --on-accent:#06201D;
+  --good:#5FB585; --crit:#EE7A68; --on-crit:#1B0A08; --warn:#DCA23F;
+  --done:#35202A; --done-2:#3E2531; --done-line:#4A2C38; --done-ink:#EFB3C7; --done-track:#4A2C38; --side-bg:#171816; --done-bar-a:#B85C7E; --done-bar-b:#EF8FB0;
+  --chip-bg:#262724; --chip-ink:#B9B6AE;
   --pink-bg:#3A2029; --pink-ink:#EFAFC3;
   --red-bg:#3A1F1B; --red-ink:#F59485; --red-line:#5A2E27;
   --amber-bg:#33270F; --amber-ink:#E4B462;
-  --hot-bg:#1E1414; --hot-lab:#E0968A;
   --warn-bg:#2A1B17; --warn-line:#4A2D25; --warn-ink:#EDAE9F;
-  --bar-bg:rgba(10,18,20,.82);
-  --weave-1:rgba(255,255,255,.028); --weave-2:rgba(255,255,255,.020);
   --pocket-a:#162526; --pocket-b:#101C1D;
-  --cell-out:#0D1718; --box-line:#5C726F; --disabled:#294240;
-  --scroll-track:#22322F; --orn-stroke:#3FBFB2;
+  --box-line:#5C726F; --disabled:#294240;
   --shadow-1:0 1px 2px rgba(0,0,0,.4);
   --shadow-2:0 2px 8px rgba(0,0,0,.45), 0 16px 40px rgba(0,0,0,.5);
-  --rim-hi:rgba(255,255,255,.07); --rim-lo:rgba(0,0,0,.55);
+  --rim-hi:rgba(255,255,255,.07);
   --lift:0 2px 8px rgba(0,0,0,.5), 0 24px 60px rgba(0,0,0,.6);
   --scrim:rgba(0,0,0,.55);
   color-scheme:dark;
@@ -66,36 +57,24 @@
    neutrals and the accent move. Status colours stay.
    ════════════════════════════════════════════════ */
 :root[data-bg="cs"]{
-  --bg:#EDF0F7; --panel:#FFFFFF; --panel-2:#F5F7FB;
-  --ink:#172033; --ink-2:#535F78; --ink-3:#636D82;
-  --line:#DCE1EC; --line-2:#ECEFF5;
-  --accent:#3650C8; --accent-soft:#E0E6FA; --accent-ink:#2A3E9E; --on-accent:#FFFFFF;
-  --chip-bg:#ECEFF5; --chip-ink:#5A6680;
-  --weave-1:rgba(23,32,51,.035); --weave-2:rgba(23,32,51,.025);
-  --cell-out:#F9FAFD; --box-line:#7E89A3; --disabled:#C5CCDC;
-  --scroll-track:#E3E7F0; --orn-stroke:#3650C8;
-  --orn-bg:.22;
-  --shadow-1:0 1px 2px rgba(23,32,51,.08);
-  --shadow-2:0 2px 6px rgba(23,32,51,.08), 0 14px 34px rgba(23,32,51,.10);
-  --rim-hi:rgba(255,255,255,.9); --rim-lo:rgba(23,32,51,.10);
-  --lift:0 2px 6px rgba(23,32,51,.08), 0 24px 60px rgba(23,32,51,.20);
-  --scrim:rgba(14,19,36,.40);
+  --bg:#F6F5F1; --panel:#FFFFFF; --panel-2:#FBFAF8;
+  --ink:#1C1C1A; --ink-2:#55534E; --ink-3:#6E6B64;
+  --line:#E6E3DC; --line-2:#EFEDE8;
+  --accent:#2B4FA8; --accent-soft:#EFF2FA; --accent-ink:#1E3A80; --on-accent:#FFFFFF;
+  --chip-bg:#F1EFEA; --chip-ink:#55534E;
+  --box-line:#7E89A3; --disabled:#C5CCDC;
+  --rim-hi:rgba(255,255,255,.9);
+  --done:#E3F1E8; --done-2:#D7EBDF; --done-line:#C7E2D2; --done-ink:#2C6541; --done-track:#CFE7D8; --side-bg:#EFEEE9; --done-bar-a:#A8DDBC; --done-bar-b:#3E8E5E;
 }
 :root[data-app="dark"][data-bg="cs"]{
-  --bg:#0A0E16; --panel:#111726; --panel-2:#161D2F;
-  --ink:#E1E6F2; --ink-2:#97A2BC; --ink-3:#7A859D;
-  --line:#222B40; --line-2:#1A2234;
-  --accent:#7D92F5; --accent-soft:#1A2347; --accent-ink:#A9B8FA; --on-accent:#0A1030;
-  --chip-bg:#1B2336; --chip-ink:#97A2BC;
-  --weave-1:rgba(255,255,255,.028); --weave-2:rgba(255,255,255,.020);
-  --cell-out:#0D1220; --box-line:#5F6B8A; --disabled:#2A3350;
-  --scroll-track:#222B40; --orn-stroke:#7D92F5;
-  --bar-bg:rgba(10,14,22,.82);
-  --shadow-1:0 1px 2px rgba(0,0,0,.4);
-  --shadow-2:0 2px 8px rgba(0,0,0,.45), 0 16px 40px rgba(0,0,0,.5);
-  --rim-hi:rgba(255,255,255,.07); --rim-lo:rgba(0,0,0,.55);
-  --lift:0 2px 8px rgba(0,0,0,.5), 0 24px 60px rgba(0,0,0,.6);
-  --scrim:rgba(0,0,0,.55);
+  --bg:#121312; --panel:#1B1C1A; --panel-2:#222320;
+  --ink:#ECEAE4; --ink-2:#B9B6AE; --ink-3:#9A978F;
+  --line:#2E2F2B; --line-2:#262724;
+  --accent:#8EA2F0; --accent-soft:#1B2340; --accent-ink:#B4C1F6; --on-accent:#0A1030;
+  --chip-bg:#262724; --chip-ink:#B9B6AE;
+  --box-line:#5F6B8A; --disabled:#2A3350;
+  --rim-hi:rgba(255,255,255,.07);
+  --done:#17301F; --done-2:#1D3A26; --done-line:#28503A; --done-ink:#9CD8B0; --done-track:#28503A; --side-bg:#171816; --done-bar-a:#3E8E5E; --done-bar-b:#8FD4A8;
 }
 
 *{box-sizing:border-box}

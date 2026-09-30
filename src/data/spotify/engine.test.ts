@@ -24,7 +24,7 @@ describe("the poller", () => {
 describe("playTarget", () => {
     const ready = { status: "ready" as const, deviceId: "roundsdev" }
 
-    it("plays here when Rounds is ready and nothing else is active", () => {
+    it("plays here when Term is ready and nothing else is active", () => {
         expect(playTarget({ deviceId: null }, ready)).toBe("here")
     })
 
@@ -32,7 +32,7 @@ describe("playTarget", () => {
         expect(playTarget({ deviceId: "phone" }, ready)).toBe("offer")
     })
 
-    it("does nothing when Rounds is already the device, or is not ready", () => {
+    it("does nothing when Term is already the device, or is not ready", () => {
         expect(playTarget({ deviceId: "roundsdev" }, ready)).toBe(null)
         for (const status of ["off", "loading", "unsupported", "needs_reconnect", "no_premium"] as const) {
             expect(playTarget({ deviceId: null }, { status, deviceId: null }), status).toBe(null)
@@ -61,7 +61,7 @@ describe("what a failure says", () => {
         expect(explain(new ApiError(404, { error: "no_device" }))).toBe("Open Spotify somewhere, or use a desktop browser, then try again.")
         expect(explain(new ApiError(403, { error: "premium_required" }))).toBe("That needs Spotify Premium.")
         expect(explain(new ApiError(403, { error: "reconnect_needed" }))).toBe("Spotify needs a fresh connection for this. Reconnect in Settings › Spotify.")
-        expect(explain(new ApiError(403, { error: "playlist_forbidden" }))).toBe("Spotify only lets Rounds open playlists you made or collaborate on.")
+        expect(explain(new ApiError(403, { error: "playlist_forbidden" }))).toBe("Spotify only lets Term open playlists you made or collaborate on.")
         expect(explain(new ApiError(502, { error: "whatever" }))).toBe("Spotify is not answering right now.")
         expect(explain(new ApiError(500, null))).toBe("Spotify is not answering right now.")
     })

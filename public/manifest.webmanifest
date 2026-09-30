@@ -1,6 +1,6 @@
 {
-  "name": "Rounds",
-  "short_name": "Rounds",
+  "name": "Term",
+  "short_name": "Term",
   "description": "A med-school tracker: assignments, exams, labs, tutorials, office hours and tasks.",
   "start_url": "/",
   "scope": "/",

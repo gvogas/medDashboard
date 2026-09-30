@@ -8,7 +8,7 @@ import { changed } from "./signal"
 import type { WebState, WebStatus } from "./types"
 
 const SDK = "https://sdk.scdn.co/spotify-player.js"
-const NAME = "Rounds"
+const NAME = "Term"
 
 /* The little of the SDK this file uses. */
 interface SdkPlayer {

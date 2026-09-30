@@ -1,11 +1,11 @@
-import { afterEach, describe, expect, it, vi } from "vitest"
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest"
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react"
 import { notify } from "@/bridge"
 import { TopBar } from "@/components/top-bar"
 import { setSide } from "@/data/sidebar"
 import { stubMatchMedia } from "./test-media"
 
-// The app is not booted: the bar needs the ui, sync status, Spotify's state and
+// The app is not booted: the bar needs the ui, the sync state, Spotify's state and
 // the school calendar, and its buttons call the actions, which are fakes here.
 const fake = vi.hoisted(() => {
     const statusListeners = new Set<(s: unknown) => void>()
@@ -21,20 +21,20 @@ const fake = vi.hoisted(() => {
     }
 })
 const actions = vi.hoisted(() => ({
-    goToday: vi.fn(), step: vi.fn(), setSearch: vi.fn(), newItem: vi.fn(),
-    toggleSettings: vi.fn(), showSidebar: vi.fn(), syncNow: vi.fn(),
+    goToday: vi.fn(), step: vi.fn(), setSearch: vi.fn(), newItem: vi.fn(), showSidebar: vi.fn(),
 }))
 vi.mock("@/data/actions", () => actions)
 vi.mock("@/data/ui", async () => (await import("@/data/fake-ui")).fakeUi(fake.ui))
 vi.mock("@/data/spotify/player", () => ({ state: fake.spotify }))
 vi.mock("@/data/query", () => ({ schoolCal: () => null }))
-vi.mock("@/data/study-controller", () => ({ setView: vi.fn() }))
 vi.mock("@/core/sync", () => ({
     status: fake.status,
     onStatus: (fn: (s: unknown) => void) => fake.statusListeners.add(fn),
 }))
 
 stubMatchMedia({ reducedMotion: false })
+beforeAll(() => { vi.useFakeTimers({ toFake: ["Date"] }); vi.setSystemTime(new Date(2026, 8, 23, 12)) })
+afterAll(() => { vi.useRealTimers() })
 
 const show = (view: string, anchor = "2026-09-23") => {
     fake.ui.view = view
@@ -42,7 +42,7 @@ const show = (view: string, anchor = "2026-09-23") => {
     act(() => notify())
 }
 const title = () => screen.getByRole("heading", { level: 1 }).textContent
-const sub = () => screen.getByRole("heading", { level: 1 }).nextElementSibling?.textContent ?? ""
+const sub = () => (screen.getByRole("heading", { level: 1 }).previousElementSibling?.textContent ?? "").trim()
 
 afterEach(() => {
     cleanup()
@@ -54,10 +54,17 @@ afterEach(() => {
 })
 
 describe("the top bar", () => {
+    it("shows the date line over the title, the title in the serif", () => {
+        render(<TopBar />)
+        const h1 = screen.getByRole("heading", { level: 1 })
+        expect(h1.className).toContain("font-serif")
+        expect(h1.previousElementSibling?.textContent).toBeTruthy()
+    })
+
     it("titles each view", () => {
         render(<TopBar />)
-        expect(title()).toBe("Week board")
-        expect(sub()).toBe("Mon 21 Sep – Sun 27 Sep 2026")
+        expect(title()).toBe("21 Sep – 27 Sep")
+        expect(sub()).toBe("Wednesday 23 September")
         show("month")
         expect(title()).toBe("September 2026")
         expect(sub()).toBe("")
@@ -106,33 +113,9 @@ describe("the top bar", () => {
         expect(box.id).toBe("search")   // the / key focuses it by id
     })
 
-    it("shows the sync state and syncs on click", () => {
+    it("opens a new item and the sidebar", () => {
         render(<TopBar />)
-        const cases: [Parameters<typeof fake.setStatus>[0], string][] = [
-            [{ state: "idle" }, "Synced"],
-            [{ state: "pending" }, "Saving…"],
-            [{ state: "syncing" }, "Syncing…"],
-            [{ state: "offline", pending: 3 }, "Offline · 3"],
-            [{ state: "error", message: "Server said no" }, "Sync problem"],
-            [{ state: "signed-out" }, "Signed out"],
-        ]
-        for (const [status, label] of cases) {
-            act(() => fake.setStatus(status))
-            expect(screen.getByRole("button", { name: label })).toBeTruthy()
-        }
-        const pill = screen.getByRole("button", { name: "Signed out" })
-        act(() => fake.setStatus({ state: "error", message: "Server said no" }))
-        expect(pill.title).toBe("Server said no")
-        expect(screen.getByRole("status").textContent).toBe("Sync problem. Server said no")
-        fireEvent.click(pill)
-        expect(actions.syncNow).toHaveBeenCalledOnce()
-    })
-
-    it("opens Settings, a new item and the sidebar", () => {
-        render(<TopBar />)
-        fireEvent.click(screen.getByRole("button", { name: "Settings" }))
         fireEvent.click(screen.getByRole("button", { name: "New item" }))
-        expect(actions.toggleSettings).toHaveBeenCalledOnce()
         expect(actions.newItem).toHaveBeenCalledOnce()
 
         const menu = screen.getByRole("button", { name: "Show sidebar" })
@@ -144,5 +127,19 @@ describe("the top bar", () => {
         fireEvent.click(menu)
         expect(actions.showSidebar).toHaveBeenLastCalledWith(false)
         act(() => setSide(false))
+    })
+
+    it("puts a dot on the menu button when sync needs you, the sidebar being out of sight", () => {
+        render(<TopBar />)
+        const dot = () => screen.getByRole("button", { name: "Show sidebar" }).querySelector("[data-sync-dot]")?.getAttribute("data-sync-dot") ?? null
+        expect(dot()).toBeNull()
+        for (const state of ["pending", "syncing"]) {
+            act(() => fake.setStatus({ state }))
+            expect(dot()).toBeNull()
+        }
+        for (const state of ["offline", "error", "signed-out"]) {
+            act(() => fake.setStatus({ state }))
+            expect(dot()).toBe(state)
+        }
     })
 })

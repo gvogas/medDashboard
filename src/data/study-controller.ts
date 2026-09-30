@@ -17,7 +17,7 @@ import { toast } from "./toast"
 import { ui, rememberUi } from "./ui"
 import type { StudyPrefs, View } from "./types"
 
-/** Show a view: the dock and the 1–5 keys. Study while a run is going opens its focus screen. */
+/** Show a view: the side nav and the 1–5 keys. Study while a run is going opens its focus screen. */
 export function setView(view: View) {
     if (view === "study" && run.active()) { openFocus(); return }
     ui.view = view; rememberUi(); notify()

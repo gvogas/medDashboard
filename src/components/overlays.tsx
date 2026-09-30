@@ -13,7 +13,7 @@ export const SHORTCUTS: [string[], string][] = [
     [["n"], "New item"],
     [["t"], "Go to today"],
     [["[", "]"], "Previous / next week or month"],
-    [["1", "5"], "Week, Month, Table, Spotify, Study"],
+    [["1", "5"], "Week, Month, All items, Study, Music"],
     [["/"], "Search"],
     [["?"], "Show this list"],
     [["Esc"], "Close a drawer or leave the focus screen"],
