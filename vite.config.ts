@@ -14,7 +14,7 @@ export default defineConfig({
   optimizeDeps: {
     include: [
       'react', 'react-dom/client', 'react/jsx-dev-runtime', 'framer-motion',
-      'clsx', 'tailwind-merge', '@radix-ui/react-slot',
+      'clsx', 'tailwind-merge',
     ],
   },
   // http://127.0.0.1:8787 is the redirect URI registered with Spotify. If the port is

@@ -46,11 +46,12 @@
 
 /* ═════════ phone ═════════ */
 /* The whole page scrolls instead of one short box under the header and stats; the
-   header scrolls away (New item floats: top-bar.tsx). Spotify keeps its own columns. */
+   header scrolls away (New item floats: top-bar.tsx, so the bar stacks above the page
+   or the page would cover it). Spotify keeps its own columns. */
 @media (max-width:700px){
   .content{overflow-y:auto;overflow-x:hidden;overscroll-behavior-y:contain}
-  .bar{backdrop-filter:none;gap:8px;padding:10px 16px}
-  .scroll{flex:none;overflow:visible;padding-bottom:84px}
+  .bar{z-index:2;backdrop-filter:none;gap:8px;padding:10px 16px}
+  .scroll{flex:none;overflow:visible;padding:16px 16px 84px}
   #views,#views.own-scroll{flex:none;overflow:visible;display:block;padding-right:0}
 }
 
