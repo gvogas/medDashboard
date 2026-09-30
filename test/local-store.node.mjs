@@ -114,7 +114,7 @@ test('versionchange closes another connection before wipe resolves', async () =>
 test('blocked database deletion is reported as a failure, not success', async () => {
  const name='blocked-wipe';
  const connection=await new Promise((resolve,reject)=>{const r=indexedDB.open(name,1);r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error);});
- try { await assert.rejects(deleteDb(name), /Close other Rounds tabs/); }
+ try { await assert.rejects(deleteDb(name), /Close other Term tabs/); }
  finally { connection.close(); }
 });
 test('saveRows writes many rows and their pending operations in one change', async () => {

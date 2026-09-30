@@ -1,4 +1,4 @@
-/* Rounds — the page's frame: the sidebar and its coat, the content with the ornament, the
+/* Term — the page's frame: the sidebar, the content, the
    top bar and the scrolling page, the sign-in screen, the scrim, and the phone layout.
    <App> (components/app.tsx, shell.tsx) draws these elements; what is on them is here
    because the coat's weave and the phone rules read better as CSS than as utilities.
@@ -6,42 +6,29 @@
    the components and the utilities. */
 
 /* ═════════ shell ═════════ */
-.app{height:100%;display:grid;grid-template-columns:222px minmax(0,1fr)}
+.app{height:100%;display:grid;grid-template-columns:260px minmax(0,1fr)}
 @media (max-width:900px){.app{grid-template-columns:minmax(0,1fr)}}
 
-/* ─── sidebar / white coat ─── */
-/* the coat: a tinted fabric weave, its colour picked in Settings */
+/* ─── sidebar ─── */
 .side{
   position:relative;display:flex;flex-direction:column;gap:13px;min-height:0;
-  padding:14px 10px 12px;border-right:1px solid var(--line);overflow-y:auto;
-  background-color:color-mix(in srgb, var(--coat) 6%, var(--panel));
-  background-image:
-    repeating-linear-gradient(90deg, color-mix(in srgb, var(--coat) 15%, transparent) 0 1px, transparent 1px 4px),
-    repeating-linear-gradient(0deg, color-mix(in srgb, var(--coat) 11%, transparent) 0 1px, transparent 1px 4px);
-}
-
-/* ─── CS: no coat. Plain panel on a faint dot grid (the sidebar shows an ID badge) ─── */
-:root[data-bg="cs"] .side{
-  background-color:var(--panel);
-  background-image:radial-gradient(color-mix(in srgb, var(--ink) 9%, transparent) 1px, transparent 1.2px);
-  background-size:12px 12px;
+  padding:24px 20px 18px;border-right:1px solid var(--line);overflow-y:auto;
+  background:var(--side-bg);
 }
 
 /* ─── content ─── */
 /* min-height:0 matters — without it a grid item refuses to shrink below its
    content, the scroll area never gets a height, and tall views can't scroll. */
 .content{position:relative;display:flex;flex-direction:column;min-width:0;min-height:0;overflow:hidden;isolation:isolate}
-#orn{position:absolute;inset:0;width:100%;height:100%;z-index:0;opacity:var(--orn-bg);pointer-events:none}
 .bar,.scroll{position:relative;z-index:1}
 .bar{
-  display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:11px 16px;
-  border-bottom:1px solid var(--line);background:var(--bar-bg);backdrop-filter:blur(6px);
+  display:flex;align-items:flex-end;gap:16px;flex-wrap:wrap;padding:28px 40px 0;
+  border-bottom:0;background:var(--bg);backdrop-filter:none;
 }
 /* the frame never scrolls — the view region inside it does */
-.scroll{flex:1;min-height:0;overflow:hidden;padding:14px 16px 14px;display:flex;flex-direction:column;gap:13px}
+.scroll{flex:1;min-height:0;overflow:hidden;padding:24px 40px 28px;display:flex;flex-direction:column;gap:24px}
 #views{flex:1;min-height:0;overflow-y:auto;overflow-x:hidden;padding-right:2px}
 #views.own-scroll{overflow:hidden;display:flex;flex-direction:column}
-.drape{position:absolute;right:6px;top:-10px;width:270px;max-width:46%;height:auto;color:var(--accent);opacity:var(--orn-art);pointer-events:none;z-index:0}
 
 /* ─── the scrim behind the sheet and the phone sidebar ─── */
 .scrim{position:fixed;inset:0;background:var(--scrim);-webkit-backdrop-filter:blur(3px);backdrop-filter:blur(3px);opacity:0;pointer-events:none;transition:opacity .25s ease;z-index:40}
@@ -49,9 +36,8 @@
 @media (prefers-reduced-motion:reduce){.scrim,.side{transition:none}}
 
 @media (max-width:900px){
-  .side{position:fixed;top:0;bottom:0;left:0;width:252px;z-index:45;transform:translateX(-102%);transition:transform .18s ease;box-shadow:var(--shadow-2)}
+  .side{position:fixed;top:0;bottom:0;left:0;width:260px;z-index:45;transform:translateX(-102%);transition:transform .18s ease;box-shadow:var(--shadow-2)}
   .side.on{transform:none}
-  .drape{display:none}
 }
 
 /* ═════════ sign-in screen ═════════ */
@@ -60,12 +46,12 @@
 
 /* ═════════ phone ═════════ */
 /* The whole page scrolls instead of one short box under the header and stats; the
-   header scrolls away (New item floats: top-bar.tsx). Spotify keeps its own columns. */
+   header scrolls away (New item floats: top-bar.tsx, so the bar stacks above the page
+   or the page would cover it). Spotify keeps its own columns. */
 @media (max-width:700px){
   .content{overflow-y:auto;overflow-x:hidden;overscroll-behavior-y:contain}
-  #orn{position:fixed}
-  .bar{backdrop-filter:none;gap:8px;padding:10px 16px}
-  .scroll{flex:none;overflow:visible;padding-bottom:84px}
+  .bar{z-index:2;backdrop-filter:none;gap:8px;padding:10px 16px}
+  .scroll{flex:none;overflow:visible;padding:16px 16px 84px}
   #views,#views.own-scroll{flex:none;overflow:visible;display:block;padding-right:0}
 }
 
@@ -87,8 +73,8 @@
 .coatpreview .pen{position:absolute;right:12px;top:-7px;width:9px;height:40px;border-radius:2px 2px 4px 4px;background:#3C6E8F}
 .coatpreview .pen::after{content:"";position:absolute;left:1px;right:1px;top:-6px;height:13px;border-radius:3px;background:#B9C7CC}
 .coatpreview .embroidery{
-  font-family:"Spectral",Georgia,serif;font-style:italic;font-weight:600;font-size:14px;
+  font-family:"Source Serif 4 Variable",Georgia,serif;font-style:italic;font-weight:600;font-size:14px;
   color:color-mix(in srgb, var(--coat) 74%, var(--ink));
 }
-.coatpreview .tuck{position:absolute;right:26px;bottom:5px;width:50px;height:28px;color:var(--accent);opacity:var(--orn-art)}
+.coatpreview .tuck{position:absolute;right:26px;bottom:5px;width:50px;height:28px;color:var(--accent);opacity:.42}
 .coatpreview .role{font-size:9.5px;letter-spacing:.13em;text-transform:uppercase;color:var(--ink-3);margin-top:1px}

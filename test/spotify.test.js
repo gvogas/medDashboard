@@ -252,7 +252,7 @@ describe('POST /api/spotify/player/:action', () => {
   });
 });
 
-describe('the Rounds device', () => {
+describe('the Term device', () => {
   const postJson = (api, path, body, headers = {}) =>
     api(path, { method: 'POST', headers: { 'content-type': 'application/json', ...headers }, body: JSON.stringify(body) });
 
@@ -413,7 +413,7 @@ describe('the Spotify view', () => {
     const { api, id } = await user('v-dev');
     await connect(id, 'tok-playing');
     expect(await (await api('/api/spotify/devices')).json()).toEqual({ devices: [
-      { id: 'roundsdev', name: 'Rounds', type: 'Computer', active: false, restricted: false },
+      { id: 'roundsdev', name: 'Term', type: 'Computer', active: false, restricted: false },
       { id: 'phone1', name: "George's iPhone", type: 'Smartphone', active: true, restricted: false },
     ] });
     expect((await api('/api/spotify/shuffle', { method: 'PUT', body: { state: true } })).status).toBe(204);

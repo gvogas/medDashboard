@@ -64,7 +64,7 @@ export function RecentList({ s, cooling }: ListProps) {
     if (s.cache.recentBlocked) {
         return (
             <Empty title="Reconnect to see what you played lately">
-                Rounds needs one more permission from Spotify for this.
+                Term needs one more permission from Spotify for this.
                 <br />
                 <a href="/api/spotify/connect" className={cn(chipButton, "mt-2.5 border-primary bg-primary text-primary-foreground no-underline hover:text-primary-foreground")}>Reconnect Spotify</a>
             </Empty>

@@ -76,7 +76,7 @@ export function Devices({ s, cooling, beside }: { s: SpotifySnapshot; cooling: b
                                         <span aria-hidden="true" className="grid size-[26px] flex-none place-items-center rounded-[6px] bg-muted text-[13px]">{deviceIcon(d.type)}</span>
                                         <span className="min-w-0 truncate leading-[1.25]">
                                             {here ? "This tab" : d.name}
-                                            <small className="block text-[10px] font-normal text-muted-foreground">{d.active ? "Playing here" : here ? "Rounds, in this browser" : d.type}</small>
+                                            <small className="block text-[10px] font-normal text-muted-foreground">{d.active ? "Playing here" : here ? "Term, in this browser" : d.type}</small>
                                         </span>
                                     </button>
                                 )

@@ -154,7 +154,7 @@ export const PlaylistTile = memo(function PlaylistTile({ p, openable }: { p: Pla
             <button
                 type="button"
                 aria-label={(openable ? "Open " : "Play ") + p.name}
-                title={openable ? undefined : "Spotify only lets Rounds open playlists you made or collaborate on; this one plays."}
+                title={openable ? undefined : "Spotify only lets Term open playlists you made or collaborate on; this one plays."}
                 className={tileButton}
                 onClick={() => openable ? openFrom(() => openPlaylist(p.id, p.name)) : playNow(null, p.uri)}
             >

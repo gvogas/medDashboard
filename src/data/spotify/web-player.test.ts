@@ -1,4 +1,4 @@
-// The Rounds device: the SDK is loaded once, the device follows the SDK's events, and a
+// The Term device: the SDK is loaded once, the device follows the SDK's events, and a
 // phone browser (which Spotify does not support) never loads it.
 import { afterEach, describe, expect, it, vi } from "vitest"
 
@@ -29,7 +29,7 @@ async function fresh() {
 
 afterEach(() => { vi.unstubAllGlobals(); vi.restoreAllMocks() })
 
-describe("the Rounds device", () => {
+describe("the Term device", () => {
     it("loads the SDK once and becomes a device when it is ready", async () => {
         vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ token: "short" }))))
         const web = await fresh()
@@ -43,7 +43,7 @@ describe("the Rounds device", () => {
         win.onSpotifyWebPlaybackSDKReady?.()
         expect(FakePlayer.made).toHaveLength(1)
         const p = FakePlayer.made[0]
-        expect(p.options).toMatchObject({ name: "Rounds", volume: 0.8 })
+        expect(p.options).toMatchObject({ name: "Term", volume: 0.8 })
         expect(p.connect).toHaveBeenCalledOnce()
         const token = await new Promise((give) => p.options.getOAuthToken(give))
         expect(token).toBe("short")

@@ -3,16 +3,14 @@
 
 import { useState } from "react"
 import { cn } from "@/lib/utils"
-import { dueSoon, isComplete, isOpen, isOverdue, isTest, tmeta } from "@/core/model"
-import { diffDays, hhmm, parse, today, DOW } from "@/core/dates"
+import { isOpen, isOverdue, isTest, tmeta } from "@/core/model"
+import { hhmm, parse, DOW } from "@/core/dates"
 import { course as courseOf } from "@/core/store"
 import { useUi } from "@/data/ui"
-import { useWeek, tintOf, type Day, type Entry, type Instance } from "@/data/views"
+import { useWeek, tintOf, type Day, type Entry } from "@/data/views"
 import { newItemOn, openItem, quickAddTask, toggleTask } from "@/data/actions"
 import type { Course, Item } from "@/data/types"
-import {
-    accent, classTitle, ClassText, Empty, HeadNote, onActivate, Panel, ScheduleTabs, SchoolTags, SoonChip, StatusChip, Steps, TINT, TypeChip,
-} from "./bits"
+import { accent, classTitle, Empty, HeadNote, Panel, ScheduleTabs, SchoolTags, statusText, Steps, TINT } from "./bits"
 
 export function WeekView() {
     const { week, officeHours, tasks, empty, schedule } = useWeek()
@@ -29,7 +27,6 @@ export function WeekView() {
                     <ScheduleTabs value={schedule} />
                 </>}
             >
-                <Rule cs={cs} />
                 {week.days.map((d) => <DayRow key={d.date} day={d} />)}
                 {!week.any && (empty
                     ? <Empty title="Nothing here yet">Add a course from the sidebar, then a first item with “New item”.</Empty>
@@ -44,34 +41,20 @@ export function WeekView() {
     )
 }
 
-/** Med: the double helix under the header. CS: a two-line data bus, ticked where the rungs are. */
-const HELIX_A = 'M0 5.5c12-5.5 24-5.5 36 0s24 5.5 36 0 24-5.5 36 0 24 5.5 36 0 24-5.5 36 0 24 5.5 36 0 24-5.5 36 0 24 5.5 36 0 24-5.5 36 0 24 5.5 36 0 24-5.5 36 0'
-const HELIX_B = 'M0 5.5c12 5.5 24 5.5 36 0s24-5.5 36 0 24 5.5 36 0 24-5.5 36 0 24 5.5 36 0 24-5.5 36 0 24 5.5 36 0 24-5.5 36 0 24 5.5 36 0 24-5.5 36 0 24 5.5 36 0'
-const TICKS = Array.from({ length: 11 }, (_, i) => 18 + 36 * i)
-
-const Rule = ({ cs }: { cs: boolean }) => (
-    <svg viewBox="0 0 400 11" preserveAspectRatio="none" fill="none" stroke="currentColor" strokeWidth="1.05" aria-hidden="true" className="block h-[11px] w-full text-[var(--accent)] opacity-35">
-        {cs
-            ? <><path d="M0 3h400M0 8h400" /><path d={TICKS.map((x) => `M${x} 3v5`).join("")} /></>
-            : <><path d={HELIX_A} /><path d={HELIX_B} /><path d={TICKS.map((x) => `M${x} 1.8v7.4`).join("")} /></>}
-    </svg>
-)
-
 function DayRow({ day }: { day: Day }) {
     const tint = tintOf(day.info)
     return (
         <div className={cn(
-            "grid [grid-template-columns:72px_minmax(0,1fr)] gap-3 border-b border-line-2 px-3.5 py-2.5 last:border-b-0 max-[520px]:[grid-template-columns:52px_minmax(0,1fr)] max-[520px]:gap-2 max-[520px]:px-2.5",
+            "grid grid-cols-[64px_minmax(0,1fr)] gap-1 border-t border-line-2 py-2 pr-3 pl-5 max-[520px]:grid-cols-[48px_minmax(0,1fr)] max-[520px]:pr-2 max-[520px]:pl-3",
             tint && TINT[tint],
-            day.isToday && "bg-[color-mix(in_srgb,var(--accent)_6%,transparent)]",
+            day.isToday && "bg-[var(--accent-soft)] shadow-[inset_3px_0_0_var(--accent)]",
         )}>
-            <div className="flex flex-col items-start gap-1">
-                <span className={cn("text-[10.5px] font-bold tracking-[.1em] uppercase", day.isToday ? "text-accent-foreground" : "text-muted-foreground")}>{day.dow}</span>
-                <span className={cn(
-                    "text-[22px] leading-none font-bold tabular-nums",
-                    day.isToday ? "grid size-9 place-items-center rounded-full bg-primary text-[17px] text-primary-foreground" : "text-foreground",
-                )}>{day.day}</span>
-                {day.isToday && <span className="sr-only">Today</span>}
+            <div className="flex flex-col items-start gap-1 pt-1">
+                <span className="flex items-baseline gap-1.5">
+                    <span className="font-serif text-[21px] leading-none">{day.day}</span>
+                    <span className="text-[12px] text-muted-foreground">{day.dow}</span>
+                </span>
+                {day.isToday && <span className="text-[11.5px] font-medium text-accent-foreground">Today</span>}
                 <SchoolTags info={day.info} />
                 <button
                     type="button"
@@ -81,64 +64,72 @@ function DayRow({ day }: { day: Day }) {
                     className="grid size-6 cursor-pointer place-items-center rounded-md border border-border bg-card text-[15px] leading-none text-ink-2 hover:border-[var(--accent)] hover:text-[var(--accent)]"
                 >+</button>
             </div>
-            <div className="flex min-w-0 flex-col gap-1.5">
+            <div className="flex min-w-0 flex-col gap-0.5">
                 {day.entries.length
-                    ? day.entries.map((e) => <EntryCard key={e.key} entry={e} />)
-                    : <span className="py-1.5 text-[12px] text-muted-foreground">{tint === "off" || tint === "break" ? "" : "Nothing due"}</span>}
+                    ? day.entries.map((e) => <EntryRow key={e.key} entry={e} />)
+                    : <span className="px-2.5 py-1.5 text-[13px] text-muted-foreground">{tint === "off" || tint === "break" ? "" : "Nothing scheduled"}</span>}
             </div>
         </div>
     )
 }
 
-function EntryCard({ entry }: { entry: Entry }) {
+/* time, title, type, course, status; on a phone: time, title, status */
+const ROW = "grid w-full grid-cols-[46px_minmax(0,1fr)_84px_124px_92px] items-center gap-3 rounded-[6px] px-2.5 min-h-[34px] text-left text-[14px] max-[720px]:grid-cols-[46px_minmax(0,1fr)_auto]"
+const clock = (t: string | null | undefined) => (t ? t.slice(0, 5) : "")
+/* the right-hand column; on a phone it can't squeeze the title */
+const LAST = "max-[720px]:max-w-[40vw] truncate"
+
+/** What the row no longer shows, for its tooltip: the title, where, and the time or the hour it's due. */
+function rowTitle(it: Item) {
+    const time = it.start && it.end ? clock(it.start) + "–" + clock(it.end) : it.start ? clock(it.start) : it.end ? "due " + clock(it.end) : ""
+    return [it.title, it.where, time].filter(Boolean).join(" · ")
+}
+
+function EntryRow({ entry }: { entry: Entry }) {
     if (entry.kind === "class") {
         const { slot } = entry
         return (
-            <div style={accent(slot.course.color)} title={classTitle(slot)}
-                className="flex items-center gap-2 rounded-lg border border-dashed border-[color-mix(in_srgb,var(--c)_45%,var(--line))] px-2.5 py-1.5 text-[12px] text-ink-2">
-                <i aria-hidden="true" className="h-4 w-[3px] flex-none rounded-full bg-[var(--c)] opacity-60" />
-                <span className="min-w-0 truncate"><ClassText slot={slot} /></span>
-                {slot.mtg.kind && <span className="ml-auto flex-none text-[10.5px] text-muted-foreground">{slot.mtg.kind}</span>}
+            <div style={accent(slot.course.color)} title={classTitle(slot)} className={cn(ROW, "text-ink-2")}>
+                <span className="font-mono text-[12.5px] text-muted-foreground">{clock(slot.mtg.start)}</span>
+                <span className="flex min-w-0 items-center gap-2.5">
+                    <i aria-hidden="true" className="size-2 flex-none rounded-full border-[1.5px] border-[var(--c)]" />
+                    <span className="truncate"><span>{slot.mtg.kind || "Class"}</span><span className="min-[721px]:hidden"> · {slot.course.code || slot.course.name}</span></span>
+                </span>
+                <span className="text-[12.5px] text-muted-foreground max-[720px]:hidden">Class</span>
+                <span className="truncate text-[12.5px] text-muted-foreground max-[720px]:hidden">{slot.course.name || slot.course.code}</span>
+                <span className={cn(LAST, "text-right text-[12.5px] text-muted-foreground")}>{slot.mtg.room}</span>
             </div>
         )
     }
-    return <ItemCard inst={entry.inst} />
-}
-
-function ItemCard({ inst }: { inst: Instance }) {
-    const it = inst.item, c = courseOf(it.courseId) as Course | null
-    const done = isComplete(it)
-    const bits = [c?.name, it.where, it.start && it.end ? hhmm(it.start) + "–" + hhmm(it.end) : it.start ? hhmm(it.start) : it.end ? "due " + hhmm(it.end) : "", it.recur === "weekly" ? "weekly" : ""].filter(Boolean)
-    const soon = !isOverdue(it) && it.status === "todo" && dueSoon(it) && (it.type === "assignment" || isTest(it.type))
+    const it = entry.inst.item, c = courseOf(it.courseId) as Course | null
+    const st = statusText(it, entry.inst.date), done = st.tone === "done"
+    const key = !done && isTest(it.type)
     return (
         <button
             type="button"
             onClick={() => openItem(it.id)}
-            style={accent(tmetaColor(it))}
-            className={cn(
-                /* the bar, the text, the chips; on a phone the chips go under the text */
-                "grid w-full cursor-pointer grid-cols-[3px_minmax(0,1fr)_auto] items-start gap-x-2.5 gap-y-1.5 rounded-lg border border-border bg-card py-2 pr-2.5 pl-1.5 text-left font-[inherit] shadow-[0_1px_2px_rgba(0,0,0,.05)] max-[520px]:grid-cols-[3px_minmax(0,1fr)]",
-                "transition-[border-color,box-shadow] hover:border-[color-mix(in_srgb,var(--c)_50%,var(--line))] hover:shadow-[0_2px_8px_rgba(0,0,0,.08)]",
-                done && "opacity-60",
-            )}
+            data-done={done || undefined}
+            title={rowTitle(it)}
+            style={accent(tmeta(it.type).color)}
+            className={cn(ROW, "cursor-pointer border-0 font-[inherit] transition-colors hover:brightness-[.975]",
+                done ? "bg-[var(--done)] text-[var(--done-ink)]" : "bg-transparent text-foreground")}
         >
-            <i aria-hidden="true" className="row-span-2 h-full w-[3px] rounded-full bg-[var(--c)]" />
-            <span className="flex min-w-0 flex-1 flex-col">
-                <span className={cn("text-[13px] font-semibold text-foreground", done && it.type === "task" && "line-through")}>{it.title}</span>
-                {bits.length > 0 && <span className="truncate text-[11.5px] text-muted-foreground">{bits.join(" · ")}</span>}
-                <Steps item={it} />
+            <span className={cn("font-mono text-[12.5px]", done ? "" : "text-muted-foreground")}>{clock(it.start || it.end)}</span>
+            <span className={cn("flex min-w-0 items-center gap-2.5 overflow-hidden", key && "font-semibold")}>
+                <i aria-hidden="true" className={cn("size-2 flex-none rounded-[2px]", done ? "bg-[var(--done-ink)]" : "bg-[var(--c)]")} />
+                <span className="truncate">{it.title}</span>
+                {!done && <Steps item={it} />}
             </span>
-            <span className="flex flex-wrap justify-end gap-1 max-[520px]:col-start-2 max-[520px]:justify-start">
-                <TypeChip type={it.type} />
-                {isOverdue(it) || it.status !== "todo"
-                    ? <StatusChip item={it} />
-                    : soon && <SoonChip>{diffDays(today(), inst.date) === 0 ? "Today" : "Soon"}</SoonChip>}
+            <span className={cn("text-[12.5px] max-[720px]:hidden", done ? "" : "text-muted-foreground")}>{tmeta(it.type).label}</span>
+            <span className={cn("truncate text-[12.5px] max-[720px]:hidden", done ? "" : "text-muted-foreground")}>{c?.name || ""}</span>
+            <span className={cn("flex items-center justify-end gap-1 text-right text-[12.5px] whitespace-nowrap max-[720px]:max-w-[40vw] overflow-hidden",
+                st.tone === "late" ? "font-medium text-destructive" : st.tone === "soon" ? "font-medium text-[var(--warn)]" : st.tone === "done" ? "font-medium" : "text-muted-foreground")}>
+                {done && <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m3 8.5 3 3 7-7" /></svg>}
+                <span className="truncate">{st.text}</span>
             </span>
         </button>
     )
 }
-
-const tmetaColor = (it: Item) => tmeta(it.type).color as string
 
 function OfficeHours({ rows, cs }: { rows: Item[]; cs: boolean }) {
     return (
@@ -180,13 +171,13 @@ const Scope = ({ cs }: { cs: boolean }) => (
 function Tasks({ list, open, cs }: { list: Item[]; open: number; cs: boolean }) {
     const [text, setText] = useState("")
     return (
-        <Panel label="Tasks" title="Tasks" head={<HeadNote>{open} open</HeadNote>} className="relative overflow-hidden">
+        <Panel label="Tasks" title="Tasks" head={<HeadNote>{open} open</HeadNote>} className="relative">
             {list.length === 0 && <Empty>No tasks</Empty>}
-            <ul className="m-0 list-none p-0">
+            <ul className="m-0 list-none px-1.5 py-0">
                 {list.map((it) => {
                     const on = !isOpen(it)
                     return (
-                        <li key={it.id} className="flex items-center gap-2 px-3.5 py-1.5">
+                        <li key={it.id} className={cn("flex items-center gap-2 rounded-[6px] px-2.5 py-1.5", on && "bg-[var(--done)] text-[var(--done-ink)]")}>
                             <button
                                 type="button"
                                 aria-pressed={on}
@@ -200,7 +191,7 @@ function Tasks({ list, open, cs }: { list: Item[]; open: number; cs: boolean }) 
                                 <svg viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" className="size-3"><path d="M2 6.5l2.6 2.6L10 3.5" /></svg>
                             </button>
                             <button type="button" onClick={() => openItem(it.id)}
-                                className={cn("min-w-0 flex-1 cursor-pointer truncate border-0 bg-transparent p-0 text-left font-[inherit] text-[12.5px]", on ? "text-muted-foreground line-through" : "text-foreground")}>
+                                className={cn("min-w-0 flex-1 cursor-pointer truncate border-0 bg-transparent p-0 text-left font-[inherit] text-[12.5px]", on ? "text-[var(--done-ink)]" : "text-foreground")}>
                                 {it.title}
                                 {it.date && <span className="ml-1 text-[11px] text-muted-foreground">· {isOverdue(it) ? "overdue" : DOW[parse(it.date).getDay()] + " " + parse(it.date).getDate()}</span>}
                             </button>
@@ -234,7 +225,7 @@ function Tasks({ list, open, cs }: { list: Item[]; open: number; cs: boolean }) 
 /** Med: a steroid in the corner. CS: a small binary tree. */
 const Corner = ({ cs }: { cs: boolean }) => (
     <svg viewBox="0 0 120 80" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true"
-        className="pointer-events-none absolute -right-2 -bottom-3 h-[60px] w-[90px] text-[var(--accent)] opacity-[calc(.35*var(--orn-art))]">
+        className="pointer-events-none absolute -right-2 -bottom-3 h-[60px] w-[90px] text-[var(--accent)] opacity-15">
         {cs ? (
             <>
                 <circle cx="60" cy="12" r="6" /><circle cx="32" cy="40" r="6" /><circle cx="88" cy="40" r="6" />

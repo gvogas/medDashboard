@@ -4,7 +4,7 @@
 import type { ReactNode } from "react"
 import { cn } from "@/lib/utils"
 import { duration } from "@/lib/time"
-import { TextureCard } from "@/components/ui/texture-card"
+import { Card } from "@/components/ui/card"
 import { useStudyTiles } from "@/data/study"
 import { openSettings } from "@/data/actions"
 
@@ -45,7 +45,7 @@ export function StudyTiles() {
 
 function Tile({ label, icon, value, sub, className }: { label: string; icon: ReactNode; value: ReactNode; sub: ReactNode; className?: string }) {
     return (
-        <TextureCard className={cn("min-w-0 bg-card", className)}>
+        <Card className={cn("min-w-0", className)}>
             <div role="group" aria-label={label} className="flex items-center gap-3.5 px-4 py-3.5 max-[520px]:gap-3 max-[520px]:px-3.5 max-[520px]:py-2.5">
                 {icon}
                 <span className="flex min-w-0 flex-col gap-px">
@@ -54,7 +54,7 @@ function Tile({ label, icon, value, sub, className }: { label: string; icon: Rea
                     <span className="text-[12px] text-ink-2">{sub}</span>
                 </span>
             </div>
-        </TextureCard>
+        </Card>
     )
 }
 

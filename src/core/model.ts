@@ -191,10 +191,6 @@ export function isComplete(it: Pick<Item, 'status'>): boolean {
 export function isOverdue(it: Pick<Item, 'status' | 'recur' | 'date'>): boolean {
   return isOpen(it) && it.recur !== 'weekly' && diffDays(today(), it.date) < 0;
 }
-export function dueSoon(it: Pick<Item, 'status' | 'date'>): boolean {
-  const d = diffDays(today(), it.date);
-  return isOpen(it) && d >= 0 && d <= 2;
-}
 
 /** Expand an item onto [from, to]: one entry, or one per week for a weekly slot. */
 export function occurrences<T extends Pick<Item, 'recur' | 'date' | 'weekday' | 'recurUntil'>>(it: T, from: string, to: string): { item: T; date: string }[] {

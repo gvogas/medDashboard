@@ -15,7 +15,7 @@ import type { View } from "./types"
 
 /* Single keys, when nothing is being typed and no drawer or the focus screen is up:
    the list is components/overlays.tsx. Each does what its top-bar button does; a number shows a view. */
-const VIEW_KEYS: Record<string, View> = { 1: "week", 2: "month", 3: "table", 4: "spotify", 5: "study" }
+const VIEW_KEYS: Record<string, View> = { 1: "week", 2: "month", 3: "table", 4: "study", 5: "spotify" }
 function shortcut(e: KeyboardEvent): boolean {
     const target = e.target as HTMLElement | null
     if (e.ctrlKey || e.metaKey || e.altKey || e.repeat || isTyping(target) || target?.isContentEditable) return false

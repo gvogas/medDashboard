@@ -12,7 +12,7 @@ const fake = vi.hoisted(() => ({
 }))
 const actions = vi.hoisted(() => ({
     openItem: vi.fn(), newItemOn: vi.fn(), toggleTask: vi.fn(), quickAddTask: vi.fn(), setSchedule: vi.fn(),
-    goToDay: vi.fn(), openCourse: vi.fn(), sortTable: vi.fn(), nextQuote: vi.fn(), openStudy: vi.fn(),
+    goToDay: vi.fn(), openCourse: vi.fn(), sortTable: vi.fn(), openStudy: vi.fn(),
 }))
 vi.mock("@/data/actions", () => actions)
 vi.mock("@/data/ui", async () => (await import("@/data/fake-ui")).fakeUi(fake.ui))
@@ -105,7 +105,9 @@ describe("the week", () => {
     it("lists the day's class with its items, and the tabs choose between them", () => {
         show(<Views />)
         const schedule = screen.getByRole("region", { name: "Schedule" })
-        expect(within(schedule).getByText("Anatomy")).toBeTruthy()
+        const lecture = within(schedule).getByTitle("ANAT · Lecture · Hall B")
+        expect(within(lecture).getByText("Lecture")).toBeTruthy()
+        expect(within(lecture).getByText("Hall B")).toBeTruthy()
         fireEvent.click(within(schedule).getByRole("button", { name: "Classes" }))
         expect(actions.setSchedule).toHaveBeenCalledWith("classes")
 
@@ -113,7 +115,7 @@ describe("the week", () => {
         expect(within(schedule).queryByRole("button", { name: /Renal problem set/ })).toBeNull()
         expect(within(schedule).getByRole("button", { name: "Classes" }).getAttribute("aria-pressed")).toBe("true")
         set({ schedule: "deadlines" })
-        expect(within(schedule).queryByText("Anatomy")).toBeNull()
+        expect(within(schedule).queryByTitle("ANAT · Lecture · Hall B")).toBeNull()
     })
 
     it("shows office hours, and the right message when the week is empty", () => {
@@ -128,6 +130,23 @@ describe("the week", () => {
         set({ search: "" })
         expect(screen.getByText("Nothing here yet")).toBeTruthy()
     })
+
+    it("tints a completed row and keeps the checklist bar on an open one", () => {
+        fake.data.items = [
+            ...fake.data.items,
+            item({ id: "hist", title: "Histology slides", status: "submitted" }),
+            item({ id: "case", title: "Case write-up", checklist: [{ id: "c1", text: "History", done: true }, { id: "c2", text: "Exam", done: false }] }),
+        ]
+        show(<Views />)
+        const done = screen.getByRole("button", { name: /Histology slides/ })
+        expect(done.getAttribute("data-done")).toBe("true")
+        expect(done.textContent).toMatch(/Done|Attended|Submitted|Taken/)
+        const open = screen.getByRole("button", { name: /Case write-up/ })
+        expect(open.getAttribute("data-done")).toBeNull()
+        expect(open.querySelector("[data-steps]")).toBeTruthy()
+        expect(open.textContent).toContain("1/2")
+        expect(screen.getByRole("button", { name: /Renal problem set/ }).title).toBe("Renal problem set · due 23:59")
+    })
 })
 
 describe("the month", () => {
@@ -139,6 +158,17 @@ describe("the month", () => {
         const timetable = screen.getByRole("region", { name: "Weekly timetable" })
         fireEvent.click(within(timetable).getByRole("button", { name: /Anatomy/ }))
         expect(actions.openCourse).toHaveBeenCalledWith("anat")
+    })
+
+    it("draws a class in its course's colour, and tints a completed deadline", () => {
+        fake.data.items = [...fake.data.items, item({ id: "hist", title: "Histology slides", status: "submitted" })]
+        fake.ui.view = "month"
+        show(<Views />)
+        const chip = document.querySelector("[data-class-chip]") as HTMLElement
+        expect(chip).toBeTruthy()
+        expect(chip.style.getPropertyValue("--c")).toMatch(/^#[0-9A-F]{6}$/i)
+        expect(screen.getByTitle("Assignment: Histology slides · Done").getAttribute("data-done")).toBe("true")
+        expect(screen.getByTitle("Assignment: Renal problem set").getAttribute("data-done")).toBeNull()
     })
 })
 
@@ -159,24 +189,37 @@ describe("the table", () => {
 })
 
 describe("the stat tiles", () => {
-    it("count the work and turn the quote", () => {
+    it("shows four boxes and no emoji", () => {
+        render(<Stats />)
+        const labels = ["Next exam or quiz", "Open assignments", "Overdue", "Studied today"]
+        for (const l of labels) expect(screen.getByText(l)).toBeTruthy()
+        expect(document.getElementById("stats")?.textContent ?? document.body.textContent).not.toMatch(/🔥/)
+    })
+
+    it("count the work", () => {
         fake.data.items = [
             ...fake.data.items,
             item({ id: "late", date: "2026-09-20" }),
             item({ id: "exam", type: "exam", title: "Cardiology midterm", date: "2026-09-26" }),
         ]
-        fake.data.quotes = [{ id: "q1", text: "Treat the patient.", source: "Osler" }, { id: "q2", text: "Listen.", source: "" }]
         show(<Stats />, "stats")
-        expect(screen.getByText("Cardiology midterm")).toBeTruthy()
-        expect(screen.getByText("needs attention today")).toBeTruthy()
+        expect(screen.getByText("Cardiology midterm exam")).toBeTruthy()
+        expect(screen.getByText("In 3 days")).toBeTruthy()
+        expect(screen.getByText("Needs attention today")).toBeTruthy()
         expect(screen.getByText("1 due this week")).toBeTruthy()
-        expect(screen.getByText("1 / 2")).toBeTruthy()
-
-        const quote = screen.getByRole("button", { name: /Treat the patient/ })
-        fireEvent.click(quote)
-        expect(actions.nextQuote).toHaveBeenCalledWith(quote)
         fireEvent.click(screen.getByRole("button", { name: /Next exam/ }))
         expect(actions.openItem).toHaveBeenCalledWith("exam")
+    })
+
+    it("name the exam once, and show an urgent pace in red", () => {
+        const steps = [1, 2, 3, 4, 5].map((n) => ({ id: "s" + n, text: "Topic " + n, done: false }))
+        fake.data.items = [item({ id: "fin", type: "exam", title: "Final exam", date: "2026-09-24", checklist: steps })]
+        show(<Stats />, "stats")
+        expect(screen.getByText("Final exam")).toBeTruthy()
+        expect(screen.queryByText("Final exam exam")).toBeNull()
+        const pace = screen.getByText("0/5 topics · 5/day")
+        expect(pace.className).toContain("text-destructive")
+        expect(pace.parentElement?.textContent).toBe("Tomorrow · 0/5 topics · 5/day")
     })
 
     it("show today's study against the goal", () => {
@@ -184,8 +227,17 @@ describe("the stat tiles", () => {
         fake.data.study_sessions = [{ id: "s", courseId: null, itemId: null, startedAt: new Date(2026, 8, 23, 9).getTime(), studyMinutes: 70, roundsDone: 0, note: "", manual: false }]
         show(<Stats />, "stats")
         expect(screen.getByRole("meter", { name: "Daily goal" }).getAttribute("aria-valuenow")).toBe("70")
-        fireEvent.click(screen.getByRole("button", { name: /Study today/ }))
+        fireEvent.click(screen.getByRole("button", { name: /Studied today/ }))
         expect(actions.openStudy).toHaveBeenCalled()
+    })
+
+    it("show the streak in words, with no emoji", () => {
+        fake.data.profile = { id: "p", studyPrefs: { goal: 90 } }
+        const day = (d: number, id: string) => ({ id, courseId: null, itemId: null, startedAt: new Date(2026, 8, d, 9).getTime(), studyMinutes: 30, roundsDone: 0, note: "", manual: false })
+        fake.data.study_sessions = [day(21, "a"), day(22, "b"), day(23, "c")]
+        show(<Stats />, "stats")
+        expect(within(host("stats")).getByText("3-day streak")).toBeTruthy()
+        expect(host("stats").textContent).not.toMatch(/🔥/)
     })
 
     it("hide on the Study and Spotify views", () => {
