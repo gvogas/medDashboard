@@ -10,6 +10,7 @@ import { useUi } from "@/data/ui"
 import { useStats } from "@/data/views"
 import { statsShown } from "@/components/shell"
 import { openItem, openStudy } from "@/data/actions"
+import { ExamMotif } from "./exam-motif"
 
 /** "Cardiology midterm exam"; the type word only when the title doesn't already say it ("Final exam"). */
 export const examName = (title: string, type: string) =>
@@ -21,6 +22,7 @@ export const studyTime = (min: number) => (min >= 60 ? Math.floor(min / 60) + "h
 export function Stats() {
     const shown = useUi(statsShown)
     const s = useStats()
+    const bg = useUi((u) => u.bg)
 
     /* <App> hides #stats with the tiles, so its gap goes too */
     if (!shown) return null
@@ -42,6 +44,7 @@ export function Stats() {
                         {s.prep && <> · <span className={s.prep.hot ? "text-destructive" : undefined}>{prepLabel(s.prep)}</span></>}
                     </>
                 ) : "Enjoy the quiet"}
+                art={exam && exam.date ? <ExamMotif bg={bg} at={new Date(exam.date + "T" + (exam.start || "09:00"))} steps={s.prep ? s.prep.done + " of " + s.prep.total + " topics" : ""} /> : undefined}
             />
             <Box label="Open assignments" value={s.openAssignments} foot={s.dueThisWeek ? s.dueThisWeek + " due this week" : "None due this week"} />
             <Box label="Overdue" tone={s.overdue ? "crit" : "good"} value={s.overdue} foot={s.overdue ? "Needs attention today" : "All caught up"} />
@@ -62,9 +65,9 @@ export function Stats() {
     )
 }
 
-function Box({ label, value, foot, tone, onClick, title, children }: {
+function Box({ label, value, foot, tone, onClick, title, children, art }: {
     label: string; value: ReactNode; foot: ReactNode; tone?: "crit" | "good"
-    onClick?: () => void; title?: string; children?: ReactNode
+    onClick?: () => void; title?: string; children?: ReactNode; art?: ReactNode
 }) {
     const body = (
         <>
@@ -74,8 +77,9 @@ function Box({ label, value, foot, tone, onClick, title, children }: {
                 tone === "crit" ? "text-destructive" : tone === "good" ? "text-[var(--done-ink)]" : "text-foreground",
             )}>{value}</span>
             {children}
-            {/* the foot sits at the bottom, unless a goal bar is there already */}
-            <span className={cn("truncate text-[12.5px] text-ink-2", !children && "mt-auto")}>{foot}</span>
+            {/* the foot sits at the bottom, unless a goal bar or an animation is below it */}
+            <span className={cn("truncate text-[12.5px] text-ink-2", !children && !art && "mt-auto")}>{foot}</span>
+            {art}
         </>
     )
     const box = "flex h-[132px] w-full min-w-0 flex-col gap-1 rounded-[var(--radius)] border border-border bg-card px-[18px] pt-4 pb-3.5 text-left font-[inherit] max-[700px]:flex-[0_0_170px] max-[700px]:snap-start"

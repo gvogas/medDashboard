@@ -196,6 +196,15 @@ describe("the stat tiles", () => {
         expect(document.getElementById("stats")?.textContent ?? document.body.textContent).not.toMatch(/🔥/)
     })
 
+    it("draws the theme's animation under the next exam, and none without one", () => {
+        const { container, unmount } = render(<Stats />)
+        expect(container.querySelector("[data-motif]")).toBeNull()
+        unmount()
+        fake.data.items = [...fake.data.items, item({ id: "exam", type: "exam", title: "Cardiology midterm", date: "2026-09-26" })]
+        const r = render(<Stats />)
+        expect(r.container.querySelector("[data-motif]")).not.toBeNull()
+    })
+
     it("count the work", () => {
         fake.data.items = [
             ...fake.data.items,
