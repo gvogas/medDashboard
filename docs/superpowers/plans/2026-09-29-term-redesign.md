@@ -4,7 +4,7 @@
 
 **Goal:** Build the approved "Term" redesign into the app in seven stages, each shipped and checked by the owner before the next starts.
 
-**Architecture:** The redesign is mostly a restyle through the CSS tokens (`src/styles/tokens.css`) and the React components that draw the frame, the tiles and the views; features are added where the data model already has a place for them (a course's `term` for its semester, the coat's `role` for the goal, an item's `recur`/`recurUntil` for repeats). Only the themes need a database change (the profile's `bg` CHECK). Each stage is a branch off `term`, merged into `term` after review; `term` merges to `main` and deploys after each stage the owner signs off.
+**Architecture:** The redesign is mostly a restyle through the CSS tokens (`src/styles/tokens.css`) and the React components that draw the frame, the tiles and the views; features are added where the data model already has a place for them (a course's `term` for its semester, the coat's `role` for the goal, an item's `recur`/`recurUntil` for repeats). Only the themes need a database change (the profile's `bg` CHECK). Each stage is a branch off `term` (named `term-N-…`: git cannot hold `term` and `term/…` together), merged into `term` after review; `term` merges to `main` and deploys after each stage the owner signs off.
 
 **Tech Stack:** Vite, React 19, TypeScript, Tailwind 4 (utilities, preflight on), Vitest (jsdom + Workers pool), Cloudflare Workers + D1, `@fontsource` for self-hosted fonts.
 
@@ -29,13 +29,13 @@
 
 | # | Stage | Branch | Database | Detailed plan |
 |---|---|---|---|---|
-| 1 | The name and the look: fonts, tokens, sidebar with the pages, top bar, the four boxes, the week as rows, completed tint, month course colours, sign-in | `term/1-look` | none | **below** |
-| 2 | Themes: six themes, their pictures with name and goal, next-exam animations, study words, dark timer colours | `term/2-themes` | migration: widen `profile.bg` | written when Stage 1 is merged |
-| 3 | Semesters and repeats: course semester picker, classes only in their term, sidebar semester switch, weekly repeat for labs and tutorials | `term/3-semesters` | none (`courses.term`, `items.recur`) | written when Stage 2 is merged |
-| 4 | The item card: type buttons, the property list, the Week/Month date picker, folded extras | `term/4-item-card` | none | written when Stage 3 is merged |
-| 5 | Study in four tabs | `term/5-study` | none | written when Stage 4 is merged |
-| 6 | Music page and the focus-mode panel restyled | `term/6-music` | none | written when Stage 5 is merged |
-| 7 | Import with AI: class schedule (new), outline with semester, calendar | `term/7-import` | none; Worker route and prompt | written when Stage 6 is merged |
+| 1 | The name and the look: fonts, tokens, sidebar with the pages, top bar, the four boxes, the week as rows, completed tint, month course colours, sign-in | `term-1-look` | none | **below** |
+| 2 | Themes: six themes, their pictures with name and goal, next-exam animations, study words, dark timer colours | `term-2-themes` | migration: widen `profile.bg` | written when Stage 1 is merged |
+| 3 | Semesters and repeats: course semester picker, classes only in their term, sidebar semester switch, weekly repeat for labs and tutorials | `term-3-semesters` | none (`courses.term`, `items.recur`) | written when Stage 2 is merged |
+| 4 | The item card: type buttons, the property list, the Week/Month date picker, folded extras | `term-4-item-card` | none | written when Stage 3 is merged |
+| 5 | Study in four tabs | `term-5-study` | none | written when Stage 4 is merged |
+| 6 | Music page and the focus-mode panel restyled | `term-6-music` | none | written when Stage 5 is merged |
+| 7 | Import with AI: class schedule (new), outline with semester, calendar | `term-7-import` | none; Worker route and prompt | written when Stage 6 is merged |
 
 Why a detailed plan per stage and not all now: each stage changes the files the next one edits (Stage 1 rewrites the sidebar that Stage 2 puts the pictures in; Stage 3 changes the course data Stage 7 writes to). Plans written against code that no longer exists would be wrong.
 
@@ -69,7 +69,7 @@ Why a detailed plan per stage and not all now: each stage changes the files the 
 
 ## Stage 1 — The name and the look
 
-**Branch:** `term/1-look` off `term` (which is off `main`).
+**Branch:** `term-1-look` off `term` (which is off `main`).
 
 **What the owner sees at the end:** the app called Term, in the new paper-and-ink look with the serif headings; the pages in the sidebar instead of the dock; the four boxes; the week as tidy rows with completed rows tinted pink and the checklist bars; month classes in their course colours; the quote, name, sync and Settings at the bottom of the sidebar; the sign-in screen in the same look. Medicine and CS both work; light and dark both work; nothing the app did before is gone.
 
@@ -115,7 +115,7 @@ git add docs/superpowers/specs/2026-09-29-term-redesign-design.md docs/superpowe
 git commit -m "Spec and plan: the Term redesign; the approved prototype in design/
 
 Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
-git switch -c term/1-look
+git switch -c term-1-look
 ```
 
 - [ ] **Step 2: Check the baseline is green**
@@ -1144,10 +1144,10 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 Run: `npm run check`
 Expected: PASS.
 
-- [ ] **Step 2: Ask for a review.** Use superpowers:requesting-code-review on `term/1-look` against `term`. Fix what it finds.
+- [ ] **Step 2: Ask for a review.** Use superpowers:requesting-code-review on `term-1-look` against `term`. Fix what it finds.
 
 - [ ] **Step 3: Show the owner.** Run the production build locally (`npm run dev:built`) and have the owner look: Medicine and CS, light and dark, phone width. Ask the open question from the spec: keep the type filters in the sidebar, or drop them?
 
-- [ ] **Step 4: Merge on a yes.** `git switch term && git merge --no-ff term/1-look`. Then, with the owner's go-ahead to release: `git switch main && git merge --no-ff term`, push, and the Cloudflare Git build deploys. No migration in this stage.
+- [ ] **Step 4: Merge on a yes.** `git switch term && git merge --no-ff term-1-look`. Then, with the owner's go-ahead to release: `git switch main && git merge --no-ff term`, push, and the Cloudflare Git build deploys. No migration in this stage.
 
 - [ ] **Step 5: Check the live site** at https://rounds.termanitor07.workers.dev: sign in, the week renders, a change syncs. Then write the Stage 2 plan (this file's "What each later stage must cover" is its start).
