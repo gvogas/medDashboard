@@ -44,7 +44,7 @@ function Card({ t }: { t: Toast }) {
                         : <span aria-hidden="true" className={cn("-ml-1.5 grid size-8 flex-none place-items-center rounded-full bg-[var(--g-soft)] text-[10.5px] font-extrabold text-[var(--g-ink)] shadow-[inset_0_0_0_2px_var(--g)]", TONE[t.badge.group])}>{t.badge.tier}</span>)}
                     <span className="flex-1 leading-snug">{t.text}</span>
                     {t.undo && (
-                        <TextureButton type="button" variant="minimal" size="sm" className="w-auto shrink-0" onClick={runToastAction}>
+                        <TextureButton type="button" variant="minimal" size="sm" className="shrink-0" onClick={runToastAction}>
                             <span className="font-semibold text-foreground">{t.label}</span>
                         </TextureButton>
                     )}

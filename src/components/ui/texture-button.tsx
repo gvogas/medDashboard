@@ -1,3 +1,5 @@
+// A plain button: ink, outline, ghost or danger. Still named TextureButton so its callers do not change.
+
 import * as React from "react"
 import { cn } from "@/lib/utils"
 
@@ -5,12 +7,12 @@ type Variant = "primary" | "secondary" | "accent" | "destructive" | "minimal" | 
 type Size = "default" | "sm" | "lg" | "icon"
 
 const VARIANT: Record<Variant, string> = {
-    primary: "bg-foreground text-background hover:opacity-90",
-    accent: "bg-foreground text-background hover:opacity-90",
-    secondary: "border border-border bg-card text-foreground hover:bg-muted",
-    minimal: "border border-border bg-card text-foreground hover:bg-muted",
-    icon: "bg-transparent text-ink-2 hover:bg-muted hover:text-foreground",
-    destructive: "bg-destructive text-[var(--on-crit)] hover:opacity-90",
+    primary: "bg-foreground text-background enabled:hover:opacity-90",
+    accent: "bg-foreground text-background enabled:hover:opacity-90",
+    secondary: "border border-border bg-card text-foreground enabled:hover:bg-muted",
+    minimal: "border border-border bg-card text-foreground enabled:hover:bg-muted",
+    icon: "bg-transparent text-ink-2 enabled:hover:bg-muted enabled:hover:text-foreground",
+    destructive: "bg-destructive text-[var(--on-crit)] enabled:hover:opacity-90",
 }
 const SIZE: Record<Size, string> = {
     default: "h-9 px-3.5 text-[13px]",

@@ -27,7 +27,7 @@ export function onActivate(run: () => void) {
 /** A panel: a card with a header line (title, then whatever `head` adds). `fill` takes the height left. */
 export function Panel({ title, head, className, children, label, fill = false }: { title: ReactNode; head?: ReactNode; className?: string; children: ReactNode; label?: string; fill?: boolean }) {
     return (
-        <Card className={cn("min-w-0 overflow-hidden", fill && "flex min-h-0 flex-1 flex-col", className)}>
+        <Card className={cn("min-w-0 overflow-hidden [&_button:focus-visible]:outline-offset-[-2px]", fill && "flex min-h-0 flex-1 flex-col", className)}>
             <section aria-label={label} className="flex min-h-0 flex-1 flex-col">
                 <div className="flex min-h-12 flex-wrap items-center gap-2 border-b border-border px-5 py-2">
                     <h2 className="m-0 flex-1 text-[14px] font-semibold text-foreground">{title}</h2>
