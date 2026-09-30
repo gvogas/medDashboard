@@ -82,35 +82,35 @@
    colours move; the paper and ink stay. Values: the prototype's THEMES.
    ════════════════════════════════════════════════ */
 :root[data-bg="law"]{
-  --accent:#7A2E2E; --accent-soft:#F7F0EF; --accent-ink:#582121; --motif:#7A2E2E;
+  --accent:#7A2E2E; --accent-soft:#F7F0EF; --accent-ink:#582121; --motif:#7A2E2E; --box-line:#9B7C7C; --disabled:#D9C4C4;
   --done:#F4ECD6; --done-2:#ECE3CB; --done-line:#E3D9C0; --done-ink:#6A511C; --done-track:#EADFC0; --done-bar-a:#EAD49A; --done-bar-b:#B08A2E;
 }
 :root[data-app="dark"][data-bg="law"]{
-  --accent:#D98C8C; --accent-soft:#341919; --accent-ink:#E8B0B0; --on-accent:#200909; --motif:#D98C8C;
+  --accent:#D98C8C; --accent-soft:#341919; --accent-ink:#E8B0B0; --on-accent:#200909; --motif:#D98C8C; --box-line:#7E5E5E; --disabled:#492A2A;
   --done:#352D1D; --done-2:#3F3622; --done-line:#4B412A; --done-ink:#EADAB8; --done-track:#4B412A; --done-bar-a:#B08A2E; --done-bar-b:#E2C98D;
 }
 :root[data-bg="pilot"]{
-  --accent:#1F3A5F; --accent-soft:#F0F3F7; --accent-ink:#162A44; --motif:#1F3A5F;
+  --accent:#1F3A5F; --accent-soft:#F0F3F7; --accent-ink:#162A44; --motif:#1F3A5F; --box-line:#7C899B; --disabled:#C4CDD9;
   --done:#DFEBF6; --done-2:#D4E1EE; --done-line:#C9D8E6; --done-ink:#274B70; --done-track:#C9DCEE; --done-bar-a:#B3D2EE; --done-bar-b:#4F83B8;
 }
 :root[data-app="dark"][data-bg="pilot"]{
-  --accent:#8CADD9; --accent-soft:#192434; --accent-ink:#B0C8E8; --on-accent:#091320; --motif:#8CADD9;
+  --accent:#8CADD9; --accent-soft:#192434; --accent-ink:#B0C8E8; --on-accent:#091320; --motif:#8CADD9; --box-line:#5E6B7E; --disabled:#2A3749;
   --done:#1D2935; --done-2:#22303F; --done-line:#2A3A4B; --done-ink:#B8D1EA; --done-track:#2A3A4B; --done-bar-a:#4F83B8; --done-bar-b:#8DB7E2;
 }
 :root[data-bg="sports"]{
-  --accent:#2F6B3A; --accent-soft:#EEF5EF; --accent-ink:#224D2A; --motif:#C2571A;
+  --accent:#2F6B3A; --accent-soft:#EEF5EF; --accent-ink:#224D2A; --motif:#C2571A; --box-line:#7C9B82; --disabled:#C4D9C8;
   --done:#FCE8D8; --done-2:#F5DECC; --done-line:#EED4C0; --done-ink:#84420F; --done-track:#F5D6BE; --done-bar-a:#F7C49B; --done-bar-b:#D9722E;
 }
 :root[data-app="dark"][data-bg="sports"]{
-  --accent:#8CD99A; --accent-soft:#19341E; --accent-ink:#B0E8BA; --on-accent:#09200D; --motif:#E2AF8D;
+  --accent:#8CD99A; --accent-soft:#19341E; --accent-ink:#B0E8BA; --on-accent:#09200D; --motif:#E2AF8D; --box-line:#5E7E64; --disabled:#2A492F;
   --done:#35271D; --done-2:#3F2F22; --done-line:#4B392A; --done-ink:#EACEB8; --done-track:#4B392A; --done-bar-a:#D9722E; --done-bar-b:#E2AF8D;
 }
 :root[data-bg="eng"]{
-  --accent:#3F4E5E; --accent-soft:#F0F2F4; --accent-ink:#2D3844; --motif:#D9651A;
+  --accent:#3F4E5E; --accent-soft:#F0F2F4; --accent-ink:#2D3844; --motif:#D9651A; --box-line:#7C8B9B; --disabled:#C4CED9;
   --done:#FBF3C8; --done-2:#F2EABD; --done-line:#E9E0B1; --done-ink:#665509; --done-track:#F1E39A; --done-bar-a:#F4DE74; --done-bar-b:#C9A21C;
 }
 :root[data-app="dark"][data-bg="eng"]{
-  --accent:#8CB1D9; --accent-soft:#192634; --accent-ink:#B0CBE8; --on-accent:#091420; --motif:#F0A060;
+  --accent:#8CB1D9; --accent-soft:#192634; --accent-ink:#B0CBE8; --on-accent:#091420; --motif:#F0A060; --box-line:#5E6D7E; --disabled:#2A3949;
   --done:#35311D; --done-2:#3F3A22; --done-line:#4B452A; --done-ink:#EAE1B8; --done-track:#4B452A; --done-bar-a:#C9A21C; --done-bar-b:#E2CF8D;
 }
 
