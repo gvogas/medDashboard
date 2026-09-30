@@ -3,6 +3,7 @@
 // app's own state: the ui object React reads and sets.
 
 import type { SpotifyPlace } from "./spotify/types"
+import type { Bg } from "./themes"
 import type { StudySession } from "../core/types"
 
 export type * from "../core/types"
@@ -51,7 +52,7 @@ export interface Ui {
     hist: Hist
     lb: Leaderboard | null
     lbTab: LbTab
-    bg: "med" | "cs"
+    bg: Bg
     theme: string
     schedule: Schedule
     sort: { key: SortKey; dir: 1 | -1 }

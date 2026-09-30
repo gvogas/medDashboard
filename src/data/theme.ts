@@ -1,10 +1,11 @@
-// The theme (light, dark or the system's) and the Med or CS background art; both are
+// The theme (light, dark or the system's) and the theme (Medicine, CS, Law, Aviation, Sports, Engineering); both are
 // saved to the profile so they follow the account to other devices.
 
 import * as store from "@/core/store"
 import { data } from "@/core/store"
 import { notify } from "@/bridge"
 import { ui, rememberUi } from "./ui"
+import { toBg } from "./themes"
 
 export function setTheme(choice: string, { persist = true }: { persist?: boolean } = {}) {
     ui.theme = choice === "light" || choice === "dark" ? choice : "system"
@@ -16,9 +17,9 @@ export function setTheme(choice: string, { persist = true }: { persist?: boolean
 }
 export function followSystem() { if (ui.theme === "system") setTheme("system", { persist: false }) }
 
-/* ═════════ background: Med or CS art, independent of light/dark ═════════ */
+/* ═════════ the theme: one of six, independent of light/dark ═════════ */
 export function setBg(choice: string, { persist = true }: { persist?: boolean } = {}) {
-    ui.bg = choice === "cs" ? "cs" : "med"
+    ui.bg = toBg(choice)
     document.documentElement.setAttribute("data-bg", ui.bg)
     rememberUi()
     if (persist && data.profile && data.profile.bg !== ui.bg) store.saveProfile({ bg: ui.bg }).catch(() => {})

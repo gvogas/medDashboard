@@ -8,6 +8,7 @@ import { useSyncExternalStore } from "react"
 import { today } from "@/core/dates"
 import { getVersion, subscribe } from "@/bridge"
 import type { Ui } from "./types"
+import { toBg } from "./themes"
 
 const KEY = "rounds.ui"
 
@@ -16,7 +17,7 @@ export const ui: Ui = {
     settingsTab: "you",      /* the Settings tab last shown */
     sort: { key: "date", dir: 1 },
     theme: (typeof window !== "undefined" && window.__roundsTheme) || "system",
-    bg: typeof window !== "undefined" && window.__roundsBg === "cs" ? "cs" : "med",     /* background art */
+    bg: toBg(typeof window !== "undefined" ? window.__roundsBg : undefined),     /* the theme */
     quoteIx: 0,
     schedule: "all",         /* the week and month show 'all', 'deadlines' or 'classes' */
     importNote: null,        /* the last import's result or error, shown once in Settings */

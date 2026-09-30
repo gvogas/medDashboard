@@ -17,7 +17,7 @@
   (function () {
     var pref = 'system', bg = 'med';
     try { pref = localStorage.getItem('rounds.theme') || 'system'; } catch (e) {}
-    try { bg = localStorage.getItem('rounds.bg') === 'cs' ? 'cs' : 'med'; } catch (e) {}
+    try { var saved = localStorage.getItem('rounds.bg'); if (['med', 'cs', 'law', 'pilot', 'sports', 'eng'].indexOf(saved) >= 0) bg = saved; } catch (e) {}
     window.__roundsTheme = pref;
     window.__roundsBg = bg;
     document.documentElement.setAttribute('data-bg', bg);
