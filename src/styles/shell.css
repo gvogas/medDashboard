@@ -1,4 +1,4 @@
-/* Rounds — the page's frame: the sidebar and its coat, the content, the
+/* Term — the page's frame: the sidebar, the content, the
    top bar and the scrolling page, the sign-in screen, the scrim, and the phone layout.
    <App> (components/app.tsx, shell.tsx) draws these elements; what is on them is here
    because the coat's weave and the phone rules read better as CSS than as utilities.

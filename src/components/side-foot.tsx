@@ -29,7 +29,7 @@ export function SideFoot() {
     useEffect(() => {
         const id = setInterval(() => {
             if (document.visibilityState !== "visible" || ui.focus) return
-            if (box.current?.matches(":hover, :focus-within")) return
+            if (box.current?.matches(":hover, :focus-within") || box.current?.closest("[inert]")) return
             if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) return
             nextQuote()
         }, QUOTE_EVERY_MS)

@@ -1,4 +1,4 @@
-/* Rounds — every stylesheet, in cascade layers: Tailwind's theme and reset (preflight),
+/* Term — every stylesheet, in cascade layers: Tailwind's theme and reset (preflight),
    the page's defaults and the theme's tokens (base), the page's frame (shell,
    styles/shell.css), what React components share (components), and the utilities, which
    win over all of them. */
@@ -71,8 +71,8 @@
 
 @custom-variant dark (&:where([data-app="dark"], [data-app="dark"] *));
 
-/* shadcn's colours are Rounds' tokens. shadcn's own :root variables are deliberately not
-   defined: its --accent would overwrite Rounds' --accent. Remove them after `shadcn add`. */
+/* shadcn's colours are Term's tokens. shadcn's own :root variables are deliberately not
+   defined: its --accent would overwrite Term's --accent. Remove them after `shadcn add`. */
 @theme inline {
   --color-background: var(--bg);
   --color-foreground: var(--ink);

@@ -9,8 +9,7 @@ import { subscribe, getStudyBadge } from "@/bridge"
 import { ui } from "@/data/ui"
 import { setView } from "@/data/study-controller"
 import { setSide, sideOpen } from "@/data/sidebar"
-
-type View = "week" | "month" | "table" | "spotify" | "study"
+import type { View } from "@/data/types"
 
 export const PAGES: { id: View; label: string; shortcut: string }[] = [
     { id: "week", label: "Week", shortcut: "1" },

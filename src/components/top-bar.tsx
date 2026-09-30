@@ -44,7 +44,7 @@ export function TopBar() {
 
             <div className="flex min-w-0 flex-1 flex-col gap-1">
                 <span className="truncate text-[13px] text-muted-foreground">{heading.sub || <>&nbsp;</>}</span>
-                <h1 className="m-0 truncate font-serif text-[34px] leading-[1.1] font-medium tracking-[-.015em] text-foreground">{heading.title}</h1>
+                <h1 className="m-0 truncate font-serif text-[34px] max-[700px]:text-[24px] leading-[1.1] font-medium tracking-[-.015em] text-foreground">{heading.title}</h1>
             </div>
 
             {dated && (

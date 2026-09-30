@@ -167,7 +167,7 @@ describe("the month", () => {
         const chip = document.querySelector("[data-class-chip]") as HTMLElement
         expect(chip).toBeTruthy()
         expect(chip.style.getPropertyValue("--c")).toMatch(/^#[0-9A-F]{6}$/i)
-        expect(screen.getByTitle("Assignment: Histology slides").getAttribute("data-done")).toBe("true")
+        expect(screen.getByTitle("Assignment: Histology slides · Done").getAttribute("data-done")).toBe("true")
         expect(screen.getByTitle("Assignment: Renal problem set").getAttribute("data-done")).toBeNull()
     })
 })

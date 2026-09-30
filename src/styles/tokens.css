@@ -1,4 +1,4 @@
-/* Rounds — palette tokens. Split from prototype.html; the look is unchanged. */
+/* Term — palette tokens. */
 /* ════════════════════════════════════════════════
    ROUNDS · Ward Board palette, light and dark
    The theme is resolved in script and stamped as
@@ -16,15 +16,14 @@
   --red-bg:#FBE9E7; --red-ink:#C0392B; --red-line:#F0C9C4;
   --amber-bg:#FCF2DF; --amber-ink:#93660E;
   --warn-bg:#FDF1EF; --warn-line:#F3D5CF; --warn-ink:#8A4A3E;
-  --weave-1:rgba(20,48,45,.035); --weave-2:rgba(20,48,45,.025);
   --pocket-a:#FBFDFC; --pocket-b:#F3F8F7;
-  --cell-out:#FAFCFC; --box-line:#7A938F; --disabled:#C3D6D3;
+  --box-line:#7A938F; --disabled:#C3D6D3;
   --coat:#17B3AE;   /* the lab coat's colour, set from Settings */
   --spotify:#1DB954;   /* Spotify's own green, in every theme */
   --shadow-1:0 1px 2px rgba(28,28,26,.06);
   --shadow-2:0 2px 6px rgba(28,28,26,.06), 0 24px 60px rgba(28,28,26,.16);
   /* Texture: a light rim above a dark one; the floating sheet's lift; the scrim behind it */
-  --rim-hi:rgba(255,255,255,.9); --rim-lo:rgba(20,48,45,.10);
+  --rim-hi:rgba(255,255,255,.9);
   --lift:0 2px 6px rgba(28,28,26,.06), 0 24px 60px rgba(28,28,26,.16);
   --scrim:rgba(28,28,26,.28);
   color-scheme:light;
@@ -42,12 +41,11 @@
   --red-bg:#3A1F1B; --red-ink:#F59485; --red-line:#5A2E27;
   --amber-bg:#33270F; --amber-ink:#E4B462;
   --warn-bg:#2A1B17; --warn-line:#4A2D25; --warn-ink:#EDAE9F;
-  --weave-1:rgba(255,255,255,.028); --weave-2:rgba(255,255,255,.020);
   --pocket-a:#162526; --pocket-b:#101C1D;
-  --cell-out:#0D1718; --box-line:#5C726F; --disabled:#294240;
+  --box-line:#5C726F; --disabled:#294240;
   --shadow-1:0 1px 2px rgba(0,0,0,.4);
   --shadow-2:0 2px 8px rgba(0,0,0,.45), 0 16px 40px rgba(0,0,0,.5);
-  --rim-hi:rgba(255,255,255,.07); --rim-lo:rgba(0,0,0,.55);
+  --rim-hi:rgba(255,255,255,.07);
   --lift:0 2px 8px rgba(0,0,0,.5), 0 24px 60px rgba(0,0,0,.6);
   --scrim:rgba(0,0,0,.55);
   color-scheme:dark;
@@ -64,9 +62,8 @@
   --line:#E6E3DC; --line-2:#EFEDE8;
   --accent:#2B4FA8; --accent-soft:#EFF2FA; --accent-ink:#1E3A80; --on-accent:#FFFFFF;
   --chip-bg:#F1EFEA; --chip-ink:#55534E;
-  --weave-1:rgba(23,32,51,.035); --weave-2:rgba(23,32,51,.025);
-  --cell-out:#F9FAFD; --box-line:#7E89A3; --disabled:#C5CCDC;
-  --rim-hi:rgba(255,255,255,.9); --rim-lo:rgba(23,32,51,.10);
+  --box-line:#7E89A3; --disabled:#C5CCDC;
+  --rim-hi:rgba(255,255,255,.9);
   --done:#E3F1E8; --done-2:#D7EBDF; --done-line:#C7E2D2; --done-ink:#2C6541; --done-track:#CFE7D8; --side-bg:#EFEEE9; --done-bar-a:#A8DDBC; --done-bar-b:#3E8E5E;
 }
 :root[data-app="dark"][data-bg="cs"]{
@@ -75,9 +72,8 @@
   --line:#2E2F2B; --line-2:#262724;
   --accent:#8EA2F0; --accent-soft:#1B2340; --accent-ink:#B4C1F6; --on-accent:#0A1030;
   --chip-bg:#262724; --chip-ink:#B9B6AE;
-  --weave-1:rgba(255,255,255,.028); --weave-2:rgba(255,255,255,.020);
-  --cell-out:#0D1220; --box-line:#5F6B8A; --disabled:#2A3350;
-  --rim-hi:rgba(255,255,255,.07); --rim-lo:rgba(0,0,0,.55);
+  --box-line:#5F6B8A; --disabled:#2A3350;
+  --rim-hi:rgba(255,255,255,.07);
   --done:#17301F; --done-2:#1D3A26; --done-line:#28503A; --done-ink:#9CD8B0; --done-track:#28503A; --side-bg:#171816; --done-bar-a:#3E8E5E; --done-bar-b:#8FD4A8;
 }
 

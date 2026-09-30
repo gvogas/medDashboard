@@ -78,7 +78,7 @@ function MonthChip({ chip }: { chip: Chip }) {
     }
     const it = chip.inst.item, m = tmeta(it.type), done = isComplete(it)
     return (
-        <span style={accent(m.color)} title={m.label + ": " + it.title} data-done={done || undefined}
+        <span style={accent(m.color)} title={m.label + ": " + it.title + (done ? " · Done" : "")} data-done={done || undefined}
             className={cn(CHIP, done ? "bg-[var(--done)] text-[var(--done-ink)]" : "bg-card text-foreground shadow-[inset_0_0_0_1px_var(--line)]")}>
             <i aria-hidden="true" className={cn("size-1.5 flex-none rounded-[1.5px]", done ? "bg-[var(--done-ink)]" : "bg-[var(--c)]")} />
             <span className="truncate">{it.start && <b className="font-mono font-medium">{hhmm(it.start)} </b>}{it.title}</span>
