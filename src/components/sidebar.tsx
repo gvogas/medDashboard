@@ -1,13 +1,14 @@
-// The sidebar: the name, the pages, the courses, the Open items filters, the lab-coat
-// pocket or ID badge, the Spotify player, and the foot (quote, name, sync, Settings).
+// The sidebar: the name, the pages, the courses, the Open items filters, the theme's
+// picture and goal, the Spotify player, and the foot (quote, name, sync, Settings).
 // It renders inside <App>'s <aside id="side">, whose .on and inert come from
 // data/sidebar.ts.
 
 import { MotionConfig } from "framer-motion"
 import { useCourses, useItems } from "@/data/store"
 import { useUi } from "@/data/ui"
+import { THEMES } from "@/data/themes"
 import { openCourse, setCourse } from "@/data/actions"
-import { Coat } from "./sidebar-coat"
+import { SidebarWho } from "./sidebar-who"
 import { Count, counts, Heading, Pip, Row } from "./sidebar-parts"
 import { TypeList } from "./sidebar-types"
 import { SideNav } from "./side-nav"
@@ -21,13 +22,13 @@ export function Sidebar() {
             <div className="flex grow flex-col gap-5 px-1 pt-1">
                 <div className="flex items-baseline justify-between px-2.5">
                     <span className="font-serif text-[26px] font-semibold tracking-[-.01em]">Term</span>
-                    <span className="text-[12px] font-medium text-accent-foreground">{bg === "cs" ? "Computer Science" : "Medicine"}</span>
+                    <span className="text-[12px] font-medium text-accent-foreground">{THEMES[bg].label}</span>
                 </div>
                 <SideNav />
                 <CourseList />
                 <TypeList />
                 <div className="mt-auto flex flex-col gap-3.5 pt-2">
-                    <Coat />
+                    <SidebarWho />
                     <SidebarPlayer />
                     <SideFoot />
                 </div>

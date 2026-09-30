@@ -94,9 +94,9 @@ export function SidebarPlayer() {
             className={cn(
                 "relative mt-[3px] flex flex-col gap-2 rounded-[9px] border border-[color-mix(in_srgb,var(--coat)_22%,var(--line))] bg-card px-2.5 pt-[9px] pb-2.5 text-[12.5px] text-ink-2",
                 "shadow-[0_1px_2px_rgba(20,48,45,.10),0_6px_16px_rgba(20,48,45,.08)] dark:shadow-[0_1px_2px_rgba(0,0,0,.4),0_6px_16px_rgba(0,0,0,.35)]",
-                /* the clip: a short bar of the coat colour over the top edge, like the pen on the pocket; CS has no coat */
+                /* the clip: a short bar of the coat colour over the top edge, like the pen on the pocket; only Medicine has a coat */
                 "before:absolute before:top-[-5px] before:left-1/2 before:-ml-[17px] before:h-2 before:w-[34px] before:rounded-[3px] before:bg-[color-mix(in_srgb,var(--coat)_70%,var(--ink))] before:shadow-[0_1px_1px_rgba(20,48,45,.2)] before:content-['']",
-                "[[data-bg=cs]_&]:border-border [[data-bg=cs]_&]:before:hidden",
+                "[:root:not([data-bg=med])_&]:border-border [:root:not([data-bg=med])_&]:before:hidden",
                 p.stale && "opacity-50",
             )}
         >

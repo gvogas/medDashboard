@@ -52,6 +52,7 @@ beforeEach(() => {
     fake.ui.types = {}
     fake.ui.course = "all"
     fake.ui.search = ""
+    fake.ui.bg = "med"
 })
 afterEach(() => { cleanup(); vi.clearAllMocks() })
 
@@ -196,12 +197,21 @@ describe("the frame", () => {
     })
 })
 
-describe("the coat", () => {
-    it("embroiders the display name when the coat has none, and badges the username", () => {
+describe("who this is", () => {
+    it("draws the theme's picture with the coat's name or the display name, and the goal", () => {
         render(<Sidebar />)
-        expect(screen.getAllByText("Dr Demo")).toHaveLength(3)             // the pocket and the badge (CSS shows one), and the foot
-        expect(screen.getByText("@demo")).toBeTruthy()
-        expect(screen.getByRole("button", { name: "Edit the name on the coat" })).toBeTruthy()
+        const pic = screen.getByRole("img", { name: /Lab coat/ })
+        expect(pic.textContent).toContain("Dr Demo")
+        expect(screen.getByRole("button", { name: /Headed for/ }).textContent).toBe("Headed forMS2 · Block 3")
         expect(screen.queryByRole("region", { name: "Spotify" })).toBeNull()   // the player waits for Spotify's first answer
+    })
+
+    it("says the theme's name under the wordmark and falls back to its first goal", () => {
+        fake.ui.bg = "law"
+        ;(fake.data.profile as { coat: { role: string } }).coat.role = ""
+        render(<Sidebar />)
+        expect(screen.getByText("Law")).toBeTruthy()
+        expect(screen.getByRole("img", { name: /Suit jacket/ })).toBeTruthy()
+        expect(screen.getByRole("button", { name: /Headed for/ }).textContent).toBe("Headed forLitigator")
     })
 })
