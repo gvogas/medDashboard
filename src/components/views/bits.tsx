@@ -5,8 +5,8 @@
 import type { CSSProperties, KeyboardEvent, ReactNode } from "react"
 import { cn } from "@/lib/utils"
 import { Card } from "@/components/ui/card"
-import { isOverdue, statusLabel, tmeta } from "@/core/model"
-import { hhmm, DOW } from "@/core/dates"
+import { isComplete, isOverdue, statusLabel, tmeta } from "@/core/model"
+import { diffDays, hhmm, today, DOW } from "@/core/dates"
 import { setSchedule } from "@/data/actions"
 import type { ClassSlot, DayInfo } from "@/data/views"
 import type { Item, Schedule } from "@/data/types"
@@ -14,6 +14,20 @@ import type { Item, Schedule } from "@/data/types"
 /** A colour for --c, from a type or course; anything but #rrggbb is left out. */
 export const accent = (color: string | undefined): CSSProperties | undefined =>
     color && /^#[0-9a-f]{6}$/i.test(color) ? ({ "--c": color } as CSSProperties) : undefined
+
+export type StatusTone = "done" | "late" | "soon" | ""
+
+/** The right-hand word for an entry on `date`: done, overdue, due tonight, today, tomorrow, in n days, every Fri. */
+export function statusText(it: Item, date: string): { text: string; tone: StatusTone } {
+    if (isComplete(it)) return { text: statusLabel(it), tone: "done" }
+    if (it.recur === "weekly") return { text: "Every " + DOW[it.weekday ?? 0], tone: "" }
+    if (isOverdue(it)) return { text: "Overdue", tone: "late" }
+    const d = diffDays(today(), date)
+    if (d === 0) return { text: it.start ? "Today" : "Due tonight", tone: "soon" }
+    if (d === 1) return { text: "Tomorrow", tone: "" }
+    if (d > 1) return { text: "In " + d + " days", tone: "" }
+    return { text: "", tone: "" }
+}
 
 /** Enter or Space on something that is not a button, as a click. */
 export function onActivate(run: () => void) {
