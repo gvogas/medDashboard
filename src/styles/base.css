@@ -22,7 +22,7 @@
 html,body{height:100%}
 body{
   margin:0; background:var(--bg); color:var(--ink);
-  font-family:"Figtree", ui-sans-serif, system-ui, sans-serif;
+  font-family:"IBM Plex Sans", system-ui, sans-serif;
   font-size:14px; line-height:1.5; -webkit-font-smoothing:antialiased; overflow:hidden;
 }
 button{cursor:pointer}

@@ -23,6 +23,14 @@
 @import "@fontsource/spectral/latin-600-italic.css";
 @import "@fontsource/spectral/latin-ext-400-italic.css";
 @import "@fontsource/spectral/latin-ext-600-italic.css";
+@import "@fontsource-variable/source-serif-4/wght.css";
+@import "@fontsource-variable/source-serif-4/wght-italic.css";
+@import "@fontsource/ibm-plex-sans/latin-400.css";
+@import "@fontsource/ibm-plex-sans/latin-500.css";
+@import "@fontsource/ibm-plex-sans/latin-600.css";
+@import "@fontsource/ibm-plex-sans/latin-ext-400.css";
+@import "@fontsource/ibm-plex-sans/latin-ext-500.css";
+@import "@fontsource/ibm-plex-sans/latin-ext-600.css";
 
 @import "./styles/tokens.css" layer(base);
 @import "./styles/base.css" layer(base);
@@ -57,8 +65,9 @@
   --color-destructive: var(--crit);
   --color-ink-2: var(--ink-2);
   --color-line-2: var(--line-2);
-  --radius: 12px;
-  --font-sans: "Figtree Variable", Figtree, system-ui, sans-serif;
+  --radius: 8px;
+  --font-sans: "IBM Plex Sans", system-ui, sans-serif;
+  --font-serif: "Source Serif 4 Variable", Georgia, serif;
   --font-mono: "IBM Plex Mono", ui-monospace, monospace;
 }
 
