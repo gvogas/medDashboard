@@ -2,7 +2,7 @@
 // timetable below. A day opens its week; a class opens its course.
 
 import { cn } from "@/lib/utils"
-import { tmeta } from "@/core/model"
+import { isComplete, tmeta } from "@/core/model"
 import { hhmm } from "@/core/dates"
 import { useMonth, cellLabel, tintOf, type Cell, type Chip, type TimetableDay } from "@/data/views"
 import { goToDay, openCourse } from "@/data/actions"
@@ -63,22 +63,25 @@ function MonthCell({ cell }: { cell: Cell }) {
     )
 }
 
-const CHIP = "block min-w-0 truncate rounded-[5px] px-1.5 py-px text-[10.5px] leading-[1.5] max-[700px]:px-1 max-[700px]:text-[9.5px]"
+const CHIP = "flex h-5 min-w-0 flex-none items-center gap-1.5 rounded-[4px] px-1.5 text-[11.5px] max-[700px]:gap-1 max-[700px]:px-1 max-[700px]:text-[10px]"
 
+/** A class in its course's colour; a deadline white with its type's square, tinted once completed. */
 function MonthChip({ chip }: { chip: Chip }) {
     if (chip.kind === "class") {
         return (
-            <span style={accent(chip.slot.course.color)} title={classTitle(chip.slot)}
-                className={cn(CHIP, "border border-dashed border-[color-mix(in_srgb,var(--c)_40%,var(--line))] text-ink-2")}>
-                <ClassText slot={chip.slot} compact />
+            <span data-class-chip style={accent(chip.slot.course.color)} title={classTitle(chip.slot)}
+                className={cn(CHIP, "bg-[color-mix(in_srgb,var(--c)_12%,var(--panel))] font-medium text-[color-mix(in_srgb,var(--c)_85%,var(--ink))]")}>
+                <i aria-hidden="true" className="size-1.5 flex-none rounded-full bg-[var(--c)]" />
+                <span className="truncate"><ClassText slot={chip.slot} compact /></span>
             </span>
         )
     }
-    const it = chip.inst.item, m = tmeta(it.type)
+    const it = chip.inst.item, m = tmeta(it.type), done = isComplete(it)
     return (
-        <span style={accent(m.color)} title={m.label + ": " + it.title}
-            className={cn(CHIP, "bg-[color-mix(in_srgb,var(--c)_14%,var(--panel))] font-semibold text-[color-mix(in_srgb,var(--c)_80%,var(--ink))]")}>
-            {it.start && <b className="font-mono">{hhmm(it.start)} </b>}{it.title}
+        <span style={accent(m.color)} title={m.label + ": " + it.title} data-done={done || undefined}
+            className={cn(CHIP, done ? "bg-[var(--done)] text-[var(--done-ink)]" : "bg-card text-foreground shadow-[inset_0_0_0_1px_var(--line)]")}>
+            <i aria-hidden="true" className={cn("size-1.5 flex-none rounded-[1.5px]", done ? "bg-[var(--done-ink)]" : "bg-[var(--c)]")} />
+            <span className="truncate">{it.start && <b className="font-mono font-medium">{hhmm(it.start)} </b>}{it.title}</span>
         </span>
     )
 }

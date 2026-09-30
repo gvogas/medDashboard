@@ -5,7 +5,7 @@
 
 import { useEffect, useRef, useState, type ReactNode } from "react"
 import { cn } from "@/lib/utils"
-import { Card as PlainCard } from "@/components/ui/card"
+import { Card } from "@/components/ui/card"
 import { MusicPill } from "@/components/focus/music-pill"
 import { activate, control, cooldownMessage, useSpotify } from "@/data/spotify"
 import { getSheet } from "@/data/overlay"
@@ -57,7 +57,7 @@ export function SpotifyPage() {
     if (!s.player.loaded || !s.player.connected) {
         return (
             <div ref={root} className="min-w-0">
-                <PlainCard className="min-w-0">
+                <Card className="min-w-0">
                     <div className="px-3.5 py-9 text-center text-[12.5px] text-muted-foreground">
                         {!s.player.loaded
                             ? <><b className="mb-0.5 block font-semibold text-ink-2">Spotify</b>Checking your connection…</>
@@ -69,7 +69,7 @@ export function SpotifyPage() {
                                 <a href="/api/spotify/connect" className="mt-3 inline-flex rounded-[10px] border border-[color-mix(in_srgb,var(--accent)_72%,#000)] bg-[linear-gradient(color-mix(in_srgb,var(--accent)_90%,#fff),color-mix(in_srgb,var(--accent)_92%,#000))] px-3.5 py-1.5 text-[12.5px] font-[650] text-primary-foreground no-underline hover:brightness-110">Connect Spotify</a>
                             </>}
                     </div>
-                </PlainCard>
+                </Card>
             </div>
         )
     }
@@ -81,25 +81,25 @@ export function SpotifyPage() {
                 <MusicPill tone="page" open={playerOpen} onOpen={() => setPlayerOpen((o) => !o)} />
             </div>
             <div className="grid min-h-0 flex-1 gap-[13px] [grid-template-columns:minmax(260px,34%)_minmax(0,1fr)] [grid-template-rows:minmax(0,1fr)] max-[760px]:flex max-[760px]:flex-col max-[760px]:overflow-y-auto">
-                <Card label="Player" className={cn(!playerOpen && "max-[760px]:hidden")}>
+                <SpotifyCard label="Player" className={cn(!playerOpen && "max-[760px]:hidden")}>
                     <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto overscroll-contain p-3.5">
                         <NowPlaying />
                         <UpNextRecent />
                     </div>
-                </Card>
-                <Card label="Browse music">
+                </SpotifyCard>
+                <SpotifyCard label="Browse music">
                     <MusicBrowser />
-                </Card>
+                </SpotifyCard>
             </div>
         </div>
     )
 }
 
 /** A card whose inside fills the height left, and scrolls its own rows. */
-function Card({ label, className, children }: { label: string; className?: string; children: ReactNode }) {
+function SpotifyCard({ label, className, children }: { label: string; className?: string; children: ReactNode }) {
     return (
-        <PlainCard className={cn("flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden max-[760px]:flex-none", className)}>
+        <Card className={cn("flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden max-[760px]:flex-none", className)}>
             <section aria-label={label} className="flex min-h-0 flex-1 flex-col">{children}</section>
-        </PlainCard>
+        </Card>
     )
 }

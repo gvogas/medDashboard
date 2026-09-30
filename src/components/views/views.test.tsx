@@ -105,7 +105,9 @@ describe("the week", () => {
     it("lists the day's class with its items, and the tabs choose between them", () => {
         show(<Views />)
         const schedule = screen.getByRole("region", { name: "Schedule" })
-        expect(within(schedule).getByText("Anatomy")).toBeTruthy()
+        const lecture = within(schedule).getByTitle("ANAT · Lecture · Hall B")
+        expect(within(lecture).getByText("Lecture")).toBeTruthy()
+        expect(within(lecture).getByText("Hall B")).toBeTruthy()
         fireEvent.click(within(schedule).getByRole("button", { name: "Classes" }))
         expect(actions.setSchedule).toHaveBeenCalledWith("classes")
 
@@ -113,7 +115,7 @@ describe("the week", () => {
         expect(within(schedule).queryByRole("button", { name: /Renal problem set/ })).toBeNull()
         expect(within(schedule).getByRole("button", { name: "Classes" }).getAttribute("aria-pressed")).toBe("true")
         set({ schedule: "deadlines" })
-        expect(within(schedule).queryByText("Anatomy")).toBeNull()
+        expect(within(schedule).queryByTitle("ANAT · Lecture · Hall B")).toBeNull()
     })
 
     it("shows office hours, and the right message when the week is empty", () => {
@@ -128,6 +130,23 @@ describe("the week", () => {
         set({ search: "" })
         expect(screen.getByText("Nothing here yet")).toBeTruthy()
     })
+
+    it("tints a completed row and keeps the checklist bar on an open one", () => {
+        fake.data.items = [
+            ...fake.data.items,
+            item({ id: "hist", title: "Histology slides", status: "submitted" }),
+            item({ id: "case", title: "Case write-up", checklist: [{ id: "c1", text: "History", done: true }, { id: "c2", text: "Exam", done: false }] }),
+        ]
+        show(<Views />)
+        const done = screen.getByRole("button", { name: /Histology slides/ })
+        expect(done.getAttribute("data-done")).toBe("true")
+        expect(done.textContent).toMatch(/Done|Attended|Submitted|Taken/)
+        const open = screen.getByRole("button", { name: /Case write-up/ })
+        expect(open.getAttribute("data-done")).toBeNull()
+        expect(open.querySelector("[data-steps]")).toBeTruthy()
+        expect(open.textContent).toContain("1/2")
+        expect(screen.getByRole("button", { name: /Renal problem set/ }).title).toBe("Renal problem set · due 23:59")
+    })
 })
 
 describe("the month", () => {
@@ -139,6 +158,17 @@ describe("the month", () => {
         const timetable = screen.getByRole("region", { name: "Weekly timetable" })
         fireEvent.click(within(timetable).getByRole("button", { name: /Anatomy/ }))
         expect(actions.openCourse).toHaveBeenCalledWith("anat")
+    })
+
+    it("draws a class in its course's colour, and tints a completed deadline", () => {
+        fake.data.items = [...fake.data.items, item({ id: "hist", title: "Histology slides", status: "submitted" })]
+        fake.ui.view = "month"
+        show(<Views />)
+        const chip = document.querySelector("[data-class-chip]") as HTMLElement
+        expect(chip).toBeTruthy()
+        expect(chip.style.getPropertyValue("--c")).toMatch(/^#[0-9A-F]{6}$/i)
+        expect(screen.getByTitle("Assignment: Histology slides").getAttribute("data-done")).toBe("true")
+        expect(screen.getByTitle("Assignment: Renal problem set").getAttribute("data-done")).toBeNull()
     })
 })
 
