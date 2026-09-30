@@ -1,12 +1,13 @@
-import { Drawing, Frame, Tag, type PictureProps } from "./parts"
-import { nameParts } from "./names"
+import { Drawing, Frame, Tag, TORSO, type PictureProps } from "./parts"
+import { fitSize, nameParts } from "./names"
 
 /** Aviation: a leather flight jacket, fleece collar, wings, a name tape with the goal under it. */
 export function Jacket({ name, goal }: PictureProps) {
+    const last = nameParts(name).capsLast
     return (
         <Frame bg="pilot" name={name} goal={goal}>
             <Drawing>
-                <path d="M18 180V70Q18 44 48 36L86 24L110 64L134 24L172 36Q202 44 202 70V180Z" fill="#6B4A34" />
+                <path d={TORSO} fill="#6B4A34" />
                 <path d="M86 24L110 62L134 24Q110 30 86 24Z" fill="#8A9A7B" />
                 <path d="M86 24L66 30L56 72L98 60Z" fill="#E7DCC8" />
                 <path d="M134 24L154 30L164 72L122 60Z" fill="#E7DCC8" />
@@ -19,8 +20,8 @@ export function Jacket({ name, goal }: PictureProps) {
                 <rect x="132" y="112" width="44" height="34" rx="3" fill="none" stroke="#523826" strokeWidth="1.5" />
                 <path d="M132 112h44v8l-22 6-22-6Z" fill="#5C3F2C" />
             </Drawing>
-            <Tag x={62} y={111.4} className="font-mono text-[8px] tracking-[1px] text-[#E7DCC8]">{nameParts(name).capsLast}</Tag>
-            <Tag x={62} y={130.4} className="font-mono text-[6.8px] tracking-[.6px] text-[#E7DCC8]">{goal.toUpperCase()}</Tag>
+            <Tag x={62} y={111.4} style={{ fontSize: fitSize(last, 48, 8, 0.6, 1) }} className="font-mono tracking-[1px] text-[#E7DCC8]">{last}</Tag>
+            <Tag x={62} y={130.4} style={{ fontSize: fitSize(goal, 80, 6.8, 0.6, 0.6) }} className="font-mono tracking-[.6px] text-[#E7DCC8]">{goal.toUpperCase()}</Tag>
         </Frame>
     )
 }

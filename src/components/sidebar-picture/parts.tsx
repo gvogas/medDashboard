@@ -5,10 +5,13 @@ import type { CSSProperties, ReactNode } from "react"
 import { cn } from "@/lib/utils"
 import { THEMES, type Bg } from "@/data/themes"
 
+/** The shoulders and body every jacket-like picture starts from. */
+export const TORSO = "M18 180V70Q18 44 48 36L86 24L110 64L134 24L172 36Q202 44 202 70V180Z"
+
 export interface PictureProps { name: string; goal: string; username: string }
 
 export const Frame = ({ bg, name, goal, children }: { bg: Bg; name: string; goal: string; children: ReactNode }) => (
-    <span role="img" aria-label={THEMES[bg].picture + ": " + name + ", headed for " + goal} className="relative mx-auto block h-[180px] w-[220px]">
+    <span role="img" aria-label={THEMES[bg].picture + (name.trim() ? ": " + name + ", headed" : ": headed") + " for " + goal} className="relative mx-auto block h-[180px] w-[220px]">
         {children}
     </span>
 )

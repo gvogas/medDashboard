@@ -1,12 +1,12 @@
-import { Drawing, Frame, type PictureProps } from "./parts"
-import { coatSize } from "./names"
+import { Drawing, Frame, TORSO, type PictureProps } from "./parts"
+import { coatSize, fitSize } from "./names"
 
 /** Medicine: the lab coat, the name embroidered over the pocket, the goal under it, a stethoscope. */
 export function Coat({ name, goal }: PictureProps) {
     return (
         <Frame bg="med" name={name} goal={goal}>
             <Drawing>
-                <path d="M18 180V70Q18 44 48 36L86 24L110 64L134 24L172 36Q202 44 202 70V180Z" fill="var(--coat)" stroke="#CFCBC2" strokeWidth="1.2" />
+                <path d={TORSO} fill="var(--coat)" stroke="#CFCBC2" strokeWidth="1.2" />
                 <path d="M86 24L110 64L134 24Q110 32 86 24Z" fill="#2F6F6A" />
                 <path d="M86 24L110 64L100 106L72 44Z" fill="#000000" fillOpacity=".05" stroke="#CFCBC2" strokeWidth="1.2" />
                 <path d="M134 24L110 64L120 106L148 44Z" fill="#000000" fillOpacity=".05" stroke="#CFCBC2" strokeWidth="1.2" />
@@ -21,7 +21,7 @@ export function Coat({ name, goal }: PictureProps) {
             </Drawing>
             <span aria-hidden="true" className="absolute flex -translate-x-1/2 flex-col items-center gap-[3px] leading-none whitespace-nowrap text-[#1F4E7A]" style={{ left: 166, top: 76 }}>
                 <span className="font-serif font-semibold tracking-[.01em] italic" style={{ fontSize: coatSize(name) }}>{name}</span>
-                <span className="text-[6px] font-semibold tracking-[.12em] opacity-75">{goal.toUpperCase()}</span>
+                <span className="font-semibold tracking-[.12em] opacity-75" style={{ fontSize: fitSize(goal, 66, 6, 0.72) }}>{goal.toUpperCase()}</span>
             </span>
         </Frame>
     )

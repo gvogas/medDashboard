@@ -1,6 +1,6 @@
 import { THEMES } from "@/data/themes"
 import { Drawing, Frame, Tag, type PictureProps } from "./parts"
-import { nameParts } from "./names"
+import { fitSize, nameParts } from "./names"
 
 /* the barcode's bars: [x, width], from the prototype, squashed to the badge's foot */
 const BARS = [[64, 2], [68, 1], [71, 3], [76, 1], [79, 2], [84, 1], [87, 3], [92, 1], [95, 2], [99, 1], [102, 3], [107, 2], [111, 1], [114, 2], [118, 3], [123, 1], [126, 2], [130, 1], [133, 3], [138, 1], [141, 2], [145, 3], [150, 1], [153, 3]]
@@ -21,10 +21,10 @@ export function Badge({ name, goal, username }: PictureProps) {
                 <g fill="#1C1C1A">{BARS.map(([x, w]) => <rect key={x} x={x} y="164" width={w} height="8.1" />)}</g>
             </Drawing>
             <Tag x={82} y={107.2} className="text-[12px] font-semibold text-[#55534E]">{n.initials}</Tag>
-            <Tag x={110} y={94.2} left className="text-[12px] font-semibold text-[#1C1C1A]">{n.first}</Tag>
-            <Tag x={110} y={108.2} left className="text-[12px] font-semibold text-[#1C1C1A]">{n.last}</Tag>
+            <Tag x={110} y={94.2} left style={{ fontSize: fitSize(n.first, 54, 12, 0.6) }} className="font-semibold text-[#1C1C1A]">{n.first}</Tag>
+            <Tag x={110} y={108.2} left style={{ fontSize: fitSize(n.last, 54, 12, 0.6) }} className="font-semibold text-[#1C1C1A]">{n.last}</Tag>
             {username && <Tag x={110} y={124} left className="max-w-[54px] overflow-hidden font-mono text-[8.5px] text-ellipsis text-[#6E6B64]">@{username}</Tag>}
-            <Tag x={110} y={146.4} className="font-mono text-[8px] tracking-[.8px] text-white">{goal.toUpperCase()}</Tag>
+            <Tag x={110} y={146.4} style={{ fontSize: fitSize(goal, 110, 8, 0.6, 0.8) }} className="font-mono tracking-[.8px] text-white">{goal.toUpperCase()}</Tag>
         </Frame>
     )
 }

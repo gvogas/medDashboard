@@ -1,14 +1,14 @@
 import { THEMES } from "@/data/themes"
-import { Drawing, Frame, Tag, type PictureProps } from "./parts"
-import { nameParts } from "./names"
+import { Drawing, Frame, Tag, TORSO, type PictureProps } from "./parts"
+import { fitSize, nameParts } from "./names"
 
 /** Law: a dark suit, the theme's tie, a brass name plate with the goal under it. */
 export function Suit({ name, goal }: PictureProps) {
-    const accent = THEMES.law.accent
+    const accent = THEMES.law.accent, short = nameParts(name).capsShort
     return (
         <Frame bg="law" name={name} goal={goal}>
             <Drawing>
-                <path d="M18 180V70Q18 44 48 36L86 24L110 64L134 24L172 36Q202 44 202 70V180Z" fill="#2B2D33" />
+                <path d={TORSO} fill="#2B2D33" />
                 <path d="M86 24L110 104L134 24Q110 32 86 24Z" fill="#FFFFFF" />
                 <path d="M104 28h12l-2 8h-8Z" fill={accent} />
                 <path d="M106 36h8l3 10-5 50-2 4-2-4-5-50Z" fill={accent} />
@@ -20,8 +20,8 @@ export function Suit({ name, goal }: PictureProps) {
                 <path d="M148 98l6-10 5 6 5-8 6 12Z" fill="#FFFFFF" />
                 <rect x="36" y="94" width="58" height="16" rx="2" fill="#C9A24A" />
             </Drawing>
-            <Tag x={65} y={98.9} className="text-[7.5px] font-semibold tracking-[1px] text-[#2B2410]">{nameParts(name).capsShort}</Tag>
-            <Tag x={65} y={116.4} className="text-[6.8px] tracking-[.8px] text-[#C9A24A]">{goal.toUpperCase()}</Tag>
+            <Tag x={65} y={98.9} style={{ fontSize: fitSize(short, 54, 7.5, 0.6, 1) }} className="font-semibold tracking-[1px] text-[#2B2410]">{short}</Tag>
+            <Tag x={65} y={116.4} style={{ fontSize: fitSize(goal, 70, 6.8, 0.6, 0.8) }} className="tracking-[.8px] text-[#C9A24A]">{goal.toUpperCase()}</Tag>
         </Frame>
     )
 }

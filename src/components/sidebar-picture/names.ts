@@ -12,5 +12,13 @@ export function nameParts(name: string) {
     }
 }
 
+/**
+ * The largest font size, at most basePx, at which `text` fits in maxPx: each character is
+ * about charEm of the size wide (~0.6 mono and capitals, ~0.47 the coat's italic serif),
+ * plus trackPx of letter-spacing. Rounded to 0.1, never below 4px.
+ */
+export const fitSize = (text: string, maxPx: number, basePx: number, charEm: number, trackPx = 0) =>
+    Math.max(4, Math.min(basePx, Math.round((maxPx / Math.max(1, text.length) - trackPx) / charEm * 10) / 10))
+
 /** The embroidery's font size: 12.5px, smaller for a long name, so it fits the pocket. */
-export const coatSize = (name: string) => Math.min(12.5, Math.round(66 / (Math.max(1, name.length) * 0.47) * 10) / 10)
+export const coatSize = (name: string) => fitSize(name, 66, 12.5, 0.47)
