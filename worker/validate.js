@@ -15,7 +15,7 @@ const TYPE_COLOURS = ['#C0392B', '#B77505', '#1E628F', '#5A46A8', '#4C7370', '#0
 const TYPE_KINDS = ['todo', 'event', 'graded'];
 const KINDS = ['Lecture', 'Lab', 'Seminar', 'Tutorial', 'PBL', 'Clinical'];
 const THEMES = ['light', 'dark', 'system'];
-const BACKGROUNDS = ['med', 'cs'];
+const BACKGROUNDS = ['med', 'cs', 'law', 'pilot', 'sports', 'eng'];
 const DATE = /^[0-9]{4}-[0-9]{2}-[0-9]{2}$/;
 const TIME = /^(?:[01][0-9]|2[0-3]):[0-5][0-9]$/;
 

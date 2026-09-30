@@ -26,7 +26,9 @@ describe('database relationships and inspection views', () => {
     const saved = await upsertRow(env.DB, 'items', id, 'p', normalizeItem({ id: 'p', title: 'Compiler', type: 'project' }));
     expect(saved.type).toBe('project');
     expect(await env.DB.prepare('SELECT bg FROM users WHERE id = ?').bind(id).first()).toEqual({ bg: 'med' });
-    await expect(env.DB.prepare("UPDATE users SET bg = 'law' WHERE id = ?").bind(id).run()).rejects.toThrow(/CHECK constraint failed/);
+    await env.DB.prepare("UPDATE users SET bg = 'law' WHERE id = ?").bind(id).run();
+    expect(await env.DB.prepare('SELECT bg FROM users WHERE id = ?').bind(id).first()).toEqual({ bg: 'law' });
+    await expect(env.DB.prepare("UPDATE users SET bg = 'foo' WHERE id = ?").bind(id).run()).rejects.toThrow(/CHECK constraint failed/);
     await expect(env.DB.prepare("UPDATE items SET type = 'essay' WHERE user_id = ?").bind(id).run()).rejects.toThrow(/CHECK constraint failed/);
   });
 
