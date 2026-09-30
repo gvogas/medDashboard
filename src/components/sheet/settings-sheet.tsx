@@ -254,7 +254,7 @@ function Quotes() {
                 {quotes.map((q) => (
                     <div key={q.id} className="flex items-start gap-2 rounded-lg bg-muted px-2.5 py-2">
                         <div className="min-w-0 flex-1">
-                            <div className="font-[Spectral,Georgia,serif] text-[12.5px] [overflow-wrap:anywhere] text-foreground italic">“{q.text}”</div>
+                            <div className="font-serif text-[12.5px] [overflow-wrap:anywhere] text-foreground italic">“{q.text}”</div>
                             {q.source && <div className="mt-0.5 text-[10.5px] text-muted-foreground">— {q.source}</div>}
                         </div>
                         <RemoveButton aria-label="Remove quote" onClick={() => void removeQuote(q.id)} />

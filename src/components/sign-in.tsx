@@ -5,7 +5,7 @@
 import { useEffect, useRef, useState, type FormEvent } from "react"
 import { signIn } from "@/data/session"
 import { useSignInState } from "@/data/signin"
-import { TextureCard } from "@/components/ui/texture-card"
+import { Card } from "@/components/ui/card"
 import { TextureButton } from "@/components/ui/texture-button"
 
 const field =
@@ -37,9 +37,9 @@ export function SignIn() {
     }
 
     return (
-        <TextureCard className="w-[min(380px,100%)]">
+        <Card className="w-[min(380px,100%)]">
             <form id="loginForm" autoComplete="on" onSubmit={submit} className="flex flex-col gap-1.5 px-7 pt-8 pb-6 text-center">
-                <h1 className="m-0 font-sans leading-none">
+                <h1 className="m-0 leading-none">
                     <span className="font-serif text-6xl font-semibold tracking-[-.02em]">Term</span>
                 </h1>
                 <p className="m-0 mb-4 text-sm text-muted-foreground">Your med-school week, in one place.</p>
@@ -76,6 +76,6 @@ export function SignIn() {
                     {busy ? "Signing in…" : "Sign in"}
                 </TextureButton>
             </form>
-        </TextureCard>
+        </Card>
     )
 }

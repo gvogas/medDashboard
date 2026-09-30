@@ -225,7 +225,7 @@ function Tasks({ list, open, cs }: { list: Item[]; open: number; cs: boolean }) 
 /** Med: a steroid in the corner. CS: a small binary tree. */
 const Corner = ({ cs }: { cs: boolean }) => (
     <svg viewBox="0 0 120 80" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true"
-        className="pointer-events-none absolute -right-2 -bottom-3 h-[60px] w-[90px] text-[var(--accent)] opacity-[calc(.35*var(--orn-art))]">
+        className="pointer-events-none absolute -right-2 -bottom-3 h-[60px] w-[90px] text-[var(--accent)] opacity-15">
         {cs ? (
             <>
                 <circle cx="60" cy="12" r="6" /><circle cx="32" cy="40" r="6" /><circle cx="88" cy="40" r="6" />
