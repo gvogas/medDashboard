@@ -19,10 +19,8 @@
   --weave-1:rgba(20,48,45,.035); --weave-2:rgba(20,48,45,.025);
   --pocket-a:#FBFDFC; --pocket-b:#F3F8F7;
   --cell-out:#FAFCFC; --box-line:#7A938F; --disabled:#C3D6D3;
-  --scroll-track:#E4EDEB; --orn-stroke:#0E7C74;
   --coat:#17B3AE;   /* the lab coat's colour, set from Settings */
   --spotify:#1DB954;   /* Spotify's own green, in every theme */
-  --orn-bg:.20; --orn-art:.42; --orn-weave:1;
   --shadow-1:0 1px 2px rgba(28,28,26,.06);
   --shadow-2:0 2px 6px rgba(28,28,26,.06), 0 24px 60px rgba(28,28,26,.16);
   /* Texture: a light rim above a dark one; the floating sheet's lift; the scrim behind it */
@@ -47,7 +45,6 @@
   --weave-1:rgba(255,255,255,.028); --weave-2:rgba(255,255,255,.020);
   --pocket-a:#162526; --pocket-b:#101C1D;
   --cell-out:#0D1718; --box-line:#5C726F; --disabled:#294240;
-  --scroll-track:#22322F; --orn-stroke:#3FBFB2;
   --shadow-1:0 1px 2px rgba(0,0,0,.4);
   --shadow-2:0 2px 8px rgba(0,0,0,.45), 0 16px 40px rgba(0,0,0,.5);
   --rim-hi:rgba(255,255,255,.07); --rim-lo:rgba(0,0,0,.55);
@@ -69,8 +66,6 @@
   --chip-bg:#F1EFEA; --chip-ink:#55534E;
   --weave-1:rgba(23,32,51,.035); --weave-2:rgba(23,32,51,.025);
   --cell-out:#F9FAFD; --box-line:#7E89A3; --disabled:#C5CCDC;
-  --scroll-track:#E3E7F0; --orn-stroke:#3650C8;
-  --orn-bg:.22;
   --rim-hi:rgba(255,255,255,.9); --rim-lo:rgba(23,32,51,.10);
   --done:#E3F1E8; --done-2:#D7EBDF; --done-line:#C7E2D2; --done-ink:#2C6541; --done-track:#CFE7D8; --side-bg:#EFEEE9; --done-bar-a:#A8DDBC; --done-bar-b:#3E8E5E;
 }
@@ -82,7 +77,6 @@
   --chip-bg:#262724; --chip-ink:#B9B6AE;
   --weave-1:rgba(255,255,255,.028); --weave-2:rgba(255,255,255,.020);
   --cell-out:#0D1220; --box-line:#5F6B8A; --disabled:#2A3350;
-  --scroll-track:#222B40; --orn-stroke:#7D92F5;
   --rim-hi:rgba(255,255,255,.07); --rim-lo:rgba(0,0,0,.55);
   --done:#17301F; --done-2:#1D3A26; --done-line:#28503A; --done-ink:#9CD8B0; --done-track:#28503A; --side-bg:#171816; --done-bar-a:#3E8E5E; --done-bar-b:#8FD4A8;
 }

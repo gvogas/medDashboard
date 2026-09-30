@@ -4,7 +4,7 @@
 
 import { motion, useReducedMotion } from "framer-motion"
 import { hideToast, runToastAction, useToast, type Toast } from "@/data/toast"
-import { TextureCard } from "@/components/ui/texture-card"
+import { Card } from "@/components/ui/card"
 import { TextureButton } from "@/components/ui/texture-button"
 import { cn } from "@/lib/utils"
 import { TONE } from "@/components/study/achievements"
@@ -15,13 +15,13 @@ export function Toaster() {
        announce content added to a region they already know more reliably than a new one. */
     return (
         <>
-            <div role="status" aria-live="polite">{t && !t.error && <Card t={t} />}</div>
-            <div role="alert" aria-live="assertive">{t?.error && <Card t={t} />}</div>
+            <div role="status" aria-live="polite">{t && !t.error && <ToastCard t={t} />}</div>
+            <div role="alert" aria-live="assertive">{t?.error && <ToastCard t={t} />}</div>
         </>
     )
 }
 
-function Card({ t }: { t: Toast }) {
+function ToastCard({ t }: { t: Toast }) {
     const reduced = useReducedMotion()
     return (
         <motion.div
@@ -36,7 +36,7 @@ function Card({ t }: { t: Toast }) {
                 "max-[640px]:right-3 max-[640px]:left-3 max-[640px]:bottom-[calc(84px+env(safe-area-inset-bottom,0px))] max-[640px]:max-w-none"
             )}
         >
-            <TextureCard className="bg-card shadow-[var(--shadow-2)]">
+            <Card className="shadow-[var(--shadow-2)]">
                 <div className={cn("flex items-center gap-2 py-1.5 pr-1.5 pl-4 text-sm", t.error ? "text-destructive" : "text-foreground")}>
                     {t.error && <span aria-hidden="true" className="size-2 shrink-0 rounded-full bg-destructive" />}
                     {t.badge && (t.badge.sticker
@@ -57,7 +57,7 @@ function Card({ t }: { t: Toast }) {
                         ✕
                     </button>
                 </div>
-            </TextureCard>
+            </Card>
         </motion.div>
     )
 }

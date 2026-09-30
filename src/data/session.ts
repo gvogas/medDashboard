@@ -6,7 +6,6 @@ import * as store from "@/core/store"
 import { data, type ServerProfile, type StoreEvent } from "@/core/store"
 import * as sync from "@/core/sync"
 import { notify } from "@/bridge"
-import { redrawOrnament as drawOrnament } from "./ornament"
 import * as spotify from "./spotify/player"
 import * as web from "./spotify/web-player"
 import { closeSheet } from "./overlay"
@@ -43,7 +42,6 @@ async function start(profile: ServerProfile) {
     await run.load()
     if (run.active()) ui.focus = true       /* a run this device was in the middle of */
     notify()
-    drawOrnament()
     celebrateStudy()                             /* the first look only records where today stands */
     celebrateAchievements()
     sync.init()

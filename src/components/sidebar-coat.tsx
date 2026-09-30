@@ -23,13 +23,13 @@ function Pocket({ name, role }: { name: string; role: string }) {
     return (
         <div className="group relative rounded-[3px_3px_8px_8px] border border-t-2 border-[color:color-mix(in_srgb,var(--coat)_26%,var(--line))] border-t-[color:color-mix(in_srgb,var(--coat)_40%,var(--line))] bg-[linear-gradient(color-mix(in_srgb,var(--coat)_7%,var(--pocket-a)),color-mix(in_srgb,var(--coat)_14%,var(--pocket-b)))] px-3 pt-3 pb-3.5 before:absolute before:inset-x-[7px] before:top-1 before:border-t before:border-dashed before:border-[color:color-mix(in_srgb,var(--coat)_62%,transparent)] before:content-[''] [[data-bg=cs]_&]:hidden">
             <span aria-hidden="true" className="absolute top-[-7px] right-3 h-10 w-[9px] rounded-[2px_2px_4px_4px] bg-[#3C6E8F] after:absolute after:inset-x-px after:top-[-6px] after:h-[13px] after:rounded-[3px] after:bg-[#B9C7CC] after:content-['']" />
-            <div className="font-[family-name:Spectral,Georgia,serif] text-[14px] font-semibold text-[color:color-mix(in_srgb,var(--coat)_74%,var(--ink))] italic">
+            <div className="font-serif text-[14px] font-semibold text-[color:color-mix(in_srgb,var(--coat)_74%,var(--ink))] italic">
                 <span>{name}</span>
                 <button type="button" className={editButton} aria-label="Edit the name on the coat" onClick={() => openSettings("o-name")}>✎</button>
             </div>
             {role && <div className="mt-px text-[9.5px] tracking-[.13em] text-muted-foreground uppercase">{role}</div>}
             <svg viewBox="0 0 60 34" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" aria-hidden="true"
-                className="absolute right-[27px] bottom-[5px] h-7 w-[50px] text-primary opacity-[var(--orn-art)]">
+                className="absolute right-[27px] bottom-[5px] h-7 w-[50px] text-primary opacity-[.42]">
                 <path d="M4 6c0 9 7 8 9 14s7 9 14 8 12-6 18-6" /><path d="M11 4c0 7 4 8 6 12" />
                 <circle cx="50" cy="20" r="6" /><circle cx="50" cy="20" r="2.6" /><path d="M44.6 21.6 42 23" />
             </svg>

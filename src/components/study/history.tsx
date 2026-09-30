@@ -241,7 +241,7 @@ function SessionRow({ s, withDay, onDelete }: { s: StudySession; withDay: boolea
             </span>
             <span className="flex min-w-0 flex-col @max-[560px]:[grid-area:what]">
                 <b className="truncate font-semibold">{it ? it.title : (courseOf(s.courseId) as Course | null)?.name || "No course"}</b>
-                {note && <em className="truncate font-[Spectral,Georgia,serif] text-[12.5px] text-ink-2 italic">{note}</em>}
+                {note && <em className="truncate font-serif text-[12.5px] text-ink-2 italic">{note}</em>}
             </span>
             <span className="text-right font-mono font-semibold @max-[560px]:[grid-area:mins]">{duration(s.studyMinutes)}</span>
             <span className={cn(
