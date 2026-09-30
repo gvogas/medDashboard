@@ -9,6 +9,7 @@ import { openCourse, setCourse } from "@/data/actions"
 import { Coat } from "./sidebar-coat"
 import { Count, counts, Heading, Pip, Row } from "./sidebar-parts"
 import { TypeList } from "./sidebar-types"
+import { SideNav } from "./side-nav"
 import { SidebarPlayer } from "./spotify/sidebar-player"
 
 export function Sidebar() {
@@ -19,6 +20,7 @@ export function Sidebar() {
                     <span aria-hidden="true" className="grid size-7 shrink-0 place-items-center rounded-[9px] bg-[linear-gradient(var(--accent),color-mix(in_srgb,var(--accent)_70%,#000))] text-[14px] text-primary-foreground shadow-[inset_0_1px_0_rgba(255,255,255,.35),0_2px_6px_color-mix(in_srgb,var(--accent)_40%,transparent)]">R</span>
                     Rounds
                 </div>
+                <SideNav />
                 <TypeList />
                 <CourseList />
                 <div className="mt-auto flex flex-col gap-3 pt-2">
