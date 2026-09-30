@@ -8,7 +8,7 @@
   --bg:#F6F5F1; --panel:#FFFFFF; --panel-2:#FBFAF8;
   --ink:#1C1C1A; --ink-2:#55534E; --ink-3:#6E6B64;
   --line:#E6E3DC; --line-2:#EFEDE8;
-  --accent:#0F5F58; --accent-soft:#EEF5F3; --accent-ink:#0A4540; --on-accent:#FFFFFF;
+  --accent:#0F5F58; --accent-soft:#EEF5F3; --accent-ink:#0A4540; --motif:#B3362B; --on-accent:#FFFFFF;
   --good:#2F7A4F; --crit:#A8322A; --on-crit:#FFFFFF; --warn:#8A5300;
   --done:#FBE8EF; --done-2:#F8DFE8; --done-line:#F2D3DF; --done-ink:#874A60; --done-track:#F3D3DE; --side-bg:#EFEEE9; --done-bar-a:#EFAEC3; --done-bar-b:#D9648C;
   --chip-bg:#F1EFEA; --chip-ink:#55534E;
@@ -33,7 +33,7 @@
   --bg:#121312; --panel:#1B1C1A; --panel-2:#222320;
   --ink:#ECEAE4; --ink-2:#B9B6AE; --ink-3:#9A978F;
   --line:#2E2F2B; --line-2:#262724;
-  --accent:#5CC2B6; --accent-soft:#16302D; --accent-ink:#8FDAD0; --on-accent:#06201D;
+  --accent:#5CC2B6; --accent-soft:#16302D; --accent-ink:#8FDAD0; --motif:#E86A5E; --on-accent:#06201D;
   --good:#5FB585; --crit:#EE7A68; --on-crit:#1B0A08; --warn:#DCA23F;
   --done:#35202A; --done-2:#3E2531; --done-line:#4A2C38; --done-ink:#EFB3C7; --done-track:#4A2C38; --side-bg:#171816; --done-bar-a:#B85C7E; --done-bar-b:#EF8FB0;
   --chip-bg:#262724; --chip-ink:#B9B6AE;
@@ -60,7 +60,7 @@
   --bg:#F6F5F1; --panel:#FFFFFF; --panel-2:#FBFAF8;
   --ink:#1C1C1A; --ink-2:#55534E; --ink-3:#6E6B64;
   --line:#E6E3DC; --line-2:#EFEDE8;
-  --accent:#2B4FA8; --accent-soft:#EFF2FA; --accent-ink:#1E3A80; --on-accent:#FFFFFF;
+  --accent:#2B4FA8; --accent-soft:#EFF2FA; --accent-ink:#1E3A80; --motif:#2B4FA8; --on-accent:#FFFFFF;
   --chip-bg:#F1EFEA; --chip-ink:#55534E;
   --box-line:#7E89A3; --disabled:#C5CCDC;
   --rim-hi:rgba(255,255,255,.9);
@@ -70,11 +70,48 @@
   --bg:#121312; --panel:#1B1C1A; --panel-2:#222320;
   --ink:#ECEAE4; --ink-2:#B9B6AE; --ink-3:#9A978F;
   --line:#2E2F2B; --line-2:#262724;
-  --accent:#8EA2F0; --accent-soft:#1B2340; --accent-ink:#B4C1F6; --on-accent:#0A1030;
+  --accent:#8EA2F0; --accent-soft:#1B2340; --accent-ink:#B4C1F6; --motif:#8EA2F0; --on-accent:#0A1030;
   --chip-bg:#262724; --chip-ink:#B9B6AE;
   --box-line:#5F6B8A; --disabled:#2A3350;
   --rim-hi:rgba(255,255,255,.07);
   --done:#17301F; --done-2:#1D3A26; --done-line:#28503A; --done-ink:#9CD8B0; --done-track:#28503A; --side-bg:#171816; --done-bar-a:#3E8E5E; --done-bar-b:#8FD4A8;
+}
+
+/* ════════════════════════════════════════════════
+   Law, Aviation, Sports, Engineering: the accent, today's tint and the completed
+   colours move; the paper and ink stay. Values: the prototype's THEMES.
+   ════════════════════════════════════════════════ */
+:root[data-bg="law"]{
+  --accent:#7A2E2E; --accent-soft:#F7F0EF; --accent-ink:#582121; --motif:#7A2E2E;
+  --done:#F4ECD6; --done-2:#ECE3CB; --done-line:#E3D9C0; --done-ink:#6A511C; --done-track:#EADFC0; --done-bar-a:#EAD49A; --done-bar-b:#B08A2E;
+}
+:root[data-app="dark"][data-bg="law"]{
+  --accent:#D98C8C; --accent-soft:#341919; --accent-ink:#E8B0B0; --on-accent:#200909; --motif:#D98C8C;
+  --done:#352D1D; --done-2:#3F3622; --done-line:#4B412A; --done-ink:#EADAB8; --done-track:#4B412A; --done-bar-a:#B08A2E; --done-bar-b:#E2C98D;
+}
+:root[data-bg="pilot"]{
+  --accent:#1F3A5F; --accent-soft:#F0F3F7; --accent-ink:#162A44; --motif:#1F3A5F;
+  --done:#DFEBF6; --done-2:#D4E1EE; --done-line:#C9D8E6; --done-ink:#274B70; --done-track:#C9DCEE; --done-bar-a:#B3D2EE; --done-bar-b:#4F83B8;
+}
+:root[data-app="dark"][data-bg="pilot"]{
+  --accent:#8CADD9; --accent-soft:#192434; --accent-ink:#B0C8E8; --on-accent:#091320; --motif:#8CADD9;
+  --done:#1D2935; --done-2:#22303F; --done-line:#2A3A4B; --done-ink:#B8D1EA; --done-track:#2A3A4B; --done-bar-a:#4F83B8; --done-bar-b:#8DB7E2;
+}
+:root[data-bg="sports"]{
+  --accent:#2F6B3A; --accent-soft:#EEF5EF; --accent-ink:#224D2A; --motif:#C2571A;
+  --done:#FCE8D8; --done-2:#F5DECC; --done-line:#EED4C0; --done-ink:#84420F; --done-track:#F5D6BE; --done-bar-a:#F7C49B; --done-bar-b:#D9722E;
+}
+:root[data-app="dark"][data-bg="sports"]{
+  --accent:#8CD99A; --accent-soft:#19341E; --accent-ink:#B0E8BA; --on-accent:#09200D; --motif:#E2AF8D;
+  --done:#35271D; --done-2:#3F2F22; --done-line:#4B392A; --done-ink:#EACEB8; --done-track:#4B392A; --done-bar-a:#D9722E; --done-bar-b:#E2AF8D;
+}
+:root[data-bg="eng"]{
+  --accent:#3F4E5E; --accent-soft:#F0F2F4; --accent-ink:#2D3844; --motif:#D9651A;
+  --done:#FBF3C8; --done-2:#F2EABD; --done-line:#E9E0B1; --done-ink:#665509; --done-track:#F1E39A; --done-bar-a:#F4DE74; --done-bar-b:#C9A21C;
+}
+:root[data-app="dark"][data-bg="eng"]{
+  --accent:#8CB1D9; --accent-soft:#192634; --accent-ink:#B0CBE8; --on-accent:#091420; --motif:#F0A060;
+  --done:#35311D; --done-2:#3F3A22; --done-line:#4B452A; --done-ink:#EAE1B8; --done-track:#4B452A; --done-bar-a:#C9A21C; --done-bar-b:#E2CF8D;
 }
 
 *{box-sizing:border-box}
@@ -88,8 +125,8 @@
 :root{
   --study:#C8577F; --study-soft:#FBE3EC; --study-ink:#9C4D66; --study-card:#6E2A45; --study-card-2:#843552;
   --break:#8B5CC7; --break-soft:#EEE6FA; --break-ink:#6B45A0; --break-card:#43296B; --break-card-2:#53337F;
-  --fx-study-bg:#1C0A12; --fx-study-glow:rgba(245,168,195,.30); --fx-study:#F5A8C3; --fx-study-card:#3A1624; --fx-study-card-2:#4A1D2F;
-  --fx-break-bg:#110B22; --fx-break-glow:rgba(188,166,230,.34); --fx-break:#C9B6F2; --fx-break-card:#281E45; --fx-break-card-2:#342857;
+  --fx-study-bg:#0C2A27; --fx-study:#F5A8C3;
+  --fx-break-bg:#313438; --fx-break:#C9B6F2;
 }
 :root[data-app="dark"]{
   --study:#EFA3BE; --study-soft:#3A2029; --study-ink:#F5BCD0; --study-card:#3A1726; --study-card-2:#4C1F32;
@@ -98,10 +135,44 @@
 :root[data-bg="cs"]{
   --study:#0E7C74; --study-soft:#D8EDEA; --study-ink:#0A5B55; --study-card:#0F4F4A; --study-card-2:#17625C;
   --break:#C0577A; --break-soft:#FBE3EC; --break-ink:#9C4D66; --break-card:#6E2A42; --break-card-2:#853752;
-  --fx-study-bg:#041B1A; --fx-study-glow:rgba(56,196,180,.30); --fx-study:#5FD3C6; --fx-study-card:#0E2E2B; --fx-study-card-2:#143D39;
-  --fx-break-bg:#1A0811; --fx-break-glow:rgba(236,130,168,.30); --fx-break:#F29BB8; --fx-break-card:#35141F; --fx-break-card-2:#461B29;
+  --fx-study-bg:#111B36; --fx-study:#5FD3C6;
+  --fx-break-bg:#193139; --fx-break:#F29BB8;
 }
 :root[data-bg="cs"][data-app="dark"]{
   --study:#3FBFB2; --study-soft:#11302D; --study-ink:#7FD8CE; --study-card:#0B2E2B; --study-card-2:#11403C;
   --break:#E28AA8; --break-soft:#3A2029; --break-ink:#EFAFC3; --break-card:#3A1726; --break-card-2:#4C1F32;
+}
+
+/* Law, Aviation, Sports, Engineering: the page's study colour is the completed bar's
+   deep end, the break the accent; the dark surfaces are the prototype's STUDY colours. */
+:root[data-bg="law"]{
+  --study:#B08A2E; --study-soft:#F4ECD6; --study-ink:#6A511C; --study-card:#5A4618; --study-card-2:#6E561E;
+  --break:#7A2E2E; --break-soft:#F7F0EF; --break-ink:#582121; --break-card:#4A1C1C; --break-card-2:#5C2424;
+  --fx-study-bg:#2A1616; --fx-break-bg:#3D2818; --fx-study:#E19898; --fx-break:#EAD49A;
+}
+:root[data-bg="pilot"]{
+  --study:#4F83B8; --study-soft:#DFEBF6; --study-ink:#274B70; --study-card:#223F5E; --study-card-2:#2A4C70;
+  --break:#1F3A5F; --break-soft:#F0F3F7; --break-ink:#162A44; --break-card:#16293F; --break-card-2:#1D344F;
+  --fx-study-bg:#0F1B2B; --fx-break-bg:#162940; --fx-study:#98B7E1; --fx-break:#B3D2EE;
+}
+:root[data-bg="sports"]{
+  --study:#D9722E; --study-soft:#FCE8D8; --study-ink:#84420F; --study-card:#6E3A12; --study-card-2:#844718;
+  --break:#2F6B3A; --break-soft:#EEF5EF; --break-ink:#224D2A; --break-card:#1E4526; --break-card-2:#26542F;
+  --fx-study-bg:#10261A; --fx-break-bg:#332E17; --fx-study:#98E1A6; --fx-break:#F7C49B;
+}
+:root[data-bg="eng"]{
+  --study:#C9A21C; --study-soft:#FBF3C8; --study-ink:#665509; --study-card:#5A4A0C; --study-card-2:#6E5B10;
+  --break:#3F4E5E; --break-soft:#F0F2F4; --break-ink:#2D3844; --break-card:#28323D; --break-card-2:#313D4A;
+  --fx-study-bg:#1C232B; --fx-break-bg:#323221; --fx-study:#98BCE1; --fx-break:#F4DE74;
+}
+:root[data-bg="law"][data-app="dark"]{ --study:#E2C98D; --study-soft:#352D1D; --study-ink:#EADAB8; --break:#D98C8C; --break-soft:#341919; --break-ink:#E8B0B0; }
+:root[data-bg="pilot"][data-app="dark"]{ --study:#8DB7E2; --study-soft:#1D2935; --study-ink:#B8D1EA; --break:#8CADD9; --break-soft:#192434; --break-ink:#B0C8E8; }
+:root[data-bg="sports"][data-app="dark"]{ --study:#E2AF8D; --study-soft:#35271D; --study-ink:#EACEB8; --break:#8CD99A; --break-soft:#19341E; --break-ink:#B0E8BA; }
+:root[data-bg="eng"][data-app="dark"]{ --study:#E2CF8D; --study-soft:#35311D; --study-ink:#EAE1B8; --break:#8CB1D9; --break-soft:#192634; --break-ink:#B0CBE8; }
+
+/* The study surfaces' flip cards: a step lighter than the surface, in every theme. */
+:root{
+  --fx-study-card:color-mix(in srgb,#FFFFFF 8%,var(--fx-study-bg)); --fx-study-card-2:color-mix(in srgb,#FFFFFF 12%,var(--fx-study-bg));
+  --fx-break-card:color-mix(in srgb,#FFFFFF 8%,var(--fx-break-bg)); --fx-break-card-2:color-mix(in srgb,#FFFFFF 12%,var(--fx-break-bg));
+  --fx-study-glow:color-mix(in srgb,var(--fx-study) 30%,transparent); --fx-break-glow:color-mix(in srgb,var(--fx-break) 32%,transparent);
 }
