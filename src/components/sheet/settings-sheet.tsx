@@ -1,4 +1,4 @@
-// Settings in the sheet, in four tabs: You (the look, the coat or badge, quotes), Study
+// Settings in the sheet, in four tabs: You (theme, where you're headed, name, look, quotes), Study
 // (the goal and streak, reviews, import, the school calendar, the calendar feed), Spotify,
 // and Account (data, saved copies, signing out). Everything saves as it changes.
 
@@ -28,8 +28,10 @@ import { openSchool, readSchoolFile, removeSchool } from "@/data/school-edit"
 import {
     addQuote, disconnectSpotify, exportData, keepSignedIn, removeQuote, resolveConflict, saveCoat, setSettingsTab, showShortcuts, signOut,
 } from "@/data/actions"
+import { BGS, GOALS as THEME_GOALS, THEMES, goalFor, type Bg } from "@/data/themes"
 import type { Feed, Profile } from "@/data/types"
-import { Button, CONTROL, Fields, Label, RemoveButton, SheetBody, SheetFoot, SheetHead, Swatches, TextArea, TextInput } from "./fields"
+import { radioKeys, rovingTab } from "./radio-keys"
+import { Button, CONTROL, RemoveButton, SheetBody, SheetFoot, SheetHead, Swatches, TextArea, TextInput } from "./fields"
 
 export function SettingsSheet({ tab, focus }: { tab: SettingsTab; focus: string | null }) {
     const profile = useProfile()
@@ -140,12 +142,11 @@ function FilePick({ id, label, busy = false, accept, onFile }: { id: string; lab
 
 /* ── You ── */
 
-const THEMES = [
+const LOOKS = [
     ["light", "Light", ["#EEF4F3", "#FFFFFF", "#0E7C74"]],
     ["dark", "Dark", ["#0A1214", "#111D1E", "#3FBFB2"]],
     ["system", "System", ["#EEF4F3", "#0A1214", "#3FBFB2"]],
 ] as const
-const BGS = [["med", "Med", "Helices, rings and a lipid tail"], ["cs", "CS", "Circuits, trees and code"]] as const
 
 function YouTab({ profile }: { profile: Profile }) {
     const theme = useUi((u) => u.theme)
@@ -153,9 +154,34 @@ function YouTab({ profile }: { profile: Profile }) {
     const dark = document.documentElement.getAttribute("data-app") === "dark"
     return (
         <>
-            <Group title="Look" state={themeLabel(theme, dark)}>
+            <Group title="Theme" state={THEMES[bg].label} id="themeGrp">
+                <Hint>Changes the sidebar, colours and the next-exam animation.</Hint>
+                <div role="radiogroup" aria-label="Theme" onKeyDown={radioKeys} className="flex flex-col gap-1.5">
+                    {BGS.map((id, i) => {
+                        const t = THEMES[id], on = bg === id
+                        return (
+                            <button key={id} type="button" role="radio" aria-checked={on} tabIndex={rovingTab(i, BGS.indexOf(bg))} onClick={() => setBg(id)}
+                                className={cn(
+                                    "grid min-h-[60px] cursor-pointer grid-cols-[44px_minmax(0,1fr)_20px] items-center gap-3.5 rounded-lg border px-3.5 py-2 text-left font-[inherit] text-[14px] text-foreground",
+                                    "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)]",
+                                    on ? "border-foreground bg-[var(--bg)]" : "border-border bg-card",
+                                )}>
+                                <span aria-hidden="true" className="grid h-8 w-11 grid-cols-2 overflow-hidden rounded-[5px] shadow-[inset_0_0_0_1px_var(--line)]">
+                                    <span style={{ background: t.accent }} /><span style={{ background: t.done }} />
+                                </span>
+                                <span className="flex flex-col gap-px"><span className="font-medium">{t.label}</span><span className="text-[12.5px] text-muted-foreground">{t.desc}</span></span>
+                                <span aria-hidden="true" className={cn("size-[18px] rounded-full", on ? "border-[5px] border-foreground" : "border-[1.5px] border-[var(--box-line)]")} />
+                            </button>
+                        )
+                    })}
+                </div>
+            </Group>
+            <Headed key={bg} profile={profile} bg={bg} />
+            <NameField profile={profile} />
+            {bg === "med" && <CoatColour profile={profile} />}
+            <Group title="Appearance" state={themeLabel(theme, dark)}>
                 <div className="flex gap-1.5">
-                    {THEMES.map(([id, label, sw]) => (
+                    {LOOKS.map(([id, label, sw]) => (
                         <button key={id} type="button" aria-pressed={theme === id} onClick={() => setTheme(id)}
                             className={cn(
                                 "flex flex-1 cursor-pointer flex-col items-center gap-1.5 rounded-[10px] border border-border bg-muted p-2 font-[inherit] text-[12px] text-ink-2",
@@ -168,76 +194,57 @@ function YouTab({ profile }: { profile: Profile }) {
                         </button>
                     ))}
                 </div>
-                <div className="grid grid-cols-2 gap-1.5">
-                    {BGS.map(([id, label, text]) => (
-                        <button key={id} type="button" aria-pressed={bg === id} onClick={() => setBg(id)}
-                            className={cn(
-                                "flex cursor-pointer flex-col gap-1 rounded-[10px] border border-border bg-muted p-2 text-left font-[inherit] text-[11px] text-muted-foreground",
-                                bg === id && "border-[var(--accent)] bg-accent",
-                            )}>
-                            {/* the art is a masked SVG, in styles/shell.css */}
-                            <span className="bgthumb" data-thumb={id} aria-hidden="true" />
-                            <b className={cn("text-[12px]", bg === id ? "text-accent-foreground" : "text-ink-2")}>{label}</b>
-                            <span>{text}</span>
-                        </button>
-                    ))}
-                </div>
-                <Hint>CS swaps the coat for an ID badge and adds Projects.</Hint>
             </Group>
-            {bg === "cs" ? <Badge profile={profile} /> : <Coat profile={profile} />}
             <Quotes />
         </>
     )
 }
 
-/** Name and line under, saved as typed (shown on the coat or badge at once). */
-function CoatFields({ profile, placeholder }: { profile: Profile; placeholder: string }) {
-    const [name, setName] = useState(profile.coat?.name ?? "")
-    const [role, setRole] = useState(profile.coat?.role ?? "")
+/** Where you're headed: one of the theme's six goals, or typed. Stored in coat.role; shown on the picture. */
+function Headed({ profile, bg }: { profile: Profile; bg: Bg }) {
+    const saved = (profile.coat?.role ?? "").trim()
+    const [own, setOwn] = useState(saved && !THEME_GOALS[bg].includes(saved) ? saved : "")
+    const now = goalFor(bg, saved)
     return (
-        <Fields>
-            <Label htmlFor="o-name">Name</Label>
-            <TextInput id="o-name" value={name} maxLength={28} placeholder={profile.displayName || "Your name"}
-                onChange={(e) => { setName(e.target.value); void saveCoat({ name: e.target.value }) }} />
-            <Label htmlFor="o-role">Line under</Label>
-            <TextInput id="o-role" value={role} maxLength={34} placeholder={placeholder}
-                onChange={(e) => { setRole(e.target.value); void saveCoat({ role: e.target.value }) }} />
-        </Fields>
-    )
-}
-
-function Coat({ profile }: { profile: Profile }) {
-    const colour = coatColour(profile)
-    return (
-        <Group title="Lab coat">
-            <CoatFields profile={profile} placeholder="MS II · Cardio block" />
-            <Fields>
-                <Label>Coat</Label>
-                <Swatches value={colour} colors={COAT_PALETTE.map((p: { hex: string; name: string }) => ({ ...p, name: p.name + " coat" }))} onChange={(color) => void saveCoat({ color })} />
-                <span className="col-start-2 text-[11px] text-muted-foreground">{colourName(colour)}</span>
-            </Fields>
-            {/* the pocket, as the sidebar's coat shows it (styles/shell.css) */}
-            <div className="coatpreview">
-                <i className="pen" aria-hidden="true" />
-                {/* the name as the sidebar's pocket shows it */}
-                <div className="embroidery">{profile.coat?.name || profile.displayName || "Your name"}</div>
-                <div className="role">{profile.coat?.role}</div>
-                <svg className="tuck" viewBox="0 0 60 34" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" aria-hidden="true">
-                    <path d="M4 6c0 9 7 8 9 14s7 9 14 8 12-6 18-6" /><path d="M11 4c0 7 4 8 6 12" />
-                    <circle cx="50" cy="20" r="6" /><circle cx="50" cy="20" r="2.6" /><path d="M44.6 21.6 42 23" />
-                </svg>
+        <Group title="Where you’re headed">
+            <Hint>Goes on your {THEMES[bg].wear}, so you see what the work is for.</Hint>
+            <div role="radiogroup" aria-label="Where you’re headed" onKeyDown={radioKeys} className="flex flex-wrap gap-1.5">
+                {THEME_GOALS[bg].map((g, i) => (
+                    <button key={g} type="button" role="radio" aria-checked={g === now} tabIndex={rovingTab(i, THEME_GOALS[bg].indexOf(now))}
+                        onClick={() => { setOwn(""); void saveCoat({ role: g }) }}
+                        className={cn(
+                            "h-[34px] cursor-pointer rounded-full border px-3 font-[inherit] text-[13px]",
+                            "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)]",
+                            g === now ? "border-[var(--accent)] bg-[var(--accent)] text-[var(--on-accent)]" : "border-border bg-card text-foreground",
+                        )}>{g}</button>
+                ))}
             </div>
-            <Hint>The coat colour tints the sidebar fabric, the pocket and the embroidery.</Hint>
+            <TextInput id="o-goal" aria-label="Your own goal" placeholder="Or type your own" maxLength={22} value={own}
+                /* an empty own goal falls back to the theme's first goal (goalFor), so that chip shows checked: intended */
+                onChange={(e) => { setOwn(e.target.value); void saveCoat({ role: e.target.value.trim() }) }} />
         </Group>
     )
 }
 
-const Badge = ({ profile }: { profile: Profile }) => (
-    <Group title="ID badge">
-        <CoatFields profile={profile} placeholder="CS · Year 2" />
-        <Hint>The pattern and barcode on the badge are made from your username.</Hint>
-    </Group>
-)
+function NameField({ profile }: { profile: Profile }) {
+    const [name, setName] = useState(profile.coat?.name ?? "")
+    return (
+        <Group title="Your name">
+            <Hint>Shown on your coat, badge, name plate, jacket, jersey or vest.</Hint>
+            <TextInput id="o-name" aria-label="Your name" value={name} maxLength={28} placeholder={profile.displayName || "Your name"}
+                onChange={(e) => { setName(e.target.value); void saveCoat({ name: e.target.value }) }} />
+        </Group>
+    )
+}
+
+function CoatColour({ profile }: { profile: Profile }) {
+    const colour = coatColour(profile)
+    return (
+        <Group title="Coat colour" state={colourName(colour)}>
+            <Swatches value={colour} colors={COAT_PALETTE.map((p: { hex: string; name: string }) => ({ ...p, name: p.name + " coat" }))} onChange={(color) => void saveCoat({ color })} />
+        </Group>
+    )
+}
 
 function Quotes() {
     const quotes = useQuotes()

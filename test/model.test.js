@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { normalizeItem, normalizeCourse, normalizeAchievement, shiftEnd } from '../src/core/model.ts';
+import { normalizeItem, normalizeCourse, normalizeAchievement, shiftEnd, typeList } from '../src/core/model.ts';
 import { validateItem, validateCourse } from '../worker/validate.js';
 
 describe('normalizeItem keeps times and dates the server accepts', () => {
@@ -67,5 +67,15 @@ describe('rows from storage or the network are made safe', () => {
   it('reads a course code that is not text as none, rather than failing every reload', () => {
     expect(normalizeCourse({ code: 12345 }).code).toBe('');
     expect(normalizeCourse({ code: 'PHARM1010' }).code).toBe('PHARM101');
+  });
+});
+
+describe('projects by theme', () => {
+  it('shows Projects by default for Computer Science and Engineering only', () => {
+    const hidden = (bg) => typeList(bg).find((t) => t.id === 'project').hidden;
+    expect(hidden('cs')).toBe(false);
+    expect(hidden('eng')).toBe(false);
+    expect(hidden('med')).toBe(true);
+    expect(hidden('law')).toBe(true);
   });
 });

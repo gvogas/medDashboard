@@ -19,8 +19,8 @@ it('copies an old-schema database into a fresh one, row for row, with the change
   await applyD1Migrations(to, env.TEST_MIGRATIONS);
 
   for (const id of ['ana', 'ben']) {
-    await from.prepare("INSERT INTO users (id, username, password_hash, types, study_flow, feed_gen, study_prefs, school_calendar, leaderboard, created_at, updated_at) VALUES (?, ?, 'hash', '[{\"id\":\"c-quiz1\",\"label\":\"Quiz\",\"color\":\"#B03A7A\",\"kind\":\"graded\"}]', '{\"steps\":[[\"study\",50],[\"break\",10]],\"rounds\":3}', ?, '{\"goal\":105}', '{\"semesters\":[]}', ?, 100, 100)")
-      .bind(id, id, id === 'ana' ? 2 : null, id === 'ana' ? 1 : 0).run();
+    await from.prepare("INSERT INTO users (id, username, password_hash, types, study_flow, feed_gen, study_prefs, school_calendar, leaderboard, bg, created_at, updated_at) VALUES (?, ?, 'hash', '[{\"id\":\"c-quiz1\",\"label\":\"Quiz\",\"color\":\"#B03A7A\",\"kind\":\"graded\"}]', '{\"steps\":[[\"study\",50],[\"break\",10]],\"rounds\":3}', ?, '{\"goal\":105}', '{\"semesters\":[]}', ?, ?, 100, 100)")
+      .bind(id, id, id === 'ana' ? 2 : null, id === 'ana' ? 1 : 0, id === 'ana' ? 'cs' : 'med').run();
     await upsertRow(from, 'courses', id, 'bio', normalizeCourse({ id: 'bio', code: 'BIO', name: "Biology 'n' more", color: '#17B3AE', target: 85, meetings: [{ id: 'm', kind: 'Lecture', weekday: 1, start: '09:00', end: '10:00', room: 'Hall B' }] }), 200);
     await upsertRow(from, 'items', id, 'mid', normalizeItem({
       id: 'mid', title: 'Midterm: α & β', type: 'exam', courseId: 'bio', date: '2026-10-05', start: '09:00', end: '10:00',
@@ -58,6 +58,9 @@ it('copies an old-schema database into a fresh one, row for row, with the change
   /* the next write in the copy numbers on from the old head */
   const next = await upsertRow(to, 'quotes', 'ana', 'n', { text: 'New', source: '' }, 300);
   expect(next.revision).toBe(source.state.head + 1);
+  /* the new database accepts a theme the old CHECK never had */
+  await to.prepare("UPDATE users SET bg = 'law' WHERE id = 'ana'").run();
+  expect((await to.prepare("SELECT bg FROM users WHERE id = 'ana'").first()).bg).toBe('law');
   /* and the twelve colours are accepted there */
   await upsertRow(to, 'courses', 'ana', 'c12', normalizeCourse({ id: 'c12', code: 'SL', name: 'Slate', color: '#7D8A99' }), 310);
   /* and so are quizzes and a grade target */

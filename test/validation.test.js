@@ -54,9 +54,9 @@ describe('backgrounds and projects', () => {
     expect(validateProfile(profile).bg).toBe('med');
   });
 
-  it('accepts the CS background and rejects anything else', () => {
-    expect(validateProfile({ ...profile, bg: 'cs' }).bg).toBe('cs');
-    expect(() => validateProfile({ ...profile, bg: 'law' })).toThrow();
+  it('accepts the six backgrounds and rejects anything else', () => {
+    for (const bg of ['med', 'cs', 'law', 'pilot', 'sports', 'eng']) expect(validateProfile({ ...profile, bg }).bg).toBe(bg);
+    expect(() => validateProfile({ ...profile, bg: 'foo' })).toThrow();
   });
 
   it('accepts project items', () => {

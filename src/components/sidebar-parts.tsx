@@ -1,5 +1,6 @@
 // Small pieces the sidebar's sections share: the section heading, a filter row with its
-// colour pip and count chip, and what counts as an open item.
+// colour pip and count chip, and what counts as an open item. All items' type chips and
+// type editor use the heading and the pip too.
 
 import type { ReactNode } from "react"
 import { isOpen } from "@/core/model"

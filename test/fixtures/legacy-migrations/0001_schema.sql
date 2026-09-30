@@ -42,6 +42,18 @@ CREATE TABLE users (
   -- an HMAC of the user id and this number (worker/calendar.js), so bumping it
   -- retires every earlier link and nothing secret is stored.
   feed_gen       INTEGER CHECK (feed_gen IS NULL OR (typeof(feed_gen) = 'integer' AND feed_gen > 0)),
+  -- The study goal, streak rules and celebrations: {goal, dayMin, rest, celebrate}. The
+  -- Worker checks the shape (worker/validate.js); this only checks it is an object.
+  study_prefs    TEXT NOT NULL DEFAULT '{}'
+                 CHECK (json_valid(study_prefs) AND json_type(study_prefs) = 'object'),
+  -- The school's academic calendar: its semesters and special days (no classes, study
+  -- break, exams, a day on another weekday's timetable, markers); {} is none. Checked in
+  -- the Worker (worker/validate.js); src/core/school.ts reads it, as does the calendar feed.
+  school_calendar TEXT NOT NULL DEFAULT '{}'
+                 CHECK (json_valid(school_calendar) AND json_type(school_calendar) = 'object'),
+  -- 1 when the person has joined the study leaderboard, which is opt-in: only those who
+  -- have joined see it, and only they are listed (worker/leaderboard.js).
+  leaderboard    INTEGER NOT NULL DEFAULT 0 CHECK (leaderboard IN (0, 1)),
   created_at     INTEGER NOT NULL,
   updated_at     INTEGER NOT NULL,
   revision       INTEGER NOT NULL DEFAULT 1 CHECK (typeof(revision) = 'integer' AND revision > 0)
@@ -138,6 +150,8 @@ CREATE TABLE study_sessions (
   started_at     INTEGER NOT NULL CHECK (typeof(started_at) = 'integer' AND started_at > 0),
   study_minutes  INTEGER NOT NULL CHECK (typeof(study_minutes) = 'integer' AND study_minutes BETWEEN 1 AND 1440),
   rounds_done    INTEGER NOT NULL DEFAULT 0 CHECK (typeof(rounds_done) = 'integer' AND rounds_done BETWEEN 0 AND 12),
+  note           TEXT NOT NULL DEFAULT '' CHECK (length(note) <= 200),   -- what was covered
+  manual         INTEGER NOT NULL DEFAULT 0 CHECK (manual IN (0, 1)),    -- 1 when typed in with Log study, not timed
   created_at     INTEGER NOT NULL,
   updated_at     INTEGER NOT NULL,
   deleted_at     INTEGER,
@@ -149,11 +163,31 @@ CREATE INDEX study_sessions_user_course  ON study_sessions (user_id, course_id);
 CREATE INDEX study_sessions_user_item    ON study_sessions (user_id, item_id);
 CREATE INDEX study_sessions_deleted      ON study_sessions (deleted_at) WHERE deleted_at IS NOT NULL;
 
-
--- The sync pull: every row of mine changed since a timestamp.
-CREATE INDEX courses_user_updated ON courses (user_id, updated_at);
-CREATE INDEX items_user_updated   ON items   (user_id, updated_at);
-CREATE INDEX quotes_user_updated  ON quotes  (user_id, updated_at);
+-- Your own achievements: a sticker you uploaded, a name, and what earns it: hours studied
+-- on one course, or a grade on one exam or quiz. Earned or not is worked out on the
+-- device from sessions and items; nothing here records it. The sticker is the picture
+-- itself, a small data: URL (256px, cut to a circle in the browser), so it syncs and
+-- works offline like every other row, and is only ever served to the account that owns
+-- it. The course and item are plain references, like a study session's: a deleted one
+-- leaves the achievement locked. At most 30 live rows per account (worker/db.js).
+CREATE TABLE achievements (
+  user_id     TEXT NOT NULL REFERENCES users(id),
+  id          TEXT NOT NULL CHECK (length(id) BETWEEN 1 AND 24),
+  name        TEXT NOT NULL CHECK (length(name) BETWEEN 1 AND 40),
+  sticker     TEXT NOT NULL CHECK (length(sticker) BETWEEN 1 AND 90000 AND sticker LIKE 'data:image/%'),
+  rule        TEXT NOT NULL CHECK (rule IN ('hours', 'grade')),
+  course_id   TEXT CHECK (course_id IS NULL OR length(course_id) BETWEEN 1 AND 40),
+  item_id     TEXT CHECK (item_id IS NULL OR length(item_id) BETWEEN 1 AND 24),
+  target      INTEGER NOT NULL CHECK (typeof(target) = 'integer' AND target BETWEEN 1 AND 1000),
+  created_at  INTEGER NOT NULL,
+  updated_at  INTEGER NOT NULL,
+  deleted_at  INTEGER,
+  revision    INTEGER NOT NULL DEFAULT 1 CHECK (typeof(revision) = 'integer' AND revision > 0),
+  PRIMARY KEY (user_id, id),
+  CHECK ((rule = 'hours' AND course_id IS NOT NULL AND item_id IS NULL)
+      OR (rule = 'grade' AND item_id IS NOT NULL AND course_id IS NULL AND target <= 100))
+);
+CREATE INDEX achievements_deleted ON achievements (deleted_at) WHERE deleted_at IS NOT NULL;
 
 -- A term's items, and a course's.
 CREATE INDEX items_user_date   ON items (user_id, date);
@@ -218,12 +252,23 @@ END;
 CREATE TRIGGER study_sessions_change_insert AFTER INSERT ON study_sessions BEGIN
  DELETE FROM changes WHERE user_id = NEW.user_id AND kind = 'study_sessions' AND row_id = NEW.id;
  INSERT INTO changes(user_id, kind, row_id, payload, deleted_at)
- VALUES(NEW.user_id, 'study_sessions', NEW.id, json_object('user_id', NEW.user_id, 'id', NEW.id, 'course_id', NEW.course_id, 'item_id', NEW.item_id, 'started_at', NEW.started_at, 'study_minutes', NEW.study_minutes, 'rounds_done', NEW.rounds_done, 'created_at', NEW.created_at, 'updated_at', NEW.updated_at, 'deleted_at', NEW.deleted_at, 'revision', NEW.revision), NEW.deleted_at);
+ VALUES(NEW.user_id, 'study_sessions', NEW.id, json_object('user_id', NEW.user_id, 'id', NEW.id, 'course_id', NEW.course_id, 'item_id', NEW.item_id, 'started_at', NEW.started_at, 'study_minutes', NEW.study_minutes, 'rounds_done', NEW.rounds_done, 'note', NEW.note, 'manual', NEW.manual, 'created_at', NEW.created_at, 'updated_at', NEW.updated_at, 'deleted_at', NEW.deleted_at, 'revision', NEW.revision), NEW.deleted_at);
 END;
 CREATE TRIGGER study_sessions_change_update AFTER UPDATE ON study_sessions BEGIN
  DELETE FROM changes WHERE user_id = NEW.user_id AND kind = 'study_sessions' AND row_id = NEW.id;
  INSERT INTO changes(user_id, kind, row_id, payload, deleted_at)
- VALUES(NEW.user_id, 'study_sessions', NEW.id, json_object('user_id', NEW.user_id, 'id', NEW.id, 'course_id', NEW.course_id, 'item_id', NEW.item_id, 'started_at', NEW.started_at, 'study_minutes', NEW.study_minutes, 'rounds_done', NEW.rounds_done, 'created_at', NEW.created_at, 'updated_at', NEW.updated_at, 'deleted_at', NEW.deleted_at, 'revision', NEW.revision), NEW.deleted_at);
+ VALUES(NEW.user_id, 'study_sessions', NEW.id, json_object('user_id', NEW.user_id, 'id', NEW.id, 'course_id', NEW.course_id, 'item_id', NEW.item_id, 'started_at', NEW.started_at, 'study_minutes', NEW.study_minutes, 'rounds_done', NEW.rounds_done, 'note', NEW.note, 'manual', NEW.manual, 'created_at', NEW.created_at, 'updated_at', NEW.updated_at, 'deleted_at', NEW.deleted_at, 'revision', NEW.revision), NEW.deleted_at);
+END;
+
+CREATE TRIGGER achievements_change_insert AFTER INSERT ON achievements BEGIN
+ DELETE FROM changes WHERE user_id = NEW.user_id AND kind = 'achievements' AND row_id = NEW.id;
+ INSERT INTO changes(user_id, kind, row_id, payload, deleted_at)
+ VALUES(NEW.user_id, 'achievements', NEW.id, json_object('user_id', NEW.user_id, 'id', NEW.id, 'name', NEW.name, 'sticker', NEW.sticker, 'rule', NEW.rule, 'course_id', NEW.course_id, 'item_id', NEW.item_id, 'target', NEW.target, 'created_at', NEW.created_at, 'updated_at', NEW.updated_at, 'deleted_at', NEW.deleted_at, 'revision', NEW.revision), NEW.deleted_at);
+END;
+CREATE TRIGGER achievements_change_update AFTER UPDATE ON achievements BEGIN
+ DELETE FROM changes WHERE user_id = NEW.user_id AND kind = 'achievements' AND row_id = NEW.id;
+ INSERT INTO changes(user_id, kind, row_id, payload, deleted_at)
+ VALUES(NEW.user_id, 'achievements', NEW.id, json_object('user_id', NEW.user_id, 'id', NEW.id, 'name', NEW.name, 'sticker', NEW.sticker, 'rule', NEW.rule, 'course_id', NEW.course_id, 'item_id', NEW.item_id, 'target', NEW.target, 'created_at', NEW.created_at, 'updated_at', NEW.updated_at, 'deleted_at', NEW.deleted_at, 'revision', NEW.revision), NEW.deleted_at);
 END;
 
 -- Failed sign-in counts per username, so a password cannot be guessed by brute force.

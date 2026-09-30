@@ -1,6 +1,6 @@
 # medDashboard
 
-A med-school tracker — assignments, exams, labs, tutorials, office hours and tasks —
+A student tracker — assignments, exams, labs, tutorials, office hours and tasks —
 with courses that carry their own class timetable: day, time and room number.
 
 Built as a multi-user web app on Cloudflare: static files and a small Worker API in
@@ -52,9 +52,11 @@ docs/RELIABILITY-UPGRADE.md  sync revisions, local queue and Spotify token keys
   table becomes a list of cards.
 - **Live status** — overdue flags, a countdown to the next exam or quiz, class hours per
   week, lab hours.
-- **Settings** — light / dark / follow-the-device, a Med or CS background (the CS one
-  swaps the lab coat for a lanyard ID badge), the name embroidered on the coat and its
-  colour, and your own quotes shown in a tile beside the stats.
+- **Settings** — light / dark / follow-the-device, one of six themes (Medicine,
+  Computer Science, Law, Aviation, Sports, Engineering), each with its own sidebar picture,
+  colours, next-exam animation, study word and quote, your name and a goal ("Headed for …")
+  on the picture, the coat colour on Medicine, and your own quotes shown in a tile beside
+  the stats.
 - **Local-first** — the app renders from IndexedDB, works offline, and syncs to D1 on
   load, on focus and after every edit. The pill in the top bar shows where it stands.
 - **Several people** — each has a username and password and sees only their own data.

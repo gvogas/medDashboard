@@ -15,14 +15,20 @@ import { minutesByDay, streak } from "@/core/history"
 import { prepPace } from "@/core/prep"
 import { useCourses, useItems, useProfile, useQuotes, useStudySessions } from "./store"
 import { ui } from "./ui"
-import type { Course, Item, Meeting, Quote, Schedule, SortKey, StudySession } from "./types"
+import type { Course, Item, Meeting, Quote, Schedule, Show, SortKey, StudySession } from "./types"
 
-/* ── the filters: the sidebar's types and course, and the search ── */
+/* ── the filters: the sidebar's course and the search; the table adds its chips ── */
 
-export interface Filters { search: string; types: Record<string, boolean>; course: string }
+export interface Filters { search: string; course: string }
+
+/** The All items table's filters: the course and search, the type chips and the status chips. */
+export interface TableFilters extends Filters { types: Record<string, boolean>; show: Show }
 
 /** A type is on unless it was switched off; new types start on. */
-export const typeOn = (f: Filters, type: string) => f.types[type] !== false
+export const typeOn = (f: TableFilters, type: string) => f.types[type] !== false
+
+/** Open, overdue, or anything, as the table's status chips ask. */
+export const passShow = (it: Item, show: Show) => (show === "open" ? isOpen(it) : show === "overdue" ? isOverdue(it) : true)
 
 const courseMap = (courses: Course[]) => new Map(courses.map((c) => [c.id, c]))
 
@@ -33,8 +39,9 @@ export function matchSearch(it: Item, byId: Map<string, Course>, search: string)
     return hay.includes(search.toLowerCase())
 }
 
+/** The course and the search: what the week, the month and the table share. */
 export const passFilters = (it: Item, f: Filters, byId: Map<string, Course>) =>
-    typeOn(f, it.type) && (f.course === "all" || it.courseId === f.course) && matchSearch(it, byId, f.search)
+    (f.course === "all" || it.courseId === f.course) && matchSearch(it, byId, f.search)
 
 export interface Instance { item: Item; date: string }
 
@@ -258,8 +265,11 @@ export function timetable(courses: Course[], f: Filters): TimetableDay[] {
 
 /* ── the table ── */
 
-/** The filtered items, sorted by a column; items without a course sort last by course. */
-export function tableRows(items: Item[], courses: Course[], f: Filters, sort: { key: SortKey; dir: 1 | -1 }): Item[] {
+/**
+ * The items that pass the course, the search, the type chips and the status chips, sorted
+ * by a column; items without a course sort last by course.
+ */
+export function tableRows(items: Item[], courses: Course[], f: TableFilters, sort: { key: SortKey; dir: 1 | -1 }): Item[] {
     const byId = courseMap(courses)
     const value = (it: Item): string => {
         switch (sort.key) {
@@ -270,7 +280,20 @@ export function tableRows(items: Item[], courses: Course[], f: Filters, sort: { 
             default: return it.date
         }
     }
-    return items.filter((it) => passFilters(it, f, byId)).sort((a, b) => cmp(value(a), value(b)) * sort.dir)
+    return items.filter((it) => typeOn(f, it.type) && passShow(it, f.show) && passFilters(it, f, byId)).sort((a, b) => cmp(value(a), value(b)) * sort.dir)
+}
+
+/**
+ * Each type chip's count: its open items, and weekly ones that are always on the board,
+ * in the course picked. The search, the status and the other chips leave it alone.
+ */
+export function typeCounts(items: Item[], course: string): Record<string, number> {
+    const n: Record<string, number> = {}
+    for (const it of items) {
+        if (course !== "all" && it.courseId !== course) continue
+        if (it.recur === "weekly" || isOpen(it)) n[it.type] = (n[it.type] || 0) + 1
+    }
+    return n
 }
 
 /* ── the stat tiles ── */
@@ -320,7 +343,13 @@ export function quoteAt(quotes: Quote[], ix: number): { quote: Quote; ix: number
 
 /* ── hooks: the selectors over the live data, redone after any change ── */
 
-const filtersOf = (): Filters => ({ search: ui.search, types: ui.types, course: ui.course })
+const filtersOf = (): Filters => ({ search: ui.search, course: ui.course })
+
+/** The table's filters. A stat tile's list leaves out the course and the search, as the tile does. */
+export const tableFiltersOf = (): TableFilters => {
+    const tile = ui.listFrom === "tile"
+    return { search: tile ? "" : ui.search, course: tile ? "all" : ui.course, types: { ...ui.types }, show: ui.show || "all" }
+}
 
 /**
  * The live input for the views. The `ui` object is changed in place, so the version the
@@ -331,7 +360,7 @@ function useViewInput(): ViewInput {
     const items = useItems(), courses = useCourses(), profile = useProfile()
     const version = useSyncExternalStore(subscribe, getVersion)
     return useMemo(
-        () => ({ items, courses, filters: { ...filtersOf(), types: { ...ui.types } }, schedule: ui.schedule, anchor: ui.anchor, today: todayIso(), cal: schoolCal() }),
+        () => ({ items, courses, filters: filtersOf(), schedule: ui.schedule, anchor: ui.anchor, today: todayIso(), cal: schoolCal() }),
         // eslint-disable-next-line react-hooks/exhaustive-deps -- `version` stands for the ui
         [items, courses, profile, version],
     )
@@ -356,7 +385,18 @@ export const useMonth = () => {
 export const useTable = () => {
     const input = useViewInput()
     const sort = { key: ui.sort.key, dir: ui.sort.dir }
-    return useMemo(() => ({ rows: tableRows(input.items, input.courses, input.filters, sort), total: input.items.length, sort }),
+    return useMemo(() => {
+        const f = tableFiltersOf()
+        return {
+            rows: tableRows(input.items, input.courses, f, sort),
+            total: input.items.length,
+            sort,
+            filters: f,
+            /* what the Overdue chip would show, and each type chip's open items */
+            overdue: tableRows(input.items, input.courses, { ...f, show: "overdue" }, sort).length,
+            perType: typeCounts(input.items, f.course),
+        }
+    },
         // eslint-disable-next-line react-hooks/exhaustive-deps -- the sort is part of the ui, keyed by `input`
         [input])
 }

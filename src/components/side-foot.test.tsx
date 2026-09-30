@@ -6,7 +6,7 @@ import { stubMatchMedia } from "./test-media"
 const toggleSettings = vi.hoisted(() => vi.fn())
 const nextQuote = vi.hoisted(() => vi.fn())
 vi.mock("@/data/actions", () => ({ toggleSettings, nextQuote, syncNow: vi.fn() }))
-const ui = vi.hoisted(() => ({ focus: false }))
+const ui = vi.hoisted(() => ({ focus: false, bg: "med" }))
 vi.mock("@/data/ui", async () => (await import("@/data/fake-ui")).fakeUi(ui))
 vi.mock("@/data/store", () => ({ useProfile: () => ({ displayName: "Alex Rivera", username: "alex" }) }))
 vi.mock("@/data/sync", () => ({
@@ -30,11 +30,12 @@ describe("the sidebar's foot", () => {
         expect(nextQuote).toHaveBeenCalledWith(button)
     })
 
-    it("without a quote, points to Settings, and a click goes there", () => {
+    it("without a quote, shows the theme's own, and a click goes to Settings", () => {
         quote.value = null
         render(<SideFoot />)
-        const button = screen.getByRole("button", { name: "Add a quote in Settings" })
-        expect(button.title).toBe("Edit quotes in Settings")
+        const button = screen.getByRole("button", { name: /The good physician treats the disease/ })
+        expect(button.textContent).toContain("William Osler")
+        expect(button.getAttribute("title")).toBe("Add your own quotes in Settings")
         fireEvent.click(button)
         expect(nextQuote).toHaveBeenCalledWith(button)   // with fewer than two, it opens Settings at the quote field
         quote.value = { ix: 0, quote: { text: "The good physician treats the disease.", source: "William Osler" } }

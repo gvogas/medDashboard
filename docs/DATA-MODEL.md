@@ -83,13 +83,13 @@ Conventions used throughout:
 | `username` | text, unique | 3–32, `[a-z0-9._-]`, lower-cased | What you sign in with. |
 | `password_hash` | text | | `pbkdf2$iterations$salt$hash`, see `worker/password.js`. Never leaves the Worker. |
 | `display_name` | text | ≤ 60 | Editable. |
-| `coat_name` | text | ≤ 28 | Embroidered on the pocket. |
-| `coat_role` | text | ≤ 34 | The line under it, e.g. `MS II · Cardio block`. |
-| `coat_color` | text | one of the five | Tints the sidebar fabric, pocket and embroidery. |
+| `coat_name` | text | ≤ 28 | Your name, shown on the theme's sidebar picture (lab coat, ID badge, suit, flight jacket, jersey, vest). |
+| `coat_role` | text | ≤ 34 | Your goal, the line "Headed for …" on the picture, e.g. `Headed for MS II`. |
+| `coat_color` | text | one of the five | Tints the Medicine coat (the only theme where it is chosen), the Spotify clip and your own achievements. |
 | `theme` | text | `light` \| `dark` \| `system` | |
-| `bg` | text | `med` \| `cs`, default `med` | background art; independent of `theme` (0008) |
+| `bg` | text | `med` \| `cs` \| `law` \| `pilot` \| `sports` \| `eng`, default `med` | The theme (Medicine, Computer Science, Law, Aviation, Sports, Engineering), independent of `theme` (the appearance). |
 | `term_start` | text \| null | `YYYY-MM-DD` | The week board's default start. Null means today. With a school calendar, its current semester's first day counts instead. |
-| `school_calendar` | JSON object | `{}` = none | The school's academic calendar (`0004`), below. |
+| `school_calendar` | JSON object | `{}` = none | The school's academic calendar, below. |
 | `created_at`, `updated_at` | int | | |
 | `revision` | int | starts at 1 | Optimistic concurrency for profile edits. |
 | `pw_gen` | int | starts at 0 | Password/session generation; changing it revokes existing sessions. |

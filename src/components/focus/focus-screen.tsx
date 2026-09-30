@@ -17,6 +17,7 @@ import { GoalRing } from "@/components/study/tiles"
 import { BackIcon, PauseIcon, PhaseLabel, PlayIcon, RoundStrip, SkipIcon, StopIcon } from "@/components/study/timer-bits"
 import { useCourses, useItems } from "@/data/store"
 import { useUi } from "@/data/ui"
+import { THEMES } from "@/data/themes"
 import { getSheet } from "@/data/overlay"
 import { keysOpen } from "@/data/keys"
 import { getBusy } from "@/data/ai-read"
@@ -48,6 +49,7 @@ const OWN_SPACE = "button, a, input, select, textarea, summary, [role=button], [
 
 function FocusScreen({ run }: { run: Run }) {
     const music = useUi((u) => u.focusMusic)
+    const bg = useUi((u) => u.bg)
     const today = useToday(run)
     const courses = useCourses(), items = useItems()
     const root = useRef<HTMLDivElement>(null)
@@ -88,7 +90,7 @@ function FocusScreen({ run }: { run: Run }) {
     const item = run.itemId ? items.find((it) => it.id === run.itemId) : null
     const next = nextLine(run)
     const at = clockTime(doneAt(run, run.at))
-    const phase = run.kind === "study" ? "Study" : "Break"
+    const phase = run.kind === "study" ? THEMES[bg].studyWord : "Break"
 
     return (
         <div
@@ -153,7 +155,7 @@ function FocusScreen({ run }: { run: Run }) {
                         <p data-next="" className="m-0 text-center text-[13px] text-[var(--fx-ink-3)] tabular-nums [&_b]:font-semibold [&_b]:text-[var(--fx-ink-2)]">
                             {next.last
                                 ? <>Last step · done at <b>{at}</b></>
-                                : <>Next · <b>{next.kind === "study" ? "Study" : "Break"} {next.minutes} min</b> · done at <b>{at}</b></>}
+                                : <>Next · <b>{next.kind === "study" ? THEMES[bg].studyWord : "Break"} {next.minutes} min</b> · done at <b>{at}</b></>}
                         </p>
                     </div>
                     <div className="flex flex-wrap items-center justify-center gap-3.5">

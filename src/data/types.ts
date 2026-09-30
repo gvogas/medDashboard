@@ -3,6 +3,7 @@
 // app's own state: the ui object React reads and sets.
 
 import type { SpotifyPlace } from "./spotify/types"
+import type { Bg } from "./themes"
 import type { StudySession } from "../core/types"
 
 export type * from "../core/types"
@@ -32,14 +33,20 @@ export type LbTab = "week" | "all"
 /** What the week and month show: both lists, the dated items only, or the classes only. */
 export type Schedule = "all" | "deadlines" | "classes"
 export type SortKey = "title" | "type" | "course" | "date" | "status"
+/** What the All items table shows by status: everything, the open items, or the overdue. */
+export type Show = "all" | "open" | "overdue"
 
 /** The UI state (ui.ts): what is open, filtered and sorted. */
 export interface Ui {
     view: View
     anchor: string
     search: string
+    /* the All items table's filters: the type chips and the status chips */
     types: Record<string, boolean>
+    show: Show
     course: string
+    /* "tile" while the table shows a stat tile's list, which leaves out the course and the search */
+    listFrom: "tile" | null
     focus: boolean
     /* the focus screen's music panel is open */
     focusMusic: boolean
@@ -51,7 +58,7 @@ export interface Ui {
     hist: Hist
     lb: Leaderboard | null
     lbTab: LbTab
-    bg: "med" | "cs"
+    bg: Bg
     theme: string
     schedule: Schedule
     sort: { key: SortKey; dir: 1 | -1 }

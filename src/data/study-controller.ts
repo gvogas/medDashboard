@@ -20,7 +20,7 @@ import type { StudyPrefs, View } from "./types"
 /** Show a view: the side nav and the 1–5 keys. Study while a run is going opens its focus screen. */
 export function setView(view: View) {
     if (view === "study" && run.active()) { openFocus(); return }
-    ui.view = view; rememberUi(); notify()
+    ui.view = view; ui.listFrom = null; rememberUi(); notify()   /* a stat tile's list ends with the page */
 }
 
 /* ── the history: deletes that can be undone, the goal ── */
