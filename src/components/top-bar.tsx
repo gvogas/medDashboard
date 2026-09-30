@@ -1,5 +1,5 @@
 // The top bar: the sidebar button on narrow screens, the view's title, ‹ Today › in the
-// week and month views, search, sync status, Settings and New item.
+// week and month views, search and New item. Sync and Settings are in the sidebar's foot.
 // It renders inside <App>'s <header class="bar">, which styles/shell.css lays out
 // (and hides it on the focus screen).
 
@@ -9,24 +9,13 @@ import { TextureButton } from "@/components/ui/texture-button"
 import { viewHeading } from "@/components/view-heading"
 import { ui, useUi } from "@/data/ui"
 import { useSide } from "@/data/sidebar"
-import { syncLabel, useSyncAnnouncement, useSyncStatus } from "@/data/sync"
-import { goToday, newItem, setSearch, showSidebar, step, syncNow, toggleSettings } from "@/data/actions"
-import type { SyncState } from "@/data/types"
+import { goToday, newItem, setSearch, showSidebar, step } from "@/data/actions"
 
 const icon = (children: ReactNode, box = "0 0 16 16") => (
     <svg viewBox={box} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className="size-4">
         {children}
     </svg>
 )
-
-const DOT: Record<SyncState, string> = {
-    idle: "bg-[var(--good)]",
-    pending: "bg-[var(--warn)]",
-    syncing: "bg-[var(--warn)]",
-    offline: "bg-muted-foreground",
-    error: "bg-destructive",
-    "signed-out": "bg-destructive",
-}
 
 export function TopBar() {
     const heading = useUi(viewHeading)
@@ -67,18 +56,6 @@ export function TopBar() {
             <div className="flex-[1_1_20px]" />
 
             <Search />
-            <SyncStatus />
-
-            <TextureButton variant="minimal" className="w-auto" aria-label="Settings" title="Settings" onClick={toggleSettings}>
-                {icon(
-                    <>
-                        <circle cx="12" cy="12" r="3" />
-                        <path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z" />
-                    </>,
-                    "0 0 24 24",
-                )}
-            </TextureButton>
-
             {/* Under 700px it floats, round, at the bottom right. */}
             <TextureButton
                 variant="accent"
@@ -119,26 +96,5 @@ function Search() {
             />
             <kbd aria-hidden="true" className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 rounded-[5px] border border-border bg-muted px-1.5 font-mono text-[10.5px] text-muted-foreground peer-focus:hidden">/</kbd>
         </div>
-    )
-}
-
-function SyncStatus() {
-    const s = useSyncStatus()
-    const said = useSyncAnnouncement()
-    const title = s.message || (s.state === "offline" ? "Changes are kept on this device until you are back online" : "Sync now")
-    return (
-        <>
-            <button
-                type="button"
-                title={title}
-                onClick={syncNow}
-                data-state={s.state}
-                className="flex shrink-0 cursor-pointer items-center gap-1.5 whitespace-nowrap rounded-full border border-border bg-card px-2.5 py-1 text-[11.5px] text-ink-2 hover:text-foreground max-[700px]:py-1.5"
-            >
-                <i aria-hidden="true" className={cn("size-[7px] rounded-full", DOT[s.state])} />
-                {syncLabel(s)}
-            </button>
-            <span className="sr-only" role="status">{said}</span>
-        </>
     )
 }

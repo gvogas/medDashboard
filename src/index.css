@@ -84,12 +84,6 @@
   }
 }
 
-/* The quote tile's new quote rises in and sharpens. */
-@keyframes quote-rise {
-  from { opacity: 0; transform: translateY(7px); filter: blur(3px); }
-  to { opacity: 1; transform: none; filter: blur(0); }
-}
-
 /* The music's equaliser (components/spotify/): 3px to 12px tall, as a transform; an endless
    height animation would lay the page out every frame. */
 @keyframes spot-eq {

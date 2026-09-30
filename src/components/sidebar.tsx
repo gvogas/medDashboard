@@ -1,6 +1,7 @@
-// The sidebar: the brand, the Open items filters, the courses, the lab-coat pocket or ID
-// badge, and the Spotify player. It renders inside <App>'s <aside id="side">, whose .on
-// and inert come from data/sidebar.ts.
+// The sidebar: the name, the pages, the courses, the Open items filters, the lab-coat
+// pocket or ID badge, the Spotify player, and the foot (quote, name, sync, Settings).
+// It renders inside <App>'s <aside id="side">, whose .on and inert come from
+// data/sidebar.ts.
 
 import { MotionConfig } from "framer-motion"
 import { useCourses, useItems } from "@/data/store"
@@ -10,22 +11,25 @@ import { Coat } from "./sidebar-coat"
 import { Count, counts, Heading, Pip, Row } from "./sidebar-parts"
 import { TypeList } from "./sidebar-types"
 import { SideNav } from "./side-nav"
+import { SideFoot } from "./side-foot"
 import { SidebarPlayer } from "./spotify/sidebar-player"
 
 export function Sidebar() {
+    const bg = useUi((u) => u.bg)
     return (
         <MotionConfig reducedMotion="user">
-            <div className="flex grow flex-col gap-6 px-1 pt-0.5">
-                <div className="flex items-center gap-2.5 px-1.5 text-[16px] font-extrabold tracking-[-.01em]">
-                    <span aria-hidden="true" className="grid size-7 shrink-0 place-items-center rounded-[9px] bg-[linear-gradient(var(--accent),color-mix(in_srgb,var(--accent)_70%,#000))] text-[14px] text-primary-foreground shadow-[inset_0_1px_0_rgba(255,255,255,.35),0_2px_6px_color-mix(in_srgb,var(--accent)_40%,transparent)]">R</span>
-                    Rounds
+            <div className="flex grow flex-col gap-5 px-1 pt-1">
+                <div className="flex items-baseline justify-between px-2.5">
+                    <span className="font-serif text-[26px] font-semibold tracking-[-.01em]">Term</span>
+                    <span className="text-[12px] font-medium text-accent-foreground">{bg === "cs" ? "Computer Science" : "Medicine"}</span>
                 </div>
                 <SideNav />
-                <TypeList />
                 <CourseList />
-                <div className="mt-auto flex flex-col gap-3 pt-2">
+                <TypeList />
+                <div className="mt-auto flex flex-col gap-3.5 pt-2">
                     <Coat />
                     <SidebarPlayer />
+                    <SideFoot />
                 </div>
             </div>
         </MotionConfig>

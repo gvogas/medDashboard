@@ -1,8 +1,8 @@
 // The stat tiles above the week, month and table: the next exam or quiz, open
-// assignments, overdue, today's study against the goal, and a quote that turns its own
-// page. They are about the whole of your work, so the filters leave them alone.
+// assignments, overdue, and today's study against the goal. They are about the whole
+// of your work, so the filters leave them alone. (The quote is in the sidebar's foot.)
 
-import { useEffect, useRef, type ReactNode } from "react"
+import type { ReactNode } from "react"
 import { cn } from "@/lib/utils"
 import { TextureCard } from "@/components/ui/texture-card"
 import { tmeta } from "@/core/model"
@@ -10,10 +10,7 @@ import { prepLabel } from "@/core/prep"
 import { useUi } from "@/data/ui"
 import { useStats } from "@/data/views"
 import { statsShown } from "@/components/shell"
-import { nextQuote, openItem, openStudy } from "@/data/actions"
-
-/** How often the quote tile turns by itself, unless it is being read or motion is reduced. */
-export const QUOTE_EVERY_MS = 25_000
+import { openItem, openStudy } from "@/data/actions"
 
 /** "1h 20" or "45 min". */
 export const studyTime = (min: number) => (min >= 60 ? Math.floor(min / 60) + "h" + (min % 60 ? " " + String(min % 60).padStart(2, "0") : "") : min + " min")
@@ -73,7 +70,6 @@ export function Stats() {
                     </span>
                 )}
             </Tile>
-            <QuoteTile cs={cs} quote={s.quote} count={s.quoteCount} />
         </>
     )
 }
@@ -112,57 +108,3 @@ const Pulse = ({ cs }: { cs: boolean }) => (
             : "M0 11h13l2-2 3 5 3-3h9l3-7 3 13 3-6h11l2-2 3 5 3-3h10l3-7 3 13 3-6h13l2-2 3 5 3-3h9"} />
     </svg>
 )
-
-function QuoteTile({ cs, quote, count }: { cs: boolean; quote: ReturnType<typeof useStats>["quote"]; count: number }) {
-    const tile = useRef<HTMLButtonElement>(null)
-    const shownIx = useRef<number | null>(null)
-
-    /* the tile turns by itself while nobody is reading it */
-    useEffect(() => {
-        const id = setInterval(() => {
-            if (document.visibilityState !== "visible") return
-            if (tile.current?.matches(":hover, :focus-within")) return
-            if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) return
-            nextQuote()
-        }, QUOTE_EVERY_MS)
-        return () => clearInterval(id)
-    }, [])
-
-    /* the new quote rises in, only when it changed after the first draw */
-    const ix = quote?.ix ?? null
-    const rise = shownIx.current !== null && ix !== null && shownIx.current !== ix
-    useEffect(() => { shownIx.current = ix }, [ix])
-
-    const mark = cs ? "/*" : "“"
-    return (
-        <TextureCard className="col-span-2 min-w-0 bg-card max-[700px]:flex-[0_0_250px] max-[700px]:snap-start">
-            <button
-                ref={tile}
-                type="button"
-                onClick={(e) => nextQuote(e.currentTarget)}
-                title={count > 1 ? "Next quote" : "Edit quotes in Settings"}
-                className="relative flex h-full min-h-[92px] w-full cursor-pointer flex-col justify-center gap-1 overflow-hidden rounded-[calc(var(--radius)-4px)] border-0 bg-[linear-gradient(135deg,var(--panel)_40%,color-mix(in_srgb,var(--accent)_7%,var(--panel)))] px-3.5 py-2.5 text-left font-[inherit]"
-            >
-                <span aria-hidden="true" className={cn(
-                    "pointer-events-none absolute leading-none text-[color-mix(in_srgb,var(--accent)_15%,transparent)]",
-                    cs ? "top-0.5 right-2.5 font-mono text-[40px] font-semibold" : "-top-2.5 right-2.5 font-[Spectral,Georgia,serif] text-[62px]",
-                )}>{mark}</span>
-                {quote ? (
-                    <span key={quote.ix} className={cn("flex flex-col gap-1", rise && "motion-safe:animate-[quote-rise_.6s_cubic-bezier(.2,.7,.2,1)_both]")}>
-                        <span className={cn("line-clamp-3 pr-6 text-pretty text-foreground", cs ? "font-mono text-[12px] leading-[1.55]" : "font-[Spectral,Georgia,serif] text-[13.5px] leading-[1.45] italic")}>{quote.quote.text}</span>
-                        <span className="flex items-baseline gap-2 text-[9.5px] tracking-[.11em] text-muted-foreground uppercase">
-                            <span aria-hidden="true" className="tracking-normal opacity-70">{cs ? "//" : "—"}</span>
-                            {quote.quote.source || "Unattributed"}
-                            {count > 1 && <em className="ml-auto tracking-[.04em] not-italic tabular-nums opacity-80">{quote.ix + 1} / {count}</em>}
-                        </span>
-                    </span>
-                ) : (
-                    <>
-                        <span className="pr-6 font-[Spectral,Georgia,serif] text-[13.5px] text-muted-foreground italic">Add a quote to keep here</span>
-                        <span className="text-[9.5px] tracking-[.11em] text-muted-foreground uppercase">Settings › Quotes</span>
-                    </>
-                )}
-            </button>
-        </TextureCard>
-    )
-}

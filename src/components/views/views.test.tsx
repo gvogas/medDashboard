@@ -12,7 +12,7 @@ const fake = vi.hoisted(() => ({
 }))
 const actions = vi.hoisted(() => ({
     openItem: vi.fn(), newItemOn: vi.fn(), toggleTask: vi.fn(), quickAddTask: vi.fn(), setSchedule: vi.fn(),
-    goToDay: vi.fn(), openCourse: vi.fn(), sortTable: vi.fn(), nextQuote: vi.fn(), openStudy: vi.fn(),
+    goToDay: vi.fn(), openCourse: vi.fn(), sortTable: vi.fn(), openStudy: vi.fn(),
 }))
 vi.mock("@/data/actions", () => actions)
 vi.mock("@/data/ui", async () => (await import("@/data/fake-ui")).fakeUi(fake.ui))
@@ -159,22 +159,16 @@ describe("the table", () => {
 })
 
 describe("the stat tiles", () => {
-    it("count the work and turn the quote", () => {
+    it("count the work", () => {
         fake.data.items = [
             ...fake.data.items,
             item({ id: "late", date: "2026-09-20" }),
             item({ id: "exam", type: "exam", title: "Cardiology midterm", date: "2026-09-26" }),
         ]
-        fake.data.quotes = [{ id: "q1", text: "Treat the patient.", source: "Osler" }, { id: "q2", text: "Listen.", source: "" }]
         show(<Stats />, "stats")
         expect(screen.getByText("Cardiology midterm")).toBeTruthy()
         expect(screen.getByText("needs attention today")).toBeTruthy()
         expect(screen.getByText("1 due this week")).toBeTruthy()
-        expect(screen.getByText("1 / 2")).toBeTruthy()
-
-        const quote = screen.getByRole("button", { name: /Treat the patient/ })
-        fireEvent.click(quote)
-        expect(actions.nextQuote).toHaveBeenCalledWith(quote)
         fireEvent.click(screen.getByRole("button", { name: /Next exam/ }))
         expect(actions.openItem).toHaveBeenCalledWith("exam")
     })

@@ -5,34 +5,19 @@ import { TopBar } from "@/components/top-bar"
 import { setSide } from "@/data/sidebar"
 import { stubMatchMedia } from "./test-media"
 
-// The app is not booted: the bar needs the ui, sync status, Spotify's state and
+// The app is not booted: the bar needs the ui, Spotify's state and
 // the school calendar, and its buttons call the actions, which are fakes here.
-const fake = vi.hoisted(() => {
-    const statusListeners = new Set<(s: unknown) => void>()
-    return {
-        ui: { view: "week", anchor: "2026-09-23", search: "" },
-        spotify: { loaded: true, connected: true, device: "Kitchen" as string | null },
-        status: { state: "idle", pending: 0, message: "" },
-        statusListeners,
-        setStatus(s: { state: string; pending?: number; message?: string }) {
-            Object.assign(this.status, { pending: 0, message: "", ...s })
-            for (const fn of statusListeners) fn(this.status)
-        },
-    }
-})
+const fake = vi.hoisted(() => ({
+    ui: { view: "week", anchor: "2026-09-23", search: "" },
+    spotify: { loaded: true, connected: true, device: "Kitchen" as string | null },
+}))
 const actions = vi.hoisted(() => ({
-    goToday: vi.fn(), step: vi.fn(), setSearch: vi.fn(), newItem: vi.fn(),
-    toggleSettings: vi.fn(), showSidebar: vi.fn(), syncNow: vi.fn(),
+    goToday: vi.fn(), step: vi.fn(), setSearch: vi.fn(), newItem: vi.fn(), showSidebar: vi.fn(),
 }))
 vi.mock("@/data/actions", () => actions)
 vi.mock("@/data/ui", async () => (await import("@/data/fake-ui")).fakeUi(fake.ui))
 vi.mock("@/data/spotify/player", () => ({ state: fake.spotify }))
 vi.mock("@/data/query", () => ({ schoolCal: () => null }))
-vi.mock("@/data/study-controller", () => ({ setView: vi.fn() }))
-vi.mock("@/core/sync", () => ({
-    status: fake.status,
-    onStatus: (fn: (s: unknown) => void) => fake.statusListeners.add(fn),
-}))
 
 stubMatchMedia({ reducedMotion: false })
 
@@ -50,7 +35,6 @@ afterEach(() => {
     fake.ui.view = "week"
     fake.ui.anchor = "2026-09-23"
     fake.ui.search = ""
-    act(() => fake.setStatus({ state: "idle" }))
 })
 
 describe("the top bar", () => {
@@ -106,33 +90,9 @@ describe("the top bar", () => {
         expect(box.id).toBe("search")   // the / key focuses it by id
     })
 
-    it("shows the sync state and syncs on click", () => {
+    it("opens a new item and the sidebar", () => {
         render(<TopBar />)
-        const cases: [Parameters<typeof fake.setStatus>[0], string][] = [
-            [{ state: "idle" }, "Synced"],
-            [{ state: "pending" }, "Saving…"],
-            [{ state: "syncing" }, "Syncing…"],
-            [{ state: "offline", pending: 3 }, "Offline · 3"],
-            [{ state: "error", message: "Server said no" }, "Sync problem"],
-            [{ state: "signed-out" }, "Signed out"],
-        ]
-        for (const [status, label] of cases) {
-            act(() => fake.setStatus(status))
-            expect(screen.getByRole("button", { name: label })).toBeTruthy()
-        }
-        const pill = screen.getByRole("button", { name: "Signed out" })
-        act(() => fake.setStatus({ state: "error", message: "Server said no" }))
-        expect(pill.title).toBe("Server said no")
-        expect(screen.getByRole("status").textContent).toBe("Sync problem. Server said no")
-        fireEvent.click(pill)
-        expect(actions.syncNow).toHaveBeenCalledOnce()
-    })
-
-    it("opens Settings, a new item and the sidebar", () => {
-        render(<TopBar />)
-        fireEvent.click(screen.getByRole("button", { name: "Settings" }))
         fireEvent.click(screen.getByRole("button", { name: "New item" }))
-        expect(actions.toggleSettings).toHaveBeenCalledOnce()
         expect(actions.newItem).toHaveBeenCalledOnce()
 
         const menu = screen.getByRole("button", { name: "Show sidebar" })

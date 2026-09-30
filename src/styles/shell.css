@@ -6,25 +6,14 @@
    the components and the utilities. */
 
 /* ═════════ shell ═════════ */
-.app{height:100%;display:grid;grid-template-columns:222px minmax(0,1fr)}
+.app{height:100%;display:grid;grid-template-columns:260px minmax(0,1fr)}
 @media (max-width:900px){.app{grid-template-columns:minmax(0,1fr)}}
 
-/* ─── sidebar / white coat ─── */
-/* the coat: a tinted fabric weave, its colour picked in Settings */
+/* ─── sidebar ─── */
 .side{
   position:relative;display:flex;flex-direction:column;gap:13px;min-height:0;
-  padding:14px 10px 12px;border-right:1px solid var(--line);overflow-y:auto;
-  background-color:color-mix(in srgb, var(--coat) 6%, var(--panel));
-  background-image:
-    repeating-linear-gradient(90deg, color-mix(in srgb, var(--coat) 15%, transparent) 0 1px, transparent 1px 4px),
-    repeating-linear-gradient(0deg, color-mix(in srgb, var(--coat) 11%, transparent) 0 1px, transparent 1px 4px);
-}
-
-/* ─── CS: no coat. Plain panel on a faint dot grid (the sidebar shows an ID badge) ─── */
-:root[data-bg="cs"] .side{
-  background-color:var(--panel);
-  background-image:radial-gradient(color-mix(in srgb, var(--ink) 9%, transparent) 1px, transparent 1.2px);
-  background-size:12px 12px;
+  padding:24px 20px 18px;border-right:1px solid var(--line);overflow-y:auto;
+  background:var(--side-bg);
 }
 
 /* ─── content ─── */
