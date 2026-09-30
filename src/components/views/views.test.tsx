@@ -181,6 +181,17 @@ describe("the stat tiles", () => {
         expect(actions.openItem).toHaveBeenCalledWith("exam")
     })
 
+    it("name the exam once, and show an urgent pace in red", () => {
+        const steps = [1, 2, 3, 4, 5].map((n) => ({ id: "s" + n, text: "Topic " + n, done: false }))
+        fake.data.items = [item({ id: "fin", type: "exam", title: "Final exam", date: "2026-09-24", checklist: steps })]
+        show(<Stats />, "stats")
+        expect(screen.getByText("Final exam")).toBeTruthy()
+        expect(screen.queryByText("Final exam exam")).toBeNull()
+        const pace = screen.getByText("0/5 topics · 5/day")
+        expect(pace.className).toContain("text-destructive")
+        expect(pace.parentElement?.textContent).toBe("Tomorrow · 0/5 topics · 5/day")
+    })
+
     it("show today's study against the goal", () => {
         fake.data.profile = { id: "p", studyPrefs: { goal: 90 } }
         fake.data.study_sessions = [{ id: "s", courseId: null, itemId: null, startedAt: new Date(2026, 8, 23, 9).getTime(), studyMinutes: 70, roundsDone: 0, note: "", manual: false }]

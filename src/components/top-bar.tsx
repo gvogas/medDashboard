@@ -10,6 +10,8 @@ import { TextureButton } from "@/components/ui/texture-button"
 import { viewHeading } from "@/components/view-heading"
 import { ui, useUi } from "@/data/ui"
 import { useSide } from "@/data/sidebar"
+import { useSyncStatus } from "@/data/sync"
+import { DOT, syncTrouble } from "@/components/sync-status"
 import { goToday, newItem, setSearch, showSidebar, step } from "@/data/actions"
 
 const icon = (children: ReactNode, box = "0 0 16 16") => (
@@ -22,6 +24,7 @@ export function TopBar() {
     const heading = useUi(viewHeading)
     const dated = useUi((ui) => ui.view === "week" || ui.view === "month")
     const open = useSide().open
+    const sync = useSyncStatus().state
 
     return (
         <>
@@ -32,9 +35,11 @@ export function TopBar() {
                 aria-controls="side"
                 aria-expanded={open}
                 onClick={() => showSidebar(!open)}
-                className="hidden size-9 shrink-0 cursor-pointer place-items-center rounded-lg border border-border bg-card text-foreground max-[900px]:grid"
+                className="relative hidden size-9 shrink-0 cursor-pointer place-items-center rounded-lg border border-border bg-card text-foreground max-[900px]:grid"
             >
                 {icon(<path d="M2.5 4h11M2.5 8h11M2.5 12h11" />)}
+                {/* the sync state is in the sidebar, out of sight here: a dot when it needs you */}
+                {syncTrouble(sync) && <i aria-hidden="true" data-sync-dot={sync} className={cn("absolute top-1 right-1 size-2 rounded-full ring-2 ring-card", DOT[sync])} />}
             </button>
 
             <div className="flex min-w-0 flex-1 flex-col gap-1">

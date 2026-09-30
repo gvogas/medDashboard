@@ -12,6 +12,7 @@ import { TopBar } from "@/components/top-bar"
 import { Sidebar } from "@/components/sidebar"
 import { SignIn } from "@/components/sign-in"
 import { Toaster } from "@/components/toaster"
+import { SyncAnnouncer } from "@/components/sync-status"
 import { Stats } from "@/components/views/stats"
 import { Views } from "@/components/views/views"
 import { Sheet } from "@/components/sheet/sheet"
@@ -34,8 +35,9 @@ export function App() {
             <SheetHost><Sheet /></SheetHost>
             {/* the shortcuts panel and the busy card: over everything, outside #app and #sheet */}
             <div id="overlays"><Overlays /></div>
-            {/* outside #app, so the sheet that makes #app inert leaves the toast's buttons usable */}
-            <div id="toaster"><Toaster /></div>
+            {/* outside #app, so the sheet that makes #app inert leaves the toast's buttons usable;
+                the sync state's live region too, so it is heard while the sidebar is inert */}
+            <div id="toaster"><Toaster /><SyncAnnouncer /></div>
         </>
     )
 }

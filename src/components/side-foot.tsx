@@ -5,10 +5,12 @@
 import { useEffect, useRef } from "react"
 import { useProfile } from "@/data/store"
 import { useStats } from "@/data/views"
+import { ui } from "@/data/ui"
 import { nextQuote, toggleSettings } from "@/data/actions"
 import { SyncStatus } from "@/components/sync-status"
 
-/** How often the quote turns by itself, unless it is being read or motion is reduced. */
+/** How often the quote turns by itself, unless it is being read, the focus screen is up
+    or motion is reduced. */
 export const QUOTE_EVERY_MS = 25_000
 
 const gear = (
@@ -20,13 +22,13 @@ const gear = (
 
 export function SideFoot() {
     const profile = useProfile()
-    const { quote } = useStats()
+    const { quote, quoteCount } = useStats()
     const box = useRef<HTMLDivElement>(null)
 
     /* the quote turns by itself while nobody is reading it */
     useEffect(() => {
         const id = setInterval(() => {
-            if (document.visibilityState !== "visible") return
+            if (document.visibilityState !== "visible" || ui.focus) return
             if (box.current?.matches(":hover, :focus-within")) return
             if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) return
             nextQuote()
@@ -37,14 +39,22 @@ export function SideFoot() {
     return (
         <div className="flex flex-col gap-3">
             <div ref={box} className="border-t border-border px-2.5 pt-3.5">
-                {quote ? (
-                    <button type="button" onClick={(e) => nextQuote(e.currentTarget)} className="flex w-full cursor-pointer flex-col gap-1.5 border-0 bg-transparent p-0 text-left font-[inherit]">
-                        <span className="font-serif text-[14.5px] leading-[1.45] text-[color:color-mix(in_srgb,var(--ink)_85%,transparent)] italic">“{quote.quote.text}”</span>
-                        <span className="text-[12px] text-muted-foreground">{quote.quote.source || "Unattributed"}</span>
-                    </button>
-                ) : (
-                    <span className="font-serif text-[14px] text-muted-foreground italic">Add a quote in Settings</span>
-                )}
+                {/* with fewer than two quotes, nextQuote opens Settings at the quote field */}
+                <button
+                    type="button"
+                    onClick={(e) => nextQuote(e.currentTarget)}
+                    title={quoteCount > 1 ? "Next quote" : "Edit quotes in Settings"}
+                    className="flex w-full cursor-pointer flex-col gap-1.5 border-0 bg-transparent p-0 text-left font-[inherit]"
+                >
+                    {quote ? (
+                        <>
+                            <span className="line-clamp-4 font-serif text-[14.5px] leading-[1.45] text-[color:color-mix(in_srgb,var(--ink)_85%,transparent)] italic">“{quote.quote.text}”</span>
+                            <span className="text-[12px] text-muted-foreground">{quote.quote.source || "Unattributed"}</span>
+                        </>
+                    ) : (
+                        <span className="font-serif text-[14px] text-muted-foreground italic">Add a quote in Settings</span>
+                    )}
+                </button>
             </div>
             <div className="flex items-center gap-2.5 border-t border-border pt-3 pl-2.5">
                 <div className="flex min-w-0 flex-1 flex-col items-start gap-0.5">

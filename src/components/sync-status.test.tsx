@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest"
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react"
-import { SyncStatus } from "@/components/sync-status"
+import { SyncAnnouncer, SyncStatus } from "@/components/sync-status"
 
 // The app is not booted: the button reads core/sync's status, a fake here, through
 // data/sync.ts, and syncs through the actions, a fake too.
@@ -29,8 +29,8 @@ afterEach(() => {
 })
 
 describe("the sync button", () => {
-    it("shows the sync state and syncs on click", () => {
-        render(<SyncStatus />)
+    it("shows the sync state and syncs on click; the announcer says it", () => {
+        render(<><SyncStatus /><SyncAnnouncer /></>)
         const cases: [Parameters<typeof fake.setStatus>[0], string][] = [
             [{ state: "idle" }, "Synced"],
             [{ state: "pending" }, "Saving…"],

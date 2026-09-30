@@ -308,7 +308,7 @@ export async function quickAddTask(title: string) {
 }
 
 /**
- * The quote tile: the next quote, with fireworks from `from` when clicked. With fewer
+ * The quote in the sidebar's foot: the next quote, with fireworks from `from` when clicked. With fewer
  * than two there is nothing to turn to, so a click opens Settings at the quote field.
  * Returns whether it turned.
  */

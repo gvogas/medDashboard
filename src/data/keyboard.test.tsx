@@ -59,6 +59,10 @@ describe("single-key shortcuts", () => {
     it("1–5 show a view and / focuses search", () => {
         press("3")
         expect(setView).toHaveBeenCalledWith("table")
+        press("4")
+        expect(setView).toHaveBeenLastCalledWith("study")
+        press("5")
+        expect(setView).toHaveBeenLastCalledWith("spotify")
         press("/")
         expect(document.activeElement?.id).toBe("search")
     })

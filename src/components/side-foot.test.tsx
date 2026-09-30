@@ -6,6 +6,8 @@ import { stubMatchMedia } from "./test-media"
 const toggleSettings = vi.hoisted(() => vi.fn())
 const nextQuote = vi.hoisted(() => vi.fn())
 vi.mock("@/data/actions", () => ({ toggleSettings, nextQuote, syncNow: vi.fn() }))
+const ui = vi.hoisted(() => ({ focus: false }))
+vi.mock("@/data/ui", async () => (await import("@/data/fake-ui")).fakeUi(ui))
 vi.mock("@/data/store", () => ({ useProfile: () => ({ displayName: "Alex Rivera", username: "alex" }) }))
 vi.mock("@/data/sync", () => ({
     useSyncStatus: () => ({ state: "idle", message: "" }),
@@ -22,14 +24,19 @@ describe("the sidebar's foot", () => {
         render(<SideFoot />)
         expect(screen.getByText(/The good physician/)).toBeTruthy()
         expect(screen.getByText("William Osler")).toBeTruthy()
-        fireEvent.click(screen.getByRole("button", { name: /The good physician/ }))
-        expect(nextQuote).toHaveBeenCalled()
+        const button = screen.getByRole("button", { name: /The good physician/ })
+        expect(button.title).toBe("Next quote")
+        fireEvent.click(button)
+        expect(nextQuote).toHaveBeenCalledWith(button)
     })
 
-    it("without a quote, points to Settings", () => {
+    it("without a quote, points to Settings, and a click goes there", () => {
         quote.value = null
         render(<SideFoot />)
-        expect(screen.getByText("Add a quote in Settings")).toBeTruthy()
+        const button = screen.getByRole("button", { name: "Add a quote in Settings" })
+        expect(button.title).toBe("Edit quotes in Settings")
+        fireEvent.click(button)
+        expect(nextQuote).toHaveBeenCalledWith(button)   // with fewer than two, it opens Settings at the quote field
         quote.value = { ix: 0, quote: { text: "The good physician treats the disease.", source: "William Osler" } }
     })
 
@@ -41,7 +48,7 @@ describe("the sidebar's foot", () => {
         expect(toggleSettings).toHaveBeenCalled()
     })
 
-    it("turns the quote by itself, but not while it is read or motion is reduced", () => {
+    it("turns the quote by itself, but not while it is read, on the focus screen or with reduced motion", () => {
         vi.useFakeTimers()
         stubMatchMedia({ reducedMotion: false })
         render(<SideFoot />)
@@ -52,6 +59,11 @@ describe("the sidebar's foot", () => {
         act(() => { vi.advanceTimersByTime(QUOTE_EVERY_MS) })
         expect(nextQuote).toHaveBeenCalledTimes(1)
         ;(document.activeElement as HTMLElement).blur()
+
+        ui.focus = true
+        act(() => { vi.advanceTimersByTime(QUOTE_EVERY_MS) })
+        expect(nextQuote).toHaveBeenCalledTimes(1)
+        ui.focus = false
 
         stubMatchMedia({ reducedMotion: true })
         act(() => { vi.advanceTimersByTime(QUOTE_EVERY_MS) })

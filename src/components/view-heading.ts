@@ -1,6 +1,6 @@
 // The top bar's title and the date line over it, for the view on screen.
 
-import { parse, addDays, monday, iso, MON } from "@/core/dates"
+import { parse, addDays, monday, iso, today, MON } from "@/core/dates"
 import { schoolCal } from "@/data/query"
 import { weekOf, type WeekInfo } from "@/core/school"
 import { state as spotify } from "@/data/spotify/player"
@@ -25,10 +25,12 @@ export function viewHeading(ui: Pick<Ui, "view" | "anchor">): Heading {
     const a = parse(ui.anchor)
     switch (ui.view) {
         case "week": {
-            /* the title is the week; the line over it the day you are on, and the school week */
+            /* the title is the week; the line over it the day you are on (with its year when
+               that isn't this year), and the school week */
             const st = monday(a), en = addDays(st, 6)
             const school = schoolLine(weekOf(schoolCal(), iso(st)))
-            const day = WEEKDAY[a.getDay()] + " " + a.getDate() + " " + MON[a.getMonth()]
+            const year = a.getFullYear() === parse(today()).getFullYear() ? "" : " " + a.getFullYear()
+            const day = WEEKDAY[a.getDay()] + " " + a.getDate() + " " + MON[a.getMonth()] + year
             return { title: short(st) + " – " + short(en), sub: day + (school ? " · " + school : "") }
         }
         case "month":

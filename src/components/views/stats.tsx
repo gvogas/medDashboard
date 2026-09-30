@@ -11,6 +11,10 @@ import { useStats } from "@/data/views"
 import { statsShown } from "@/components/shell"
 import { openItem, openStudy } from "@/data/actions"
 
+/** "Cardiology midterm exam"; the type word only when the title doesn't already say it ("Final exam"). */
+export const examName = (title: string, type: string) =>
+    title.toLowerCase().includes(type.toLowerCase()) ? title : title + " " + type.toLowerCase()
+
 /** "1h 20" or "45 min". */
 export const studyTime = (min: number) => (min >= 60 ? Math.floor(min / 60) + "h" + (min % 60 ? " " + String(min % 60).padStart(2, "0") : "") : min + " min")
 
@@ -23,6 +27,7 @@ export function Stats() {
 
     const exam = s.nextExam, dd = s.daysTo
     const study = s.study, left = Math.max(0, study.goal - study.minutes)
+    const when = dd === 0 ? "Today" : dd === 1 ? "Tomorrow" : "In " + dd + " days"
 
     return (
         <>
@@ -30,8 +35,13 @@ export function Stats() {
                 label="Next exam or quiz"
                 onClick={exam ? () => openItem(exam.id) : undefined}
                 title={exam ? "Open " + exam.title : undefined}
-                value={<span className="block truncate text-[21px] leading-[1.15]">{exam ? exam.title + " " + tmeta(exam.type).label.toLowerCase() : "Nothing scheduled"}</span>}
-                foot={exam ? (dd === 0 ? "Today" : dd === 1 ? "Tomorrow" : "In " + dd + " days") + (s.prep ? " · " + prepLabel(s.prep) : "") : "Enjoy the quiet"}
+                value={<span className="block truncate text-[21px] leading-[1.15]">{exam ? examName(exam.title, tmeta(exam.type).label) : "Nothing scheduled"}</span>}
+                foot={exam ? (
+                    <>
+                        {when}
+                        {s.prep && <> · <span className={s.prep.hot ? "text-destructive" : undefined}>{prepLabel(s.prep)}</span></>}
+                    </>
+                ) : "Enjoy the quiet"}
             />
             <Box label="Open assignments" value={s.openAssignments} foot={s.dueThisWeek ? s.dueThisWeek + " due this week" : "None due this week"} />
             <Box label="Overdue" tone={s.overdue ? "crit" : "good"} value={s.overdue} foot={s.overdue ? "Needs attention today" : "All caught up"} />
@@ -64,7 +74,8 @@ function Box({ label, value, foot, tone, onClick, title, children }: {
                 tone === "crit" ? "text-destructive" : tone === "good" ? "text-[var(--done-ink)]" : "text-foreground",
             )}>{value}</span>
             {children}
-            <span className="mt-auto truncate text-[12.5px] text-ink-2">{foot}</span>
+            {/* the foot sits at the bottom, unless a goal bar is there already */}
+            <span className={cn("truncate text-[12.5px] text-ink-2", !children && "mt-auto")}>{foot}</span>
         </>
     )
     const box = "flex h-[132px] w-full min-w-0 flex-col gap-1 rounded-[var(--radius)] border border-border bg-card px-[18px] pt-4 pb-3.5 text-left font-[inherit] max-[700px]:flex-[0_0_170px] max-[700px]:snap-start"

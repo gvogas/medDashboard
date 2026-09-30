@@ -1,16 +1,25 @@
-import { afterEach, describe, expect, it, vi } from "vitest"
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest"
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react"
 import { notify } from "@/bridge"
 import { TopBar } from "@/components/top-bar"
 import { setSide } from "@/data/sidebar"
 import { stubMatchMedia } from "./test-media"
 
-// The app is not booted: the bar needs the ui, Spotify's state and
+// The app is not booted: the bar needs the ui, the sync state, Spotify's state and
 // the school calendar, and its buttons call the actions, which are fakes here.
-const fake = vi.hoisted(() => ({
-    ui: { view: "week", anchor: "2026-09-23", search: "" },
-    spotify: { loaded: true, connected: true, device: "Kitchen" as string | null },
-}))
+const fake = vi.hoisted(() => {
+    const statusListeners = new Set<(s: unknown) => void>()
+    return {
+        ui: { view: "week", anchor: "2026-09-23", search: "" },
+        spotify: { loaded: true, connected: true, device: "Kitchen" as string | null },
+        status: { state: "idle", pending: 0, message: "" },
+        statusListeners,
+        setStatus(s: { state: string; pending?: number; message?: string }) {
+            Object.assign(this.status, { pending: 0, message: "", ...s })
+            for (const fn of statusListeners) fn(this.status)
+        },
+    }
+})
 const actions = vi.hoisted(() => ({
     goToday: vi.fn(), step: vi.fn(), setSearch: vi.fn(), newItem: vi.fn(), showSidebar: vi.fn(),
 }))
@@ -18,8 +27,14 @@ vi.mock("@/data/actions", () => actions)
 vi.mock("@/data/ui", async () => (await import("@/data/fake-ui")).fakeUi(fake.ui))
 vi.mock("@/data/spotify/player", () => ({ state: fake.spotify }))
 vi.mock("@/data/query", () => ({ schoolCal: () => null }))
+vi.mock("@/core/sync", () => ({
+    status: fake.status,
+    onStatus: (fn: (s: unknown) => void) => fake.statusListeners.add(fn),
+}))
 
 stubMatchMedia({ reducedMotion: false })
+beforeAll(() => { vi.useFakeTimers({ toFake: ["Date"] }); vi.setSystemTime(new Date(2026, 8, 23, 12)) })
+afterAll(() => { vi.useRealTimers() })
 
 const show = (view: string, anchor = "2026-09-23") => {
     fake.ui.view = view
@@ -35,6 +50,7 @@ afterEach(() => {
     fake.ui.view = "week"
     fake.ui.anchor = "2026-09-23"
     fake.ui.search = ""
+    act(() => fake.setStatus({ state: "idle" }))
 })
 
 describe("the top bar", () => {
@@ -111,5 +127,19 @@ describe("the top bar", () => {
         fireEvent.click(menu)
         expect(actions.showSidebar).toHaveBeenLastCalledWith(false)
         act(() => setSide(false))
+    })
+
+    it("puts a dot on the menu button when sync needs you, the sidebar being out of sight", () => {
+        render(<TopBar />)
+        const dot = () => screen.getByRole("button", { name: "Show sidebar" }).querySelector("[data-sync-dot]")?.getAttribute("data-sync-dot") ?? null
+        expect(dot()).toBeNull()
+        for (const state of ["pending", "syncing"]) {
+            act(() => fake.setStatus({ state }))
+            expect(dot()).toBeNull()
+        }
+        for (const state of ["offline", "error", "signed-out"]) {
+            act(() => fake.setStatus({ state }))
+            expect(dot()).toBe(state)
+        }
     })
 })

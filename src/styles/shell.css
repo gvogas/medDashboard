@@ -38,7 +38,7 @@
 @media (prefers-reduced-motion:reduce){.scrim,.side{transition:none}}
 
 @media (max-width:900px){
-  .side{position:fixed;top:0;bottom:0;left:0;width:252px;z-index:45;transform:translateX(-102%);transition:transform .18s ease;box-shadow:var(--shadow-2)}
+  .side{position:fixed;top:0;bottom:0;left:0;width:260px;z-index:45;transform:translateX(-102%);transition:transform .18s ease;box-shadow:var(--shadow-2)}
   .side.on{transform:none}
   .drape{display:none}
 }
