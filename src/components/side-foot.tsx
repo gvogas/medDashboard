@@ -5,7 +5,8 @@
 import { useEffect, useRef } from "react"
 import { useProfile } from "@/data/store"
 import { useStats } from "@/data/views"
-import { ui } from "@/data/ui"
+import { ui, useUi } from "@/data/ui"
+import { THEMES } from "@/data/themes"
 import { nextQuote, toggleSettings } from "@/data/actions"
 import { SyncStatus } from "@/components/sync-status"
 
@@ -23,6 +24,8 @@ const gear = (
 export function SideFoot() {
     const profile = useProfile()
     const { quote, quoteCount } = useStats()
+    const bg = useUi((u) => u.bg)
+    const q = quote ? quote.quote : THEMES[bg].quote
     const box = useRef<HTMLDivElement>(null)
 
     /* the quote turns by itself while nobody is reading it */
@@ -43,17 +46,11 @@ export function SideFoot() {
                 <button
                     type="button"
                     onClick={(e) => nextQuote(e.currentTarget)}
-                    title={quoteCount > 1 ? "Next quote" : "Edit quotes in Settings"}
+                    title={quoteCount > 1 ? "Next quote" : "Add your own quotes in Settings"}
                     className="flex w-full cursor-pointer flex-col gap-1.5 border-0 bg-transparent p-0 text-left font-[inherit]"
                 >
-                    {quote ? (
-                        <>
-                            <span className="line-clamp-4 font-serif text-[14.5px] leading-[1.45] text-[color:color-mix(in_srgb,var(--ink)_85%,transparent)] italic">“{quote.quote.text}”</span>
-                            <span className="text-[12px] text-muted-foreground">{quote.quote.source || "Unattributed"}</span>
-                        </>
-                    ) : (
-                        <span className="font-serif text-[14px] text-muted-foreground italic">Add a quote in Settings</span>
-                    )}
+                    <span className="line-clamp-4 font-serif text-[14.5px] leading-[1.45] text-[color:color-mix(in_srgb,var(--ink)_85%,transparent)] italic">“{q.text}”</span>
+                    <span className="text-[12px] text-muted-foreground">{q.source || "Unattributed"}</span>
                 </button>
             </div>
             <div className="flex items-center gap-2.5 border-t border-border pt-3 pl-2.5">

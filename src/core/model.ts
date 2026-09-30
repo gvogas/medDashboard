@@ -89,7 +89,7 @@ export function typeList(bg: string, items: { type: string }[] = []): ItemType[]
       custom: !base,
       hiddenSet: p.hidden !== undefined,
       hidden: p.hidden !== undefined ? !!p.hidden
-        : (id === 'project' && bg !== 'cs' || id === 'quiz' && ownQuiz) && !items.some((it) => it.type === id),
+        : (id === 'project' && bg !== 'cs' && bg !== 'eng' || id === 'quiz' && ownQuiz) && !items.some((it) => it.type === id),
     };
   });
 }

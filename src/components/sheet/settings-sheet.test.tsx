@@ -56,6 +56,7 @@ import { closeSheet, getSheet, openSheet } from "@/data/overlay"
 import type { ImportPlan } from "@/data/import-edit"
 import type { SchoolDraft } from "@/data/school-edit"
 import { Sheet } from "./sheet"
+import { TAB_OF } from "@/data/settings"
 
 beforeEach(() => {
     document.body.innerHTML = '<div id="app"></div><div id="scrim"></div><div id="sheet"></div>'
@@ -65,7 +66,7 @@ afterEach(() => {
     act(() => closeSheet())
     cleanup()
     vi.clearAllMocks()
-    Object.assign(fake.ui, { importNote: null, schoolAsk: false, signoutAsk: null, feed: null })
+    Object.assign(fake.ui, { bg: "med", importNote: null, schoolAsk: false, signoutAsk: null, feed: null })
     fake.conflicts.length = 0
 })
 
@@ -79,16 +80,68 @@ describe("Settings", () => {
         expect(actions.setSettingsTab).toHaveBeenCalledWith("study")
     })
 
-    it("sets the theme and background, and saves the coat", () => {
+    it("picks a theme from six rows, a goal from its chips or typed, and the name", () => {
         settings("you")
-        fireEvent.click(screen.getByRole("button", { name: "Light" }))
-        expect(legacy.setTheme).toHaveBeenCalledWith("light")
-        fireEvent.click(screen.getByRole("button", { name: /CS/ }))
-        expect(legacy.setBg).toHaveBeenCalledWith("cs")
-        fireEvent.change(screen.getByRole("textbox", { name: "Name" }), { target: { value: "Dr. Demo" } })
-        expect(actions.saveCoat).toHaveBeenCalledWith({ name: "Dr. Demo" })
+        const rows = within(screen.getByRole("radiogroup", { name: "Theme" })).getAllByRole("radio")
+        expect(rows.map((r) => r.textContent)).toEqual([
+            "MedicineLab coat · pink when done", "Computer ScienceID badge · mint when done",
+            "LawSuit and name plate · parchment when done", "AviationFlight jacket · sky blue when done",
+            "SportsJersey · peach when done", "EngineeringHi-vis vest · yellow when done",
+        ])
+        expect(rows[0].getAttribute("aria-checked")).toBe("true")
+        fireEvent.click(screen.getByRole("radio", { name: /Aviation/ }))
+        expect(legacy.setBg).toHaveBeenCalledWith("pilot")
+
+        fireEvent.click(screen.getByRole("radio", { name: "Surgeon" }))
+        expect(actions.saveCoat).toHaveBeenCalledWith({ role: "Surgeon" })
+        fireEvent.change(screen.getByRole("textbox", { name: "Your own goal" }), { target: { value: "Neurosurgeon" } })
+        expect(actions.saveCoat).toHaveBeenCalledWith({ role: "Neurosurgeon" })
+        fireEvent.change(screen.getByRole("textbox", { name: "Your name" }), { target: { value: "Alex" } })
+        expect(actions.saveCoat).toHaveBeenCalledWith({ name: "Alex" })
+
         fireEvent.click(screen.getByRole("button", { name: "Pink coat" }))
         expect(actions.saveCoat).toHaveBeenCalledWith({ color: "#E4749B" })
+        fireEvent.click(screen.getByRole("button", { name: "Dark" }))
+        expect(legacy.setTheme).toHaveBeenCalledWith("dark")
+    })
+
+    it("moves through the theme rows and the goal chips with the arrow keys", () => {
+        settings("you")
+        const group = screen.getByRole("radiogroup", { name: "Theme" })
+        const rows = within(group).getAllByRole("radio")
+        expect(rows.map((r) => r.tabIndex)).toEqual([0, -1, -1, -1, -1, -1])
+        rows[0].focus()
+        fireEvent.keyDown(rows[0], { key: "ArrowDown" })
+        expect(legacy.setBg).toHaveBeenLastCalledWith("cs")
+        expect(document.activeElement).toBe(rows[1])
+        rows[0].focus()
+        fireEvent.keyDown(rows[0], { key: "ArrowLeft" })
+        expect(legacy.setBg).toHaveBeenLastCalledWith("eng")
+        rows[0].focus()
+        fireEvent.keyDown(rows[0], { key: "End" })
+        expect(legacy.setBg).toHaveBeenLastCalledWith("eng")
+        fireEvent.keyDown(document.activeElement!, { key: "Home" })
+        expect(legacy.setBg).toHaveBeenLastCalledWith("med")
+
+        const chips = within(screen.getByRole("radiogroup", { name: "Where you’re headed" })).getAllByRole("radio")
+        chips[0].focus()
+        fireEvent.keyDown(chips[0], { key: "ArrowRight" })
+        expect(actions.saveCoat).toHaveBeenLastCalledWith({ role: chips[1].textContent })
+        expect(document.activeElement).toBe(chips[1])
+        // a custom goal checks no chip: the first is still the one Tab stop
+        expect(chips.map((c) => c.tabIndex)).toEqual([0, -1, -1, -1, -1, -1])
+    })
+
+    it("a deep link to the theme focuses its group, and it belongs to the You tab", () => {
+        expect(TAB_OF.themeGrp).toBe("you")
+        settings("you", "themeGrp")
+        return waitFor(() => expect(document.activeElement?.id).toBe("themeGrp"))
+    })
+
+    it("shows the coat colours only for Medicine", () => {
+        fake.ui.bg = "cs"
+        settings("you")
+        expect(screen.queryByRole("button", { name: "Pink coat" })).toBeNull()
     })
 
     it("adds a quote with Enter or Add, and removes one", async () => {

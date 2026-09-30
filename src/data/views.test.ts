@@ -7,8 +7,8 @@ vi.mock("@/data/query", () => ({ schoolCal: () => null }))
 import { normalizeCourse, normalizeItem } from "@/core/model"
 import { normalizeSchool } from "@/core/school"
 import {
-    cellLabel, classes, instances, monthCells, officeHours, quoteAt, stats, tableRows, tasks, timetable, weekDays,
-    type Filters, type ViewInput,
+    cellLabel, classes, instances, monthCells, officeHours, quoteAt, stats, tableRows, tasks, timetable, typeCounts, weekDays,
+    type Filters, type TableFilters, type ViewInput,
 } from "./views"
 import type { Course, Item, Schedule, StudySession } from "./types"
 
@@ -21,7 +21,8 @@ const item = (row: Partial<Item> & { id: string }): Item => normalizeItem({ type
 const course = (row: Partial<Course> & { id: string }, i = 0): Course => normalizeCourse({ code: row.id.toUpperCase(), name: row.id, ...row }, i) as Course
 const mtg = (id: string, weekday: number, start: string, end: string, room = "") => ({ id, kind: "Lecture", weekday, start, end, room })
 
-const ALL: Filters = { search: "", types: {}, course: "all" }
+const ALL: Filters = { search: "", course: "all" }
+const TABLE: TableFilters = { ...ALL, types: {}, show: "all" }
 const input = (items: Item[], courses: Course[], over: Partial<ViewInput> = {}): ViewInput =>
     ({ items, courses, filters: ALL, schedule: "all", anchor: TODAY, today: TODAY, cal: null, ...over })
 
@@ -29,11 +30,10 @@ const anat = course({ id: "anat", color: "#C2571A", meetings: [mtg("m1", 1, "09:
 const phys = course({ id: "phys", color: "#1E628F", meetings: [mtg("m3", 3, "08:00", "09:00")] }, 1)
 
 describe("filters", () => {
-    it("drop switched-off types, other courses and search misses", () => {
+    it("drop other courses and search misses, and never filter by type", () => {
         const items = [item({ id: "a", courseId: "anat" }), item({ id: "b", type: "lab", courseId: "phys" }), item({ id: "c", title: "Renal set" })]
         const ids = (f: Filters) => instances(items, [anat, phys], f, "2026-09-21", "2026-09-27").map((x) => x.item.id)
         expect(ids(ALL)).toEqual(["a", "b", "c"])
-        expect(ids({ ...ALL, types: { lab: false } })).toEqual(["a", "c"])
         expect(ids({ ...ALL, course: "phys" })).toEqual(["b"])
         expect(ids({ ...ALL, search: "renal" })).toEqual(["c"])
         expect(ids({ ...ALL, search: "PHYS" })).toEqual(["b"])   /* the course's name counts */
@@ -171,7 +171,7 @@ describe("the table", () => {
         item({ id: "a", title: "Alpha", date: "2026-09-27", courseId: "anat", status: "submitted" }),
         item({ id: "c", title: "gamma", date: "2026-09-21" }),
     ]
-    const ids = (key: "title" | "type" | "course" | "date" | "status", dir: 1 | -1 = 1) => tableRows(list, [anat, phys], ALL, { key, dir }).map((x) => x.id)
+    const ids = (key: "title" | "type" | "course" | "date" | "status", dir: 1 | -1 = 1) => tableRows(list, [anat, phys], TABLE, { key, dir }).map((x) => x.id)
 
     it("sorts by each column, both ways", () => {
         expect(ids("date")).toEqual(["c", "b", "a"])
@@ -182,8 +182,31 @@ describe("the table", () => {
         expect(ids("status")).toEqual(["c", "b", "a"])   /* Open, Scheduled, Submitted */
     })
 
-    it("filters like the other views", () => {
-        expect(tableRows(list, [anat, phys], { ...ALL, search: "gam" }, { key: "date", dir: 1 }).map((x) => x.id)).toEqual(["c"])
+    const rows = (f: Partial<TableFilters>) => tableRows(list, [anat, phys], { ...TABLE, ...f }, { key: "date", dir: 1 }).map((x) => x.id)
+
+    it("filters by course and search like the other views", () => {
+        expect(rows({ search: "gam" })).toEqual(["c"])
+        expect(rows({ course: "phys" })).toEqual(["b"])
+    })
+
+    it("drops switched-off types, which the week and month keep", () => {
+        expect(rows({ types: { lab: false } })).toEqual(["c", "a"])
+        expect(rows({ types: { assignment: false, lab: true } })).toEqual(["b"])
+    })
+
+    it("shows the open items, or only the overdue ones", () => {
+        /* c is open and two days late; b is open and to come; a is submitted */
+        expect(rows({ show: "open" })).toEqual(["c", "b"])
+        expect(rows({ show: "overdue" })).toEqual(["c"])
+        expect(rows({ show: "overdue", types: { assignment: false } })).toEqual([])
+        const weekly = item({ id: "w", recur: "weekly", weekday: 1, date: "2026-09-01" })
+        expect(tableRows([...list, weekly], [], { ...TABLE, show: "overdue" }, { key: "date", dir: 1 }).map((x) => x.id)).toEqual(["c"])
+    })
+
+    it("counts each type's open and weekly items in the course, for the type chips", () => {
+        const more = [...list, item({ id: "w", type: "lab", status: "done", recur: "weekly", weekday: 1, courseId: "phys" })]
+        expect(typeCounts(more, "all")).toEqual({ lab: 2, assignment: 1 })
+        expect(typeCounts(more, "anat")).toEqual({})
     })
 })
 

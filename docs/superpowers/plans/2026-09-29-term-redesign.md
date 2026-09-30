@@ -30,7 +30,7 @@
 | # | Stage | Branch | Database | Detailed plan |
 |---|---|---|---|---|
 | 1 | The name and the look: fonts, tokens, sidebar with the pages, top bar, the four boxes, the week as rows, completed tint, month course colours, sign-in | `term-1-look` | none | **below** |
-| 2 | Themes: six themes, their pictures with name and goal, next-exam animations, study words, dark timer colours | `term-2-themes` | migration: widen `profile.bg` | written when Stage 1 is merged |
+| 2 | Themes: six themes, their pictures with name and goal, next-exam animations, study words, dark timer colours | `term-2-themes` | clean db: widen `users.bg`, move to `rounds-v5` | `2026-09-30-term-stage-2-themes.md` |
 | 3 | Semesters and repeats: course semester picker, classes only in their term, sidebar semester switch, weekly repeat for labs and tutorials | `term-3-semesters` | none (`courses.term`, `items.recur`) | written when Stage 2 is merged |
 | 4 | The item card: type buttons, the property list, the Week/Month date picker, folded extras | `term-4-item-card` | none | written when Stage 3 is merged |
 | 5 | Study in four tabs | `term-5-study` | none | written when Stage 4 is merged |
@@ -42,7 +42,7 @@ Why a detailed plan per stage and not all now: each stage changes the files the 
 ### What each later stage must cover (its plan starts from this)
 
 **Stage 2 — Themes.**
-- Migration `migrations/0002_themes.sql`: rebuild `profiles` with `bg IN ('med','cs','law','pilot','sports','eng')` (SQLite cannot alter a CHECK: create the new table, copy, drop, rename, recreate indexes and the change triggers exactly as in `0001_schema.sql`). Update `BACKGROUNDS` in `worker/validate.js` and the `bg` type in `src/data/types.ts` (`"med" | "cs"` → the six). Test: a Worker test that saves each value and rejects `"foo"`.
+- The database: **not** a table rebuild (dropping `users` would cascade-delete the change feed). The owner chose a clean database instead: widen the `bg` CHECK in `0001_schema.sql` and move the live data into a fresh `rounds-v5` (see `2026-09-30-term-stage-2-themes.md`, Tasks 1 and 13). Update `BACKGROUNDS` in `worker/validate.js` and the `bg` type. Test: saves each value and rejects `"foo"`.
 - `src/data/theme.ts` `applyBg()`: accept the six; `data-bg` on `<html>`.
 - Tokens: one `:root[data-bg="…"]` block per theme, light and dark, with `--accent`, `--accent-soft` (today's tint), `--accent-ink`, `--done`, `--done-ink`, `--done-track`, `--done-bar-a`, `--done-bar-b`, `--motif`, `--study-deep` (values: `THEMES` and `STUDY` in the prototype).
 - `src/components/sidebar-picture/` one component per theme (coat, badge, suit, jacket, jersey, vest): the SVG from the prototype (search `aria-label="Lab coat` etc.) with the name and goal as HTML spans over it, never SVG `<text>`. Snapshot-free tests: each renders the person's name and goal.

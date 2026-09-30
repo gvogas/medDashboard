@@ -17,6 +17,7 @@ import { getSheet } from "./overlay"
 import { useCourses, useItems, useProfile, useStudySessions } from "./store"
 import { shownSessions } from "./study"
 import { ui, useUi } from "./ui"
+import { THEMES } from "./themes"
 import type { Course, Flow, Item, StepKind, StudySession } from "./types"
 
 const MIN = 60_000
@@ -69,10 +70,18 @@ function refresh(force: boolean) {
     if (!force && key === runKey) return
     run = next
     runKey = key
-    document.title = tickTitle(run)
+    document.title = tickTitle(run, THEMES[ui.bg].studyWord)
     setStudyBadge(run ? timeText(run.leftMs) : null)
     for (const fn of listeners) fn()
 }
+
+/* The title carries the theme's study word, so a theme change retitles the tab even while paused. */
+let titledBg = ui.bg
+subscribeBridge(() => {
+    if (ui.bg === titledBg) return
+    titledBg = ui.bg
+    refresh(true)
+})
 
 /* What a run does to the page: Start opens the focus screen; a new Study step pulls you
    back into it (unless a sheet is open); Stop & log, or the flow's end, goes to the
@@ -338,4 +347,4 @@ export function clockTime(ms: number): string {
 }
 
 /** The tab's title: the time left and the phase during a run. */
-export const tickTitle = (r: Run | null) => (r ? timeText(r.leftMs) + " · " + (r.kind === "study" ? "Study" : "Break") : "Term")
+export const tickTitle = (r: Run | null, word = "Study") => (r ? timeText(r.leftMs) + " · " + (r.kind === "study" ? word : "Break") : "Term")

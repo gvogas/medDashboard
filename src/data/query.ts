@@ -1,4 +1,4 @@
-// The school calendar the app goes by, and the type filter. The lists the views show are
+// The school calendar the app goes by, and All items' type filter. The lists the views show are
 // worked out in views.ts, from the store and the UI state passed in.
 
 import { data } from "@/core/store"
@@ -21,5 +21,5 @@ export const termStart = (): string | null => {
     return cal ? currentTerm(cal, today())!.start : data.profile?.termStart || null
 }
 
-/** A type filter is on unless it was switched off; new types start on. */
+/** A type chip on All items is on unless it was switched off; new types start on. */
 export const typeOn = (t: string) => ui.types[t] !== false

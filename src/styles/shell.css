@@ -54,27 +54,3 @@
   .scroll{flex:none;overflow:visible;padding:16px 16px 84px}
   #views,#views.own-scroll{flex:none;overflow:visible;display:block;padding-right:0}
 }
-
-/* ═════════ art in the Settings sheet (settings-sheet.tsx) ═════════ */
-/* The background thumbnails: each art masked in the accent. */
-.bgthumb{display:block;height:44px;border-radius:6px;background:var(--bg);border:1px solid var(--line);position:relative;overflow:hidden}
-.bgthumb::before{content:"";position:absolute;inset:0;background:var(--accent);opacity:.7;-webkit-mask:var(--art) center/cover no-repeat;mask:var(--art) center/cover no-repeat}
-.bgthumb[data-thumb="med"]{--art:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 120 44' fill='none' stroke='black' stroke-width='1.3'%3E%3Cpath d='M-4 30c10-14 20-14 30 0s20 14 30 0 20-14 30 0 20 14 30 0'/%3E%3Cpath d='M-4 30c10 14 20 14 30 0s20-14 30 0 20 14 30 0 20-14 30 0'/%3E%3Cpath d='M84 6l7 4v8l-7 4-7-4v-8z'/%3E%3Cpath d='M98 2l7 4v8l-7 4-7-4V6z'/%3E%3Ccircle cx='18' cy='10' r='5'/%3E%3C/svg%3E")}
-.bgthumb[data-thumb="cs"]{--art:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 120 44' fill='none' stroke='black' stroke-width='1.3' stroke-linecap='round'%3E%3Cpath d='M-2 8h26l8 8h22M-2 14h22l8 8h22M-2 20h18l8 8h22'/%3E%3Ccircle cx='56' cy='16' r='2'/%3E%3Ccircle cx='52' cy='22' r='2'/%3E%3Ccircle cx='48' cy='28' r='2'/%3E%3Ccircle cx='96' cy='6' r='3'/%3E%3Cpath d='M94 8l-8 9M98 8l8 9'/%3E%3Ccircle cx='85' cy='20' r='3'/%3E%3Ccircle cx='107' cy='20' r='3'/%3E%3Cpath d='M70 38h4M84 30v12M88 30v12'/%3E%3Cpath d='M104 32l-4 4 4 4M112 32l4 4-4 4'/%3E%3C/svg%3E")}
-
-/* The coat's pocket, as the sidebar shows it (sidebar-coat.tsx), previewing the colour. */
-.coatpreview{
-  position:relative;border:1px solid color-mix(in srgb, var(--coat) 26%, var(--line));
-  border-top-width:2px;border-top-color:color-mix(in srgb, var(--coat) 40%, var(--line));
-  border-radius:3px 3px 8px 8px;padding:9px 11px 11px;
-  background:linear-gradient(color-mix(in srgb, var(--coat) 7%, var(--pocket-a)), color-mix(in srgb, var(--coat) 14%, var(--pocket-b)));
-}
-.coatpreview::before{content:"";position:absolute;left:7px;right:7px;top:4px;border-top:1px dashed color-mix(in srgb, var(--coat) 62%, transparent)}
-.coatpreview .pen{position:absolute;right:12px;top:-7px;width:9px;height:40px;border-radius:2px 2px 4px 4px;background:#3C6E8F}
-.coatpreview .pen::after{content:"";position:absolute;left:1px;right:1px;top:-6px;height:13px;border-radius:3px;background:#B9C7CC}
-.coatpreview .embroidery{
-  font-family:"Source Serif 4 Variable",Georgia,serif;font-style:italic;font-weight:600;font-size:14px;
-  color:color-mix(in srgb, var(--coat) 74%, var(--ink));
-}
-.coatpreview .tuck{position:absolute;right:26px;bottom:5px;width:50px;height:28px;color:var(--accent);opacity:.42}
-.coatpreview .role{font-size:9.5px;letter-spacing:.13em;text-transform:uppercase;color:var(--ink-3);margin-top:1px}

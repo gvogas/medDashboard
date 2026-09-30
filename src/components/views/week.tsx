@@ -6,7 +6,6 @@ import { cn } from "@/lib/utils"
 import { isOpen, isOverdue, isTest, tmeta } from "@/core/model"
 import { hhmm, parse, DOW } from "@/core/dates"
 import { course as courseOf } from "@/core/store"
-import { useUi } from "@/data/ui"
 import { useWeek, tintOf, type Day, type Entry } from "@/data/views"
 import { newItemOn, openItem, quickAddTask, toggleTask } from "@/data/actions"
 import type { Course, Item } from "@/data/types"
@@ -14,7 +13,6 @@ import { accent, classTitle, Empty, HeadNote, Panel, ScheduleTabs, SchoolTags, s
 
 export function WeekView() {
     const { week, officeHours, tasks, empty, schedule } = useWeek()
-    const cs = useUi((u) => u.bg === "cs")
     const n = week.count
 
     return (
@@ -34,8 +32,8 @@ export function WeekView() {
             </Panel>
 
             <div className="grid min-w-0 gap-[13px]">
-                <OfficeHours rows={officeHours} cs={cs} />
-                <Tasks list={tasks.shown} open={tasks.open} cs={cs} />
+                <OfficeHours rows={officeHours} />
+                <Tasks list={tasks.shown} open={tasks.open} />
             </div>
         </div>
     )
@@ -131,7 +129,7 @@ function EntryRow({ entry }: { entry: Entry }) {
     )
 }
 
-function OfficeHours({ rows, cs }: { rows: Item[]; cs: boolean }) {
+function OfficeHours({ rows }: { rows: Item[] }) {
     return (
         <Panel label="Office hours" title="Office hours" head={<HeadNote>weekly</HeadNote>}>
             {rows.length === 0 && <Empty>None yet</Empty>}
@@ -143,7 +141,7 @@ function OfficeHours({ rows, cs }: { rows: Item[]; cs: boolean }) {
                         <li key={it.id}>
                             <button type="button" onClick={() => openItem(it.id)}
                                 className="flex w-full cursor-pointer items-start gap-2 border-0 border-b border-line-2 bg-transparent px-3.5 py-2 text-left font-[inherit] last:border-b-0 hover:bg-muted">
-                                {i === 0 && <Scope cs={cs} />}
+                                {i === 0 && <NextMark />}
                                 <span className="min-w-0 flex-1">
                                     <span className="block text-[12.5px] font-semibold text-foreground">{it.title.replace(" — office hours", "")}</span>
                                     <span className="block text-[11px] text-muted-foreground">{it.dept || c?.code || ""}</span>
@@ -161,17 +159,10 @@ function OfficeHours({ rows, cs }: { rows: Item[]; cs: boolean }) {
     )
 }
 
-/** The next office hour's mark: a stethoscope, or a prompt on CS. */
-const Scope = ({ cs }: { cs: boolean }) => (
-    <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" aria-label="Next" role="img" className="mt-0.5 size-4 flex-none text-[var(--accent)]">
-        {cs ? <path d="M3 6l5 4-5 4M10 15h7" /> : <><path d="M4 3c0 6 2 7 4 9s6 3 8 1" /><circle cx="16" cy="14" r="3.4" /></>}
-    </svg>
-)
-
-function Tasks({ list, open, cs }: { list: Item[]; open: number; cs: boolean }) {
+function Tasks({ list, open }: { list: Item[]; open: number }) {
     const [text, setText] = useState("")
     return (
-        <Panel label="Tasks" title="Tasks" head={<HeadNote>{open} open</HeadNote>} className="relative">
+        <Panel label="Tasks" title="Tasks" head={<HeadNote>{open} open</HeadNote>}>
             {list.length === 0 && <Empty>No tasks</Empty>}
             <ul className="m-0 list-none px-1.5 py-0">
                 {list.map((it) => {
@@ -199,7 +190,7 @@ function Tasks({ list, open, cs }: { list: Item[]; open: number; cs: boolean }) 
                     )
                 })}
             </ul>
-            <div className="relative z-[1] px-3.5 pt-1.5 pb-3">
+            <div className="px-3.5 pt-1.5 pb-3">
                 <input
                     type="text"
                     value={text}
@@ -217,26 +208,11 @@ function Tasks({ list, open, cs }: { list: Item[]; open: number; cs: boolean }) 
                     className="w-full rounded-lg border border-border bg-card px-2.5 py-1.5 font-[inherit] text-[12.5px] text-foreground outline-none placeholder:text-muted-foreground focus:border-[var(--accent)]"
                 />
             </div>
-            <Corner cs={cs} />
         </Panel>
     )
 }
 
-/** Med: a steroid in the corner. CS: a small binary tree. */
-const Corner = ({ cs }: { cs: boolean }) => (
-    <svg viewBox="0 0 120 80" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true"
-        className="pointer-events-none absolute -right-2 -bottom-3 h-[60px] w-[90px] text-[var(--accent)] opacity-15">
-        {cs ? (
-            <>
-                <circle cx="60" cy="12" r="6" /><circle cx="32" cy="40" r="6" /><circle cx="88" cy="40" r="6" />
-                <circle cx="18" cy="68" r="5" /><circle cx="46" cy="68" r="5" /><circle cx="102" cy="68" r="5" />
-                <path d="M55 16L37 36M65 16l18 20M28 45l-7 18M36 45l7 18M92 45l7 18" />
-            </>
-        ) : (
-            <>
-                <path d="M14 46l-9-16 9-16 18 1 8 15-8 16z" /><path d="M32 31l18 1 8 15-8 16-18-1-8-15" />
-                <path d="M50 32l17-8 13 11-5 17-17 3-8-15" /><path d="M80 35l16-4 8 12-11 11-13-5z" />
-            </>
-        )}
-    </svg>
+/** The next office hour's mark. */
+const NextMark = () => (
+    <span role="img" aria-label="Next" className="mt-[5px] size-2 flex-none rounded-full bg-[var(--accent)]" />
 )

@@ -1,19 +1,18 @@
-// "Open items": a filter per item type with its count, and the editor behind ✎ where
-// types are reordered (drag, or ↑/↓ on the handle), renamed, recoloured, hidden, deleted
-// and added. Every edit saves through the actions, which redraw the views.
+// The item types' editor, behind All items' Edit types: types are reordered (drag, or ↑/↓
+// on the handle), renamed, recoloured, hidden, deleted and added. Every edit saves
+// through the actions, which redraw the views.
 
 import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent } from "react"
 import { Reorder, useDragControls } from "framer-motion"
 import { TYPE_KINDS } from "@/core/model"
 import { useItems, useProfile } from "@/data/store"
-import { useUi } from "@/data/ui"
 import {
-    addType, canAddType, canDeleteType, deleteType, freeTypeColour, isTypeOn, itemTypes, recolourType,
-    renameType, reorderTypes, toggleType, toggleTypeHidden, TYPE_LABEL_MAX, TYPE_PALETTE,
+    addType, canAddType, canDeleteType, deleteType, freeTypeColour, itemTypes, recolourType,
+    renameType, reorderTypes, toggleTypeHidden, TYPE_LABEL_MAX, TYPE_PALETTE,
 } from "@/data/actions"
-import type { Item, ItemType } from "@/data/types"
+import type { ItemType } from "@/data/types"
 import { cn } from "@/lib/utils"
-import { Count, counts, Heading, headingButton, Pip, Row } from "./sidebar-parts"
+import { Pip } from "@/components/sidebar-parts"
 
 const KIND_NOTE: Record<string, string> = {
     todo: "To do, then done, like Tasks.",
@@ -24,65 +23,13 @@ const KIND_NOTE: Record<string, string> = {
 const quietIcon = "grid size-6 shrink-0 place-items-center rounded-md border-0 bg-transparent p-0 text-muted-foreground hover:text-primary pointer-coarse:size-10"
 const field = "min-w-0 rounded-md border border-border bg-card px-2 py-1 text-[12.5px] text-foreground"
 
-export function TypeList() {
-    const items = useItems()
-    useProfile()                               // the type list lives on the profile
-    const course = useUi((ui) => ui.course)
-    const [editing, setEditing] = useState(false)
-    const pen = useRef<HTMLButtonElement>(null)
-    const back = useRef(false)
-
-    useEffect(() => {
-        if (!editing && back.current) pen.current?.focus()
-        back.current = false
-    }, [editing])
-
-    const leave = () => { back.current = true; setEditing(false) }
-    const types = itemTypes()
-    const n: Record<string, number> = {}
-    for (const it of items) {
-        if (course !== "all" && it.courseId !== course) continue
-        if (counts(it)) n[it.type] = (n[it.type] || 0) + 1
-    }
-
-    const onKeyDown = (e: KeyboardEvent) => {
-        if (e.key !== "Escape" || !editing || e.isDefaultPrevented()) return
-        e.preventDefault()                     // the page's Escape handler (keyboard.ts) stands aside
-        leave()
-    }
-
-    return (
-        <section aria-label="Open items" onKeyDown={onKeyDown}>
-            <Heading
-                action={editing
-                    ? <button type="button" className={cn(headingButton, "text-primary")} onClick={leave}>Done</button>
-                    : <button ref={pen} type="button" className={headingButton} aria-label="Edit item types" title="Rename, recolour, reorder or hide" onClick={() => setEditing(true)}>✎</button>}
-            >
-                Open items
-            </Heading>
-            {editing
-                ? <TypeEditor types={types} items={items} />
-                : (
-                    <div className="flex flex-col gap-px">
-                        {types.filter((t) => !t.hidden).map((t) => {
-                            const on = isTypeOn(t.id)
-                            return (
-                                <Row key={t.id} pressed={on} dim={!on} onClick={() => toggleType(t.id)}>
-                                    <Pip color={t.color} hollow={!on} />
-                                    <span data-label className="min-w-0 truncate">{t.plural}</span>
-                                    <Count n={n[t.id] || 0} />
-                                </Row>
-                            )
-                        })}
-                    </div>
-                )}
-        </section>
-    )
-}
-
 /* ── the editor ── */
 
-function TypeEditor({ types, items }: { types: ItemType[]; items: Item[] }) {
+/** Every type, hidden ones too, top to bottom as the chips and the new-item list show them. */
+export function TypeEditor() {
+    const items = useItems()
+    useProfile()                               // the type list lives on the profile
+    const types = itemTypes()
     const ids = types.map((t) => t.id), saved = ids.join()
     /* The order being dragged, until the saved list catches up with it. */
     const [local, setLocal] = useState<{ from: string; order: string[] } | null>(null)
@@ -137,7 +84,7 @@ function TypeEditor({ types, items }: { types: ItemType[]; items: Item[] }) {
                 })}
             </Reorder.Group>
             <p className="m-0 px-2 pt-1 text-[11px] leading-snug text-muted-foreground">
-                Hidden types leave the sidebar and the new-item list; their items stay.
+                Hidden types leave the type chips and the new-item list; their items stay.
             </p>
             {adding
                 ? <AddForm onClose={() => setAdding(false)} />

@@ -5,7 +5,7 @@
 # streams under its own origin. Artwork uses i.scdn.co and playlist mosaics use
 # mosaic.scdn.co; allow those hosts only for images.
 /*
-  Content-Security-Policy: default-src 'self'; script-src 'self' 'sha256-npPDegaqv7XOEqrQQ0qhMPq6UPATWIrUAHU0FNaVCfs=' https://sdk.scdn.co; frame-src https://sdk.scdn.co; style-src 'self'; style-src-attr 'none'; font-src 'self'; img-src 'self' data: https://i.scdn.co https://mosaic.scdn.co; connect-src 'self'; worker-src 'self'; manifest-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'; object-src 'none'
+  Content-Security-Policy: default-src 'self'; script-src 'self' 'sha256-gqf3ccvqhHu/99aH3ngLCHFTo1To6/EhR3Bcs3ZVF8c=' https://sdk.scdn.co; frame-src https://sdk.scdn.co; style-src 'self'; style-src-attr 'none'; font-src 'self'; img-src 'self' data: https://i.scdn.co https://mosaic.scdn.co; connect-src 'self'; worker-src 'self'; manifest-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'; object-src 'none'
   X-Content-Type-Options: nosniff
   Referrer-Policy: same-origin
   Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=()

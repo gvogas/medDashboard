@@ -1,4 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest"
+import { setBg } from "./theme"
+import { ui } from "./ui"
 
 /* ui.ts reads what this browser remembered when it loads, so each case loads it afresh. */
 const load = async (saved: unknown) => {
@@ -24,5 +26,15 @@ describe("the remembered schedule tab", () => {
         expect(state.ui.schedule).toBe("deadlines")
         state.rememberUi()
         expect(JSON.parse(localStorage.getItem("rounds.ui")!)).toEqual({ view: "week", schedule: "deadlines" })
+    })
+})
+
+describe("the theme", () => {
+    it("applies any of the six to <html>, and Medicine for anything else", () => {
+        setBg("law", { persist: false })
+        expect(document.documentElement.getAttribute("data-bg")).toBe("law")
+        expect(ui.bg).toBe("law")
+        setBg("foo", { persist: false })
+        expect(document.documentElement.getAttribute("data-bg")).toBe("med")
     })
 })

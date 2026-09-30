@@ -60,10 +60,10 @@ describe('profile', () => {
   it('PUT /api/me saves the background, and keeps it when an older client leaves it out', async () => {
     const api = await signIn();
     const body = { coat: { name: '', role: '', color: '#E4749B' }, theme: 'dark', termStart: null, displayName: '' };
-    let res = await api('/api/me', { method: 'PUT', body: { ...body, bg: 'cs' } });
+    let res = await api('/api/me', { method: 'PUT', body: { ...body, bg: 'law' } });
     expect(res.status).toBe(200);
     const saved = await res.json();
-    expect(saved.bg).toBe('cs');
+    expect(saved.bg).toBe('law');
     res = await api('/api/me', { method: 'PUT', body: { ...body, bg: 'nope' } });
     expect(res.status).toBe(400);
     expect(await res.json()).toEqual({ error: 'invalid', field: 'bg' });

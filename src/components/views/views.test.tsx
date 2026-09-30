@@ -6,13 +6,15 @@ import { act, cleanup, fireEvent, render, screen, within } from "@testing-librar
 const fake = vi.hoisted(() => ({
     data: { items: [] as unknown[], courses: [] as unknown[], quotes: [] as unknown[], study_sessions: [] as unknown[], profile: null as unknown },
     ui: {
-        view: "week", anchor: "2026-09-23", search: "", types: {} as Record<string, boolean>, course: "all",
+        view: "week", anchor: "2026-09-23", search: "", types: {} as Record<string, boolean>, show: "all", listFrom: null, course: "all",
         focus: false, bg: "med", schedule: "all", sort: { key: "date", dir: 1 }, quoteIx: 0,
     },
 }))
 const actions = vi.hoisted(() => ({
     openItem: vi.fn(), newItemOn: vi.fn(), toggleTask: vi.fn(), quickAddTask: vi.fn(), setSchedule: vi.fn(),
-    goToDay: vi.fn(), openCourse: vi.fn(), sortTable: vi.fn(), openStudy: vi.fn(),
+    goToDay: vi.fn(), openCourse: vi.fn(), sortTable: vi.fn(), openStudy: vi.fn(), showTileList: vi.fn(),
+    /* All items' chips (their own tests are in table-filters.test.tsx) */
+    itemTypes: vi.fn(() => []), isTypeOn: vi.fn(() => true), toggleType: vi.fn(), setShow: vi.fn(), endTileList: vi.fn(),
 }))
 vi.mock("@/data/actions", () => actions)
 vi.mock("@/data/ui", async () => (await import("@/data/fake-ui")).fakeUi(fake.ui))
@@ -50,7 +52,7 @@ beforeEach(() => {
 afterEach(() => {
     cleanup()
     Object.values(actions).forEach((fn) => fn.mockClear())
-    Object.assign(fake.ui, { view: "week", search: "", schedule: "all", sort: { key: "date", dir: 1 }, quoteIx: 0, focus: false })
+    Object.assign(fake.ui, { view: "week", search: "", types: {}, schedule: "all", sort: { key: "date", dir: 1 }, quoteIx: 0, focus: false })
 })
 
 const set = (patch: Partial<typeof fake.ui>) => { Object.assign(fake.ui, patch); act(() => notify()) }
@@ -100,6 +102,17 @@ describe("the week", () => {
         fireEvent.keyDown(input, { key: "Enter" })
         expect(actions.quickAddTask).toHaveBeenCalledWith("Book OSCE slot")
         expect((input as HTMLInputElement).value).toBe("")
+    })
+
+    it("shows every type: the type chips filter only All items", () => {
+        fake.ui.types = { assignment: false, task: false }
+        show(<Views />)
+        expect(screen.getByRole("button", { name: /Renal problem set/ })).toBeTruthy()
+        expect(screen.getByRole("button", { name: "Done: Print flashcards" })).toBeTruthy()
+        set({ view: "month" })
+        expect(screen.getByText("Renal problem set")).toBeTruthy()
+        set({ view: "table" })
+        expect(screen.queryByRole("row", { name: /Renal problem set/ })).toBeNull()
     })
 
     it("lists the day's class with its items, and the tabs choose between them", () => {
@@ -196,6 +209,15 @@ describe("the stat tiles", () => {
         expect(document.getElementById("stats")?.textContent ?? document.body.textContent).not.toMatch(/🔥/)
     })
 
+    it("draws the theme's animation under the next exam, and none without one", () => {
+        const { container, unmount } = render(<Stats />)
+        expect(container.querySelector("[data-motif]")).toBeNull()
+        unmount()
+        fake.data.items = [...fake.data.items, item({ id: "exam", type: "exam", title: "Cardiology midterm", date: "2026-09-26" })]
+        const r = render(<Stats />)
+        expect(r.container.querySelector("[data-motif]")).not.toBeNull()
+    })
+
     it("count the work", () => {
         fake.data.items = [
             ...fake.data.items,
@@ -209,6 +231,11 @@ describe("the stat tiles", () => {
         expect(screen.getByText("1 due this week")).toBeTruthy()
         fireEvent.click(screen.getByRole("button", { name: /Next exam/ }))
         expect(actions.openItem).toHaveBeenCalledWith("exam")
+        /* Overdue and Open assignments open All items on just those (table-filters.test.tsx) */
+        fireEvent.click(screen.getByRole("button", { name: /^Overdue/ }))
+        expect(actions.showTileList).toHaveBeenCalledWith("overdue")
+        fireEvent.click(screen.getByTitle("Show open assignments"))
+        expect(actions.showTileList).toHaveBeenLastCalledWith("assignments")
     })
 
     it("name the exam once, and show an urgent pace in red", () => {
