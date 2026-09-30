@@ -73,7 +73,7 @@ export function savedValues(row: Row = {}): [string, string][] {
 
 export const coatColour = (profile: Profile | null) => profile?.coat?.color || DEFAULT_COAT
 
-/** The coat colour tints the sidebar fabric, the pocket and the embroidery. */
+/** The coat colour tints the Medicine coat, the Spotify clip and your own achievements. */
 export function applyCoat(profile: Profile | null) {
     document.documentElement.style.setProperty("--coat", coatColour(profile))
 }

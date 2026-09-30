@@ -1,4 +1,4 @@
-// The Spotify badge at the bottom of the sidebar, clipped to the coat under the pocket:
+// The Spotify badge at the bottom of the sidebar, clipped to the sidebar picture (on Medicine, the coat):
 // the cover, the track and artist with the equaliser, the mark, the progress line,
 // previous / play / next, a failed control's reason, and the device (with Play here when
 // the music is on another device and this tab can take it). Hidden until the first answer.

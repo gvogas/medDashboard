@@ -22,7 +22,7 @@ export const TONE: Record<string, string> = {
     tasks: "[--g:var(--good)] [--g-soft:color-mix(in_srgb,var(--good)_16%,var(--panel))] [--g-ink:var(--good)]",
     exams: "[--g:var(--break)] [--g-soft:var(--break-soft)] [--g-ink:var(--break-ink)]",
     grades: "[--g:#D9A21E] [--g-soft:color-mix(in_srgb,#E8B33A_20%,var(--panel))] [--g-ink:#855D00] dark:[--g-ink:#F0C96A]",
-    own: "[--g:var(--coat)] [--g-soft:color-mix(in_srgb,var(--coat)_16%,var(--panel))] [--g-ink:color-mix(in_srgb,var(--coat)_70%,var(--ink))]",
+    own: "[--g:var(--mine)] [--g-soft:color-mix(in_srgb,var(--mine)_16%,var(--panel))] [--g-ink:color-mix(in_srgb,var(--mine)_70%,var(--ink))]",
 }
 
 /* The unlock toast's See adds .pop to the medal's <li> (showAchievement in data/study-controller.ts). */
