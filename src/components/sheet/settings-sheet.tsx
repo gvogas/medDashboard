@@ -30,6 +30,7 @@ import {
 } from "@/data/actions"
 import { BGS, GOALS as THEME_GOALS, THEMES, goalFor, type Bg } from "@/data/themes"
 import type { Feed, Profile } from "@/data/types"
+import { radioKeys, rovingTab } from "./radio-keys"
 import { Button, CONTROL, RemoveButton, SheetBody, SheetFoot, SheetHead, Swatches, TextArea, TextInput } from "./fields"
 
 export function SettingsSheet({ tab, focus }: { tab: SettingsTab; focus: string | null }) {
@@ -153,19 +154,19 @@ function YouTab({ profile }: { profile: Profile }) {
     const dark = document.documentElement.getAttribute("data-app") === "dark"
     return (
         <>
-            <Group title="Theme" state={THEMES[bg].label}>
+            <Group title="Theme" state={THEMES[bg].label} id="themeGrp">
                 <Hint>Changes the sidebar, colours and the next-exam animation.</Hint>
-                <div role="radiogroup" aria-label="Theme" className="flex flex-col gap-1.5">
-                    {BGS.map((id) => {
+                <div role="radiogroup" aria-label="Theme" onKeyDown={radioKeys} className="flex flex-col gap-1.5">
+                    {BGS.map((id, i) => {
                         const t = THEMES[id], on = bg === id
                         return (
-                            <button key={id} type="button" role="radio" aria-checked={on} onClick={() => setBg(id)}
+                            <button key={id} type="button" role="radio" aria-checked={on} tabIndex={rovingTab(i, BGS.indexOf(bg))} onClick={() => setBg(id)}
                                 className={cn(
                                     "grid min-h-[60px] cursor-pointer grid-cols-[44px_minmax(0,1fr)_20px] items-center gap-3.5 rounded-lg border px-3.5 py-2 text-left font-[inherit] text-[14px] text-foreground",
                                     "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)]",
                                     on ? "border-foreground bg-[var(--bg)]" : "border-border bg-card",
                                 )}>
-                                <span aria-hidden="true" className="grid h-8 w-11 grid-cols-2 overflow-hidden rounded-[5px] shadow-[inset_0_0_0_1px_rgba(0,0,0,.06)]">
+                                <span aria-hidden="true" className="grid h-8 w-11 grid-cols-2 overflow-hidden rounded-[5px] shadow-[inset_0_0_0_1px_var(--line)]">
                                     <span style={{ background: t.accent }} /><span style={{ background: t.done }} />
                                 </span>
                                 <span className="flex flex-col gap-px"><span className="font-medium">{t.label}</span><span className="text-[12.5px] text-muted-foreground">{t.desc}</span></span>
@@ -207,9 +208,9 @@ function Headed({ profile, bg }: { profile: Profile; bg: Bg }) {
     return (
         <Group title="Where you’re headed">
             <Hint>Goes on your {THEMES[bg].wear}, so you see what the work is for.</Hint>
-            <div role="radiogroup" aria-label="Where you’re headed" className="flex flex-wrap gap-1.5">
-                {THEME_GOALS[bg].map((g) => (
-                    <button key={g} type="button" role="radio" aria-checked={g === now}
+            <div role="radiogroup" aria-label="Where you’re headed" onKeyDown={radioKeys} className="flex flex-wrap gap-1.5">
+                {THEME_GOALS[bg].map((g, i) => (
+                    <button key={g} type="button" role="radio" aria-checked={g === now} tabIndex={rovingTab(i, THEME_GOALS[bg].indexOf(now))}
                         onClick={() => { setOwn(""); void saveCoat({ role: g }) }}
                         className={cn(
                             "h-[34px] cursor-pointer rounded-full border px-3 font-[inherit] text-[13px]",
@@ -219,6 +220,7 @@ function Headed({ profile, bg }: { profile: Profile; bg: Bg }) {
                 ))}
             </div>
             <TextInput id="o-goal" aria-label="Your own goal" placeholder="Or type your own" maxLength={22} value={own}
+                /* an empty own goal falls back to the theme's first goal (goalFor), so that chip shows checked: intended */
                 onChange={(e) => { setOwn(e.target.value); void saveCoat({ role: e.target.value.trim() }) }} />
         </Group>
     )

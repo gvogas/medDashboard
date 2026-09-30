@@ -23,10 +23,11 @@ vi.mock("@/data/actions", async (importOriginal) => ({
     reorderTypes: vi.fn(async () => {}),
     deleteType: vi.fn(async () => {}),
     openCourse: vi.fn(),
+    openSettings: vi.fn(),
 }))
 
 import { useTypePrefs } from "@/core/model"
-import { reorderTypes, openCourse } from "@/data/actions"
+import { reorderTypes, openCourse, openSettings } from "@/data/actions"
 import { saveProfile } from "@/core/store"
 import { Sidebar } from "./sidebar"
 import type { TypePref } from "@/data/types"
@@ -204,6 +205,14 @@ describe("who this is", () => {
         expect(pic.textContent).toContain("Dr Demo")
         expect(screen.getByRole("button", { name: /Headed for/ }).textContent).toBe("Headed forMS2 · Block 3")
         expect(screen.queryByRole("region", { name: "Spotify" })).toBeNull()   // the player waits for Spotify's first answer
+    })
+
+    it("the picture is a button that opens Settings at the theme", () => {
+        render(<Sidebar />)
+        fireEvent.click(screen.getByRole("button", { name: "Change theme: Medicine" }))
+        expect(openSettings).toHaveBeenCalledWith("themeGrp")
+        fireEvent.click(screen.getByRole("button", { name: /Headed for/ }))
+        expect(openSettings).toHaveBeenLastCalledWith("o-goal")
     })
 
     it("says the theme's name under the wordmark and falls back to its first goal", () => {

@@ -56,6 +56,7 @@ import { closeSheet, getSheet, openSheet } from "@/data/overlay"
 import type { ImportPlan } from "@/data/import-edit"
 import type { SchoolDraft } from "@/data/school-edit"
 import { Sheet } from "./sheet"
+import { TAB_OF } from "@/data/settings"
 
 beforeEach(() => {
     document.body.innerHTML = '<div id="app"></div><div id="scrim"></div><div id="sheet"></div>'
@@ -102,6 +103,39 @@ describe("Settings", () => {
         expect(actions.saveCoat).toHaveBeenCalledWith({ color: "#E4749B" })
         fireEvent.click(screen.getByRole("button", { name: "Dark" }))
         expect(legacy.setTheme).toHaveBeenCalledWith("dark")
+    })
+
+    it("moves through the theme rows and the goal chips with the arrow keys", () => {
+        settings("you")
+        const group = screen.getByRole("radiogroup", { name: "Theme" })
+        const rows = within(group).getAllByRole("radio")
+        expect(rows.map((r) => r.tabIndex)).toEqual([0, -1, -1, -1, -1, -1])
+        rows[0].focus()
+        fireEvent.keyDown(rows[0], { key: "ArrowDown" })
+        expect(legacy.setBg).toHaveBeenLastCalledWith("cs")
+        expect(document.activeElement).toBe(rows[1])
+        rows[0].focus()
+        fireEvent.keyDown(rows[0], { key: "ArrowLeft" })
+        expect(legacy.setBg).toHaveBeenLastCalledWith("eng")
+        rows[0].focus()
+        fireEvent.keyDown(rows[0], { key: "End" })
+        expect(legacy.setBg).toHaveBeenLastCalledWith("eng")
+        fireEvent.keyDown(document.activeElement!, { key: "Home" })
+        expect(legacy.setBg).toHaveBeenLastCalledWith("med")
+
+        const chips = within(screen.getByRole("radiogroup", { name: "Where you’re headed" })).getAllByRole("radio")
+        chips[0].focus()
+        fireEvent.keyDown(chips[0], { key: "ArrowRight" })
+        expect(actions.saveCoat).toHaveBeenLastCalledWith({ role: chips[1].textContent })
+        expect(document.activeElement).toBe(chips[1])
+        // a custom goal checks no chip: the first is still the one Tab stop
+        expect(chips.map((c) => c.tabIndex)).toEqual([0, -1, -1, -1, -1, -1])
+    })
+
+    it("a deep link to the theme focuses its group, and it belongs to the You tab", () => {
+        expect(TAB_OF.themeGrp).toBe("you")
+        settings("you", "themeGrp")
+        return waitFor(() => expect(document.activeElement?.id).toBe("themeGrp"))
     })
 
     it("shows the coat colours only for Medicine", () => {

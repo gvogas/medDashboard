@@ -4,7 +4,7 @@
 import { useProfile } from "@/data/store"
 import { useUi } from "@/data/ui"
 import { openSettings } from "@/data/actions"
-import { goalFor } from "@/data/themes"
+import { goalFor, THEMES } from "@/data/themes"
 import { SidebarPicture } from "./sidebar-picture"
 
 export function SidebarWho() {
@@ -14,7 +14,7 @@ export function SidebarWho() {
     const goal = goalFor(bg, profile?.coat?.role ?? "")
     return (
         <div className="flex flex-col gap-1">
-            <button type="button" title="Change theme" onClick={() => openSettings()}
+            <button type="button" title="Change theme" aria-label={"Change theme: " + THEMES[bg].label} onClick={() => openSettings("themeGrp")}
                 className="block cursor-pointer rounded-lg border-0 bg-transparent p-0 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)]">
                 <SidebarPicture bg={bg} name={name} goal={goal} username={profile?.username || ""} />
             </button>
