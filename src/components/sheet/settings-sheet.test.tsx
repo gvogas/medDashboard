@@ -65,7 +65,7 @@ afterEach(() => {
     act(() => closeSheet())
     cleanup()
     vi.clearAllMocks()
-    Object.assign(fake.ui, { importNote: null, schoolAsk: false, signoutAsk: null, feed: null })
+    Object.assign(fake.ui, { bg: "med", importNote: null, schoolAsk: false, signoutAsk: null, feed: null })
     fake.conflicts.length = 0
 })
 
@@ -79,16 +79,35 @@ describe("Settings", () => {
         expect(actions.setSettingsTab).toHaveBeenCalledWith("study")
     })
 
-    it("sets the theme and background, and saves the coat", () => {
+    it("picks a theme from six rows, a goal from its chips or typed, and the name", () => {
         settings("you")
-        fireEvent.click(screen.getByRole("button", { name: "Light" }))
-        expect(legacy.setTheme).toHaveBeenCalledWith("light")
-        fireEvent.click(screen.getByRole("button", { name: /CS/ }))
-        expect(legacy.setBg).toHaveBeenCalledWith("cs")
-        fireEvent.change(screen.getByRole("textbox", { name: "Name" }), { target: { value: "Dr. Demo" } })
-        expect(actions.saveCoat).toHaveBeenCalledWith({ name: "Dr. Demo" })
+        const rows = within(screen.getByRole("radiogroup", { name: "Theme" })).getAllByRole("radio")
+        expect(rows.map((r) => r.textContent)).toEqual([
+            "MedicineLab coat · pink when done", "Computer ScienceID badge · mint when done",
+            "LawSuit and name plate · parchment when done", "AviationFlight jacket · sky blue when done",
+            "SportsJersey · peach when done", "EngineeringHi-vis vest · yellow when done",
+        ])
+        expect(rows[0].getAttribute("aria-checked")).toBe("true")
+        fireEvent.click(screen.getByRole("radio", { name: /Aviation/ }))
+        expect(legacy.setBg).toHaveBeenCalledWith("pilot")
+
+        fireEvent.click(screen.getByRole("radio", { name: "Surgeon" }))
+        expect(actions.saveCoat).toHaveBeenCalledWith({ role: "Surgeon" })
+        fireEvent.change(screen.getByRole("textbox", { name: "Your own goal" }), { target: { value: "Neurosurgeon" } })
+        expect(actions.saveCoat).toHaveBeenCalledWith({ role: "Neurosurgeon" })
+        fireEvent.change(screen.getByRole("textbox", { name: "Your name" }), { target: { value: "Alex" } })
+        expect(actions.saveCoat).toHaveBeenCalledWith({ name: "Alex" })
+
         fireEvent.click(screen.getByRole("button", { name: "Pink coat" }))
         expect(actions.saveCoat).toHaveBeenCalledWith({ color: "#E4749B" })
+        fireEvent.click(screen.getByRole("button", { name: "Dark" }))
+        expect(legacy.setTheme).toHaveBeenCalledWith("dark")
+    })
+
+    it("shows the coat colours only for Medicine", () => {
+        fake.ui.bg = "cs"
+        settings("you")
+        expect(screen.queryByRole("button", { name: "Pink coat" })).toBeNull()
     })
 
     it("adds a quote with Enter or Add, and removes one", async () => {

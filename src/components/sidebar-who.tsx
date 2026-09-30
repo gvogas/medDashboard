@@ -15,11 +15,11 @@ export function SidebarWho() {
     return (
         <div className="flex flex-col gap-1">
             <button type="button" title="Change theme" onClick={() => openSettings()}
-                className="block cursor-pointer rounded-lg border-0 bg-transparent p-0">
+                className="block cursor-pointer rounded-lg border-0 bg-transparent p-0 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)]">
                 <SidebarPicture bg={bg} name={name} goal={goal} username={profile?.username || ""} />
             </button>
-            <button type="button" onClick={() => openSettings("o-role")}
-                className="flex cursor-pointer items-baseline gap-1.5 border-0 bg-transparent px-2.5 text-left font-[inherit]">
+            <button type="button" onClick={() => openSettings("o-goal")}
+                className="flex cursor-pointer items-baseline gap-1.5 rounded-lg border-0 bg-transparent px-2.5 text-left font-[inherit] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)]">
                 <span className="text-[12px] text-muted-foreground">Headed for</span>
                 <span className="font-serif text-[15px] font-medium text-[var(--accent)] italic">{goal}</span>
             </button>

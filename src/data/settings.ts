@@ -9,7 +9,7 @@ export type SettingsTab = "you" | "study" | "spotify" | "account"
 export const TABS: readonly [SettingsTab, string][] = [["you", "You"], ["study", "Study"], ["spotify", "Spotify"], ["account", "Account"]]
 
 /** Where a deep link lands: the field or group, and the tab it lives on. */
-export const TAB_OF: Record<string, SettingsTab> = { "o-name": "you", "o-role": "you", qText: "you", goalGrp: "study", importGrp: "study", schoolGrp: "study", spotifyGrp: "spotify" }
+export const TAB_OF: Record<string, SettingsTab> = { "o-name": "you", "o-goal": "you", qText: "you", goalGrp: "study", importGrp: "study", schoolGrp: "study", spotifyGrp: "spotify" }
 
 /** The sync status in a sentence, for the Account tab. */
 export function syncLine(s: { state: string; pending: number; message: string; lastPull?: number | null }, now = Date.now()): string {

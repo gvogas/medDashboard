@@ -16,7 +16,6 @@
   --red-bg:#FBE9E7; --red-ink:#C0392B; --red-line:#F0C9C4;
   --amber-bg:#FCF2DF; --amber-ink:#93660E;
   --warn-bg:#FDF1EF; --warn-line:#F3D5CF; --warn-ink:#8A4A3E;
-  --pocket-a:#FBFDFC; --pocket-b:#F3F8F7;
   --box-line:#7A938F; --disabled:#C3D6D3;
   --coat:#17B3AE;   /* the lab coat's colour, set from Settings */
   --spotify:#1DB954;   /* Spotify's own green, in every theme */
@@ -41,7 +40,6 @@
   --red-bg:#3A1F1B; --red-ink:#F59485; --red-line:#5A2E27;
   --amber-bg:#33270F; --amber-ink:#E4B462;
   --warn-bg:#2A1B17; --warn-line:#4A2D25; --warn-ink:#EDAE9F;
-  --pocket-a:#162526; --pocket-b:#101C1D;
   --box-line:#5C726F; --disabled:#294240;
   --shadow-1:0 1px 2px rgba(0,0,0,.4);
   --shadow-2:0 2px 8px rgba(0,0,0,.45), 0 16px 40px rgba(0,0,0,.5);
