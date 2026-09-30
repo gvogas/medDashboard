@@ -14,12 +14,13 @@ achievements     your own achievements: an uploaded sticker and what earns it
 ```
 
 The schema is [`migrations/0001_schema.sql`](../migrations/0001_schema.sql), in one
-piece. Three times in September 2026 the live data moved into a fresh database built from it
+piece. Four times in September 2026 the live data moved into a fresh database built from it
 (`node scripts/move-db.mjs --from <old> --to <new> --remote`): first `rounds` into
 `rounds-v2`, replacing ten migrations of patches, then `rounds-v2` into `rounds-v3`,
 folding in the study timer, quizzes, grade targets and the calendar feed, then
 `rounds-v3` into `rounds-v4`, folding in study history, achievements, the school
-calendar and the leaderboard. The databases before `rounds-v3` have been deleted. The schema the last move copied from is kept as a test
+calendar and the leaderboard, then `rounds-v4` into `rounds-v5`, widening the theme to
+six. The databases before `rounds-v3` have been deleted. The schema the last move copied from is kept as a test
 fixture in `test/fixtures/legacy-migrations/`. Later changes are new numbered files.
 
 ## Structure at a glance
