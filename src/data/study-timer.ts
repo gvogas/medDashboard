@@ -61,7 +61,7 @@ function readRun(): Run | null {
 
 const keyOf = (r: Run | null) => (r
     ? [r.round, r.index, r.kind, r.paused, r.done, r.roundsDone, Math.ceil(r.leftMs / 1000), Math.floor(r.studyMs / 1000),
-        Math.floor(r.at / 1000), r.courseId, r.itemId].join()
+        Math.floor(r.at / 1000), r.courseId, r.itemId, ui.bg].join()
     : "")
 
 /* A new snapshot also retitles the tab ("24:13 · Study") and badges the Study icon. */
@@ -74,6 +74,14 @@ function refresh(force: boolean) {
     setStudyBadge(run ? timeText(run.leftMs) : null)
     for (const fn of listeners) fn()
 }
+
+/* The title carries the theme's study word, so a theme change retitles the tab even while paused. */
+let titledBg = ui.bg
+subscribeBridge(() => {
+    if (ui.bg === titledBg) return
+    titledBg = ui.bg
+    refresh(true)
+})
 
 /* What a run does to the page: Start opens the focus screen; a new Study step pulls you
    back into it (unless a sheet is open); Stop & log, or the flow's end, goes to the

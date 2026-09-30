@@ -10,6 +10,8 @@ describe("the next-exam animation", () => {
     it("counts down in hours, minutes and seconds", () => {
         expect(countdown(90061000)).toBe("25:01:01")
         expect(countdown(-5)).toBe("00:00:00")
+        expect(countdown(((99 * 60 + 59) * 60 + 59) * 1000)).toBe("99:59:59")
+        expect(countdown((4 * 24 + 4) * 3600000 + 10 * 60000 + 5000)).toBe("4d 04:10")
     })
 
     it.each(BGS)("%s draws its own motif, hidden from screen readers", (bg) => {

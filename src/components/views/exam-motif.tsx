@@ -7,9 +7,13 @@ import type { Bg } from "@/data/themes"
 
 const pad = (n: number) => String(n).padStart(2, "0")
 
-/** "25:01:01": hours (past 24 too), minutes and seconds until then. */
+/** "25:01:01": hours (past 24 too), minutes and seconds until then; from 100 hours on, "4d 03:10". */
 export function countdown(ms: number): string {
     const s = Math.max(0, Math.floor(ms / 1000))
+    if (s >= 100 * 3600) {
+        const h = Math.floor(s / 3600)
+        return Math.floor(h / 24) + "d " + pad(h % 24) + ":" + pad(Math.floor((s % 3600) / 60))
+    }
     return pad(Math.floor(s / 3600)) + ":" + pad(Math.floor((s % 3600) / 60)) + ":" + pad(s % 60)
 }
 
@@ -17,6 +21,7 @@ function useCountdown(at: Date, on: boolean) {
     const [now, setNow] = useState(() => Date.now())
     useEffect(() => {
         if (!on) return
+        setNow(Date.now())
         const id = setInterval(() => setNow(Date.now()), 1000)
         return () => clearInterval(id)
     }, [on])
@@ -27,9 +32,9 @@ const TRACE = "M0 18h20l3-3 4 6 3-3h10l4-12 4 20 4-8h23h20l3-3 4 6 3-3h10l4-12 4
 
 export function ExamMotif({ bg, at, steps }: { bg: Bg; at: Date; steps: string }) {
     const clock = useCountdown(at, bg === "cs" || bg === "sports")
-    const rule = steps ? <><span className="h-px grow bg-border" /><span>{steps}</span></> : null
+    const rule = steps ? <><span className="h-px min-w-2 grow bg-border" /><span className="min-w-0 truncate">{steps}</span></> : null
     return (
-        <span data-motif={bg} aria-hidden="true" className="relative mt-auto flex h-[26px] w-full items-center gap-2.5 text-[12px] text-ink-2">
+        <span data-motif={bg} aria-hidden="true" className="relative mt-auto flex h-[26px] w-full min-w-0 items-center overflow-hidden gap-2.5 text-[12px] text-ink-2">
             {bg === "med" && (
                 <svg viewBox="0 0 300 26" preserveAspectRatio="none" width="100%" height="26" className="block w-full">
                     <path d={TRACE} fill="none" stroke="var(--motif)" strokeOpacity=".16" strokeWidth="1.4" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
@@ -37,8 +42,8 @@ export function ExamMotif({ bg, at, steps }: { bg: Bg; at: Date; steps: string }
                 </svg>
             )}
             {bg === "cs" && (
-                <span className="flex items-center gap-2 font-mono text-[12.5px]">
-                    <span className="text-[var(--accent)]">$</span>countdown --next<span className="font-medium text-foreground">{clock}</span>
+                <span className="flex min-w-0 items-center gap-2 font-mono text-[12.5px]">
+                    <span className="shrink-0 text-[var(--accent)]">$</span><span className="max-[700px]:hidden">countdown --next</span><span className="font-medium text-foreground">{clock}</span>
                     <span className="motif-blink h-3.5 w-[7px] bg-[var(--accent)]" />
                 </span>
             )}
@@ -66,6 +71,7 @@ export function ExamMotif({ bg, at, steps }: { bg: Bg; at: Date; steps: string }
                     <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--motif)" strokeWidth="1.6" strokeLinecap="round">
                         <circle cx="12" cy="13.5" r="8" /><path d="M10 2.5h4M12 2.5v3" /><path d="M12 13.5V8.5" className="motif-hand" />
                     </svg>
+                    {/* the {" "} keeps a space in the text ("12:00:00 to go"); the flex gap only spaces it visually */}
                     <span className="font-mono text-[13px] font-medium text-foreground">{clock}</span>{" "}<span>to go</span>
                 </>
             )}
