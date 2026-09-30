@@ -194,7 +194,7 @@ describe("the frame", () => {
         expect(screen.getByText("Medicine")).toBeTruthy()
         expect(screen.getByRole("navigation", { name: "Pages" })).toBeTruthy()
         expect(screen.getByRole("button", { name: "Settings" })).toBeTruthy()
-        expect(screen.getByText("Add a quote in Settings")).toBeTruthy()
+        expect(screen.getByText(/The good physician/)).toBeTruthy()
     })
 })
 
