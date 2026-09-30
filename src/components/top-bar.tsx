@@ -1,5 +1,6 @@
-// The top bar: the sidebar button on narrow screens, the view's title, ‹ Today › in the
-// week and month views, search and New item. Sync and Settings are in the sidebar's foot.
+// The top bar: the sidebar button on narrow screens, the date line over the view's title
+// in the serif, ‹ Today › in the week and month views, search and New item. Sync and
+// Settings are in the sidebar's foot.
 // It renders inside <App>'s <header class="bar">, which styles/shell.css lays out
 // (and hides it on the focus screen).
 
@@ -36,24 +37,22 @@ export function TopBar() {
                 {icon(<path d="M2.5 4h11M2.5 8h11M2.5 12h11" />)}
             </button>
 
-            <div className="min-w-0">
-                <h1 className="m-0 whitespace-nowrap text-lg font-extrabold tracking-tight text-foreground">{heading.title}</h1>
-                {heading.sub && <div className="truncate text-[11.5px] text-muted-foreground">{heading.sub}</div>}
+            <div className="flex min-w-0 flex-1 flex-col gap-1">
+                <span className="truncate text-[13px] text-muted-foreground">{heading.sub || <>&nbsp;</>}</span>
+                <h1 className="m-0 truncate font-serif text-[34px] leading-[1.1] font-medium tracking-[-.015em] text-foreground">{heading.title}</h1>
             </div>
 
             {dated && (
                 <div className="flex items-center gap-1">
-                    <TextureButton variant="minimal" size="sm" className="w-auto" aria-label="Previous" onClick={() => step(-1)}>
+                    <TextureButton variant="minimal" size="sm" aria-label="Previous" onClick={() => step(-1)}>
                         {icon(<path d="M10 3 5 8l5 5" />)}
                     </TextureButton>
-                    <TextureButton variant="minimal" size="sm" className="w-auto" onClick={goToday}>Today</TextureButton>
-                    <TextureButton variant="minimal" size="sm" className="w-auto" aria-label="Next" onClick={() => step(1)}>
+                    <TextureButton variant="minimal" size="sm" onClick={goToday}>Today</TextureButton>
+                    <TextureButton variant="minimal" size="sm" aria-label="Next" onClick={() => step(1)}>
                         {icon(<path d="m6 3 5 5-5 5" />)}
                     </TextureButton>
                 </div>
             )}
-
-            <div className="flex-[1_1_20px]" />
 
             <Search />
             {/* Under 700px it floats, round, at the bottom right. */}
@@ -61,7 +60,7 @@ export function TopBar() {
                 variant="accent"
                 onClick={newItem}
                 className={cn(
-                    "w-auto whitespace-nowrap font-semibold",
+                    "font-semibold",
                     "max-[700px]:fixed max-[700px]:right-4 max-[700px]:bottom-[calc(16px+env(safe-area-inset-bottom))] max-[700px]:z-30",
                     "max-[700px]:rounded-full max-[700px]:shadow-[var(--shadow-2)] max-[700px]:h-auto max-[700px]:px-5 max-[700px]:py-3",
                 )}

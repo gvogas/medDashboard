@@ -23,11 +23,11 @@
 #orn{position:absolute;inset:0;width:100%;height:100%;z-index:0;opacity:var(--orn-bg);pointer-events:none}
 .bar,.scroll{position:relative;z-index:1}
 .bar{
-  display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:11px 16px;
-  border-bottom:1px solid var(--line);background:var(--bar-bg);backdrop-filter:blur(6px);
+  display:flex;align-items:flex-end;gap:16px;flex-wrap:wrap;padding:28px 40px 0;
+  border-bottom:0;background:var(--bg);backdrop-filter:none;
 }
 /* the frame never scrolls — the view region inside it does */
-.scroll{flex:1;min-height:0;overflow:hidden;padding:14px 16px 14px;display:flex;flex-direction:column;gap:13px}
+.scroll{flex:1;min-height:0;overflow:hidden;padding:24px 40px 28px;display:flex;flex-direction:column;gap:24px}
 #views{flex:1;min-height:0;overflow-y:auto;overflow-x:hidden;padding-right:2px}
 #views.own-scroll{overflow:hidden;display:flex;flex-direction:column}
 .drape{position:absolute;right:6px;top:-10px;width:270px;max-width:46%;height:auto;color:var(--accent);opacity:var(--orn-art);pointer-events:none;z-index:0}

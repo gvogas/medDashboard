@@ -27,7 +27,7 @@ const show = (view: string, anchor = "2026-09-23") => {
     act(() => notify())
 }
 const title = () => screen.getByRole("heading", { level: 1 }).textContent
-const sub = () => screen.getByRole("heading", { level: 1 }).nextElementSibling?.textContent ?? ""
+const sub = () => (screen.getByRole("heading", { level: 1 }).previousElementSibling?.textContent ?? "").trim()
 
 afterEach(() => {
     cleanup()
@@ -38,10 +38,17 @@ afterEach(() => {
 })
 
 describe("the top bar", () => {
+    it("shows the date line over the title, the title in the serif", () => {
+        render(<TopBar />)
+        const h1 = screen.getByRole("heading", { level: 1 })
+        expect(h1.className).toContain("font-serif")
+        expect(h1.previousElementSibling?.textContent).toBeTruthy()
+    })
+
     it("titles each view", () => {
         render(<TopBar />)
-        expect(title()).toBe("Week board")
-        expect(sub()).toBe("Mon 21 Sep – Sun 27 Sep 2026")
+        expect(title()).toBe("21 Sep – 27 Sep")
+        expect(sub()).toBe("Wednesday 23 September")
         show("month")
         expect(title()).toBe("September 2026")
         expect(sub()).toBe("")
