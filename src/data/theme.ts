@@ -1,5 +1,5 @@
-// The theme (light, dark or the system's) and the theme (Medicine, CS, Law, Aviation, Sports, Engineering); both are
-// saved to the profile so they follow the account to other devices.
+// The appearance (light, dark or the system's) and the theme (Medicine, CS, Law, Aviation,
+// Sports, Engineering); both are saved to the profile so they follow the account to other devices.
 
 import * as store from "@/core/store"
 import { data } from "@/core/store"
