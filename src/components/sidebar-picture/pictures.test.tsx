@@ -56,6 +56,11 @@ describe("long names and goals", () => {
         expect(long.some((size, i) => size < short[i])).toBe(true)
     })
 
+    it.each(BGS)("%s: every word keeps a one-line height, so it sits where it was placed", (bg) => {
+        const { container } = render(<SidebarPicture bg={bg} name="Alex Rivera" goal="Neurologist" username="alex" />)
+        for (const tag of container.querySelectorAll("[role=img] > span")) expect(tag.className).toContain("leading-none")
+    })
+
     it("an empty name leaves no dangling comma in the label", () => {
         render(<SidebarPicture bg="med" name="" goal="Neurologist" username="" />)
         expect(screen.getByRole("img").getAttribute("aria-label")).toBe(THEMES.med.picture + ": headed for Neurologist")
