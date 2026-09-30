@@ -72,11 +72,11 @@
 }
 
 /* <App>'s containers. #root takes no box, so the page lays out as children of <body>, as
-   the shell's layout expects (.app is 100% of the body's height). #stats: the tiles in a
-   row that wraps; on a phone, one row you swipe along. */
+   the shell's layout expects (.app is 100% of the body's height). #stats: the four boxes in
+   a row; on a phone, one row you swipe along. */
 @layer components {
   #root { display: contents; }
-  #stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 9px; position: relative; z-index: 1; }
+  #stats { display: grid; grid-template-columns: 1.6fr 1fr 1fr 1.2fr; gap: 16px; position: relative; z-index: 1; }
   #stats[hidden] { display: none; }
   @media (max-width: 700px) {
     #stats { display: flex; overflow-x: auto; scroll-snap-type: x mandatory; margin: 0 -16px; padding: 0 16px 2px; scrollbar-width: none; }

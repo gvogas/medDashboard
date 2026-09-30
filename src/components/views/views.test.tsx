@@ -159,6 +159,13 @@ describe("the table", () => {
 })
 
 describe("the stat tiles", () => {
+    it("shows four boxes and no emoji", () => {
+        render(<Stats />)
+        const labels = ["Next exam or quiz", "Open assignments", "Overdue", "Studied today"]
+        for (const l of labels) expect(screen.getByText(l)).toBeTruthy()
+        expect(document.getElementById("stats")?.textContent ?? document.body.textContent).not.toMatch(/🔥/)
+    })
+
     it("count the work", () => {
         fake.data.items = [
             ...fake.data.items,
@@ -166,8 +173,9 @@ describe("the stat tiles", () => {
             item({ id: "exam", type: "exam", title: "Cardiology midterm", date: "2026-09-26" }),
         ]
         show(<Stats />, "stats")
-        expect(screen.getByText("Cardiology midterm")).toBeTruthy()
-        expect(screen.getByText("needs attention today")).toBeTruthy()
+        expect(screen.getByText("Cardiology midterm exam")).toBeTruthy()
+        expect(screen.getByText("In 3 days")).toBeTruthy()
+        expect(screen.getByText("Needs attention today")).toBeTruthy()
         expect(screen.getByText("1 due this week")).toBeTruthy()
         fireEvent.click(screen.getByRole("button", { name: /Next exam/ }))
         expect(actions.openItem).toHaveBeenCalledWith("exam")
@@ -178,8 +186,17 @@ describe("the stat tiles", () => {
         fake.data.study_sessions = [{ id: "s", courseId: null, itemId: null, startedAt: new Date(2026, 8, 23, 9).getTime(), studyMinutes: 70, roundsDone: 0, note: "", manual: false }]
         show(<Stats />, "stats")
         expect(screen.getByRole("meter", { name: "Daily goal" }).getAttribute("aria-valuenow")).toBe("70")
-        fireEvent.click(screen.getByRole("button", { name: /Study today/ }))
+        fireEvent.click(screen.getByRole("button", { name: /Studied today/ }))
         expect(actions.openStudy).toHaveBeenCalled()
+    })
+
+    it("show the streak in words, with no emoji", () => {
+        fake.data.profile = { id: "p", studyPrefs: { goal: 90 } }
+        const day = (d: number, id: string) => ({ id, courseId: null, itemId: null, startedAt: new Date(2026, 8, d, 9).getTime(), studyMinutes: 30, roundsDone: 0, note: "", manual: false })
+        fake.data.study_sessions = [day(21, "a"), day(22, "b"), day(23, "c")]
+        show(<Stats />, "stats")
+        expect(within(host("stats")).getByText("3-day streak")).toBeTruthy()
+        expect(host("stats").textContent).not.toMatch(/🔥/)
     })
 
     it("hide on the Study and Spotify views", () => {
