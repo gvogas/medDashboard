@@ -1,23 +1,8 @@
 /* Rounds — the page's defaults, after Tailwind's reset (preflight): the body's font and
    colours, the focus ring, and the scrollbars. In the `base` layer. */
 
-/* ═════════ scrollbars: a capsule running down an IV line ═════════ */
-*{scrollbar-width:thin;scrollbar-color:#CE6D90 var(--scroll-track)}
-::-webkit-scrollbar{width:13px;height:13px;background:transparent}
-::-webkit-scrollbar-track{
-  background-image:linear-gradient(90deg,transparent 0 5px,var(--scroll-track) 5px 8px,transparent 8px 13px);
-  background-color:transparent;
-}
-::-webkit-scrollbar-track:horizontal{
-  background-image:linear-gradient(180deg,transparent 0 5px,var(--scroll-track) 5px 8px,transparent 8px 13px);
-}
-::-webkit-scrollbar-thumb{
-  border:3px solid transparent;background-clip:padding-box;border-radius:999px;
-  background-image:linear-gradient(180deg,#E4749B 0 50%,#17B3AE 50% 100%);
-}
-::-webkit-scrollbar-thumb:horizontal{background-image:linear-gradient(90deg,#E4749B 0 50%,#17B3AE 50% 100%)}
-::-webkit-scrollbar-thumb:hover{border-width:2px}
-::-webkit-scrollbar-corner{background:transparent}
+/* ═════════ scrollbars: thin and quiet ═════════ */
+*{scrollbar-width:thin;scrollbar-color:var(--line) transparent}
 
 html,body{height:100%}
 body{
