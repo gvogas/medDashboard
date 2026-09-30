@@ -1,5 +1,5 @@
 import { Drawing, Frame, Tag, TORSO, type PictureProps } from "./parts"
-import { fitSize, nameParts } from "./names"
+import { fitStyle, nameParts } from "./names"
 
 /** Engineering: a hi-vis vest over a dark shirt, a name tag with the goal. */
 export function Vest({ name, goal }: PictureProps) {
@@ -21,8 +21,8 @@ export function Vest({ name, goal }: PictureProps) {
                 <rect x="52" y="90" width="3" height="18" rx="1.5" fill="#1C1C1A" />
                 <rect x="58" y="92" width="3" height="16" rx="1.5" fill="#2B5F8A" />
             </Drawing>
-            <Tag x={152} y={97.9} style={{ fontSize: fitSize(short, 58, 7.5, 0.6, 1) }} className="font-semibold tracking-[1px] text-[#1C1C1A]">{short}</Tag>
-            <Tag x={152} y={110.1} style={{ fontSize: fitSize(goal, 58, 6, 0.6, 0.5) }} className="font-semibold tracking-[.5px] text-[#D9651A]">{goal.toUpperCase()}</Tag>
+            <Tag x={152} y={97.9} style={fitStyle(short, 58, 7.5, 0.6, 1)} className="font-semibold text-[#1C1C1A]">{short}</Tag>
+            <Tag x={152} y={110.1} style={fitStyle(goal, 58, 6, 0.6, 0.5)} className="font-semibold text-[#D9651A]">{goal.toUpperCase()}</Tag>
         </Frame>
     )
 }

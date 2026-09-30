@@ -20,5 +20,15 @@ export function nameParts(name: string) {
 export const fitSize = (text: string, maxPx: number, basePx: number, charEm: number, trackPx = 0) =>
     Math.max(4, Math.min(basePx, Math.round((maxPx / Math.max(1, text.length) - trackPx) / charEm * 10) / 10))
 
+/**
+ * The font size and letter-spacing for `text` in maxPx: fitSize, and at the 4px floor the
+ * spacing shrinks too, so even a long name stays on its plate.
+ */
+export function fitStyle(text: string, maxPx: number, basePx: number, charEm: number, trackPx = 0) {
+    const fontSize = fitSize(text, maxPx, basePx, charEm, trackPx), n = Math.max(1, text.length)
+    const letterSpacing = n * (fontSize * charEm + trackPx) > maxPx ? Math.max(0, Math.floor((maxPx / n - fontSize * charEm) * 10) / 10) : trackPx
+    return { fontSize, letterSpacing }
+}
+
 /** The embroidery's font size: 12.5px, smaller for a long name, so it fits the pocket. */
 export const coatSize = (name: string) => fitSize(name, 66, 12.5, 0.47)

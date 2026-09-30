@@ -1,6 +1,6 @@
 import { THEMES } from "@/data/themes"
 import { Drawing, Frame, Tag, TORSO, type PictureProps } from "./parts"
-import { fitSize, nameParts } from "./names"
+import { fitStyle, nameParts } from "./names"
 
 /** Law: a dark suit, the theme's tie, a brass name plate with the goal under it. */
 export function Suit({ name, goal }: PictureProps) {
@@ -20,8 +20,8 @@ export function Suit({ name, goal }: PictureProps) {
                 <path d="M148 98l6-10 5 6 5-8 6 12Z" fill="#FFFFFF" />
                 <rect x="36" y="94" width="58" height="16" rx="2" fill="#C9A24A" />
             </Drawing>
-            <Tag x={65} y={98.9} style={{ fontSize: fitSize(short, 54, 7.5, 0.6, 1) }} className="font-semibold tracking-[1px] text-[#2B2410]">{short}</Tag>
-            <Tag x={65} y={116.4} style={{ fontSize: fitSize(goal, 70, 6.8, 0.6, 0.8) }} className="tracking-[.8px] text-[#C9A24A]">{goal.toUpperCase()}</Tag>
+            <Tag x={65} y={98.9} style={fitStyle(short, 54, 7.5, 0.6, 1)} className="font-semibold text-[#2B2410]">{short}</Tag>
+            <Tag x={65} y={116.4} style={fitStyle(goal, 70, 6.8, 0.6, 0.8)} className="text-[#C9A24A]">{goal.toUpperCase()}</Tag>
         </Frame>
     )
 }

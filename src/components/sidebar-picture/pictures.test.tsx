@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it } from "vitest"
 import { cleanup, render, screen } from "@testing-library/react"
 import { BGS, THEMES } from "@/data/themes"
 import { SidebarPicture } from "./index"
-import { coatSize, fitSize, nameParts } from "./names"
+import { coatSize, fitSize, fitStyle, nameParts } from "./names"
 
 afterEach(cleanup)
 
@@ -41,6 +41,13 @@ describe("long names and goals", () => {
         cleanup()
         return out
     }
+
+    it("fitStyle keeps the spacing until the floor, then narrows it so the text fits", () => {
+        expect(fitStyle("RIVERA", 54, 7.5, 0.6, 1)).toEqual({ fontSize: 7.5, letterSpacing: 1 })
+        const long = fitStyle("A. MONTGOMERY-RIVIERA", 54, 7.5, 0.6, 1)
+        expect(long.fontSize).toBe(4)
+        expect(21 * (long.fontSize * 0.6 + long.letterSpacing)).toBeLessThanOrEqual(54)
+    })
 
     it("fitSize keeps the base for short text and shrinks for long", () => {
         expect(fitSize("RIVERA", 58, 7.5, 0.6, 1)).toBe(7.5)

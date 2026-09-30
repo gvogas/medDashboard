@@ -1,5 +1,5 @@
 import { Drawing, Frame, Tag, TORSO, type PictureProps } from "./parts"
-import { fitSize, nameParts } from "./names"
+import { fitStyle, nameParts } from "./names"
 
 /** Aviation: a leather flight jacket, fleece collar, wings, a name tape with the goal under it. */
 export function Jacket({ name, goal }: PictureProps) {
@@ -20,8 +20,8 @@ export function Jacket({ name, goal }: PictureProps) {
                 <rect x="132" y="112" width="44" height="34" rx="3" fill="none" stroke="#523826" strokeWidth="1.5" />
                 <path d="M132 112h44v8l-22 6-22-6Z" fill="#5C3F2C" />
             </Drawing>
-            <Tag x={62} y={111.4} style={{ fontSize: fitSize(last, 48, 8, 0.6, 1) }} className="font-mono tracking-[1px] text-[#E7DCC8]">{last}</Tag>
-            <Tag x={62} y={130.4} style={{ fontSize: fitSize(goal, 80, 6.8, 0.6, 0.6) }} className="font-mono tracking-[.6px] text-[#E7DCC8]">{goal.toUpperCase()}</Tag>
+            <Tag x={62} y={111.4} style={fitStyle(last, 48, 8, 0.6, 1)} className="font-mono text-[#E7DCC8]">{last}</Tag>
+            <Tag x={62} y={130.4} style={fitStyle(goal, 80, 6.8, 0.6, 0.6)} className="font-mono text-[#E7DCC8]">{goal.toUpperCase()}</Tag>
         </Frame>
     )
 }
