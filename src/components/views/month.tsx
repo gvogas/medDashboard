@@ -63,7 +63,7 @@ function MonthCell({ cell }: { cell: Cell }) {
     )
 }
 
-const CHIP = "flex h-5 min-w-0 flex-none items-center gap-1.5 rounded-[4px] px-1.5 text-[11.5px] max-[700px]:px-1 max-[700px]:text-[10px]"
+const CHIP = "flex h-5 min-w-0 flex-none items-center gap-1.5 rounded-[4px] px-1.5 text-[11.5px] max-[700px]:gap-1 max-[700px]:px-1 max-[700px]:text-[10px]"
 
 /** A class in its course's colour; a deadline white with its type's square, tinted once completed. */
 function MonthChip({ chip }: { chip: Chip }) {

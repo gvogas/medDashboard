@@ -5,7 +5,7 @@
 import type { CSSProperties, KeyboardEvent, ReactNode } from "react"
 import { cn } from "@/lib/utils"
 import { Card } from "@/components/ui/card"
-import { isComplete, isOverdue, statusLabel, tmeta } from "@/core/model"
+import { isComplete, isOpen, isOverdue, statusLabel, tmeta } from "@/core/model"
 import { diffDays, hhmm, today, DOW } from "@/core/dates"
 import { setSchedule } from "@/data/actions"
 import type { ClassSlot, DayInfo } from "@/data/views"
@@ -17,13 +17,14 @@ export const accent = (color: string | undefined): CSSProperties | undefined =>
 
 export type StatusTone = "done" | "late" | "soon" | ""
 
-/** The right-hand word for an entry on `date`: done, overdue, due tonight, today, tomorrow, in n days, every Fri. */
+/** The right-hand word for an entry on `date`: done or closed, every Fri, overdue, due tonight (or due at an earlier hour), today, tomorrow, in n days. */
 export function statusText(it: Item, date: string): { text: string; tone: StatusTone } {
     if (isComplete(it)) return { text: statusLabel(it), tone: "done" }
+    if (!isOpen(it)) return { text: statusLabel(it), tone: "" }
     if (it.recur === "weekly") return { text: "Every " + DOW[it.weekday ?? 0], tone: "" }
     if (isOverdue(it)) return { text: "Overdue", tone: "late" }
     const d = diffDays(today(), date)
-    if (d === 0) return { text: it.start ? "Today" : "Due tonight", tone: "soon" }
+    if (d === 0) return { text: it.start ? "Today" : it.end && it.end < "18:00" ? "Due " + it.end.slice(0, 5) : "Due tonight", tone: "soon" }
     if (d === 1) return { text: "Tomorrow", tone: "" }
     if (d > 1) return { text: "In " + d + " days", tone: "" }
     return { text: "", tone: "" }
@@ -108,16 +109,16 @@ export function StatusChip({ item }: { item: Item }) {
 }
 
 /** The checklist's progress: a bar that fills in the theme's completed colours, and "2/5". */
-export function Steps({ item }: { item: Item }) {
+export function Steps({ item, className }: { item: Item; className?: string }) {
     const list = item.checklist || []
     if (!list.length) return null
     const done = list.filter((x) => x.done).length
     return (
-        <span data-steps className="flex flex-none items-center gap-1.5 text-[11.5px] font-normal text-muted-foreground" title={done + " of " + list.length + " steps"}>
+        <span data-steps className={cn("flex flex-none items-center gap-1.5 text-[11.5px] font-normal text-muted-foreground", className)} title={done + " of " + list.length + " steps"}>
             <span className="h-[5px] w-12 overflow-hidden rounded-full bg-[var(--done-track)]">
                 <i className="block h-full rounded-full bg-[linear-gradient(90deg,var(--done-bar-a),var(--done-bar-b))] transition-[width] duration-500" style={{ width: Math.round((done / list.length) * 100) + "%" }} />
             </span>
-            {done}/{list.length}
+            <span className="max-[520px]:hidden">{done}/{list.length}</span>
         </span>
     )
 }

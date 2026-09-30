@@ -45,7 +45,7 @@ function DayRow({ day }: { day: Day }) {
     const tint = tintOf(day.info)
     return (
         <div className={cn(
-            "grid grid-cols-[64px_minmax(0,1fr)] gap-1 border-t border-line-2 py-2 pr-3 pl-5",
+            "grid grid-cols-[64px_minmax(0,1fr)] gap-1 border-t border-line-2 py-2 pr-3 pl-5 max-[520px]:grid-cols-[48px_minmax(0,1fr)] max-[520px]:pr-2 max-[520px]:pl-3",
             tint && TINT[tint],
             day.isToday && "bg-[var(--accent-soft)] shadow-[inset_3px_0_0_var(--accent)]",
         )}>
@@ -76,6 +76,14 @@ function DayRow({ day }: { day: Day }) {
 /* time, title, type, course, status; on a phone: time, title, status */
 const ROW = "grid w-full grid-cols-[46px_minmax(0,1fr)_84px_124px_92px] items-center gap-3 rounded-[6px] px-2.5 min-h-[34px] text-left text-[14px] max-[720px]:grid-cols-[46px_minmax(0,1fr)_auto]"
 const clock = (t: string | null | undefined) => (t ? t.slice(0, 5) : "")
+/* the right-hand column; on a phone it can't squeeze the title */
+const LAST = "max-[720px]:max-w-[40vw] truncate"
+
+/** What the row no longer shows, for its tooltip: the title, where, and the time or the hour it's due. */
+function rowTitle(it: Item) {
+    const time = it.start && it.end ? clock(it.start) + "–" + clock(it.end) : it.start ? clock(it.start) : it.end ? "due " + clock(it.end) : ""
+    return [it.title, it.where, time].filter(Boolean).join(" · ")
+}
 
 function EntryRow({ entry }: { entry: Entry }) {
     if (entry.kind === "class") {
@@ -85,11 +93,11 @@ function EntryRow({ entry }: { entry: Entry }) {
                 <span className="font-mono text-[12.5px] text-muted-foreground">{clock(slot.mtg.start)}</span>
                 <span className="flex min-w-0 items-center gap-2.5">
                     <i aria-hidden="true" className="size-2 flex-none rounded-full border-[1.5px] border-[var(--c)]" />
-                    <span className="truncate">{slot.mtg.kind || "Class"}</span>
+                    <span className="truncate"><span>{slot.mtg.kind || "Class"}</span><span className="min-[721px]:hidden"> · {slot.course.code || slot.course.name}</span></span>
                 </span>
                 <span className="text-[12.5px] text-muted-foreground max-[720px]:hidden">Class</span>
                 <span className="truncate text-[12.5px] text-muted-foreground max-[720px]:hidden">{slot.course.name || slot.course.code}</span>
-                <span className="truncate text-right text-[12.5px] text-muted-foreground">{slot.mtg.room}</span>
+                <span className={cn(LAST, "text-right text-[12.5px] text-muted-foreground")}>{slot.mtg.room}</span>
             </div>
         )
     }
@@ -101,22 +109,23 @@ function EntryRow({ entry }: { entry: Entry }) {
             type="button"
             onClick={() => openItem(it.id)}
             data-done={done || undefined}
+            title={rowTitle(it)}
             style={accent(tmeta(it.type).color)}
             className={cn(ROW, "cursor-pointer border-0 font-[inherit] transition-colors hover:brightness-[.975]",
                 done ? "bg-[var(--done)] text-[var(--done-ink)]" : "bg-transparent text-foreground")}
         >
             <span className={cn("font-mono text-[12.5px]", done ? "" : "text-muted-foreground")}>{clock(it.start || it.end)}</span>
-            <span className={cn("flex min-w-0 items-center gap-2.5", key && "font-semibold")}>
+            <span className={cn("flex min-w-0 items-center gap-2.5 overflow-hidden", key && "font-semibold")}>
                 <i aria-hidden="true" className={cn("size-2 flex-none rounded-[2px]", done ? "bg-[var(--done-ink)]" : "bg-[var(--c)]")} />
                 <span className="truncate">{it.title}</span>
                 {!done && <Steps item={it} />}
             </span>
             <span className={cn("text-[12.5px] max-[720px]:hidden", done ? "" : "text-muted-foreground")}>{tmeta(it.type).label}</span>
             <span className={cn("truncate text-[12.5px] max-[720px]:hidden", done ? "" : "text-muted-foreground")}>{c?.name || ""}</span>
-            <span className={cn("flex items-center justify-end gap-1 text-right text-[12.5px] whitespace-nowrap",
+            <span className={cn("flex items-center justify-end gap-1 text-right text-[12.5px] whitespace-nowrap max-[720px]:max-w-[40vw] overflow-hidden",
                 st.tone === "late" ? "font-medium text-destructive" : st.tone === "soon" ? "font-medium text-[var(--warn)]" : st.tone === "done" ? "font-medium" : "text-muted-foreground")}>
                 {done && <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m3 8.5 3 3 7-7" /></svg>}
-                {st.text}
+                <span className="truncate">{st.text}</span>
             </span>
         </button>
     )
@@ -164,7 +173,7 @@ function Tasks({ list, open, cs }: { list: Item[]; open: number; cs: boolean }) 
     return (
         <Panel label="Tasks" title="Tasks" head={<HeadNote>{open} open</HeadNote>} className="relative">
             {list.length === 0 && <Empty>No tasks</Empty>}
-            <ul className="m-0 list-none p-0">
+            <ul className="m-0 list-none px-1.5 py-0">
                 {list.map((it) => {
                     const on = !isOpen(it)
                     return (

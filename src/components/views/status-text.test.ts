@@ -17,6 +17,14 @@ describe("statusText", () => {
     it("due today with no start time: due tonight", () => {
         expect(statusText(item({}), "2026-09-29")).toEqual({ text: "Due tonight", tone: "soon" })
     })
+    it("due today before six: due at that hour", () => {
+        expect(statusText(item({ end: "17:00" }), "2026-09-29")).toEqual({ text: "Due 17:00", tone: "soon" })
+        expect(statusText(item({ end: "23:59" }), "2026-09-29")).toEqual({ text: "Due tonight", tone: "soon" })
+    })
+    it("a missed, cancelled or dropped item says so, not when it was due", () => {
+        expect(statusText(item({ type: "lab", status: "missed" }), "2026-09-29")).toEqual({ text: "Missed", tone: "" })
+        expect(statusText(item({ type: "lab", status: "missed", date: "2026-10-02" }), "2026-10-02")).toEqual({ text: "Missed", tone: "" })
+    })
     it("today with a start time: today", () => {
         expect(statusText(item({ type: "tutoring", start: "11:00" }), "2026-09-29")).toEqual({ text: "Today", tone: "soon" })
     })

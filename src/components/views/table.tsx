@@ -69,7 +69,7 @@ export function TableView() {
                                 >
                                     <td className={td}>
                                         <b className="font-semibold text-foreground">{it.title}</b>
-                                        <Steps item={it} />
+                                        <Steps item={it} className="mt-1" />
                                     </td>
                                     <td className={cn(td, "max-[640px]:text-right")}><TypeChip type={it.type} /></td>
                                     <td className={td}>

@@ -105,7 +105,9 @@ describe("the week", () => {
     it("lists the day's class with its items, and the tabs choose between them", () => {
         show(<Views />)
         const schedule = screen.getByRole("region", { name: "Schedule" })
-        expect(within(schedule).getByTitle("ANAT · Lecture · Hall B")).toBeTruthy()
+        const lecture = within(schedule).getByTitle("ANAT · Lecture · Hall B")
+        expect(within(lecture).getByText("Lecture")).toBeTruthy()
+        expect(within(lecture).getByText("Hall B")).toBeTruthy()
         fireEvent.click(within(schedule).getByRole("button", { name: "Classes" }))
         expect(actions.setSchedule).toHaveBeenCalledWith("classes")
 
@@ -143,6 +145,7 @@ describe("the week", () => {
         expect(open.getAttribute("data-done")).toBeNull()
         expect(open.querySelector("[data-steps]")).toBeTruthy()
         expect(open.textContent).toContain("1/2")
+        expect(screen.getByRole("button", { name: /Renal problem set/ }).title).toBe("Renal problem set · due 23:59")
     })
 })
 
