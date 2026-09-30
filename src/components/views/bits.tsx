@@ -107,24 +107,17 @@ export function StatusChip({ item }: { item: Item }) {
     )
 }
 
-export const SoonChip = ({ children }: { children: ReactNode }) => (
-    <span className={cn(chip, "bg-[var(--amber-bg)] text-[var(--amber-ink)]")}>{children}</span>
-)
-
-/** The checklist's progress: a bar that fills in pink, and "2 of 5 steps". */
+/** The checklist's progress: a bar that fills in the theme's completed colours, and "2/5". */
 export function Steps({ item }: { item: Item }) {
     const list = item.checklist || []
     if (!list.length) return null
-    const done = list.filter((x) => x.done).length, full = done === list.length
+    const done = list.filter((x) => x.done).length
     return (
-        <span className="mt-1 flex items-center gap-1.5 text-[10.5px] text-ink-2">
-            <span className="h-[5px] w-[54px] flex-none overflow-hidden rounded-full bg-line-2">
-                <i
-                    className={cn("block h-full rounded-full", full ? "bg-[linear-gradient(90deg,#DE7A9C,#C8517A)]" : "bg-[linear-gradient(90deg,#EFAEC3,#D9648C)]")}
-                    style={{ width: Math.round((done / list.length) * 100) + "%" }}
-                />
+        <span data-steps className="flex flex-none items-center gap-1.5 text-[11.5px] font-normal text-muted-foreground" title={done + " of " + list.length + " steps"}>
+            <span className="h-[5px] w-12 overflow-hidden rounded-full bg-[var(--done-track)]">
+                <i className="block h-full rounded-full bg-[linear-gradient(90deg,var(--done-bar-a),var(--done-bar-b))] transition-[width] duration-500" style={{ width: Math.round((done / list.length) * 100) + "%" }} />
             </span>
-            {full ? "all " + list.length + " steps done" : done + " of " + list.length + " steps"}
+            {done}/{list.length}
         </span>
     )
 }

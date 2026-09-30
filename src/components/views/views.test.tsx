@@ -105,7 +105,7 @@ describe("the week", () => {
     it("lists the day's class with its items, and the tabs choose between them", () => {
         show(<Views />)
         const schedule = screen.getByRole("region", { name: "Schedule" })
-        expect(within(schedule).getByText("Anatomy")).toBeTruthy()
+        expect(within(schedule).getByTitle("ANAT · Lecture · Hall B")).toBeTruthy()
         fireEvent.click(within(schedule).getByRole("button", { name: "Classes" }))
         expect(actions.setSchedule).toHaveBeenCalledWith("classes")
 
@@ -113,7 +113,7 @@ describe("the week", () => {
         expect(within(schedule).queryByRole("button", { name: /Renal problem set/ })).toBeNull()
         expect(within(schedule).getByRole("button", { name: "Classes" }).getAttribute("aria-pressed")).toBe("true")
         set({ schedule: "deadlines" })
-        expect(within(schedule).queryByText("Anatomy")).toBeNull()
+        expect(within(schedule).queryByTitle("ANAT · Lecture · Hall B")).toBeNull()
     })
 
     it("shows office hours, and the right message when the week is empty", () => {
@@ -127,6 +127,22 @@ describe("the week", () => {
         fake.data.courses = []
         set({ search: "" })
         expect(screen.getByText("Nothing here yet")).toBeTruthy()
+    })
+
+    it("tints a completed row and keeps the checklist bar on an open one", () => {
+        fake.data.items = [
+            ...fake.data.items,
+            item({ id: "hist", title: "Histology slides", status: "submitted" }),
+            item({ id: "case", title: "Case write-up", checklist: [{ id: "c1", text: "History", done: true }, { id: "c2", text: "Exam", done: false }] }),
+        ]
+        show(<Views />)
+        const done = screen.getByRole("button", { name: /Histology slides/ })
+        expect(done.getAttribute("data-done")).toBe("true")
+        expect(done.textContent).toMatch(/Done|Attended|Submitted|Taken/)
+        const open = screen.getByRole("button", { name: /Case write-up/ })
+        expect(open.getAttribute("data-done")).toBeNull()
+        expect(open.querySelector("[data-steps]")).toBeTruthy()
+        expect(open.textContent).toContain("1/2")
     })
 })
 
