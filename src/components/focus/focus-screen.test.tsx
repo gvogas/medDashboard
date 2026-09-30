@@ -228,7 +228,7 @@ describe("the run on the focus screen", () => {
         expect(getStudyBadge()).toBe("23:30")
         fireEvent.click(stage().getByRole("button", { name: "Stop & log" }))
         await settle()
-        expect(document.title).toBe("Rounds")
+        expect(document.title).toBe("Term")
         expect(getStudyBadge()).toBeNull()
     })
 })

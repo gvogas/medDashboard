@@ -175,7 +175,7 @@ describe("the time as text", () => {
     it("titles the tab with the time and phase, or the app's name", () => {
         expect(tickTitle(runAt(CLASSIC, 60_500))).toBe("24:00 · Study")
         expect(tickTitle(runAt(CLASSIC, 26 * MIN))).toBe("04:00 · Break")
-        expect(tickTitle(null)).toBe("Rounds")
+        expect(tickTitle(null)).toBe("Term")
     })
 })
 
@@ -467,7 +467,7 @@ describe("a run", () => {
         expect(document.title).toBe("00:59 · Break")
         expect(getStudyBadge()).toBe("00:59")
         await act(() => stopRun())
-        expect(document.title).toBe("Rounds")
+        expect(document.title).toBe("Term")
         expect(getStudyBadge()).toBeNull()
     })
 

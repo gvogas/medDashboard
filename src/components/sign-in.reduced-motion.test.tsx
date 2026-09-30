@@ -8,8 +8,8 @@ vi.mock("@/data/session", () => ({ signIn: vi.fn() }))
 
 stubMatchMedia({ reducedMotion: true })
 
-it("shows the wordmark as plain text, with no GIF, when reduced motion is asked for", () => {
+it("shows the wordmark as plain text, with no GIF, with reduced motion too", () => {
     render(<SignIn />)
-    expect(screen.getByRole("heading").textContent).toBe("Rounds")
+    expect(screen.getByRole("heading").textContent).toBe("Term")
     expect(document.querySelector("img")).toBeNull()
 })

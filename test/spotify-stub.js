@@ -92,7 +92,7 @@ async function player(request, url) {
     if (path === '/v1/me/player/queue') return json({ currently_playing: T1, queue: [T2, T1] });
     if (path === '/v1/me/player/devices') {
       return json({ devices: [
-        { id: 'roundsdev', name: 'Rounds', type: 'Computer', is_active: false, is_restricted: false },
+        { id: 'roundsdev', name: 'Term', type: 'Computer', is_active: false, is_restricted: false },
         { id: 'phone1', name: "George's iPhone", type: 'Smartphone', is_active: true, is_restricted: false },
         { id: null, name: 'Ghost', type: 'Speaker' },
       ] });

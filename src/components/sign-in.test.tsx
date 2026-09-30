@@ -28,7 +28,7 @@ describe("sign-in", () => {
         expect(document.getElementById("app")!.hidden).toBe(true)
         expect(document.activeElement?.id).toBe("loginUser")
         expect(screen.queryByRole("alert")).toBeNull()
-        expect(document.querySelector('img[src="/wordmark.gif"]')).toBeTruthy()
+        expect(screen.getByRole("heading").textContent).toBe("Term")
     })
 
     it("keeps the username and focuses the password when one is given", () => {

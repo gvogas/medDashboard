@@ -238,7 +238,7 @@ export async function exportData() {
     const blob = new Blob([JSON.stringify({ ...store.data, pending: await store.pending(), conflicts: store.conflicts }, null, 2)], { type: "application/json" })
     const url = URL.createObjectURL(blob), link = document.createElement("a")
     link.href = url
-    link.download = "rounds-backup.json"
+    link.download = "term-backup.json"
     link.click()
     setTimeout(() => URL.revokeObjectURL(url), 1000)
 }

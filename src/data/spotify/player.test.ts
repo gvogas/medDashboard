@@ -1,5 +1,5 @@
 // The poller and the controls against a fake Worker: when it asks, what it does with a
-// 401, a 409 and a 429, and how a command finds the Rounds device.
+// 401, a 409 and a 429, and how a command finds the Term device.
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
 type Route = (path: string, init?: RequestInit) => Response | Promise<Response>
@@ -188,7 +188,7 @@ describe("the controls", () => {
         expect(paths()).toContain("/api/spotify/player")
     })
 
-    it("sends a command to the Rounds device when Spotify has none active", async () => {
+    it("sends a command to the Term device when Spotify has none active", async () => {
         const { player, web, paths } = await connectedPlayer((path) => path.includes("deviceId=") ? json(null, 204) : json({ error: "no_device" }, 404))
         Object.assign(web.state, { status: "ready", deviceId: "roundsdev" })
         const p = player.control("next")
@@ -209,7 +209,7 @@ describe("the controls", () => {
         expect(player.state.error).toBeNull()
     })
 
-    it("says no device without the Rounds device, and offline without an answer", async () => {
+    it("says no device without the Term device, and offline without an answer", async () => {
         let offline = false
         const { player } = await connectedPlayer(() => offline ? Promise.reject(new TypeError("Failed to fetch")) : json({ error: "no_device" }, 404))
         const p = player.control("next")
@@ -253,7 +253,7 @@ describe("the controls", () => {
         expect(paths().filter((x) => x.startsWith("/api/spotify/player/"))).toEqual(["/api/spotify/player/restart", "/api/spotify/player/previous"])
     })
 
-    it("moves the music into this tab only once the Rounds device is ready", async () => {
+    it("moves the music into this tab only once the Term device is ready", async () => {
         const { player, web, fetcher } = await connectedPlayer(() => json(null, 204))
         await player.playHere()
         expect(fetcher).not.toHaveBeenCalled()

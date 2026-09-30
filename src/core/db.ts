@@ -77,7 +77,7 @@ export function openDb(name: string, onVersionChange: () => void = () => {}): Pr
       };
     };
     req.onerror = () => reject(req.error);
-    req.onblocked = () => { blocked = true; reject(new Error('Close older Rounds tabs, then reload to upgrade local storage.')); };
+    req.onblocked = () => { blocked = true; reject(new Error('Close older Term tabs, then reload to upgrade local storage.')); };
     req.onsuccess = () => {
       const db = req.result;
       if (blocked) { db.close(); return; }
@@ -110,7 +110,7 @@ export function openDb(name: string, onVersionChange: () => void = () => {}): Pr
 export function deleteDb(name: string): Promise<void> {
   return new Promise((resolve, reject) => {
     const req = indexedDB.deleteDatabase(name);
-    const timer = setTimeout(() => reject(new Error('Close other Rounds tabs and retry clearing this device.')), 5000);
+    const timer = setTimeout(() => reject(new Error('Close other Term tabs and retry clearing this device.')), 5000);
     req.onsuccess = () => { clearTimeout(timer); resolve(); };
     req.onerror = () => { clearTimeout(timer); reject(req.error); };
     // A blocked request is still pending, never a successful deletion.

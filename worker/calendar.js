@@ -83,7 +83,7 @@ export async function serveFeed(env, url, userId, token) {
   return new Response(body, {
     headers: {
       'content-type': 'text/calendar; charset=utf-8',
-      'content-disposition': 'inline; filename="rounds.ics"',
+      'content-disposition': 'inline; filename="term.ics"',
     },
   });
 }
@@ -105,7 +105,7 @@ export function buildCalendar({ courses, items, termStart = null, school = null,
   const labelOf = (t) => types.find((x) => x && x.id === t)?.label || LABELS[t] || 'Item';
   const lines = [
     'BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Rounds//Calendar feed//EN', 'CALSCALE:GREGORIAN', 'METHOD:PUBLISH',
-    'X-WR-CALNAME:Rounds', 'X-WR-CALDESC:Deadlines\\, exams and classes from Rounds',
+    'X-WR-CALNAME:Term', 'X-WR-CALDESC:Deadlines\\, exams and classes from Term',
     'REFRESH-INTERVAL;VALUE=DURATION:PT1H', 'X-PUBLISHED-TTL:PT1H',
   ];
   if (tz) lines.push('X-WR-TIMEZONE:' + tz);

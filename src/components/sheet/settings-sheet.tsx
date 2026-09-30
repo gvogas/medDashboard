@@ -84,7 +84,7 @@ export function SettingsSheet({ tab, focus }: { tab: SettingsTab; focus: string 
                 {tab === "spotify" && <SpotifyTab />}
                 {tab === "account" && <AccountTab profile={profile} />}
             </SheetBody>
-            <SheetFoot hint="Rounds">
+            <SheetFoot hint="Term">
                 <Button variant="ghost" className="[@media(hover:none)]:hidden" onClick={showShortcuts}>
                     Keyboard shortcuts <kbd className="ml-1 rounded border border-border px-1.5 font-mono text-[11px]">?</kbd>
                 </Button>
@@ -390,7 +390,7 @@ function School() {
     return (
         <Group title="School calendar" state={cal ? "on" : "off"} id="schoolGrp">
             {!cal ? <>
-                <Hint>Upload your school’s academic calendar (PDF). Rounds marks days off, breaks and exams, skips classes when there are none, and numbers your weeks.</Hint>
+                <Hint>Upload your school’s academic calendar (PDF). Term marks days off, breaks and exams, skips classes when there are none, and numbers your weeks.</Hint>
                 <Row>{pick("Upload calendar…")}</Row>
             </> : asking ? <>
                 <Hint>Remove the school calendar? Classes show every week again, and the term start goes back to the one you had.</Hint>
@@ -526,10 +526,10 @@ function SpotifyTab() {
             </div>
             {on && retry > 0 && <Hint>Your account is connected. Spotify requests are paused until {new Date(retry).toLocaleString()}.</Hint>}
             {on && web.status === "needs_reconnect" && <Hint error>Reconnect Spotify to play in this browser. <a href="/api/spotify/connect">Reconnect</a></Hint>}
-            {on && web.status === "ready" && <Hint>This tab is a Spotify device called <b>Rounds</b>: press play here and it plays here.</Hint>}
+            {on && web.status === "ready" && <Hint>This tab is a Spotify device called <b>Term</b>: press play here and it plays here.</Hint>}
             {note === "error" && <Hint error>Spotify did not connect. Try again.</Hint>}
             {note === "connected" && <span className="text-[11.5px] text-[var(--good)]">Connected. The badge on the coat shows what is playing.</span>}
-            <Hint>Controls need Spotify Premium; free accounts still see what is playing.{on ? "" : " The owner of the Rounds app has to add your Spotify email to it first, so ask before connecting."}</Hint>
+            <Hint>Controls need Spotify Premium; free accounts still see what is playing.{on ? "" : " The owner of the Term app has to add your Spotify email to it first, so ask before connecting."}</Hint>
         </Group>
     )
 }

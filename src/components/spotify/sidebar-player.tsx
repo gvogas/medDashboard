@@ -34,7 +34,7 @@ export function SidebarPlayer() {
                 <SpotifyMark className="text-muted-foreground" />
                 Nothing playing
                 {s.target === "here" && (
-                    <button type="button" aria-label="Play in Rounds" title="Play in Rounds" className={cn(pp, "ml-auto size-[26px]")} onClick={() => { activate(); void control("play") }}>
+                    <button type="button" aria-label="Play in Term" title="Play in Term" className={cn(pp, "ml-auto size-[26px]")} onClick={() => { activate(); void control("play") }}>
                         <Icon name="play" className="size-[11px]" />
                     </button>
                 )}
