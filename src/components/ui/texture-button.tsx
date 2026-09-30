@@ -1,116 +1,39 @@
-"use client";
+import * as React from "react"
+import { cn } from "@/lib/utils"
 
-// From cult-ui (MIT). The "accent" and "minimal" variants use Rounds' tokens rather than
-// indigo and neutral greys, so they follow the Med and CS themes in light and dark; "sm"
-// is compact for the top bar.
+type Variant = "primary" | "secondary" | "accent" | "destructive" | "minimal" | "icon"
+type Size = "default" | "sm" | "lg" | "icon"
 
-import { Slot } from "@radix-ui/react-slot";
-import { cva } from "class-variance-authority";
-import * as React from "react";
-
-import { cn } from "@/lib/utils";
-
-const buttonVariantsOuter = cva("", {
-  variants: {
-    variant: {
-      primary:
-        "w-full border border-[1px] border-black/10 bg-gradient-to-b from-black/70 to-black p-[1px] transition duration-300 ease-in-out dark:border-[2px] dark:border-black dark:from-white dark:to-white/80",
-      accent:
-        "w-full border-[1px] border-black/10 bg-gradient-to-b from-primary/70 to-primary p-[1px] transition duration-300 ease-in-out dark:border-[2px] dark:border-black/60 dark:from-primary/60 dark:to-primary",
-      destructive:
-        "w-full border-[1px] border-black/10 bg-gradient-to-b from-red-300/90 to-red-500 p-[1px] transition duration-300 ease-in-out dark:border-[2px] dark:border-neutral-950 dark:from-red-300/90 dark:to-red-500",
-      secondary:
-        "w-full border-[1px] border-black/20 bg-white/50 p-[1px] transition duration-300 ease-in-out dark:border-[2px] dark:border-neutral-950 dark:bg-neutral-600/50",
-      minimal:
-        "group/texture-button w-full border border-border bg-[var(--rim-hi)] p-px transition duration-200 ease-in-out hover:border-primary/40 active:brightness-95",
-      icon: "group/texture-button rounded-full border border-black/10 bg-white/50 to-white p-[1px] hover:bg-gradient-to-t hover:from-neutral-100 active:bg-neutral-200 dark:border-neutral-950 dark:bg-neutral-600/50 dark:hover:from-neutral-700 dark:hover:to-neutral-600 dark:active:bg-neutral-800",
-    },
-    size: {
-      sm: "rounded-[10px]",
-      default: "rounded-[12px]",
-      lg: "rounded-[12px]",
-      icon: "rounded-full",
-    },
-  },
-  defaultVariants: {
-    variant: "primary",
-    size: "default",
-  },
-});
-
-const innerDivVariants = cva(
-  "text-muted-foreground flex h-full w-full items-center justify-center",
-  {
-    variants: {
-      variant: {
-        primary:
-          "gap-2 bg-gradient-to-b from-neutral-800 to-black text-sm text-white/90 transition duration-300 ease-in-out hover:from-stone-800 hover:to-neutral-800/70 active:bg-gradient-to-b active:from-black active:to-black dark:from-neutral-200 dark:to-neutral-50 dark:text-black/80 dark:hover:from-stone-200 dark:hover:to-neutral-200 dark:active:from-stone-300 dark:active:to-neutral-300",
-        accent:
-          "gap-2 bg-gradient-to-b from-primary/85 to-primary text-sm text-primary-foreground shadow-[inset_0_1px_0_rgba(255,255,255,.28)] transition duration-300 ease-in-out hover:brightness-110 active:brightness-95",
-        destructive:
-          "gap-2 bg-gradient-to-b from-red-400/60 to-red-500/60 text-sm text-white/90 transition duration-300 ease-in-out hover:bg-gradient-to-b hover:from-red-400/70 hover:to-red-600/70 active:bg-gradient-to-b active:from-red-400/80 active:to-red-600/80 dark:hover:from-red-400/70 dark:hover:to-red-500/80 dark:active:from-red-400 dark:active:to-red-500",
-        secondary:
-          "bg-gradient-to-b from-neutral-100/80 to-neutral-200/50 text-sm transition duration-300 ease-in-out hover:bg-gradient-to-b hover:from-neutral-200/40 hover:to-neutral-300/60 active:bg-gradient-to-b active:from-neutral-200/60 active:to-neutral-300/70 dark:from-neutral-800 dark:to-neutral-700/50 dark:hover:from-neutral-700 dark:hover:to-neutral-700/60 dark:active:from-neutral-800 dark:active:to-neutral-700",
-        minimal:
-          "bg-gradient-to-b from-card to-muted text-sm text-ink-2 shadow-[inset_0_1px_0_var(--rim-hi)] transition duration-200 ease-in-out group-hover/texture-button:text-foreground",
-        icon: "rounded-full bg-gradient-to-b from-white to-neutral-50/50 group-active/texture-button:bg-neutral-200 dark:from-neutral-800 dark:to-neutral-700/50 dark:group-active/texture-button:bg-neutral-800",
-      },
-      size: {
-        sm: "rounded-[9px] px-2.5 py-1 text-xs",
-        default: "rounded-[10px] px-4 py-2 text-sm",
-        lg: "rounded-[10px] px-4 py-2 text-base",
-        icon: "rounded-full p-1",
-      },
-    },
-    defaultVariants: {
-      variant: "primary",
-      size: "default",
-    },
-  }
-);
-
-export interface UnifiedButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
-  variant?:
-    | "primary"
-    | "secondary"
-    | "accent"
-    | "destructive"
-    | "minimal"
-    | "icon";
-  size?: "default" | "sm" | "lg" | "icon";
-  asChild?: boolean;
+const VARIANT: Record<Variant, string> = {
+    primary: "bg-foreground text-background hover:opacity-90",
+    accent: "bg-foreground text-background hover:opacity-90",
+    secondary: "border border-border bg-card text-foreground hover:bg-muted",
+    minimal: "border border-border bg-card text-foreground hover:bg-muted",
+    icon: "bg-transparent text-ink-2 hover:bg-muted hover:text-foreground",
+    destructive: "bg-destructive text-[var(--on-crit)] hover:opacity-90",
+}
+const SIZE: Record<Size, string> = {
+    default: "h-9 px-3.5 text-[13px]",
+    sm: "h-8 px-2.5 text-[12.5px]",
+    lg: "h-11 px-5 text-[14px]",
+    icon: "size-9",
 }
 
-const TextureButton = React.forwardRef<HTMLButtonElement, UnifiedButtonProps>(
-  (
-    {
-      children,
-      variant = "primary",
-      size = "default",
-      asChild = false,
-      className,
-      ...props
-    },
-    ref
-  ) => {
-    const Comp = asChild ? Slot : "button";
+export interface TextureButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
+    variant?: Variant
+    size?: Size
+}
 
-    return (
-      <Comp
-        className={cn(buttonVariantsOuter({ variant, size }), className)}
-        ref={ref}
-        {...props}
-      >
-        <div className={cn(innerDivVariants({ variant, size }))}>
-          {children}
-        </div>
-      </Comp>
-    );
-  }
-);
-
-TextureButton.displayName = "TextureButton";
-
-export { TextureButton };
-
-// export default TextureButton
+/** A plain button; the name is kept so its many callers don't change. */
+export const TextureButton = React.forwardRef<HTMLButtonElement, TextureButtonProps>(
+    ({ className, variant = "primary", size = "default", children, ...props }, ref) => (
+        <button
+            ref={ref}
+            className={cn("inline-flex cursor-pointer items-center justify-center gap-2 rounded-[6px] font-medium whitespace-nowrap disabled:cursor-not-allowed disabled:opacity-50", VARIANT[variant], SIZE[size], className)}
+            {...props}
+        >
+            {children}
+        </button>
+    ),
+)
+TextureButton.displayName = "TextureButton"

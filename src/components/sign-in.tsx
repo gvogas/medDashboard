@@ -80,7 +80,7 @@ export function SignIn() {
                     className={field}
                 />
                 {error && <p role="alert" className="m-0 mt-1 text-left text-sm text-destructive">{error}</p>}
-                <TextureButton type="submit" variant="accent" size="lg" disabled={busy} className="mt-3 disabled:opacity-70">
+                <TextureButton type="submit" variant="accent" size="lg" disabled={busy} className="mt-3 w-full disabled:opacity-70">
                     {busy ? "Signing in…" : "Sign in"}
                 </TextureButton>
             </form>

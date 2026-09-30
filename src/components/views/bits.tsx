@@ -4,7 +4,7 @@
 
 import type { CSSProperties, KeyboardEvent, ReactNode } from "react"
 import { cn } from "@/lib/utils"
-import { TextureCard } from "@/components/ui/texture-card"
+import { Card } from "@/components/ui/card"
 import { isOverdue, statusLabel, tmeta } from "@/core/model"
 import { hhmm, DOW } from "@/core/dates"
 import { setSchedule } from "@/data/actions"
@@ -24,28 +24,18 @@ export function onActivate(run: () => void) {
     }
 }
 
-/* The Texture card nests four borders; to fill the height, each level is a flex column.
-   Written out in full: Tailwind finds classes by reading the source. */
-export const FILL = [
-    "flex min-h-0 flex-1 flex-col",
-    "[&>div]:flex [&>div]:min-h-0 [&>div]:flex-1 [&>div]:flex-col",
-    "[&>div>div]:flex [&>div>div]:min-h-0 [&>div>div]:flex-1 [&>div>div]:flex-col",
-    "[&>div>div>div]:flex [&>div>div>div]:min-h-0 [&>div>div>div]:flex-1 [&>div>div>div]:flex-col",
-    "[&>div>div>div>div]:flex [&>div>div>div>div]:min-h-0 [&>div>div>div>div]:flex-1 [&>div>div>div>div]:flex-col",
-].join(" ")
-
-/** A panel: a Texture card with a header line (title, then whatever `head` adds). `fill` takes the height left. */
+/** A panel: a card with a header line (title, then whatever `head` adds). `fill` takes the height left. */
 export function Panel({ title, head, className, children, label, fill = false }: { title: ReactNode; head?: ReactNode; className?: string; children: ReactNode; label?: string; fill?: boolean }) {
     return (
-        <TextureCard className={cn("min-w-0 bg-card", fill && FILL, className)}>
+        <Card className={cn("min-w-0 overflow-hidden", fill && "flex min-h-0 flex-1 flex-col", className)}>
             <section aria-label={label} className="flex min-h-0 flex-1 flex-col">
-                <div className="flex flex-wrap items-center gap-2 border-b border-border px-3.5 py-2.5">
-                    <h2 className="m-0 text-[11px] font-bold tracking-[.1em] text-ink-2 uppercase">{title}</h2>
+                <div className="flex min-h-12 flex-wrap items-center gap-2 border-b border-border px-5 py-2">
+                    <h2 className="m-0 flex-1 text-[14px] font-semibold text-foreground">{title}</h2>
                     {head}
                 </div>
                 {children}
             </section>
-        </TextureCard>
+        </Card>
     )
 }
 

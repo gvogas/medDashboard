@@ -5,8 +5,7 @@
 
 import { useEffect, useRef, useState, type ReactNode } from "react"
 import { cn } from "@/lib/utils"
-import { TextureCard } from "@/components/ui/texture-card"
-import { FILL } from "@/components/views/bits"
+import { Card as PlainCard } from "@/components/ui/card"
 import { MusicPill } from "@/components/focus/music-pill"
 import { activate, control, cooldownMessage, useSpotify } from "@/data/spotify"
 import { getSheet } from "@/data/overlay"
@@ -58,7 +57,7 @@ export function SpotifyPage() {
     if (!s.player.loaded || !s.player.connected) {
         return (
             <div ref={root} className="min-w-0">
-                <TextureCard className="min-w-0 bg-card">
+                <PlainCard className="min-w-0">
                     <div className="px-3.5 py-9 text-center text-[12.5px] text-muted-foreground">
                         {!s.player.loaded
                             ? <><b className="mb-0.5 block font-semibold text-ink-2">Spotify</b>Checking your connection…</>
@@ -70,7 +69,7 @@ export function SpotifyPage() {
                                 <a href="/api/spotify/connect" className="mt-3 inline-flex rounded-[10px] border border-[color-mix(in_srgb,var(--accent)_72%,#000)] bg-[linear-gradient(color-mix(in_srgb,var(--accent)_90%,#fff),color-mix(in_srgb,var(--accent)_92%,#000))] px-3.5 py-1.5 text-[12.5px] font-[650] text-primary-foreground no-underline hover:brightness-110">Connect Spotify</a>
                             </>}
                     </div>
-                </TextureCard>
+                </PlainCard>
             </div>
         )
     }
@@ -96,11 +95,11 @@ export function SpotifyPage() {
     )
 }
 
-/** A Texture card whose inside fills the height left, and scrolls its own rows. */
+/** A card whose inside fills the height left, and scrolls its own rows. */
 function Card({ label, className, children }: { label: string; className?: string; children: ReactNode }) {
     return (
-        <TextureCard className={cn("min-w-0 bg-card", FILL, "max-[760px]:flex-none", className)}>
+        <PlainCard className={cn("flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden max-[760px]:flex-none", className)}>
             <section aria-label={label} className="flex min-h-0 flex-1 flex-col">{children}</section>
-        </TextureCard>
+        </PlainCard>
     )
 }
