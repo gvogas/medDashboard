@@ -24,7 +24,7 @@ import { achievementDraft, newAchievement } from "./achievement-edit"
 /* session.ts imports openSettings from here: a cycle, but each side calls the other only later */
 import { signOut as endSession } from "./session"
 import { ui } from "./ui"
-import type { Course, Item, ItemType, Schedule, SortKey } from "./types"
+import type { Course, Item, ItemType, Schedule, Show, SortKey } from "./types"
 
 export { setView }
 
@@ -46,11 +46,12 @@ let searchTimer: ReturnType<typeof setTimeout> | undefined
 /** Filter the views; they redraw once typing pauses, not on every key. */
 export function setSearch(text: string) {
     ui.search = text
+    ui.listFrom = null                         /* searching again ends a stat tile's list */
     clearTimeout(searchTimer)
     searchTimer = setTimeout(notify, 120)
 }
 
-/* ── the sidebar's filters ── */
+/* ── the filters: the sidebar's course; the All items table's type and status chips ── */
 
 export const itemTypes = (): ItemType[] => typeList(ui.bg, data.items)
 
@@ -71,6 +72,35 @@ export const isTypeOn = (id: string): boolean => typeOn(id)
 
 export function setCourse(id: string) {
     ui.course = id
+    ui.listFrom = null                         /* picking a course ends a stat tile's list */
+    notify()
+}
+
+/** The table's status chips: All, Open or Overdue. */
+export function setShow(show: Show) {
+    ui.show = show
+    notify()
+}
+
+/**
+ * A stat tile's list on All items, matching the tile's number: every overdue item, or
+ * the open assignments, soonest first. The tiles count your whole work, so the list
+ * leaves out the course and the search until you pick a course, search, or ask for them.
+ */
+export function showTileList(tile: "overdue" | "assignments") {
+    ui.show = tile === "overdue" ? "overdue" : "open"
+    ui.types = {}
+    if (tile === "assignments") for (const t of itemTypes()) ui.types[t.id] = t.id === "assignment"
+    ui.sort = { key: "date", dir: 1 }
+    ui.listFrom = "tile"
+    ui.view = "table"
+    rememberUi()
+    notify()
+}
+
+/** Put the course and the search back on a stat tile's list. */
+export function endTileList() {
+    ui.listFrom = null
     notify()
 }
 

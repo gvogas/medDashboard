@@ -1,5 +1,6 @@
-// Every item that passes the filters, in a table you sort by clicking a column. It
-// scrolls on its own; on a phone each row becomes a small card.
+// Every item that passes the filters, in a table you sort by clicking a column. The chips
+// above it pick the status and the types (table-filters.tsx). It scrolls on its own; on a
+// phone each row becomes a small card.
 
 import { cn } from "@/lib/utils"
 import { isComplete } from "@/core/model"
@@ -7,7 +8,10 @@ import { hhmm, parse, DOW, MON } from "@/core/dates"
 import { course as courseOf } from "@/core/store"
 import { useTable } from "@/data/views"
 import { openItem, sortTable } from "@/data/actions"
+import { TableFilters } from "./table-filters"
 import type { Course, Item, SortKey } from "@/data/types"
+import type { TableFilters as Filters } from "@/data/views"
+import { itemTypes } from "@/data/actions"
 import { accent, Empty, HeadNote, onActivate, Panel, StatusChip, Steps, TypeChip } from "./bits"
 
 const when = (it: Item) => {
@@ -15,10 +19,24 @@ const when = (it: Item) => {
     const d = parse(it.date)
     return DOW[d.getDay()] + " " + d.getDate() + " " + MON[d.getMonth()].slice(0, 3)
 }
+/** What the empty table says is hiding things: the status, the types off, the course, the search. */
+function hiddenBy(f: Filters): string {
+    const off = itemTypes().filter((t) => !t.hidden && f.types[t.id] === false).length
+    const c = f.course !== "all" ? (courseOf(f.course) as Course | null) : null
+    const parts = [
+        f.show === "open" ? "Open" : f.show === "overdue" ? "Overdue" : "",
+        off ? off + (off === 1 ? " type" : " types") + " off" : "",
+        f.course !== "all" ? (c ? c.name : "a course") : "",
+        f.search ? "the search" : "",
+    ].filter(Boolean)
+    return parts.length ? "Hidden by " + parts.join(", ") + "." : ""
+}
+
 const time = (it: Item) => (it.start ? hhmm(it.start) + (it.end ? "–" + hhmm(it.end) : "") : it.end ? hhmm(it.end) : "")
 
 export function TableView() {
-    const { rows, total, sort } = useTable()
+    const { rows, total, sort, filters, overdue, perType } = useTable()
+    const why = hiddenBy(filters)
 
     const Head = ({ k, label }: { k: SortKey; label: string }) => {
         const on = sort.key === k
@@ -36,6 +54,7 @@ export function TableView() {
 
     return (
         <Panel label="All items" title="All items" head={<HeadNote>{rows.length} shown of {total}</HeadNote>} fill>
+            <TableFilters overdue={overdue} perType={perType} />
             <div className="min-h-0 flex-1 overflow-auto max-[700px]:overflow-visible">
                 <table className="w-full border-collapse text-[12.5px] max-[640px]:block">
                     <thead className="max-[640px]:hidden">
@@ -51,7 +70,11 @@ export function TableView() {
                     </thead>
                     <tbody className="max-[640px]:grid max-[640px]:gap-2 max-[640px]:p-2.5">
                         {rows.length === 0 && (
-                            <tr><td colSpan={7}><Empty title="Nothing matches">Clear the search or turn a filter back on.</Empty></td></tr>
+                            <tr><td colSpan={7}>
+                                {total === 0 || !why
+                                    ? <Empty title="No items yet">Add one with New item.</Empty>
+                                    : <Empty title="Nothing matches the filters">{why}</Empty>}
+                            </td></tr>
                         )}
                         {rows.map((it) => {
                             const c = courseOf(it.courseId) as Course | null

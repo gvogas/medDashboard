@@ -1,6 +1,7 @@
 // The four boxes above the week, month and table: the next exam or quiz, open
 // assignments, overdue, and today's study against the goal. They are about the whole
-// of your work, so the filters leave them alone. (The quote is in the sidebar's foot.)
+// of your work, so the filters leave them alone; Open assignments and Overdue open
+// All items on just those items. (The quote is in the sidebar's foot.)
 
 import type { ReactNode } from "react"
 import { cn } from "@/lib/utils"
@@ -9,7 +10,7 @@ import { prepLabel } from "@/core/prep"
 import { useUi } from "@/data/ui"
 import { useStats } from "@/data/views"
 import { statsShown } from "@/components/shell"
-import { openItem, openStudy } from "@/data/actions"
+import { openItem, openStudy, showTileList } from "@/data/actions"
 import { ExamMotif } from "./exam-motif"
 
 /** "Cardiology midterm exam"; the type word only when the title doesn't already say it ("Final exam"). */
@@ -46,8 +47,8 @@ export function Stats() {
                 ) : "Enjoy the quiet"}
                 art={exam && exam.date ? <ExamMotif bg={bg} at={new Date(exam.date + "T" + (exam.start || "09:00"))} steps={s.prep ? s.prep.done + " of " + s.prep.total + " topics" : ""} /> : undefined}
             />
-            <Box label="Open assignments" value={s.openAssignments} foot={s.dueThisWeek ? s.dueThisWeek + " due this week" : "None due this week"} />
-            <Box label="Overdue" tone={s.overdue ? "crit" : "good"} value={s.overdue} foot={s.overdue ? "Needs attention today" : "All caught up"} />
+            <Box label="Open assignments" onClick={() => showTileList("assignments")} title="Show open assignments" value={s.openAssignments} foot={s.dueThisWeek ? s.dueThisWeek + " due this week" : "None due this week"} />
+            <Box label="Overdue" onClick={() => showTileList("overdue")} title="Show overdue items" tone={s.overdue ? "crit" : "good"} value={s.overdue} foot={s.overdue ? "Needs attention today" : "All caught up"} />
             <Box
                 label="Studied today"
                 onClick={openStudy}

@@ -1,5 +1,6 @@
-// The sidebar: the name, the pages, the courses, the Open items filters, the theme's
-// picture and goal, the Spotify player, and the foot (quote, name, sync, Settings).
+// The sidebar: the name, the pages, the courses, the theme's picture and goal, the
+// Spotify player, and the foot (quote, name, sync, Settings). The type filters are
+// chips on All items (views/table-filters.tsx).
 // It renders inside <App>'s <aside id="side">, whose .on and inert come from
 // data/sidebar.ts.
 
@@ -10,7 +11,6 @@ import { THEMES } from "@/data/themes"
 import { openCourse, setCourse } from "@/data/actions"
 import { SidebarWho } from "./sidebar-who"
 import { Count, counts, Heading, Pip, Row } from "./sidebar-parts"
-import { TypeList } from "./sidebar-types"
 import { SideNav } from "./side-nav"
 import { SideFoot } from "./side-foot"
 import { SidebarPlayer } from "./spotify/sidebar-player"
@@ -26,7 +26,6 @@ export function Sidebar() {
                 </div>
                 <SideNav />
                 <CourseList />
-                <TypeList />
                 <div className="mt-auto flex flex-col gap-3.5 pt-2">
                     <SidebarWho />
                     <SidebarPlayer />
