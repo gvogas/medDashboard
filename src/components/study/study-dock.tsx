@@ -6,6 +6,7 @@
 import { cn } from "@/lib/utils"
 import { duration } from "@/lib/time"
 import { useUi } from "@/data/ui"
+import { THEMES } from "@/data/themes"
 import { openFocus, togglePause, useRun, useToday } from "@/data/study-timer"
 import { FlipClock } from "./flip-clock"
 import { GoalRing } from "./tiles"
@@ -14,9 +15,10 @@ import { PauseIcon, PhaseLabel, PlayIcon } from "./timer-bits"
 export function StudyDock() {
     const run = useRun()
     const focusing = useUi((u) => u.focus)
+    const bg = useUi((u) => u.bg)
     const today = useToday(run)
     if (!run || focusing) return null
-    const phase = run.kind === "study" ? "Study" : "Break"
+    const phase = run.kind === "study" ? THEMES[bg].studyWord : "Break"
     return (
         <div
             role="region"

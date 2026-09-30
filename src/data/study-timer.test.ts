@@ -461,7 +461,7 @@ describe("a run", () => {
 
     it("titles the tab and badges the Study icon with the time left, and clears both at the end", async () => {
         await begin({ steps: [["study", 1], ["break", 1]], rounds: 1 })
-        expect(document.title).toBe("01:00 · Study")
+        expect(document.title).toBe("01:00 · On shift")
         expect(getStudyBadge()).toBe("01:00")
         await tickFor(61_000)
         expect(document.title).toBe("00:59 · Break")
@@ -538,5 +538,14 @@ describe("the music panel", () => {
         toggleMusic()
         expect(ui.focusMusic).toBe(false)
         off()
+    })
+})
+
+describe("the tab title", () => {
+    it("says the theme's study word while studying", () => {
+        const run = { leftMs: 25 * 60000, kind: "study" } as Parameters<typeof tickTitle>[0]
+        expect(tickTitle(run, "On shift")).toBe("25:00 · On shift")
+        expect(tickTitle({ ...run!, kind: "break" }, "On shift")).toBe("25:00 · Break")
+        expect(tickTitle(null, "On shift")).toBe("Term")
     })
 })

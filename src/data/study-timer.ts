@@ -17,6 +17,7 @@ import { getSheet } from "./overlay"
 import { useCourses, useItems, useProfile, useStudySessions } from "./store"
 import { shownSessions } from "./study"
 import { ui, useUi } from "./ui"
+import { THEMES } from "./themes"
 import type { Course, Flow, Item, StepKind, StudySession } from "./types"
 
 const MIN = 60_000
@@ -69,7 +70,7 @@ function refresh(force: boolean) {
     if (!force && key === runKey) return
     run = next
     runKey = key
-    document.title = tickTitle(run)
+    document.title = tickTitle(run, THEMES[ui.bg].studyWord)
     setStudyBadge(run ? timeText(run.leftMs) : null)
     for (const fn of listeners) fn()
 }
@@ -338,4 +339,4 @@ export function clockTime(ms: number): string {
 }
 
 /** The tab's title: the time left and the phase during a run. */
-export const tickTitle = (r: Run | null) => (r ? timeText(r.leftMs) + " · " + (r.kind === "study" ? "Study" : "Break") : "Term")
+export const tickTitle = (r: Run | null, word = "Study") => (r ? timeText(r.leftMs) + " · " + (r.kind === "study" ? word : "Break") : "Term")
