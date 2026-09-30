@@ -42,7 +42,7 @@ export function SignIn() {
                 <h1 className="m-0 leading-none">
                     <span className="font-serif text-6xl font-semibold tracking-[-.02em]">Term</span>
                 </h1>
-                <p className="m-0 mb-4 text-sm text-muted-foreground">Your med-school week, in one place.</p>
+                <p className="m-0 mb-4 text-sm text-muted-foreground">Your term, in one place.</p>
 
                 <label htmlFor="loginUser" className={label}>Username</label>
                 <input
