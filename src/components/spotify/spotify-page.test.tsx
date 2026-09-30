@@ -229,7 +229,7 @@ describe("the Spotify page", () => {
         expect(api.spotifyRepeat).toHaveBeenLastCalledWith("track")
     })
 
-    it("turns shuffle and repeat off with nothing to send them to, and lets the Rounds tab play", () => {
+    it("turns shuffle and repeat off with nothing to send them to, and lets the Term tab play", () => {
         resetEngine()
         Object.assign(web, { status: "ready", deviceId: "rounds" })
         show()
@@ -238,7 +238,7 @@ describe("the Spotify page", () => {
         expect((player.getByRole("button", { name: "Shuffle" }) as HTMLButtonElement).disabled).toBe(true)
         expect((player.getByRole("button", { name: "Repeat is off" }) as HTMLButtonElement).disabled).toBe(true)
         expect((player.getByRole("button", { name: "Next" }) as HTMLButtonElement).disabled).toBe(true)
-        fireEvent.click(player.getByRole("button", { name: "Play in Rounds" }))
+        fireEvent.click(player.getByRole("button", { name: "Play in Term" }))
         expect(api.spotifyControl).toHaveBeenCalledWith("play", null)
     })
 
@@ -246,7 +246,7 @@ describe("the Spotify page", () => {
         Object.assign(web, { status: "ready", deviceId: "rounds" })
         api.spotifyDevices.mockResolvedValue({ devices: [
             { id: "mac", name: "MacBook", type: "Computer", active: true, restricted: false },
-            { id: "rounds", name: "Rounds", type: "Computer", active: false, restricted: false },
+            { id: "rounds", name: "Term", type: "Computer", active: false, restricted: false },
             { id: "tv", name: "Living room", type: "TV", active: false, restricted: true },
         ] })
         show()
@@ -256,7 +256,7 @@ describe("the Spotify page", () => {
         await waitFor(() => expect(button.getAttribute("aria-expanded")).toBe("true"))
         const list = within(await player.findByRole("dialog", { name: "Choose a device" }))
         expect(await list.findByText("This tab")).toBeTruthy()
-        expect(list.getByText("Rounds, in this browser")).toBeTruthy()
+        expect(list.getByText("Term, in this browser")).toBeTruthy()
         expect(list.getByText("Playing here")).toBeTruthy()
         const tv = list.getByRole("button", { name: /Living room/ }) as HTMLButtonElement
         expect(tv.disabled).toBe(true)
@@ -367,7 +367,7 @@ describe("the sidebar player", () => {
         expect(within(badge()).queryByRole("button")).toBeNull()
         act(() => { Object.assign(web, { status: "ready", deviceId: "rounds" }) })
         setPlayer({})
-        fireEvent.click(within(badge()).getByRole("button", { name: "Play in Rounds" }))
+        fireEvent.click(within(badge()).getByRole("button", { name: "Play in Term" }))
         expect(api.spotifyControl).toHaveBeenCalledWith("play", null)
     })
 

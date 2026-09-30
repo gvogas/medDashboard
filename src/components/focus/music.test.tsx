@@ -46,10 +46,10 @@ describe("the pill", () => {
         render(<MusicPill onOpen={onOpen} />)
         fireEvent.click(pill().getByRole("button", { name: "Pick something to play ▴" }))
         expect(onOpen).toHaveBeenCalledOnce()
-        expect(pill().queryByRole("button", { name: "Play in Rounds" })).toBeNull()
+        expect(pill().queryByRole("button", { name: "Play in Term" })).toBeNull()
         Object.assign(web, { status: "ready", deviceId: "rounds" })
         setPlayer({})
-        fireEvent.click(pill().getByRole("button", { name: "Play in Rounds" }))
+        fireEvent.click(pill().getByRole("button", { name: "Play in Term" }))
         expect(api.spotifyControl).toHaveBeenCalledWith("play", null)
     })
 
@@ -165,7 +165,7 @@ describe("the panel", () => {
 
     it("lists the devices", async () => {
         Object.assign(web, { status: "ready", deviceId: "rounds" })
-        api.spotifyDevices.mockResolvedValue({ devices: [{ id: "rounds", name: "Rounds", type: "Computer", active: false, restricted: false }] })
+        api.spotifyDevices.mockResolvedValue({ devices: [{ id: "rounds", name: "Term", type: "Computer", active: false, restricted: false }] })
         render(<MusicPanel onClose={() => {}} />)
         fireEvent.click(panel().getByRole("button", { name: /MacBook/ }))
         const list = within(await panel().findByRole("dialog", { name: "Choose a device" }))

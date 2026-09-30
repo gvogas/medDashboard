@@ -70,7 +70,7 @@ function IdBadge({ name, role, username }: { name: string; role: string; usernam
     return (
         <div className="group relative hidden overflow-hidden rounded-[10px] border border-border bg-card shadow-[var(--shadow-1),0_6px_14px_rgba(23,32,51,.06)] [[data-bg=cs]_&]:block">
             <div className="flex h-6 items-center justify-between bg-primary px-2.5 font-mono text-[9px] font-semibold tracking-[.12em] text-primary-foreground">
-                <span>ROUNDS</span><span>STUDENT</span>
+                <span>TERM</span><span>STUDENT</span>
             </div>
             <i aria-hidden="true" className="absolute top-[7px] left-1/2 -ml-[13px] h-1.5 w-[26px] rounded-[3px] bg-card shadow-[inset_0_1px_1px_rgba(0,0,0,.25)]" />
             <div className="flex items-center gap-2.5 px-2.5 pt-2.5 pb-2">

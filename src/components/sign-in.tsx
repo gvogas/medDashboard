@@ -3,17 +3,14 @@
 // its signIn(), which reloads on success or shows the form again with the reason.
 
 import { useEffect, useRef, useState, type FormEvent } from "react"
-import { useReducedMotion } from "framer-motion"
 import { signIn } from "@/data/session"
 import { useSignInState } from "@/data/signin"
-import { TextGif } from "@/components/ui/text-gif"
 import { TextureCard } from "@/components/ui/texture-card"
 import { TextureButton } from "@/components/ui/texture-button"
 
 const field =
     "w-full rounded-[10px] border border-border bg-card px-3 py-2 text-[15px] text-foreground outline-none transition-colors focus:border-primary focus:ring-2 focus:ring-primary/25"
 const label = "mt-1 text-left text-xs font-medium text-muted-foreground"
-const wordmark = "text-6xl font-black tracking-tighter sm:text-7xl"
 
 export function SignIn() {
     const { error, username: kept, shown } = useSignInState()
@@ -22,7 +19,6 @@ export function SignIn() {
     const [busy, setBusy] = useState(false)
     const userRef = useRef<HTMLInputElement>(null)
     const passRef = useRef<HTMLInputElement>(null)
-    const reduced = useReducedMotion()
 
     // Each time session.ts shows the screen: keep the username, clear the password,
     // stop waiting, and focus the field to type in next.
@@ -44,11 +40,7 @@ export function SignIn() {
         <TextureCard className="w-[min(380px,100%)]">
             <form id="loginForm" autoComplete="on" onSubmit={submit} className="flex flex-col gap-1.5 px-7 pt-8 pb-6 text-center">
                 <h1 className="m-0 font-sans leading-none">
-                    {reduced ? (
-                        <span className={`${wordmark} text-primary`}>Rounds</span>
-                    ) : (
-                        <TextGif text="Rounds" gifUrl="/wordmark.gif" size="xl" weight="black" className="text-6xl tracking-tighter sm:text-7xl lg:text-7xl" fallbackColor="var(--accent)" />
-                    )}
+                    <span className="font-serif text-6xl font-semibold tracking-[-.02em]">Term</span>
                 </h1>
                 <p className="m-0 mb-4 text-sm text-muted-foreground">Your med-school week, in one place.</p>
 

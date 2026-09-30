@@ -338,4 +338,4 @@ export function clockTime(ms: number): string {
 }
 
 /** The tab's title: the time left and the phase during a run. */
-export const tickTitle = (r: Run | null) => (r ? timeText(r.leftMs) + " · " + (r.kind === "study" ? "Study" : "Break") : "Rounds")
+export const tickTitle = (r: Run | null) => (r ? timeText(r.leftMs) + " · " + (r.kind === "study" ? "Study" : "Break") : "Term")

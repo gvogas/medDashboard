@@ -16,8 +16,8 @@ export function Sidebar() {
         <MotionConfig reducedMotion="user">
             <div className="flex grow flex-col gap-6 px-1 pt-0.5">
                 <div className="flex items-center gap-2.5 px-1.5 text-[16px] font-extrabold tracking-[-.01em]">
-                    <span aria-hidden="true" className="grid size-7 shrink-0 place-items-center rounded-[9px] bg-[linear-gradient(var(--accent),color-mix(in_srgb,var(--accent)_70%,#000))] text-[14px] text-primary-foreground shadow-[inset_0_1px_0_rgba(255,255,255,.35),0_2px_6px_color-mix(in_srgb,var(--accent)_40%,transparent)]">R</span>
-                    Rounds
+                    <span aria-hidden="true" className="grid size-7 shrink-0 place-items-center rounded-[9px] bg-[linear-gradient(var(--accent),color-mix(in_srgb,var(--accent)_70%,#000))] text-[14px] text-primary-foreground shadow-[inset_0_1px_0_rgba(255,255,255,.35),0_2px_6px_color-mix(in_srgb,var(--accent)_40%,transparent)]">T</span>
+                    Term
                 </div>
                 <TypeList />
                 <CourseList />

@@ -73,7 +73,7 @@ describe("play", () => {
         expect(library.note).toBeNull()
     })
 
-    it("plays a context as it is, and tries the Rounds device when nothing is active", async () => {
+    it("plays a context as it is, and tries the Term device when nothing is active", async () => {
         const { commands, web, calls, settle } = await fresh((path) => calls.length === 1 ? json({ error: "no_device" }, 404) : json(null, 204))
         Object.assign(web, { status: "ready", deviceId: "roundsdev" })
         const p = commands.play(null, "spotify:album:al1")
@@ -130,7 +130,7 @@ describe("the queue", () => {
 
 describe("devices and volume", () => {
     it("opens the device list, and moves playback keeping it paused", async () => {
-        const devices = [{ id: "roundsdev", name: "Rounds", type: "Computer", active: false, restricted: false }, { id: "phone1", name: "Phone", type: "Smartphone", active: true, restricted: false }]
+        const devices = [{ id: "roundsdev", name: "Term", type: "Computer", active: false, restricted: false }, { id: "phone1", name: "Phone", type: "Smartphone", active: true, restricted: false }]
         const { commands, library, web, player, calls, settle } = await fresh((path) => path === "/api/spotify/devices" ? json({ devices }) : json(null, 204))
         Object.assign(web, { status: "ready", deviceId: "roundsdev" })
         player.playing = false

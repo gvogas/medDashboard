@@ -161,7 +161,7 @@ export async function syncNow(): Promise<boolean> {
     } catch (e) {
       if (!active(cycle)) return false;
       if (e instanceof ApiError && e.status === 401) { stop(); state('signed-out'); signedOut(); }
-      else if (e instanceof ApiError && e.status === 428) { state('error', 'Reload Rounds to finish the update. Your edits are saved.'); }
+      else if (e instanceof ApiError && e.status === 428) { state('error', 'Reload Term to finish the update. Your edits are saved.'); }
       else { state(e instanceof ApiError ? 'error' : 'offline', (e as Error).message); schedule(retryDelayMs(e)); }
       return false;
     }

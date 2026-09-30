@@ -73,7 +73,7 @@ const MESSAGES: Record<string, string> = {
     not_connected: "Spotify is not connected. Connect it in Settings.",
     not_found: "That is not on Spotify any more.",
     reconnect_needed: "Spotify needs a fresh connection for this. Reconnect in Settings › Spotify.",
-    playlist_forbidden: "Spotify only lets Rounds open playlists you made or collaborate on.",
+    playlist_forbidden: "Spotify only lets Term open playlists you made or collaborate on.",
     offline: "You seem to be offline.",
 }
 

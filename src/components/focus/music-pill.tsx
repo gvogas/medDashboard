@@ -72,7 +72,7 @@ export function MusicPill({ onOpen, open = false, tone = "glass", className }: M
                     {note || (open ? "Pick something to play ▾" : "Pick something to play ▴")}
                 </button>
                 {s.target === "here" && (
-                    <button type="button" aria-label="Play in Rounds" title="Play in Rounds" className={round} onClick={() => { activate(); void control("play") }}>
+                    <button type="button" aria-label="Play in Term" title="Play in Term" className={round} onClick={() => { activate(); void control("play") }}>
                         <Icon name="play" />
                     </button>
                 )}

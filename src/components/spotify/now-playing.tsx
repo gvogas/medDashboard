@@ -79,7 +79,7 @@ export function NowPlaying({ compact = false }: { compact?: boolean }) {
                     <button
                         type="button"
                         disabled={!canPlay}
-                        aria-label={p.playing ? "Pause" : t ? "Play" : "Play in Rounds"}
+                        aria-label={p.playing ? "Pause" : t ? "Play" : "Play in Term"}
                         onClick={() => { activate(); void control(p.playing ? "pause" : "play") }}
                         className={cn(
                             "grid flex-none cursor-pointer place-items-center rounded-full border-0 bg-foreground p-0 text-background hover:bg-primary hover:text-primary-foreground disabled:cursor-default disabled:opacity-40 disabled:hover:bg-foreground disabled:hover:text-background",
