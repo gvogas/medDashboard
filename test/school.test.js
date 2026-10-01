@@ -195,6 +195,13 @@ describe('the calendar feed with a school calendar', () => {
   const course = { id: 'n', code: 'NEURO', name: 'Neuroscience', archived: 0, created_at: Date.UTC(2026, 7, 1),
     meetings: JSON.stringify([{ id: 'm', kind: 'Lecture', weekday: 1, start: '10:00', end: '11:00', room: '' }]) };
 
+  it('repeats a one-semester course through that semester only', () => {
+    const ics = unfold(buildCalendar({ courses: [{ ...course, term: 'Winter 2027' }], items: [], school: cal, now: Date.UTC(2026, 8, 26) }));
+    expect(ics).not.toContain('UID:class-n-m-2026-08-24@rounds');
+    expect(ics).toContain('UID:class-n-m-2027-01-19@rounds');
+    expect(ics).toContain('RRULE:FREQ=WEEKLY;BYDAY=MO;UNTIL=20270514T235959');
+  });
+
   it('repeats each class within a semester, skips days off, and adds swapped days', () => {
     const ics = unfold(buildCalendar({ courses: [course], items: [], school: cal, now: Date.UTC(2026, 8, 26) }));
     expect(ics).toContain('UID:class-n-m-2026-08-24@rounds');

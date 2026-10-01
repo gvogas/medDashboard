@@ -15,7 +15,7 @@
 import { HttpError } from './http.js';
 import { claimLimit, rateLimited } from './limits.js';
 import { sameString, hex } from './auth.js';
-import { normalizeSchool, classWeekday, dayInfo, weekdayOf } from '../src/core/school.ts';
+import { normalizeSchool, classWeekday, courseTerm, dayInfo, weekdayOf } from '../src/core/school.ts';
 
 const FEED_LIMIT = 60;                     /* fetches an hour per link; calendars poll a few times a day */
 const HOUR_MS = 60 * 60 * 1000;
@@ -72,7 +72,7 @@ export async function serveFeed(env, url, userId, token) {
   if (wait) throw rateLimited(wait);
 
   const [courses, items] = await env.DB.batch([
-    env.DB.prepare('SELECT id, code, name, archived, meetings, created_at FROM courses WHERE user_id = ? AND deleted_at IS NULL').bind(userId),
+    env.DB.prepare('SELECT id, code, name, term, archived, meetings, created_at FROM courses WHERE user_id = ? AND deleted_at IS NULL').bind(userId),
     env.DB.prepare('SELECT id, type, title, course_id, date, start, end, location, status, weight, notes, recur, weekday, recur_until FROM items WHERE user_id = ? AND deleted_at IS NULL ORDER BY date').bind(userId),
   ]);
   const tz = url.searchParams.get('tz');
@@ -149,7 +149,7 @@ export function buildCalendar({ courses, items, termStart = null, school = null,
   return lines.map(fold).join('\r\n') + '\r\n';
 }
 
-/* One class meeting through each semester: weekly from the first day of classes to the
+/* One class meeting through each semester (only its own, for a course set to one): weekly from the first day of classes to the
    last, minus the days its weekday has no classes, plus the days that follow its weekday. */
 function schoolClasses(c, m, school, stamp) {
   const out = [];
@@ -160,7 +160,9 @@ function schoolClasses(c, m, school, stamp) {
     out.push('DESCRIPTION:' + text(c.name), 'END:VEVENT');
   };
   const at = (d) => compact(d) + 'T' + m.start.replace(':', '') + '00';
+  const only = courseTerm(school, c.term);
   for (const term of school.terms) {
+    if (only && term !== only) continue;
     const first = onOrAfter(term.start, m.weekday), id = 'class-' + c.id + '-' + bare(m.id) + '-' + term.start;
     if (first <= term.end) {
       const skip = [];
