@@ -28,10 +28,10 @@ export const TONE: Record<string, string> = {
 /* The unlock toast's See adds .pop to the medal's <li> (showAchievement in data/study-controller.ts). */
 const POP = "group-[.pop]:motion-safe:animate-[ach-pop_1.4s_ease-out_1]"
 
-export function AchievementsCard({ className }: { className?: string }) {
+export function AchievementsCard() {
     const b = useBadges()
     return (
-        <div className={cn("min-w-0", className)}>
+        <div className="min-w-0">
             <Panel
                 label="Achievements"
                 title="Achievements"

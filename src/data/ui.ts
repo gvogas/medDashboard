@@ -1,9 +1,9 @@
 // UI state: what is open, what is filtered, how the table is sorted. Never synced. The
 // view, the week and month's schedule and the Study page's tab are remembered per browser
-// as a convenience, and
-// the theme and background too, for index.html's script to apply before the first paint.
-// It is one object changed in place, with no events: everything that changes it then
-// calls the bridge's notify(), whose counter is the snapshot useUi() reads.
+// as a convenience, and the theme and background too, for index.html's script to apply
+// before the first paint. It is one object changed in place, with no events: everything
+// that changes it then calls the bridge's notify(), whose counter is the snapshot useUi()
+// reads.
 
 import { useSyncExternalStore } from "react"
 import { today } from "@/core/dates"

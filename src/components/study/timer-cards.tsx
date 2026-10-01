@@ -2,8 +2,10 @@
 // so starting feels like stepping into the focus screen (the phase in the theme's word,
 // the flip clock on the first step, the flow's name, the round strip, the course and item
 // picked, and Start); on the right Your flow (the steps, the rounds and the Quick start
-// presets; every change saves the flow to the profile, study-timer.ts) and Today (today-card.tsx). Under 1000px, one
-// column (the 314px Ready clock plus the card's padding does not fit beside the 260px sidebar and Your flow below about 996px; the card trims its padding to 24px under 1100px).
+// presets; every change saves the flow to the profile, study-timer.ts) and Today
+// (today-card.tsx). Under 1000px, one column (the 314px Ready clock plus the card's
+// padding does not fit beside the 260px sidebar and Your flow below about 996px; the card
+// trims its padding to 24px under 1100px).
 
 import { useState, type KeyboardEvent, type ReactNode } from "react"
 import { cn } from "@/lib/utils"
@@ -24,10 +26,10 @@ import { TodayCard } from "./today-card"
 
 const MIN = 60_000
 
-export function TimerCards({ className }: { className?: string }) {
+export function TimerCards() {
     const flow = useFlow()
     return (
-        <div className={cn("grid items-stretch gap-4 [grid-template-columns:minmax(0,1.4fr)_minmax(0,1fr)] max-[1000px]:[grid-template-columns:minmax(0,1fr)]", className)}>
+        <div className={cn("grid items-stretch gap-4 [grid-template-columns:minmax(0,1.4fr)_minmax(0,1fr)] max-[1000px]:[grid-template-columns:minmax(0,1fr)]")}>
             <ReadyCard flow={flow} />
             <div className="flex min-w-0 flex-col gap-4">
                 <FlowCard flow={flow} />

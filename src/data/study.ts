@@ -81,7 +81,6 @@ export function studyTiles(sessions: StudySession[], prefs: StudyPrefs, termStar
 export interface TodayRow { id: string; at: string; courseId: string | null; color: string | undefined; what: string; minutes: number }
 export interface TodayStudy { rows: TodayRow[]; total: number; goal: number }
 
-/** "09:05": when a session started. */
 /** A clock time, "09:05", for a session's start in History and Today. */
 export const clockTime = (ms: number) => { const d = new Date(ms); return String(d.getHours()).padStart(2, "0") + ":" + String(d.getMinutes()).padStart(2, "0") }
 

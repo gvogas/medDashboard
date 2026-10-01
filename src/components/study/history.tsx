@@ -43,7 +43,7 @@ const DAY_TINT = [
     "bg-[color-mix(in_srgb,var(--study)_36%,var(--panel))]",
 ]
 
-export function HistoryCard({ className }: { className?: string }) {
+export function HistoryCard() {
     const h = useHistory()
     const card = useRef<HTMLDivElement>(null)
     /* a heatmap day, to bring into view once its month is drawn */
@@ -82,7 +82,7 @@ export function HistoryCard({ className }: { className?: string }) {
     }
 
     return (
-        <div ref={card} className={cn("min-w-0", className)}>
+        <div ref={card} className="min-w-0">
             <Panel
                 label="History"
                 title="History"

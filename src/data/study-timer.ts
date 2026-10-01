@@ -355,11 +355,7 @@ export function timeText(ms: number): string {
     return String(m).padStart(2, "0") + ":" + String(s).padStart(2, "0")
 }
 
-/** A time of day as the clock shows it: "15:40". */
-export function clockTime(ms: number): string {
-    const d = new Date(ms)
-    return String(d.getHours()).padStart(2, "0") + ":" + String(d.getMinutes()).padStart(2, "0")
-}
+export { clockTime } from "./study"
 
 /** The tab's title: the time left and the phase during a run. */
 export const tickTitle = (r: Run | null, word = "Study") => (r ? timeText(r.leftMs) + " · " + (r.kind === "study" ? word : "Break") : "Term")

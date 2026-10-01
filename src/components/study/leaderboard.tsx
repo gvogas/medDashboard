@@ -1,5 +1,5 @@
 // The Leaderboard card on the Study page: who has studied the most this week, or ever,
-// among those who joined. Not joined, it says what joining shares. It loads when the page
+// among those who joined. Not joined, it says what joining shares. It loads when its tab
 // opens and the totals are missing or a minute old, and again when the device comes back
 // online after saying it needed a connection.
 
