@@ -10,11 +10,11 @@ import { useUi } from "@/data/ui"
 import { THEMES } from "@/data/themes"
 import { openCourse, setCourse, setSem } from "@/data/actions"
 import { today } from "@/core/dates"
-import { courseTerm, inTerm, pickedTerm, type SchoolCalendar } from "@/core/school"
+import { courseTerm, inTerm, pickedTerm } from "@/core/school"
 import { schoolCal } from "@/data/query"
-import { cn } from "@/lib/utils"
 import { SidebarWho } from "./sidebar-who"
-import { Count, counts, Heading, headingButton, Pip, Row } from "./sidebar-parts"
+import { Count, counts, Heading, Pip, Row } from "./sidebar-parts"
+import { SemesterMenu } from "./semester-menu"
 import { SideNav } from "./side-nav"
 import { SideFoot } from "./side-foot"
 import { SidebarPlayer } from "./spotify/sidebar-player"
@@ -55,7 +55,7 @@ function CourseList() {
 
     return (
         <section aria-label="Courses">
-            <Heading action={picker && term ? <SemesterSelect cal={cal!} value={term.name} /> : undefined}>Courses</Heading>
+            <Heading action={picker && term ? <SemesterMenu names={cal!.terms.map((t) => t.name)} value={term.name} onPick={setSem} /> : undefined}>Courses</Heading>
             <div className="flex flex-col gap-px">
                 <Row pressed={selected === "all"} onClick={() => setCourse("all")}>
                     <span className="min-w-0 truncate">All courses</span>
@@ -87,14 +87,5 @@ function CourseList() {
                 </button>
             </div>
         </section>
-    )
-}
-
-/** Which semester's courses the list shows. */
-function SemesterSelect({ cal, value }: { cal: SchoolCalendar; value: string }) {
-    return (
-        <select aria-label="Semester" value={value} onChange={(e) => setSem(e.target.value)} className={cn(headingButton, "cursor-pointer font-medium text-foreground")}>
-            {cal.terms.map((t) => <option key={t.name} value={t.name}>{t.name}</option>)}
-        </select>
     )
 }

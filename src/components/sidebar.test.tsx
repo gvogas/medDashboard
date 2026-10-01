@@ -101,7 +101,7 @@ describe("the semester select", () => {
 
     it("lists the current semester's courses and the all-year ones, marked Both", () => {
         render(<Sidebar />)
-        expect((coursesNav().getByRole("combobox", { name: "Semester" }) as HTMLSelectElement).value).toBe("Fall 2026")
+        expect(coursesNav().getByRole("button", { name: "Semester: Fall 2026" }).getAttribute("aria-expanded")).toBe("false")
         expect(coursesNav().getByRole("button", { name: /^Fall course/ })).toBeTruthy()
         expect(coursesNav().queryByRole("button", { name: /^Winter course/ })).toBeNull()
         expect(coursesNav().getByRole("button", { name: /^Year course/ }).textContent).toContain("Both")
@@ -111,17 +111,33 @@ describe("the semester select", () => {
     it("switches semester; a course picked outside it goes back to All courses", () => {
         fake.ui.course = "f"
         render(<Sidebar />)
-        fireEvent.change(coursesNav().getByRole("combobox", { name: "Semester" }), { target: { value: "Winter 2027" } })
+        fireEvent.click(coursesNav().getByRole("button", { name: "Semester: Fall 2026" }))
+        const list = coursesNav().getByRole("listbox", { name: "Semester" })
+        expect(within(list).getByRole("option", { name: /Fall 2026/ }).getAttribute("aria-selected")).toBe("true")
+        expect(document.activeElement).toBe(within(list).getByRole("option", { name: /Fall 2026/ }))
+        fireEvent.keyDown(list, { key: "ArrowDown" })
+        fireEvent.click(document.activeElement as HTMLElement)
+        expect(coursesNav().queryByRole("listbox")).toBeNull()
         expect(fake.ui.sem).toBe("Winter 2027")
         expect(fake.ui.course).toBe("all")
         expect(coursesNav().getByRole("button", { name: /^Winter course/ })).toBeTruthy()
         expect(coursesNav().queryByRole("button", { name: /^Fall course/ })).toBeNull()
     })
 
+    it("closes on Escape without picking, focus back on the button", () => {
+        render(<Sidebar />)
+        const button = coursesNav().getByRole("button", { name: "Semester: Fall 2026" })
+        fireEvent.click(button)
+        fireEvent.keyDown(coursesNav().getByRole("listbox"), { key: "Escape" })
+        expect(coursesNav().queryByRole("listbox")).toBeNull()
+        expect(document.activeElement).toBe(button)
+        expect(fake.ui.sem).toBeNull()
+    })
+
     it("is not there with one semester", () => {
         fake.data.profile = { ...(fake.data.profile as object), schoolCalendar: { name: "", terms: TERMS.slice(0, 1), days: [] } }
         render(<Sidebar />)
-        expect(coursesNav().queryByRole("combobox", { name: "Semester" })).toBeNull()
+        expect(coursesNav().queryByRole("button", { name: /^Semester/ })).toBeNull()
         expect(coursesNav().queryByText("Both")).toBeNull()
     })
 })

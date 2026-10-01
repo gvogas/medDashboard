@@ -165,6 +165,22 @@ export function pickedTerm(cal: SchoolCalendar | null, picked: string | null, to
 }
 
 /**
+ * The semesters a calendar edit renamed, old name to new: an old semester whose name is gone,
+ * when the semester in its place has a name the old calendar did not have.
+ */
+export function renamedTerms(before: SchoolCalendar | null, after: SchoolCalendar | null): Map<string, string> {
+  const out = new Map<string, string>();
+  if (!before || !after) return out;
+  const key = (t: Term) => t.name.toLowerCase();
+  const was = new Set(before.terms.map(key)), now = new Set(after.terms.map(key));
+  before.terms.forEach((t, i) => {
+    const next = after.terms[i];
+    if (next && !now.has(key(t)) && !was.has(key(next))) out.set(t.name, next.name);
+  });
+  return out;
+}
+
+/**
  * When a weekly item can repeat until, for an item dated `date`: the end of each semester
  * still to end, then the school year's last day (its last exam day) when that is later.
  * The first is the default. Empty without a calendar.

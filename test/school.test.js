@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { normalizeSchool, dayInfo, classWeekday, weekOf, currentTerm, termStartFor, schoolStatus, courseTerm, courseRunsOn, inTerm, pickedTerm, repeatEnds } from '../src/core/school.ts';
+import { normalizeSchool, dayInfo, classWeekday, weekOf, currentTerm, termStartFor, schoolStatus, courseTerm, courseRunsOn, inTerm, pickedTerm, renamedTerms, repeatEnds } from '../src/core/school.ts';
 import { lectureDates } from '../src/core/reviews.ts';
 import { cleanSchool, readSchool } from '../worker/school.js';
 import { MODEL } from '../worker/outline.js';
@@ -135,6 +135,17 @@ describe("a course's semester", () => {
     expect(pickedTerm(cal, null, '2026-09-23')).toBe(cal.terms[0]);
     expect(pickedTerm(cal, 'Gone 2025', '2027-02-01')).toBe(cal.terms[1]);
     expect(pickedTerm(null, 'Winter 2027', '2026-09-23')).toBeNull();
+  });
+
+  it('knows which semesters were renamed: a name gone, a new one in its place', () => {
+    const renamed = (...names) => normalizeSchool({ ...VANIER, terms: VANIER.terms.map((t, i) => ({ ...t, name: names[i] })) });
+    expect([...renamedTerms(cal, renamed('Fall 2026', 'Winter 2027'))]).toEqual([['Autumn 2026', 'Fall 2026']]);
+    expect([...renamedTerms(cal, renamed('autumn 2026', 'Winter 2027'))]).toEqual([]);   /* the same name to a course */
+    expect([...renamedTerms(cal, renamed('Winter 2027', 'Spring 2027'))]).toEqual([]);   /* Autumn's place went to a name it had */
+    expect([...renamedTerms(cal, normalizeSchool({ terms: [{ name: 'Fall', start: '2026-09-01', end: '2026-12-01' }] }))])
+      .toEqual([['Autumn 2026', 'Fall']]);
+    expect([...renamedTerms(null, cal)]).toEqual([]);
+    expect([...renamedTerms(cal, null)]).toEqual([]);
   });
 
   it('gives the ends a weekly item can repeat until', () => {

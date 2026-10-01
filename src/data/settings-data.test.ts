@@ -21,7 +21,8 @@ vi.mock("@/core/api", () => ({ api: {} }))
 import { normalizeCourse } from "@/core/model"
 import { feedLink, hm, savedValues, syncLine, TAB_OF, themeLabel, toggleRest } from "./settings"
 import { commitImport, importCount, type ImportPlan } from "./import-edit"
-import { dayOk, footHint, groupDays, moveFrom, toSave, valid, type SchoolDraft } from "./school-edit"
+import { normalizeSchool } from "@/core/school"
+import { dayOk, footHint, groupDays, moveFrom, saveSchool, toSave, valid, type SchoolDraft } from "./school-edit"
 
 afterEach(() => { fake.rows = []; fake.profile = []; fake.cal = null; fake.data.profile = { id: "p", termStart: null } })
 
@@ -131,6 +132,22 @@ describe("the school calendar", () => {
         expect(moveFrom(one, "2026-10-14").to).toBe("2026-10-14")
         expect(moveFrom({ ...one, to: "2026-10-20" }, "2026-10-14").to).toBe("2026-10-20")
         expect(moveFrom({ ...one, to: "2026-10-13" }, "2026-10-15").to).toBe("2026-10-15")
+    })
+
+    it("moves a renamed semester's courses to its new name", async () => {
+        fake.cal = normalizeSchool(toSave(draft()))
+        fake.data.courses = [
+            normalizeCourse({ id: "a", code: "A", name: "A", term: "autumn" }, 0),
+            normalizeCourse({ id: "w", code: "W", name: "W", term: "Winter" }, 1),
+            normalizeCourse({ id: "y", code: "Y", name: "Y", term: "" }, 2),
+        ] as typeof fake.data.courses
+        await saveSchool(draft({ terms: [{ name: "Winter", start: "2027-01-06", end: "2027-04-10" }, { name: "Fall", start: "2026-09-02", end: "2026-12-04" }] }))
+        expect(fake.profile).toHaveLength(1)
+        expect(fake.rows.map((r) => [r.row.id, (r.row as { term?: string }).term])).toEqual([["a", "Fall"]])
+        fake.rows = []
+        await saveSchool(draft())
+        expect(fake.rows).toEqual([])
+        fake.data.courses = []
     })
 
     it("groups the days under the semester they fall in", () => {
