@@ -12,24 +12,33 @@ import { openRoot, useCooling } from "./use-music"
 
 export interface TabDef<T extends string> { id: T; label: string }
 
-/** A row of tabs as pressed buttons, like the week's Everything / Deadlines / Classes. */
-export function Tabs<T extends string>({ tabs, value, onPick, label }: { tabs: TabDef<T>[]; value: T | null; onPick: (id: T) => void; label: string }) {
+/** A row of tabs as pressed buttons: a segmented switch on the page, pills on the focus screen. */
+export function Tabs<T extends string>({ tabs, value, onPick, label, tone = "segment" }: {
+    tabs: TabDef<T>[]; value: T | null; onPick: (id: T) => void; label: string; tone?: "segment" | "pills"
+}) {
+    const pills = tone === "pills"
     return (
-        <div role="group" aria-label={label} className="flex flex-none rounded-full border border-line-2 bg-muted p-0.5">
-            {tabs.map((t) => (
-                <button
-                    key={t.id}
-                    type="button"
-                    aria-pressed={value === t.id}
-                    onClick={() => onPick(t.id)}
-                    className={cn(
-                        "cursor-pointer rounded-full border-0 bg-transparent px-2.5 py-1 text-[11.5px] font-semibold whitespace-nowrap text-muted-foreground hover:text-foreground",
-                        value === t.id && "bg-card text-foreground shadow-[0_1px_3px_rgba(0,0,0,.12)]",
-                    )}
-                >
-                    {t.label}
-                </button>
-            ))}
+        <div role="group" aria-label={label} className={cn("flex flex-none", pills ? "gap-1" : "gap-0.5 rounded-[6px] bg-[var(--chip-bg)] p-0.5")}>
+            {tabs.map((t) => {
+                const on = value === t.id
+                return (
+                    <button
+                        key={t.id}
+                        type="button"
+                        aria-pressed={on}
+                        onClick={() => onPick(t.id)}
+                        className={cn(
+                            "cursor-pointer border-0 text-[12.5px] whitespace-nowrap",
+                            pills ? "h-[30px] rounded-full px-3" : "h-[26px] rounded-[4px] px-2.5",
+                            on
+                                ? pills ? "bg-white/[.18] font-semibold text-foreground" : "bg-card font-semibold text-foreground shadow-[0_0_0_1px_var(--line)]"
+                                : "bg-transparent text-ink-2 hover:text-foreground",
+                        )}
+                    >
+                        {t.label}
+                    </button>
+                )
+            })}
         </div>
     )
 }
@@ -152,21 +161,24 @@ function Heading({ title, note, children }: { title: string; note?: string; chil
 type Side = "queue" | "recent"
 const SIDE_TABS: TabDef<Side>[] = [{ id: "queue", label: "Up next" }, { id: "recent", label: "Recent" }]
 
-/** The Music page's left card, under <NowPlaying>: Up next or Recently played. */
+/** The Music page's left card, under <NowPlaying>: Up next or Recently played, with how many beside. */
 export function UpNextRecent() {
     const s = useSpotify()
     const cooling = useCooling(s.retryAt)
     const [side, setSide] = useState<Side>("queue")
+    const note = side === "queue"
+        ? s.cache.queue ? s.cache.queue.queue.length + " queued" : null
+        : s.cache.recent?.items.length ? "Last " + s.cache.recent.items.length : null
     return (
-        <section aria-label="Up next and recent" className="flex min-h-0 min-w-0 flex-col">
-            <div className="flex items-center gap-2 pb-1.5">
+        <section aria-label="Up next and recent" className="flex min-w-0 flex-col">
+            <div className="flex items-center gap-2 pb-2">
                 <Tabs label="Show" tabs={SIDE_TABS} value={side} onPick={setSide} />
-                <span className="ml-auto flex items-center gap-1.5">
-                    {side === "queue" && s.cache.queue && <em className="text-[10.5px] text-muted-foreground not-italic">{s.cache.queue.queue.length} next</em>}
+                <span className="ml-auto flex items-center gap-2">
+                    {note && <span className="text-[12px] text-muted-foreground">{note}</span>}
                     {side === "queue" ? <QueueActions /> : <RecentActions s={s} />}
                 </span>
             </div>
-            <div className="-mx-3.5">
+            <div className="-mx-3">
                 {side === "queue" ? <QueueList s={s} cooling={cooling} /> : <RecentList s={s} cooling={cooling} />}
             </div>
         </section>

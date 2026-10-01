@@ -42,7 +42,28 @@ describe("the Spotify page", () => {
         setPlayer({ loaded: true })
         expect(screen.getByText("Spotify is not connected")).toBeTruthy()
         expect(screen.getByRole("link", { name: "Connect Spotify" }).getAttribute("href")).toBe("/api/spotify/connect")
+        expect(screen.getByRole("link", { name: "Connect Spotify" }).className).not.toContain("gradient")
+        expect(screen.getByRole("link", { name: "Connect Spotify" }).className).toContain("bg-primary")
         expect(api.spotifyPlaylists).not.toHaveBeenCalled()
+    })
+
+    it("lays the page out as the prototype: the player 400px wide beside the browser when wide, one column on a phone", () => {
+        show()
+        const grid = screen.getByRole("region", { name: "Player" }).closest(".grid")!
+        expect(grid.className).toContain("[grid-template-columns:minmax(280px,36%)_minmax(0,1fr)]")
+        expect(grid.className).toContain("min-[1280px]:[grid-template-columns:400px_minmax(0,1fr)]")
+        expect(grid.className).toContain("max-[760px]:flex-col")
+        expect(grid.children[0].contains(screen.getByRole("region", { name: "Now playing" }))).toBe(true)
+        expect(grid.children[1].contains(screen.getByRole("region", { name: "Find music" }))).toBe(true)
+    })
+
+    it("on a phone, keeps the player folded behind the pill until ▴ Music", () => {
+        show()
+        const playerCard = screen.getByRole("region", { name: "Player" }).parentElement!
+        expect(playerCard.className).toContain("max-[760px]:hidden")
+        fireEvent.click(within(screen.getByRole("region", { name: "Music" })).getByRole("button", { name: "▴ Music" }))
+        expect(playerCard.className).not.toContain("max-[760px]:hidden")
+        expect(within(screen.getByRole("region", { name: "Music" })).getByRole("button", { name: "▾ Music" }).getAttribute("aria-expanded")).toBe("true")
     })
 
     it("shows what plays and the library once connected", async () => {
@@ -84,12 +105,15 @@ describe("the Spotify page", () => {
         show()
         const player = card("Player")
         expect(await player.findByText("Night Owl")).toBeTruthy()
-        expect(player.getByText("2 next")).toBeTruthy()
+        expect(player.getByText("2 queued")).toBeTruthy()
+        expect(player.getByRole("group", { name: "Show" }).className).toContain("bg-[var(--chip-bg)]")
         expect(player.getByText(/Spotify lets apps add to the queue and skip, but not remove or reorder/)).toBeTruthy()
         expect(player.getByRole("button", { name: "Up next" }).getAttribute("aria-pressed")).toBe("true")
 
         fireEvent.click(player.getByRole("button", { name: "Recent" }))
         expect(await player.findByText("Holocene")).toBeTruthy()
+        expect(player.getByText("Last 1")).toBeTruthy()
+        expect(player.queryByText("2 queued")).toBeNull()
         expect(player.queryByText("Night Owl")).toBeNull()
         fireEvent.click(player.getByRole("button", { name: "Play Holocene" }))
         /* recently played has no context: it plays from the track picked on */
