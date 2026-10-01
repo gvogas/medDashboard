@@ -8,15 +8,17 @@ import {
     activate, canOpen, due, ensurePlaylists, ensureQueue, ensureRecent, matchesFilter, more, openAlbum, openArtist,
     openPlaylist, play, refresh, setFilter, toggleShuffle, watchQueue, type Page, type SpotifySnapshot, type Track,
 } from "@/data/spotify"
-import { chipButton, Count, Empty, ghost, Loading, More, Refresh, Sub } from "./bits"
-import { AlbumRow, ArtistRow, LikedTile, PlaylistRow, PlaylistTile, TrackRow } from "./rows"
+import { Art, chipButton, Count, Empty, Icon, Loading, More, Refresh, Sub } from "./bits"
+import { AlbumRow, ArtistRow, COLUMNS, LikedTile, PlaylistRow, PlaylistTile, TrackRow } from "./rows"
 import { ForTheme } from "./for-theme"
 import { goBack } from "./use-music"
 
 interface ListProps { s: SpotifySnapshot; cooling: boolean }
 
-/** Rows of tracks; `filter` hides those it does not match (they stay loaded). */
-function Tracks({ s, items, contextUri = null, list = null, filter = "" }: { s: SpotifySnapshot; items: Track[]; contextUri?: string | null; list?: string | null; filter?: string }) {
+/** Rows of tracks; `filter` hides those it does not match (they stay loaded); `numbered` on the page's opened lists. */
+function Tracks({ s, items, contextUri = null, list = null, filter = "", numbered = false }: {
+    s: SpotifySnapshot; items: Track[]; contextUri?: string | null; list?: string | null; filter?: string; numbered?: boolean
+}) {
     const nowUri = s.player.track?.uri ?? null, playing = s.player.playing
     return <>{items.map((t, i) => (
         <TrackRow
@@ -28,6 +30,7 @@ function Tracks({ s, items, contextUri = null, list = null, filter = "" }: { s: 
             contextUri={contextUri}
             list={list}
             hidden={!matchesFilter(t, filter)}
+            n={numbered ? i + 1 : undefined}
         />
     ))}</>
 }
@@ -47,7 +50,7 @@ export function QueueList({ s, cooling }: ListProps) {
             {q.current ? <Tracks s={s} items={[q.current]} /> : <Empty>Nothing playing.</Empty>}
             <Sub end={<Count n={q.queue.length} />}>Next up</Sub>
             {q.queue.length ? <Tracks s={s} items={q.queue} /> : <Empty>The queue is empty. Add to it with + on any track.</Empty>}
-            <p className="m-0 border-t border-line-2 px-3.5 pt-2.5 pb-3.5 text-[11px] text-muted-foreground">
+            <p className="m-0 mx-2 mt-2 border-t border-line-2 px-2.5 pt-2.5 pb-3.5 text-[12px] text-muted-foreground">
                 Spotify lets apps add to the queue and skip, but not remove or reorder. Do that in the Spotify app.
             </p>
         </>
@@ -127,28 +130,51 @@ export const LibraryHead = ({ s }: { s: SpotifySnapshot }) => (
 
 /* ── an opened playlist, album or artist ── */
 
-/** The header over an opened list: ‹ Back, its name and line, then its buttons. */
-function OpenHead({ name, line, children }: { name: string; line?: ReactNode; children?: ReactNode }) {
+/** A playlist's cover from what the session has seen of it: the library or a search. */
+const playlistArt = (c: SpotifySnapshot["cache"], id: string) =>
+    c.playlists?.items.find((p) => p.id === id)?.art ?? c.results?.playlists.find((p) => p.id === id)?.art ?? null
+
+const coverBox = "size-full rounded-[6px] shadow-[0_8px_24px_rgba(28,28,26,.14)]"
+const LikedCover = () => (
+    <span aria-hidden="true" className={cn(coverBox, "grid place-items-center bg-primary text-primary-foreground")}>
+        <Icon name="heart" className="size-1/3" />
+    </span>
+)
+
+/** The header over an opened list: its cover, ‹ Back, its kind, name and line, then its buttons. */
+function OpenHead({ compact, kind, name, line, cover, children }: {
+    compact: boolean; kind: string; name: string; line?: ReactNode; cover: ReactNode; children?: ReactNode
+}) {
     return (
-        <div className="flex flex-wrap items-center gap-2 border-b border-line-2 px-3.5 py-2.5">
-            <button type="button" onClick={goBack} className={chipButton}>‹ Back</button>
-            <div className="min-w-0 flex-1 leading-[1.25]">
-                <h3 className="m-0 truncate text-[14px] font-bold text-foreground">{name}</h3>
-                {line && <span className="block truncate text-[11px] text-muted-foreground">{line}</span>}
+        <div className={cn("flex flex-wrap items-end", compact ? "gap-3 px-5 pt-3 pb-2" : "gap-[18px] px-[18px] pt-[18px] pb-3 max-[560px]:gap-3 max-[560px]:px-3.5")}>
+            <span className={cn("flex-none", compact ? "size-16" : "size-[132px] max-[560px]:size-24")}>{cover}</span>
+            <div className="flex min-w-0 flex-1 basis-[180px] flex-col gap-1.5">
+                <button type="button" onClick={goBack} className={cn(chipButton, "self-start")}>‹ Back</button>
+                <span className="text-[12px] text-muted-foreground">{kind}</span>
+                <h3 className={cn("m-0 truncate font-serif leading-[1.1] font-medium text-foreground", compact ? "text-[20px]" : "text-[30px] max-[560px]:text-[22px]")}>{name}</h3>
+                {line && <span className="truncate text-[13px] text-ink-2">{line}</span>}
             </div>
-            <span className="flex flex-none items-center gap-1.5">{children}</span>
+            <span className="flex flex-none items-center gap-2">{children}</span>
         </div>
     )
 }
 
-/** Play the whole list, with shuffle beside it. */
+/** Play the whole list, with shuffle beside it (the prototype's lines 768–771). */
 function PlayAll({ s, label, run }: { s: SpotifySnapshot; label: string; run: () => void }) {
     const p = s.player
     return (
         <>
-            <button type="button" onClick={() => { activate(); run() }} className={cn(chipButton, "border-primary bg-primary text-primary-foreground hover:text-primary-foreground hover:brightness-110")}>▶ {label}</button>
+            <button type="button" onClick={() => { activate(); run() }}
+                className="inline-flex h-10 cursor-pointer items-center gap-2 rounded-full border-0 bg-primary px-4 text-[13px] font-semibold text-primary-foreground hover:brightness-110">
+                <Icon name="play" className="size-3" />{label}
+            </button>
             <button type="button" onClick={() => void toggleShuffle()} disabled={!p.device} aria-pressed={p.shuffle} title="Shuffle" aria-label="Shuffle"
-                className={cn(ghost, p.shuffle && "border-[color-mix(in_srgb,var(--spotify)_45%,var(--line))] text-[var(--spotify)] hover:text-[var(--spotify)]")}>⤮</button>
+                className={cn(
+                    "grid size-10 cursor-pointer place-items-center rounded-full border border-border p-0 hover:border-primary disabled:cursor-default disabled:opacity-45",
+                    p.shuffle ? "bg-secondary text-primary" : "bg-transparent text-ink-2 hover:text-primary",
+                )}>
+                <Icon name="shuffle" className="size-4" />
+            </button>
         </>
     )
 }
@@ -159,28 +185,36 @@ function Filter({ s, items }: { s: SpotifySnapshot; items: Track[] }) {
     if (items.length < 8) return null
     const shown = f.trim() ? items.filter((t) => matchesFilter(t, f)).length : 0
     return (
-        <div className="flex items-center gap-2 border-b border-line-2 px-3.5 py-2">
+        <label className="mx-4 mb-2 flex h-9 items-center gap-2 rounded-[6px] border border-border px-3 text-[12px] text-muted-foreground focus-within:border-primary">
+            <Icon name="filter" className="size-[13px]" />
             <input
                 type="search"
-                placeholder="Filter these tracks"
+                placeholder="Filter this list"
                 aria-label="Filter tracks"
                 autoComplete="off"
                 value={f}
                 onChange={(e) => setFilter(e.target.value)}
-                className="min-w-0 flex-1 rounded-lg border border-border bg-card px-2.5 py-1.5 text-[12px] text-foreground outline-none focus:border-primary"
+                className="min-w-0 flex-1 border-0 bg-transparent text-[13px] text-foreground outline-none placeholder:text-muted-foreground"
             />
-            <span className="flex-none font-mono text-[10.5px] text-muted-foreground">{f.trim() ? shown + " of " + items.length + " loaded" : ""}</span>
-        </div>
+            <span className="flex-none font-mono text-[11px]">{f.trim() ? shown + " of " + items.length + " loaded" : ""}</span>
+        </label>
     )
 }
 
-function TrackPane({ s, cooling, keyName, page, contextUri, list, emptyText }: ListProps & { keyName: string; page: Page<Track> | undefined; contextUri: string | null; list?: string | null; emptyText: string }) {
+function TrackPane({ s, cooling, keyName, page, contextUri, list, emptyText, numbered }: ListProps & {
+    keyName: string; page: Page<Track> | undefined; contextUri: string | null; list?: string | null; emptyText: string; numbered: boolean
+}) {
     if (!page) return <Loading what={s.cache.names[keyName] || "Tracks"} cooling={cooling} />
     if (!page.items.length) return <Empty>{emptyText}</Empty>
     return (
         <>
             <Filter s={s} items={page.items} />
-            <Tracks s={s} items={page.items} contextUri={contextUri} list={list} filter={s.place.filter} />
+            {numbered && (
+                <div aria-hidden="true" className={cn("mx-2 grid h-[30px] items-center gap-3 border-b border-line-2 px-2.5 text-[11.5px] text-muted-foreground", COLUMNS)}>
+                    <span>#</span><span>Title</span><span className="@max-[560px]:hidden">Artist</span><span className="text-right">Time</span><span />
+                </div>
+            )}
+            <Tracks s={s} items={page.items} contextUri={contextUri} list={list} filter={s.place.filter} numbered={numbered} />
             {page.next && <More onClick={() => more("tracks")} left={page.total - page.items.length} />}
         </>
     )
@@ -198,8 +232,8 @@ function useReopen(s: SpotifySnapshot, cooling: boolean) {
     }, [s, cooling, pane, playlistId, albumId, artistId])
 }
 
-/** The playlist, album or artist open now, with its header. */
-export function OpenList({ s, cooling }: ListProps) {
+/** The playlist, album or artist open now, with its header; `compact` in the focus panel. */
+export function OpenList({ s, cooling, compact = false }: ListProps & { compact?: boolean }) {
     useReopen(s, cooling)
     const place = s.place, c = s.cache
 
@@ -207,30 +241,31 @@ export function OpenList({ s, cooling }: ListProps) {
         const id = place.playlistId || "", t = c.tracks[id], liked = id === "liked", ctx = liked ? null : "spotify:playlist:" + id
         return (
             <>
-                <OpenHead name={c.names[id] || "Playlist"} line={t ? t.total + " tracks" : null}>
+                <OpenHead compact={compact} kind={liked ? "Your saved tracks" : "Playlist"} name={c.names[id] || "Playlist"} line={t ? t.total + " tracks" : null}
+                    cover={liked ? <LikedCover /> : <Art src={playlistArt(c, id)} className={coverBox} />}>
                     <Refresh onClick={() => refresh("list")} />
                     {t && t.items.length > 0 && <PlayAll s={s} label="Play all" run={() => void play(null, ctx, liked ? "liked" : null)} />}
                 </OpenHead>
-                <TrackPane s={s} cooling={cooling} keyName={id} page={t} contextUri={ctx} list={liked ? "liked" : null} emptyText="Nothing in here yet." />
+                <TrackPane s={s} cooling={cooling} keyName={id} page={t} contextUri={ctx} list={liked ? "liked" : null} emptyText="Nothing in here yet." numbered={!compact} />
             </>
         )
     }
     if (place.pane === "album") {
-        const id = place.albumId || "", a = c.albums[id] || { name: "Album", uri: "spotify:album:" + id, artists: "" }, t = c.tracks["album:" + id]
+        const id = place.albumId || "", a = c.albums[id] || { name: "Album", uri: "spotify:album:" + id, artists: "", art: null }, t = c.tracks["album:" + id]
         return (
             <>
-                <OpenHead name={a.name} line={a.artists || null}>
+                <OpenHead compact={compact} kind="Album" name={a.name} line={a.artists || null} cover={<Art src={a.art} className={coverBox} />}>
                     <Refresh onClick={() => refresh("list")} />
                     <PlayAll s={s} label="Play album" run={() => void play(null, a.uri)} />
                 </OpenHead>
-                <TrackPane s={s} cooling={cooling} keyName={"album:" + id} page={t} contextUri={a.uri} emptyText="This album has no tracks Spotify will play." />
+                <TrackPane s={s} cooling={cooling} keyName={"album:" + id} page={t} contextUri={a.uri} emptyText="This album has no tracks Spotify will play." numbered={!compact} />
             </>
         )
     }
-    const id = place.artistId || "", a = c.artists[id] || { name: "Artist", uri: "spotify:artist:" + id }, list = c.artistAlbums[id]
+    const id = place.artistId || "", a = c.artists[id] || { name: "Artist", uri: "spotify:artist:" + id, art: null }, list = c.artistAlbums[id]
     return (
         <>
-            <OpenHead name={a.name} line="Artist">
+            <OpenHead compact={compact} kind="Artist" name={a.name} cover={<Art src={a.art} className={cn(coverBox, "rounded-full")} />}>
                 <PlayAll s={s} label="Play" run={() => void play(null, a.uri)} />
             </OpenHead>
             {!list

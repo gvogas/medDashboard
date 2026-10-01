@@ -153,6 +153,9 @@ describe("the panel", () => {
         render(<MusicPanel onClose={() => {}} />)
         fireEvent.click(await panel().findByRole("button", { name: "Open Study mix" }))
         expect(await panel().findByText("Song one")).toBeTruthy()
+        /* the panel's opened list: the kind, no columns' header, unnumbered rows */
+        expect(panel().getByText("Playlist")).toBeTruthy()
+        expect(panel().queryByText("Title")).toBeNull()
         fireEvent.click(panel().getByRole("button", { name: "Queue Song one" }))
         await waitFor(() => expect(panel().getByRole("button", { name: "Queue Song one" }).textContent).toBe("✓"))
         fireEvent.click(panel().getByRole("button", { name: "‹ Back" }))

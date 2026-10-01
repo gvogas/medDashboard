@@ -141,7 +141,7 @@ export function MusicBrowser({ compact = false }: { compact?: boolean }) {
                 onScroll={(e) => { scrolls.current.set(key, e.currentTarget.scrollTop) }}
                 className="@container min-h-0 flex-1 overflow-y-auto overscroll-contain"
             >
-                {what === "open" && <OpenList s={s} cooling={cooling} />}
+                {what === "open" && <OpenList s={s} cooling={cooling} compact={compact} />}
                 {what === "search" && <Results s={s} cooling={cooling} />}
                 {what === "queue" && <QueueList s={s} cooling={cooling} />}
                 {what === "recent" && <RecentList s={s} cooling={cooling} />}

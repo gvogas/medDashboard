@@ -142,14 +142,14 @@ describe("the Spotify page", () => {
         expect(api.spotifyPlaylistTracks).toHaveBeenCalledWith("pl1", 0)
         expect(music.getByRole("heading", { name: "Study mix" })).toBeTruthy()
         expect(music.getByText("30 tracks")).toBeTruthy()
-        /* the track playing shows the equaliser in place of its length */
+        /* the track playing shows the equaliser in place of its number */
         expect(music.getAllByRole("img", { name: "Playing" })).toHaveLength(1)
 
         fireEvent.change(music.getByRole("searchbox", { name: "Filter tracks" }), { target: { value: "song 1" } })
         expect(music.getByText("1 of 9 loaded")).toBeTruthy()
         expect(music.getByText("Song 2").closest("[hidden]")).toBeTruthy()
 
-        fireEvent.click(music.getByRole("button", { name: "▶ Play all" }))
+        fireEvent.click(music.getByRole("button", { name: "Play all" }))
         await waitFor(() => expect(api.spotifyPlay).toHaveBeenCalledWith({ uri: null, contextUri: "spotify:playlist:pl1" }))
         fireEvent.click(music.getByRole("button", { name: "Show more · 21 left" }))
         await waitFor(() => expect(api.spotifyPlaylistTracks).toHaveBeenLastCalledWith("pl1", 9))
@@ -157,6 +157,40 @@ describe("the Spotify page", () => {
         fireEvent.click(music.getByRole("button", { name: "‹ Back" }))
         expect(music.getByRole("button", { name: "Open Study mix" })).toBeTruthy()
         expect(music.queryByText("Song 0")).toBeNull()
+    })
+
+    it("opens a playlist as the prototype: its cover, kind and name in the serif, numbered rows with ▶ and +", async () => {
+        api.spotifyPlaylists.mockResolvedValue(page([playlist("pl1", "Study mix", { art: "https://i.scdn.co/image/pl1" })]))
+        api.spotifyPlaylistTracks.mockResolvedValue(page([track("s0", { title: "Song 0" }), WEIGHTLESS, track("s2", { title: "Song 2" })]))
+        show()
+        const music = card("Browse music")
+        fireEvent.click(await music.findByRole("button", { name: "Open Study mix" }))
+        await music.findByText("Song 0")
+        expect(music.getByText("Playlist")).toBeTruthy()
+        expect(music.getByRole("heading", { name: "Study mix" }).className).toContain("font-serif")
+        expect(document.querySelector('img[src="https://i.scdn.co/image/pl1"]')).toBeTruthy()
+        expect(music.getByRole("button", { name: "Play all" }).querySelector("svg")).toBeTruthy()
+        expect(music.getByText("Title")).toBeTruthy()       /* the columns' header */
+
+        const row = music.getByText("Song 2").closest("[class*='grid-template-columns']") as HTMLElement
+        expect(within(row).getByText("3")).toBeTruthy()
+        expect(within(row).getByRole("button", { name: "Play Song 2" }).querySelector("svg")).toBeTruthy()
+        expect(within(row).getByRole("button", { name: "Queue Song 2" }).textContent).toBe("+")
+        /* the track playing: tinted, the equaliser in place of its number */
+        const now = music.getByText("Weightless", { selector: "b" }).closest("[data-now]") as HTMLElement
+        expect(now.className).toContain("bg-secondary")
+        expect(within(now).getByRole("img", { name: "Playing" })).toBeTruthy()
+        expect(within(now).queryByText("2")).toBeNull()
+    })
+
+    it("opens Liked Songs with the heart for a cover and says what it is", async () => {
+        api.spotifyPlaylistTracks.mockResolvedValue(page([track("l1"), track("l2")]))
+        show()
+        const music = card("Browse music")
+        fireEvent.click(await music.findByRole("button", { name: "Open Liked Songs" }))
+        await music.findByText("l1")
+        expect(music.getByText("Your saved tracks")).toBeTruthy()
+        expect(music.getByRole("heading", { name: "Liked Songs" })).toBeTruthy()
     })
 
     it("plays Liked Songs from the track picked, as it has no context", async () => {
