@@ -7,6 +7,7 @@ import * as store from "@/core/store"
 import { data } from "@/core/store"
 import { classRoom, normalizeCourse, normalizeItem } from "@/core/model"
 import { today } from "@/core/dates"
+import { courseTerm, currentTerm, type SchoolCalendar } from "@/core/school"
 import { schoolCal, termStart } from "@/data/query"
 import { parseIcs } from "@/core/importers/ics"
 import { parseCsv } from "@/core/importers/csv"
@@ -24,6 +25,13 @@ export type { PlanCourse, PlanItem, PlanMeeting } from "@/core/importers/plan"
 export type ImportPlan = Plan
 
 export const MAX_BYTES = 2_000_000
+
+/** A new course's semester: with a school calendar, the one its file names, else the current
+    one; without one, the file's own words, as before. */
+export function defaultTerm(cal: SchoolCalendar | null, named: string, day: string): string {
+    if (!cal) return named
+    return (courseTerm(cal, named) ?? currentTerm(cal, day))?.name ?? ""
+}
 
 /** A problem to show under Import in Settings. */
 function note(text: string, error = true) {
@@ -68,7 +76,11 @@ export function readOutlineFile(file: File) {
             outline_unreadable: "The outline could not be understood. Try again, or import a CSV instead.",
         },
         call: (body, signal) => api.readOutline(body, { name: file.name, today: today(), termStart: termStart() || "" }, signal),
-        done: (outline: Outline) => openSheet({ kind: "import", plan: planOutline(outline, data, termStart() || "") as ImportPlan, name: file.name }),
+        done: (outline: Outline) => {
+            const plan = planOutline(outline, data, termStart() || "") as ImportPlan
+            for (const c of plan.courses) if (c.isNew) c.term = defaultTerm(schoolCal(), c.term || "", today())
+            openSheet({ kind: "import", plan, name: file.name })
+        },
     })
 }
 
@@ -84,13 +96,15 @@ export async function commitImport(plan: ImportPlan): Promise<string> {
     const wanted = new Set(plan.items.filter((i) => i.include).map((i) => i.row.courseId).filter(Boolean))
     for (const c of plan.courses) {
         const add = c.meetings.filter((m) => m.include).map(({ include: _, ...m }) => m)
-        if (!add.length && !(c.isNew && (c.keep || wanted.has(c.id)))) continue
         if (c.isNew) {
+            if (!add.length && !(c.keep || wanted.has(c.id))) continue
             rows.push({ kind: "courses", row: normalizeCourse({ id: c.id, code: c.code, name: c.name, color: c.color, instructor: c.instructor || "", term: c.term || "", meetings: add }) as Course })
         } else {
             const live = store.course(c.id) as Course | null
-            if (!live) continue
-            rows.push({ kind: "courses", row: { ...live, meetings: [...live.meetings, ...add].slice(0, 12) } })
+            /* a semester picked in the preview; undefined (a calendar or CSV import) leaves it */
+            const term = c.term ?? live?.term ?? ""
+            if (!live || (!add.length && term === live.term)) continue
+            rows.push({ kind: "courses", row: { ...live, term, meetings: [...live.meetings, ...add].slice(0, 12) } })
         }
         classes += add.length
     }

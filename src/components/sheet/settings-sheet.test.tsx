@@ -13,6 +13,7 @@ const fake = vi.hoisted(() => {
             profile: { id: "p", username: "demo", displayName: "Demo", coat: { name: "Demo", role: "MS II", color: "#17B3AE" }, types: [], studyPrefs: { goal: 90, dayMin: 15, rest: [0], celebrate: true } } as Record<string, unknown>,
         },
         conflicts: [] as unknown[],
+        cal: null as unknown,
         ui: { view: "week", bg: "med", theme: "dark", settingsTab: "you", importNote: null, schoolNote: null, spotifyNote: null, outlineBusy: false, schoolBusy: false, schoolAsk: false, signoutAsk: null as null | { everywhere: boolean }, feed: null as unknown, course: "all", search: "", types: {} },
         spotify: { loaded: true, connected: true, device: "Kitchen", stale: false, track: null },
         review: { on: false, through: null as string | null },
@@ -38,7 +39,7 @@ vi.mock("@/core/store", () => ({
     subscribe: (fn: (e: { type: string }) => void) => { fake.listeners.add(fn); return () => fake.listeners.delete(fn) },
 }))
 vi.mock("@/data/ui", async () => (await import("@/data/fake-ui")).fakeUi(fake.ui))
-vi.mock("@/data/query", () => ({ schoolCal: () => null, termStart: () => null }))
+vi.mock("@/data/query", () => ({ schoolCal: () => fake.cal, termStart: () => null }))
 vi.mock("@/core/sync", () => ({ status: { state: "idle", pending: 0, message: "", lastPull: null }, onStatus: () => {} }))
 vi.mock("@/data/spotify/player", () => ({ state: fake.spotify }))
 vi.mock("@/data/spotify/web-player", () => ({ state: { status: "ready" } }))
@@ -57,6 +58,7 @@ import type { ImportPlan } from "@/data/import-edit"
 import type { SchoolDraft } from "@/data/school-edit"
 import { Sheet } from "./sheet"
 import { TAB_OF } from "@/data/settings"
+import { normalizeSchool } from "@/core/school"
 
 beforeEach(() => {
     document.body.innerHTML = '<div id="app"></div><div id="scrim"></div><div id="sheet"></div>'
@@ -68,6 +70,7 @@ afterEach(() => {
     vi.clearAllMocks()
     Object.assign(fake.ui, { bg: "med", importNote: null, schoolAsk: false, signoutAsk: null, feed: null })
     fake.conflicts.length = 0
+    fake.cal = null
 })
 
 const settings = (tab: "you" | "study" | "spotify" | "account", focus: string | null = null) => act(() => openSheet({ kind: "settings", tab, focus }))
@@ -258,6 +261,30 @@ describe("the import sheet", () => {
         act(() => openSheet({ kind: "import", plan: plan(), name: "phys.csv" }))
         fireEvent.click(screen.getByRole("button", { name: "Cancel" }))
         expect(actions.openSettings).toHaveBeenCalledWith("importGrp")
+    })
+
+    it("asks an outline's semester when there is a school calendar, and saves it with the course", async () => {
+        fake.cal = normalizeSchool({ name: "Uni", days: [], terms: [{ name: "Fall 2026", start: "2026-09-08", end: "2026-12-18" }, { name: "Winter 2027", start: "2027-01-11", end: "2027-04-23" }] })
+        const p = plan()
+        p.kind = "outline"
+        p.courses[0].keep = true
+        p.courses[0].term = "Fall 2026"
+        act(() => openSheet({ kind: "import", plan: p, name: "phys.pdf" }))
+        const group = screen.getByRole("group", { name: "Semester for PHYS" })
+        expect(within(group).getByRole("button", { name: "Fall 2026" }).getAttribute("aria-pressed")).toBe("true")
+        fireEvent.click(within(group).getByRole("button", { name: "Winter 2027" }))
+        expect(within(group).getByRole("button", { name: "Winter 2027" }).getAttribute("aria-pressed")).toBe("true")
+        await act(async () => fireEvent.click(screen.getByRole("button", { name: /^Import \d/ })))
+        const rows = legacy.saveRows.mock.calls[0][0] as unknown as { kind: string; row: { term: string } }[]
+        expect(rows[0]).toMatchObject({ kind: "courses", row: { term: "Winter 2027" } })
+    })
+
+    it("asks no semester without a school calendar, or for a calendar file", () => {
+        act(() => openSheet({ kind: "import", plan: { ...plan(), kind: "outline" }, name: "phys.pdf" }))
+        expect(screen.queryByRole("group", { name: /^Semester/ })).toBeNull()
+        fake.cal = normalizeSchool({ name: "Uni", days: [], terms: [{ name: "Fall 2026", start: "2026-09-08", end: "2026-12-18" }] })
+        act(() => openSheet({ kind: "import", plan: plan(), name: "cal.ics" }))
+        expect(screen.queryByRole("group", { name: /^Semester/ })).toBeNull()
     })
 })
 

@@ -5,7 +5,8 @@ import { useState } from "react"
 import { cn } from "@/lib/utils"
 import { typeList } from "@/core/model"
 import { DOW, shortDate } from "@/core/dates"
-import { termStart } from "@/data/query"
+import { schoolCal, termStart } from "@/data/query"
+import { semesterOptions, semesterPicked } from "@/data/course-edit"
 import { planSummary, setWeek1 } from "@/core/importers/plan"
 import { data } from "@/core/store"
 import { notify } from "@/bridge"
@@ -13,7 +14,7 @@ import { useUi, ui } from "@/data/ui"
 import { commitImport, importCount, type ImportPlan, type PlanItem } from "@/data/import-edit"
 import { openSettings } from "@/data/actions"
 import { accent } from "@/components/views/bits"
-import { Button, CONTROL, Section, SheetBody, SheetFoot, SheetHead, Warning } from "./fields"
+import { Button, CONTROL, Section, Segmented, SheetBody, SheetFoot, SheetHead, Warning } from "./fields"
 
 export function ImportSheet({ plan: initial, name }: { plan: ImportPlan; name: string }) {
     /* the plan is changed in place by the ticks, as the planner expects; `v` redraws */
@@ -24,6 +25,8 @@ export function ImportSheet({ plan: initial, name }: { plan: ImportPlan; name: s
     const bg = useUi((u) => u.bg)
     const types = typeList(bg, data.items) as { id: string; label: string; hidden: boolean }[]
     const n = importCount(plan)
+    /* an outline's course gets a semester picker beside it, when there is a school calendar */
+    const cal = plan.kind === "outline" ? schoolCal() : null
 
     const kept = plan.courses.find((c) => c.keep && c.isNew && (c.instructor || c.term))
     const extra = [kept?.instructor, kept?.term, plan.termStart && !termStart() ? "term start " + shortDate(plan.termStart) : ""].filter(Boolean).join(" · ")
@@ -66,17 +69,26 @@ export function ImportSheet({ plan: initial, name }: { plan: ImportPlan; name: s
                 )}
                 {groups.map(({ c, items }) => (
                     <Section key={c.id} title={<><i aria-hidden="true" style={accent(c.color)} className="inline-block size-2 rounded-full bg-[var(--c,var(--ink-3))]" />{c.code} · {c.name}</>} note={c.isNew ? "new course" : undefined}>
-                        <div>
-                            {c.meetings.map((m) => (
-                                <label key={m.id} className={ROW}>
-                                    <input type="checkbox" checked={m.include} onChange={(e) => { m.include = e.target.checked; redraw() }} />
-                                    <span className="min-w-[62px] flex-none text-ink-2">{m.kind}</span>
-                                    <span>{DOW[m.weekday]} {m.start}–{m.end}</span>
-                                    <span className={WHERE}>{m.room}</span>
-                                </label>
-                            ))}
-                            {items.map((x) => <ItemRow key={x.i} it={x.it} types={types} onChange={redraw} />)}
-                        </div>
+                        <>
+                            {cal && (
+                                <div className="flex flex-wrap items-center gap-2 text-[12px] text-muted-foreground">
+                                    Semester
+                                    <Segmented label={"Semester for " + c.code} value={semesterPicked(cal, c.term)} options={semesterOptions(cal)}
+                                        onChange={(term) => { c.term = term; redraw() }} />
+                                </div>
+                            )}
+                            <div>
+                                {c.meetings.map((m) => (
+                                    <label key={m.id} className={ROW}>
+                                        <input type="checkbox" checked={m.include} onChange={(e) => { m.include = e.target.checked; redraw() }} />
+                                        <span className="min-w-[62px] flex-none text-ink-2">{m.kind}</span>
+                                        <span>{DOW[m.weekday]} {m.start}–{m.end}</span>
+                                        <span className={WHERE}>{m.room}</span>
+                                    </label>
+                                ))}
+                                {items.map((x) => <ItemRow key={x.i} it={x.it} types={types} onChange={redraw} />)}
+                            </div>
+                        </>
                     </Section>
                 ))}
                 {loose.length > 0 && <Section title="No course"><div>{loose.map((x) => <ItemRow key={x.i} it={x.it} types={types} onChange={redraw} />)}</div></Section>}
