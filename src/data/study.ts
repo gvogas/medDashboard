@@ -1,8 +1,8 @@
-// What the Study page shows: the three tiles, the History card's week, month and term, and
-// the achievements, worked out from the logged sessions. core/history.ts and
-// core/achievements.ts do the arithmetic; the selectors here shape it for the page. Pure:
-// each takes the sessions, the prefs and today, so it can be tested on its own. The hooks
-// and the History card's actions are at the end.
+// What the Study page shows: the three tiles, Today on the Timer tab, the History card's
+// week, month and term, and the achievements, worked out from the logged sessions.
+// core/history.ts and core/achievements.ts do the arithmetic; the selectors here shape it
+// for the page. Pure: each takes the sessions, the prefs and today, so it can be tested on
+// its own. The hooks and the page's actions are at the end.
 
 import { useMemo, useSyncExternalStore } from "react"
 import { getVersion, notify, subscribe } from "@/bridge"
@@ -70,6 +70,35 @@ export function studyTiles(sessions: StudySession[], prefs: StudyPrefs, termStar
             minutes: sum(term),
             sub: plural(term.length, "session") + (range.since ? " since " + dayMonth(range.since) : ""),
         },
+    }
+}
+
+/* ── the Timer tab's Today ── */
+
+export interface TodayRow { id: string; at: string; courseId: string | null; color: string | undefined; what: string; minutes: number }
+export interface TodayStudy { rows: TodayRow[]; total: number; goal: number }
+
+/** "09:05": when a session started. */
+const startTime = (ms: number) => { const d = new Date(ms); return String(d.getHours()).padStart(2, "0") + ":" + String(d.getMinutes()).padStart(2, "0") }
+
+/**
+ * Today's sessions, newest first, as the Today card lists them: when each started, its
+ * course and the course's colour, what it was (the item, else the note, else the course)
+ * and how long; and today's total against the goal (0 with none).
+ */
+export function todayOf(sessions: StudySession[], items: Item[], courses: Course[], goal: number, today: string): TodayStudy {
+    const list = sessions.filter((s) => dayOf(s) === today).sort((a, b) => b.startedAt - a.startedAt)
+    return {
+        rows: list.map((s) => {
+            const course = courses.find((c) => c.id === s.courseId)
+            return {
+                id: s.id, at: startTime(s.startedAt), courseId: s.courseId, color: course?.color,
+                what: items.find((x) => x.id === s.itemId)?.title || s.note || course?.name || "No course",
+                minutes: s.studyMinutes,
+            }
+        }),
+        total: sum(list),
+        goal,
     }
 }
 
@@ -288,6 +317,12 @@ export const useHistory = () => {
 export const useBadges = () => {
     const input = useStudyInput(), items = useItems(), own = useAchievements(), courses = useCourses()
     return useMemo(() => badges(input.sessions, items, input.prefs, input.today, own, courses), [input, items, own, courses])
+}
+
+/** The Timer tab's Today card. */
+export const useTodayStudy = () => {
+    const input = useStudyInput(), items = useItems(), courses = useCourses()
+    return useMemo(() => todayOf(input.sessions, items, courses, input.prefs.goal, input.today), [input, items, courses])
 }
 
 /* ── the History card's actions: each changes the ui and redraws ── */

@@ -164,6 +164,8 @@ describe("the Study page", () => {
         expect(layout.className).toContain("max-[960px]:[grid-template-columns:minmax(0,1fr)]")
         expect(layout.firstElementChild).toBe(region("Ready"))
         expect(layout.children[1].contains(region("Your flow"))).toBe(true)
+        expect(layout.children[1].contains(region("Today"))).toBe(true)
+        expect(region("Your flow").compareDocumentPosition(region("Today")) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
     })
 
     it("is not drawn on the focus screen", async () => {
@@ -196,6 +198,31 @@ describe("the tiles", () => {
         expect(actions.openSettings).toHaveBeenCalledWith("goalGrp")
         expect(tile("Last 12 weeks").textContent).toContain("0 sessions")
         expect(tile("Streak").textContent).toContain("0 days")
+    })
+})
+
+describe("Today", () => {
+    it("lists today's sessions newest first, with the total of the goal", async () => {
+        fake.data.study_sessions = [
+            ...fake.data.study_sessions,
+            session("t1", 23, 8, 25, { courseId: "phys", manual: true, note: "Flashcards" }),
+            session("t2", 23, 10, 40, { itemId: "e1" }),
+        ]
+        await show()
+        const today = region("Today")
+        const rows = within(within(today).getByRole("list", { name: "Sessions today" })).getAllByRole("listitem")
+        expect(rows.map((r) => r.textContent)).toEqual(["10:00Brachial plexus quiz40m", "08:00Flashcards25m"])
+        expect(within(today).getByRole("heading", { name: "Today" }).parentElement!.textContent).toBe("Today1h 05m of 1h 00m")
+    })
+
+    it("says when nothing is logged, shows the total alone without a goal, and logs study by hand", async () => {
+        fake.data.profile = null
+        await show()
+        const today = region("Today")
+        expect(today.textContent).toContain("Nothing logged today yet.")
+        expect(within(today).getByRole("heading", { name: "Today" }).parentElement!.textContent).toBe("Today0m")
+        fireEvent.click(within(today).getByRole("button", { name: "Log study by hand" }))
+        expect(actions.openSession).toHaveBeenCalledWith(null)
     })
 })
 

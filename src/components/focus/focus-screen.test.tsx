@@ -30,7 +30,7 @@ vi.mock("@/core/store", () => ({
 vi.mock("@/data/query", () => ({ termStart: () => null, schoolCal: () => null }))
 vi.mock("@/data/study-controller", () => ({ setView: vi.fn() }))
 vi.mock("@/data/sidebar", () => ({ setSide: vi.fn(), sideOpen: () => false }))
-vi.mock("@/data/actions", () => ({ openCourse: vi.fn(), openSettings: vi.fn(), newItem: vi.fn(), goToday: vi.fn(), step: vi.fn() }))
+vi.mock("@/data/actions", () => ({ openCourse: vi.fn(), openSettings: vi.fn(), openSession: vi.fn(), newItem: vi.fn(), goToday: vi.fn(), step: vi.fn() }))
 const api = vi.hoisted(() => ({}) as ReturnType<typeof import("@/components/spotify/test-spotify").fakeApi>)
 vi.mock("@/core/api", async (importOriginal) => ({
     ...(await importOriginal<typeof import("@/core/api")>()),

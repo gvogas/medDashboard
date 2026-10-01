@@ -32,7 +32,7 @@ vi.mock("@/core/store", () => ({
     },
 }))
 vi.mock("@/data/query", () => ({ termStart: () => null, schoolCal: () => null }))
-const actions = vi.hoisted(() => ({ openCourse: vi.fn(), openSettings: vi.fn() }))
+const actions = vi.hoisted(() => ({ openCourse: vi.fn(), openSettings: vi.fn(), openSession: vi.fn() }))
 vi.mock("@/data/actions", () => actions)
 
 import * as focus from "@/data/run"

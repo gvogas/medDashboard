@@ -2,7 +2,7 @@
 // so starting feels like stepping into the focus screen (the phase in the theme's word,
 // the flip clock on the first step, the flow's name, the round strip, the course and item
 // picked, and Start); on the right Your flow (the steps, the rounds and the Quick start
-// presets; every change saves the flow to the profile, study-timer.ts). Under 960px, one
+// presets; every change saves the flow to the profile, study-timer.ts) and Today (today-card.tsx). Under 960px, one
 // column (the Ready clock needs about 350px, so the two-column split stops fitting there).
 
 import { useState, type KeyboardEvent, type ReactNode } from "react"
@@ -20,6 +20,7 @@ import {
 import type { Flow } from "@/data/types"
 import { FlipClock } from "./flip-clock"
 import { PhaseLabel, PlayIcon, RoundStrip } from "./timer-bits"
+import { TodayCard } from "./today-card"
 
 const MIN = 60_000
 
@@ -30,6 +31,7 @@ export function TimerCards({ className }: { className?: string }) {
             <ReadyCard flow={flow} />
             <div className="flex min-w-0 flex-col gap-4">
                 <FlowCard flow={flow} />
+                <TodayCard />
             </div>
         </div>
     )
