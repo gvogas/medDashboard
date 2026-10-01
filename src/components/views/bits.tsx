@@ -145,10 +145,10 @@ const TAG_TONE: Record<string, string> = {
     swap: "bg-accent text-accent-foreground",
 }
 
-/** A school day's tags: no classes, a break, exams, another day's timetable, and markers. */
 /** Whether a day has any school tag to show. */
 export const hasSchoolTags = (info: DayInfo | null) => !!info && (info.kind === "off" || info.kind === "break" || info.kind === "exams" || info.kind === "swap" || info.notes.length > 0)
 
+/** A school day's tags: no classes, a break, exams, another day's timetable, and markers. */
 export function SchoolTags({ info }: { info: DayInfo | null }) {
     if (!info) return null
     return (

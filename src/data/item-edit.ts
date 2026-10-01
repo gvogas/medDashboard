@@ -50,9 +50,10 @@ export const untilLabel = (x: { end: string; term: Term | null }) =>
 
 /**
  * An edit to one field and everything it brings along: the weekday follows the date on a
- * weekly item; a weekly item ends with its semester by default; the end follows the start; the course or type fill in the title; a status
- * the new type lacks goes back to its first; an exam on a class day takes the class's room
- * unless one was typed. Returns the fields to save.
+ * weekly item; a weekly item ends with its semester by default; the end follows the start;
+ * the course or type fill in the title; a status the new type lacks goes back to its first;
+ * an exam on a class day takes the class's room unless one was typed. Returns the fields
+ * to save.
  */
 export function deriveEdit(it: Item, field: ItemField, value: unknown, courseOf: (id: string | null) => Course | null, cal: SchoolCalendar | null = null): Partial<Item> {
     const patch: Partial<Item> = {}

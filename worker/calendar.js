@@ -149,8 +149,9 @@ export function buildCalendar({ courses, items, termStart = null, school = null,
   return lines.map(fold).join('\r\n') + '\r\n';
 }
 
-/* One class meeting through each semester (only its own, for a course set to one): weekly from the first day of classes to the
-   last, minus the days its weekday has no classes, plus the days that follow its weekday. */
+/* One class meeting through each semester (only its own, for a course set to one): weekly
+   from the first day of classes to the last, minus the days its weekday has no classes,
+   plus the days that follow its weekday. */
 function schoolClasses(c, m, school, stamp) {
   const out = [];
   const event = (uid, day, extra) => {
