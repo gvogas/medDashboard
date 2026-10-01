@@ -260,9 +260,14 @@ export function planSummary(plan: Plan): string {
  * by code, else by name ("Matches your course"), or proposed ("New course"); its classes as
  * meetings, ticked. Codes are compared without case or spaces, so a course the timetable
  * lists twice ("MATH 205", "math205") becomes one course with both lists of classes.
+ * A course read with no code and no match gets a code made from its name ("Waves" → WAVE),
+ * with a digit added when one of yours or another course in this read has it already (WAVE2),
+ * so two new courses never merge and a new one never lands in a course of yours by chance;
+ * the same name read twice gets the same code.
  * planImport leaves out the classes a course already has, or that it lists twice, and keeps
- * a course to 12. Every course found is listed, even when all its classes are there, so that
- * its semester can still be set: one that exists keeps its own `term`, a new one gets `term`.
+ * a course to 12. A course that matches one of yours is listed even when all its classes are
+ * there, so that its semester can still be set (it keeps its own `term` until then); a new
+ * course is listed only when it has a class to add, and gets `term`.
  */
 export function planSchedule(s: Schedule, data: PlanData, term = ''): Plan {
   const existing = data.courses || [];
@@ -270,11 +275,26 @@ export function planSchedule(s: Schedule, data: PlanData, term = ''): Plan {
   const key = (t: unknown) => String(t || '').replace(/\s+/g, '').toUpperCase();
   const rows: ImportRow[] = [];
   const matched: string[] = [];
-  for (const c of s.courses) {
+  const found = s.courses.map((c) => {
     const given = key(c.code);
     const live = existing.find((x) => given && key(x.code) === given) || existing.find((x) => c.name && norm(x.name) === norm(c.name));
+    return { c, given, live };
+  });
+  /* the codes a made-up one must not take: yours, and those read with a course */
+  const used = new Set([...existing.map((x) => key(x.code)), ...found.filter((f) => !f.live && f.given).map((f) => f.given.slice(0, 8))]);
+  const made = new Map<string, string>();               /* name → the code made for it */
+  const makeCode = (name: string) => {
+    const n = norm(name);
+    if (made.has(n)) return made.get(n)!;
+    const base = (String(name || '').replace(/[^A-Za-z0-9]/g, '').slice(0, 4) || 'NEW').toUpperCase();
+    let code = base;
+    for (let i = 2; used.has(code); i++) code = base.slice(0, 8 - String(i).length) + i;
+    used.add(code); made.set(n, code);
+    return code;
+  };
+  for (const { c, given, live } of found) {
     if (live) matched.push(live.id);
-    const code = (live ? live.code : given || String(c.name || '').replace(/[^A-Za-z0-9]/g, '').slice(0, 4) || 'NEW').toUpperCase().slice(0, 8);
+    const code = (live ? live.code : given || makeCode(c.name)).toUpperCase().slice(0, 8);
     for (const k of c.classes) {
       rows.push({ type: 'class', kind: k.kind, weekday: k.weekday, course: code, courseName: live ? live.name : (c.name || code), title: k.kind, date: '', start: k.start, end: k.end, room: k.room, weight: null });
     }

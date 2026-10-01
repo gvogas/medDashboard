@@ -87,6 +87,8 @@ describe('days and kinds as models write them', () => {
   it('reads a weekday in any case, and the short forms of Tuesday and Thursday', () => {
     expect(['TUE', 'THU', 'monday', 'Th', 'Thu', 'R', 'Tu', 'tu', 'th', 'r', 'FRI', 'sunday'].map(dayIndex))
       .toEqual([2, 4, 1, 4, 4, 4, 2, 2, 4, 4, 5, 0]);
+    expect(['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su', 'MO', 'we', ' fr '].map(dayIndex))
+      .toEqual([1, 2, 3, 4, 5, 6, 0, 1, 3, 5]);
     expect(['', 'X', 'Someday', null].map(dayIndex)).toEqual([-1, -1, -1, -1]);
   });
 

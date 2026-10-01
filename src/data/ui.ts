@@ -44,6 +44,7 @@ export const ui: Ui = {
     schoolAsk: false,        /* Settings is asking before removing the school calendar */
     scheduleBusy: false,     /* a class schedule is being read */
     aiLeft: null,            /* the AI reads left today, as the Worker last said */
+    aiLimit: null,           /* the AI reads a day, as the Worker last said */
     aiNote: null,            /* the Import with AI card's last word */
     signoutAsk: null,        /* sign-out waits on a warning about unsynced edits */
     feed: null,              /* the calendar feed as Settings last heard it, once a session */

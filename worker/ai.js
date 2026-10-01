@@ -49,9 +49,10 @@ const OF = /^(\d{1,3}) ?\/ ?(\d{1,3})$/;
 /**
  * A document's text with less to pay for. Only the "### Page N" markers the browser's PDF
  * reader writes (src/core/pdftext.ts) split pages; text without them (toMarkdown's) is one
- * page. Spaces and blank lines are squeezed and the page markers go. On a page's first or last
- * two lines: a page number goes ("Page 3", "- 3 -"; "3/12" or a bare "3" only when it is this
- * page's number of this many pages, a bare number allowed one off when the whole document is);
+ * page; text before the first marker is kept as it is, and is no page. Spaces and blank lines
+ * are squeezed and the page markers go. On a page's first or last two lines: a page number goes
+ * ("Page 3", "- 3 -"; "3/12" or a bare "3" only when it is this page's number of this many
+ * pages, counting blank pages, a bare number allowed one off when the whole document is);
  * a line of 12 or more characters that heads (or ends) at least max(3, half the pages) pages,
  * a running header or footer, is kept the first time only. Lines inside a page are never
  * dropped, even when they repeat ("LEC", a room, a week number).
@@ -59,29 +60,35 @@ const OF = /^(\d{1,3}) ?\/ ?(\d{1,3})$/;
 export function tidyText(text) {
   const parts = String(text).replace(/\r\n?/g, '\n').split(/^#{1,6} ?Page (\d+)[^\S\n]*$/m);
   const lines = (p) => p.split('\n').map((l) => l.replace(/\s+/g, ' ').trim()).filter(Boolean);
-  const pages = [{ n: 1, lines: lines(parts[0]) }];
+  const marked = parts.length > 1;
+  const pages = [{ n: marked ? 0 : 1, lines: lines(parts[0]) }];
   for (let i = 1; i < parts.length; i += 2) pages.push({ n: Number(parts[i]), lines: lines(parts[i + 1]) });
   const kept = pages.filter((p) => p.lines.length);
-  const count = kept.length;
+  /* the pages counted and searched for headers: not the text before the first marker (page 0) */
+  const counted = kept.filter((p) => p.n > 0);
+  const count = counted.length;
+  /* "3/12" counts the blank pages the reader skipped too: the highest marker says how many there are */
+  const total = Math.max(count, ...counted.map((p) => p.n));
   const heads = (p) => new Set(p.lines.slice(0, 2)), foots = (p) => new Set(p.lines.slice(-2));
   const tally = (pick) => {
     const m = new Map();
-    for (const p of kept) for (const l of pick(p)) m.set(l, (m.get(l) || 0) + 1);
+    for (const p of counted) for (const l of pick(p)) m.set(l, (m.get(l) || 0) + 1);
     return m;
   };
   const onHeads = tally(heads), onFoots = tally(foots);
   const enough = Math.max(3, Math.ceil(count / 2));
   /* a bare page number one off from the markers, when most pages agree */
-  const hits = (off) => kept.filter((p) => [...heads(p), ...foots(p)].some((l) => BARE.test(l) && Number(l) === p.n + off)).length;
+  const hits = (off) => counted.filter((p) => [...heads(p), ...foots(p)].some((l) => BARE.test(l) && Number(l) === p.n + off)).length;
   const offset = [-1, 1].find((off) => hits(off) >= Math.max(2, Math.ceil(count / 2)) && hits(off) > hits(0)) ?? 0;
   const pageNumber = (l, p) => {
     if (PAGE_LABEL.test(l)) return true;
     if (BARE.test(l)) return Number(l) === p.n + offset;
     const of = l.match(OF);
-    return !!of && Number(of[1]) === p.n && Number(of[2]) === count;
+    return !!of && Number(of[1]) === p.n && Number(of[2]) === total;
   };
   const seen = new Set();
   return kept.map((p) => {
+    if (!p.n) return p.lines.join('\n');
     const top = heads(p), end = foots(p);
     return p.lines.filter((l) => {
       if (!top.has(l) && !end.has(l)) return true;
@@ -139,10 +146,13 @@ export async function askJson(ai, model, input, clean, what = 'ai', { timeoutMs 
 export const listParam = (value, sep, max, len) =>
   String(value || '').split(sep).map((s) => s.trim().slice(0, len)).filter(Boolean).slice(0, max);
 
+/** A semester name sent with a read, made safe to quote to the model: no control characters, no quotes. */
+export const cleanTerm = (t) => String(t || '').replace(/[\u0000-\u001f\u007f"'`\u2018\u2019\u201c\u201d]/g, '').replace(/\s+/g, ' ').trim();
+
 /** What the app already knows, said to the model: the school's semester names and the student's course codes. */
 export function knownContext({ terms = [], codes = [] } = {}) {
   return [
-    terms.length ? 'The school\'s semesters are named ' + terms.map((t) => '"' + t + '"').join(', ') + '; when the document is for one of them, write term exactly as that name.' : '',
+    terms.length ? 'The school\'s semesters are named ' + terms.map((t) => JSON.stringify(t)).join(', ') + '; when the document is for one of them, write term exactly as that name.' : '',
     codes.length ? 'The student\'s courses so far have the codes ' + codes.join(', ') + '; when a course is one of these, write its code exactly like that.' : '',
   ].filter(Boolean).join(' ');
 }

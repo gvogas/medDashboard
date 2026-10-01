@@ -6,7 +6,7 @@ import { act, cleanup, fireEvent, render, screen, within } from "@testing-librar
 // Import with AI card.
 const fake = vi.hoisted(() => ({
     data: { items: [] as unknown[], courses: [] as { id: string }[], study_sessions: [], achievements: [], quotes: [], profile: { id: "p", termStart: null } as Record<string, unknown> },
-    ui: { view: "week", bg: "med", course: "all", search: "", types: {}, aiLeft: null as number | null, aiNote: null as unknown, importNote: null as unknown },
+    ui: { view: "week", bg: "med", course: "all", search: "", types: {}, aiLeft: null as number | null, aiLimit: null as number | null, aiNote: null as unknown, importNote: null as unknown },
     cal: null as unknown,
 }))
 const legacy = vi.hoisted(() => ({ saveRows: vi.fn(async (_rows: unknown) => {}), saveProfile: vi.fn(), toast: vi.fn(), shrink: vi.fn(async () => new Blob(["j"], { type: "image/jpeg" })) }))
@@ -42,7 +42,7 @@ afterEach(() => {
     vi.clearAllMocks()
     fake.cal = null
     fake.data.courses = []
-    Object.assign(fake.ui, { aiLeft: null, aiNote: null, importNote: null })
+    Object.assign(fake.ui, { aiLeft: null, aiLimit: null, aiNote: null, importNote: null })
 })
 
 const plan = (): ImportPlan => ({ kind: "schedule", notes: [], items: [], courses: [
@@ -85,6 +85,41 @@ describe("the class schedule preview", () => {
         await act(async () => fireEvent.click(screen.getByRole("button", { name: "Add 3 classes" })))
         const rows = legacy.saveRows.mock.calls[0][0] as unknown as Saved
         expect(rows.map((r) => [r.row.id, r.row.term])).toEqual([["c1", "Fall 2026"], ["n1", "Winter 2027"]])
+    })
+
+    it("saves only the semesters when no class is ticked but a semester changed", async () => {
+        fake.cal = CAL
+        fake.data.courses = [CHEM]
+        const p = plan()
+        p.courses[0].meetings = []
+        act(() => openSheet({ kind: "schedule", plan: p, name: "timetable.png" }))
+        for (const box of await screen.findAllByRole("checkbox")) fireEvent.click(box)
+        expect((screen.getByRole("button", { name: "Add 0 classes" }) as HTMLButtonElement).disabled).toBe(true)
+        fireEvent.click(within(screen.getByRole("group", { name: "Semester for CHEM271" })).getByRole("button", { name: "Fall 2026" }))
+        await act(async () => fireEvent.click(screen.getByRole("button", { name: "Save semesters" })))
+        const rows = legacy.saveRows.mock.calls[0][0] as unknown as Saved
+        expect(rows.map((r) => [r.row.id, r.row.term])).toEqual([["c1", "Fall 2026"]])
+        expect(legacy.toast).toHaveBeenCalledWith("Updated the semester of 1 course")
+        expect(getSheet()).toBeNull()
+    })
+
+    it("counts a course given only a new semester beside the classes added", async () => {
+        fake.cal = CAL
+        fake.data.courses = [CHEM]
+        const p = plan()
+        p.courses[0].meetings = []
+        act(() => openSheet({ kind: "schedule", plan: p, name: "timetable.png" }))
+        fireEvent.click(within(await screen.findByRole("group", { name: "Semester for CHEM271" })).getByRole("button", { name: "Fall 2026" }))
+        await act(async () => fireEvent.click(screen.getByRole("button", { name: "Add 2 classes" })))
+        expect(legacy.toast).toHaveBeenCalledWith("Added 2 classes to 1 course and updated the semester of 1 other course")
+    })
+
+    it("gives the button back when the save fails", async () => {
+        legacy.saveRows.mockRejectedValueOnce(new Error("offline"))
+        act(() => openSheet({ kind: "schedule", plan: plan(), name: "timetable.png" }))
+        await act(async () => fireEvent.click(await screen.findByRole("button", { name: "Add 3 classes" })))
+        expect(legacy.toast).toHaveBeenCalledWith("The classes were not all added: offline", { error: true, ms: 8000 })
+        expect((screen.getByRole("button", { name: "Add 3 classes" }) as HTMLButtonElement).disabled).toBe(false)
     })
 
     it("says when a course's classes are all there, and goes back to the card for another file", async () => {
@@ -130,10 +165,12 @@ describe("the Import with AI card", () => {
         expect(ai.refreshReads).toHaveBeenCalled()
         expect(screen.getByRole("meter", { name: "AI reads left today" }).getAttribute("aria-valuenow")).toBe("7")
         expect(screen.getByText(/7 of 10 AI reads left today/)).toBeTruthy()
+        /* the outline and the school calendar both take a PDF, Word or text file */
+        expect(screen.getAllByText("PDF, Word or text · read by AI")).toHaveLength(2)
 
         pick("Class schedule: Choose a PDF or image", new File(["x"], "t.png", { type: "image/png" }))
         pick("Course outline: Choose a file", new File(["x"], "o.pdf", { type: "application/pdf" }))
-        pick("School calendar: Choose a PDF", new File(["x"], "c.pdf", { type: "application/pdf" }))
+        pick("School calendar: Choose a file", new File(["x"], "c.pdf", { type: "application/pdf" }))
         expect([0, 1, 2].map((i) => [cfg(i).what, cfg(i).note])).toEqual([["timetable", "aiNote"], ["outline", "aiNote"], ["calendar", "aiNote"]])
     })
 
@@ -145,6 +182,15 @@ describe("the Import with AI card", () => {
         expect(getSheet()).toMatchObject({ kind: "import", back: "ai" })
         fireEvent.click(await screen.findByRole("button", { name: "Cancel" }))
         expect(getSheet()).toEqual({ kind: "ai" })
+    })
+
+    it("counts against the Worker's limit once it is known, and keeps the meter within its track", async () => {
+        Object.assign(fake.ui, { aiLeft: 25, aiLimit: 20 })
+        act(() => openSheet({ kind: "ai" }))
+        const meter = await screen.findByRole("meter", { name: "AI reads left today" })
+        expect(meter.getAttribute("aria-valuemax")).toBe("20")
+        expect((meter.firstElementChild as HTMLElement).style.width).toBe("100%")
+        expect(screen.getByText(/25 of 20 AI reads left today/)).toBeTruthy()
     })
 
     it("says what went wrong, and stops offering reads when none are left", async () => {
@@ -161,6 +207,9 @@ describe("the Import with AI card", () => {
         fireEvent.change(await screen.findByLabelText("Calendar or CSV text"), { target: { value: "nonsense" } })
         fireEvent.click(screen.getByRole("button", { name: "Preview" }))
         expect(screen.getByRole("alert").textContent).toMatch(/No rows were found/)
+        /* beside Preview, inside the paste box, not above it */
+        expect(screen.getByRole("alert").closest("details")).toBeTruthy()
+        expect(screen.getByRole("alert").parentElement!.contains(screen.getByRole("button", { name: "Preview" }))).toBe(true)
         fireEvent.change(screen.getByLabelText("Calendar or CSV text"), { target: { value: "type,course,title,date\nexam,PHYS205,Midterm,2026-10-20" } })
         fireEvent.click(screen.getByRole("button", { name: "Preview" }))
         expect(getSheet()).toMatchObject({ kind: "import", back: "ai" })
@@ -174,5 +223,7 @@ describe("what a read is told", () => {
         fake.cal = CAL
         fake.data.courses = [CHEM, { ...CHEM, id: "c2", code: "OLD1", archived: true }]
         expect(readContext()).toEqual({ terms: "Fall 2026|Winter 2027", codes: "CHEM271" })
+        fake.cal = { ...CAL!, terms: [...CAL!.terms, { name: "Summer | Intensive", start: "2027-05-03", end: "2027-06-25" }] }
+        expect(readContext().terms).toBe("Fall 2026|Winter 2027")
     })
 })

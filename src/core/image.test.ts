@@ -13,10 +13,13 @@ describe("a screenshot made smaller", () => {
 
     it("draws it on white as a JPEG", async () => {
         const close = vi.fn()
-        vi.stubGlobal("createImageBitmap", vi.fn(async () => ({ width: 3200, height: 2000, close })))
-        const ctx = { fillStyle: "", fillRect: vi.fn(), drawImage: vi.fn() }
+        const open = vi.fn(async () => ({ width: 3200, height: 2000, close }))
+        vi.stubGlobal("createImageBitmap", open)
+        const ctx = { fillStyle: "", imageSmoothingQuality: "low", fillRect: vi.fn(), drawImage: vi.fn() }
         vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue(ctx as never)
+        let canvas: HTMLCanvasElement | null = null
         const toBlob = vi.spyOn(HTMLCanvasElement.prototype, "toBlob").mockImplementation(function (this: HTMLCanvasElement, cb, type) {
+            canvas = this
             cb(new Blob(["j"], { type: type as string }))
         })
         const out = await shrinkImage(new File(["png"], "t.png", { type: "image/png" }))
@@ -25,6 +28,11 @@ describe("a screenshot made smaller", () => {
         expect(ctx.fillRect).toHaveBeenCalledWith(0, 0, 1600, 1000)
         expect(ctx.drawImage).toHaveBeenCalledWith(expect.anything(), 0, 0, 1600, 1000)
         expect(close).toHaveBeenCalled()
+        expect(open).toHaveBeenCalledWith(expect.anything(), { imageOrientation: "from-image" })
+        expect(ctx.imageSmoothingQuality).toBe("high")
+        /* the canvas let go once the JPEG is made */
+        expect(canvas!.width).toBe(0)
+        expect(canvas!.height).toBe(0)
     })
 
     it("says so when the browser cannot open it", async () => {

@@ -5,7 +5,6 @@
 
 import { useEffect, useState } from "react"
 import { cn } from "@/lib/utils"
-import { notify } from "@/bridge"
 import { ui, useUi } from "@/data/ui"
 import { refreshReads } from "@/data/ai-read"
 import { previewImport, readOutlineFile } from "@/data/import-edit"
@@ -13,8 +12,6 @@ import { readSchoolFile } from "@/data/school-edit"
 import { readScheduleFile } from "@/data/schedule-edit"
 import { beforeSheetClose, closeSheet } from "@/data/overlay"
 import { Button, SheetBody, SheetHead, TextArea } from "./fields"
-
-export const READS = 10
 
 const KINDS = [
     {
@@ -32,7 +29,7 @@ const KINDS = [
         read: (f: File) => readOutlineFile(f, "aiNote", "ai"),
     },
     {
-        id: "calendar", title: "School calendar", pick: "Choose a PDF", note: "PDF · read by AI",
+        id: "calendar", title: "School calendar", pick: "Choose a file", note: "PDF, Word or text · read by AI",
         blurb: "Your school’s academic calendar. It finds each semester, reading weeks, holidays and exam periods, so classes stop repeating all year.",
         icon: "M4 5h16v15H4zM4 10h16M9 3v4M15 3v4",
         accept: ".pdf,.docx,.txt,.html,application/pdf",
@@ -42,8 +39,12 @@ const KINDS = [
 
 export function AiSheet() {
     const left = useUi((u) => u.aiLeft)
+    /* the Worker's limit once it has said */
+    const reads = useUi((u) => u.aiLimit) ?? 10
     const note = useUi((u) => u.aiNote)
     const [text, setText] = useState("")
+    /* what Preview said about the pasted text, shown beside it */
+    const [pasteError, setPasteError] = useState("")
     const none = left === 0
 
     useEffect(() => {
@@ -56,8 +57,7 @@ export function AiSheet() {
 
     const paste = () => {
         if (!text.trim()) return
-        const error = previewImport(text, "", "ai")
-        if (error) { ui.aiNote = { text: error, error: true }; notify() }
+        setPasteError(previewImport(text, "", "ai"))
     }
 
     return (
@@ -94,19 +94,22 @@ export function AiSheet() {
                 ))}
                 {left != null && (
                     <div className="flex items-center gap-2.5 rounded-lg bg-muted px-3 py-2.5 text-[12.5px] text-ink-2">
-                        <span role="meter" aria-label="AI reads left today" aria-valuemin={0} aria-valuemax={READS} aria-valuenow={left}
+                        <span role="meter" aria-label="AI reads left today" aria-valuemin={0} aria-valuemax={reads} aria-valuenow={left}
                             className="block h-[5px] w-[60px] flex-none overflow-hidden rounded-[3px] bg-border">
-                            <span style={{ width: Math.round((left / READS) * 100) + "%" }} className="block h-[5px] bg-primary" />
+                            <span style={{ width: Math.min(100, Math.round((left / reads) * 100)) + "%" }} className="block h-[5px] bg-primary" />
                         </span>
-                        <span>{none ? "No AI reads left today. They come back within a day of the first one." : left + " of " + READS + " AI reads left today · pasting a calendar or CSV doesn’t count"}</span>
+                        <span>{none ? "No AI reads left today. They come back within a day of the first one." : left + " of " + reads + " AI reads left today · pasting a calendar or CSV doesn’t count"}</span>
                     </div>
                 )}
                 {note && <p role={note.error ? "alert" : "status"} className={cn("m-0 text-[12.5px]", note.error ? "text-destructive" : "text-ink-2")}>{note.text}</p>}
                 <details className="text-[12.5px] text-ink-2">
                     <summary className="min-h-7 cursor-pointer">Paste a calendar or CSV instead</summary>
                     <p className="mt-2 mb-1.5">Calendar text, or CSV with the columns <span className="font-mono">type,course,title,date,start,end,room,weight</span>.</p>
-                    <TextArea rows={4} className="min-h-0 font-mono text-[12px]" value={text} aria-label="Calendar or CSV text" placeholder="Paste calendar or CSV text" onChange={(e) => setText(e.target.value)} />
-                    <Button variant="ghost" className="mt-1.5" onClick={paste}>Preview</Button>
+                    <TextArea rows={4} className="min-h-0 font-mono text-[12px]" value={text} aria-label="Calendar or CSV text" placeholder="Paste calendar or CSV text" onChange={(e) => { setText(e.target.value); setPasteError("") }} />
+                    <div className="mt-1.5 flex flex-wrap items-center gap-2.5">
+                        <Button variant="ghost" onClick={paste}>Preview</Button>
+                        {pasteError && <p role="alert" className="m-0 min-w-0 flex-1 text-[12.5px] text-destructive">{pasteError}</p>}
+                    </div>
                 </details>
             </SheetBody>
         </>

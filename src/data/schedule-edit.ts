@@ -21,6 +21,10 @@ export const isImage = (f: File) => /^image\//.test(f.type) || /\.(png|jpe?g|web
 /** What "Add N classes" adds: the ticked classes. */
 export const scheduleCount = (plan: ImportPlan) => plan.courses.reduce((n, c) => n + c.meetings.filter((m) => m.include).length, 0)
 
+/** The courses of yours whose semester was changed in the preview. */
+export const semesterChanges = (plan: ImportPlan) =>
+    plan.courses.filter((c) => !c.isNew && c.term !== undefined && c.term !== ((data.courses as { id: string; term?: string }[]).find((x) => x.id === c.id)?.term ?? "")).length
+
 /** A timetable was picked: read it with AI, then check it in the schedule sheet. */
 export function readScheduleFile(file: File, note: NoteKey = "aiNote") {
     return readWithAi(file, {
@@ -44,15 +48,24 @@ export function readScheduleFile(file: File, note: NoteKey = "aiNote") {
     })
 }
 
-/** Add the ticked classes and the semesters picked; a toast says what happened. */
-export async function commitSchedule(plan: ImportPlan) {
+const plural = (n: number, one: string, many = one + "s") => n + " " + (n === 1 ? one : many)
+
+/** Add the ticked classes and the semesters picked; a toast says what happened. True when saved
+    (the sheet is then closed). */
+export async function commitSchedule(plan: ImportPlan): Promise<boolean> {
     const n = scheduleCount(plan)
-    const courses = plan.courses.filter((c) => c.meetings.some((m) => m.include)).length
+    const added = plan.courses.filter((c) => c.meetings.some((m) => m.include))
+    /* the courses of yours given only a new semester */
+    const terms = semesterChanges({ ...plan, courses: plan.courses.filter((c) => !added.includes(c)) })
     try {
         await commitImport(plan)
         closeSheet()
-        toast("Added " + n + " class" + (n === 1 ? "" : "es") + " to " + courses + " course" + (courses === 1 ? "" : "s"))
+        toast(n
+            ? "Added " + plural(n, "class", "classes") + " to " + plural(added.length, "course") + (terms ? " and updated the semester of " + plural(terms, "other course") : "")
+            : "Updated the semester of " + plural(terms, "course"))
+        return true
     } catch (e) {
-        toast("The classes were not all added: " + (e as Error).message, { error: true, ms: 8000 })
+        toast((n ? "The classes were not all added: " : "The semesters were not saved: ") + (e as Error).message, { error: true, ms: 8000 })
+        return false
     }
 }

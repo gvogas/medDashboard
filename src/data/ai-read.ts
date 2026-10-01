@@ -41,11 +41,14 @@ function hideBusy() {
     if (had) document.querySelector<HTMLElement>("#sheet [role=dialog]")?.focus({ preventScroll: true })
 }
 
+/** The AI reads a day: the Worker's limit once it has said, else 10. */
+const readsLimit = () => ui.aiLimit ?? 10
+
 /* The Worker's answers shared by every read. */
 const AI_ERRORS: Record<string, string> = {
     outline_unsupported: "That kind of file cannot be read. Try a PDF or Word document.",
     outline_unavailable: "The reader is not available right now. Try again later.",
-    outline_limit: "That is the limit of 10 AI reads for today (outlines, timetables and calendars). Try again tomorrow.",
+    get outline_limit() { return "That is the limit of " + readsLimit() + " AI reads for today (outlines, timetables and calendars). Try again tomorrow." },
     outline_quota: "The free AI allowance for today is used up. It resets at 8 pm Eastern (midnight UTC).",
     too_large: "That file is over 5 MB.",
     ai_timeout: "The AI took too long to answer. Try again in a minute.",
@@ -83,12 +86,13 @@ export interface AiRead<T> {
     refresh: () => void
 }
 
-/** The reads left today, as the Worker counts them, into ui.aiLeft. Offline it keeps what it knew. */
+/** The reads left today and the limit, as the Worker counts them, into ui.aiLeft and ui.aiLimit. Offline it keeps what it knew. */
 export async function refreshReads() {
     try {
         const r = await api.aiReads()
         if (!Number.isInteger(r?.left)) return
         ui.aiLeft = r.left
+        if (Number.isInteger(r.limit)) ui.aiLimit = r.limit
         notify()
     } catch { /* offline or signed out */ }
 }
@@ -131,10 +135,11 @@ export async function readWithAi<T>(file: File, { what, title, steps, flag, note
         show(1)
         const answer = hit != null ? hit as T : await call(body, stop.signal)
         stop.signal.throwIfAborted()
-        if (key && hit == null) remember(key, answer)
         show(2)
         u[flag] = false; hideBusy()
         done(answer)
+        /* only an answer the preview could use is kept: one that made `done` throw is read afresh next time */
+        if (key && hit == null) remember(key, answer)
     } catch (err) {
         u[flag] = false; hideBusy()
         const failed = err instanceof ApiError ? err as ApiError & { body?: { error?: string }; status: number } : null

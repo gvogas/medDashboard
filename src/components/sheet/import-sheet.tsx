@@ -31,7 +31,8 @@ export function ImportSheet({ plan: initial, name, back }: { plan: ImportPlan; n
     const cal = plan.kind === "outline" ? schoolCal() : null
 
     const kept = plan.courses.find((c) => c.keep && c.isNew && (c.instructor || c.term))
-    const extra = [kept?.instructor, kept?.term, plan.termStart && !termStart() ? "term start " + shortDate(plan.termStart) : ""].filter(Boolean).join(" · ")
+    /* with a school calendar the picker shows the semester, so the line leaves it out */
+    const extra = [kept?.instructor, cal ? "" : kept?.term, plan.termStart && !termStart() ? "term start " + shortDate(plan.termStart) : ""].filter(Boolean).join(" · ")
     const rows = plan.items.map((it, i) => ({ it, i }))
     const groups = plan.courses.map((c) => ({ c, items: rows.filter((x) => x.it.row.courseId === c.id) }))
     const loose = rows.filter((x) => !x.it.row.courseId)

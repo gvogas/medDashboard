@@ -8,7 +8,7 @@ import { DOW, dayMonth } from "@/core/dates"
 import type { SchoolCalendar } from "@/core/school"
 import { schoolCal } from "@/data/query"
 import { semesterOptions, semesterPicked } from "@/data/course-edit"
-import { commitSchedule, scheduleCount } from "@/data/schedule-edit"
+import { commitSchedule, scheduleCount, semesterChanges } from "@/data/schedule-edit"
 import { closeSheet, openSheet } from "@/data/overlay"
 import type { ImportPlan } from "@/data/import-edit"
 import { accent } from "@/components/views/bits"
@@ -30,7 +30,10 @@ export function ScheduleSheet({ plan: initial, name }: { plan: ImportPlan; name:
     const n = scheduleCount(plan)
     const found = plan.courses.reduce((k, c) => k + c.meetings.length, 0)
     const again = () => openSheet({ kind: "ai" })
-    const add = async () => { setBusy(true); await commitSchedule(plan); setBusy(false) }
+    /* nothing ticked can still save a semester changed for a course of yours */
+    const terms = semesterChanges(plan)
+    /* on success the sheet closes, so only a failure gives the button back */
+    const add = async () => { setBusy(true); if (!(await commitSchedule(plan))) setBusy(false) }
 
     return (
         <>
@@ -81,7 +84,7 @@ export function ScheduleSheet({ plan: initial, name }: { plan: ImportPlan; name:
             </SheetBody>
             <SheetFoot hint="Nothing is saved until you add them">
                 <Button variant="ghost" onClick={again}>Another file</Button>
-                <Button disabled={!n || busy} onClick={() => void add()}>Add {plural(n, "class", "classes")}</Button>
+                <Button disabled={!(n || terms) || busy} onClick={() => void add()}>{n || !terms ? "Add " + plural(n, "class", "classes") : "Save semesters"}</Button>
             </SheetFoot>
         </>
     )

@@ -364,6 +364,7 @@ function Import() {
     const busy = useUi((u) => u.outlineBusy)
     const note = useUi((u) => u.importNote)
     const left = useUi((u) => u.aiLeft)
+    const reads = useUi((u) => u.aiLimit) ?? 10
     const [text, setText] = useState("")
     useEffect(() => { void refreshReads() }, [])
     return (
@@ -373,7 +374,7 @@ function Import() {
                 <FilePick id="outlineFile" label={busy ? "Reading outline…" : "Course outline…"} busy={busy}
                     accept=".pdf,.docx,.doc,.txt,.md,.html,.odt,application/pdf" onFile={(f) => void readOutlineFile(f)} />
             </Row>
-            <Hint>You see everything before it is saved. Outlines, timetables and calendars are read by AI, up to 10 a day{left != null ? " (" + left + " left today)" : ""}.</Hint>
+            <Hint>You see everything before it is saved. Outlines, timetables and calendars are read by AI, up to {reads} a day{left != null ? " (" + left + " left today)" : ""}.</Hint>
             <details className="text-[11.5px]">
                 <summary className="cursor-pointer text-muted-foreground">Paste instead</summary>
                 <Hint>Calendar text, or CSV with the columns <span className="font-mono">type,course,title,date,start,end,room,weight</span>.</Hint>

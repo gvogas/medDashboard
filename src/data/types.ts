@@ -79,6 +79,8 @@ export interface Ui {
     scheduleBusy: boolean
     /* the AI reads left today, as the Worker last said; null until asked */
     aiLeft: number | null
+    /* the AI reads a day, as the Worker last said; null until asked (10 is shown meanwhile) */
+    aiLimit: number | null
     /* what the Import with AI card has to say: a read stopped or gone wrong */
     aiNote: Note | null
     schoolAsk: boolean

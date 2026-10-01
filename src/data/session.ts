@@ -9,7 +9,7 @@ import { notify } from "@/bridge"
 import * as spotify from "./spotify/player"
 import * as web from "./spotify/web-player"
 import { closeSheet } from "./overlay"
-import { forgetReads } from "./ai-cache"
+import { forgetReads, keepReadsFor } from "./ai-cache"
 import { toast } from "./toast"
 import { applyCoat } from "./settings"
 import { openSettings } from "./actions"
@@ -33,6 +33,8 @@ export async function boot() {
 
 async function start(profile: ServerProfile) {
     bindAccount(profile.id)
+    /* answers another account's reads left on this device go */
+    keepReadsFor(profile.id)
     await store.open(profile)
     showApp()
     const p = data.profile!
@@ -65,7 +67,7 @@ function spotifyReturn(): "connected" | "error" | null {
 export function onStoreEvent(evt: StoreEvent) {
     if (evt.type === "change" && data.profile) { celebrateStudy(); celebrateAchievements() }
     if (evt.type === "save-error") toast("The change could not be saved on this device. " + evt.message, { error: true, ms: 10000 })
-    if (evt.type === "signed-out") { sync.stop(); spotify.stop(); web.stop(); resetRequests(); location.reload() }
+    if (evt.type === "signed-out") { sync.stop(); spotify.stop(); web.stop(); resetRequests(); forgetReads(); location.reload() }
     if (evt.type === "remote" && data.profile) refreshAfterSync()
     if ((evt.type === "synced" || evt.type === "remote") && data.profile) celebrateAchievements({ quiet: true })
 }
@@ -76,7 +78,7 @@ export function onStorage(event: StorageEvent) {
     let id: string | undefined
     try { id = JSON.parse(event.newValue || "null")?.id } catch {}
     if (id !== data.profile.id) {
-        sync.stop(); spotify.stop(); web.stop(); resetRequests()
+        sync.stop(); spotify.stop(); web.stop(); resetRequests(); forgetReads()
         store.close().finally(() => location.reload())
     }
 }

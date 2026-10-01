@@ -80,7 +80,8 @@ export function readOutlineFile(file: File, note: NoteKey = "importNote", back?:
         call: (body, signal) => api.readOutline(body, { name: file.name, today: today(), termStart: termStart() || "", ...readContext() }, signal),
         done: (outline: Outline) => {
             const plan = planOutline(outline, data, termStart() || "") as ImportPlan
-            for (const c of plan.courses) if (c.isNew) c.term = defaultTerm(schoolCal(), c.term || "", today())
+            const cal = schoolCal()
+            for (const c of plan.courses) if (c.isNew) c.term = defaultTerm(cal, c.term || "", today())
             openSheet({ kind: "import", plan, name: file.name, ...(back ? { back } : {}) })
         },
     })
@@ -93,7 +94,7 @@ export const importCount = (plan: ImportPlan) =>
 
 /** Write the ticked rows in one save, courses first so the items can point at them. Returns a summary line. */
 export async function commitImport(plan: ImportPlan): Promise<string> {
-    let classes = 0, items = 0
+    let classes = 0, items = 0, terms = 0
     const rows: { kind: "courses" | "items"; row: Course | Item }[] = []
     const wanted = new Set(plan.items.filter((i) => i.include).map((i) => i.row.courseId).filter(Boolean))
     for (const c of plan.courses) {
@@ -107,6 +108,7 @@ export async function commitImport(plan: ImportPlan): Promise<string> {
             const term = c.term ?? live?.term ?? ""
             if (!live || (!add.length && term === live.term)) continue
             rows.push({ kind: "courses", row: { ...live, term, meetings: [...live.meetings, ...add].slice(0, 12) } })
+            if (term !== live.term) terms++
         }
         classes += add.length
     }
@@ -123,5 +125,7 @@ export async function commitImport(plan: ImportPlan): Promise<string> {
     const start = plan.week1 || plan.termStart
     const profile = data.profile
     if (start && profile && !profile.termStart && !schoolCal()) await store.saveProfile({ termStart: start })
+    /* only semesters picked: say that, not "Imported 0 classes" */
+    if (!classes && !items && terms) return terms === 1 ? "Updated the semester." : "Updated " + terms + " semesters."
     return "Imported " + classes + " class" + (classes === 1 ? "" : "es") + " and " + items + " item" + (items === 1 ? "" : "s") + "."
 }

@@ -105,12 +105,18 @@ describe("importing", () => {
     it("saves a semester picked for a course that exists, even with no new classes", async () => {
         fake.data.courses = [normalizeCourse({ id: "old", code: "ANAT", name: "Anatomy", term: "", meetings: [] }, 0) as { id: string; meetings: unknown[] }]
         const p: ImportPlan = { notes: [], items: [], courses: [{ id: "old", code: "ANAT", name: "Anatomy", color: "#E4749B", isNew: false, meetings: [], term: "Fall 2026" }] }
-        expect(await commitImport(p)).toBe("Imported 0 classes and 0 items.")
+        expect(await commitImport(p)).toBe("Updated the semester.")
         expect(fake.rows.map((r) => [r.row.id, (r.row as unknown as { term: string }).term])).toEqual([["old", "Fall 2026"]])
         fake.rows = []
         p.courses[0].term = undefined
         await commitImport(p)
         expect(fake.rows).toEqual([])
+    })
+
+    it("counts the semesters changed when nothing else is added", async () => {
+        fake.data.courses = ["a", "b"].map((id) => normalizeCourse({ id, code: id.toUpperCase(), name: id, term: "", meetings: [] }, 0) as { id: string; meetings: unknown[] })
+        const p: ImportPlan = { notes: [], items: [], courses: ["a", "b"].map((id) => ({ id, code: id.toUpperCase(), name: id, color: "#E4749B", isNew: false, meetings: [], term: "Fall 2026" })) }
+        expect(await commitImport(p)).toBe("Updated 2 semesters.")
     })
 
     it("gives a new course the semester its file names, else the current one", () => {

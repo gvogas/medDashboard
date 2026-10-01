@@ -1,9 +1,9 @@
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest"
 import { webcrypto } from "node:crypto"
-import { cacheKey, cached, forgetReads, remember } from "./ai-cache"
+import { cacheKey, cached, forgetReads, keepReadsFor, remember } from "./ai-cache"
 
 beforeAll(() => { if (!globalThis.crypto?.subtle) vi.stubGlobal("crypto", webcrypto) })
-afterEach(() => { vi.restoreAllMocks(); localStorage.clear() })
+afterEach(() => { vi.restoreAllMocks(); localStorage.clear(); keepReadsFor("") })
 
 const DAY = 86_400_000
 
@@ -35,5 +35,27 @@ describe("answers remembered on this device", () => {
         vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => { throw new Error("blocked") })
         expect(() => remember("k", 1)).not.toThrow()
         expect(cached("k")).toBeNull()
+    })
+
+    it("are marked with the account and dropped when another account's session starts", () => {
+        keepReadsFor("u1")
+        remember("k1", "mine")
+        keepReadsFor("u2")
+        expect(cached("k1")).toBeNull()
+        remember("k2", "theirs")
+        keepReadsFor("u2")
+        expect(cached("k2")).toBe("theirs")
+        expect((JSON.parse(localStorage.getItem("term.aiReads.v1")!) as { k: string; user: string }[]).map((e) => [e.k, e.user])).toEqual([["k2", "u2"]])
+    })
+
+    it("are kept under a versioned key, and an older store is dropped", () => {
+        localStorage.setItem("term.aiReads", JSON.stringify([{ k: "k", at: Date.now(), answer: "old shape" }]))
+        keepReadsFor("u1")
+        expect(localStorage.getItem("term.aiReads")).toBeNull()
+        expect(cached("k")).toBeNull()
+        remember("k", "new")
+        expect(localStorage.getItem("term.aiReads.v1")).toContain("new")
+        forgetReads()
+        expect(localStorage.getItem("term.aiReads.v1")).toBeNull()
     })
 })

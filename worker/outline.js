@@ -108,10 +108,10 @@ function prompt(text, today, termStart, known = '') {
   ];
 }
 
-/* the short forms timetables use: "Tu", "Th", and "R" for Thursday */
-const SHORT_DAYS = { tu: 2, th: 4, r: 4 };
+/* the short forms timetables use: two letters ("Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"), and "R" for Thursday */
+const SHORT_DAYS = { mo: 1, tu: 2, we: 3, th: 4, fr: 5, sa: 6, su: 0, r: 4 };
 
-/** A weekday (0 = Sunday) from "Tue", "THU", "monday", "Th", "R"…; -1 when it is none. */
+/** A weekday (0 = Sunday) from "Tue", "THU", "monday", "Th", "We", "R"…; -1 when it is none. */
 export function dayIndex(d) {
   const t = String(d || '').trim().toLowerCase();
   if (Object.hasOwn(SHORT_DAYS, t)) return SHORT_DAYS[t];
@@ -151,7 +151,9 @@ export function cleanCode(v) {
   return code.slice(0, 8);
 }
 
-/* "1:00" in a timetable that leaves out am/pm is 13:00: no class starts between midnight and 6 */
+/* "1:00" in a timetable that leaves out am/pm is 13:00: no class starts between midnight and 6.
+   A trade-off: 6 and 7 written without pm stay in the morning (06:00, 07:00), as an early lab
+   or clinical shift would be, so an evening class written "6:00" is read 12 hours early. */
 const daytime = (t) => (t && t < '06:00' ? String(+t.slice(0, 2) + 12).padStart(2, '0') + t.slice(2) : t);
 
 /**
@@ -183,10 +185,11 @@ export function cleanOutline(raw, { today } = {}) {
   const assessments = (Array.isArray(o.assessments) ? o.assessments : []).map((a) => {
     const w = typeof a?.weight === 'number' ? a.weight : parseFloat(a?.weight);
     const start = cleanTime(a?.start), end = cleanTime(a?.end);
+    const date = cleanDate(a?.date);
     return {
       title: clip(a?.title, 140),
       type: TYPES.includes(a?.type) ? a.type : 'task',
-      date: near(cleanDate(a?.date)) ? cleanDate(a?.date) : '',
+      date: near(date) ? date : '',
       week: Number.isInteger(a?.week) && a.week >= 1 && a.week <= 20 ? a.week : null,
       start, end: start && end > start ? end : '',
       room: clip(a?.room, 80),

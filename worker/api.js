@@ -3,10 +3,10 @@ import { requireUser, requireSession, signSession, sessionCookie, clearCookie, d
 import { verifyPassword, normalizeUsername } from './password.js';
 import { claimAttempt, recordSuccess } from './throttle.js';
 import { limitLogin, limitOutline, readsLeft } from './limits.js';
-import { readOutline, MAX_BYTES } from './outline.js';
+import { readOutline, cleanCode, MAX_BYTES } from './outline.js';
 import { readSchool } from './school.js';
 import { readSchedule } from './schedule.js';
-import { listParam } from './ai.js';
+import { listParam, cleanTerm } from './ai.js';
 import { validateProfile, validateCourse, validateItem, validateQuote, validateStudySession, validateAchievement, validateId } from './validate.js';
 import { getUserForLogin, getProfile, updateProfile, getRow, upsertRow, deleteRow, syncPage, bumpPasswordGen, saveSpotifyTokens, deleteSpotifyTokens } from './db.js';
 import * as spotify from './spotify.js';
@@ -119,6 +119,12 @@ const DATE = /^\d{4}-\d{2}-\d{2}$/;
    model place "Week 3" on a date; ?terms= (the school's semesters, "|"-separated) and ?codes=
    (your course codes, ","-separated) let it name them as the app does. All three count toward
    the same daily reads. */
+/** The semesters and course codes sent with a read, cleaned as the readers' own answers are. */
+export const knownParams = (params) => ({
+  terms: listParam(params.get('terms'), '|', 6, 40).map(cleanTerm).filter(Boolean),
+  codes: listParam(params.get('codes'), ',', 30, 24).map(cleanCode).filter(Boolean),
+});
+
 const aiRead = (read, what) => async ({ request, env, url }) => {
   const userId = await requireUser(request, env);
   const bytes = await readBytes(request, MAX_BYTES);
@@ -128,7 +134,7 @@ const aiRead = (read, what) => async ({ request, env, url }) => {
     return json(await read(env.AI, {
       bytes, type: request.headers.get('content-type') || '', name: (url.searchParams.get('name') || what).slice(0, 120),
       today: date('today') || new Date().toISOString().slice(0, 10), termStart: date('termStart'), claim: () => limitOutline(env, userId),
-      terms: listParam(url.searchParams.get('terms'), '|', 6, 40), codes: listParam(url.searchParams.get('codes'), ',', 30, 8),
+      ...knownParams(url.searchParams),
     }));
   } catch (e) {
     if (e instanceof HttpError) throw e;

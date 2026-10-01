@@ -7,7 +7,7 @@ const fake = vi.hoisted(() => {
         status: number; body: unknown
         constructor(status: number, body: unknown) { super("HTTP " + status); this.status = status; this.body = body }
     }
-    return { ApiError, ui: { importNote: null as unknown, outlineBusy: false, aiLeft: null as number | null }, api: { aiReads: vi.fn(async () => ({ left: 7, limit: 10 })) } }
+    return { ApiError, ui: { importNote: null as unknown, outlineBusy: false, aiLeft: null as number | null, aiLimit: null as number | null }, api: { aiReads: vi.fn(async () => ({ left: 7, limit: 10 })) } }
 })
 vi.mock("@/core/api", () => ({ ApiError: fake.ApiError, api: fake.api }))
 vi.mock("@/core/pdftext", () => ({ pdfText: vi.fn(async () => "the text") }))
@@ -165,6 +165,14 @@ describe("the reading card", () => {
         fake.api.aiReads.mockResolvedValueOnce({ left: 3, limit: 10 })
         await refreshReads()
         expect(fake.ui.aiLeft).toBe(3)
+        expect(fake.ui.aiLimit).toBe(10)
+        fake.api.aiReads.mockResolvedValueOnce({ left: 4 } as never)
+        await refreshReads()
+        expect([fake.ui.aiLeft, fake.ui.aiLimit]).toEqual([4, 10])
+        fake.api.aiReads.mockResolvedValueOnce({ left: 18, limit: 20 })
+        await refreshReads()
+        expect(fake.ui.aiLimit).toBe(20)
+        fake.ui.aiLimit = null
     })
 
     it("answers the same file again from this device, using no read", async () => {
@@ -177,6 +185,17 @@ describe("the reading card", () => {
         expect(done).toHaveBeenNthCalledWith(2, { ok: 1 })
         await act(() => readWithAi(file(), { ...opts, cache: ["outline", "u2"] }))
         expect(call).toHaveBeenCalledTimes(2)
+    })
+
+    it("remembers no answer the preview could not use", async () => {
+        const call = vi.fn(async () => ({ ok: 3 }))
+        const done = vi.fn().mockImplementationOnce(() => { throw new Error("bad shape") })
+        const opts = { what: "outline", title: "T", steps: STEPS, flag: "outlineBusy" as const, note: "importNote" as const, errors: {}, cache: ["outline", "u4"], call, done, refresh: vi.fn() }
+        await act(() => readWithAi(file(), opts))
+        expect((fake.ui.importNote as { error: boolean }).error).toBe(true)
+        await act(() => readWithAi(file(), opts))
+        expect(call).toHaveBeenCalledTimes(2)
+        expect(done).toHaveBeenLastCalledWith({ ok: 3 })
     })
 
     it("remembers no failed read", async () => {
@@ -207,6 +226,10 @@ describe("the reading card", () => {
         const refresh = vi.fn()
         await act(() => read(async () => { throw new fake.ApiError(429, { error: "outline_limit" }) }, vi.fn(), refresh))
         expect(fake.ui.importNote).toEqual({ text: "That is the limit of 10 AI reads for today (outlines, timetables and calendars). Try again tomorrow.", error: true })
+        fake.ui.aiLimit = 20
+        await act(() => read(async () => { throw new fake.ApiError(429, { error: "outline_limit" }) }))
+        expect((fake.ui.importNote as { text: string }).text).toMatch(/^That is the limit of 20 AI reads/)
+        fake.ui.aiLimit = null
         expect(screen.queryByRole("alertdialog")).toBeNull()
         expect(refresh).toHaveBeenCalled()
 

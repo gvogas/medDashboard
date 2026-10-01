@@ -301,6 +301,24 @@ describe('planSchedule', () => {
     expect(plan.notes.join(' ')).toContain('MATH205 already has 12 classes');
   });
 
+  it('gives a new course with no code one of its own, never one already taken', () => {
+    const lec = (weekday) => [{ kind: 'Lecture', weekday, start: '09:00', end: '10:00', room: '' }];
+    const d = { items: [], courses: [{ id: 'w', code: 'WAVE', name: 'Wave Mechanics', color: '#4F74D9', term: '', meetings: [] }] };
+    const plan = planSchedule({ term: '', courses: [
+      { code: '', name: 'Organic Chemistry', classes: lec(1) },
+      { code: '', name: 'Organic Physics', classes: lec(2) },
+      { code: '', name: 'Waves', classes: lec(3) },
+      { code: 'ORGA3', name: 'Organ Music', classes: lec(4) },
+      { code: '', name: 'organic  chemistry', classes: lec(5) },
+    ] }, d, '');
+    expect(plan.courses.map((c) => [c.code, c.name, c.isNew, c.meetings.map((m) => m.weekday)])).toEqual([
+      ['ORGA', 'Organic Chemistry', true, [1, 5]],
+      ['ORGA2', 'Organic Physics', true, [2]],
+      ['WAVE2', 'Waves', true, [3]],
+      ['ORGA3', 'Organ Music', true, [4]],
+    ]);
+  });
+
   it('merges a course read twice into the one of yours it matches', () => {
     const plan = planSchedule({ term: '', courses: [
       { code: 'chem 271', name: 'Organic', classes: [{ kind: 'Lab', weekday: 5, start: '13:00', end: '16:00', room: '' }] },

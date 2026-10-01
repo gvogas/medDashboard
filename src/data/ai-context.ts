@@ -7,7 +7,8 @@ import { schoolCal } from "@/data/query"
 
 export function readContext(): { terms?: string; codes?: string } {
     const cal = schoolCal()
-    const terms = cal ? cal.terms.map((t) => t.name).join("|") : ""
+    /* a name with "|" in it would split in two on the way */
+    const terms = cal ? cal.terms.map((t) => t.name).filter((n) => !n.includes("|")).join("|") : ""
     const codes = data.courses.filter((c) => !c.archived && c.code).map((c) => c.code).slice(0, 30).join(",")
     return { ...(terms ? { terms } : {}), ...(codes ? { codes } : {}) }
 }

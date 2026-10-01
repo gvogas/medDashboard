@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
-import { runModel, askJson, modelJson, tidyText, knownContext, listParam } from '../worker/ai.js';
+import { runModel, askJson, modelJson, tidyText, knownContext, listParam, cleanTerm } from '../worker/ai.js';
+import { knownParams } from '../worker/api.js';
 import { HttpError } from '../worker/http.js';
 
 describe('runModel', () => {
@@ -150,6 +151,13 @@ describe('tidyText', () => {
     expect(tidyText(pages)).toBe([1, 2, 3, 4].map((n) => 'Week ' + n + '\nTopic ' + n).join('\n\n'));
   });
 
+  it('counts blank pages in "N/M" footers, and the text before the first marker as no page', () => {
+    const blank = ['### Page 1\nWeek 1\nIntro\n1/4', '### Page 2\nWeek 2\nLab\n2/4', '### Page 3\n', '### Page 4\nWeek 4\nFinal\n4/4'].join('\n\n');
+    expect(tidyText(blank)).toBe('Week 1\nIntro\n\nWeek 2\nLab\n\nWeek 4\nFinal');
+    const lead = 'CHEM 271 outline\n1/2\n\n' + ['### Page 1\nWeek 1\nIntro\n1/2', '### Page 2\nWeek 2\nLab\n2/2'].join('\n\n');
+    expect(tidyText(lead)).toBe('CHEM 271 outline\n1/2\n\nWeek 1\nIntro\n\nWeek 2\nLab');
+  });
+
   it('squeezes spaces and blank lines in text without pages', () => {
     expect(tidyText('a   b\t c\n\n\n\nd')).toBe('a b c\nd');
   });
@@ -167,5 +175,14 @@ describe('what the app knows', () => {
     expect(knownContext({ terms: ['Fall 2026', 'Winter 2027'], codes: ['CHEM271'] }))
       .toBe('The school\'s semesters are named "Fall 2026", "Winter 2027"; when the document is for one of them, write term exactly as that name. The student\'s courses so far have the codes CHEM271; when a course is one of these, write its code exactly like that.');
     expect(knownContext({})).toBe('');
+    /* a name is quoted as JSON, so a stray quote or backslash cannot end it early */
+    expect(knownContext({ terms: ['Fall \\ 2026'] })).toContain('named "Fall \\\\ 2026";');
+  });
+
+  it('cleans the semesters and codes a read is sent', () => {
+    expect(cleanTerm('  "Fall\u0007 2026"\n ')).toBe('Fall 2026');
+    expect(cleanTerm('Winter \u201c27\u201d')).toBe('Winter 27');
+    const params = new URLSearchParams({ terms: 'Fall "2026"|\u0000|Winter 2027', codes: 'chem 271,  ,phys-205,!!,ABCD-EFGH-1' });
+    expect(knownParams(params)).toEqual({ terms: ['Fall 2026', 'Winter 2027'], codes: ['CHEM271', 'PHYS-205', 'ABCDEFGH'] });
   });
 });
