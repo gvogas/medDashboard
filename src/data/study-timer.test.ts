@@ -471,14 +471,15 @@ describe("a run", () => {
         expect(getStudyBadge()).toBeNull()
     })
 
-    it("opens the focus screen on Start, and goes to the Study page when it ends", async () => {
+    it("opens the focus screen on Start, and goes to the Study page's Timer tab when it ends", async () => {
         ui.view = "week"
         ui.focus = false
+        ui.studyTab = "achievements"
         await begin(CLASSIC)
         expect(ui.focus).toBe(true)
         expect(redraw).toHaveBeenCalled()
         await act(() => stopRun())
-        expect(ui).toMatchObject({ focus: false, view: "study" })
+        expect(ui).toMatchObject({ focus: false, view: "study", studyTab: "timer" })   /* Today lists the session */
     })
 
     it("is gone after sign-out forgets it", async () => {

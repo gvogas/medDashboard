@@ -85,13 +85,14 @@ subscribeBridge(() => {
 
 /* What a run does to the page: Start opens the focus screen; a new Study step pulls you
    back into it (unless a sheet is open); Stop & log, or the flow's end, goes to the
-   Study page, where the session now shows. */
+   Study page's Timer tab, whose Today card now lists the session. */
 focus.onTick((s: { kind: StepKind } | null, event: string) => {
     let moved = false
     if (event === "start") { ui.focus = true; moved = true }
     else if (event === "end") {
         ui.focus = false
         ui.view = "study"
+        ui.studyTab = "timer"
         rememberUi()
         moved = true
     } else if (event === "step" && s?.kind === "study" && !ui.focus && !getSheet()) { ui.focus = true; moved = true }
