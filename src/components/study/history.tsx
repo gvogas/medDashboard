@@ -13,7 +13,7 @@ import { course as courseOf, item as itemOf } from "@/core/store"
 import { accent, Panel } from "@/components/views/bits"
 import { Segmented } from "@/components/sheet/fields"
 import {
-    pickDay, setHistTab, stepHist, undoSessionDelete, useHistory,
+    clockTime, NO_COURSE, pickDay, setHistTab, stepHist, undoSessionDelete, useHistory,
     type HeatWeek, type MonthHist, type TermHist, type WeekHist,
 } from "@/data/study"
 import { deleteSession, openSession } from "@/data/actions"
@@ -22,7 +22,6 @@ import type { Course, HistTab, Item, SessionUndo, StudySession } from "@/data/ty
 const TABS = [["week", "Week"], ["month", "Month"], ["term", "Term"]] as const
 
 /* A course's colour for --c; sessions with none, or a course since deleted, are grey. */
-const NO_COURSE = "#7D8A99"
 const courseColour = (id: string | null): CSSProperties | undefined => accent((courseOf(id) as Course | null)?.color) ?? accent(NO_COURSE)
 const courseCode = (id: string | null) => (courseOf(id) as Course | null)?.code || "No course"
 const plural = (n: number, one: string) => n + " " + one + (n === 1 ? "" : "s")
@@ -225,8 +224,6 @@ function Sessions({ list, withDay, onDelete }: { list: StudySession[]; withDay: 
     )
 }
 
-const hm = (ms: number) => { const d = new Date(ms); return String(d.getHours()).padStart(2, "0") + ":" + String(d.getMinutes()).padStart(2, "0") }
-
 /** When, the course, what, how long, Timer or By hand, ✎ and ✕. Narrow, it takes two lines. */
 function SessionRow({ s, withDay, onDelete }: { s: StudySession; withDay: boolean; onDelete: (id: string) => void }) {
     const it = s.itemId ? (itemOf(s.itemId) as Item | null) : null
@@ -239,7 +236,7 @@ function SessionRow({ s, withDay, onDelete }: { s: StudySession; withDay: boolea
             "@max-[520px]:py-2.5 @max-[520px]:[grid-template-areas:'chip_what_mins'_'tm_src_acts'] @max-[520px]:[grid-template-columns:auto_minmax(0,1fr)_auto]",
         )}>
             <span className="font-mono text-[12px] whitespace-nowrap text-ink-2 @max-[520px]:[grid-area:tm]">
-                {withDay && DOW[at.getDay()] + " " + at.getDate() + " · "}{hm(s.startedAt)}
+                {withDay && DOW[at.getDay()] + " " + at.getDate() + " · "}{clockTime(s.startedAt)}
             </span>
             <span style={courseColour(s.courseId)}
                 className="inline-flex max-w-full items-center gap-1.5 justify-self-start overflow-hidden rounded-md bg-muted px-2 py-[3px] text-[11px] font-bold tracking-[.05em] whitespace-nowrap @max-[520px]:[grid-area:chip]">

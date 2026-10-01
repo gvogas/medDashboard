@@ -5,10 +5,7 @@
 import { duration } from "@/lib/time"
 import { accent, Panel } from "@/components/views/bits"
 import { openSession } from "@/data/actions"
-import { useTodayStudy } from "@/data/study"
-
-/* a session with no course, or a course since deleted, is grey, as in History */
-const NO_COURSE = "#7D8A99"
+import { NO_COURSE, useTodayStudy } from "@/data/study"
 
 export function TodayCard() {
     const t = useTodayStudy()

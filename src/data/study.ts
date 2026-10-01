@@ -23,6 +23,9 @@ const plural = (n: number, one: string) => n + " " + one + (n === 1 ? "" : "s")
 const sum = (list: StudySession[]) => list.reduce((a, s) => a + s.studyMinutes, 0)
 const pct = (part: number, whole: number) => Math.round((part / whole) * 1000) / 10
 
+/** The grey for a session with no course, or a course since deleted (History and Today). */
+export const NO_COURSE = "#7D8A99"
+
 /** Minutes studied for one item, over every session linked to it (the item sheet shows it). */
 export const studiedFor = (sessions: StudySession[], itemId: string) =>
     sessions.reduce((a, s) => a + (s.itemId === itemId ? s.studyMinutes : 0), 0)
@@ -79,7 +82,8 @@ export interface TodayRow { id: string; at: string; courseId: string | null; col
 export interface TodayStudy { rows: TodayRow[]; total: number; goal: number }
 
 /** "09:05": when a session started. */
-const startTime = (ms: number) => { const d = new Date(ms); return String(d.getHours()).padStart(2, "0") + ":" + String(d.getMinutes()).padStart(2, "0") }
+/** A clock time, "09:05", for a session's start in History and Today. */
+export const clockTime = (ms: number) => { const d = new Date(ms); return String(d.getHours()).padStart(2, "0") + ":" + String(d.getMinutes()).padStart(2, "0") }
 
 /**
  * Today's sessions, newest first, as the Today card lists them: when each started, its
@@ -92,7 +96,7 @@ export function todayOf(sessions: StudySession[], items: Item[], courses: Course
         rows: list.map((s) => {
             const course = courses.find((c) => c.id === s.courseId)
             return {
-                id: s.id, at: startTime(s.startedAt), courseId: s.courseId, color: course?.color,
+                id: s.id, at: clockTime(s.startedAt), courseId: s.courseId, color: course?.color,
                 what: items.find((x) => x.id === s.itemId)?.title || s.note || course?.name || "No course",
                 minutes: s.studyMinutes,
             }
