@@ -44,7 +44,7 @@ export function SidebarPlayer() {
     } else {
         const pct = t.durationMs ? Math.min(100, (t.progressMs / t.durationMs) * 100) : 0
         const moving = p.playing && !p.stale
-        const bar = cn("h-1.5 w-[3px] origin-bottom rounded-[1px] bg-[var(--spotify)]", moving && "animate-[spot-eq_1s_ease-in-out_infinite] motion-reduce:animate-none")
+        const bar = cn("h-1.5 w-[3px] origin-bottom rounded-[1px] bg-primary", moving && "animate-[spot-eq_1s_ease-in-out_infinite] motion-reduce:animate-none")
         body = <>
             <div className="flex min-w-0 items-center gap-[9px]">
                 {t.art
@@ -62,7 +62,7 @@ export function SidebarPlayer() {
                 <SpotifyMark />
             </div>
             <span className="block h-[3px] overflow-hidden rounded-full bg-line-2">
-                <i className="block h-full rounded-full bg-[linear-gradient(90deg,var(--accent),var(--spotify))]" style={{ width: pct + "%" }} />
+                <i className="block h-full rounded-full bg-primary" style={{ width: pct + "%" }} />
             </span>
             <div className="flex items-center justify-center gap-2.5">
                 <button type="button" aria-label="Previous" className={ctl} onClick={() => { activate(); void previous() }}><Icon name="prev" /></button>

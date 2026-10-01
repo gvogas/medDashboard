@@ -207,6 +207,25 @@ describe("the Spotify page", () => {
         await waitFor(() => expect(music.getByRole("button", { name: "Queue Night Owl" }).textContent).toBe("+"), { timeout: 3000 })
     })
 
+    it("draws the player as the prototype: a square cover, the title in the serif, the progress as a progressbar, play in the accent", () => {
+        show()
+        const player = card("Player")
+        const now = within(player.getByRole("region", { name: "Now playing" }))
+        const bar = now.getByRole("progressbar", { name: "Track progress" })
+        expect(bar.getAttribute("aria-valuenow")).toBe("191")
+        expect(bar.getAttribute("aria-valuemax")).toBe("489")
+        expect(bar.getAttribute("aria-valuetext")).toBe("3:11 of 8:09")
+        expect(bar.querySelector("i")!.style.width).toBe((191000 / 489000) * 100 + "%")
+        expect(now.getByRole("link", { name: "Weightless" }).className).toContain("font-serif")
+        expect(now.getByRole("img", { name: "Playing" })).toBeTruthy()
+        expect(now.getByRole("button", { name: "Pause" }).className).toContain("bg-primary")
+        expect(now.getByRole("button", { name: "Shuffle" }).querySelector("svg")).toBeTruthy()
+        expect(now.getByRole("button", { name: "Repeat is off" }).querySelector("svg")).toBeTruthy()
+        /* paused, the equaliser goes */
+        setPlayer({ playing: false })
+        expect(now.queryByRole("img", { name: "Playing" })).toBeNull()
+    })
+
     it("plays, pauses, skips, shuffles and repeats", async () => {
         show()
         const player = card("Player")
@@ -222,11 +241,13 @@ describe("the Spotify page", () => {
         const shuffle = player.getByRole("button", { name: "Shuffle" })
         fireEvent.click(shuffle)
         expect(shuffle.getAttribute("aria-pressed")).toBe("true")
+        expect(shuffle.className).toContain("bg-secondary")
         expect(api.spotifyShuffle).toHaveBeenCalledWith(true)
         fireEvent.click(player.getByRole("button", { name: "Repeat is off" }))
         expect(api.spotifyRepeat).toHaveBeenLastCalledWith("context")
         fireEvent.click(player.getByRole("button", { name: "Repeating the playlist or album" }))
-        expect(player.getByRole("button", { name: "Repeating this track" }).textContent).toBe("↻¹")
+        expect(player.getByRole("button", { name: "Repeating this track" }).textContent).toBe("1")
+        expect(player.getByRole("button", { name: "Repeating this track" }).getAttribute("data-mode")).toBe("track")
         expect(api.spotifyRepeat).toHaveBeenLastCalledWith("track")
     })
 
@@ -401,6 +422,7 @@ describe("the sidebar player", () => {
         expect(b.getByText("Marconi Union")).toBeTruthy()
         expect(b.getByText("MacBook")).toBeTruthy()
         expect(badge().querySelector<HTMLElement>("i[style]")?.style.width).toBe((191000 / 489000) * 100 + "%")
+        expect(badge().querySelector<HTMLElement>("i[style]")!.className).toContain("bg-primary")
         fireEvent.click(b.getByRole("button", { name: "Pause" }))
         expect(api.spotifyControl).toHaveBeenCalledWith("pause", null)
         expect(badge().dataset.state).toBe("paused")
