@@ -1,5 +1,5 @@
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest"
-import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react"
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react"
 import { useState } from "react"
 import { DatePicker, monthDays, pickedLabel, weekOf } from "./date-picker"
 
@@ -81,6 +81,7 @@ describe("the date picker", () => {
         expect(picks).toEqual(["2026-11-10"])
         expect(within(show).getByRole("button", { name: "Week" }).getAttribute("aria-pressed")).toBe("true")
         expect(screen.getByRole("group", { name: "Days" })).toBeTruthy()
+        expect(document.activeElement).toBe(screen.getByRole("button", { name: "Tue 10 Nov" }))
     })
 
     it("goes to today with Today, and rings today", () => {
@@ -99,5 +100,25 @@ describe("the date picker", () => {
         expect(screen.getByRole("button", { name: "Fri 25 Sep, something due" })).toBeTruthy()
         fireEvent.click(screen.getByRole("button", { name: "Next month" }))
         expect(screen.getByRole("button", { name: "Wed 14 Oct, something due" })).toBeTruthy()
+    })
+
+    it("steps over a year end in Month, and rings today in the grid", () => {
+        render(<Held start="2026-12-15" />)
+        fireEvent.click(within(screen.getByRole("group", { name: "Show" })).getByRole("button", { name: "Month" }))
+        fireEvent.click(screen.getByRole("button", { name: "Next month" }))
+        expect(screen.getByText("January 2027")).toBeTruthy()
+        fireEvent.click(screen.getByRole("button", { name: "Previous month" }))
+        expect(screen.getByText("December 2026")).toBeTruthy()
+        cleanup()
+        render(<Held start="2026-09-10" />)
+        fireEvent.click(within(screen.getByRole("group", { name: "Show" })).getByRole("button", { name: "Month" }))
+        expect(screen.getByRole("button", { name: "Wed 23 Sep" }).getAttribute("aria-current")).toBe("date")
+    })
+
+    it("keeps the month in step when the date changes from outside", () => {
+        const { rerender } = render(<DatePicker value="2026-09-10" busy={new Set()} onChange={() => {}} />)
+        fireEvent.click(within(screen.getByRole("group", { name: "Show" })).getByRole("button", { name: "Month" }))
+        rerender(<DatePicker value="2026-11-10" busy={new Set()} onChange={() => {}} />)
+        expect(screen.getByText("November 2026")).toBeTruthy()
     })
 })

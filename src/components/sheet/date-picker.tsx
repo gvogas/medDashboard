@@ -3,7 +3,7 @@
 // calendar with ‹ October 2026 ›, and picking a day there goes back to Week. Today is
 // ringed; a day that already has something due has a dot.
 
-import { useState } from "react"
+import { useLayoutEffect, useRef, useState } from "react"
 import { cn } from "@/lib/utils"
 import { addDays, diffDays, iso, MON, monday, parse, shortDate, today } from "@/core/dates"
 import { Segmented } from "./fields"
@@ -44,8 +44,15 @@ export function DatePicker({ value, onChange, busy }: { value: string; onChange:
     const [mode, setMode] = useState<"week" | "month">("week")
     /* the month shown: the chosen day's when Month opens, then wherever ‹ › take it */
     const [shown, setShown] = useState(() => { const d = parse(value); return [d.getFullYear(), d.getMonth()] as const })
+    const [prevValue, setPrevValue] = useState(value)
+    if (value !== prevValue) { setPrevValue(value); const d = parse(value); setShown([d.getFullYear(), d.getMonth()]) }
+    const root = useRef<HTMLDivElement>(null)
+    const refocus = useRef(false)   /* a pick in Month unmounts the focused button: focus the chosen day once Week is back */
+    useLayoutEffect(() => {
+        if (mode === "week" && refocus.current) { refocus.current = false; root.current?.querySelector<HTMLElement>("[role=group][aria-label=Days] [aria-pressed=true]")?.focus() }
+    }, [mode])
     const now = today()
-    const pick = (d: string) => { if (d !== value) onChange(d); setMode("week") }
+    const pick = (d: string) => { if (d !== value) onChange(d); if (mode === "month") refocus.current = true; setMode("week") }
     const openMode = (m: "week" | "month") => {
         if (m === "month") { const d = parse(value); setShown([d.getFullYear(), d.getMonth()]) }
         setMode(m)
@@ -54,7 +61,7 @@ export function DatePicker({ value, onChange, busy }: { value: string; onChange:
     const title = MON[shown[1]] + " " + shown[0]
 
     return (
-        <div className="flex flex-col gap-1.5">
+        <div ref={root} className="flex flex-col gap-1.5">
             <div className="flex h-8 items-center gap-1">
                 <span className="flex-1 text-[14px] font-semibold">{pickedLabel(value, now)}</span>
                 <button type="button" onClick={() => pick(now)} className="h-7 cursor-pointer rounded-full border-0 bg-transparent px-2.5 font-[inherit] text-[12px] text-ink-2 hover:bg-muted hover:text-foreground">Today</button>
@@ -88,9 +95,9 @@ export function DatePicker({ value, onChange, busy }: { value: string; onChange:
             ) : (
                 <div className="flex flex-col gap-1 rounded-[10px] border border-line-2 bg-[var(--panel-2)] p-2.5">
                     <div className="flex items-center justify-between">
-                        <button type="button" aria-label="Previous month" onClick={() => moveMonth(-1)} className={cn(ARROW, "size-[30px] rounded-full")}><Chevron back /></button>
+                        <button type="button" aria-label="Previous month" onClick={() => moveMonth(-1)} className={cn(ARROW, "size-[30px] rounded-full hover:bg-card")}><Chevron back /></button>
                         <span aria-live="polite" className="text-[13px] font-semibold">{title}</span>
-                        <button type="button" aria-label="Next month" onClick={() => moveMonth(1)} className={cn(ARROW, "size-[30px] rounded-full")}><Chevron /></button>
+                        <button type="button" aria-label="Next month" onClick={() => moveMonth(1)} className={cn(ARROW, "size-[30px] rounded-full hover:bg-card")}><Chevron /></button>
                     </div>
                     <div aria-hidden="true" className="grid grid-cols-7 gap-0.5">
                         {HEADS.map((h, i) => <span key={i} className="grid h-[22px] place-items-center text-[11px] text-muted-foreground">{h}</span>)}
@@ -104,7 +111,7 @@ export function DatePicker({ value, onChange, busy }: { value: string; onChange:
                                     className={cn(
                                         "relative h-8 cursor-pointer rounded-full border-0 p-0 font-[inherit] text-[12.5px] tabular-nums",
                                         on ? "bg-foreground font-semibold text-background"
-                                            : cn("bg-transparent hover:bg-muted", inMonth ? "text-foreground" : "text-muted-foreground",
+                                            : cn("bg-transparent hover:bg-card", inMonth ? "text-foreground" : "text-muted-foreground",
                                                 d === now && "font-semibold shadow-[inset_0_0_0_1.5px_var(--accent)]"),
                                     )}>
                                     {parse(d).getDate()}
