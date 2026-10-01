@@ -6,7 +6,7 @@ import { useMemo, useSyncExternalStore } from "react"
 import { getVersion, subscribe } from "@/bridge"
 import { isOpen, isOverdue, isTest, normalizePrefs, occurrences, statusLabel, tmeta } from "@/core/model"
 import { addDays, diffDays, dur, iso, monday, parse, today as todayIso, DOW, MON } from "@/core/dates"
-import { classWeekday, courseRunsOn, dayInfo, weekOf } from "@/core/school"
+import { classWeekday, courseRunsOn, currentTerm, dayInfo, inTerm, weekOf } from "@/core/school"
 import type { SchoolCalendar } from "@/core/school"
 import { weekLabel } from "@/lib/school-bits"
 import { schoolCal } from "@/data/query"
@@ -255,9 +255,13 @@ export function cellLabel(c: Cell): string {
 
 export interface TimetableDay { weekday: number; dow: string; hours: number; slots: ClassSlot[] }
 
-/** The weekly timetable, Monday to Saturday, and Sunday only if a class lands there. */
-export function timetable(courses: Course[], f: Filters): TimetableDay[] {
-    const slots = byWeekday(classes(courses, f))
+/**
+ * The weekly timetable, Monday to Saturday, and Sunday only if a class lands there. With a
+ * calendar it holds the anchor's semester (the current one between semesters) and all-year courses.
+ */
+export function timetable(courses: Course[], f: Filters, cal: SchoolCal = null, anchor = ""): TimetableDay[] {
+    const term = cal ? dayInfo(cal, anchor).term ?? currentTerm(cal, anchor) : null
+    const slots = byWeekday(classes(courses.filter((c) => inTerm(cal, c.term, term)), f))
     return [1, 2, 3, 4, 5, 6, 0]
         .filter((w) => (w !== 0 && w !== 6) || (slots.get(w) || []).length)
         .map((w) => {
@@ -383,7 +387,7 @@ export const useWeek = () => {
 
 export const useMonth = () => {
     const input = useViewInput()
-    return useMemo(() => ({ month: monthCells(input), timetable: timetable(input.courses, input.filters), schedule: input.schedule }), [input])
+    return useMemo(() => ({ month: monthCells(input), timetable: timetable(input.courses, input.filters, input.cal, input.anchor),schedule: input.schedule }), [input])
 }
 
 export const useTable = () => {

@@ -187,6 +187,16 @@ describe("the month", () => {
         const sun = course({ id: "s", meetings: [mtg("m4", 0, "10:00", "11:00")] })
         expect(timetable([sun], ALL).map((d) => d.dow)).toEqual(["Mon", "Tue", "Wed", "Thu", "Fri", "Sun"])
     })
+
+    it("keeps the timetable to the anchor's semester and all-year courses", () => {
+        const fall = course({ ...anat, term: "Fall 2026" }), winter = course({ ...phys, term: "Winter 2027" }, 1)
+        const ids = (t: ReturnType<typeof timetable>) => t.flatMap((d) => d.slots.map((x) => x.mtg.id))
+        expect(ids(timetable([fall, winter], ALL, TWO, "2026-10-14"))).toEqual(["m3"])
+        expect(ids(timetable([fall, winter], ALL, TWO, "2026-09-07"))).toEqual(["m1", "m2"])
+        const both = course({ ...anat, term: "" })
+        expect(ids(timetable([both, winter], ALL, TWO, "2026-10-14"))).toEqual(["m1", "m3", "m2"])
+        expect(ids(timetable([fall, winter], ALL, null, "2026-10-14"))).toEqual(["m1", "m3", "m2"])
+    })
 })
 
 describe("the table", () => {
