@@ -46,6 +46,16 @@ export function normalizeSchool(raw: unknown): SchoolCalendar | null {
     .map((t) => ({ name: cut(t.name, SCHOOL_LIMITS.term) || 'Semester', start: t.start, end: t.end }))
     .sort((a, b) => a.start.localeCompare(b.start)).slice(0, SCHOOL_LIMITS.terms);
   if (!terms.length) return null;
+  /* names are how courses find their semester: a later name taken already gets " 2", " 3"… */
+  const taken = new Set<string>();
+  for (const t of terms) {
+    const base = t.name;
+    for (let n = 2; taken.has(t.name.toLowerCase()); n++) {
+      const tail = ' ' + n;
+      t.name = base.slice(0, SCHOOL_LIMITS.term - tail.length).trimEnd() + tail;
+    }
+    taken.add(t.name.toLowerCase());
+  }
   const days = (Array.isArray(r.days) ? r.days as Record<string, unknown>[] : [])
     .filter((d): d is { from: string; to?: unknown; kind: SchoolKind; label?: unknown; follows?: unknown } => d && validDate(d.from) && isKind(d.kind))
     .map((d) => {

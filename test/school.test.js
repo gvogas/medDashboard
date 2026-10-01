@@ -43,6 +43,18 @@ describe('a school calendar', () => {
     expect(normalizeSchool({})).toBeNull();
   });
 
+  it('gives each semester its own name', () => {
+    const term = (name, start) => ({ name, start, end: start });
+    const c = normalizeSchool({ terms: [
+      term('', '2026-09-01'), term(' ', '2026-10-01'), term('Fall', '2026-11-01'), term('fall', '2026-12-01'),
+    ] });
+    expect(c.terms.map((t) => t.name)).toEqual(['Semester', 'Semester 2', 'Fall', 'fall 2']);
+    const twice = normalizeSchool({ terms: [term('Fall 2026', '2026-09-01'), term('Fall 2026', '2026-10-01')] });
+    expect(twice.terms.map((t) => t.name)).toEqual(['Fall 2026', 'Fall 2026 2']);
+    const long = 'x'.repeat(40);
+    expect(normalizeSchool({ terms: [term(long, '2026-09-01'), term(long, '2026-10-01')] }).terms[1].name).toBe('x'.repeat(38) + ' 2');
+  });
+
   it('says what kind of day each date is', () => {
     expect(dayInfo(cal, '2026-10-05')).toMatchObject({ kind: 'off', label: 'Provincial election' });
     expect(dayInfo(cal, '2026-10-06')).toMatchObject({ kind: 'swap', follows: 1 });
