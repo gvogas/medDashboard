@@ -18,6 +18,7 @@ import { SidebarPlayer } from "./sidebar-player"
 import { Icon } from "./bits"
 import { album, artist, fakeApi, page, playlist, resetEngine, results, setPlayer, track } from "./test-spotify"
 import { showApp } from "@/data/signin"
+import { ui } from "@/data/ui"
 
 const WEIGHTLESS = track("t1", { title: "Weightless", progressMs: 191000, url: "https://open.spotify.com/track/t1" })
 
@@ -29,7 +30,7 @@ beforeEach(() => {
     document.body.innerHTML = '<div id="app"></div>'
     showApp()   /* the page's keys work only while the app shows */
 })
-afterEach(() => { cleanup(); vi.useRealTimers() })
+afterEach(() => { cleanup(); vi.useRealTimers(); ui.bg = "med" })
 
 const show = () => render(<SpotifyPage />, { container: document.getElementById("app")! })
 const card = (name: string) => within(screen.getByRole("region", { name }))
@@ -378,6 +379,44 @@ describe("the Spotify page", () => {
         expect(list.getByRole("button", { name: /This tab/ }).querySelector("svg")).toBeNull()
         expect(player.getByTitle("Volume on MacBook").querySelector("svg")).toBeTruthy()
         expect(screen.getByRole("region", { name: "Player" }).textContent).not.toMatch(/[🔈🔉🔊🔇💻📱📺🎮🚗]/u)
+    })
+
+    it("puts a search picked for the theme above the library, and runs it", async () => {
+        api.spotifySearch.mockResolvedValue(results("", { playlists: [playlist("pl7", "Night Shift Study")] }))
+        show()
+        const music = card("Browse music")
+        const pick = within(music.getByRole("region", { name: "For the night shift" }))
+        expect(pick.getByText("Picked for the Medicine theme")).toBeTruthy()
+        expect(pick.getByText("Night shift").className).toContain("font-serif")
+        fireEvent.click(pick.getByRole("button", { name: /Night shift/ }))
+        await waitFor(() => expect(api.spotifySearch).toHaveBeenCalledWith("night shift study", null, 0))
+        expect(await music.findByText("Night Shift Study")).toBeTruthy()
+        expect(music.getByText("for “night shift study”")).toBeTruthy()
+        expect((music.getByRole("searchbox", { name: "Search Spotify" }) as HTMLInputElement).value).toBe("night shift study")
+        fireEvent.click(music.getByRole("button", { name: "‹ Library" }))
+        expect(await music.findByRole("region", { name: "For the night shift" })).toBeTruthy()
+    })
+
+    it("names the pick for the theme in use", () => {
+        ui.bg = "cs"
+        show()
+        const pick = within(card("Browse music").getByRole("region", { name: "For deep work" }))
+        expect(pick.getByText("Picked for the Computer Science theme")).toBeTruthy()
+        expect(pick.getByText("Deep work")).toBeTruthy()
+    })
+
+    it("draws the search and the library as the prototype", async () => {
+        show()
+        const music = card("Browse music")
+        const form = within(music.getByRole("search"))
+        expect(form.getByRole("button", { name: "Search" }).className).toContain("bg-foreground")
+        expect(form.getByText("Spotify")).toBeTruthy()
+        expect(music.getByRole("heading", { name: "Library" })).toBeTruthy()
+        const liked = await music.findByRole("button", { name: "Open Liked Songs" })
+        expect(liked.querySelector("svg")).toBeTruthy()
+        expect(liked.textContent).not.toContain("♥")
+        expect(liked.querySelector("span[aria-hidden]")!.className).toContain("bg-primary")
+        expect((await music.findByRole("button", { name: "Play Study mix" })).querySelector("svg")).toBeTruthy()
     })
 })
 

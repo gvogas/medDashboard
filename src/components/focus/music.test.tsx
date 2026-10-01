@@ -122,6 +122,9 @@ describe("the panel", () => {
         expect(tab("Library").getAttribute("aria-pressed")).toBe("true")
         const open = await panel().findByRole("button", { name: "Open Study mix" })
         expect(open.closest(".grid-cols-3")).toBeTruthy()
+        /* the theme's pick is the page's */
+        expect(panel().queryByRole("region", { name: /^For / })).toBeNull()
+        expect(panel().getByRole("heading", { name: "Library" })).toBeTruthy()
     })
 
     it("switches between Up next, Recent and Library", async () => {

@@ -10,6 +10,7 @@ import {
 } from "@/data/spotify"
 import { chipButton, Count, Empty, ghost, Loading, More, Refresh, Sub } from "./bits"
 import { AlbumRow, ArtistRow, LikedTile, PlaylistRow, PlaylistTile, TrackRow } from "./rows"
+import { ForTheme } from "./for-theme"
 import { goBack } from "./use-music"
 
 interface ListProps { s: SpotifySnapshot; cooling: boolean }
@@ -84,30 +85,42 @@ export const RecentActions = ({ s }: { s: SpotifySnapshot }) =>
 
 /* ── the library ── */
 
-/** Liked Songs and the playlists as covers: three across `compact`, else as many as fit. */
+/** Liked Songs and the playlists as covers: three across `compact` (the focus panel, whose
+    head says "Library"); on the page as many as fit, under the theme's pick and a heading. */
 export function Library({ s, cooling, compact }: ListProps & { compact: boolean }) {
     useEffect(() => { if (!document.hidden) ensurePlaylists() }, [s, cooling])
     const pl = s.cache.playlists
-    const grid = cn("grid gap-3 px-3.5 py-3", compact ? "grid-cols-3" : "grid-cols-[repeat(auto-fill,minmax(118px,1fr))]")
+    const tiles = (
+        <div className={compact ? "grid grid-cols-3 gap-3 px-5 py-3" : "grid grid-cols-[repeat(auto-fill,minmax(132px,1fr))] gap-3.5"}>
+            <LikedTile total={s.cache.tracks.liked ? s.cache.tracks.liked.total : null} />
+            {pl?.items.map((p) => <PlaylistTile key={p.id} p={p} openable={canOpen(p, s.cache.me)} />)}
+        </div>
+    )
+    const after = !pl
+        ? s.busy.has("playlists") ? <Loading what="Playlists" cooling={cooling} /> : null
+        : !pl.items.length
+            ? <Empty>No playlists yet.</Empty>
+            : pl.next && <More onClick={() => more("playlists")} left={pl.total - pl.items.length} />
+    if (compact) return <>{tiles}{after}</>
     return (
-        <>
-            <div className={grid}>
-                <LikedTile total={s.cache.tracks.liked ? s.cache.tracks.liked.total : null} />
-                {pl?.items.map((p) => <PlaylistTile key={p.id} p={p} openable={canOpen(p, s.cache.me)} />)}
-            </div>
-            {!pl
-                ? s.busy.has("playlists") ? <Loading what="Playlists" cooling={cooling} /> : null
-                : !pl.items.length
-                    ? <Empty>No playlists yet.</Empty>
-                    : pl.next && <More onClick={() => more("playlists")} left={pl.total - pl.items.length} />}
-        </>
+        <div className="flex flex-col gap-[22px] p-[18px] max-[560px]:p-3.5">
+            <ForTheme />
+            <section aria-label="Your library" className="flex flex-col gap-2.5">
+                <div className="flex min-h-7 items-center gap-2">
+                    <h3 className="m-0 text-[14px] font-semibold text-foreground">Library</h3>
+                    <LibraryHead s={s} />
+                </div>
+                {tiles}
+                {after}
+            </section>
+        </div>
     )
 }
 
 /** The library's heading: how many playlists, and ↻. */
 export const LibraryHead = ({ s }: { s: SpotifySnapshot }) => (
     <>
-        {s.cache.playlists && <em className="ml-auto text-[10.5px] tracking-[.04em] text-muted-foreground not-italic">{s.cache.playlists.total} playlists</em>}
+        {s.cache.playlists && <em className="ml-auto text-[12px] text-muted-foreground not-italic">{s.cache.playlists.total} playlists</em>}
         <span className={cn(!s.cache.playlists && "ml-auto")}><Refresh onClick={() => refresh("playlists")} label="Refresh playlists" /></span>
     </>
 )

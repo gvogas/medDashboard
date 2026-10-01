@@ -6,7 +6,7 @@ import { memo } from "react"
 import { cn } from "@/lib/utils"
 import { activate, openAlbum, openArtist, openPlaylist, play, queueAdd, type Album, type Artist, type Playlist, type Track } from "@/data/spotify"
 import { openFrom } from "./use-music"
-import { Art, Eq, mmss } from "./bits"
+import { Art, Eq, Icon, mmss } from "./bits"
 
 const row = "group/row flex items-center gap-2.5 border-t border-line-2 px-3.5 py-1.5 text-[12.5px] first:border-t-0 hover:bg-muted"
 const what = "min-w-0 flex-1 leading-[1.3]"
@@ -111,22 +111,27 @@ export const PlaylistRow = memo(function PlaylistRow({ p, openable }: { p: Playl
     )
 })
 
-/* ── the library's cover grid ── */
+/* ── the library's cover grid (the prototype's lines 740–752) ── */
 
-const tile = "group/tile relative flex min-w-0 flex-col gap-1 text-left"
-const tileButton = "flex min-w-0 cursor-pointer flex-col gap-1 rounded-[9px] border-0 bg-transparent p-0 text-left font-[inherit] text-inherit"
-const cover = "aspect-square w-full rounded-[8px] shadow-[0_6px_16px_-10px_rgba(0,0,0,.45)] transition-transform duration-200 group-hover/tile:-translate-y-0.5 motion-reduce:transition-none motion-reduce:group-hover/tile:translate-y-0"
+const tile = "group/tile relative flex min-w-0 flex-col text-left"
+const tileButton = "flex min-w-0 cursor-pointer flex-col gap-2 rounded-[6px] border-0 bg-transparent p-0 text-left font-[inherit] text-inherit"
+const cover = "aspect-square w-full rounded-[6px]"
+const tileName = "truncate text-[13px] font-semibold text-foreground"
+const tileLine = "truncate text-[12px] text-muted-foreground"
+
 /* ▶ sits on the cover's corner: a square over the tile's top, the button in its corner */
 function PlayOnCover({ name, onPlay }: { name: string; onPlay: () => void }) {
     return (
-        <span className="pointer-events-none absolute inset-x-0 top-0 flex aspect-square items-end justify-end p-1.5">
+        <span className="pointer-events-none absolute inset-x-0 top-0 flex aspect-square items-end justify-end p-2">
             <button
                 type="button"
                 title={"Play " + name}
                 aria-label={"Play " + name}
                 onClick={onPlay}
-                className="pointer-events-auto grid size-8 cursor-pointer place-items-center rounded-full border-0 bg-[var(--spotify)] p-0 text-[11px] text-white opacity-0 shadow-[0_6px_14px_-4px_rgba(0,0,0,.5)] group-hover/tile:opacity-100 focus-visible:opacity-100 [@media(hover:none)]:opacity-100"
-            >▶</button>
+                className="pointer-events-auto grid size-9 cursor-pointer place-items-center rounded-full border-0 bg-primary p-0 text-primary-foreground opacity-0 shadow-[0_6px_14px_-4px_rgba(0,0,0,.5)] group-hover/tile:opacity-100 focus-visible:opacity-100 [@media(hover:none)]:opacity-100"
+            >
+                <Icon name="play" className="size-3.5" />
+            </button>
         </span>
     )
 }
@@ -136,9 +141,13 @@ export const LikedTile = memo(function LikedTile({ total }: { total: number | nu
     return (
         <div className={tile}>
             <button type="button" aria-label="Open Liked Songs" className={tileButton} onClick={() => openFrom(() => openPlaylist("liked", "Liked Songs"))}>
-                <span aria-hidden="true" className={cn(cover, "grid place-items-center bg-[linear-gradient(135deg,color-mix(in_srgb,var(--accent)_65%,#fff),var(--accent)_55%,color-mix(in_srgb,var(--accent)_55%,#000))] text-[28px] text-white")}>♥</span>
-                <b className="truncate text-[12px] font-semibold text-foreground">Liked Songs</b>
-                <span className="truncate text-[11px] text-muted-foreground">{total == null ? "Your saved tracks" : total + " songs"}</span>
+                <span aria-hidden="true" className={cn(cover, "grid place-items-center bg-primary text-primary-foreground")}>
+                    <Icon name="heart" className="size-10" />
+                </span>
+                <span className="flex min-w-0 flex-col">
+                    <b className={tileName}>Liked Songs</b>
+                    <span className={tileLine}>{total == null ? "Your saved tracks" : total + " songs"}</span>
+                </span>
             </button>
             {/* Liked Songs has no context: it plays the tracks loaded, so only once they are */}
             {!!total && <PlayOnCover name="Liked Songs" onPlay={() => playNow(null, null, "liked")} />}
@@ -146,7 +155,7 @@ export const LikedTile = memo(function LikedTile({ total }: { total: number | nu
     )
 })
 
-/** A playlist: opens it when Spotify lets Rounds, else plays it. */
+/** A playlist: opens it when Spotify lets Term, else plays it. */
 export const PlaylistTile = memo(function PlaylistTile({ p, openable }: { p: Playlist; openable: boolean }) {
     const sub = [p.owner, p.count == null ? "" : String(p.count)].filter(Boolean).join(" · ")
     return (
@@ -159,8 +168,10 @@ export const PlaylistTile = memo(function PlaylistTile({ p, openable }: { p: Pla
                 onClick={() => openable ? openFrom(() => openPlaylist(p.id, p.name)) : playNow(null, p.uri)}
             >
                 <Art src={p.art} className={cover} />
-                <b className="truncate text-[12px] font-semibold text-foreground">{p.name}</b>
-                <span className="truncate text-[11px] text-muted-foreground">{sub || " "}</span>
+                <span className="flex min-w-0 flex-col">
+                    <b className={tileName}>{p.name}</b>
+                    <span className={tileLine}>{sub || " "}</span>
+                </span>
             </button>
             {openable && <PlayOnCover name={p.name} onPlay={() => playNow(null, p.uri)} />}
         </div>

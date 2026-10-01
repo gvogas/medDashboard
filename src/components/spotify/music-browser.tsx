@@ -6,7 +6,7 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react"
 import { cn } from "@/lib/utils"
 import { ensureMe, openHome, openQueue, openRecent, search, typed, useSpotify, type SpotifyPlace } from "@/data/spotify"
-import { chipButton, SpotifyMark } from "./bits"
+import { chipButton, Icon, SpotifyMark } from "./bits"
 import { Library, LibraryHead, OpenList, QueueActions, QueueList, RecentActions, RecentList, Results } from "./lists"
 import { openRoot, useCooling } from "./use-music"
 
@@ -43,11 +43,12 @@ export function Tabs<T extends string>({ tabs, value, onPick, label, tone = "seg
     )
 }
 
-/** The search box. What is typed searches after a pause; Enter at once. */
-function SearchBox({ q, hint }: { q: string; hint: boolean }) {
+/** The search box. What is typed searches after a pause; Enter at once. On the page (`page`)
+    the / hint and "Spotify" beside it. */
+function SearchBox({ q, page }: { q: string; page: boolean }) {
     const [value, setValue] = useState(q)
     const box = useRef<HTMLInputElement>(null)
-    /* a search started elsewhere (the other place the browser shows) fills the box, unless it is being typed in */
+    /* a search started elsewhere (the other place the browser shows, the theme's pick) fills the box, unless it is being typed in */
     useEffect(() => { if (document.activeElement !== box.current) setValue(q) }, [q])
 
     return (
@@ -58,23 +59,26 @@ function SearchBox({ q, hint }: { q: string; hint: boolean }) {
                 typed("")                                   /* no delayed search after this one */
                 openRoot(() => search(value))
             }}
-            className="group/search flex min-w-0 flex-1 basis-[220px] items-center gap-2 rounded-full border border-border bg-muted py-1 pr-1 pl-3 focus-within:border-primary"
+            className="flex min-w-0 flex-1 basis-[240px] items-center gap-2"
         >
-            <SpotifyMark className="size-4" />
-            <input
-                ref={box}
-                type="search"
-                name="q"
-                data-music-search=""
-                placeholder="Search tracks, artists, albums, playlists"
-                aria-label="Search Spotify"
-                autoComplete="off"
-                value={value}
-                onChange={(e) => { setValue(e.target.value); typed(e.target.value) }}
-                className="min-w-0 flex-1 border-0 bg-transparent py-1 text-[13px] text-foreground outline-none placeholder:text-muted-foreground"
-            />
-            {hint && <kbd title="Press / to search" className="flex-none rounded border border-border px-1.5 py-0.5 font-mono text-[10px] leading-none text-muted-foreground group-focus-within/search:hidden">/</kbd>}
-            <button type="submit" className="flex-none cursor-pointer rounded-full border-0 bg-primary px-3 py-1 text-[12px] font-bold text-primary-foreground hover:brightness-110">Search</button>
+            <label className="group/search flex h-10 min-w-0 flex-1 items-center gap-2 rounded-full border border-border px-3.5 text-muted-foreground focus-within:border-primary">
+                <Icon name="search" className="size-[15px]" />
+                <input
+                    ref={box}
+                    type="search"
+                    name="q"
+                    data-music-search=""
+                    placeholder="Songs, artists, albums, playlists"
+                    aria-label="Search Spotify"
+                    autoComplete="off"
+                    value={value}
+                    onChange={(e) => { setValue(e.target.value); typed(e.target.value) }}
+                    className="min-w-0 flex-1 border-0 bg-transparent text-[14px] text-foreground outline-none placeholder:text-muted-foreground"
+                />
+                {page && <kbd title="Press / to search" className="flex-none rounded border border-border px-1.5 py-0.5 font-mono text-[10px] leading-none text-muted-foreground group-focus-within/search:hidden">/</kbd>}
+            </label>
+            <button type="submit" className="h-10 flex-none cursor-pointer rounded-full border-0 bg-foreground px-[18px] text-[13px] font-medium text-background hover:bg-primary hover:text-primary-foreground">Search</button>
+            {page && <span className="ml-1.5 flex flex-none items-center gap-1.5 text-[12px] text-ink-2 max-[560px]:hidden"><SpotifyMark className="size-4" />Spotify</span>}
         </form>
     )
 }
@@ -113,7 +117,8 @@ export function MusicBrowser({ compact = false }: { compact?: boolean }) {
     const pick = (t: Tab) => openRoot(() => t === "queue" ? openQueue(true) : t === "recent" ? openRecent() : openHome())
 
     let head: ReactNode = null
-    if (what === "library") head = <Heading title="Library"><LibraryHead s={s} /></Heading>
+    /* on the page the library heads its own list, under the theme's pick */
+    if (what === "library") head = compact ? <Heading title="Library"><LibraryHead s={s} /></Heading> : null
     else if (what === "queue") head = <Heading title="Up next"><span className="ml-auto"><QueueActions /></span></Heading>
     else if (what === "recent") head = <Heading title="Recently played"><span className="ml-auto"><RecentActions s={s} /></span></Heading>
     else if (what === "search") {
@@ -126,17 +131,15 @@ export function MusicBrowser({ compact = false }: { compact?: boolean }) {
 
     return (
         <section aria-label="Find music" className="flex min-h-0 min-w-0 flex-1 flex-col">
-            <div className="flex flex-col gap-2.5 border-b border-line-2 px-3.5 pt-3 pb-2.5">
-                <div className="flex flex-wrap items-center gap-2">
-                    {compact && <Tabs label="Music" tabs={TABS} value={tab} onPick={pick} />}
-                    <SearchBox q={s.place.q} hint={!compact} />
-                </div>
+            <div className={cn("flex flex-none flex-col gap-2.5 border-b border-line-2", compact ? "px-5 pt-3 pb-2.5" : "px-[18px] py-3.5 max-[560px]:px-3.5")}>
+                {compact && <Tabs label="Music" tabs={TABS} value={tab} onPick={pick} />}
+                <SearchBox q={s.place.q} page={!compact} />
                 {head}
             </div>
             <div
                 ref={scroller}
                 onScroll={(e) => { scrolls.current.set(key, e.currentTarget.scrollTop) }}
-                className="min-h-0 flex-1 overflow-y-auto overscroll-contain"
+                className="@container min-h-0 flex-1 overflow-y-auto overscroll-contain"
             >
                 {what === "open" && <OpenList s={s} cooling={cooling} />}
                 {what === "search" && <Results s={s} cooling={cooling} />}
@@ -151,8 +154,8 @@ export function MusicBrowser({ compact = false }: { compact?: boolean }) {
 function Heading({ title, note, children }: { title: string; note?: string; children?: ReactNode }) {
     return (
         <div className="flex min-h-7 items-center gap-2">
-            <h3 className="m-0 text-[11px] font-bold tracking-[.1em] text-ink-2 uppercase">{title}</h3>
-            {note && <span className="min-w-0 truncate text-[11.5px] text-muted-foreground">{note}</span>}
+            <h3 className="m-0 text-[14px] font-semibold text-foreground">{title}</h3>
+            {note && <span className="min-w-0 truncate text-[12px] text-muted-foreground">{note}</span>}
             {children}
         </div>
     )
