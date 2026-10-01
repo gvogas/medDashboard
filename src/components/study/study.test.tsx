@@ -254,6 +254,18 @@ describe("History", () => {
         expect(h.textContent).toContain("21 – 27 Sep")
     })
 
+    it("puts the week in two columns when wide: the total, chart and courses beside the sessions", async () => {
+        await show("History")
+        const h = history()
+        const left = h.querySelector<HTMLElement>('[data-col="chart"]')!, right = h.querySelector<HTMLElement>('[data-col="sessions"]')!
+        expect(left.parentElement).toBe(right.parentElement)
+        expect(left.parentElement!.className).toContain("@min-[880px]:grid-cols-2")
+        expect(left.textContent).toContain("1h 00m goal")
+        expect(within(left).getByText("ANAT")).toBeTruthy()   /* the course bars */
+        expect(within(right).getAllByRole("listitem").map((li) => li.dataset.session)).toEqual(["s1", "s2"])
+        expect(right.className).toContain("@container")
+    })
+
     it("switches to the month: the stats, the calendar, the picked day", async () => {
         await show("History")
         const h = history()
