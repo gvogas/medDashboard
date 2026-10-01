@@ -1,5 +1,6 @@
 // The Study page's three tiles: the streak, today against the daily goal, and the term
-// so far (the last 12 weeks with no term start). With no goal, Today offers to set one.
+// so far (the last 12 weeks with no term start), the numbers in serif. With no goal,
+// Today offers to set one.
 
 import type { ReactNode } from "react"
 import { cn } from "@/lib/utils"
@@ -21,7 +22,7 @@ export function StudyTiles() {
             />
             <Tile
                 label="Today"
-                icon={goal ? <GoalRing part={t.today.minutes} whole={goal} /> : <Icon><Calendar /></Icon>}
+                icon={goal ? <GoalRing part={t.today.minutes} whole={goal} className="size-12 max-[520px]:size-10" /> : <Icon><Calendar /></Icon>}
                 value={<>{duration(t.today.minutes)}{goal > 0 && <small> of {duration(goal)}</small>}</>}
                 sub={goal
                     ? t.today.sub
@@ -46,11 +47,11 @@ export function StudyTiles() {
 function Tile({ label, icon, value, sub, className }: { label: string; icon: ReactNode; value: ReactNode; sub: ReactNode; className?: string }) {
     return (
         <Card className={cn("min-w-0", className)}>
-            <div role="group" aria-label={label} className="flex items-center gap-3.5 px-4 py-3.5 max-[520px]:gap-3 max-[520px]:px-3.5 max-[520px]:py-2.5">
+            <div role="group" aria-label={label} className="flex min-h-[84px] items-center gap-4 px-5 py-3 max-[520px]:min-h-0 max-[520px]:gap-3 max-[520px]:px-3.5 max-[520px]:py-2.5">
                 {icon}
-                <span className="flex min-w-0 flex-col gap-px">
-                    <span className="text-[11px] font-semibold tracking-[.1em] text-ink-2 uppercase">{label}</span>
-                    <b className="text-[26px] leading-[1.15] font-extrabold tracking-[-.01em] text-foreground tabular-nums max-[520px]:text-[22px] [&_small]:text-[13px] [&_small]:font-semibold [&_small]:text-ink-2">{value}</b>
+                <span className="flex min-w-0 flex-col gap-0.5">
+                    <span className="text-[12.5px] text-muted-foreground">{label}</span>
+                    <b className="font-serif text-[28px] leading-none font-medium text-foreground tabular-nums max-[520px]:text-[24px] [&_small]:text-[15px] [&_small]:font-normal [&_small]:text-muted-foreground">{value}</b>
                     <span className="text-[12px] text-ink-2">{sub}</span>
                 </span>
             </div>
@@ -61,7 +62,7 @@ function Tile({ label, icon, value, sub, className }: { label: string; icon: Rea
 /** The tile's picture in a soft square: the accent's, or the study colour's. */
 const Icon = ({ study = false, children }: { study?: boolean; children: ReactNode }) => (
     <span aria-hidden="true" className={cn(
-        "grid size-12 flex-none place-items-center rounded-[13px] max-[520px]:size-10 [&_svg]:size-6",
+        "grid size-11 flex-none place-items-center rounded-[8px] max-[520px]:size-10 [&_svg]:size-5",
         study ? "bg-[var(--study-soft)] text-[var(--study-ink)]" : "bg-accent text-accent-foreground",
     )}>{children}</span>
 )
