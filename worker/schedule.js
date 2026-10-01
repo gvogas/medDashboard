@@ -5,13 +5,22 @@
 // A PDF arrives as text (read in the browser, like outlines) and goes to the text model,
 // thinking little: a timetable needs reading, not reasoning. About 110 neurons a page.
 // A screenshot arrives as a JPEG or PNG made smaller in the browser and goes to the vision
-// model (Task 3). Both count against the same daily reads as outlines (limitOutline).
+// model (VISION_MODEL). Both count against the same daily reads as outlines (limitOutline).
 
 import { HttpError } from './http.js';
 import { DAYS, KINDS, askModel, cleanClasses, cleanCode, clip, modelJson } from './outline.js';
+import { runModel } from './ai.js';
 
 const MAX_COURSES = 15;
 const TEXT_TOKENS = 3000;
+
+// A screenshot goes to Llama 4 Scout: it reads images given as data URIs (never URLs) and
+// answers in JSON mode. About 110 neurons for a 1600 px screenshot: ~1,900 image tokens and
+// ~600 prompt tokens in at 24,545 neurons/M, ~600 out at 77,273/M. Measured in Task 13.
+export const VISION_MODEL = '@cf/meta/llama-4-scout-17b-16e-instruct';
+export const MAX_IMAGE_BYTES = 4 * 1024 * 1024;
+const IMAGE_TYPES = /^image\/(png|jpeg)$/i;
+const VISION_TOKENS = 2000;    /* its default is 256: too few for a timetable */
 
 const SCHEMA = {
   type: 'object',
@@ -75,7 +84,37 @@ export function cleanSchedule(raw) {
   return { term: clip(o.term, 40), courses };
 }
 
+/** Bytes as base64, in chunks: String.fromCharCode(...bytes) overflows the stack on a large picture. */
+export function toBase64(bytes) {
+  let s = '';
+  for (let i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+  return btoa(s);
+}
+
+async function askImage(ai, { bytes, type, claim }, today) {
+  if (bytes.byteLength > MAX_IMAGE_BYTES) throw new HttpError(413, { error: 'too_large' });
+  if (claim) await claim();
+  const out = await runModel(ai, VISION_MODEL, {
+    messages: [
+      { role: 'system', content: RULES.join(' ') },
+      { role: 'user', content: [
+        { type: 'text', text: 'Today is ' + today + '. Read this timetable.' },
+        { type: 'image_url', image_url: { url: 'data:' + type.toLowerCase() + ';base64,' + toBase64(bytes) } },
+      ] },
+    ],
+    response_format: { type: 'json_schema', json_schema: SCHEMA },
+    max_tokens: VISION_TOKENS,
+    temperature: 0,
+  }, 'schedule');
+  return out?.response ?? out;
+}
+
 export async function readSchedule(ai, { today, ...doc }) {
+  if (/^image\//i.test(doc.type || '')) {
+    /* toMarkdown would describe other pictures with a model of its own: refuse them here */
+    if (!IMAGE_TYPES.test(doc.type)) throw new HttpError(415, { error: 'image_unsupported' });
+    return { ...cleanSchedule(await askImage(ai, doc, today)), truncated: false };
+  }
   const { answer, truncated } = await askModel(ai, doc, (text) => textPrompt(text, today), { effort: 'low', maxTokens: TEXT_TOKENS, what: 'schedule' });
   return { ...cleanSchedule(answer), truncated };
 }

@@ -6,6 +6,7 @@ const protectedRoutes = [
   ['GET', '/api/me'], ['PUT', '/api/me'], ['GET', '/api/sync'],
   ['POST', '/api/session/revoke-all'],
   ['GET', '/api/ai/reads'],
+  ['POST', '/api/ai/schedule'],
   ...['courses', 'items', 'quotes'].flatMap((kind) => ['GET', 'PUT', 'DELETE'].map((method) => [method, `/api/${kind}/id`])),
   ...['connect', 'player', 'token', 'devices', 'me', 'recent', 'search', 'albums/id/tracks', 'artists/id/albums', 'playlists', 'playlists/id/tracks', 'queue'].map((path) => ['GET', `/api/spotify/${path}`]),
   ...['play', 'pause', 'next', 'previous', 'restart'].map((action) => ['POST', `/api/spotify/player/${action}`]),

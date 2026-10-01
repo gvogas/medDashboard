@@ -5,6 +5,7 @@ import { claimAttempt, recordSuccess } from './throttle.js';
 import { limitLogin, limitOutline, readsLeft } from './limits.js';
 import { readOutline, MAX_BYTES } from './outline.js';
 import { readSchool } from './school.js';
+import { readSchedule } from './schedule.js';
 import { validateProfile, validateCourse, validateItem, validateQuote, validateStudySession, validateAchievement, validateId } from './validate.js';
 import { getUserForLogin, getProfile, updateProfile, getRow, upsertRow, deleteRow, syncPage, bumpPasswordGen, saveSpotifyTokens, deleteSpotifyTokens } from './db.js';
 import * as spotify from './spotify.js';
@@ -135,6 +136,7 @@ const aiRead = (read, what) => async ({ request, env, url }) => {
 const routes = [
   ['POST', /^\/api\/outline$/, aiRead(readOutline, 'outline')],
   ['POST', /^\/api\/school-calendar$/, aiRead(readSchool, 'calendar')],
+  ['POST', /^\/api\/ai\/schedule$/, aiRead(readSchedule, 'schedule')],
   ['GET', /^\/api\/ai\/reads$/, async ({ request, env }) => json(await readsLeft(env.DB, await requireUser(request, env)))],
   // Username + password. Accounts are created with `npm run user:add`.
   ['POST', /^\/api\/login$/, async ({ request, env, url }) => {
