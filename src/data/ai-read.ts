@@ -47,6 +47,7 @@ const AI_ERRORS: Record<string, string> = {
     outline_limit: "That is the limit of 10 AI reads for today (outlines, timetables and calendars). Try again tomorrow.",
     outline_quota: "The free AI allowance for today is used up. It resets at 8 pm Eastern (midnight UTC).",
     too_large: "That file is over 5 MB.",
+    ai_timeout: "The AI took too long to answer. Try again in a minute.",
 }
 
 type Flag = "outlineBusy" | "schoolBusy" | "scheduleBusy"

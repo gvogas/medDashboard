@@ -12,7 +12,9 @@
 // scored 18/21 against 14/21 for Llama 3.3 70B; see the study-tools spec.
 
 import { HttpError } from './http.js';
-import { runModel } from './ai.js';
+import { askJson, modelJson } from './ai.js';
+
+export { modelJson };
 
 export const MODEL = '@cf/openai/gpt-oss-120b';
 export const MAX_BYTES = 5 * 1024 * 1024;
@@ -158,17 +160,6 @@ function cleanDate(v) {
   return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === s ? s : '';
 }
 
-/** The model's answer as an object, or null: gpt-oss answers in JSON text, sometimes wrapped. */
-export function modelJson(raw) {
-  let o = raw;
-  if (o && typeof o === 'object' && Array.isArray(o.choices)) o = o.choices[0]?.message?.content;
-  if (typeof o === 'string') {
-    const m = o.match(/\{[\s\S]*\}/);
-    try { o = m ? JSON.parse(m[0]) : null; } catch { o = null; }
-  }
-  return o && typeof o === 'object' ? o : null;
-}
-
 /** Whatever the model returned, made safe and bounded. */
 export function cleanOutline(raw) {
   const o = modelJson(raw);
@@ -208,21 +199,21 @@ export async function outlineText(ai, bytes, type, name) {
 }
 
 /**
- * A document's text put to the model with `messages(text)`: {answer, truncated}.
- * `claim` runs just before the model does: only a document that reaches the model uses
- * one of the day's attempts, not a file that could not be converted or has no text.
+ * A document's text put to the model with `messages(text)` and its answer cleaned by `clean`:
+ * {...clean(answer), truncated}. `claim` runs just before the model does: only a document
+ * that reaches the model uses one of the day's reads, not a file that could not be converted
+ * or has no text.
  */
-export async function askModel(ai, { bytes, type, name, claim }, messages, { effort, maxTokens = MAX_TOKENS, what = 'outline' } = {}) {
+export async function askModel(ai, { bytes, type, name, claim }, messages, clean, { effort, maxTokens = MAX_TOKENS, what = 'outline' } = {}) {
   let text = (await outlineText(ai, bytes, type, name)).trim();
   if (text.length < 40) throw new HttpError(422, { error: 'outline_empty' });
   const truncated = text.length > MAX_CHARS;
   if (truncated) text = text.slice(0, MAX_CHARS);
   if (claim) await claim();
-  const out = await runModel(ai, MODEL, { messages: messages(text), max_tokens: maxTokens, temperature: 0, ...(effort ? { reasoning: { effort } } : {}) }, what);
-  return { answer: out?.response ?? out, truncated };
+  const input = { messages: messages(text), max_tokens: maxTokens, temperature: 0, ...(effort ? { reasoning: { effort } } : {}) };
+  return { ...await askJson(ai, MODEL, input, clean, what), truncated };
 }
 
 export async function readOutline(ai, { today, termStart, ...doc }) {
-  const { answer, truncated } = await askModel(ai, doc, (text) => prompt(text, today, termStart));
-  return { ...cleanOutline(answer), truncated };
+  return askModel(ai, doc, (text) => prompt(text, today, termStart), cleanOutline);
 }

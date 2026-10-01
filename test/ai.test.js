@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
-import { runModel } from '../worker/ai.js';
+import { runModel, askJson, modelJson } from '../worker/ai.js';
+import { HttpError } from '../worker/http.js';
 
 describe('runModel', () => {
   it('passes the input through and logs the tokens used', async () => {
@@ -16,5 +17,46 @@ describe('runModel', () => {
     await expect(runModel({ run: async () => { throw new Error('AiError: 4006: daily free allocation'); } }, '@cf/x', {}))
       .rejects.toMatchObject({ status: 429, body: { error: 'outline_quota' } });
     await expect(runModel({ run: async () => { throw new Error('boom'); } }, '@cf/x', {})).rejects.toThrow('boom');
+  });
+});
+
+describe('askJson', () => {
+  const clean = (raw) => { const o = modelJson(raw); if (!o || !('ok' in o)) throw new HttpError(502, { error: 'x_unreadable' }); return { ok: o.ok }; };
+
+  it('cleans a JSON answer after one call', async () => {
+    const ai = { run: vi.fn(async () => ({ response: 'Here: {"ok":1}' })) };
+    expect(await askJson(ai, '@cf/m', { messages: [{ role: 'user', content: 'hi' }] }, clean)).toEqual({ ok: 1 });
+    expect(ai.run).toHaveBeenCalledTimes(1);
+  });
+
+  it('asks once more when the answer is not JSON, with that answer and a reminder', async () => {
+    const ai = { run: vi.fn().mockResolvedValueOnce({ response: 'Sure! The dates are below.' }).mockResolvedValueOnce({ response: { ok: 2 } }) };
+    expect(await askJson(ai, '@cf/m', { messages: [{ role: 'user', content: 'hi' }], max_tokens: 10 }, clean)).toEqual({ ok: 2 });
+    const second = ai.run.mock.calls[1][1];
+    expect(second.max_tokens).toBe(10);
+    expect(second.messages).toEqual([
+      { role: 'user', content: 'hi' },
+      { role: 'assistant', content: 'Sure! The dates are below.' },
+      { role: 'user', content: 'That was not one valid JSON object. Answer again with only the JSON object, nothing else.' },
+    ]);
+  });
+
+  it("gives up after the second try with the reader's own error", async () => {
+    const ai = { run: vi.fn(async () => ({ response: 'no' })) };
+    await expect(askJson(ai, '@cf/m', { messages: [] }, clean)).rejects.toMatchObject({ status: 502, body: { error: 'x_unreadable' } });
+    expect(ai.run).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not retry JSON that the reader finds empty: asking again would cost the same for the same answer', async () => {
+    const ai = { run: vi.fn(async () => ({ response: '{}' })) };
+    await expect(askJson(ai, '@cf/m', { messages: [] }, clean)).rejects.toMatchObject({ status: 502 });
+    expect(ai.run).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('a model that does not answer', () => {
+  it('is a 504 ai_timeout after the time given', async () => {
+    await expect(runModel({ run: () => new Promise(() => {}) }, '@cf/x', {}, 'outline', 10))
+      .rejects.toMatchObject({ status: 504, body: { error: 'ai_timeout' } });
   });
 });

@@ -175,6 +175,9 @@ describe("the reading card", () => {
         await act(() => read(async () => { throw new TypeError("Failed to fetch") }))
         expect(fake.ui.importNote).toEqual({ text: "You seem to be offline. Reading outlines needs a connection.", error: true })
 
+        await act(() => read(async () => { throw new fake.ApiError(504, { error: "ai_timeout" }) }))
+        expect(fake.ui.importNote).toEqual({ text: "The AI took too long to answer. Try again in a minute.", error: true })
+
         await act(() => read(vi.fn(), vi.fn(), vi.fn(), async () => { throw new Error("locked") }))
         expect(fake.ui.importNote).toEqual({ text: "That file could not be opened. Is it a damaged or locked PDF?", error: true })
 

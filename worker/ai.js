@@ -7,17 +7,57 @@
 
 import { HttpError } from './http.js';
 
-/** One model call. A spent allowance (error 4006) is a 429 of its own. */
-export async function runModel(ai, model, input, what = 'ai') {
+/* Longer than any read seen so far (30 s), shorter than the browser's 120 s. */
+export const TIMEOUT_MS = 100_000;
+
+/** One model call. A spent allowance (error 4006) is a 429 of its own; no answer in `timeoutMs` a 504. */
+export async function runModel(ai, model, input, what = 'ai', timeoutMs = TIMEOUT_MS) {
+  let timer;
+  const late = new Promise((_, reject) => { timer = setTimeout(() => reject(new HttpError(504, { error: 'ai_timeout' })), timeoutMs); });
   let out;
   try {
-    out = await ai.run(model, input);
+    out = await Promise.race([ai.run(model, input), late]);
   } catch (e) {
+    if (e instanceof HttpError) throw e;
     /* 4006: the account's free daily neurons are spent; it resets at 00:00 UTC. */
     if (/\b4006\b|daily free allocation/i.test(e?.message || '')) throw new HttpError(429, { error: 'outline_quota' });
     throw e;
+  } finally {
+    clearTimeout(timer);
   }
   const u = out?.usage;
   if (u) console.log(`${what}: ${model} in=${u.prompt_tokens ?? '?'} out=${u.completion_tokens ?? '?'}`);
   return out;
+}
+
+/** The model's answer as an object, or null: gpt-oss answers in JSON text, sometimes wrapped; JSON mode answers an object. */
+export function modelJson(raw) {
+  let o = raw;
+  if (o && typeof o === 'object' && Array.isArray(o.choices)) o = o.choices[0]?.message?.content;
+  if (typeof o === 'string') {
+    const m = o.match(/\{[\s\S]*\}/);
+    try { o = m ? JSON.parse(m[0]) : null; } catch { o = null; }
+  }
+  return o && typeof o === 'object' ? o : null;
+}
+
+const reply = (out) => out?.response ?? out;
+
+/**
+ * A model's answer, cleaned: `clean(answer)` makes it safe or throws the reader's 502. An
+ * answer that is not JSON at all gets one more try, with that answer and a reminder; the
+ * retry is part of the same read (no second claim). JSON that `clean` finds empty is not
+ * retried: the same document would give the same answer at the same cost.
+ */
+export async function askJson(ai, model, input, clean, what = 'ai') {
+  const answer = reply(await runModel(ai, model, input, what));
+  if (modelJson(answer)) return clean(answer);
+  const said = typeof answer === 'string' ? answer : JSON.stringify(answer ?? null);
+  const again = reply(await runModel(ai, model, {
+    ...input,
+    messages: [...input.messages,
+      { role: 'assistant', content: said.slice(0, 2000) },
+      { role: 'user', content: 'That was not one valid JSON object. Answer again with only the JSON object, nothing else.' }],
+  }, what + ' retry'));
+  return clean(again);
 }

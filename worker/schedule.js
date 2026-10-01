@@ -8,8 +8,8 @@
 // model (VISION_MODEL). Both count against the same daily reads as outlines (limitOutline).
 
 import { HttpError } from './http.js';
-import { DAYS, KINDS, askModel, cleanClasses, cleanCode, clip, modelJson } from './outline.js';
-import { runModel } from './ai.js';
+import { DAYS, KINDS, askModel, cleanClasses, cleanCode, clip } from './outline.js';
+import { askJson, modelJson } from './ai.js';
 
 const MAX_COURSES = 15;
 const TEXT_TOKENS = 3000;
@@ -94,7 +94,7 @@ export function toBase64(bytes) {
 async function askImage(ai, { bytes, type, claim }, today) {
   if (bytes.byteLength > MAX_IMAGE_BYTES) throw new HttpError(413, { error: 'too_large' });
   if (claim) await claim();
-  const out = await runModel(ai, VISION_MODEL, {
+  return askJson(ai, VISION_MODEL, {
     messages: [
       { role: 'system', content: RULES.join(' ') },
       { role: 'user', content: [
@@ -105,16 +105,14 @@ async function askImage(ai, { bytes, type, claim }, today) {
     response_format: { type: 'json_schema', json_schema: SCHEMA },
     max_tokens: VISION_TOKENS,
     temperature: 0,
-  }, 'schedule');
-  return out?.response ?? out;
+  }, cleanSchedule, 'schedule');
 }
 
 export async function readSchedule(ai, { today, ...doc }) {
   if (/^image\//i.test(doc.type || '')) {
     /* toMarkdown would describe other pictures with a model of its own: refuse them here */
     if (!IMAGE_TYPES.test(doc.type)) throw new HttpError(415, { error: 'image_unsupported' });
-    return { ...cleanSchedule(await askImage(ai, doc, today)), truncated: false };
+    return { ...await askImage(ai, doc, today), truncated: false };
   }
-  const { answer, truncated } = await askModel(ai, doc, (text) => textPrompt(text, today), { effort: 'low', maxTokens: TEXT_TOKENS, what: 'schedule' });
-  return { ...cleanSchedule(answer), truncated };
+  return askModel(ai, doc, (text) => textPrompt(text, today), cleanSchedule, { effort: 'low', maxTokens: TEXT_TOKENS, what: 'schedule' });
 }
