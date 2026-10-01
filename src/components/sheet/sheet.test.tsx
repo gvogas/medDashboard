@@ -113,6 +113,17 @@ describe("the sheet", () => {
 })
 
 describe("the item sheet", () => {
+    it("says in the foot what saving needs", () => {
+        show()
+        open({ kind: "new-item", draft: item({ id: "n2", title: "" }) })
+        expect(within(dialog()).getByRole("status").textContent).toBe("Give it a name to save")
+        fireEvent.change(screen.getByRole("textbox", { name: "Title" }), { target: { value: "Lab report" } })
+        expect(within(dialog()).getByRole("status").textContent).toBe("Ready to save")
+        act(() => closeSheet())
+        open({ kind: "item", id: "i1" })
+        expect(within(dialog()).getByRole("status").textContent).toBe("Edits save as you type")
+    })
+
     it("picks the type with a button, the person's own types too", async () => {
         show()
         open({ kind: "item", id: "i1" })

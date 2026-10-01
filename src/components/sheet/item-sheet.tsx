@@ -258,7 +258,7 @@ export function ItemSheet({ id, draft }: { id?: string; draft?: Item }) {
             </SheetBody>
 
             {isNew ? (
-                <SheetFoot hint={it.title.trim() ? "Ready to save" : "Give it a name to save"}>
+                <SheetFoot hint={it.title.trim() ? <span className="text-[var(--done-ink)]">Ready to save</span> : "Give it a name to save"}>
                     <Button variant="ghost" onClick={closeSheet}>Cancel</Button>
                     <Button disabled={!it.title.trim()} onClick={() => void save()}>Save item</Button>
                 </SheetFoot>

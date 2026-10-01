@@ -62,10 +62,12 @@ export function DatePicker({ value, onChange, busy }: { value: string; onChange:
 
     return (
         <div ref={root} className="flex flex-col gap-1.5">
-            <div className="flex h-8 items-center gap-1">
-                <span className="min-w-0 flex-1 truncate text-[14px] font-semibold">{pickedLabel(value, now)}</span>
-                <button type="button" onClick={() => pick(now)} className="h-7 cursor-pointer rounded-full border-0 bg-transparent px-2.5 font-[inherit] text-[12px] text-ink-2 hover:bg-muted hover:text-foreground">Today</button>
-                <Segmented label="Show" value={mode} options={MODES} onChange={openMode} />
+            <div className="flex min-h-8 flex-wrap items-center gap-1">
+                <span className="min-w-fit flex-1 text-[14px] leading-8 font-semibold whitespace-nowrap">{pickedLabel(value, now)}</span>
+                <span className="ml-auto flex items-center gap-1">
+                    <button type="button" onClick={() => pick(now)} className="h-7 flex-none cursor-pointer rounded-full border-0 bg-transparent px-2 font-[inherit] text-[12px] text-ink-2 hover:bg-muted hover:text-foreground">Today</button>
+                    <Segmented label="Show" value={mode} options={MODES} onChange={openMode} />
+                </span>
             </div>
 
             {mode === "week" ? (
@@ -78,7 +80,7 @@ export function DatePicker({ value, onChange, busy }: { value: string; onChange:
                                 <button key={d} type="button" aria-pressed={on} aria-label={dayName(d, busy)} aria-current={d === now ? "date" : undefined}
                                     onClick={() => pick(d)}
                                     className={cn(
-                                        "relative flex h-[46px] cursor-pointer flex-col items-center justify-center gap-px rounded-lg border p-0 font-[inherit]",
+                                        "relative flex h-[46px] cursor-pointer flex-col items-center justify-center gap-0.5 rounded-lg border p-0 pb-1 font-[inherit] leading-[1.15]",
                                         on ? "border-foreground bg-foreground text-background"
                                             : d === now ? "border-[var(--accent)] bg-[var(--accent-soft)] text-foreground"
                                             : "border-border bg-card text-foreground hover:border-[color-mix(in_srgb,var(--accent)_50%,var(--line))]",
