@@ -395,4 +395,10 @@ describe("the sidebar player", () => {
         fireEvent.click(within(badge()).getByRole("button", { name: "Play here" }))
         expect(api.spotifyTransfer).toHaveBeenCalledWith("rounds")
     })
+
+    it("sends a person with nothing to resume to the Music page", () => {
+        render(<SidebarPlayer />)
+        setPlayer({ error: "nothing_to_resume" })
+        expect(within(badge()).getByRole("status").textContent).toBe("Pick something on the Music page")
+    })
 })

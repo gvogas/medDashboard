@@ -123,7 +123,7 @@ export function Notice({ text, ok = false, className }: { text: string | null | 
 /** What a failed control says, in the sidebar player and the pill. */
 const CONTROL_ERRORS: Record<string, string> = {
     no_device: "Open Spotify somewhere, or use a desktop browser",
-    nothing_to_resume: "Pick something in the Spotify view",
+    nothing_to_resume: "Pick something on the Music page",
     premium_required: "Controls need Spotify Premium",
     not_allowed: "Spotify would not do that right now",
     spotify_unavailable: "Spotify is not answering",

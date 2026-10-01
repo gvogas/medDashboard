@@ -1,7 +1,7 @@
 // The music, folded into one line: the cover, the track and artist over a thin progress
 // line, ⏮ ❚❚ ⏭, the device, and ▴ Music to open the rest. Not connected: Connect Spotify.
 // Nothing playing: "Pick something to play ▴". The cooldown or a failed command: the short
-// note in place of the artist. Glass on the focus screen; `tone="page"` on the Spotify page
+// note in place of the artist. Glass on the focus screen; `tone="page"` on the Music page
 // on a phone, where ▴ Music opens the player card and the page shows the note.
 
 import { cn } from "@/lib/utils"
@@ -25,7 +25,7 @@ export function MusicPill({ onOpen, open = false, tone = "glass", className }: M
     const s = useSpotify()
     const cooling = useCooling(s.retryAt)
     const p = s.player, t = p.track
-    /* on the Spotify page, the page says it above the pill */
+    /* on the Music page, the page says it above the pill */
     const note = tone === "page" ? null : cooling ? cooldownMessage(s.retryAt) : s.note && !s.note.ok ? s.note.text : controlError(p.error)
     const pct = t && t.durationMs ? Math.min(100, (t.progressMs / t.durationMs) * 100) : 0
 

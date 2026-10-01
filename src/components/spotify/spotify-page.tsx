@@ -1,4 +1,4 @@
-// The Spotify page, in #views: two Texture cards, the player on the left (<NowPlaying>,
+// The Music page, in #views: two Texture cards, the player on the left (<NowPlaying>,
 // then Up next or Recent) and <MusicBrowser> on the right. Under 760px one column: the pill
 // on top (▴ Music opens the player card), the browser under it. Space plays or pauses and /
 // goes to the search box, when nothing is being typed. Not connected: Connect Spotify.

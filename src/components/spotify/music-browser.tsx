@@ -1,4 +1,4 @@
-// Finding music: a search box (/ focuses it on the Spotify page, Enter searches) over the
+// Finding music: a search box (/ focuses it on the Music page, Enter searches) over the
 // library's covers, an opened playlist, album or artist, or search results. `compact` (the
 // focus panel) adds the Up next and Recent tabs and puts three covers across; the page has
 // those in its left card (<UpNextRecent>). The open place is `ui.spotify`, shared by both.
@@ -152,7 +152,7 @@ function Heading({ title, note, children }: { title: string; note?: string; chil
 type Side = "queue" | "recent"
 const SIDE_TABS: TabDef<Side>[] = [{ id: "queue", label: "Up next" }, { id: "recent", label: "Recent" }]
 
-/** The Spotify page's left card, under <NowPlaying>: Up next or Recently played. */
+/** The Music page's left card, under <NowPlaying>: Up next or Recently played. */
 export function UpNextRecent() {
     const s = useSpotify()
     const cooling = useCooling(s.retryAt)

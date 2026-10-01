@@ -1,4 +1,4 @@
-// The week, month, table, Study or Spotify page, in <App>'s #views. On the focus
+// The week, month, table, Study or Music page, in <App>'s #views. On the focus
 // screen (components/focus/, in #focus) nothing shows here. Each page loads on first
 // use (lib/lazy.ts): the saved one at once, the others when the browser is idle.
 
