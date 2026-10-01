@@ -63,7 +63,7 @@ export function DatePicker({ value, onChange, busy }: { value: string; onChange:
     return (
         <div ref={root} className="flex flex-col gap-1.5">
             <div className="flex h-8 items-center gap-1">
-                <span className="flex-1 text-[14px] font-semibold">{pickedLabel(value, now)}</span>
+                <span className="min-w-0 flex-1 truncate text-[14px] font-semibold">{pickedLabel(value, now)}</span>
                 <button type="button" onClick={() => pick(now)} className="h-7 cursor-pointer rounded-full border-0 bg-transparent px-2.5 font-[inherit] text-[12px] text-ink-2 hover:bg-muted hover:text-foreground">Today</button>
                 <Segmented label="Show" value={mode} options={MODES} onChange={openMode} />
             </div>

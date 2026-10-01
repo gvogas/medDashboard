@@ -105,7 +105,7 @@ export const Props = ({ children }: { children: ReactNode }) => (
 export function Prop({ icon, label, htmlFor, top = false, children }: { icon: ReactNode; label: string; htmlFor?: string; top?: boolean; children: ReactNode }) {
     const name = cn("flex items-center gap-2 text-[13px] text-muted-foreground", top && "h-8")
     return (
-        <div className={cn("grid min-h-12 grid-cols-[104px_minmax(0,1fr)] gap-x-2 border-b border-line-2", top ? "items-start py-2.5" : "items-center py-1.5")}>
+        <div className={cn("grid min-h-12 grid-cols-[104px_minmax(0,1fr)] border-b border-line-2", top ? "items-start py-2.5 max-[520px]:grid-cols-1 max-[520px]:gap-y-1" : "items-center py-1.5")}>
             {htmlFor ? <label htmlFor={htmlFor} className={name}>{icon}{label}</label> : <span className={name}>{icon}{label}</span>}
             <div className="min-w-0">{children}</div>
         </div>
@@ -159,7 +159,7 @@ export const CONTROL = cn(
 /** A control with no well until hovered or focused: the item card's rows. Put it after CONTROL in cn(). */
 export const QUIET = "bg-transparent hover:bg-muted focus-visible:bg-card"
 
-export const TextInput =({ className, ...props }: ComponentProps<"input">) => <input type="text" {...props} className={cn(CONTROL, className)} />
+export const TextInput = ({ className, ...props }: ComponentProps<"input">) => <input type="text" {...props} className={cn(CONTROL, className)} />
 export const NumberInput = ({ className, ...props }: ComponentProps<"input">) => <input type="number" {...props} className={cn(CONTROL, className)} />
 export const DateInput = ({ className, ...props }: ComponentProps<"input">) => <input type="date" {...props} className={cn(CONTROL, className)} />
 export const Select = ({ className, ...props }: ComponentProps<"select">) => <select {...props} className={cn(CONTROL, "cursor-pointer", className)} />

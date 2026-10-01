@@ -6,7 +6,7 @@
 
 import { useEffect, useId, useState } from "react"
 import { cn } from "@/lib/utils"
-import { baseOf, httpUrl, isComplete, isOpen, isOverdue, isTest, normalizeItem, statusesFor, tmeta, typeList, uid } from "@/core/model"
+import { baseOf, httpUrl, isComplete, isOpen, isTest, normalizeItem, statusesFor, tmeta, typeList, uid } from "@/core/model"
 import { shortDate, today, DOW } from "@/core/dates"
 import * as store from "@/core/store"
 import { repeatEnds } from "@/core/school"
@@ -104,7 +104,7 @@ export function ItemSheet({ id, draft }: { id?: string; draft?: Item }) {
                 )}
             </SheetHead>
 
-            <SheetBody className="gap-[22px] px-6 pt-2 pb-7">
+            <SheetBody className="gap-[22px] px-6 pt-2 pb-7 max-[700px]:px-4">
                 <div className="flex flex-col gap-1.5">
                     <TitleArea
                         value={it.title}

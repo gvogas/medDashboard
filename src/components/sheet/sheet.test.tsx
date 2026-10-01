@@ -189,6 +189,19 @@ describe("the item sheet", () => {
         expect(screen.queryByRole("group", { name: "Repeat" })).toBeNull()
     })
 
+    it("office hours have a Dept that saves once typing pauses; an exam has none", async () => {
+        fake.data.items = [item({ id: "o1", type: "office", title: "Dr Lee" }), item({ id: "e1", type: "exam", title: "Final" })]
+        show()
+        open({ kind: "item", id: "o1" })
+        fireEvent.change(screen.getByRole("textbox", { name: "Dept" }), { target: { value: "Cardiology" } })
+        await act(() => vi.advanceTimersByTimeAsync(TYPING_MS))
+        expect(fake.data.items[0]).toMatchObject({ dept: "Cardiology" })
+        act(() => closeSheet())
+        await flush()
+        open({ kind: "item", id: "e1" })
+        expect(screen.queryByRole("textbox", { name: "Dept" })).toBeNull()
+    })
+
     it("saves the title once typing pauses, and at once on close", async () => {
         show()
         open({ kind: "item", id: "i1" })
