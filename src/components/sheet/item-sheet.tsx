@@ -52,6 +52,8 @@ export function ItemSheet({ id, draft }: { id?: string; draft?: Item }) {
         steps: !!it?.checklist?.length, notes: !!it?.notes, links: !!it?.links?.length,
     }))
     const [focus, setFocus] = useState<"steps" | "notes" | "links" | null>(null)
+    /* autoFocus acts at mount, before this runs; clearing it keeps a remount from stealing focus */
+    useEffect(() => { if (focus) setFocus(null) }, [focus])
 
     /* closing, or switching to another item, saves what is being typed */
     useEffect(() => {
