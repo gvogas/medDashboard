@@ -94,14 +94,20 @@ const start = async () => {
 }
 
 describe("the Ready card", () => {
+    it("says the theme's study word in the phase", () => {
+        ui.bg = "law"
+        cards()
+        expect(within(region("Ready")).getByText("In session · round 1 of 4")).toBeTruthy()
+    })
+
     it("shows the first step on the clock, the rounds, the course and item to log against, and Start", () => {
         cards()
         const ready = within(region("Ready"))
-        expect(ready.getByText("Ready")).toBeTruthy()
+        expect(ready.getByText("On shift · round 1 of 4")).toBeTruthy()
         expect(ready.getByRole("timer").textContent).toContain("25 minutes 0 seconds left")
         expect(region("Ready").querySelectorAll("[data-strip] > span")).toHaveLength(4)
         expect(region("Ready").querySelectorAll("[data-strip] [data-kind]")).toHaveLength(8)
-        expect(ready.getByText("Round 1 of 4")).toBeTruthy()
+        expect(ready.getByText("Classic 25/5 · 4 rounds")).toBeTruthy()
         expect(ready.getByText("1h 40m study · 2h 00m total")).toBeTruthy()
         /* live courses only; the first is picked */
         const course = ready.getByRole("combobox", { name: "Course" }) as HTMLSelectElement
@@ -183,6 +189,20 @@ describe("the flow card", () => {
         await settle()
         expect(flow()).toEqual({ steps: [["study", 20], ["break", 5], ["study", 40], ["break", 15]], rounds: 2 })
         expect([pressed("Classic 25/5"), pressed("LeetCode then read")]).toEqual(["false", "true"])
+        const none = () => ["Classic 25/5", "Deep 50/10", "LeetCode then read"].map(pressed)
+        const rounds = screen.getByRole("spinbutton", { name: "Repeat" })
+        fireEvent.change(rounds, { target: { value: "3" } })
+        fireEvent.blur(rounds)
+        await settle()
+        expect(none()).toEqual(["false", "false", "false"])
+        fireEvent.click(card.getByRole("button", { name: "Classic 25/5" }))
+        await settle()
+        expect(pressed("Classic 25/5")).toBe("true")
+        const box = screen.getByRole("spinbutton", { name: "Minutes for step 1" })
+        fireEvent.change(box, { target: { value: "26" } })
+        fireEvent.blur(box)
+        await settle()
+        expect(none()).toEqual(["false", "false", "false"])
     })
 
     it("shows one round in proportion, the numbered steps, the rounds, the totals and the presets", () => {
@@ -274,7 +294,8 @@ describe("the flow card", () => {
         await settle()
         expect(flow().rounds).toBe(2)
         expect(within(region("Your flow")).getByText("50m study · 1h 00m total")).toBeTruthy()
-        expect(within(region("Ready")).getByText("Round 1 of 2")).toBeTruthy()
+        expect(within(region("Ready")).getByText("On shift · round 1 of 2")).toBeTruthy()
+        expect(within(region("Ready")).getByText("Your flow · 2 rounds")).toBeTruthy()
         fireEvent.change(rounds(), { target: { value: "40" } })
         fireEvent.keyDown(rounds(), { key: "Enter" })
         await settle()

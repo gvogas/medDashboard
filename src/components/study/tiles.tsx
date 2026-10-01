@@ -51,7 +51,7 @@ function Tile({ label, icon, value, sub, className }: { label: string; icon: Rea
                 {icon}
                 <span className="flex min-w-0 flex-col gap-0.5">
                     <span className="text-[12.5px] text-muted-foreground">{label}</span>
-                    <b className="font-serif text-[28px] leading-none font-medium text-foreground tabular-nums max-[520px]:text-[24px] [&_small]:text-[15px] [&_small]:font-normal [&_small]:text-muted-foreground">{value}</b>
+                    <b className="font-serif text-[28px] leading-none font-medium text-foreground tabular-nums max-[520px]:text-[24px] [&_small]:whitespace-nowrap [&_small]:text-[15px] [&_small]:font-normal [&_small]:text-muted-foreground">{value}</b>
                     <span className="text-[12px] text-ink-2">{sub}</span>
                 </span>
             </div>

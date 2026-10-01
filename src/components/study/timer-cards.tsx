@@ -1,19 +1,21 @@
-// The Study page's timer: two cards at the top of the left column. Ready is dark with the
-// focus screen's glow, so starting feels like stepping into it: the flip clock on the
-// first step, the round strip, the course and item picked, and Start. Your flow is a
-// Texture card with the steps, the rounds and the Quick start presets; every change saves
-// the flow to the profile (study-timer.ts).
+// The Study page's Timer tab: the Ready card large on the left, in the theme's dark colour
+// so starting feels like stepping into the focus screen (the phase in the theme's word,
+// the flip clock on the first step, the flow's name, the round strip, the course and item
+// picked, and Start); on the right Your flow (the steps, the rounds and the Quick start
+// presets; every change saves the flow to the profile, study-timer.ts). Under 960px, one
+// column (the Ready clock needs about 350px, so the two-column split stops fitting there).
 
 import { useState, type KeyboardEvent, type ReactNode } from "react"
 import { cn } from "@/lib/utils"
 import { duration } from "@/lib/time"
 import { Panel, HeadNote } from "@/components/views/bits"
-import { Button, RemoveButton } from "@/components/sheet/fields"
+import { RemoveButton } from "@/components/sheet/fields"
 import { openCourse } from "@/data/actions"
 import { useUi } from "@/data/ui"
+import { THEMES } from "@/data/themes"
 import {
-    addStep, applyPreset, delStep, flowTotals, MAX_MINUTES, MAX_ROUNDS, MAX_STEPS, openFocus, pickCourse, pickItem, presetsFor, sameFlow,
-    setRounds, setStepKind, setStepMinutes, startRun, stripSegments, useFlow, useRun, useStudyPick,
+    addStep, applyPreset, delStep, flowName, flowTotals, MAX_MINUTES, MAX_ROUNDS, MAX_STEPS, openFocus, pickCourse, pickItem, presetsFor,
+    sameFlow, setRounds, setStepKind, setStepMinutes, startRun, stripSegments, useFlow, useRun, useStudyPick,
 } from "@/data/study-timer"
 import type { Flow } from "@/data/types"
 import { FlipClock } from "./flip-clock"
@@ -24,41 +26,43 @@ const MIN = 60_000
 export function TimerCards({ className }: { className?: string }) {
     const flow = useFlow()
     return (
-        <div className={cn("flex min-w-0 flex-col gap-[13px]", className)}>
+        <div className={cn("grid items-stretch gap-4 [grid-template-columns:minmax(0,1.4fr)_minmax(0,1fr)] max-[960px]:[grid-template-columns:minmax(0,1fr)]", className)}>
             <ReadyCard flow={flow} />
-            <FlowCard flow={flow} />
+            <div className="flex min-w-0 flex-col gap-4">
+                <FlowCard flow={flow} />
+            </div>
         </div>
     )
 }
 
 /* ── Ready ── */
 
-const PICK = "min-w-0 flex-[1_1_190px] max-w-[280px] cursor-pointer rounded-[9px] border border-white/15 bg-white/[.06] px-2.5 py-[7px] font-[inherit] text-[13px] text-[var(--fx-ink)] outline-none hover:border-white/30 focus-visible:border-[var(--ph)] focus-visible:shadow-[0_0_0_3px_var(--ph-soft)] [&_option]:bg-card [&_option]:text-foreground"
+const PICK = "h-[38px] w-full min-w-0 cursor-pointer rounded-md border border-white/20 bg-white/[.06] px-2 font-[inherit] text-[13px] text-[var(--fx-ink)] outline-none hover:border-white/30 focus-visible:border-[var(--ph)] focus-visible:shadow-[0_0_0_3px_var(--ph-soft)] [&_option]:bg-card [&_option]:text-foreground"
 
 function ReadyCard({ flow }: { flow: Flow }) {
     const pick = useStudyPick()
     const running = useRun() !== null
+    const bg = useUi((u) => u.bg)
     const totals = flowTotals(flow)
     return (
         <section
             aria-label="Ready"
-            className={cn(
-                "study-fx flex min-w-0 flex-col items-center gap-4 rounded-[var(--radius)] border border-[var(--fx-study-card)] px-[18px] pt-[26px] pb-[22px] text-[var(--fx-ink)]",
-                "bg-[radial-gradient(60%_55%_at_50%_30%,var(--fx-glow),transparent_70%),var(--fx-bg)] shadow-[0_12px_28px_-18px_rgba(0,0,0,.6)]",
-            )}
+            className="study-fx flex min-w-0 flex-col justify-center gap-6 rounded-[10px] bg-[var(--fx-bg)] px-11 py-9 text-[var(--fx-ink)] shadow-[inset_0_0_0_1px_rgba(255,255,255,.06)] max-[520px]:gap-5 max-[520px]:px-5 max-[520px]:py-6"
         >
-            <PhaseLabel>Ready</PhaseLabel>
-            <FlipClock ms={flow.steps[0][1] * MIN} running={false} size="ready" />
-            <div className="flex w-full max-w-[520px] flex-col gap-2">
-                <RoundStrip rows={stripSegments(flow, null)} />
-                <div className="flex flex-wrap justify-between gap-x-2.5 text-[11.5px] text-[var(--fx-ink-2)] tabular-nums">
-                    <span>Round 1 of {flow.rounds}</span>
+            <PhaseLabel className="text-[12px] font-medium tracking-[.04em] normal-case">
+                {THEMES[bg].studyWord} · round 1 of {flow.rounds}
+            </PhaseLabel>
+            <div className="flex flex-col items-start gap-3.5">
+                <FlipClock ms={flow.steps[0][1] * MIN} running={false} size="ready" />
+                <div className="flex flex-wrap gap-x-3.5 gap-y-1 text-[13px] text-[var(--fx-ink-2)] tabular-nums">
+                    <span>{flowName(flow, bg)}</span>
                     <span>{duration(totals.study)} study · {duration(totals.total)} total</span>
                 </div>
             </div>
+            <RoundStrip rows={stripSegments(flow, null)} className="max-w-[520px]" />
             {pick.courses.length ? (
                 <>
-                    <div className="flex w-full flex-wrap justify-center gap-2">
+                    <div className="grid grid-cols-2 gap-2 max-[520px]:grid-cols-1">
                         <select aria-label="Course" value={pick.courseId ?? ""} onChange={(e) => pickCourse(e.target.value)} className={PICK}>
                             {pick.courses.map((c) => <option key={c.id} value={c.id}>{c.code + " · " + c.name}</option>)}
                         </select>
@@ -67,29 +71,29 @@ function ReadyCard({ flow }: { flow: Flow }) {
                             {pick.items.map((it) => <option key={it.id} value={it.id}>{it.title}</option>)}
                         </select>
                     </div>
-                    {running
-                        ? <GoButton onClick={openFocus}>Back to focus</GoButton>
-                        : <GoButton onClick={() => void startRun()}><PlayIcon />Start focus</GoButton>}
-                    <p className="m-0 text-center text-[12.5px] text-[var(--fx-ink-2)]">Opens the focus screen: the clock and your music, nothing else.</p>
+                    <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+                        {running
+                            ? <GoButton onClick={openFocus}>Back to focus</GoButton>
+                            : <GoButton onClick={() => void startRun()}><PlayIcon />Start focus</GoButton>}
+                        <p className="m-0 text-[12.5px] text-[var(--fx-ink-2)]">Opens the focus screen: the clock and your music, nothing else.</p>
+                    </div>
                 </>
             ) : (
-                <>
-                    <p className="m-0 text-center text-[12.5px] text-[var(--fx-ink-2)]">Add a course first; study time is logged against one.</p>
+                <div className="flex flex-col items-start gap-3">
+                    <p className="m-0 text-[12.5px] text-[var(--fx-ink-2)]">Add a course first; study time is logged against one.</p>
                     <GoButton onClick={() => openCourse(null)}>Add a course</GoButton>
-                </>
+                </div>
             )}
         </section>
     )
 }
 
+/* white on the dark card, as in the prototype */
 const GoButton = ({ onClick, children }: { onClick: () => void; children: ReactNode }) => (
     <button
         type="button"
         onClick={onClick}
-        className={cn(
-            "inline-flex cursor-pointer items-center gap-2 rounded-full border-0 bg-[var(--ph)] px-6 py-[11px] font-[inherit] text-[14px] font-bold text-[var(--fx-on-ph)]",
-            "shadow-[0_8px_24px_-8px_var(--ph)] hover:brightness-[1.08] active:brightness-95 [&_svg]:size-3.5",
-        )}
+        className="inline-flex h-12 cursor-pointer items-center gap-2 rounded-full border-0 bg-white px-6 font-[inherit] text-[15px] font-semibold text-[#1C1C1A] hover:bg-white/90 active:bg-white/80 [&_svg]:size-3"
     >
         {children}
     </button>
@@ -164,7 +168,7 @@ function FlowCard({ flow }: { flow: Flow }) {
                         return (
                             <button key={i} type="button" aria-pressed={on} onClick={() => void applyPreset(i)}
                                 className={cn(
-                                    "cursor-pointer rounded-full border px-[11px] py-1 font-[inherit] text-[12px] font-semibold",
+                                    "cursor-pointer rounded-full border px-[11px] py-1 font-[inherit] text-[12px] font-semibold outline-none focus-visible:shadow-[0_0_0_2px_var(--accent)]",
                                     on ? "border-foreground bg-foreground text-background" : "border-border bg-card text-ink-2 hover:border-muted-foreground hover:text-foreground",
                                 )}>
                                 {name}

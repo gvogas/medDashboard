@@ -157,6 +157,15 @@ describe("the Study page", () => {
         expect(region("Leaderboard").closest(".max-w-\\[760px\\]")!.className).toContain("mx-auto")
     })
 
+    it("lays the Timer tab out as the Ready card beside Your flow, one column under 960px", async () => {
+        await show()
+        const layout = region("Ready").parentElement!
+        expect(layout.className).toContain("[grid-template-columns:minmax(0,1.4fr)_minmax(0,1fr)]")
+        expect(layout.className).toContain("max-[960px]:[grid-template-columns:minmax(0,1fr)]")
+        expect(layout.firstElementChild).toBe(region("Ready"))
+        expect(layout.children[1].contains(region("Your flow"))).toBe(true)
+    })
+
     it("is not drawn on the focus screen", async () => {
         fake.ui.focus = true
         await show()
