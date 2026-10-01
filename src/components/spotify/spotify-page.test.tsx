@@ -15,6 +15,7 @@ import { cooldownMessage } from "@/data/spotify"
 import { state as web } from "@/data/spotify/web-player"
 import { SpotifyPage } from "./spotify-page"
 import { SidebarPlayer } from "./sidebar-player"
+import { Icon } from "./bits"
 import { album, artist, fakeApi, page, playlist, resetEngine, results, setPlayer, track } from "./test-spotify"
 import { showApp } from "@/data/signin"
 
@@ -312,6 +313,27 @@ describe("the Spotify page", () => {
         setPlayer({ track: track("t9", { title: "Holocene" }) })
         await waitFor(() => expect(api.spotifyQueue).toHaveBeenCalledTimes(2))
     })
+
+    it("marks the device with Spotify's dot and the one playing with a tick, and draws no emoji", async () => {
+        Object.assign(web, { status: "ready", deviceId: "rounds" })
+        api.spotifyDevices.mockResolvedValue({ devices: [
+            { id: "mac", name: "MacBook", type: "Computer", active: true, restricted: false },
+            { id: "rounds", name: "Term", type: "Computer", active: false, restricted: false },
+        ] })
+        show()
+        const player = card("Player")
+        const button = player.getByRole("button", { name: "MacBook" })
+        expect(button.querySelector("span[aria-hidden]")!.className).toContain("bg-[var(--spotify)]")
+        fireEvent.click(button)
+        const list = within(await player.findByRole("dialog", { name: "Choose a device" }))
+        await list.findByText("This tab")
+        const mac = list.getByRole("button", { name: /MacBook/ })
+        expect(mac.getAttribute("aria-current")).toBe("true")
+        expect(mac.querySelector("svg")).toBeTruthy()
+        expect(list.getByRole("button", { name: /This tab/ }).querySelector("svg")).toBeNull()
+        expect(player.getByTitle("Volume on MacBook").querySelector("svg")).toBeTruthy()
+        expect(screen.getByRole("region", { name: "Player" }).textContent).not.toMatch(/[🔈🔉🔊🔇💻📱📺🎮🚗]/u)
+    })
 })
 
 describe("the page's keys", () => {
@@ -400,5 +422,17 @@ describe("the sidebar player", () => {
         render(<SidebarPlayer />)
         setPlayer({ error: "nothing_to_resume" })
         expect(within(badge()).getByRole("status").textContent).toBe("Pick something on the Music page")
+    })
+})
+
+describe("the music's icons", () => {
+    it("draw on a 24-unit box, filled or stroked, hidden from screen readers", () => {
+        const { container } = render(<><Icon name="play" /><Icon name="shuffle" /></>)
+        const [play, shuffle] = container.querySelectorAll("svg")
+        expect(play.getAttribute("viewBox")).toBe("0 0 24 24")
+        expect(play.getAttribute("fill")).toBe("currentColor")
+        expect(shuffle.getAttribute("fill")).toBe("none")
+        expect(shuffle.getAttribute("stroke")).toBe("currentColor")
+        for (const svg of [play, shuffle]) expect(svg.getAttribute("aria-hidden")).toBe("true")
     })
 })
