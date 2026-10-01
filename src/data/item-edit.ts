@@ -82,7 +82,14 @@ export function deriveEdit(it: Item, field: ItemField, value: unknown, courseOf:
         if (!statusesFor(patch.type).some((x: string[]) => x[0] === it.status)) Object.assign(patch, withStatus(it, "todo"))
     } else {
         Object.assign(patch, { [field]: value })
-        if (field === "date" && it.recur === "weekly") patch.weekday = parse(value as string).getDay()
+        if (field === "date" && it.recur === "weekly") {
+            patch.weekday = parse(value as string).getDay()
+            /* an end the new date passes would be dropped, and the default end moves with the
+               date; no end, or an end picked by hand that is still ahead, stays */
+            const until = it.recurUntil
+            if (until && (until < (value as string) || until === repeatEnds(cal, it.date)[0]?.end))
+                patch.recurUntil = repeatEnds(cal, value as string)[0]?.end ?? null
+        }
     }
     if (field === "date" || field === "courseId" || field === "type" || field === "start") {
         const next = { ...it, ...patch }
