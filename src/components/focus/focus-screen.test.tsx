@@ -282,6 +282,10 @@ describe("the music", () => {
         fireEvent.click(stage().getByRole("button", { name: "▴ Music" }))
         expect(ui.focusMusic).toBe(true)
         expect(panel()).not.toBeNull()
+        /* it floats, 12px in from the edge, with the prototype's corner; a sheet on a phone */
+        expect(panel()!.className).toContain("rounded-2xl")
+        expect(panel()!.className).toContain("m-3")
+        expect(panel()!.className).toContain("max-[700px]:m-0")
         expect(stage().queryByRole("region", { name: "Music" })).toBeNull()
         /* the stage is still there beside it */
         expect(stage().getByRole("timer")).toBeTruthy()

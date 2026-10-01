@@ -37,7 +37,7 @@ export const SPOTIFY_GAP_MS = 1500;
 let spotifyTail = Promise.resolve();
 let spotifyLastAt = 0;
 let spotifyBlockedUntil = 0;
-/** The current tab's retry deadline, also used by the Spotify view. */
+/** The current tab's retry deadline, also used by the Music page. */
 export function spotifyRetryAt(): number { return spotifyBlockedUntil > Date.now() ? spotifyBlockedUntil : 0; }
 const spotifyInFlight = new Map<string, ReturnType<typeof send>>();
 let sessionRequests = new AbortController();

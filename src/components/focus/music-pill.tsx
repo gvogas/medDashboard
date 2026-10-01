@@ -1,12 +1,12 @@
 // The music, folded into one line: the cover, the track and artist over a thin progress
 // line, ⏮ ❚❚ ⏭, the device, and ▴ Music to open the rest. Not connected: Connect Spotify.
 // Nothing playing: "Pick something to play ▴". The cooldown or a failed command: the short
-// note in place of the artist. Glass on the focus screen; `tone="page"` on the Spotify page
+// note in place of the artist. Glass on the focus screen; `tone="page"` on the Music page
 // on a phone, where ▴ Music opens the player card and the page shows the note.
 
 import { cn } from "@/lib/utils"
 import { activate, control, cooldownMessage, previous, useSpotify } from "@/data/spotify"
-import { Art, controlError, FX, GLASS, Icon, SpotifyMark } from "@/components/spotify/bits"
+import { Art, controlError, FX, Icon, SpotifyMark } from "@/components/spotify/bits"
 import { useCooling } from "@/components/spotify/use-music"
 
 export interface MusicPillProps {
@@ -19,19 +19,19 @@ export interface MusicPillProps {
 }
 
 const round = "grid size-8 flex-none cursor-pointer place-items-center rounded-full border-0 bg-transparent p-0 text-ink-2 hover:text-primary"
-const chip = "inline-flex max-w-[160px] min-w-0 flex-none items-center gap-1 rounded-full border border-border bg-[var(--panel)] px-2.5 py-1 text-[11.5px] font-semibold whitespace-nowrap text-ink-2"
+const chip = "inline-flex max-w-[160px] min-w-0 flex-none items-center gap-1 rounded-full border border-border bg-transparent px-2.5 py-1 text-[11.5px] font-semibold whitespace-nowrap text-ink-2"
 
 export function MusicPill({ onOpen, open = false, tone = "glass", className }: MusicPillProps) {
     const s = useSpotify()
     const cooling = useCooling(s.retryAt)
     const p = s.player, t = p.track
-    /* on the Spotify page, the page says it above the pill */
+    /* on the Music page, the page says it above the pill */
     const note = tone === "page" ? null : cooling ? cooldownMessage(s.retryAt) : s.note && !s.note.ok ? s.note.text : controlError(p.error)
     const pct = t && t.durationMs ? Math.min(100, (t.progressMs / t.durationMs) * 100) : 0
 
     const shell = cn(
         "flex w-full min-w-0 items-center gap-2.5 rounded-full py-1.5 pr-1.5 pl-1.5 text-[12.5px]",
-        tone === "glass" ? cn(FX, GLASS) : "border border-border bg-card text-foreground shadow-[var(--shadow-1)]",
+        tone === "glass" ? cn(FX, "bg-white/10 backdrop-blur-[14px]") : "border border-border bg-card text-foreground shadow-[var(--shadow-1)]",
         p.stale && "opacity-70",
         className,
     )
@@ -76,7 +76,7 @@ export function MusicPill({ onOpen, open = false, tone = "glass", className }: M
                         <Icon name="play" />
                     </button>
                 )}
-                {p.device && <span className={chip}><span aria-hidden="true">🔈</span><span className="truncate">{p.device}</span></span>}
+                {p.device && <span className={chip}><span aria-hidden="true" className="size-2 flex-none rounded-full bg-[var(--spotify)]" /><span className="truncate">{p.device}</span></span>}
             </div>
         )
     }
@@ -90,7 +90,7 @@ export function MusicPill({ onOpen, open = false, tone = "glass", className }: M
                         ? <span role="status" className="text-[var(--warn-ink)]"> · {note}</span>
                         : <span className="text-muted-foreground"> · {t.artists}</span>}
                 </span>
-                <span className="mt-1 block h-[3px] overflow-hidden rounded-full bg-line-2">
+                <span className={cn("mt-1 block h-[3px] overflow-hidden rounded-full", tone === "glass" ? "bg-white/15" : "bg-line-2")}>
                     <i className="block h-full rounded-full bg-foreground" style={{ width: pct + "%" }} />
                 </span>
             </div>
@@ -101,7 +101,7 @@ export function MusicPill({ onOpen, open = false, tone = "glass", className }: M
                 </button>
                 <button type="button" aria-label="Next" className={round} onClick={() => { activate(); void control("next") }}><Icon name="next" /></button>
             </span>
-            {p.device && <span className={cn(chip, "max-[560px]:hidden")}><span aria-hidden="true">🔈</span><span className="truncate">{p.device}</span></span>}
+            {p.device && <span className={cn(chip, "max-[560px]:hidden")}><span aria-hidden="true" className="size-2 flex-none rounded-full bg-[var(--spotify)]" /><span className="truncate">{p.device}</span></span>}
             {toggle("Music")}
         </div>
     )
