@@ -5,17 +5,20 @@ import { useState } from "react"
 import { cn } from "@/lib/utils"
 import { typeList } from "@/core/model"
 import { DOW, shortDate } from "@/core/dates"
-import { termStart } from "@/data/query"
+import { schoolCal, termStart } from "@/data/query"
+import { semesterOptions, semesterPicked } from "@/data/course-edit"
 import { planSummary, setWeek1 } from "@/core/importers/plan"
 import { data } from "@/core/store"
 import { notify } from "@/bridge"
 import { useUi, ui } from "@/data/ui"
 import { commitImport, importCount, type ImportPlan, type PlanItem } from "@/data/import-edit"
 import { openSettings } from "@/data/actions"
+import { closeSheet, openSheet } from "@/data/overlay"
+import { toast } from "@/data/toast"
 import { accent } from "@/components/views/bits"
-import { Button, CONTROL, Section, SheetBody, SheetFoot, SheetHead, Warning } from "./fields"
+import { Button, CONTROL, Section, Segmented, SheetBody, SheetFoot, SheetHead, Warning } from "./fields"
 
-export function ImportSheet({ plan: initial, name }: { plan: ImportPlan; name: string }) {
+export function ImportSheet({ plan: initial, name, back }: { plan: ImportPlan; name: string; back?: "ai" }) {
     /* the plan is changed in place by the ticks, as the planner expects; `v` redraws */
     const [plan] = useState(initial)
     const [, setV] = useState(0)
@@ -24,19 +27,23 @@ export function ImportSheet({ plan: initial, name }: { plan: ImportPlan; name: s
     const bg = useUi((u) => u.bg)
     const types = typeList(bg, data.items) as { id: string; label: string; hidden: boolean }[]
     const n = importCount(plan)
+    /* an outline's course gets a semester picker beside it, when there is a school calendar */
+    const cal = plan.kind === "outline" ? schoolCal() : null
 
     const kept = plan.courses.find((c) => c.keep && c.isNew && (c.instructor || c.term))
-    const extra = [kept?.instructor, kept?.term, plan.termStart && !termStart() ? "term start " + shortDate(plan.termStart) : ""].filter(Boolean).join(" · ")
+    /* with a school calendar the picker shows the semester, so the line leaves it out */
+    const extra = [kept?.instructor, cal ? "" : kept?.term, plan.termStart && !termStart() ? "term start " + shortDate(plan.termStart) : ""].filter(Boolean).join(" · ")
     const rows = plan.items.map((it, i) => ({ it, i }))
     const groups = plan.courses.map((c) => ({ c, items: rows.filter((x) => x.it.row.courseId === c.id) }))
     const loose = rows.filter((x) => !x.it.row.courseId)
-    const cancel = () => openSettings("importGrp")
+    const cancel = () => (back ? openSheet({ kind: "ai" }) : openSettings("importGrp"))
 
     const commit = async () => {
         setBusy(true)
         let note
         try { note = { text: await commitImport(plan), error: false } } catch (error) { note = { text: "The import stopped part-way: " + (error as Error).message, error: true } }
         notify()
+        if (back) { closeSheet(); toast(note.text, { error: note.error }); return }
         ui.importNote = note
         openSettings("importGrp")
     }
@@ -66,17 +73,26 @@ export function ImportSheet({ plan: initial, name }: { plan: ImportPlan; name: s
                 )}
                 {groups.map(({ c, items }) => (
                     <Section key={c.id} title={<><i aria-hidden="true" style={accent(c.color)} className="inline-block size-2 rounded-full bg-[var(--c,var(--ink-3))]" />{c.code} · {c.name}</>} note={c.isNew ? "new course" : undefined}>
-                        <div>
-                            {c.meetings.map((m) => (
-                                <label key={m.id} className={ROW}>
-                                    <input type="checkbox" checked={m.include} onChange={(e) => { m.include = e.target.checked; redraw() }} />
-                                    <span className="min-w-[62px] flex-none text-ink-2">{m.kind}</span>
-                                    <span>{DOW[m.weekday]} {m.start}–{m.end}</span>
-                                    <span className={WHERE}>{m.room}</span>
-                                </label>
-                            ))}
-                            {items.map((x) => <ItemRow key={x.i} it={x.it} types={types} onChange={redraw} />)}
-                        </div>
+                        <>
+                            {cal && (
+                                <div className="flex flex-wrap items-center gap-2 text-[12px] text-muted-foreground">
+                                    Semester
+                                    <Segmented label={"Semester for " + c.code} value={semesterPicked(cal, c.term)} options={semesterOptions(cal)}
+                                        onChange={(term) => { c.term = term; redraw() }} />
+                                </div>
+                            )}
+                            <div>
+                                {c.meetings.map((m) => (
+                                    <label key={m.id} className={ROW}>
+                                        <input type="checkbox" checked={m.include} onChange={(e) => { m.include = e.target.checked; redraw() }} />
+                                        <span className="min-w-[62px] flex-none text-ink-2">{m.kind}</span>
+                                        <span>{DOW[m.weekday]} {m.start}–{m.end}</span>
+                                        <span className={WHERE}>{m.room}</span>
+                                    </label>
+                                ))}
+                                {items.map((x) => <ItemRow key={x.i} it={x.it} types={types} onChange={redraw} />)}
+                            </div>
+                        </>
                     </Section>
                 ))}
                 {loose.length > 0 && <Section title="No course"><div>{loose.map((x) => <ItemRow key={x.i} it={x.it} types={types} onChange={redraw} />)}</div></Section>}

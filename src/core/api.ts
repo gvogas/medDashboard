@@ -86,25 +86,29 @@ function spotifyRequest(method: string, path: string, body?: unknown) {
 }
 
 /** Resolves to JSON (or null for 204). Invalid replies never acknowledge a write. */
-export function request(method: string, path: string, body?: unknown, headers?: Record<string, string>) {
+export function request(method: string, path: string, body?: unknown, headers?: Record<string, string>, signal?: AbortSignal) {
   /* Account operations and the local connection check remain available during an API cooldown. */
   if (path.startsWith('/api/spotify/') && !['/api/spotify/token', '/api/spotify/status'].includes(path)) return spotifyRequest(method, path, body);
-  return send(method, path, body, headers);
+  return send(method, path, body, headers, signal);
 }
 
 /* The answer is JSON as the Worker sends it (typed `any`, as Response.json() is): each
    caller says what it expects, and the record and sync answers are checked here. */
-async function send(method: string, path: string, body?: unknown, extraHeaders: Record<string, string> = {}) {
+async function send(method: string, path: string, body?: unknown, extraHeaders: Record<string, string> = {}, outer?: AbortSignal) {
   const session = sessionRequests.signal;
   const controller = new AbortController();
   const { signal } = controller;
   const abort = () => controller.abort(session.reason);
+  /* the caller's own signal: Cancel on the reading card */
+  const stop = () => controller.abort(outer!.reason);
   session.addEventListener('abort', abort, { once: true });
+  outer?.addEventListener('abort', stop, { once: true });
   /* A file (a course outline) goes as it is, and reading it with AI can take a while. */
   const file = typeof Blob !== 'undefined' && body instanceof Blob;
   const timer = setTimeout(() => controller.abort(new DOMException('The request timed out. Try again.', 'TimeoutError')), file ? 120_000 : 30_000);
   try {
     session.throwIfAborted();
+    outer?.throwIfAborted();
     const res = await fetch(path, {
       method,
       credentials: 'same-origin',
@@ -127,6 +131,7 @@ async function send(method: string, path: string, body?: unknown, extraHeaders: 
   } finally {
     clearTimeout(timer);
     session.removeEventListener('abort', abort);
+    outer?.removeEventListener('abort', stop);
   }
 }
 
@@ -158,6 +163,10 @@ async function changes(cursor: number): Promise<Page & { reset: boolean; more: b
   return page;
 }
 
+/* A read's query: only the values given, in the order given. */
+const query = (o: Record<string, string | undefined>) => new URLSearchParams(Object.entries(o).filter((e): e is [string, string] => !!e[1])).toString()
+type ReadQuery = { name: string; today: string; termStart?: string; terms?: string; codes?: string }
+
 export const api = {
   me: () => record<ServerProfile & Row>(request('GET', '/api/me'), accountId),
   saveMe: (profile: Record<string, unknown> & { id?: string; revision?: number }) => record<ServerProfile & Row>(request('PUT', '/api/me', profile, match(profile.revision)), accountId || profile.id, profile.revision),
@@ -173,8 +182,10 @@ export const api = {
   calendarStop: () => empty(request('DELETE', '/api/calendar')),
   leaderboard: (since: string | number) => request('GET', `/api/leaderboard?since=${since}`),
   leaderboardJoin: (joined: boolean) => empty(request('PUT', '/api/leaderboard', { joined })),
-  readOutline: (file: Blob, { name, today, termStart }: { name: string; today: string; termStart?: string }) => request('POST', '/api/outline?' + new URLSearchParams({ name, today, ...(termStart ? { termStart } : {}) }), file),
-  readSchool: (file: Blob, { name, today }: { name: string; today: string }) => request('POST', '/api/school-calendar?' + new URLSearchParams({ name, today }), file),
+  readOutline: (file: Blob, q: ReadQuery, signal?: AbortSignal) => request('POST', '/api/outline?' + query(q), file, undefined, signal),
+  readSchool: (file: Blob, q: ReadQuery, signal?: AbortSignal) => request('POST', '/api/school-calendar?' + query(q), file, undefined, signal),
+  readSchedule: (file: Blob, q: ReadQuery, signal?: AbortSignal) => request('POST', '/api/ai/schedule?' + query(q), file, undefined, signal),
+  aiReads: (): Promise<{ left: number; limit: number }> => request('GET', '/api/ai/reads'),
   spotifyPlayer: () => request('GET', '/api/spotify/player'),
   spotifyStatus: () => request('GET', '/api/spotify/status'),
   spotifyControl: (action: string, deviceId?: string | null) => request('POST', `/api/spotify/player/${action}` + (deviceId ? `?deviceId=${encodeURIComponent(deviceId)}` : '')),

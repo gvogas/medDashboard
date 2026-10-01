@@ -1,0 +1,42 @@
+{
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "index": 0,
+      "logprobs": null,
+      "message": {
+        "annotations": null,
+        "audio": null,
+        "content": "{\n  \"term\": \"Fall 2026\",\n  \"courses\": [\n    {\n      \"code\": \"CHEM 271\",\n      \"name\": \"Organic Chemistry I\",\n      \"classes\": [\n        {\n          \"kind\": \"Lecture\",\n          \"day\": \"Tue\",\n          \"start\": \"08:30\",\n          \"end\": \"10:00\",\n          \"room\": \"H-110\"\n        },\n        {\n          \"kind\": \"Lecture\",\n          \"day\": \"Thu\",\n          \"start\": \"08:30\",\n          \"end\": \"10:00\",\n          \"room\": \"H-110\"\n        },\n        {\n          \"kind\": \"Lab\",\n          \"day\": \"Fri\",\n          \"start\": \"13:00\",\n          \"end\": \"16:00\",\n          \"room\": \"SP-265\"\n        }\n      ]\n    },\n    {\n      \"code\": \"PHYS 205\",\n      \"name\": \"Waves and Optics\",\n      \"classes\": [\n        {\n          \"kind\": \"Lecture\",\n          \"day\": \"Mon\",\n          \"start\": \"09:00\",\n          \"end\": \"10:30\",\n          \"room\": \"Hall B\"\n        },\n        {\n          \"kind\": \"Lecture\",\n          \"day\": \"Wed\",\n          \"start\": \"09:00\",\n          \"end\": \"10:30\",\n          \"room\": \"Hall B\"\n        },\n        {\n          \"kind\": \"Tutorial\",\n          \"day\": \"Wed\",\n          \"start\": \"15:00\",\n          \"end\": \"16:00\",\n          \"room\": \"Room 2.04\"\n        }\n      ]\n    },\n    {\n      \"code\": \"BIOL 266\",\n      \"name\": \"Cell Biology\",\n      \"classes\": [\n        {\n          \"kind\": \"Lecture\",\n          \"day\": \"Mon\",\n          \"start\": \"13:00\",\n          \"end\": \"14:30\",\n          \"room\": \"CC-301\"\n        },\n        {\n          \"kind\": \"Lab\",\n          \"day\": \"Thu\",\n          \"start\": \"14:00\",\n          \"end\": \"17:00\",\n          \"room\": \"SP-110\"\n        }\n      ]\n    }\n  ]\n}",
+        "function_call": null,
+        "reasoning": "We need to parse the schedule.\n\nTerm: \"Fall 2026\" as per header.\n\nCourses: need each distinct course code. We have CHEM 271, PHYS 205, BIOL 266. Also mention ANAT101 but not present. So we list those three.\n\nFor each course, need name (title). Use the Course Title column.\n\nClasses: need each weekly meeting entry.\n\nWe need to map component abbreviations to kind: LEC => Lecture, LAB => Lab, TUT => Tutorial. Also \"LEC\" and \"Cours\" are Lecture, but not needed.\n\nNow parse each line.\n\nLine 1: CHEM 271 Organic Chemistry I 01 LEC Tu Th 8:30 AM – 10:00 AM H-110 Dr. A. Okafor\n\nComponent LEC => Lecture. Days: Tu Th (Tuesday, Thursday). Time: 8:30 AM – 10:00 AM. Convert to 24-hour: 08:30 to 10:00. Room: H-110.\n\nThus two class entries for CHEM 271: Lecture on Tue, Lecture on Thu.\n\nLine 2: CHEM 271 Organic Chemistry I 01A LAB Fr 1:00 PM – 4:00 PM SP-265 Staff\n\nComponent LAB => Lab. Day: Fr (Friday). Time: 1:00 PM – 4:00 PM => 13:00 to 16:00. Room: SP-265.\n\nLine 3: PHYS 205 Waves and Optics 02 LEC Mo We 9:00 AM – 10:30 AM Hall B Dr. J. Chen\n\nLecture on Monday and Wednesday. Time 09:00 – 10:30. Room Hall B.\n\nLine 4: PHYS 205 Waves and Optics 02T TUT We 3:00 PM – 4:00 PM Room 2.04 Staff\n\nTutorial on Wednesday. Time 15:00 – 16:00. Room: Room 2.04.\n\nLine 5: BIOL 266 Cell Biology 01 LEC Mo 1:00 PM – 2:30 PM CC-301 Dr. M. Roy\n\nLecture Monday 13:00 – 14:30. Room CC-301.\n\nLine 6: BIOL 266 Cell Biology 01L LAB Th 2:00 PM – 5:00 PM SP-110 Staff\n\nLab Thursday 14:00 – 17:00. Room SP-110.\n\nNow produce JSON.\n\nNeed to ensure day abbreviations: \"Tue\", \"Thu\", \"Fri\", \"Mon\", \"Wed\". The schema expects day values from enum: [\"Sun\",\"Mon\",\"Tue\",\"Wed\",\"Thu\",\"Fri\",\"Sat\"].\n\nThus use \"Tue\", \"Thu\", \"Fri\", \"Mon\", \"Wed\".\n\nNow produce JSON object with term and courses array.\n\nEach course object: code, name, classes array.\n\nClasses entries: kind, day, start, end, room (room optional but we include). Must include required fields: kind, day, start. End optional? Schema includes end but not required. We'll include end.\n\nNow produce.\n\nCheck for duplicate entries: For each day separate entry.\n\nCHEM 271:\n\n- Lecture Tue 08:30-10:00 room H-110\n- Lecture Thu 08:30-10:00 room H-110\n- Lab Fri 13:00-16:00 room SP-265\n\nPHYS 205:\n\n- Lecture Mon 09:00-10:30 room Hall B\n- Lecture Wed 09:00-10:30 room Hall B\n- Tutorial Wed 15:00-16:00 room Room 2.04\n\nBIOL 266:\n\n- Lecture Mon 13:00-14:30 room CC-301\n- Lab Thu 14:00-17:00 room SP-110\n\nNow produce JSON.\n\nCheck that code strings exactly as in schedule: \"CHEM 271\", \"PHYS 205\", \"BIOL 266\". Name strings: \"Organic Chemistry I\", \"Waves and Optics\", \"Cell Biology\". Ensure no extra spaces.\n\nNow final answer.",
+        "reasoning_content": "We need to parse the schedule.\n\nTerm: \"Fall 2026\" as per header.\n\nCourses: need each distinct course code. We have CHEM 271, PHYS 205, BIOL 266. Also mention ANAT101 but not present. So we list those three.\n\nFor each course, need name (title). Use the Course Title column.\n\nClasses: need each weekly meeting entry.\n\nWe need to map component abbreviations to kind: LEC => Lecture, LAB => Lab, TUT => Tutorial. Also \"LEC\" and \"Cours\" are Lecture, but not needed.\n\nNow parse each line.\n\nLine 1: CHEM 271 Organic Chemistry I 01 LEC Tu Th 8:30 AM – 10:00 AM H-110 Dr. A. Okafor\n\nComponent LEC => Lecture. Days: Tu Th (Tuesday, Thursday). Time: 8:30 AM – 10:00 AM. Convert to 24-hour: 08:30 to 10:00. Room: H-110.\n\nThus two class entries for CHEM 271: Lecture on Tue, Lecture on Thu.\n\nLine 2: CHEM 271 Organic Chemistry I 01A LAB Fr 1:00 PM – 4:00 PM SP-265 Staff\n\nComponent LAB => Lab. Day: Fr (Friday). Time: 1:00 PM – 4:00 PM => 13:00 to 16:00. Room: SP-265.\n\nLine 3: PHYS 205 Waves and Optics 02 LEC Mo We 9:00 AM – 10:30 AM Hall B Dr. J. Chen\n\nLecture on Monday and Wednesday. Time 09:00 – 10:30. Room Hall B.\n\nLine 4: PHYS 205 Waves and Optics 02T TUT We 3:00 PM – 4:00 PM Room 2.04 Staff\n\nTutorial on Wednesday. Time 15:00 – 16:00. Room: Room 2.04.\n\nLine 5: BIOL 266 Cell Biology 01 LEC Mo 1:00 PM – 2:30 PM CC-301 Dr. M. Roy\n\nLecture Monday 13:00 – 14:30. Room CC-301.\n\nLine 6: BIOL 266 Cell Biology 01L LAB Th 2:00 PM – 5:00 PM SP-110 Staff\n\nLab Thursday 14:00 – 17:00. Room SP-110.\n\nNow produce JSON.\n\nNeed to ensure day abbreviations: \"Tue\", \"Thu\", \"Fri\", \"Mon\", \"Wed\". The schema expects day values from enum: [\"Sun\",\"Mon\",\"Tue\",\"Wed\",\"Thu\",\"Fri\",\"Sat\"].\n\nThus use \"Tue\", \"Thu\", \"Fri\", \"Mon\", \"Wed\".\n\nNow produce JSON object with term and courses array.\n\nEach course object: code, name, classes array.\n\nClasses entries: kind, day, start, end, room (room optional but we include). Must include required fields: kind, day, start. End optional? Schema includes end but not required. We'll include end.\n\nNow produce.\n\nCheck for duplicate entries: For each day separate entry.\n\nCHEM 271:\n\n- Lecture Tue 08:30-10:00 room H-110\n- Lecture Thu 08:30-10:00 room H-110\n- Lab Fri 13:00-16:00 room SP-265\n\nPHYS 205:\n\n- Lecture Mon 09:00-10:30 room Hall B\n- Lecture Wed 09:00-10:30 room Hall B\n- Tutorial Wed 15:00-16:00 room Room 2.04\n\nBIOL 266:\n\n- Lecture Mon 13:00-14:30 room CC-301\n- Lab Thu 14:00-17:00 room SP-110\n\nNow produce JSON.\n\nCheck that code strings exactly as in schedule: \"CHEM 271\", \"PHYS 205\", \"BIOL 266\". Name strings: \"Organic Chemistry I\", \"Waves and Optics\", \"Cell Biology\". Ensure no extra spaces.\n\nNow final answer.",
+        "refusal": null,
+        "role": "assistant"
+      },
+      "routed_experts": null,
+      "stop_reason": null,
+      "token_ids": null
+    }
+  ],
+  "created": 1790835843,
+  "ec_transfer_params": null,
+  "id": "chatcmpl-2a37f152-9f1f-4b72-9a16-197445912caa",
+  "kv_transfer_params": null,
+  "metrics": null,
+  "model": "@cf/openai/gpt-oss-120b",
+  "object": "chat.completion",
+  "prompt_logprobs": null,
+  "prompt_text": null,
+  "prompt_token_ids": null,
+  "service_tier": null,
+  "usage": {
+    "prompt_tokens": 778,
+    "completion_tokens": 1353,
+    "total_tokens": 2131,
+    "prompt_tokens_details": {
+      "cached_tokens": 0
+    },
+    "neurons": 117.0043716430664
+  }
+}

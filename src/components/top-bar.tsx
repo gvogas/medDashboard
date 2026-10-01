@@ -1,5 +1,5 @@
 // The top bar: the sidebar button on narrow screens, the date line over the view's title
-// in the serif, ‹ Today › in the week and month views, search and New item. Sync and
+// in the serif, ‹ Today › in the week and month views, search, Import with AI and New item. Sync and
 // Settings are in the sidebar's foot.
 // It renders inside <App>'s <header class="bar">, which styles/shell.css lays out
 // (and hides it on the focus screen).
@@ -12,7 +12,7 @@ import { ui, useUi } from "@/data/ui"
 import { useSide } from "@/data/sidebar"
 import { useSyncStatus } from "@/data/sync"
 import { DOT, syncTrouble } from "@/components/sync-status"
-import { goToday, newItem, setSearch, showSidebar, step } from "@/data/actions"
+import { goToday, newItem, openAiImport, setSearch, showSidebar, step } from "@/data/actions"
 
 const icon = (children: ReactNode, box = "0 0 16 16") => (
     <svg viewBox={box} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className="size-4">
@@ -60,6 +60,13 @@ export function TopBar() {
             )}
 
             <Search />
+            {/* Import with AI (spec §10): the spark and the words; the spark alone on a phone */}
+            <TextureButton variant="minimal" size="sm" aria-label="Import with AI" onClick={openAiImport}>
+                <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" className="size-3.5 text-primary">
+                    <path d="M12 2l1.9 5.6L19.5 9.5l-5.6 1.9L12 17l-1.9-5.6L4.5 9.5l5.6-1.9zM19 14l.9 2.6 2.6.9-2.6.9L19 21l-.9-2.6-2.6-.9 2.6-.9z" />
+                </svg>
+                <span className="max-[700px]:hidden">Import with AI</span>
+            </TextureButton>
             {/* Under 700px it floats, round, at the bottom right. */}
             <TextureButton
                 variant="accent"

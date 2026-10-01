@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { normalizeSchool, dayInfo, classWeekday, weekOf, currentTerm, termStartFor, schoolStatus, courseTerm, courseRunsOn, inTerm, pickedTerm, renamedTerms, repeatEnds } from '../src/core/school.ts';
 import { lectureDates } from '../src/core/reviews.ts';
 import { cleanSchool, readSchool } from '../worker/school.js';
@@ -183,6 +183,15 @@ describe('reading and saving a school calendar', () => {
     expect(calls).toEqual([MODEL, 2]);
     expect(out).toMatchObject({ name: 'Vanier College 2026–27', truncated: false });
     expect(out.terms).toHaveLength(2);
+  });
+
+  it('logs its tokens as a calendar read, apart from outlines', async () => {
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {});
+    const ai = { async run() { return { response: JSON.stringify(VANIER), usage: { prompt_tokens: 900, completion_tokens: 400 } }; } };
+    const text = 'Vanier academic calendar 2026 2027. August 24, Monday, first day of classes.';
+    await readSchool(ai, { bytes: new TextEncoder().encode(text), type: 'text/plain', name: 'c.txt', today: '2026-09-26' });
+    expect(log).toHaveBeenCalledWith(`calendar: ${MODEL} in=900 out=400`);
+    log.mockRestore();
   });
 
   it('checks the shape on the profile', () => {

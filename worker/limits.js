@@ -91,6 +91,13 @@ export async function limitOutline(env, userId) {
   if (wait) throw rateLimited(wait, 'outline_limit');
 }
 
+/** The AI reads (outlines, calendars, timetables) left in the person's window: { left, limit }. */
+export async function readsLeft(db, userId, now = Date.now()) {
+  const row = await db.prepare('SELECT hits, reset_at FROM request_limits WHERE key = ?').bind(`outline:${userId}`).first();
+  const used = row && row.reset_at > now ? row.hits : 0;
+  return { left: Math.max(0, OUTLINE_DAILY_LIMIT - used), limit: OUTLINE_DAILY_LIMIT };
+}
+
 export async function purgeLimits(db, now = Date.now()) {
   await db.batch([
     db.prepare('DELETE FROM request_limits WHERE reset_at <= ?').bind(now),

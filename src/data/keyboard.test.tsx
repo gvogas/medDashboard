@@ -4,6 +4,7 @@ import { afterEach, beforeAll, describe, expect, it, vi } from "vitest"
 const ui = vi.hoisted(() => ({ view: "week", focus: false }))
 const actions = vi.hoisted(() => ({ newItem: vi.fn(), goToday: vi.fn(), step: vi.fn() }))
 const setView = vi.hoisted(() => vi.fn())
+const busy = vi.hoisted(() => ({ current: null as null | { cancel: () => void } }))
 
 // Everything else keyboard.ts imports needs the booted app; none of it runs for these keys.
 vi.mock("@/data/actions", () => actions)
@@ -11,11 +12,12 @@ vi.mock("@/data/ui", async () => (await import("@/data/fake-ui")).fakeUi(ui))
 vi.mock("@/data/study-controller", () => ({ setView }))
 vi.mock("@/data/study-timer", () => ({ escapeFocus: vi.fn() }))
 vi.mock("@/data/sidebar", () => ({ setSide: vi.fn(), sideOpen: () => false }))
-vi.mock("@/data/ai-read", () => ({ getBusy: () => null }))
+vi.mock("@/data/ai-read", () => ({ getBusy: () => busy.current }))
 vi.mock("@/core/store", () => ({}))
 
 import { onKeydown } from "@/data/keyboard"
 import { keysOpen } from "@/data/keys"
+import { closeSheet, getSheet, openSheet } from "@/data/overlay"
 import { showApp } from "@/data/signin"
 import { act, render } from "@testing-library/react"
 import { Page } from "@/components/shell"
@@ -81,5 +83,21 @@ describe("the shortcuts panel", () => {
         press("Escape")
         expect(keysOpen()).toBe(false)
         expect(document.getElementById("app")!.hasAttribute("inert")).toBe(false)
+    })
+})
+
+describe("Escape while a file is read", () => {
+    it("cancels the read, even with focus outside the card, and leaves the sheet open", () => {
+        const cancel = vi.fn()
+        act(() => openSheet({ kind: "course", id: null }))
+        busy.current = { cancel }
+        try {
+            press("Escape")
+            expect(cancel).toHaveBeenCalledOnce()
+            expect(getSheet()).not.toBeNull()
+        } finally {
+            busy.current = null
+            act(() => closeSheet())
+        }
     })
 })

@@ -6,7 +6,8 @@
 // daily allowance of reads per person (limitOutline).
 
 import { HttpError } from './http.js';
-import { DAYS, dayIndex, modelJson, askModel } from './outline.js';
+import { DAYS, dayIndex, askModel } from './outline.js';
+import { modelJson } from './ai.js';
 import { normalizeSchool, SCHOOL_KINDS } from '../src/core/school.ts';
 
 const SCHEMA = {
@@ -74,6 +75,5 @@ export function cleanSchool(raw) {
 }
 
 export async function readSchool(ai, { today, ...doc }) {
-  const { answer, truncated } = await askModel(ai, doc, (text) => prompt(text, today));
-  return { ...cleanSchool(answer), truncated };
+  return askModel(ai, doc, (text) => prompt(text, today), cleanSchool, { what: 'calendar' });
 }

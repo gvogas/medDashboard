@@ -2,9 +2,11 @@ import { json, readJson, readBytes, HttpError } from './http.js';
 import { requireUser, requireSession, signSession, sessionCookie, clearCookie, deviceCookie, trustedDevice, parseCookies, secureFlag, sameString, hex, RENEW_WITHIN_MS } from './auth.js';
 import { verifyPassword, normalizeUsername } from './password.js';
 import { claimAttempt, recordSuccess } from './throttle.js';
-import { limitLogin, limitOutline } from './limits.js';
-import { readOutline, MAX_BYTES } from './outline.js';
+import { limitLogin, limitOutline, readsLeft } from './limits.js';
+import { readOutline, cleanCode, MAX_BYTES } from './outline.js';
 import { readSchool } from './school.js';
+import { readSchedule } from './schedule.js';
+import { listParam, cleanTerm, TIMEOUT_MS } from './ai.js';
 import { validateProfile, validateCourse, validateItem, validateQuote, validateStudySession, validateAchievement, validateId } from './validate.js';
 import { getUserForLogin, getProfile, updateProfile, getRow, upsertRow, deleteRow, syncPage, bumpPasswordGen, saveSpotifyTokens, deleteSpotifyTokens } from './db.js';
 import * as spotify from './spotify.js';
@@ -112,10 +114,20 @@ async function spotifyCallback({ request, env, url }) {
 
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
 
-/* Read an uploaded document with Workers AI: a course outline or a school calendar. The
-   body is the file; ?name= is its file name and ?today= / ?termStart= help the model place
-   "Week 3" on a date. Both count toward the same daily reads. */
+/* Read an uploaded document with Workers AI: a course outline, a school calendar or a class
+   schedule. The body is the file; ?name= is its file name and ?today= / ?termStart= help the
+   model place "Week 3" on a date; ?terms= (the school's semesters, "|"-separated) and ?codes=
+   (your course codes, ","-separated) let it name them as the app does. All three count toward
+   the same daily reads. */
+/** The semesters and course codes sent with a read, cleaned as the readers' own answers are. */
+export const knownParams = (params) => ({
+  terms: listParam(params.get('terms'), '|', 6, 40).map(cleanTerm).filter(Boolean),
+  codes: listParam(params.get('codes'), ',', 30, 24).map(cleanCode).filter(Boolean),
+});
+
 const aiRead = (read, what) => async ({ request, env, url }) => {
+  /* one deadline for the whole read: the upload, the conversion, the model and its retry */
+  const t0 = Date.now();
   const userId = await requireUser(request, env);
   const bytes = await readBytes(request, MAX_BYTES);
   if (!bytes.byteLength) throw new HttpError(400, { error: 'invalid', field: 'body' });
@@ -124,6 +136,8 @@ const aiRead = (read, what) => async ({ request, env, url }) => {
     return json(await read(env.AI, {
       bytes, type: request.headers.get('content-type') || '', name: (url.searchParams.get('name') || what).slice(0, 120),
       today: date('today') || new Date().toISOString().slice(0, 10), termStart: date('termStart'), claim: () => limitOutline(env, userId),
+      deadline: t0 + TIMEOUT_MS,
+      ...knownParams(url.searchParams),
     }));
   } catch (e) {
     if (e instanceof HttpError) throw e;
@@ -135,6 +149,8 @@ const aiRead = (read, what) => async ({ request, env, url }) => {
 const routes = [
   ['POST', /^\/api\/outline$/, aiRead(readOutline, 'outline')],
   ['POST', /^\/api\/school-calendar$/, aiRead(readSchool, 'calendar')],
+  ['POST', /^\/api\/ai\/schedule$/, aiRead(readSchedule, 'schedule')],
+  ['GET', /^\/api\/ai\/reads$/, async ({ request, env }) => json(await readsLeft(env.DB, await requireUser(request, env)))],
   // Username + password. Accounts are created with `npm run user:add`.
   ['POST', /^\/api\/login$/, async ({ request, env, url }) => {
     await limitLogin(request, env);

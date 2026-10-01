@@ -7,18 +7,20 @@
 // through toMarkdown here.
 //
 // Cost: toMarkdown is free for documents; the extraction is one gpt-oss-120b call
-// (about 300 neurons for a 10-page outline), bounded by MAX_CHARS in and MAX_TOKENS
-// out, and by OUTLINE_DAILY_LIMIT model calls per person per day. On three real outlines it
-// scored 18/21 against 14/21 for Llama 3.3 70B; see the study-tools spec.
+// (about 300 neurons for a 10-page outline; measured 1 October 2026 on the 3-page
+// test/fixtures/outline.txt: 1,311 tokens in, 1,576 out, 149 neurons), bounded by MAX_CHARS
+// in and MAX_TOKENS out, and by OUTLINE_DAILY_LIMIT model calls per person per day. On three
+// real outlines it scored 18/21 against 14/21 for Llama 3.3 70B; see the study-tools spec.
 
 import { HttpError } from './http.js';
+import { askJson, knownContext, modelJson, tidyText, timeLeft } from './ai.js';
 
 export const MODEL = '@cf/openai/gpt-oss-120b';
 export const MAX_BYTES = 5 * 1024 * 1024;
 export const MAX_CHARS = 48_000;          /* about 12k tokens of outline */
 const MAX_TOKENS = 6000;            /* a reasoning model: its thinking counts too */
 
-const KINDS = ['Lecture', 'Lab', 'Seminar', 'Tutorial', 'PBL', 'Clinical'];
+export const KINDS = ['Lecture', 'Lab', 'Seminar', 'Tutorial', 'PBL', 'Clinical'];
 export const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const TYPES = ['exam', 'quiz', 'assignment', 'lab', 'project', 'task'];
 const TEXT_TYPES = /^text\/(plain|markdown|csv)\b/i;
@@ -80,7 +82,7 @@ const SCHEMA = {
   required: ['code', 'name', 'classes', 'officeHours', 'assessments'],
 };
 
-function prompt(text, today, termStart) {
+function prompt(text, today, termStart, known = '') {
   return [
     {
       role: 'system',
@@ -102,13 +104,21 @@ function prompt(text, today, termStart) {
     },
     {
       role: 'user',
-      content: 'Today is ' + today + '.' + (termStart ? ' The term started on ' + termStart + '.' : '') + '\n\nCourse outline:\n\n' + text,
+      content: 'Today is ' + today + '.' + (termStart ? ' The term started on ' + termStart + '.' : '') + (known ? ' ' + known : '') + '\n\nCourse outline:\n\n' + text,
     },
   ];
 }
 
-export const dayIndex = (d) => DAYS.indexOf(String(d || '').slice(0, 3).replace(/^./, (c) => c.toUpperCase()));
-const clip = (v, n) => (typeof v === 'string' ? v.replace(/\s+/g, ' ').trim().slice(0, n) : '');
+/* the short forms timetables use: two letters ("Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"), and "R" for Thursday */
+const SHORT_DAYS = { mo: 1, tu: 2, we: 3, th: 4, fr: 5, sa: 6, su: 0, r: 4 };
+
+/** A weekday (0 = Sunday) from "Tue", "THU", "monday", "Th", "We", "R"…; -1 when it is none. */
+export function dayIndex(d) {
+  const t = String(d || '').trim().toLowerCase();
+  if (Object.hasOwn(SHORT_DAYS, t)) return SHORT_DAYS[t];
+  return DAYS.findIndex((day) => day.toLowerCase() === t.slice(0, 3));
+}
+export const clip = (v, n) => (typeof v === 'string' ? v.replace(/\s+/g, ' ').trim().slice(0, n) : '');
 
 /** "9:00", "0900", "2pm", "14.30" → "HH:MM", or '' */
 export function cleanTime(v) {
@@ -122,6 +132,42 @@ export function cleanTime(v) {
   return String(h).padStart(2, '0') + ':' + String(min).padStart(2, '0');
 }
 
+/** A class kind as the app keeps it, from the words timetables and outlines use. */
+export function cleanKind(v) {
+  const t = String(v || '').trim().toLowerCase();
+  const exact = KINDS.find((k) => k.toLowerCase() === t);
+  if (exact) return exact;
+  if (/\bpbl\b|problem[- ]based/.test(t)) return 'PBL';
+  if (/\blab|laborato|practical/.test(t)) return 'Lab';
+  if (/\btut|^td$|\bdisc/.test(t)) return 'Tutorial';   /* at a word's start: not "institute" */
+  if (/semin/.test(t)) return 'Seminar';
+  if (/clinic|ward|placement|bedside/.test(t)) return 'Clinical';
+  return 'Lecture';
+}
+
+/** A course code as the app keeps it: at most 8 characters, "CHEM 271" → CHEM271, "420-521-VA" → 420521VA. */
+export function cleanCode(v) {
+  let code = clip(v, 24).toUpperCase().replace(/[^A-Z0-9-]/g, '');
+  if (code.length > 8) code = code.replace(/-/g, '');
+  return code.slice(0, 8);
+}
+
+/* "1:00" in a timetable that leaves out am/pm is 13:00: no class starts between midnight and 6.
+   A trade-off: 6 and 7 written without pm stay in the morning (06:00, 07:00), as an early lab
+   or clinical shift would be, so an evening class written "6:00" is read 12 hours early. */
+const daytime = (t) => (t && t < '06:00' ? String(+t.slice(0, 2) + 12).padStart(2, '0') + t.slice(2) : t);
+
+/**
+ * Weekly classes as the model gave them, made safe: a weekday and a start each, an end only
+ * after the start, a small-hours time read as the afternoon, each weekday-and-start once, at most `max`.
+ */
+export function cleanClasses(list, max = 12) {
+  return (Array.isArray(list) ? list : []).map((c) => {
+    const start = daytime(cleanTime(c?.start)), end = daytime(cleanTime(c?.end));
+    return { kind: cleanKind(c?.kind), weekday: dayIndex(c?.day), start, end: end > start ? end : '', room: clip(c?.room, 40) };
+  }).filter((c, i, all) => c.weekday >= 0 && c.start && all.findIndex((x) => x.weekday === c.weekday && x.start === c.start) === i).slice(0, max);
+}
+
 function cleanDate(v) {
   const s = String(v || '').trim();
   if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return '';
@@ -129,41 +175,22 @@ function cleanDate(v) {
   return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === s ? s : '';
 }
 
-/** The model's answer as an object, or null: gpt-oss answers in JSON text, sometimes wrapped. */
-export function modelJson(raw) {
-  let o = raw;
-  if (o && typeof o === 'object' && Array.isArray(o.choices)) o = o.choices[0]?.message?.content;
-  if (typeof o === 'string') {
-    const m = o.match(/\{[\s\S]*\}/);
-    try { o = m ? JSON.parse(m[0]) : null; } catch { o = null; }
-  }
-  return o && typeof o === 'object' ? o : null;
-}
-
 /** Whatever the model returned, made safe and bounded. */
-export function cleanOutline(raw) {
+export function cleanOutline(raw, { today } = {}) {
   const o = modelJson(raw);
   if (!o) throw new HttpError(502, { error: 'outline_unreadable' });
-  /* Codes are at most 8 characters: "CHEM 271" → CHEM271, "420-521-VA" → 420521VA. */
-  let code = clip(o.code, 24).toUpperCase().replace(/[^A-Z0-9-]/g, '');
-  if (code.length > 8) code = code.replace(/-/g, '');
-  code = code.slice(0, 8);
-  const classes = (Array.isArray(o.classes) ? o.classes : []).map((c) => {
-    const start = cleanTime(c?.start), end = cleanTime(c?.end);
-    return {
-      kind: KINDS.includes(c?.kind) ? c.kind : 'Lecture',
-      weekday: dayIndex(c?.day),
-      start, end: end > start ? end : '',
-      room: clip(c?.room, 40),
-    };
-  }).filter((c) => c.weekday >= 0 && c.start).slice(0, 12);
+  /* a date more than 18 months from today is a misread year: it shows as "no date" in the preview's notes */
+  const near = (d) => !d || !today || Math.abs(Date.parse(d) - Date.parse(today)) <= 548 * 86_400_000;
+  const code = cleanCode(o.code);
+  const classes = cleanClasses(o.classes);
   const assessments = (Array.isArray(o.assessments) ? o.assessments : []).map((a) => {
     const w = typeof a?.weight === 'number' ? a.weight : parseFloat(a?.weight);
     const start = cleanTime(a?.start), end = cleanTime(a?.end);
+    const date = cleanDate(a?.date);
     return {
       title: clip(a?.title, 140),
       type: TYPES.includes(a?.type) ? a.type : 'task',
-      date: cleanDate(a?.date),
+      date: near(date) ? date : '',
       week: Number.isInteger(a?.week) && a.week >= 1 && a.week <= 20 ? a.week : null,
       start, end: start && end > start ? end : '',
       room: clip(a?.room, 80),
@@ -182,6 +209,9 @@ export function cleanOutline(raw) {
  * `ai` is env.AI (or a fake in tests).
  */
 export async function outlineText(ai, bytes, type, name) {
+  /* toMarkdown describes a picture with an AI model of its own (and its neurons); timetable
+     screenshots go to /api/ai/schedule instead */
+  if (/^image\//i.test(type || '')) throw new HttpError(415, { error: 'image_unsupported' });
   if (TEXT_TYPES.test(type || '')) return new TextDecoder().decode(bytes);
   const result = await ai.toMarkdown({ name: name || 'outline', blob: new Blob([bytes], { type: type || 'application/octet-stream' }) });
   const doc = Array.isArray(result) ? result[0] : result;
@@ -190,27 +220,26 @@ export async function outlineText(ai, bytes, type, name) {
 }
 
 /**
- * A document's text put to the model with `messages(text)`: {answer, truncated}.
- * `claim` runs just before the model does: only a document that reaches the model uses
- * one of the day's attempts, not a file that could not be converted or has no text.
+ * A document's text put to the model with `messages(text)` and its answer cleaned by `clean`:
+ * {...clean(answer), truncated}. `claim` runs just before the model does: only a document
+ * that reaches the model uses one of the day's reads, not a file that could not be converted
+ * or has no text, or whose conversion used up the read's `deadline` (ai.js timeLeft).
  */
-export async function askModel(ai, { bytes, type, name, claim }, messages) {
-  let text = (await outlineText(ai, bytes, type, name)).trim();
+export async function askModel(ai, { bytes, type, name, claim, deadline }, messages, clean, { effort, maxTokens = MAX_TOKENS, maxChars = MAX_CHARS, what = 'outline' } = {}) {
+  let text = tidyText(await outlineText(ai, bytes, type, name));
   if (text.length < 40) throw new HttpError(422, { error: 'outline_empty' });
-  const truncated = text.length > MAX_CHARS;
-  if (truncated) text = text.slice(0, MAX_CHARS);
-  if (claim) await claim();
-  try {
-    const out = await ai.run(MODEL, { messages: messages(text), max_tokens: MAX_TOKENS, temperature: 0 });
-    return { answer: out?.response ?? out, truncated };
-  } catch (e) {
-    /* 4006: the account's free daily neurons are spent; it resets at 00:00 UTC. */
-    if (/\b4006\b|daily free allocation/i.test(e?.message || '')) throw new HttpError(429, { error: 'outline_quota' });
-    throw e;
+  const truncated = text.length > maxChars;
+  if (truncated) {
+    /* at the end of a line, unless that loses more than a fifth */
+    const cut = text.lastIndexOf('\n', maxChars);
+    text = text.slice(0, cut > 0.8 * maxChars ? cut : maxChars);
   }
+  const timeoutMs = timeLeft(deadline);
+  if (claim) await claim();
+  const input = { messages: messages(text), max_tokens: maxTokens, temperature: 0, ...(effort ? { reasoning: { effort } } : {}) };
+  return { ...await askJson(ai, MODEL, input, clean, what, { timeoutMs }), truncated };
 }
 
-export async function readOutline(ai, { today, termStart, ...doc }) {
-  const { answer, truncated } = await askModel(ai, doc, (text) => prompt(text, today, termStart));
-  return { ...cleanOutline(answer), truncated };
+export async function readOutline(ai, { today, termStart, terms, codes, ...doc }) {
+  return askModel(ai, doc, (text) => prompt(text, today, termStart, knownContext({ terms, codes })), (raw) => cleanOutline(raw, { today }));
 }

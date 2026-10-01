@@ -1,6 +1,6 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { SELF, env } from 'cloudflare:test';
-import { cleanOutline, cleanTime, readOutline, outlineText, MODEL, MAX_CHARS } from '../worker/outline.js';
+import { cleanOutline, cleanTime, cleanKind, dayIndex, readOutline, outlineText, MODEL, MAX_CHARS } from '../worker/outline.js';
 import { signIn, BASE } from './helpers.js';
 import { OUTLINE_DAILY_LIMIT } from '../worker/limits.js';
 
@@ -83,7 +83,53 @@ describe('cleanOutline', () => {
   });
 });
 
+describe('days and kinds as models write them', () => {
+  it('reads a weekday in any case, and the short forms of Tuesday and Thursday', () => {
+    expect(['TUE', 'THU', 'monday', 'Th', 'Thu', 'R', 'Tu', 'tu', 'th', 'r', 'FRI', 'sunday'].map(dayIndex))
+      .toEqual([2, 4, 1, 4, 4, 4, 2, 2, 4, 4, 5, 0]);
+    expect(['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su', 'MO', 'we', ' fr '].map(dayIndex))
+      .toEqual([1, 2, 3, 4, 5, 6, 0, 1, 3, 5]);
+    expect(['', 'X', 'Someday', null].map(dayIndex)).toEqual([-1, -1, -1, -1]);
+  });
+
+  it('reads a tutorial only at the start of a word', () => {
+    expect(cleanKind('Lecture at the Institute')).toBe('Lecture');
+    expect(cleanKind('Tut')).toBe('Tutorial');
+    expect(cleanKind('TUT')).toBe('Tutorial');
+    expect(cleanKind('Tutorial group')).toBe('Tutorial');
+    expect(cleanKind('TD')).toBe('Tutorial');
+    expect(cleanKind('Discussion')).toBe('Tutorial');
+  });
+});
+
 describe('readOutline', () => {
+  it('refuses a picture before any model or read: toMarkdown would describe it with a model', async () => {
+    const ai = fakeAi(MODEL_REPLY);
+    const claim = vi.fn();
+    await expect(readOutline(ai, { bytes: new Uint8Array(400), type: 'image/png', name: 'x.png', today: '2026-09-23', claim }))
+      .rejects.toMatchObject({ status: 415, body: { error: 'image_unsupported' } });
+    expect(ai.calls).toEqual([]);
+    expect(claim).not.toHaveBeenCalled();
+  });
+
+  it('sends the text tidied', async () => {
+    const ai = fakeAi(MODEL_REPLY);
+    const text = ['### Page 1', 'PHARM 101 header', OUTLINE, 'Page 1 of 3', '### Page 2', 'PHARM 101 header', 'More', 'Page 2 of 3', '### Page 3', 'PHARM 101 header', 'End', 'Page 3 of 3'].join('\n');
+    await readOutline(ai, { bytes: new TextEncoder().encode(text), type: 'text/plain', today: '2026-09-23' });
+    const sent = ai.calls[0][2].messages[1].content;
+    expect(sent.match(/PHARM 101 header/g)).toHaveLength(1);
+    expect(sent).not.toContain('Page 2 of 3');
+  });
+
+  it('tells the model the semesters and course codes, and drops dates far from today', async () => {
+    const ai = fakeAi({ ...MODEL_REPLY, assessments: [{ title: 'Midterm exam', type: 'exam', date: '2016-10-20', weight: 30 }, { title: 'Final', type: 'exam', date: '2026-12-15', weight: 50 }] });
+    const out = await readOutline(ai, { bytes: new TextEncoder().encode(OUTLINE), type: 'text/plain', today: '2026-09-23', terms: ['Fall 2026', 'Winter 2027'], codes: ['PHARM101'] });
+    const user = ai.calls[0][2].messages[1].content;
+    expect(user).toContain('"Fall 2026", "Winter 2027"');
+    expect(user).toContain('the codes PHARM101');
+    expect(out.assessments.map((a) => [a.title, a.date])).toEqual([['Midterm exam', ''], ['Final', '2026-12-15']]);
+  });
+
   it('converts a PDF with toMarkdown and extracts with the JSON schema', async () => {
     const ai = fakeAi(MODEL_REPLY);
     const out = await readOutline(ai, { bytes: new Uint8Array([37, 80, 68, 70]), type: 'application/pdf', name: 'pharm.pdf', today: '2026-09-23', termStart: '2026-09-07' });
@@ -91,6 +137,7 @@ describe('readOutline', () => {
     const [, model, input] = ai.calls[1];
     expect(model).toBe(MODEL);
     expect(input.response_format).toBeUndefined();
+    expect(input.reasoning).toBeUndefined();
     expect(input.messages[0].content).toContain('"officeHours"');
     expect(input.messages[1].content).toContain('The term started on 2026-09-07.');
     expect(input.messages[1].content).toContain(OUTLINE);
@@ -103,6 +150,16 @@ describe('readOutline', () => {
     const out = await readOutline(ai, { bytes: new TextEncoder().encode(long), type: 'text/plain; charset=utf-8', today: '2026-09-23' });
     expect(ai.calls[0][0]).toBe('run');
     expect(out.truncated).toBe(true);
+  });
+
+  it('cuts a long outline at the end of a line', async () => {
+    const ai = fakeAi(MODEL_REPLY);
+    const lines = Array.from({ length: 600 }, (_, i) => String(i).padStart(5, '0') + ' ' + 'y'.repeat(90)).join('\n');
+    const out = await readOutline(ai, { bytes: new TextEncoder().encode(lines), type: 'text/plain', today: '2026-09-23' });
+    expect(out.truncated).toBe(true);
+    const sent = ai.calls[0][2].messages[1].content;
+    expect(sent).toMatch(/00493 y{90}$/);
+    expect(sent).not.toContain('00494');
   });
 
   it('reports a spent daily AI allowance as its own error', async () => {
@@ -171,5 +228,27 @@ describe('POST /api/outline', () => {
     const over = await post();
     expect(over.status).toBe(429);
     expect((await over.json()).error).toBe('outline_limit');
+  });
+});
+
+describe('one deadline for the whole read', () => {
+  it('gives the model only what the conversion left of it', async () => {
+    const ai = fakeAi(MODEL_REPLY);
+    ai.toMarkdown = () => new Promise((ok) => setTimeout(() => ok([{ format: 'markdown', data: OUTLINE }]), 80));
+    ai.run = () => new Promise(() => {});
+    const t0 = Date.now();
+    await expect(readOutline(ai, { bytes: new Uint8Array(4), type: 'application/pdf', today: '2026-09-23', deadline: t0 + 150 }))
+      .rejects.toMatchObject({ status: 504, body: { error: 'ai_timeout' } });
+    expect(Date.now() - t0).toBeLessThan(230);
+  });
+
+  it('claims no read when the conversion used it all up', async () => {
+    const claim = vi.fn();
+    const ai = fakeAi(MODEL_REPLY);
+    ai.toMarkdown = () => new Promise((ok) => setTimeout(() => ok([{ format: 'markdown', data: OUTLINE }]), 40));
+    await expect(readOutline(ai, { bytes: new Uint8Array(4), type: 'application/pdf', today: '2026-09-23', claim, deadline: Date.now() + 20 }))
+      .rejects.toMatchObject({ status: 504, body: { error: 'ai_timeout' } });
+    expect(claim).not.toHaveBeenCalled();
+    expect(ai.calls.some((c) => c[0] === 'run')).toBe(false);
   });
 });

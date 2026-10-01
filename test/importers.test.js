@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { parseIcs } from '../src/core/importers/ics.ts';
 import { parseCsv, normDate } from '../src/core/importers/csv.ts';
-import { planImport, planOutline, planSummary, setWeek1, weekDate, guessKind, guessType, codeToken } from '../src/core/importers/plan.ts';
+import { planImport, planOutline, planSchedule, planSummary, setWeek1, weekDate, guessKind, guessType, codeToken } from '../src/core/importers/plan.ts';
 import { normalizeCourse } from '../src/core/model.ts';
 
 const pad = (n) => String(n).padStart(2, '0');
@@ -233,5 +233,97 @@ describe('planOutline', () => {
     const plan = planOutline({ ...outline, code: '', classes: [], assessments: [] }, { courses: [], items: [] });
     expect(plan.courses[0]).toMatchObject({ code: 'PRIN', keep: true });
     expect(planSummary(plan)).toBe('1 new course · 0 classes · 0 items');
+  });
+
+  it("marks the plan as an outline and keeps an existing course's semester", () => {
+    const plan = planOutline(outline, { courses: [{ id: 'c1', code: 'PHARM101', name: 'Pharm', color: '#E4749B', term: 'Fall 2026', meetings: [] }], items: [] });
+    expect(plan.kind).toBe('outline');
+    expect(plan.courses[0].term).toBe('Fall 2026');
+  });
+});
+
+describe('planSchedule', () => {
+  const read = { term: 'Fall 2026', courses: [
+    { code: 'CHEM271', name: 'Organic Chemistry I', classes: [
+      { kind: 'Lecture', weekday: 2, start: '08:30', end: '10:00', room: 'H-110' },
+      { kind: 'Lab', weekday: 5, start: '13:00', end: '16:00', room: 'SP-265' },
+    ] },
+    { code: '', name: 'Waves', classes: [{ kind: 'Lecture', weekday: 1, start: '09:00', end: '10:30', room: 'Hall B' }] },
+    { code: 'BIOL266', name: 'Cell Biology', classes: [{ kind: 'Tutorial', weekday: 3, start: '15:00', end: '16:00', room: '' }] },
+  ] };
+  const data = () => ({ items: [], courses: [
+    { id: 'c1', code: 'CHEM271', name: 'Organic Chem', color: '#E4749B', term: 'Winter 2027', meetings: [{ id: 'm0', kind: 'Lecture', weekday: 2, start: '08:30', end: '10:00', room: 'H-110' }] },
+    { id: 'c2', code: 'PHYS205', name: 'waves ', color: '#4F74D9', term: '', meetings: [] },
+  ] });
+
+  it('matches courses by code, then by name, and proposes the rest with the semester given', () => {
+    const plan = planSchedule(read, data(), 'Fall 2026');
+    expect(plan.kind).toBe('schedule');
+    expect(plan.courses.map((c) => [c.id === 'c1' || c.id === 'c2' ? c.id : 'new', c.code, c.isNew, c.term]))
+      .toEqual([['c1', 'CHEM271', false, 'Winter 2027'], ['c2', 'PHYS205', false, ''], ['new', 'BIOL266', true, 'Fall 2026']]);
+    expect(plan.courses[2].name).toBe('Cell Biology');
+    expect(plan.items).toEqual([]);
+  });
+
+  it('leaves out the classes a course already has and ticks the rest', () => {
+    const chem = planSchedule(read, data(), '').courses[0];
+    expect(chem.meetings.map((m) => [m.kind, m.weekday, m.start, m.room, m.include])).toEqual([['Lab', 5, '13:00', 'SP-265', true]]);
+  });
+
+  it('still lists a course whose classes are all there, so its semester can be set', () => {
+    const d = data();
+    d.courses[0].meetings.push({ id: 'm1', kind: 'Lab', weekday: 5, start: '13:00', end: '16:00', room: 'SP-265' });
+    const plan = planSchedule({ term: '', courses: [read.courses[0]] }, d, '');
+    expect(plan.courses.map((c) => [c.id, c.meetings.length])).toEqual([['c1', 0]]);
+  });
+
+  it('keeps a course to 12 classes and says what was dropped', () => {
+    const classes = Array.from({ length: 13 }, (_, i) => ({ kind: 'Lecture', weekday: 1 + (i % 5), start: String(8 + Math.floor(i / 5)).padStart(2, '0') + ':00', end: '', room: '' }));
+    const plan = planSchedule({ term: '', courses: [{ code: 'MANY', name: 'Many', classes }] }, { items: [], courses: [] }, '');
+    expect(plan.courses[0].meetings).toHaveLength(12);
+    expect(plan.notes.join(' ')).toContain('already has 12 classes');
+  });
+
+  it('merges two courses read with the same code, whatever its case or spaces, into one', () => {
+    const lec = { kind: 'Lecture', weekday: 1, start: '09:00', end: '10:00', room: 'A' };
+    const lab = { kind: 'Lab', weekday: 3, start: '13:00', end: '16:00', room: 'B' };
+    const many = Array.from({ length: 12 }, (_, i) => ({ kind: 'Tutorial', weekday: 1 + (i % 5), start: String(11 + Math.floor(i / 5)).padStart(2, '0') + ':30', end: '', room: '' }));
+    const plan = planSchedule({ term: '', courses: [
+      { code: 'MATH 205', name: 'Calculus', classes: [lec, lab] },
+      { code: 'math205', name: 'Calculus II', classes: [lec, ...many] },
+    ] }, { items: [], courses: [] }, 'Fall 2026');
+    expect(plan.courses).toHaveLength(1);
+    expect(plan.courses[0]).toMatchObject({ code: 'MATH205', name: 'Calculus', isNew: true, term: 'Fall 2026' });
+    const keys = plan.courses[0].meetings.map((m) => [m.weekday, m.start, m.end].join(' '));
+    expect(new Set(keys).size).toBe(keys.length);
+    expect(keys.slice(0, 2)).toEqual(['1 09:00 10:00', '3 13:00 16:00']);
+    expect(plan.courses[0].meetings).toHaveLength(12);
+    expect(plan.notes.join(' ')).toContain('MATH205 already has 12 classes');
+  });
+
+  it('gives a new course with no code one of its own, never one already taken', () => {
+    const lec = (weekday) => [{ kind: 'Lecture', weekday, start: '09:00', end: '10:00', room: '' }];
+    const d = { items: [], courses: [{ id: 'w', code: 'WAVE', name: 'Wave Mechanics', color: '#4F74D9', term: '', meetings: [] }] };
+    const plan = planSchedule({ term: '', courses: [
+      { code: '', name: 'Organic Chemistry', classes: lec(1) },
+      { code: '', name: 'Organic Physics', classes: lec(2) },
+      { code: '', name: 'Waves', classes: lec(3) },
+      { code: 'ORGA3', name: 'Organ Music', classes: lec(4) },
+      { code: '', name: 'organic  chemistry', classes: lec(5) },
+    ] }, d, '');
+    expect(plan.courses.map((c) => [c.code, c.name, c.isNew, c.meetings.map((m) => m.weekday)])).toEqual([
+      ['ORGA', 'Organic Chemistry', true, [1, 5]],
+      ['ORGA2', 'Organic Physics', true, [2]],
+      ['WAVE2', 'Waves', true, [3]],
+      ['ORGA3', 'Organ Music', true, [4]],
+    ]);
+  });
+
+  it('merges a course read twice into the one of yours it matches', () => {
+    const plan = planSchedule({ term: '', courses: [
+      { code: 'chem 271', name: 'Organic', classes: [{ kind: 'Lab', weekday: 5, start: '13:00', end: '16:00', room: '' }] },
+      { code: '', name: 'Organic Chem', classes: [{ kind: 'Tutorial', weekday: 4, start: '10:00', end: '11:00', room: '' }] },
+    ] }, data(), '');
+    expect(plan.courses.map((c) => [c.id, c.meetings.map((m) => m.kind)])).toEqual([['c1', ['Lab', 'Tutorial']]]);
   });
 });
