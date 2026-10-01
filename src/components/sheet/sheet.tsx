@@ -1,5 +1,6 @@
 // The sheet: a floating Texture panel on the right for an item, a course, Settings, an
-// import, the school calendar, a study session or an achievement, over the blurred scrim
+// import, a class schedule, the Import with AI card, the school calendar, a study session
+// or an achievement, over the blurred scrim
 // (<App>'s, shared with the phone sidebar). What it shows comes from
 // src/data/overlay.ts, which also makes the page behind inert while it is open. Escape
 // and the scrim close it, or ask first when the course has unsaved changes.
@@ -18,6 +19,7 @@ const ItemSheet = lazyNamed(() => import("./item-sheet"), "ItemSheet")
 const CourseSheet = lazyNamed(() => import("./course-sheet"), "CourseSheet")
 const SettingsSheet = lazyNamed(() => import("./settings-sheet"), "SettingsSheet")
 const ImportSheet = lazyNamed(() => import("./import-sheet"), "ImportSheet")
+const ScheduleSheet = lazyNamed(() => import("./schedule-sheet"), "ScheduleSheet")
 const SchoolSheet = lazyNamed(() => import("./school-sheet"), "SchoolSheet")
 const SessionSheet = lazyNamed(() => import("./session-sheet"), "SessionSheet")
 const AchievementSheet = lazyNamed(() => import("./achievement-sheet"), "AchievementSheet")
@@ -28,6 +30,8 @@ export function sheetLabel(s: Exclude<SheetState, null>): string {
     if (s.kind === "new-item") return "New " + tmeta(s.draft.type).label.toLowerCase()
     if (s.kind === "settings") return "Settings"
     if (s.kind === "import") return "Import"
+    if (s.kind === "schedule") return "Class schedule"
+    if (s.kind === "ai") return "Import with AI"
     if (s.kind === "school") return "School calendar"
     if (s.kind === "session") return s.draft.isNew ? "Log study" : "Edit session"
     if (s.kind === "achievement") return s.draft.isNew ? "New achievement" : "Edit achievement"
@@ -84,6 +88,7 @@ export function Sheet() {
                 {shown?.kind === "course" && <CourseSheet key={shown.id ?? "new"} id={shown.id} />}
                 {shown?.kind === "settings" && <SettingsSheet tab={shown.tab} focus={shown.focus} />}
                 {shown?.kind === "import" && <ImportSheet key={shown.name} plan={shown.plan} name={shown.name} />}
+                {shown?.kind === "schedule" && <ScheduleSheet key={shown.name} plan={shown.plan} name={shown.name} />}
                 {shown?.kind === "school" && <SchoolSheet draft={shown.draft} />}
                 {shown?.kind === "session" && <SessionSheet key={shown.draft.id} draft={shown.draft} />}
                 {shown?.kind === "achievement" && <AchievementSheet key={shown.draft.id} draft={shown.draft} />}

@@ -19,6 +19,8 @@ export type SheetState =
     | { kind: "course"; id: string | null }
     | { kind: "settings"; tab: SettingsTab; focus: string | null }
     | { kind: "import"; plan: ImportPlan; name: string }
+    | { kind: "schedule"; plan: ImportPlan; name: string }
+    | { kind: "ai" }
     | { kind: "school"; draft: SchoolDraft }
     | { kind: "session"; draft: SessionDraft }
     | { kind: "achievement"; draft: AchievementDraft }
