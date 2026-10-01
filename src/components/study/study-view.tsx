@@ -35,7 +35,7 @@ export function StudyView() {
                         tabIndex={open === id ? 0 : -1}
                         onClick={() => setStudyTab(id)}
                         className={cn(
-                            "-mb-px h-[42px] flex-none cursor-pointer border-0 border-b-2 bg-transparent px-3.5 font-[inherit] text-[13.5px] max-[520px]:px-2.5",
+                            "-mb-px h-[42px] flex-none cursor-pointer border-0 border-b-2 bg-transparent px-3.5 font-[inherit] outline-none focus-visible:shadow-[inset_0_0_0_2px_var(--accent)] text-[13.5px] max-[520px]:px-2.5",
                             open === id ? "border-primary font-semibold text-foreground" : "border-transparent font-medium text-muted-foreground hover:text-foreground",
                         )}
                     >
@@ -43,7 +43,7 @@ export function StudyView() {
                     </button>
                 ))}
             </div>
-            <div role="tabpanel" id="study-panel" aria-labelledby={"study-tab-" + open} className="min-w-0">
+            <div role="tabpanel" id="study-panel" aria-labelledby={"study-tab-" + open} tabIndex={0} className="min-w-0 rounded-[var(--radius)] outline-none focus-visible:shadow-[inset_0_0_0_2px_var(--accent)]">
                 {open === "timer" && <TimerCards />}
                 {open === "history" && <HistoryCard />}
                 {open === "achievements" && <AchievementsCard />}

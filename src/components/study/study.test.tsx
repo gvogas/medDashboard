@@ -100,6 +100,7 @@ describe("the Study page", () => {
         expect(tabs().map((t) => t.tabIndex)).toEqual([0, -1, -1, -1])
         const panel = screen.getByRole("tabpanel", { name: "Timer" })
         expect(tab("Timer").getAttribute("aria-controls")).toBe(panel.id)
+        expect(panel.tabIndex).toBe(0)
         for (const name of ["Ready", "Your flow"]) expect(within(panel).getByRole("region", { name })).toBeTruthy()
         for (const name of ["History", "Achievements", "Leaderboard"]) expect(screen.queryByRole("region", { name })).toBeNull()
     })
@@ -430,6 +431,19 @@ describe("the leaderboard", () => {
         vi.stubGlobal("navigator", { onLine: true })
         fake.api.leaderboard.mockResolvedValue(joined)
         await act(async () => { window.dispatchEvent(new Event("online")) })
+        expect(within(lb()).getByRole("button", { name: "Leave the leaderboard" })).toBeTruthy()
+    })
+
+    it("tries again on opening its tab when the last try was offline and the device is online now", async () => {
+        vi.stubGlobal("navigator", { onLine: false })
+        fake.api.leaderboard.mockRejectedValue(new Error("offline"))
+        await show("Leaderboard")
+        expect(lb().textContent).toContain("needs a connection")
+        vi.stubGlobal("navigator", { onLine: true })
+        fake.api.leaderboard.mockResolvedValue(joined)
+        fireEvent.click(tab("Timer"))
+        fireEvent.click(tab("Leaderboard"))
+        await act(async () => {})
         expect(within(lb()).getByRole("button", { name: "Leave the leaderboard" })).toBeTruthy()
     })
 

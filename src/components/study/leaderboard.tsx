@@ -27,7 +27,7 @@ export function LeaderboardCard({ className }: { className?: string }) {
        cancelled when the account is bound (core/api.ts), so wait for the app to show. */
     const screen = useScreen()
     useEffect(() => {
-        if (screen === "app" && lbStale()) void loadLeaderboard()
+        if (screen === "app" && (lbStale() || (ui.lb?.offline && navigator.onLine))) void loadLeaderboard()
     }, [screen])
 
     useEffect(() => {
