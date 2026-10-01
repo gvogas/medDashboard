@@ -12,7 +12,7 @@ vi.mock("@/lib/fireworks", () => ({ launch: vi.fn() }))
 
 import { httpUrl, normalizeCourse, normalizeItem } from "@/core/model"
 import { normalizeSchool } from "@/core/school"
-import { autoTitleFor, countdown, deriveEdit, editNow, flush, linkUrl, pendingFor, typeInto, TYPING_MS } from "./item-edit"
+import { autoTitleFor, busyDays, countdown, deriveEdit, editNow, flush, linkUrl, pendingFor, typeInto, TYPING_MS } from "./item-edit"
 import { courseChanged, forSaving, newCourse } from "./course-edit"
 import type { Course, Item } from "./types"
 
@@ -140,5 +140,18 @@ describe("a course draft", () => {
 
     it("gets a code from its name when saved without one", () => {
         expect(forSaving({ ...newCourse(0), name: "Pharmacology" }).code).toBe("PHAR")
+    })
+})
+
+describe("the date picker's dots", () => {
+    it("are the days other open items fall on", () => {
+        const items = [
+            item({ id: "a", date: "2026-09-25" }),
+            item({ id: "b", date: "2026-09-26", status: "submitted" }),   /* finished: no dot */
+            item({ id: "c", date: "2026-09-27", status: "missed" }),      /* closed: no dot */
+            item({ id: "i1", date: "2026-09-28" }),                       /* the item itself */
+            item({ id: "d", date: "2026-09-25" }),
+        ]
+        expect([...busyDays(items, "i1")]).toEqual(["2026-09-25"])
     })
 })
