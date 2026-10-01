@@ -2,21 +2,24 @@ import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest
 
 /* The selectors are pure; the actions change a fake ui. */
 const fake = vi.hoisted(() => ({
-    ui: { hist: { weekOffset: 0, tab: "week", monthOffset: 0, focusDay: null as string | null, undo: null as unknown } },
+    ui: { studyTab: "timer", hist: { weekOffset: 0, tab: "week", monthOffset: 0, focusDay: null as string | null, undo: null as unknown } },
 }))
 vi.mock("@/core/store", () => ({ data: { items: [], courses: [], quotes: [], study_sessions: [], achievements: [], profile: null }, subscribe: () => () => {} }))
 vi.mock("@/data/ui", async () => (await import("@/data/fake-ui")).fakeUi(fake.ui))
 vi.mock("@/data/query", () => ({ termStart: () => null, schoolCal: () => null }))
 
 import { normalizeItem, normalizePrefs } from "@/core/model"
-import { badges, monthOf, pickDay, rangeLabel, setHistTab, shownSessions, stepHist, studyTiles, termOf, undoSessionDelete, weekOf } from "./study"
+import { badges, monthOf, pickDay, rangeLabel, setHistTab, setStudyTab, shownSessions, stepHist, studyTiles, termOf, undoSessionDelete, weekOf } from "./study"
 import type { Achievement, Item, StudyPrefs, StudySession } from "./types"
 
 /* Wednesday 23 September 2026; the week runs Mon 21 – Sun 27. */
 const TODAY = "2026-09-23"
 beforeAll(() => { vi.useFakeTimers({ toFake: ["Date", "setTimeout", "clearTimeout"] }); vi.setSystemTime(new Date(2026, 8, 23, 12)) })
 afterAll(() => { vi.useRealTimers() })
-afterEach(() => { Object.assign(fake.ui.hist, { weekOffset: 0, tab: "week", monthOffset: 0, focusDay: null, undo: null }) })
+afterEach(() => {
+    fake.ui.studyTab = "timer"
+    Object.assign(fake.ui.hist, { weekOffset: 0, tab: "week", monthOffset: 0, focusDay: null, undo: null })
+})
 
 /** A session at a local hour on a day, so the tests hold in any time zone. */
 let n = 0
@@ -271,5 +274,14 @@ describe("labels", () => {
     it("say a range within a month, or across two", () => {
         expect(rangeLabel("2026-09-14", "2026-09-20")).toBe("14 – 20 Sep")
         expect(rangeLabel("2026-12-28", "2027-01-03")).toBe("28 Dec – 3 Jan")
+    })
+})
+
+describe("the Study page's tabs", () => {
+    it("open the tab asked for", () => {
+        setStudyTab("history")
+        expect(fake.ui.studyTab).toBe("history")
+        setStudyTab("leaderboard")
+        expect(fake.ui.studyTab).toBe("leaderboard")
     })
 })

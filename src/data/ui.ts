@@ -1,5 +1,6 @@
 // UI state: what is open, what is filtered, how the table is sorted. Never synced. The
-// view and the week and month's schedule are remembered per browser as a convenience, and
+// view, the week and month's schedule and the Study page's tab are remembered per browser
+// as a convenience, and
 // the theme and background too, for index.html's script to apply before the first paint.
 // It is one object changed in place, with no events: everything that changes it then
 // calls the bridge's notify(), whose counter is the snapshot useUi() reads.
@@ -31,6 +32,7 @@ export const ui: Ui = {
     focus: false,            /* the focus screen is up: the study clock and Spotify, nothing else */
     focusMusic: false,       /* the focus screen's music panel is open */
     study: { courseId: null, itemId: null },   /* what the next study run is logged against */
+    studyTab: "timer",       /* the Study page's tab: Timer, History, Achievements or Leaderboard */
     /* the Study page's History card: which week and month are shown, the Week, Month or
        Term tab, the day picked on the month's calendar or the heatmap, and a deleted
        session that can still be undone */
@@ -45,14 +47,15 @@ export const ui: Ui = {
 }
 
 try {
-    const saved = JSON.parse(localStorage.getItem(KEY) || "{}") as { view?: string; schedule?: string; monthDeadlines?: boolean }
+    const saved = JSON.parse(localStorage.getItem(KEY) || "{}") as { view?: string; schedule?: string; monthDeadlines?: boolean; studyTab?: string }
     if (["week", "month", "table", "spotify", "study"].includes(saved.view!)) ui.view = saved.view as Ui["view"]
     if (["all", "deadlines", "classes"].includes(saved.schedule!)) ui.schedule = saved.schedule as Ui["schedule"]
     else if (saved.monthDeadlines === false) ui.schedule = "classes"   /* the month's old Deadlines toggle */
+    if (["timer", "history", "achievements", "leaderboard"].includes(saved.studyTab!)) ui.studyTab = saved.studyTab as Ui["studyTab"]
 } catch {}
 
 export function rememberUi() {
-    try { localStorage.setItem(KEY, JSON.stringify({ view: ui.view, schedule: ui.schedule })) } catch {}
+    try { localStorage.setItem(KEY, JSON.stringify({ view: ui.view, schedule: ui.schedule, studyTab: ui.studyTab })) } catch {}
     try { localStorage.setItem("rounds.theme", ui.theme) } catch {}
     try { localStorage.setItem("rounds.bg", ui.bg) } catch {}
 }

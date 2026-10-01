@@ -12,6 +12,8 @@ export type View = "week" | "month" | "table" | "spotify" | "study"
 
 /** The History card on the Study page: its tab, the week and month shown, the day picked, a delete Undo can take back. */
 export type HistTab = "week" | "month" | "term"
+/** The Study page's four tabs. */
+export type StudyTab = "timer" | "history" | "achievements" | "leaderboard"
 export interface SessionUndo { session: StudySession; timer: ReturnType<typeof setTimeout> }
 export interface Hist { weekOffset: number; tab: HistTab; monthOffset: number; focusDay: string | null; undo: SessionUndo | null }
 
@@ -56,7 +58,8 @@ export interface Ui {
     spotify: SpotifyPlace
     /* what the next study run is logged against */
     study: { courseId: string | null; itemId: string | null }
-    /* the Study page: the History card and the leaderboard */
+    /* the Study page: its tab (remembered on this browser), the History card and the leaderboard */
+    studyTab: StudyTab
     hist: Hist
     lb: Leaderboard | null
     lbTab: LbTab

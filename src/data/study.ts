@@ -13,8 +13,8 @@ import { termStart as currentTermStart } from "@/data/query"
 import { addDays, dayMonth, iso, parse, shortDate, today as todayIso, DOW, MON } from "@/core/dates"
 import { duration } from "@/lib/time"
 import { useAchievements, useCourses, useItems, useProfile, useStudySessions } from "./store"
-import { ui } from "./ui"
-import type { Achievement, Badge, Course, HistTab, Item, SessionUndo, StudyPrefs, StudySession } from "./types"
+import { rememberUi, ui } from "./ui"
+import type { Achievement, Badge, Course, HistTab, Item, SessionUndo, StudyPrefs, StudySession, StudyTab } from "./types"
 
 /* A course split is [courseId, minutes] pairs, most first, with "" for no course. */
 type Split = [string, number][]
@@ -291,6 +291,14 @@ export const useBadges = () => {
 }
 
 /* ── the History card's actions: each changes the ui and redraws ── */
+
+/** Open a Study tab; the tab is remembered on this browser, like the page. */
+export function setStudyTab(tab: StudyTab) {
+    if (ui.studyTab === tab) return
+    ui.studyTab = tab
+    rememberUi()
+    notify()
+}
 
 /** Week, Month or Term; a day picked before is let go. The tab lasts the session. */
 export function setHistTab(tab: HistTab) {
