@@ -1,11 +1,13 @@
-// An item in the sheet: its title, fields, notes, checklist (topics for an exam) and
-// links. A stored item saves as it is edited (text once typing pauses); a new one is a
-// draft until Save. The rules for what an edit brings along are in data/item-edit.ts.
+// An item in the card: its title, the type as buttons, the property rows (course, date,
+// time, room, status, repeat, weight…), then the checklist (topics for an exam), notes and
+// links, folded until wanted. A stored item saves as it is edited (text once typing
+// pauses); a new one is a draft until Save. The rules for what an edit brings along are in
+// data/item-edit.ts.
 
 import { useEffect, useId, useState } from "react"
 import { cn } from "@/lib/utils"
 import { baseOf, httpUrl, isComplete, isOpen, isOverdue, isTest, normalizeItem, statusesFor, tmeta, typeList, uid } from "@/core/model"
-import { hhmm, shortDate, today, DOW } from "@/core/dates"
+import { shortDate, today, DOW } from "@/core/dates"
 import * as store from "@/core/store"
 import { repeatEnds } from "@/core/school"
 import { GRADABLE } from "@/core/grades"
@@ -16,15 +18,17 @@ import { useCourses, useItems, useStudySessions } from "@/data/store"
 import { studiedFor } from "@/data/study"
 import { useUi } from "@/data/ui"
 import { beforeSheetClose, closeSheet, updateDraft } from "@/data/overlay"
-import { celebrate, chainReview, countdown, deriveEdit, editNow, flush, linkUrl, REPEAT_CHOICES, REPEATS, typeInto, untilLabel, useItemView, type ItemField } from "@/data/item-edit"
+import { busyDays, celebrate, chainReview, countdown, deriveEdit, editNow, flush, linkUrl, REPEAT_CHOICES, REPEATS, typeInto, untilLabel, useItemView, type ItemField } from "@/data/item-edit"
 import { deleteItem, openCourse } from "@/data/actions"
-import { StatusChip, TypeChip } from "@/components/views/bits"
+import { accent, StatusChip } from "@/components/views/bits"
 import type { ChecklistEntry, Course, Item } from "@/data/types"
 import {
-    Button, DateInput, Fields, IconButton, Label, Meter, Note, NumberInput, RemoveButton, Section, Segmented, Select,
+    Button, Chips, DateInput, IconButton, Meter, Note, NumberInput, Prop, Props, QUIET, RemoveButton, Section, Segmented, Select,
     SheetBody, SheetFoot, SheetHead, TextArea, TextInput, TitleArea, CONTROL,
 } from "./fields"
 import { TimeField } from "./time-field"
+import { DatePicker } from "./date-picker"
+import { ICONS } from "./prop-icons"
 
 /** Fields saved once typing pauses; the rest save at once. */
 const TYPED: ItemField[] = ["title", "notes", "where", "dept", "checklist"]
@@ -37,7 +41,7 @@ export function ItemSheet({ id, draft }: { id?: string; draft?: Item }) {
     const it = draft ?? stored
     const isNew = !!draft
     const courses = useCourses()
-    useItems()   /* the type list counts items; topics read them */
+    const items = useItems()   /* the type list counts items; topics and the date's dots read them */
     const sessions = useStudySessions()
     const bg = useUi((u) => u.bg)
     const [fillNote, setFillNote] = useState("")
@@ -84,6 +88,9 @@ export function ItemSheet({ id, draft }: { id?: string; draft?: Item }) {
     const studied = isNew ? 0 : studiedFor(sessions, it.id)
     const next = c && (c.meetings || []).length ? [...c.meetings].sort((a, b) => (a.weekday + 6) % 7 - (b.weekday + 6) % 7)[0] : null
 
+    const busy = busyDays(items, it.id)
+    const gradable = GRADABLE.includes(baseOf(it.type))
+
     return (
         <>
             <SheetHead color={m.color} kind={isNew ? "New " + m.label.toLowerCase() : m.label} onClose={closeSheet}>
@@ -97,7 +104,7 @@ export function ItemSheet({ id, draft }: { id?: string; draft?: Item }) {
                 )}
             </SheetHead>
 
-            <SheetBody>
+            <SheetBody className="gap-[22px] px-6 pt-2 pb-7">
                 <div className="flex flex-col gap-1.5">
                     <TitleArea
                         value={it.title}
@@ -108,74 +115,99 @@ export function ItemSheet({ id, draft }: { id?: string; draft?: Item }) {
                         onChange={(e) => set("title", e.target.value)}
                         onBlur={() => void flush()}
                         onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); if (isNew) void save() } }}
+                        className="font-serif text-[30px] leading-[1.15] font-[500] tracking-[-.015em]"
                     />
                     {c && next && (
-                        <div className="flex flex-wrap items-center gap-1.5 text-[11.5px] text-muted-foreground">
-                            {c.code} meets {DOW[next.weekday]} {hhmm(next.start)} · {next.room || "room not set"}
+                        <div className="flex flex-wrap items-center gap-1.5 text-[12.5px] text-muted-foreground">
+                            {c.name} meets {DOW[next.weekday]} {next.start} · {next.room || "room not set"}
                             <IconButton className="px-1.5 py-px text-[11px]" onClick={() => openCourse(c.id)}>Edit course</IconButton>
                         </div>
                     )}
                 </div>
 
-                <Fields>
-                    <Label htmlFor={f + "type"}>Type</Label>
-                    <Select id={f + "type"} value={it.type} onChange={(e) => set("type", e.target.value)}>
-                        {types.map((t: { id: string; label: string }) => <option key={t.id} value={t.id}>{t.label}</option>)}
-                    </Select>
+                <Chips label="Type" value={it.type} options={types} onChange={(v) => set("type", v)} />
 
-                    <Label htmlFor={f + "course"}>Course</Label>
-                    <Select id={f + "course"} value={it.courseId ?? ""} onChange={(e) => set("courseId", e.target.value)}>
-                        <option value="">No course</option>
-                        {courses.filter((x) => !x.archived || x.id === it.courseId).map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}
-                    </Select>
+                <Props>
+                    <Prop icon={ICONS.course} label="Course" htmlFor={f + "course"}>
+                        <span style={accent(c?.color)} className="flex items-center gap-2">
+                            <span aria-hidden="true" className="size-[9px] flex-none rounded-[3px] bg-[var(--c,var(--line))]" />
+                            <Select id={f + "course"} className={QUIET} value={it.courseId ?? ""} onChange={(e) => set("courseId", e.target.value)}>
+                                <option value="">No course</option>
+                                {courses.filter((x) => !x.archived || x.id === it.courseId).map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}
+                            </Select>
+                        </span>
+                    </Prop>
 
-                    <Label htmlFor={f + "date"}>Date</Label>
-                    <DateInput id={f + "date"} value={it.date} required onChange={(e) => { if (e.target.value) set("date", e.target.value) }} />
+                    <Prop icon={ICONS.date} label="Date" top>
+                        <DatePicker value={it.date} busy={busy} onChange={(d) => set("date", d)} />
+                    </Prop>
 
-                    <Label htmlFor={f + "start"}>Time</Label>
-                    <span className="flex items-center gap-1.5">
-                        <TimeField id={f + "start"} label="Start time" value={it.start} onChange={(v) => set("start", v)} />
-                        <span className="text-[11px] text-muted-foreground">to</span>
-                        <TimeField label="End time" value={it.end} onChange={(v) => set("end", v)} />
-                    </span>
+                    <Prop icon={ICONS.time} label="Time" htmlFor={f + "start"}>
+                        <span className="flex items-center gap-1.5">
+                            <TimeField id={f + "start"} label="Start time" className={QUIET} value={it.start} onChange={(v) => set("start", v)} />
+                            <span className="text-[12px] text-muted-foreground">to</span>
+                            <TimeField label="End time" className={QUIET} value={it.end} onChange={(v) => set("end", v)} />
+                        </span>
+                    </Prop>
 
-                    <Label htmlFor={f + "where"}>Room</Label>
-                    <TextInput id={f + "where"} value={it.where} maxLength={80} placeholder="Room, lab, platform" onChange={(e) => set("where", e.target.value)} onBlur={() => void flush()} />
+                    <Prop icon={ICONS.room} label="Room" htmlFor={f + "where"}>
+                        <TextInput id={f + "where"} className={QUIET} value={it.where} maxLength={80} placeholder="Add a room or place" onChange={(e) => set("where", e.target.value)} onBlur={() => void flush()} />
+                    </Prop>
 
-                    <Label htmlFor={f + "status"}>Status</Label>
-                    <Segmented id={f + "status"} label="Status" value={it.status} options={statuses} onChange={(v, el) => set("status", v, el)} />
+                    <Prop icon={ICONS.status} label="Status">
+                        <span className="flex"><Segmented label="Status" value={it.status} options={statuses} onChange={(v, el) => set("status", v, el)} /></span>
+                    </Prop>
 
-                    {GRADABLE.includes(baseOf(it.type)) && <>
-                        <Label htmlFor={f + "weight"}>Weight</Label>
-                        <NumberInput id={f + "weight"} min={0} max={100} step="any" placeholder="% of course" value={it.weight ?? ""} onChange={(e) => set("weight", e.target.value)} />
-                    </>}
-                    {studied > 0 && <>
-                        <Label>Studied</Label>
-                        <span className="font-mono text-[12.5px] text-ink-2">{duration(studied)}</span>
-                    </>}
-                    {it.status === "graded" && <>
-                        <Label htmlFor={f + "grade"}>Grade</Label>
-                        <NumberInput id={f + "grade"} min={0} max={100} placeholder="%" value={it.grade ?? ""} onChange={(e) => set("grade", e.target.value)} />
-                    </>}
-                    {REPEATS.includes(it.type) && <>
-                        <Label htmlFor={f + "recur"}>Repeat</Label>
-                        <Segmented id={f + "recur"} label="Repeat" value={it.recur === "weekly" ? "weekly" : "once"} options={REPEAT_CHOICES} onChange={(v) => set("recur", v === "weekly")} />
-                        {it.recur === "weekly" && <>
-                            <Label htmlFor={f + "until"}>Until</Label>
-                            {ends.length
-                                ? <Select id={f + "until"} value={it.recurUntil ?? ""} onChange={(e) => set("recurUntil", e.target.value)}>
-                                    {ends.map((x) => <option key={x.end} value={x.end}>{untilLabel(x)}</option>)}
-                                    {it.recurUntil && !ends.some((x) => x.end === it.recurUntil) && <option value={it.recurUntil}>{shortDate(it.recurUntil)}</option>}
-                                    <option value="">no end</option>
-                                </Select>
-                                : <DateInput id={f + "until"} value={it.recurUntil ?? ""} onChange={(e) => set("recurUntil", e.target.value)} />}
-                        </>}
-                        {it.type === "office" && <>
-                            <Label htmlFor={f + "dept"}>Dept</Label>
-                            <TextInput id={f + "dept"} value={it.dept} maxLength={40} placeholder="Cardiology" onChange={(e) => set("dept", e.target.value)} onBlur={() => void flush()} />
-                        </>}
-                    </>}
-                </Fields>
+                    {REPEATS.includes(it.type) && (
+                        <Prop icon={ICONS.repeat} label="Repeat" top>
+                            <div className="flex flex-col items-start gap-2">
+                                <Segmented label="Repeat" value={it.recur === "weekly" ? "weekly" : "once"} options={REPEAT_CHOICES} onChange={(v) => set("recur", v === "weekly")} />
+                                {it.recur === "weekly" && (
+                                    <span className="flex items-center gap-1.5 text-[13px] text-ink-2">
+                                        <label htmlFor={f + "until"}>Until</label>
+                                        {ends.length
+                                            ? <Select id={f + "until"} className={cn(QUIET, "w-auto")} value={it.recurUntil ?? ""} onChange={(e) => set("recurUntil", e.target.value)}>
+                                                {ends.map((x) => <option key={x.end} value={x.end}>{untilLabel(x)}</option>)}
+                                                {it.recurUntil && !ends.some((x) => x.end === it.recurUntil) && <option value={it.recurUntil}>{shortDate(it.recurUntil)}</option>}
+                                                <option value="">no end</option>
+                                            </Select>
+                                            : <DateInput id={f + "until"} className={cn(QUIET, "w-auto")} value={it.recurUntil ?? ""} onChange={(e) => set("recurUntil", e.target.value)} />}
+                                    </span>
+                                )}
+                            </div>
+                        </Prop>
+                    )}
+
+                    {it.type === "office" && (
+                        <Prop icon={ICONS.dept} label="Dept" htmlFor={f + "dept"}>
+                            <TextInput id={f + "dept"} className={QUIET} value={it.dept} maxLength={40} placeholder="Cardiology" onChange={(e) => set("dept", e.target.value)} onBlur={() => void flush()} />
+                        </Prop>
+                    )}
+
+                    {gradable && (
+                        <Prop icon={ICONS.weight} label="Weight" htmlFor={f + "weight"}>
+                            <span className="flex items-center gap-1">
+                                <NumberInput id={f + "weight"} className={cn(QUIET, "w-16")} min={0} max={100} step="any" placeholder="—" value={it.weight ?? ""} onChange={(e) => set("weight", e.target.value)} />
+                                <span className="text-muted-foreground">% of the course grade</span>
+                            </span>
+                        </Prop>
+                    )}
+
+                    {it.status === "graded" && (
+                        <Prop icon={ICONS.grade} label="Grade" htmlFor={f + "grade"}>
+                            <span className="flex items-center gap-1">
+                                <NumberInput id={f + "grade"} className={cn(QUIET, "w-16")} min={0} max={100} placeholder="—" value={it.grade ?? ""} onChange={(e) => set("grade", e.target.value)} />
+                                <span className="text-muted-foreground">%</span>
+                            </span>
+                        </Prop>
+                    )}
+
+                    {studied > 0 && (
+                        <Prop icon={ICONS.studied} label="Studied">
+                            <span className="font-mono text-[12.5px] text-ink-2">{duration(studied)}</span>
+                        </Prop>
+                    )}
+                </Props>
 
                 <Section title="Notes">
                     <TextArea aria-label="Notes" value={it.notes} maxLength={5000} placeholder="What to revise, what the lecturer said, page numbers."

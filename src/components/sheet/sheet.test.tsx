@@ -113,6 +113,59 @@ describe("the sheet", () => {
 })
 
 describe("the item sheet", () => {
+    it("picks the type with a button, the person's own types too", async () => {
+        show()
+        open({ kind: "item", id: "i1" })
+        const type = screen.getByRole("group", { name: "Type" })
+        for (const name of ["Assignment", "Exam", "Quiz", "Lab", "Tutorial", "Office hours", "Task"]) expect(within(type).getByRole("button", { name })).toBeTruthy()
+        expect(within(type).queryByRole("button", { name: "Project" })).toBeNull()   /* hidden on Med until used */
+        expect(within(type).getByRole("button", { name: "Assignment" }).getAttribute("aria-pressed")).toBe("true")
+        await act(async () => fireEvent.click(within(type).getByRole("button", { name: "Exam" })))
+        expect(fake.data.items[0]).toMatchObject({ type: "exam" })
+        expect(within(screen.getByRole("group", { name: "Type" })).getByRole("button", { name: "Exam" }).getAttribute("aria-pressed")).toBe("true")
+    })
+
+    it("picks the date in the week strip, and in the month", async () => {
+        show()
+        open({ kind: "item", id: "i1" })   /* due Wed 23 Sep, today */
+        expect(screen.getByText("Wed 23 Sep · today")).toBeTruthy()
+        await act(async () => fireEvent.click(screen.getByRole("button", { name: "Fri 25 Sep" })))
+        expect(fake.data.items[0]).toMatchObject({ date: "2026-09-25" })
+        fireEvent.click(within(screen.getByRole("group", { name: "Show" })).getByRole("button", { name: "Month" }))
+        await act(async () => fireEvent.click(screen.getByRole("button", { name: "Fri 2 Oct" })))
+        expect(fake.data.items[0]).toMatchObject({ date: "2026-10-02" })
+        expect(screen.getByRole("group", { name: "Days" })).toBeTruthy()
+    })
+
+    it("dots the days other open items fall on", () => {
+        fake.data.items = [...fake.data.items, item({ id: "i2", title: "Quiz 3", date: "2026-09-24" })]
+        show()
+        open({ kind: "item", id: "i1" })
+        expect(screen.getByRole("button", { name: "Thu 24 Sep, something due" })).toBeTruthy()
+        expect(screen.getByRole("button", { name: "Wed 23 Sep" })).toBeTruthy()   /* its own day: no dot */
+    })
+
+    it("says when the course meets, and opens the course", () => {
+        show()
+        open({ kind: "item", id: "i1" })
+        expect(screen.getByText(/Anatomy meets Wed 09:00 · Hall B/)).toBeTruthy()
+        fireEvent.click(screen.getByRole("button", { name: "Edit course" }))
+        expect(actions.openCourse).toHaveBeenCalledWith("anat")
+    })
+
+    it("keeps every row: course, time, room, status, weight, grade once graded", async () => {
+        show()
+        open({ kind: "item", id: "i1" })
+        expect((screen.getByRole("combobox", { name: "Course" }) as HTMLSelectElement).value).toBe("anat")
+        expect(screen.getByRole("textbox", { name: "Start time" })).toBeTruthy()
+        expect(screen.getByRole("textbox", { name: "Room" })).toBeTruthy()
+        await act(async () => fireEvent.change(screen.getByRole("spinbutton", { name: "Weight" }), { target: { value: "15" } }))
+        expect(fake.data.items[0]).toMatchObject({ weight: 15 })
+        expect(screen.queryByRole("spinbutton", { name: "Grade" })).toBeNull()
+        await act(async () => fireEvent.click(within(screen.getByRole("group", { name: "Status" })).getByRole("button", { name: "Graded" })))
+        expect(screen.getByRole("spinbutton", { name: "Grade" })).toBeTruthy()
+    })
+
     it("repeats a lab every week until the end of its semester, or later", async () => {
         fake.cal = TWO_TERMS
         fake.data.items = [item({ id: "l1", type: "lab", title: "Histology lab" })]
