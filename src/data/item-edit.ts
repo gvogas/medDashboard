@@ -5,7 +5,7 @@
 import { useSyncExternalStore } from "react"
 import * as store from "@/core/store"
 import { data } from "@/core/store"
-import { classRoom, normalizeItem, shiftEnd, statusesFor } from "@/core/model"
+import { classRoom, isOpen, normalizeItem, shiftEnd, statusesFor } from "@/core/model"
 import { dayMonth, diffDays, parse, today, DOW } from "@/core/dates"
 import { repeatEnds, type SchoolCalendar, type Term } from "@/core/school"
 import { nextReview } from "@/core/reviews"
@@ -108,6 +108,10 @@ export function countdown(it: Item, now = today()): string {
     if (dd === 1) return "tomorrow"
     return dd > 0 ? "in " + dd + " days" : -dd + " day" + (dd === -1 ? "" : "s") + " ago"
 }
+
+/** The days other open items fall on: the date picker's dots. */
+export const busyDays = (items: Item[], except: string): Set<string> =>
+    new Set(items.filter((x) => x.id !== except && isOpen(x)).map((x) => x.date))
 
 /** A web link as the server takes it: https:// added, spaces after the host written out. null if not one. */
 export function linkUrl(raw: string, isHttp: (u: string) => boolean): string | null {

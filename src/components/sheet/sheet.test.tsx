@@ -113,6 +113,70 @@ describe("the sheet", () => {
 })
 
 describe("the item sheet", () => {
+    it("says in the foot what saving needs", () => {
+        show()
+        open({ kind: "new-item", draft: item({ id: "n2", title: "" }) })
+        expect(within(dialog()).getByRole("status").textContent).toBe("Give it a name to save")
+        fireEvent.change(screen.getByRole("textbox", { name: "Title" }), { target: { value: "Lab report" } })
+        expect(within(dialog()).getByRole("status").textContent).toBe("Ready to save")
+        act(() => closeSheet())
+        open({ kind: "item", id: "i1" })
+        expect(within(dialog()).getByRole("status").textContent).toBe("Edits save as you type")
+    })
+
+    it("picks the type with a button, the person's own types too", async () => {
+        show()
+        open({ kind: "item", id: "i1" })
+        const type = screen.getByRole("group", { name: "Type" })
+        for (const name of ["Assignment", "Exam", "Quiz", "Lab", "Tutorial", "Office hours", "Task"]) expect(within(type).getByRole("button", { name })).toBeTruthy()
+        expect(within(type).queryByRole("button", { name: "Project" })).toBeNull()   /* hidden on Med until used */
+        expect(within(type).getByRole("button", { name: "Assignment" }).getAttribute("aria-pressed")).toBe("true")
+        await act(async () => fireEvent.click(within(type).getByRole("button", { name: "Exam" })))
+        expect(fake.data.items[0]).toMatchObject({ type: "exam" })
+        expect(within(screen.getByRole("group", { name: "Type" })).getByRole("button", { name: "Exam" }).getAttribute("aria-pressed")).toBe("true")
+    })
+
+    it("picks the date in the week strip, and in the month", async () => {
+        show()
+        open({ kind: "item", id: "i1" })   /* due Wed 23 Sep, today */
+        expect(screen.getByText("Wed 23 Sep · today")).toBeTruthy()
+        await act(async () => fireEvent.click(screen.getByRole("button", { name: "Fri 25 Sep" })))
+        expect(fake.data.items[0]).toMatchObject({ date: "2026-09-25" })
+        fireEvent.click(within(screen.getByRole("group", { name: "Show" })).getByRole("button", { name: "Month" }))
+        await act(async () => fireEvent.click(screen.getByRole("button", { name: "Fri 2 Oct" })))
+        expect(fake.data.items[0]).toMatchObject({ date: "2026-10-02" })
+        expect(screen.getByRole("group", { name: "Days" })).toBeTruthy()
+    })
+
+    it("dots the days other open items fall on", () => {
+        fake.data.items = [...fake.data.items, item({ id: "i2", title: "Quiz 3", date: "2026-09-24" })]
+        show()
+        open({ kind: "item", id: "i1" })
+        expect(screen.getByRole("button", { name: "Thu 24 Sep, something due" })).toBeTruthy()
+        expect(screen.getByRole("button", { name: "Wed 23 Sep" })).toBeTruthy()   /* its own day: no dot */
+    })
+
+    it("says when the course meets, and opens the course", () => {
+        show()
+        open({ kind: "item", id: "i1" })
+        expect(screen.getByText(/Anatomy meets Wed 09:00 · Hall B/)).toBeTruthy()
+        fireEvent.click(screen.getByRole("button", { name: "Edit course" }))
+        expect(actions.openCourse).toHaveBeenCalledWith("anat")
+    })
+
+    it("keeps every row: course, time, room, status, weight, grade once graded", async () => {
+        show()
+        open({ kind: "item", id: "i1" })
+        expect((screen.getByRole("combobox", { name: "Course" }) as HTMLSelectElement).value).toBe("anat")
+        expect(screen.getByRole("textbox", { name: "Start time" })).toBeTruthy()
+        expect(screen.getByRole("textbox", { name: "Room" })).toBeTruthy()
+        await act(async () => fireEvent.change(screen.getByRole("spinbutton", { name: "Weight" }), { target: { value: "15" } }))
+        expect(fake.data.items[0]).toMatchObject({ weight: 15 })
+        expect(screen.queryByRole("spinbutton", { name: "Grade" })).toBeNull()
+        await act(async () => fireEvent.click(within(screen.getByRole("group", { name: "Status" })).getByRole("button", { name: "Graded" })))
+        expect(screen.getByRole("spinbutton", { name: "Grade" })).toBeTruthy()
+    })
+
     it("repeats a lab every week until the end of its semester, or later", async () => {
         fake.cal = TWO_TERMS
         fake.data.items = [item({ id: "l1", type: "lab", title: "Histology lab" })]
@@ -136,6 +200,19 @@ describe("the item sheet", () => {
         expect(screen.queryByRole("group", { name: "Repeat" })).toBeNull()
     })
 
+    it("office hours have a Dept that saves once typing pauses; an exam has none", async () => {
+        fake.data.items = [item({ id: "o1", type: "office", title: "Dr Lee" }), item({ id: "e1", type: "exam", title: "Final" })]
+        show()
+        open({ kind: "item", id: "o1" })
+        fireEvent.change(screen.getByRole("textbox", { name: "Dept" }), { target: { value: "Cardiology" } })
+        await act(() => vi.advanceTimersByTimeAsync(TYPING_MS))
+        expect(fake.data.items[0]).toMatchObject({ dept: "Cardiology" })
+        act(() => closeSheet())
+        await flush()
+        open({ kind: "item", id: "e1" })
+        expect(screen.queryByRole("textbox", { name: "Dept" })).toBeNull()
+    })
+
     it("saves the title once typing pauses, and at once on close", async () => {
         show()
         open({ kind: "item", id: "i1" })
@@ -144,10 +221,50 @@ describe("the item sheet", () => {
         await act(() => vi.advanceTimersByTimeAsync(TYPING_MS))
         expect(fake.data.items[0]).toMatchObject({ title: "Renal set 2" })
 
+        fireEvent.click(screen.getByRole("button", { name: "Add notes" }))
         fireEvent.change(screen.getByRole("textbox", { name: "Notes" }), { target: { value: "p. 40" } })
         await act(async () => closeSheet())
         await act(() => flush())
         expect(fake.data.items[0]).toMatchObject({ notes: "p. 40" })
+    })
+
+    it("folds the checklist, notes and links until wanted, and opens what the item has", () => {
+        fake.data.items = [item({ id: "e1", type: "exam", title: "Midterm" })]
+        show()
+        open({ kind: "item", id: "e1" })
+        expect(screen.queryByRole("textbox", { name: "Notes" })).toBeNull()
+        expect(screen.queryByRole("textbox", { name: "Add a step" })).toBeNull()
+        expect(screen.queryByRole("textbox", { name: "Link URL" })).toBeNull()
+
+        fireEvent.click(screen.getByRole("button", { name: "Add topics" }))   /* an exam's checklist is its topics */
+        expect(screen.getByRole("textbox", { name: "Add a step" })).toBe(document.activeElement)
+        expect(screen.queryByRole("button", { name: "Add topics" })).toBeNull()
+        fireEvent.click(screen.getByRole("button", { name: "Add notes" }))
+        expect(screen.getByRole("textbox", { name: "Notes" })).toBe(document.activeElement)
+        fireEvent.click(screen.getByRole("button", { name: "Add links" }))
+        expect(screen.getByRole("textbox", { name: "Link label" })).toBe(document.activeElement)
+    })
+
+    it("shows an item's steps, notes and links open, and keeps notes open when emptied", async () => {
+        fake.data.items = [item({ id: "i3", title: "Essay", notes: "p. 12", checklist: [{ id: "s", text: "Outline", done: false }], links: [{ label: "Brief", url: "https://x.org" }] })]
+        show()
+        open({ kind: "item", id: "i3" })
+        expect(screen.queryByRole("button", { name: "Add a checklist" })).toBeNull()
+        expect(screen.queryByRole("button", { name: "Add notes" })).toBeNull()
+        expect(screen.queryByRole("button", { name: "Add links" })).toBeNull()
+        const notes = screen.getByRole("textbox", { name: "Notes" })
+        fireEvent.change(notes, { target: { value: "" } })
+        await act(() => vi.advanceTimersByTimeAsync(TYPING_MS))
+        expect(screen.getByRole("textbox", { name: "Notes" })).toBeTruthy()
+    })
+
+    it("fills an exam's topics from the lectures once Topics is open", () => {
+        fake.data.items = [item({ id: "e2", type: "exam", title: "Final", courseId: "anat", date: "2026-10-14" })]
+        show()
+        open({ kind: "item", id: "e2" })
+        expect(screen.queryByRole("button", { name: "Fill topics from lectures" })).toBeNull()
+        fireEvent.click(screen.getByRole("button", { name: "Add topics" }))
+        expect(screen.getByRole("button", { name: "Fill topics from lectures" })).toBeTruthy()
     })
 
     it("keeps what is typed when a sync reloads the item", async () => {
