@@ -150,6 +150,16 @@ describe('readOutline', () => {
     expect(out.truncated).toBe(true);
   });
 
+  it('cuts a long outline at the end of a line', async () => {
+    const ai = fakeAi(MODEL_REPLY);
+    const lines = Array.from({ length: 600 }, (_, i) => String(i).padStart(5, '0') + ' ' + 'y'.repeat(90)).join('\n');
+    const out = await readOutline(ai, { bytes: new TextEncoder().encode(lines), type: 'text/plain', today: '2026-09-23' });
+    expect(out.truncated).toBe(true);
+    const sent = ai.calls[0][2].messages[1].content;
+    expect(sent).toMatch(/00493 y{90}$/);
+    expect(sent).not.toContain('00494');
+  });
+
   it('reports a spent daily AI allowance as its own error', async () => {
     const ai = { run: async () => { throw new Error('4006: you have used up your daily free allocation of 10,000 neurons'); } };
     await expect(readOutline(ai, { bytes: new TextEncoder().encode(OUTLINE), type: 'text/plain', today: '2026-09-23' }))

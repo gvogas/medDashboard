@@ -41,30 +41,54 @@ export function modelJson(raw) {
   return o && typeof o === 'object' ? o : null;
 }
 
-/* a page's number on its own line: "Page 3", "Page 3 of 12", "- 3 -", "3/12", "3" */
-const PAGE_NUMBER = /^(page \d+( of \d+)?|[-–]? ?\d{1,3} ?[-–]?|\d{1,3} ?\/ ?\d{1,3})$/i;
+/* a line that is always a page number: "Page 3", "Page 3 of 12", "- 3 -" */
+const PAGE_LABEL = /^(page \d+( of \d+)?|[-–] ?\d{1,3} ?[-–])$/i;
+const BARE = /^\d{1,3}$/;
+const OF = /^(\d{1,3}) ?\/ ?(\d{1,3})$/;
 
 /**
- * A document's text with less to pay for. Pages are the "### Page N" markers the browser's
- * PDF reader writes (src/core/pdftext.ts). Spaces and blank lines are squeezed; the page
- * markers go; a page number on a page's first or last two lines goes; a line on the first or
- * last two lines of 3 or more pages (a running header or footer) is kept the first time only.
- * Lines inside a page are never dropped, even when they repeat ("LEC", a room, a week number).
+ * A document's text with less to pay for. Only the "### Page N" markers the browser's PDF
+ * reader writes (src/core/pdftext.ts) split pages; text without them (toMarkdown's) is one
+ * page. Spaces and blank lines are squeezed and the page markers go. On a page's first or last
+ * two lines: a page number goes ("Page 3", "- 3 -"; "3/12" or a bare "3" only when it is this
+ * page's number of this many pages, a bare number allowed one off when the whole document is);
+ * a line of 12 or more characters that heads (or ends) at least max(3, half the pages) pages,
+ * a running header or footer, is kept the first time only. Lines inside a page are never
+ * dropped, even when they repeat ("LEC", a room, a week number).
  */
 export function tidyText(text) {
-  const pages = String(text).replace(/\r\n?/g, '\n').split(/^#{1,6} ?Page \d+[^\S\n]*$/m)
-    .map((p) => p.split('\n').map((l) => l.replace(/\s+/g, ' ').trim()).filter(Boolean))
-    .filter((p) => p.length);
-  const edges = (lines) => new Set([...lines.slice(0, 2), ...lines.slice(-2)]);
-  const onPages = new Map();
-  for (const p of pages) for (const l of edges(p)) onPages.set(l, (onPages.get(l) || 0) + 1);
+  const parts = String(text).replace(/\r\n?/g, '\n').split(/^#{1,6} ?Page (\d+)[^\S\n]*$/m);
+  const lines = (p) => p.split('\n').map((l) => l.replace(/\s+/g, ' ').trim()).filter(Boolean);
+  const pages = [{ n: 1, lines: lines(parts[0]) }];
+  for (let i = 1; i < parts.length; i += 2) pages.push({ n: Number(parts[i]), lines: lines(parts[i + 1]) });
+  const kept = pages.filter((p) => p.lines.length);
+  const count = kept.length;
+  const heads = (p) => new Set(p.lines.slice(0, 2)), foots = (p) => new Set(p.lines.slice(-2));
+  const tally = (pick) => {
+    const m = new Map();
+    for (const p of kept) for (const l of pick(p)) m.set(l, (m.get(l) || 0) + 1);
+    return m;
+  };
+  const onHeads = tally(heads), onFoots = tally(foots);
+  const enough = Math.max(3, Math.ceil(count / 2));
+  /* a bare page number one off from the markers, when most pages agree */
+  const hits = (off) => kept.filter((p) => [...heads(p), ...foots(p)].some((l) => BARE.test(l) && Number(l) === p.n + off)).length;
+  const offset = [-1, 1].find((off) => hits(off) >= Math.max(2, Math.ceil(count / 2)) && hits(off) > hits(0)) ?? 0;
+  const pageNumber = (l, p) => {
+    if (PAGE_LABEL.test(l)) return true;
+    if (BARE.test(l)) return Number(l) === p.n + offset;
+    const of = l.match(OF);
+    return !!of && Number(of[1]) === p.n && Number(of[2]) === count;
+  };
   const seen = new Set();
-  return pages.map((p) => {
-    const ends = edges(p);
-    return p.filter((l) => {
-      if (!ends.has(l)) return true;
-      if (PAGE_NUMBER.test(l)) return false;
-      if (onPages.get(l) >= 3 && l.length <= 120) {
+  return kept.map((p) => {
+    const top = heads(p), end = foots(p);
+    return p.lines.filter((l) => {
+      if (!top.has(l) && !end.has(l)) return true;
+      if (pageNumber(l, p)) return false;
+      const running = l.length >= 12 && l.length <= 120
+        && ((top.has(l) && onHeads.get(l) >= enough) || (end.has(l) && onFoots.get(l) >= enough));
+      if (running) {
         if (seen.has(l)) return false;
         seen.add(l);
       }
@@ -75,22 +99,39 @@ export function tidyText(text) {
 
 const reply = (out) => out?.response ?? out;
 
+/* the retry is skipped when less than this is left of the read's deadline */
+export const MIN_RETRY_MS = 15_000;
+
+/** The model stopped at max_tokens: chat-completions says so; Workers AI's own shape only counts. */
+function cutOff(out, input) {
+  if (out?.choices?.[0]?.finish_reason === 'length') return true;
+  const used = out?.usage?.completion_tokens;
+  return Number.isFinite(used) && Number.isFinite(input?.max_tokens) && used >= input.max_tokens;
+}
+
 /**
  * A model's answer, cleaned: `clean(answer)` makes it safe or throws the reader's 502. An
  * answer that is not JSON at all gets one more try, with that answer and a reminder; the
- * retry is part of the same read (no second claim). JSON that `clean` finds empty is not
- * retried: the same document would give the same answer at the same cost.
+ * retry is part of the same read (no second claim) and of its one deadline, `timeoutMs`
+ * (the browser gives up at 120 s). No retry when less than `minRetryMs` is left, or when the
+ * answer was cut off at max_tokens (the retry would be too). JSON that `clean` finds empty is
+ * not retried: the same document would give the same answer at the same cost.
  */
-export async function askJson(ai, model, input, clean, what = 'ai') {
-  const answer = reply(await runModel(ai, model, input, what));
+export async function askJson(ai, model, input, clean, what = 'ai', { timeoutMs = TIMEOUT_MS, minRetryMs = MIN_RETRY_MS } = {}) {
+  const start = Date.now();
+  const out = await runModel(ai, model, input, what, timeoutMs);
+  const answer = reply(out);
   if (modelJson(answer)) return clean(answer);
-  const said = typeof answer === 'string' ? answer : JSON.stringify(answer ?? null);
+  const left = timeoutMs - (Date.now() - start);
+  if (left < minRetryMs || cutOff(out, input)) return clean(answer);
+  const text = Array.isArray(answer?.choices) ? answer.choices[0]?.message?.content : answer;
+  const said = typeof text === 'string' ? text : JSON.stringify(text ?? null);
   const again = reply(await runModel(ai, model, {
     ...input,
     messages: [...input.messages,
       { role: 'assistant', content: said.slice(0, 2000) },
       { role: 'user', content: 'That was not one valid JSON object. Answer again with only the JSON object, nothing else.' }],
-  }, what + ' retry'));
+  }, what + ' retry', left));
   return clean(again);
 }
 

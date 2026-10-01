@@ -14,8 +14,6 @@
 import { HttpError } from './http.js';
 import { askJson, knownContext, modelJson, tidyText } from './ai.js';
 
-export { modelJson };
-
 export const MODEL = '@cf/openai/gpt-oss-120b';
 export const MAX_BYTES = 5 * 1024 * 1024;
 export const MAX_CHARS = 48_000;          /* about 12k tokens of outline */
@@ -227,7 +225,11 @@ export async function askModel(ai, { bytes, type, name, claim }, messages, clean
   let text = tidyText(await outlineText(ai, bytes, type, name));
   if (text.length < 40) throw new HttpError(422, { error: 'outline_empty' });
   const truncated = text.length > maxChars;
-  if (truncated) text = text.slice(0, maxChars);
+  if (truncated) {
+    /* at the end of a line, unless that loses more than a fifth */
+    const cut = text.lastIndexOf('\n', maxChars);
+    text = text.slice(0, cut > 0.8 * maxChars ? cut : maxChars);
+  }
   if (claim) await claim();
   const input = { messages: messages(text), max_tokens: maxTokens, temperature: 0, ...(effort ? { reasoning: { effort } } : {}) };
   return { ...await askJson(ai, MODEL, input, clean, what), truncated };

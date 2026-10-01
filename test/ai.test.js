@@ -52,6 +52,43 @@ describe('askJson', () => {
     await expect(askJson(ai, '@cf/m', { messages: [] }, clean)).rejects.toMatchObject({ status: 502 });
     expect(ai.run).toHaveBeenCalledTimes(1);
   });
+
+  it('does not retry an answer cut off for length: the retry would be cut off too', async () => {
+    const short = { response: '{"ok": 1, "items": [', usage: { prompt_tokens: 5, completion_tokens: 10 } };
+    const a = { run: vi.fn(async () => short) };
+    await expect(askJson(a, '@cf/m', { messages: [], max_tokens: 10 }, clean)).rejects.toMatchObject({ status: 502 });
+    expect(a.run).toHaveBeenCalledTimes(1);
+    const chat = { choices: [{ message: { content: '{"ok": 1, "items": [' }, finish_reason: 'length' }] };
+    const b = { run: vi.fn(async () => chat) };
+    await expect(askJson(b, '@cf/m', { messages: [] }, clean)).rejects.toMatchObject({ status: 502 });
+    expect(b.run).toHaveBeenCalledTimes(1);
+  });
+
+  it("echoes a chat-completions answer's text, not the wrapper", async () => {
+    const ai = { run: vi.fn()
+      .mockResolvedValueOnce({ choices: [{ message: { content: 'Sure thing' }, finish_reason: 'stop' }] })
+      .mockResolvedValueOnce({ response: { ok: 3 } }) };
+    expect(await askJson(ai, '@cf/m', { messages: [{ role: 'user', content: 'hi' }] }, clean)).toEqual({ ok: 3 });
+    expect(ai.run.mock.calls[1][1].messages[1]).toEqual({ role: 'assistant', content: 'Sure thing' });
+  });
+
+  it('skips the retry when too little of the deadline is left', async () => {
+    const ai = { run: vi.fn(() => new Promise((ok) => setTimeout(() => ok({ response: 'no' }), 50))) };
+    await expect(askJson(ai, '@cf/m', { messages: [] }, clean, 'x', { timeoutMs: 100, minRetryMs: 60 }))
+      .rejects.toMatchObject({ status: 502, body: { error: 'x_unreadable' } });
+    expect(ai.run).toHaveBeenCalledTimes(1);
+  });
+
+  it('gives the retry only what is left of one deadline', async () => {
+    const ai = { run: vi.fn()
+      .mockImplementationOnce(() => new Promise((ok) => setTimeout(() => ok({ response: 'no' }), 120)))
+      .mockImplementationOnce(() => new Promise(() => {})) };
+    const t0 = Date.now();
+    await expect(askJson(ai, '@cf/m', { messages: [] }, clean, 'x', { timeoutMs: 200, minRetryMs: 10 }))
+      .rejects.toMatchObject({ status: 504, body: { error: 'ai_timeout' } });
+    expect(ai.run).toHaveBeenCalledTimes(2);
+    expect(Date.now() - t0).toBeLessThan(280);
+  });
 });
 
 describe('a model that does not answer', () => {
@@ -83,6 +120,34 @@ describe('tidyText', () => {
     expect(out.match(/^LEC$/gm)).toHaveLength(3);
     expect(out.match(/^Room H-110$/gm)).toHaveLength(2);
     expect(out).toMatch(/^7$/m);
+  });
+
+  it('keeps a short line that ends most pages, and a long footer once', () => {
+    const quiz = [1, 2, 3].map((n) => '### Page ' + n + '\nWeek ' + n + '\nReading ' + n + '\nQuiz').join('\n\n') + '\n\n### Page 4\nWeek 4\nReview\nFinal';
+    expect(tidyText(quiz).match(/^Quiz$/gm)).toHaveLength(3);
+    const foot = [1, 2, 3, 4].map((n) => '### Page ' + n + '\nWeek ' + n + '\nTopic ' + n + '\nCHEM 271 · Fall 2026 · Concordia University').join('\n\n');
+    expect(tidyText(foot).match(/CHEM 271 · Fall 2026 · Concordia University/g)).toHaveLength(1);
+  });
+
+  it("drops only the page's own number, and keeps dates and numbers that are not it", () => {
+    const pages = [
+      '### Page 1\nIntro\nWeek 1 reading\n1',
+      '### Page 2\nWeek 2\nTest on\n9/14\n2/4',
+      '### Page 3\n- 3 -\nWeek 3\nRoom\n13',
+      '### Page 4\nPage 4 of 4\nWeek 4\nFinal\n3/4',
+    ].join('\n\n');
+    const out = tidyText(pages);
+    expect(out).toMatch(/^9\/14$/m);
+    expect(out).toMatch(/^13$/m);
+    expect(out).toMatch(/^3\/4$/m);
+    expect(out).not.toMatch(/^1$/m);
+    expect(out).not.toMatch(/^2\/4$/m);
+    expect(out).not.toMatch(/- 3 -|Page 4/);
+  });
+
+  it('drops page numbers one off from the markers when the whole document is one off', () => {
+    const pages = [1, 2, 3, 4].map((n) => '### Page ' + n + '\nWeek ' + n + '\nTopic ' + n + '\n' + (n + 1)).join('\n\n');
+    expect(tidyText(pages)).toBe([1, 2, 3, 4].map((n) => 'Week ' + n + '\nTopic ' + n).join('\n\n'));
   });
 
   it('squeezes spaces and blank lines in text without pages', () => {
