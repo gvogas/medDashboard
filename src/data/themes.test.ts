@@ -2,6 +2,10 @@ import { describe, expect, it } from "vitest"
 import { BGS, GOALS, THEMES, goalFor, toBg } from "./themes"
 
 describe("the themes", () => {
+    it("names the third Quick start for each theme", () => {
+        expect(BGS.map((bg) => THEMES[bg].preset)).toEqual(["Anki then read", "LeetCode then read", "Brief then outline", "Charts then sim", "Film then drills", "Problems then read"])
+    })
+
     it("has six, each with its words and six goals", () => {
         expect(BGS).toEqual(["med", "cs", "law", "pilot", "sports", "eng"])
         for (const bg of BGS) {

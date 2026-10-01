@@ -18,28 +18,30 @@ export interface ThemeInfo {
     picture: string
     /** the phase word while studying: "On shift · round 1 of 4" */
     studyWord: string
+    /** the third Quick start's name: "Anki then read" */
+    preset: string
     /** shown in the sidebar until the person saves quotes of their own */
     quote: { text: string; source: string }
 }
 
 export const THEMES: Record<Bg, ThemeInfo> = {
     med: { label: "Medicine", desc: "Lab coat · pink when done", accent: "#0F5F58", done: "#FBE8EF", wear: "coat",
-        picture: "Lab coat with your name embroidered", studyWord: "On shift",
+        picture: "Lab coat with your name embroidered", studyWord: "On shift", preset: "Anki then read",
         quote: { text: "The good physician treats the disease; the great physician treats the patient.", source: "William Osler" } },
     cs: { label: "Computer Science", desc: "ID badge · mint when done", accent: "#2B4FA8", done: "#E3F1E8", wear: "badge",
-        picture: "Lanyard ID badge with your name", studyWord: "Compiling",
+        picture: "Lanyard ID badge with your name", studyWord: "Compiling", preset: "LeetCode then read",
         quote: { text: "Programs must be written for people to read, and only incidentally for machines to execute.", source: "Harold Abelson" } },
     law: { label: "Law", desc: "Suit and name plate · parchment when done", accent: "#7A2E2E", done: "#F4ECD6", wear: "name plate",
-        picture: "Suit jacket with a brass name plate", studyWord: "In session",
+        picture: "Suit jacket with a brass name plate", studyWord: "In session", preset: "Brief then outline",
         quote: { text: "The life of the law has not been logic: it has been experience.", source: "Oliver Wendell Holmes Jr." } },
     pilot: { label: "Aviation", desc: "Flight jacket · sky blue when done", accent: "#1F3A5F", done: "#DFEBF6", wear: "jacket",
-        picture: "Flight jacket with wings and a name tape", studyWord: "In flight",
+        picture: "Flight jacket with wings and a name tape", studyWord: "In flight", preset: "Charts then sim",
         quote: { text: "The engine is the heart of an aeroplane, but the pilot is its soul.", source: "Walter Raleigh" } },
     sports: { label: "Sports", desc: "Jersey · peach when done", accent: "#2F6B3A", done: "#FCE8D8", wear: "jersey",
-        picture: "Back of a jersey with your name and number", studyWord: "On the clock",
+        picture: "Back of a jersey with your name and number", studyWord: "On the clock", preset: "Film then drills",
         quote: { text: "Hard work beats talent when talent doesn’t work hard.", source: "Tim Notke" } },
     eng: { label: "Engineering", desc: "Hi-vis vest · yellow when done", accent: "#3F4E5E", done: "#FBF3C8", wear: "vest",
-        picture: "Hi-vis safety vest with a name tag", studyWord: "Building",
+        picture: "Hi-vis safety vest with a name tag", studyWord: "Building", preset: "Problems then read",
         quote: { text: "Scientists study the world as it is; engineers create the world that has never been.", source: "Theodore von Kármán" } },
 }
 

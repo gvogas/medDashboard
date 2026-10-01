@@ -10,8 +10,9 @@ import { duration } from "@/lib/time"
 import { Panel, HeadNote } from "@/components/views/bits"
 import { Button, RemoveButton } from "@/components/sheet/fields"
 import { openCourse } from "@/data/actions"
+import { useUi } from "@/data/ui"
 import {
-    addStep, applyPreset, delStep, flowTotals, MAX_MINUTES, MAX_ROUNDS, MAX_STEPS, openFocus, pickCourse, pickItem, PRESETS,
+    addStep, applyPreset, delStep, flowTotals, MAX_MINUTES, MAX_ROUNDS, MAX_STEPS, openFocus, pickCourse, pickItem, presetsFor, sameFlow,
     setRounds, setStepKind, setStepMinutes, startRun, stripSegments, useFlow, useRun, useStudyPick,
 } from "@/data/study-timer"
 import type { Flow } from "@/data/types"
@@ -47,7 +48,7 @@ function ReadyCard({ flow }: { flow: Flow }) {
             )}
         >
             <PhaseLabel>Ready</PhaseLabel>
-            <FlipClock ms={flow.steps[0][1] * MIN} running={false} size="mid" />
+            <FlipClock ms={flow.steps[0][1] * MIN} running={false} size="ready" />
             <div className="flex w-full max-w-[520px] flex-col gap-2">
                 <RoundStrip rows={stripSegments(flow, null)} />
                 <div className="flex flex-wrap justify-between gap-x-2.5 text-[11.5px] text-[var(--fx-ink-2)] tabular-nums">
@@ -100,6 +101,7 @@ function FlowCard({ flow }: { flow: Flow }) {
     const totals = flowTotals(flow)
     const full = flow.steps.length >= MAX_STEPS
     const studies = flow.steps.filter(([k]) => k === "study").length
+    const bg = useUi((u) => u.bg)
     return (
         <Panel label="Your flow" title="Your flow" head={<HeadNote>Tap Study or Break to switch it</HeadNote>}>
             <div className="flex flex-col gap-3 p-3.5">
@@ -157,12 +159,18 @@ function FlowCard({ flow }: { flow: Flow }) {
                 </div>
                 <div className="flex flex-wrap items-center gap-1.5">
                     <span className="text-[12px] text-muted-foreground">Quick start</span>
-                    {PRESETS.map(([name], i) => (
-                        <button key={name} type="button" onClick={() => void applyPreset(i)}
-                            className="cursor-pointer rounded-full border border-border bg-card px-[11px] py-1 font-[inherit] text-[12px] font-semibold text-ink-2 hover:border-muted-foreground hover:text-foreground">
-                            {name}
-                        </button>
-                    ))}
+                    {presetsFor(bg).map(([name, preset], i) => {
+                        const on = sameFlow(preset, flow)
+                        return (
+                            <button key={i} type="button" aria-pressed={on} onClick={() => void applyPreset(i)}
+                                className={cn(
+                                    "cursor-pointer rounded-full border px-[11px] py-1 font-[inherit] text-[12px] font-semibold",
+                                    on ? "border-foreground bg-foreground text-background" : "border-border bg-card text-ink-2 hover:border-muted-foreground hover:text-foreground",
+                                )}>
+                                {name}
+                            </button>
+                        )
+                    })}
                 </div>
             </div>
         </Panel>

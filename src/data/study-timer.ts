@@ -17,7 +17,7 @@ import { getSheet } from "./overlay"
 import { useCourses, useItems, useProfile, useStudySessions } from "./store"
 import { shownSessions } from "./study"
 import { ui, useUi } from "./ui"
-import { THEMES } from "./themes"
+import { THEMES, type Bg } from "./themes"
 import type { Course, Flow, Item, StepKind, StudySession } from "./types"
 
 const MIN = 60_000
@@ -282,6 +282,20 @@ export const PRESETS: readonly [string, Flow][] = FLOW_PRESETS
 export function applyPreset(i: number): Promise<boolean> {
     const preset = PRESETS[i]
     return preset ? saveFlow(copy(preset[1])) : Promise.resolve(false)
+}
+
+/** The Quick start presets as a theme names them: the third is the theme's own ("LeetCode then read"). */
+export const presetsFor = (bg: Bg): [string, Flow][] =>
+    PRESETS.map(([name, f], i): [string, Flow] => [i === 2 ? THEMES[bg].preset : name, f])
+
+/** Whether two flows have the same steps and rounds. */
+export const sameFlow = (a: Flow, b: Flow) =>
+    a.rounds === b.rounds && a.steps.length === b.steps.length && a.steps.every(([k, m], i) => k === b.steps[i][0] && m === b.steps[i][1])
+
+/** The Ready card's name for the flow: "Classic 25/5 · 4 rounds", or "Your flow · 1 round" when it is no preset. */
+export function flowName(f: Flow, bg: Bg): string {
+    const preset = presetsFor(bg).find(([, p]) => sameFlow(p, f))
+    return (preset ? preset[0] : "Your flow") + " · " + f.rounds + (f.rounds === 1 ? " round" : " rounds")
 }
 
 /* ── what the cards, the focus screen and the dock show ── */

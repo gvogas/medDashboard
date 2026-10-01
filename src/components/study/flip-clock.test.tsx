@@ -42,7 +42,8 @@ describe("the flip clock", () => {
     })
 
     it("does not flip on its first draw", () => {
-        render(<FlipClock ms={5 * MIN} running size="mid" />)
+        render(<FlipClock ms={5 * MIN} running size="ready" />)
+        expect(screen.getByRole("timer").className).toContain("fc-ready")
         expect(flipping()).toEqual([false, false, false, false])
         expect(halves(cards()[1])).toEqual(["5", "5", "5", "5"])
     })

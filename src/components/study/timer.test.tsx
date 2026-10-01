@@ -71,7 +71,7 @@ beforeEach(() => {
     ]
     fake.data.study_sessions = []
     fake.data.profile = { id: "me", studyFlow: structuredClone(CLASSIC), studyPrefs: { goal: 60 } }
-    Object.assign(ui, { focus: false, view: "study", study: { courseId: null, itemId: null } })
+    Object.assign(ui, { focus: false, view: "study", bg: "med", study: { courseId: null, itemId: null } })
     ui.hist.undo = null
 })
 afterEach(async () => {
@@ -172,6 +172,19 @@ describe("the Ready card", () => {
 })
 
 describe("the flow card", () => {
+    it("names the third Quick start for the theme, and presses the preset the flow is", async () => {
+        ui.bg = "cs"
+        cards()
+        const card = within(region("Your flow"))
+        const pressed = (name: string) => card.getByRole("button", { name }).getAttribute("aria-pressed")
+        expect(card.queryByRole("button", { name: "Anki then read" })).toBeNull()
+        expect([pressed("Classic 25/5"), pressed("Deep 50/10"), pressed("LeetCode then read")]).toEqual(["true", "false", "false"])
+        fireEvent.click(card.getByRole("button", { name: "LeetCode then read" }))
+        await settle()
+        expect(flow()).toEqual({ steps: [["study", 20], ["break", 5], ["study", 40], ["break", 15]], rounds: 2 })
+        expect([pressed("Classic 25/5"), pressed("LeetCode then read")]).toEqual(["false", "true"])
+    })
+
     it("shows one round in proportion, the numbered steps, the rounds, the totals and the presets", () => {
         cards()
         const card = within(region("Your flow"))
