@@ -219,6 +219,14 @@ describe('readSchedule, a screenshot', () => {
     expect(claim).not.toHaveBeenCalled();
   });
 
+  it('gives the picture model only what is left of the read deadline', async () => {
+    const ai = { run: vi.fn(() => new Promise(() => {})) };
+    const t0 = Date.now();
+    await expect(readSchedule(ai, { bytes: jpeg, type: 'image/png', today: '2026-09-01', deadline: t0 + 60 }))
+      .rejects.toMatchObject({ status: 504, body: { error: 'ai_timeout' } });
+    expect(Date.now() - t0).toBeLessThan(150);
+  });
+
   it('takes a type with parameters and image/jpg, and builds the data URI from the bare type', async () => {
     const png = fakeAi(REPLY);
     await readSchedule(png, { bytes: jpeg, type: 'image/png; x=y', today: '2026-09-01' });

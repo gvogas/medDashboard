@@ -69,7 +69,7 @@ export function openSchool(read: unknown, source: string | null = null) {
 /** A calendar file was picked: read it with AI, then check it in the sheet. */
 export function readSchoolFile(file: File, note: NoteKey = "schoolNote") {
     return readWithAi(file, {
-        what: "calendar", title: "Reading your school calendar", steps: ["Reading the PDF", "Finding semesters and breaks", "Checking the dates"],
+        what: "calendar", title: "Reading your school calendar", steps: ["Reading the document", "Finding semesters and breaks", "Checking the dates"],
         flag: "schoolBusy", note, refresh: notify,
         errors: {
             outline_empty: "No text was found in that file. A scanned calendar needs to be a text PDF.",

@@ -145,6 +145,11 @@ describe("reading a timetable", () => {
         await cfg.prepare(pdf)
         expect(ai.asSent).toHaveBeenCalledWith(pdf)
 
+        /* a picture over the Worker's 4 MB is too large as a picture, not "over 5 MB" */
+        expect((cfg as unknown as { errors: Record<string, string> }).errors.too_large).toBe("That picture is too large.")
+        void readScheduleFile(pdf)
+        expect((ai.readWithAi.mock.calls[1][1] as { errors: Record<string, string> }).errors.too_large).toBeUndefined()
+
         fake.cal = CAL
         act(() => cfg.done({ term: "Winter 2027", courses: [{ code: "BIOL266", name: "Cell Biology", classes: [{ kind: "Lecture", weekday: 1, start: "09:00", end: "10:30", room: "" }] }] }))
         expect(getSheet()).toMatchObject({ kind: "schedule", name: "t.png" })
@@ -172,6 +177,8 @@ describe("the Import with AI card", () => {
         pick("Course outline: Choose a file", new File(["x"], "o.pdf", { type: "application/pdf" }))
         pick("School calendar: Choose a file", new File(["x"], "c.pdf", { type: "application/pdf" }))
         expect([0, 1, 2].map((i) => [cfg(i).what, cfg(i).note])).toEqual([["timetable", "aiNote"], ["outline", "aiNote"], ["calendar", "aiNote"]])
+        /* a calendar can be a Word or text file: its first step does not say PDF */
+        expect((ai.readWithAi.mock.calls[2][1] as { steps: string[] }).steps[0]).toBe("Reading the document")
     })
 
     it("opens an outline's preview that comes back to the card", async () => {

@@ -11,7 +11,7 @@
 
 import { HttpError } from './http.js';
 import { DAYS, KINDS, askModel, cleanClasses, cleanCode, clip } from './outline.js';
-import { askJson, knownContext, modelJson } from './ai.js';
+import { askJson, knownContext, modelJson, timeLeft } from './ai.js';
 
 const MAX_COURSES = 15;
 const TEXT_TOKENS = 3000;
@@ -112,8 +112,9 @@ export function toBase64(bytes) {
   return btoa(s);
 }
 
-async function askImage(ai, { bytes, type, claim }, today, known = '') {
+async function askImage(ai, { bytes, type, claim, deadline }, today, known = '') {
   if (bytes.byteLength > MAX_IMAGE_BYTES) throw new HttpError(413, { error: 'too_large' });
+  const timeoutMs = timeLeft(deadline);
   if (claim) await claim();
   return askJson(ai, VISION_MODEL, {
     messages: [
@@ -126,7 +127,7 @@ async function askImage(ai, { bytes, type, claim }, today, known = '') {
     response_format: { type: 'json_schema', json_schema: SCHEMA },
     max_tokens: VISION_TOKENS,
     temperature: 0,
-  }, cleanSchedule, 'schedule');
+  }, cleanSchedule, 'schedule', { timeoutMs });
 }
 
 export async function readSchedule(ai, { today, terms, codes, ...doc }) {

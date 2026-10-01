@@ -13,7 +13,7 @@
 // real outlines it scored 18/21 against 14/21 for Llama 3.3 70B; see the study-tools spec.
 
 import { HttpError } from './http.js';
-import { askJson, knownContext, modelJson, tidyText } from './ai.js';
+import { askJson, knownContext, modelJson, tidyText, timeLeft } from './ai.js';
 
 export const MODEL = '@cf/openai/gpt-oss-120b';
 export const MAX_BYTES = 5 * 1024 * 1024;
@@ -223,9 +223,9 @@ export async function outlineText(ai, bytes, type, name) {
  * A document's text put to the model with `messages(text)` and its answer cleaned by `clean`:
  * {...clean(answer), truncated}. `claim` runs just before the model does: only a document
  * that reaches the model uses one of the day's reads, not a file that could not be converted
- * or has no text.
+ * or has no text, or whose conversion used up the read's `deadline` (ai.js timeLeft).
  */
-export async function askModel(ai, { bytes, type, name, claim }, messages, clean, { effort, maxTokens = MAX_TOKENS, maxChars = MAX_CHARS, what = 'outline' } = {}) {
+export async function askModel(ai, { bytes, type, name, claim, deadline }, messages, clean, { effort, maxTokens = MAX_TOKENS, maxChars = MAX_CHARS, what = 'outline' } = {}) {
   let text = tidyText(await outlineText(ai, bytes, type, name));
   if (text.length < 40) throw new HttpError(422, { error: 'outline_empty' });
   const truncated = text.length > maxChars;
@@ -234,9 +234,10 @@ export async function askModel(ai, { bytes, type, name, claim }, messages, clean
     const cut = text.lastIndexOf('\n', maxChars);
     text = text.slice(0, cut > 0.8 * maxChars ? cut : maxChars);
   }
+  const timeoutMs = timeLeft(deadline);
   if (claim) await claim();
   const input = { messages: messages(text), max_tokens: maxTokens, temperature: 0, ...(effort ? { reasoning: { effort } } : {}) };
-  return { ...await askJson(ai, MODEL, input, clean, what), truncated };
+  return { ...await askJson(ai, MODEL, input, clean, what, { timeoutMs }), truncated };
 }
 
 export async function readOutline(ai, { today, termStart, terms, codes, ...doc }) {

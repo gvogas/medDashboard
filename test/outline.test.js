@@ -230,3 +230,25 @@ describe('POST /api/outline', () => {
     expect((await over.json()).error).toBe('outline_limit');
   });
 });
+
+describe('one deadline for the whole read', () => {
+  it('gives the model only what the conversion left of it', async () => {
+    const ai = fakeAi(MODEL_REPLY);
+    ai.toMarkdown = () => new Promise((ok) => setTimeout(() => ok([{ format: 'markdown', data: OUTLINE }]), 80));
+    ai.run = () => new Promise(() => {});
+    const t0 = Date.now();
+    await expect(readOutline(ai, { bytes: new Uint8Array(4), type: 'application/pdf', today: '2026-09-23', deadline: t0 + 150 }))
+      .rejects.toMatchObject({ status: 504, body: { error: 'ai_timeout' } });
+    expect(Date.now() - t0).toBeLessThan(230);
+  });
+
+  it('claims no read when the conversion used it all up', async () => {
+    const claim = vi.fn();
+    const ai = fakeAi(MODEL_REPLY);
+    ai.toMarkdown = () => new Promise((ok) => setTimeout(() => ok([{ format: 'markdown', data: OUTLINE }]), 40));
+    await expect(readOutline(ai, { bytes: new Uint8Array(4), type: 'application/pdf', today: '2026-09-23', claim, deadline: Date.now() + 20 }))
+      .rejects.toMatchObject({ status: 504, body: { error: 'ai_timeout' } });
+    expect(claim).not.toHaveBeenCalled();
+    expect(ai.calls.some((c) => c[0] === 'run')).toBe(false);
+  });
+});

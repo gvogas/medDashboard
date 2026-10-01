@@ -8,13 +8,11 @@ import { DOW, dayMonth } from "@/core/dates"
 import type { SchoolCalendar } from "@/core/school"
 import { schoolCal } from "@/data/query"
 import { semesterOptions, semesterPicked } from "@/data/course-edit"
-import { commitSchedule, scheduleCount, semesterChanges } from "@/data/schedule-edit"
+import { commitSchedule, plural, scheduleCount, semesterChanges } from "@/data/schedule-edit"
 import { closeSheet, openSheet } from "@/data/overlay"
 import type { ImportPlan } from "@/data/import-edit"
 import { accent } from "@/components/views/bits"
 import { Button, Segmented, SheetBody, SheetFoot, SheetHead, Warning } from "./fields"
-
-const plural = (n: number, one: string, many = one + "s") => n + " " + (n === 1 ? one : many)
 
 /** "Fall 2026: 8 Sep – 18 Dec · Winter 2027: 11 Jan – 23 Apr · Both semesters: all year." */
 const semesterLine = (cal: SchoolCalendar) =>

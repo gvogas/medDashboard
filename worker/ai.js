@@ -7,8 +7,18 @@
 
 import { HttpError } from './http.js';
 
-/* Longer than any read seen so far (30 s), shorter than the browser's 120 s. */
+/* Longer than any read seen so far (30 s), shorter than the browser's 120 s. A read's deadline:
+   it starts with the request (api.js), so the file's conversion, the model and its retry
+   together stay inside it. */
 export const TIMEOUT_MS = 100_000;
+
+/** What is left of a read's deadline (a time in ms; none: all of TIMEOUT_MS); nothing left is the 504. */
+export function timeLeft(deadline) {
+  if (!deadline) return TIMEOUT_MS;
+  const left = Math.min(TIMEOUT_MS, deadline - Date.now());
+  if (left <= 0) throw new HttpError(504, { error: 'ai_timeout' });
+  return left;
+}
 
 /** One model call. A spent allowance (error 4006) is a 429 of its own; no answer in `timeoutMs` a 504. */
 export async function runModel(ai, model, input, what = 'ai', timeoutMs = TIMEOUT_MS) {
@@ -107,7 +117,7 @@ export function tidyText(text) {
 const reply = (out) => out?.response ?? out;
 
 /* the retry is skipped when less than this is left of the read's deadline */
-export const MIN_RETRY_MS = 15_000;
+const MIN_RETRY_MS = 15_000;
 
 /** The model stopped at max_tokens: chat-completions says so; Workers AI's own shape only counts. */
 function cutOff(out, input) {

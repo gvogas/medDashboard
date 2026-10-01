@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { runModel, askJson, modelJson, tidyText, knownContext, listParam, cleanTerm } from '../worker/ai.js';
+import { runModel, askJson, modelJson, tidyText, knownContext, listParam, cleanTerm, timeLeft, TIMEOUT_MS } from '../worker/ai.js';
 import { knownParams } from '../worker/api.js';
 import { HttpError } from '../worker/http.js';
 
@@ -184,5 +184,16 @@ describe('what the app knows', () => {
     expect(cleanTerm('Winter \u201c27\u201d')).toBe('Winter 27');
     const params = new URLSearchParams({ terms: 'Fall "2026"|\u0000|Winter 2027', codes: 'chem 271,  ,phys-205,!!,ABCD-EFGH-1' });
     expect(knownParams(params)).toEqual({ terms: ['Fall 2026', 'Winter 2027'], codes: ['CHEM271', 'PHYS-205', 'ABCDEFGH'] });
+  });
+});
+
+describe('timeLeft', () => {
+  it('is what is left of a deadline, all of TIMEOUT_MS without one, and a 504 once it has passed', () => {
+    expect(timeLeft(undefined)).toBe(TIMEOUT_MS);
+    const left = timeLeft(Date.now() + 5_000);
+    expect(left).toBeGreaterThan(4_900);
+    expect(left).toBeLessThanOrEqual(5_000);
+    expect(timeLeft(Date.now() + 10 * TIMEOUT_MS)).toBe(TIMEOUT_MS);
+    expect(() => timeLeft(Date.now() - 1)).toThrow(expect.objectContaining({ status: 504, body: { error: 'ai_timeout' } }));
   });
 });

@@ -6,7 +6,7 @@ import { limitLogin, limitOutline, readsLeft } from './limits.js';
 import { readOutline, cleanCode, MAX_BYTES } from './outline.js';
 import { readSchool } from './school.js';
 import { readSchedule } from './schedule.js';
-import { listParam, cleanTerm } from './ai.js';
+import { listParam, cleanTerm, TIMEOUT_MS } from './ai.js';
 import { validateProfile, validateCourse, validateItem, validateQuote, validateStudySession, validateAchievement, validateId } from './validate.js';
 import { getUserForLogin, getProfile, updateProfile, getRow, upsertRow, deleteRow, syncPage, bumpPasswordGen, saveSpotifyTokens, deleteSpotifyTokens } from './db.js';
 import * as spotify from './spotify.js';
@@ -126,6 +126,8 @@ export const knownParams = (params) => ({
 });
 
 const aiRead = (read, what) => async ({ request, env, url }) => {
+  /* one deadline for the whole read: the upload, the conversion, the model and its retry */
+  const t0 = Date.now();
   const userId = await requireUser(request, env);
   const bytes = await readBytes(request, MAX_BYTES);
   if (!bytes.byteLength) throw new HttpError(400, { error: 'invalid', field: 'body' });
@@ -134,6 +136,7 @@ const aiRead = (read, what) => async ({ request, env, url }) => {
     return json(await read(env.AI, {
       bytes, type: request.headers.get('content-type') || '', name: (url.searchParams.get('name') || what).slice(0, 120),
       today: date('today') || new Date().toISOString().slice(0, 10), termStart: date('termStart'), claim: () => limitOutline(env, userId),
+      deadline: t0 + TIMEOUT_MS,
       ...knownParams(url.searchParams),
     }));
   } catch (e) {

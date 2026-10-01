@@ -38,6 +38,8 @@ export function readScheduleFile(file: File, note: NoteKey = "aiNote") {
             outline_empty: "No text was found in that PDF. Try a screenshot of the timetable instead.",
             schedule_unreadable: "No classes could be found in that timetable. Try a clearer screenshot, or the PDF.",
             image_unsupported: "That kind of picture cannot be read. Use a PNG or JPG screenshot.",
+            /* the Worker takes a picture of up to 4 MB, made smaller first; not "over 5 MB" */
+            ...(isImage(file) ? { too_large: "That picture is too large." } : {}),
         },
         cache: ["timetable", String(data.profile?.id ?? ""), today().slice(0, 7), JSON.stringify(readContext())],
         call: (body, signal) => api.readSchedule(body, { name: file.name, today: today(), ...readContext() }, signal),
@@ -48,7 +50,8 @@ export function readScheduleFile(file: File, note: NoteKey = "aiNote") {
     })
 }
 
-const plural = (n: number, one: string, many = one + "s") => n + " " + (n === 1 ? one : many)
+/** "1 class", "2 classes". */
+export const plural = (n: number, one: string, many = one + "s") => n + " " + (n === 1 ? one : many)
 
 /** Add the ticked classes and the semesters picked; a toast says what happened. True when saved
     (the sheet is then closed). */
