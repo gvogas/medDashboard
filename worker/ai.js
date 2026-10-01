@@ -41,6 +41,38 @@ export function modelJson(raw) {
   return o && typeof o === 'object' ? o : null;
 }
 
+/* a page's number on its own line: "Page 3", "Page 3 of 12", "- 3 -", "3/12", "3" */
+const PAGE_NUMBER = /^(page \d+( of \d+)?|[-–]? ?\d{1,3} ?[-–]?|\d{1,3} ?\/ ?\d{1,3})$/i;
+
+/**
+ * A document's text with less to pay for. Pages are the "### Page N" markers the browser's
+ * PDF reader writes (src/core/pdftext.ts). Spaces and blank lines are squeezed; the page
+ * markers go; a page number on a page's first or last two lines goes; a line on the first or
+ * last two lines of 3 or more pages (a running header or footer) is kept the first time only.
+ * Lines inside a page are never dropped, even when they repeat ("LEC", a room, a week number).
+ */
+export function tidyText(text) {
+  const pages = String(text).replace(/\r\n?/g, '\n').split(/^#{1,6} ?Page \d+[^\S\n]*$/m)
+    .map((p) => p.split('\n').map((l) => l.replace(/\s+/g, ' ').trim()).filter(Boolean))
+    .filter((p) => p.length);
+  const edges = (lines) => new Set([...lines.slice(0, 2), ...lines.slice(-2)]);
+  const onPages = new Map();
+  for (const p of pages) for (const l of edges(p)) onPages.set(l, (onPages.get(l) || 0) + 1);
+  const seen = new Set();
+  return pages.map((p) => {
+    const ends = edges(p);
+    return p.filter((l) => {
+      if (!ends.has(l)) return true;
+      if (PAGE_NUMBER.test(l)) return false;
+      if (onPages.get(l) >= 3 && l.length <= 120) {
+        if (seen.has(l)) return false;
+        seen.add(l);
+      }
+      return true;
+    }).join('\n');
+  }).join('\n\n').trim();
+}
+
 const reply = (out) => out?.response ?? out;
 
 /**

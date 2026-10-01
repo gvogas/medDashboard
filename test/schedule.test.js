@@ -93,6 +93,14 @@ describe('readSchedule, text', () => {
     await expect(readSchedule(fakeAi(REPLY), { bytes: new TextEncoder().encode('short'), type: 'text/plain', today: '2026-09-01', claim })).rejects.toMatchObject({ status: 422 });
     expect(claim).not.toHaveBeenCalled();
   });
+
+  it('reads at most 16,000 characters of a timetable', async () => {
+    const ai = fakeAi(REPLY);
+    const long = Array.from({ length: 1200 }, (_, i) => 'CHEM 271 LEC Mon 09:00 row ' + i).join('\n');
+    const out = await readSchedule(ai, { bytes: new TextEncoder().encode(long), type: 'text/plain', today: '2026-09-01' });
+    expect(out.truncated).toBe(true);
+    expect(ai.calls[0][1].messages[1].content.length).toBeLessThan(16_200);
+  });
 });
 
 describe('readSchedule, a screenshot', () => {

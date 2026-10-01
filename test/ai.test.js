@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { runModel, askJson, modelJson } from '../worker/ai.js';
+import { runModel, askJson, modelJson, tidyText } from '../worker/ai.js';
 import { HttpError } from '../worker/http.js';
 
 describe('runModel', () => {
@@ -58,5 +58,34 @@ describe('a model that does not answer', () => {
   it('is a 504 ai_timeout after the time given', async () => {
     await expect(runModel({ run: () => new Promise(() => {}) }, '@cf/x', {}, 'outline', 10))
       .rejects.toMatchObject({ status: 504, body: { error: 'ai_timeout' } });
+  });
+});
+
+describe('tidyText', () => {
+  const page = (n, body) => '### Page ' + n + '\nCHEM 271 · Fall 2026 · Concordia University\n' + body + '\nPage ' + n + ' of 4';
+  const doc = [
+    page(1, 'Schedule\nWeek 1 Intro\n7\nLEC\nReading: ch. 1'),
+    page(2, 'Week 7\nTerm test 1\nLEC\nRoom H-110\nReading: ch. 7'),
+    page(3, 'Week 9\nQuiz 2\nLEC\nRoom H-110\nReading: ch. 9'),
+    page(4, 'Week 13\nFinal review\nFinal exam\nDecember\nGood luck'),
+  ].join('\n\n');
+
+  it('keeps a running header once, and drops page markers and page numbers', () => {
+    const out = tidyText(doc);
+    expect(out.match(/CHEM 271 · Fall 2026/g)).toHaveLength(1);
+    expect(out).not.toMatch(/Page \d/);
+    expect(out).toContain('Term test 1');
+    expect(out.length).toBeLessThan(doc.length);
+  });
+
+  it('keeps what repeats inside the pages, and a lone number that is not at a page edge', () => {
+    const out = tidyText(doc);
+    expect(out.match(/^LEC$/gm)).toHaveLength(3);
+    expect(out.match(/^Room H-110$/gm)).toHaveLength(2);
+    expect(out).toMatch(/^7$/m);
+  });
+
+  it('squeezes spaces and blank lines in text without pages', () => {
+    expect(tidyText('a   b\t c\n\n\n\nd')).toBe('a b c\nd');
   });
 });

@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { SELF, env } from 'cloudflare:test';
 import { cleanOutline, cleanTime, readOutline, outlineText, MODEL, MAX_CHARS } from '../worker/outline.js';
 import { signIn, BASE } from './helpers.js';
@@ -84,6 +84,24 @@ describe('cleanOutline', () => {
 });
 
 describe('readOutline', () => {
+  it('refuses a picture before any model or read: toMarkdown would describe it with a model', async () => {
+    const ai = fakeAi(MODEL_REPLY);
+    const claim = vi.fn();
+    await expect(readOutline(ai, { bytes: new Uint8Array(400), type: 'image/png', name: 'x.png', today: '2026-09-23', claim }))
+      .rejects.toMatchObject({ status: 415, body: { error: 'image_unsupported' } });
+    expect(ai.calls).toEqual([]);
+    expect(claim).not.toHaveBeenCalled();
+  });
+
+  it('sends the text tidied', async () => {
+    const ai = fakeAi(MODEL_REPLY);
+    const text = ['### Page 1', 'PHARM 101 header', OUTLINE, 'Page 1 of 3', '### Page 2', 'PHARM 101 header', 'More', 'Page 2 of 3', '### Page 3', 'PHARM 101 header', 'End', 'Page 3 of 3'].join('\n');
+    await readOutline(ai, { bytes: new TextEncoder().encode(text), type: 'text/plain', today: '2026-09-23' });
+    const sent = ai.calls[0][2].messages[1].content;
+    expect(sent.match(/PHARM 101 header/g)).toHaveLength(1);
+    expect(sent).not.toContain('Page 2 of 3');
+  });
+
   it('converts a PDF with toMarkdown and extracts with the JSON schema', async () => {
     const ai = fakeAi(MODEL_REPLY);
     const out = await readOutline(ai, { bytes: new Uint8Array([37, 80, 68, 70]), type: 'application/pdf', name: 'pharm.pdf', today: '2026-09-23', termStart: '2026-09-07' });

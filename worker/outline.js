@@ -12,7 +12,7 @@
 // scored 18/21 against 14/21 for Llama 3.3 70B; see the study-tools spec.
 
 import { HttpError } from './http.js';
-import { askJson, modelJson } from './ai.js';
+import { askJson, modelJson, tidyText } from './ai.js';
 
 export { modelJson };
 
@@ -191,6 +191,9 @@ export function cleanOutline(raw) {
  * `ai` is env.AI (or a fake in tests).
  */
 export async function outlineText(ai, bytes, type, name) {
+  /* toMarkdown describes a picture with an AI model of its own (and its neurons); timetable
+     screenshots go to /api/ai/schedule instead */
+  if (/^image\//i.test(type || '')) throw new HttpError(415, { error: 'image_unsupported' });
   if (TEXT_TYPES.test(type || '')) return new TextDecoder().decode(bytes);
   const result = await ai.toMarkdown({ name: name || 'outline', blob: new Blob([bytes], { type: type || 'application/octet-stream' }) });
   const doc = Array.isArray(result) ? result[0] : result;
@@ -204,11 +207,11 @@ export async function outlineText(ai, bytes, type, name) {
  * that reaches the model uses one of the day's reads, not a file that could not be converted
  * or has no text.
  */
-export async function askModel(ai, { bytes, type, name, claim }, messages, clean, { effort, maxTokens = MAX_TOKENS, what = 'outline' } = {}) {
-  let text = (await outlineText(ai, bytes, type, name)).trim();
+export async function askModel(ai, { bytes, type, name, claim }, messages, clean, { effort, maxTokens = MAX_TOKENS, maxChars = MAX_CHARS, what = 'outline' } = {}) {
+  let text = tidyText(await outlineText(ai, bytes, type, name));
   if (text.length < 40) throw new HttpError(422, { error: 'outline_empty' });
-  const truncated = text.length > MAX_CHARS;
-  if (truncated) text = text.slice(0, MAX_CHARS);
+  const truncated = text.length > maxChars;
+  if (truncated) text = text.slice(0, maxChars);
   if (claim) await claim();
   const input = { messages: messages(text), max_tokens: maxTokens, temperature: 0, ...(effort ? { reasoning: { effort } } : {}) };
   return { ...await askJson(ai, MODEL, input, clean, what), truncated };

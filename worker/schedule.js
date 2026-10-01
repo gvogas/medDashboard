@@ -13,6 +13,7 @@ import { askJson, modelJson } from './ai.js';
 
 const MAX_COURSES = 15;
 const TEXT_TOKENS = 3000;
+const TEXT_CHARS = 16_000;    /* a timetable is a page or two; a long PDF picked by mistake costs no more than this */
 
 // A screenshot goes to Llama 4 Scout: it reads images given as data URIs (never URLs) and
 // answers in JSON mode. About 110 neurons for a 1600 px screenshot: ~1,900 image tokens and
@@ -114,5 +115,5 @@ export async function readSchedule(ai, { today, ...doc }) {
     if (!IMAGE_TYPES.test(doc.type)) throw new HttpError(415, { error: 'image_unsupported' });
     return { ...await askImage(ai, doc, today), truncated: false };
   }
-  return askModel(ai, doc, (text) => textPrompt(text, today), cleanSchedule, { effort: 'low', maxTokens: TEXT_TOKENS, what: 'schedule' });
+  return askModel(ai, doc, (text) => textPrompt(text, today), cleanSchedule, { effort: 'low', maxTokens: TEXT_TOKENS, maxChars: TEXT_CHARS, what: 'schedule' });
 }
