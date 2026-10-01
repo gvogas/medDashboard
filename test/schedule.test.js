@@ -4,6 +4,8 @@ import { signIn, BASE } from './helpers.js';
 import { OUTLINE_DAILY_LIMIT } from '../worker/limits.js';
 import { cleanSchedule, readSchedule, VISION_MODEL, MAX_IMAGE_BYTES, toBase64 } from '../worker/schedule.js';
 import { MODEL, cleanClasses } from '../worker/outline.js';
+import visionReply from './fixtures/schedule-vision-reply.json';
+import textReply from './fixtures/schedule-text-reply.json';
 
 const TIMETABLE = 'Fall 2026 timetable. CHEM 271 Organic Chemistry I LEC Tue Thu 08:30-10:00 H-110. CHEM 271 LAB Fri 13:00-16:00 SP-265. PHYS 205 Waves LEC Mon 09:00-10:30 Hall B; TUT Wed 15:00-16:00 Room 2.04.';
 
@@ -61,6 +63,58 @@ describe('cleanSchedule', () => {
     const out = cleanSchedule(many);
     expect(out.courses).toHaveLength(15);
     expect(out.courses[0].classes).toHaveLength(12);
+  });
+
+  it('puts the rows of one course together: by code, or by name when there is no code', () => {
+    const out = cleanSchedule({ courses: [
+      { code: 'CHEM 271', name: 'Organic Chemistry I', classes: [{ kind: 'LEC', day: 'Tue', start: '08:30' }] },
+      { code: 'chem271', name: '', classes: [{ kind: 'LAB', day: 'Fri', start: '13:00' }, { kind: 'LEC', day: 'Tue', start: '08:30' }] },
+      { code: '', name: 'Choir', classes: [{ kind: 'Seminar', day: 'Mon', start: '18:00' }] },
+      { code: '', name: 'choir', classes: [{ kind: 'Seminar', day: 'Wed', start: '18:00' }] },
+      { code: 'PHYS 205', name: 'Choir', classes: [{ kind: 'Lecture', day: 'Mon', start: '09:00' }] },
+    ] });
+    expect(out.courses.map((c) => [c.code, c.name, c.classes.map((k) => k.kind + k.weekday)])).toEqual([
+      ['CHEM271', 'Organic Chemistry I', ['Lecture2', 'Lab5']],
+      ['', 'Choir', ['Seminar1', 'Seminar3']],
+      ['PHYS205', 'Choir', ['Lecture1']],
+    ]);
+  });
+});
+
+/* The replies of the one live read (1 October 2026) of test/fixtures/timetable.html: Llama 4
+   Scout on a 1400x900 screenshot, gpt-oss-120b on the PDF's text. Scout answered each row as
+   a course of its own (CHEM 271 twice: lecture, lab); cleanSchedule puts them together. */
+describe('the real replies (Task 13)', () => {
+  it.each([['screenshot', visionReply], ['PDF', textReply]])('read the sample timetable from a %s', (_, reply) => {
+    const out = cleanSchedule(reply);
+    expect(out.term).toBe('Fall 2026');
+    expect(out.courses.map((c) => c.code).sort()).toEqual(['BIOL266', 'CHEM271', 'PHYS205']);
+    const chem = out.courses.find((c) => c.code === 'CHEM271');
+    expect(chem.classes).toEqual(expect.arrayContaining([
+      expect.objectContaining({ kind: 'Lecture', weekday: 2, start: '08:30', end: '10:00' }),
+      expect.objectContaining({ kind: 'Lecture', weekday: 4, start: '08:30', end: '10:00' }),
+      expect.objectContaining({ kind: 'Lab', weekday: 5, start: '13:00', end: '16:00', room: 'SP-265' }),
+    ]));
+    expect(out.courses.find((c) => c.code === 'PHYS205').classes).toEqual(expect.arrayContaining([
+      expect.objectContaining({ kind: 'Tutorial', weekday: 3, start: '15:00', end: '16:00' }),
+    ]));
+    expect(out.courses.reduce((n, c) => n + c.classes.length, 0)).toBe(8);
+  });
+
+  it('both models agree on every class, room included', () => {
+    const flat = (reply) => cleanSchedule(reply).courses
+      .flatMap((c) => c.classes.map((k) => [c.code, k.kind, k.weekday, k.start, k.end, k.room].join(' '))).sort();
+    expect(flat(visionReply)).toEqual(flat(textReply));
+    expect(flat(textReply)).toEqual([
+      'BIOL266 Lab 4 14:00 17:00 SP-110',
+      'BIOL266 Lecture 1 13:00 14:30 CC-301',
+      'CHEM271 Lab 5 13:00 16:00 SP-265',
+      'CHEM271 Lecture 2 08:30 10:00 H-110',
+      'CHEM271 Lecture 4 08:30 10:00 H-110',
+      'PHYS205 Lecture 1 09:00 10:30 Hall B',
+      'PHYS205 Lecture 3 09:00 10:30 Hall B',
+      'PHYS205 Tutorial 3 15:00 16:00 Room 2.04',
+    ]);
   });
 });
 

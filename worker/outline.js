@@ -7,9 +7,10 @@
 // through toMarkdown here.
 //
 // Cost: toMarkdown is free for documents; the extraction is one gpt-oss-120b call
-// (about 300 neurons for a 10-page outline), bounded by MAX_CHARS in and MAX_TOKENS
-// out, and by OUTLINE_DAILY_LIMIT model calls per person per day. On three real outlines it
-// scored 18/21 against 14/21 for Llama 3.3 70B; see the study-tools spec.
+// (about 300 neurons for a 10-page outline; measured 1 October 2026 on the 3-page
+// test/fixtures/outline.txt: 1,311 tokens in, 1,576 out, 149 neurons), bounded by MAX_CHARS
+// in and MAX_TOKENS out, and by OUTLINE_DAILY_LIMIT model calls per person per day. On three
+// real outlines it scored 18/21 against 14/21 for Llama 3.3 70B; see the study-tools spec.
 
 import { HttpError } from './http.js';
 import { askJson, knownContext, modelJson, tidyText } from './ai.js';

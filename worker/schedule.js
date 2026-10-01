@@ -3,7 +3,9 @@
 // courses in the schedule preview and saves what the person ticks.
 //
 // A PDF arrives as text (read in the browser, like outlines) and goes to the text model,
-// thinking little: a timetable needs reading, not reasoning. About 110 neurons a page.
+// thinking little: a timetable needs reading, not reasoning. Measured 1 October 2026 on a
+// one-page timetable (test/fixtures/timetable.html as a PDF): 778 tokens in, 1,353 out with
+// the thinking, 117 neurons.
 // A screenshot arrives as a JPEG or PNG made smaller in the browser and goes to the vision
 // model (VISION_MODEL). Both count against the same daily reads as outlines (limitOutline).
 
@@ -16,8 +18,10 @@ const TEXT_TOKENS = 3000;
 const TEXT_CHARS = 16_000;    /* a timetable is a page or two; a long PDF picked by mistake costs no more than this */
 
 // A screenshot goes to Llama 4 Scout: it reads images given as data URIs (never URLs) and
-// answers in JSON mode. About 110 neurons for a 1600 px screenshot: ~1,900 image tokens and
-// ~600 prompt tokens in at 24,545 neurons/M, ~600 out at 77,273/M. Measured in Task 13.
+// answers in JSON mode. Measured 1 October 2026 on a 1400x900 screenshot of
+// test/fixtures/timetable.html (6 rows, 8 classes): 2,641 tokens in (image and prompt) at
+// 24,545 neurons/M and 557 out at 77,273/M, about 108 neurons. It answers a course split over
+// several rows (lecture, lab) as one entry per row: cleanSchedule puts them together.
 export const VISION_MODEL = '@cf/meta/llama-4-scout-17b-16e-instruct';
 export const MAX_IMAGE_BYTES = 4 * 1024 * 1024;
 /* the pictures it reads, by the type they are sent as: "image/png; x=y" is image/png, image/jpg is image/jpeg */
@@ -75,12 +79,26 @@ function textPrompt(text, today, known = '') {
   ];
 }
 
-/** Whatever the model returned, made safe: {term, courses}. 502 when there is no class at all. */
+/**
+ * Whatever the model returned, made safe: {term, courses}. 502 when there is no class at all.
+ * Entries for the same course (the same code, or no code and the same name) are one course:
+ * a timetable lists a course's lecture and lab on rows of their own, and a model may too.
+ */
 export function cleanSchedule(raw) {
   const o = modelJson(raw);
   if (!o) throw new HttpError(502, { error: 'schedule_unreadable' });
-  const courses = (Array.isArray(o.courses) ? o.courses : [])
-    .map((c) => ({ code: cleanCode(c?.code), name: clip(c?.name, 80), classes: cleanClasses(c?.classes) }))
+  const merged = [];
+  for (const c of Array.isArray(o.courses) ? o.courses : []) {
+    const code = cleanCode(c?.code), name = clip(c?.name, 80);
+    const classes = Array.isArray(c?.classes) ? c.classes : [];
+    const same = merged.find((m) => (code ? m.code === code : !m.code && !!name && m.name.toLowerCase() === name.toLowerCase()));
+    if (same) {
+      same.raw.push(...classes);
+      same.name ||= name;
+    } else merged.push({ code, name, raw: [...classes] });
+  }
+  const courses = merged
+    .map((c) => ({ code: c.code, name: c.name, classes: cleanClasses(c.raw) }))
     .filter((c) => (c.code || c.name) && c.classes.length)
     .slice(0, MAX_COURSES);
   if (!courses.length) throw new HttpError(502, { error: 'schedule_unreadable' });
