@@ -75,6 +75,7 @@ export function readSchoolFile(file: File, note: NoteKey = "schoolNote") {
             outline_empty: "No text was found in that file. A scanned calendar needs to be a text PDF.",
             school_unreadable: "No semesters could be found in that calendar. Try again, or check it is the academic calendar.",
         },
+        cache: ["calendar", String(store.data.profile?.id ?? ""), today().slice(0, 7)],
         call: (body, signal) => api.readSchool(body, { name: file.name, today: today() }, signal),
         done: (read: unknown) => openSchool(read, file.name),
     })

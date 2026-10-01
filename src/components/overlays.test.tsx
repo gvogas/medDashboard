@@ -1,4 +1,5 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest"
+import { webcrypto } from "node:crypto"
 import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react"
 
 const fake = vi.hoisted(() => {
@@ -18,6 +19,7 @@ import { closeSheet, openSheet } from "@/data/overlay"
 import { Overlays } from "./overlays"
 import { Page, SheetHost } from "./shell"
 
+beforeAll(() => { if (!globalThis.crypto?.subtle) vi.stubGlobal("crypto", webcrypto) })
 beforeEach(() => {
     /* the page, the sheet and the overlays as <App> draws them */
     render(<>
@@ -26,7 +28,7 @@ beforeEach(() => {
         <div id="overlays"><Overlays /></div>
     </>)
 })
-afterEach(() => { act(() => closeKeys()); cleanup(); vi.useRealTimers() })
+afterEach(() => { act(() => closeKeys()); cleanup(); vi.useRealTimers(); localStorage.clear() })
 
 const app = () => document.getElementById("app")!
 
@@ -163,6 +165,42 @@ describe("the reading card", () => {
         fake.api.aiReads.mockResolvedValueOnce({ left: 3, limit: 10 })
         await refreshReads()
         expect(fake.ui.aiLeft).toBe(3)
+    })
+
+    it("answers the same file again from this device, using no read", async () => {
+        const call = vi.fn(async () => ({ ok: 1 }))
+        const done = vi.fn()
+        const opts = { what: "outline", title: "T", steps: STEPS, flag: "outlineBusy" as const, note: "importNote" as const, errors: {}, cache: ["outline", "u1"], call, done, refresh: vi.fn() }
+        await act(() => readWithAi(file(), opts))
+        await act(() => readWithAi(file(), opts))
+        expect(call).toHaveBeenCalledTimes(1)
+        expect(done).toHaveBeenNthCalledWith(2, { ok: 1 })
+        await act(() => readWithAi(file(), { ...opts, cache: ["outline", "u2"] }))
+        expect(call).toHaveBeenCalledTimes(2)
+    })
+
+    it("remembers no failed read", async () => {
+        const call = vi.fn().mockRejectedValueOnce(new fake.ApiError(503, { error: "outline_unavailable" })).mockResolvedValueOnce({ ok: 2 })
+        const opts = { what: "outline", title: "T", steps: STEPS, flag: "outlineBusy" as const, note: "importNote" as const, errors: {}, cache: ["outline", "u3"], call, done: vi.fn(), refresh: vi.fn() }
+        await act(() => readWithAi(file(), opts))
+        await act(() => readWithAi(file(), opts))
+        expect(call).toHaveBeenCalledTimes(2)
+    })
+
+    it("leaves no unhandled rejection when the file fails to open after Cancel", async () => {
+        const unhandled = vi.fn()
+        process.on("unhandledRejection", unhandled)
+        try {
+            let fail!: (e: Error) => void
+            let reading!: Promise<void>
+            await act(async () => { reading = read(vi.fn(), vi.fn(), vi.fn(), () => new Promise<Blob>((_, reject) => { fail = reject })) })
+            fireEvent.click(within(screen.getByRole("alertdialog")).getByRole("button", { name: "Cancel" }))
+            await act(async () => { await reading })
+            fail(new Error("locked"))
+            await new Promise((r) => setTimeout(r, 0))
+            expect(unhandled).not.toHaveBeenCalled()
+            expect(fake.ui.importNote).toEqual({ text: "Stopped reading.", error: false })
+        } finally { process.off("unhandledRejection", unhandled) }
     })
 
     it("puts what went wrong in the note", async () => {

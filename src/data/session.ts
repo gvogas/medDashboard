@@ -9,6 +9,7 @@ import { notify } from "@/bridge"
 import * as spotify from "./spotify/player"
 import * as web from "./spotify/web-player"
 import { closeSheet } from "./overlay"
+import { forgetReads } from "./ai-cache"
 import { toast } from "./toast"
 import { applyCoat } from "./settings"
 import { openSettings } from "./actions"
@@ -108,6 +109,7 @@ export async function signOut({ everywhere = false, force = false }: { everywher
     spotify.stop()
     web.stop()
     closeSheet()
+    forgetReads()
     if (id) {
         try { await store.wipe(id) }
         catch (e) { alert("You are signed out, but local cleanup is still pending. " + (e as Error).message) }

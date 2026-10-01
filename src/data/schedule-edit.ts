@@ -35,6 +35,7 @@ export function readScheduleFile(file: File, note: NoteKey = "aiNote") {
             schedule_unreadable: "No classes could be found in that timetable. Try a clearer screenshot, or the PDF.",
             image_unsupported: "That kind of picture cannot be read. Use a PNG or JPG screenshot.",
         },
+        cache: ["timetable", String(data.profile?.id ?? ""), today().slice(0, 7), JSON.stringify(readContext())],
         call: (body, signal) => api.readSchedule(body, { name: file.name, today: today(), ...readContext() }, signal),
         done: (read: Schedule) => openSheet({
             kind: "schedule", name: file.name,

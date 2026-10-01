@@ -8,6 +8,7 @@ import { flushSync } from "react-dom"
 import { api, ApiError } from "@/core/api"
 import { pdfText } from "@/core/pdftext"
 import { notify } from "@/bridge"
+import { cacheKey, cached, remember } from "./ai-cache"
 import { cover } from "./overlay"
 import { ui } from "./ui"
 import type { Note, Ui } from "./types"
@@ -75,6 +76,8 @@ export interface AiRead<T> {
     prepare?: (file: File) => Promise<Blob>
     /** the largest file taken, before `prepare`; 5 MB unless given (a screenshot may be bigger: it is made smaller) */
     maxBytes?: number
+    /** the words that, with the file as sent, find a remembered answer: the kind, the account, … */
+    cache?: string[]
     call: (body: Blob, signal: AbortSignal) => Promise<T>
     done: (answer: T) => void
     refresh: () => void
@@ -93,6 +96,8 @@ export async function refreshReads() {
 /** `work`, or the signal's reason as soon as it aborts, whichever comes first. */
 function untilAborted<T>(work: Promise<T>, signal: AbortSignal): Promise<T> {
     if (signal.aborted) return Promise.reject(signal.reason)
+    /* once Cancel has won, a later failure of the work is of no interest */
+    work.catch(() => {})
     let onAbort!: () => void
     const aborted = new Promise<never>((_, reject) => {
         onAbort = () => reject(signal.reason)
@@ -106,7 +111,7 @@ function untilAborted<T>(work: Promise<T>, signal: AbortSignal): Promise<T> {
  * a smaller picture), `call(body, signal)` asks the Worker, and the answer goes to `done`.
  * While it runs ui[flag] is true; Cancel aborts the request; a problem goes in ui[note].
  */
-export async function readWithAi<T>(file: File, { what, title, steps, flag, note, errors, prepare = asSent, maxBytes = MAX_FILE, call, done, refresh }: AiRead<T>) {
+export async function readWithAi<T>(file: File, { what, title, steps, flag, note, errors, prepare = asSent, maxBytes = MAX_FILE, cache, call, done, refresh }: AiRead<T>) {
     const u = ui as Ui & Record<NoteKey, Note | null> & Record<Flag, boolean>
     if (file.size > maxBytes) { u[note] = { text: "That file is over " + Math.round(maxBytes / 1048576) + " MB.", error: true }; refresh(); return }
     const stop = new AbortController()
@@ -121,9 +126,12 @@ export async function readWithAi<T>(file: File, { what, title, steps, flag, note
             throw Object.assign(new Error(own ? (e as Error).message : "That file could not be opened. Is it a damaged or locked PDF?"), { name: "FileError" })
         }
         stop.signal.throwIfAborted()
+        const key = cache ? await cacheKey(cache, body).catch(() => null) : null
+        const hit = key ? cached(key) : null
         show(1)
-        const answer = await call(body, stop.signal)
+        const answer = hit != null ? hit as T : await call(body, stop.signal)
         stop.signal.throwIfAborted()
+        if (key && hit == null) remember(key, answer)
         show(2)
         u[flag] = false; hideBusy()
         done(answer)
