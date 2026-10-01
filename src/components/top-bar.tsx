@@ -60,12 +60,12 @@ export function TopBar() {
             )}
 
             <Search />
-            {/* Import with AI (spec §10): the spark and the words; the spark alone on a phone */}
-            <TextureButton variant="minimal" size="sm" aria-label="Import with AI" onClick={openAiImport}>
+            {/* Import with AI (spec §10): the spark and the words; the spark alone under 1280px, where the words would squeeze the title */}
+            <TextureButton variant="minimal" size="sm" aria-label="Import with AI" title="Import with AI" onClick={openAiImport}>
                 <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" className="size-3.5 text-primary">
                     <path d="M12 2l1.9 5.6L19.5 9.5l-5.6 1.9L12 17l-1.9-5.6L4.5 9.5l5.6-1.9zM19 14l.9 2.6 2.6.9-2.6.9L19 21l-.9-2.6-2.6-.9 2.6-.9z" />
                 </svg>
-                <span className="max-[700px]:hidden">Import with AI</span>
+                <span className="max-[1280px]:hidden">Import with AI</span>
             </TextureButton>
             {/* Under 700px it floats, round, at the bottom right. */}
             <TextureButton
@@ -89,7 +89,7 @@ function Search() {
     // once typing pauses, so reading it back would drop keys.
     const [text, setText] = useState(() => ui.search)
     return (
-        <div className="relative min-w-[126px] flex-[0_1_220px] max-[700px]:order-last max-[700px]:basis-full">
+        <div className="relative min-w-[126px] flex-[0_1_220px] max-[1280px]:basis-[126px] max-[700px]:order-last max-[700px]:basis-full">
             <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true" className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground">
                 <circle cx="7" cy="7" r="4.5" />
                 <path d="M10.5 10.5 14 14" />
