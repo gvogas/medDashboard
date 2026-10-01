@@ -87,11 +87,11 @@ export function TableView() {
                                     className={cn(
                                         "cursor-pointer hover:bg-muted focus-visible:bg-muted focus-visible:outline-2 focus-visible:outline-[var(--accent)]",
                                         "max-[640px]:grid max-[640px]:grid-cols-[1fr_auto] max-[640px]:gap-x-2 max-[640px]:gap-y-1 max-[640px]:rounded-lg max-[640px]:border max-[640px]:border-border max-[640px]:bg-card max-[640px]:p-2.5 max-[640px]:[&>td]:border-0 max-[640px]:[&>td]:p-0",
-                                        isComplete(it) && "opacity-60",
+                                        isComplete(it) && "bg-[var(--done)] text-[var(--done-ink)] hover:bg-[var(--done)] hover:brightness-[.975]",
                                     )}
                                 >
                                     <td className={td}>
-                                        <b className="font-semibold text-foreground">{it.title}</b>
+                                        <b className={cn("font-semibold", isComplete(it) ? "text-[var(--done-ink)]" : "text-foreground")}>{it.title}</b>
                                         <Steps item={it} className="mt-1" />
                                     </td>
                                     <td className={cn(td, "max-[640px]:text-right")}><TypeChip type={it.type} /></td>

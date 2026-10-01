@@ -137,7 +137,7 @@ export function ClassText({ slot, compact = false }: { slot: ClassSlot; compact?
 
 export const classTitle = ({ course, mtg }: ClassSlot) => [course.code, mtg.kind, mtg.room].filter(Boolean).join(" · ")
 
-const TAG = "inline-flex max-w-full flex-none items-center gap-1 overflow-hidden rounded px-1.5 py-px text-[9.5px] font-bold tracking-[.04em] text-ellipsis whitespace-nowrap uppercase"
+const TAG_BASE = "inline-flex max-w-full flex-none items-center gap-1 overflow-hidden rounded px-1.5 py-px text-[9.5px] font-bold tracking-[.04em] text-ellipsis whitespace-nowrap uppercase"
 const TAG_TONE: Record<string, string> = {
     off: "bg-[var(--chip-bg)] text-ink-2",
     break: "bg-[color-mix(in_srgb,var(--good)_20%,var(--panel))] text-[var(--good)]",
@@ -146,8 +146,11 @@ const TAG_TONE: Record<string, string> = {
 }
 
 /** A school day's tags: no classes, a break, exams, another day's timetable, and markers. */
-export function SchoolTags({ info }: { info: DayInfo | null }) {
+/** A day's school tags: no classes, a break, exams, a swap, markers. `wrap` lets a long one
+    run onto more lines instead of being cut, for the week's narrow date column. */
+export function SchoolTags({ info, wrap = false }: { info: DayInfo | null; wrap?: boolean }) {
     if (!info) return null
+    const TAG = cn(TAG_BASE, wrap && "whitespace-normal break-words leading-[1.25]")
     return (
         <>
             {(info.kind === "off" || info.kind === "break" || info.kind === "exams") && <span className={cn(TAG, TAG_TONE[info.kind])}>{info.label}</span>}

@@ -53,7 +53,7 @@ function DayRow({ day }: { day: Day }) {
                     <span className="text-[12px] text-muted-foreground">{day.dow}</span>
                 </span>
                 {day.isToday && <span className="text-[11.5px] font-medium text-accent-foreground">Today</span>}
-                <SchoolTags info={day.info} />
+                <SchoolTags info={day.info} wrap />
                 <button
                     type="button"
                     onClick={() => newItemOn(day.date)}
