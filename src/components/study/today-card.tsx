@@ -37,6 +37,7 @@ export function TodayCard() {
                 <button
                     type="button"
                     onClick={() => openSession(null)}
+                    data-log-today
                     className="mt-1 inline-flex h-9 cursor-pointer items-center gap-1.5 self-start border-0 bg-transparent p-0 font-[inherit] text-[13px] font-medium text-accent-foreground hover:underline hover:underline-offset-2"
                 >
                     <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden="true" className="size-[11px]"><path d="M8 3v10M3 8h10" /></svg>

@@ -41,6 +41,7 @@ import { normalizeCourse, normalizeItem } from "@/core/model"
 import { normalizeSchool } from "@/core/school"
 import { launch as fireworks } from "@/lib/fireworks"
 import { closeSheet, cover, getSheet, openSheet } from "@/data/overlay"
+import { newSession } from "@/data/session-edit"
 import { flush, TYPING_MS } from "@/data/item-edit"
 import { Sheet } from "./sheet"
 import { Page, Scrim, SheetHost } from "@/components/shell"
@@ -99,6 +100,21 @@ describe("the sheet", () => {
         open({ kind: "item", id: "i1" })
         fireEvent.click(within(dialog()).getByRole("button", { name: "Close" }))
         expect(getSheet()).toBeNull()
+    })
+
+    it("gives focus back to what opened it when the sheet focuses a field itself", () => {
+        show()
+        const opener = document.getElementById("opener")!
+        for (const sheet of [
+            { kind: "session", draft: newSession() },
+            { kind: "new-item", draft: item({ id: "n3", title: "" }) },
+        ] as const) {
+            opener.focus()
+            open(sheet)
+            expect(dialog().contains(document.activeElement)).toBe(true)
+            act(() => closeSheet())
+            expect(document.activeElement).toBe(opener)
+        }
     })
 
     it("goes inert under an overlay", () => {

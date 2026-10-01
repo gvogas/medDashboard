@@ -91,7 +91,7 @@ export function HistoryCard({ className }: { className?: string }) {
                     {h.week && <Stepper unit="week" offset={h.week.offset} range={h.week.range} />}
                     {h.month && <Stepper unit="month" offset={h.month.offset} range={h.month.title} />}
                     {h.term && <span className="font-mono text-[12px] text-ink-2">{h.term.title} · {h.term.range}</span>}
-                    <button type="button" onClick={() => openSession(null)}
+                    <button type="button" onClick={() => openSession(null)} data-log
                         className="ml-auto inline-flex cursor-pointer items-center gap-1.5 rounded-[9px] border border-border bg-[linear-gradient(var(--panel),var(--panel-2))] px-2.5 py-1 font-[inherit] text-[12px] font-semibold text-ink-2 shadow-[var(--shadow-1),inset_0_1px_0_var(--rim-hi)] hover:border-[color-mix(in_srgb,var(--accent)_50%,var(--line))] hover:text-accent-foreground">
                         <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden="true" className="size-3.5"><path d="M8 3v10M3 8h10" /></svg>
                         Log study
