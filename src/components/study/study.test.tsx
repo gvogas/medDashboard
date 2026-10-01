@@ -12,7 +12,7 @@ const fake = vi.hoisted(() => ({
         achievements: [] as unknown[], profile: null as unknown,
     },
     ui: {
-        view: "study", focus: false, bg: "med", search: "", types: {}, course: "all",
+        view: "study", focus: false, bg: "med", search: "", types: {}, course: "all", studyTab: "timer",
         hist: { weekOffset: 0, tab: "week", monthOffset: 0, focusDay: null as string | null, undo: null as unknown },
         lb: null as unknown, lbTab: "week", study: { courseId: null as string | null, itemId: null as string | null },
     },
@@ -69,43 +69,97 @@ beforeEach(() => {
 afterEach(() => {
     cleanup()
     vi.clearAllMocks()
-    Object.assign(fake.ui, { view: "study", focus: false, lb: null, lbTab: "week" })
+    Object.assign(fake.ui, { view: "study", focus: false, lb: null, lbTab: "week", studyTab: "timer" })
     Object.assign(fake.ui.hist, { weekOffset: 0, tab: "week", monthOffset: 0, focusDay: null, undo: null })
 })
 
 const redraw = () => act(() => notify())
-const show = async () => {
+/* the page, and a tab opened as a person would; the waits are the page's lazy load and the leaderboard's first load */
+const show = async (tab?: string) => {
     const r = render(<ViewsHost><Views /></ViewsHost>)
-    await act(async () => {})   /* the leaderboard's first load */
+    await act(async () => {})
+    if (tab) {
+        fireEvent.click(screen.getByRole("tab", { name: tab }))
+        await act(async () => {})
+    }
     return r
 }
 const region = (name: string) => screen.getByRole("region", { name })
 /* a tile; the achievements have a Streak group too, after it */
 const tile = (name: string) => screen.getAllByRole("group", { name })[0]
 const history = () => region("History")
+const tab = (name: string) => screen.getByRole("tab", { name })
+const tabs = () => within(screen.getByRole("tablist", { name: "Study" })).getAllByRole("tab")
 
 describe("the Study page", () => {
-    it("shows the tiles, the timer cards and the three cards, one column's worth in order when narrow", async () => {
+    it("shows the tiles, then four tabs with Timer open: the Ready card and Your flow", async () => {
         await show()
         for (const name of ["Streak", "Today", "This term"]) expect(tile(name)).toBeTruthy()
-        for (const name of ["Ready", "Your flow", "History", "Achievements", "Leaderboard"]) expect(region(name)).toBeTruthy()
-        /* Ready over Your flow, as one piece of the column */
-        const slot = region("Ready").parentElement!
-        expect(slot.contains(region("Your flow"))).toBe(true)
-        /* narrow: the timer cards, History, achievements, leaderboard */
-        const order = (el: Element) => Number(/max-\[900px\]:order-(\d)/.exec(el.closest("[class*='max-[900px]:order-']")!.className)?.[1])
-        expect([slot, history(), region("Achievements"), region("Leaderboard")].map(order)).toEqual([1, 2, 3, 4])
-        /* wide: the timer and the leaderboard on the left, History and achievements on the right */
-        const column = (el: Element) => el.closest("[class*='max-[900px]:contents']")
-        expect(column(slot)).toBe(column(region("Leaderboard")))
-        expect(column(history())).toBe(column(region("Achievements")))
-        expect(column(slot)).not.toBe(column(history()))
+        expect(tabs().map((t) => t.textContent)).toEqual(["Timer", "History", "Achievements", "Leaderboard"])
+        expect(tabs().map((t) => t.getAttribute("aria-selected"))).toEqual(["true", "false", "false", "false"])
+        expect(tabs().map((t) => t.tabIndex)).toEqual([0, -1, -1, -1])
+        const panel = screen.getByRole("tabpanel", { name: "Timer" })
+        expect(tab("Timer").getAttribute("aria-controls")).toBe(panel.id)
+        for (const name of ["Ready", "Your flow"]) expect(within(panel).getByRole("region", { name })).toBeTruthy()
+        for (const name of ["History", "Achievements", "Leaderboard"]) expect(screen.queryByRole("region", { name })).toBeNull()
+    })
+
+    it("opens a tab on a click, and keeps it in the ui", async () => {
+        await show()
+        fireEvent.click(tab("History"))
+        expect(fake.ui.studyTab).toBe("history")
+        expect(tab("History").getAttribute("aria-selected")).toBe("true")
+        expect(within(screen.getByRole("tabpanel", { name: "History" })).getByRole("region", { name: "History" })).toBeTruthy()
+        expect(screen.queryByRole("region", { name: "Ready" })).toBeNull()
+        fireEvent.click(tab("Achievements"))
+        expect(region("Achievements")).toBeTruthy()
+        fireEvent.click(tab("Leaderboard"))
+        await act(async () => {})
+        expect(region("Leaderboard")).toBeTruthy()
+        expect(fake.api.leaderboard).toHaveBeenCalledTimes(1)   /* asked for once its tab opened */
+    })
+
+    it("opens on the tab last shown", async () => {
+        fake.ui.studyTab = "achievements"
+        await show()
+        expect(tab("Achievements").getAttribute("aria-selected")).toBe("true")
+        expect(region("Achievements")).toBeTruthy()
+    })
+
+    it("moves between tabs with the left and right arrows, Home and End", async () => {
+        await show()
+        act(() => tab("Timer").focus())
+        fireEvent.keyDown(tab("Timer"), { key: "ArrowRight" })
+        expect(document.activeElement).toBe(tab("History"))
+        expect(fake.ui.studyTab).toBe("history")
+        fireEvent.keyDown(document.activeElement!, { key: "End" })
+        await act(async () => {})
+        expect(document.activeElement).toBe(tab("Leaderboard"))
+        expect(tab("Leaderboard").tabIndex).toBe(0)
+        fireEvent.keyDown(document.activeElement!, { key: "ArrowRight" })   /* round to the first */
+        expect(document.activeElement).toBe(tab("Timer"))
+        fireEvent.keyDown(document.activeElement!, { key: "ArrowLeft" })
+        await act(async () => {})
+        expect(fake.ui.studyTab).toBe("leaderboard")
+        fireEvent.keyDown(document.activeElement!, { key: "Home" })
+        expect(fake.ui.studyTab).toBe("timer")
+        fireEvent.keyDown(document.activeElement!, { key: "ArrowDown" })   /* a row of tabs: down does nothing */
+        expect(fake.ui.studyTab).toBe("timer")
+    })
+
+    it("lays Achievements full width with the groups two across, and centres the leaderboard", async () => {
+        await show("Achievements")
+        const groups = within(region("Achievements")).getByRole("group", { name: "Study hours" }).parentElement!
+        expect(groups.className).toContain("grid-cols-2")
+        fireEvent.click(tab("Leaderboard"))
+        await act(async () => {})
+        expect(region("Leaderboard").closest(".max-w-\\[760px\\]")!.className).toContain("mx-auto")
     })
 
     it("is not drawn on the focus screen", async () => {
         fake.ui.focus = true
         await show()
-        expect(screen.queryByRole("region", { name: "History" })).toBeNull()
+        expect(screen.queryByRole("region", { name: "Ready" })).toBeNull()
         expect(document.getElementById("views")!.hidden).toBe(true)
     })
 })
@@ -137,7 +191,7 @@ describe("the tiles", () => {
 
 describe("History", () => {
     it("shows the week: total, sessions newest first, and the arrows stop at this week", async () => {
-        await show()
+        await show("History")
         const h = history()
         expect(h.textContent).toContain("21 – 27 Sep")
         expect(h.textContent).toContain("in 2 sessions")
@@ -164,7 +218,7 @@ describe("History", () => {
     })
 
     it("switches to the month: the stats, the calendar, the picked day", async () => {
-        await show()
+        await show("History")
         const h = history()
         fireEvent.click(within(h).getByRole("button", { name: "Month" }))
         expect(within(h).getByRole("button", { name: "Month" }).getAttribute("aria-pressed")).toBe("true")
@@ -192,7 +246,7 @@ describe("History", () => {
     })
 
     it("shows the term; a day opens its month with it picked, in view, and focused", async () => {
-        await show()
+        await show("History")
         const h = history()
         fireEvent.click(within(h).getByRole("button", { name: "Term" }))
         expect(h.textContent).toContain("Term · 31 Aug – 20 Dec")
@@ -220,7 +274,7 @@ describe("History", () => {
     })
 
     it("edits a session, deletes it with Undo in the foot on any tab, and Undo brings it back", async () => {
-        await show()
+        await show("History")
         const h = history()
         const row = () => h.querySelector('[data-session="s1"]') as HTMLElement | null
         fireEvent.click(within(row()!).getByRole("button", { name: "Edit this session" }))
@@ -249,14 +303,14 @@ describe("History", () => {
     })
 
     it("logs study by hand from the head", async () => {
-        await show()
+        await show("History")
         fireEvent.click(within(history()).getByRole("button", { name: "Log study" }))
         expect(actions.openSession).toHaveBeenCalledWith(null)
     })
 
     it("says so with no study at all", async () => {
         fake.data.study_sessions = []
-        await show()
+        await show("History")
         expect(history().textContent).toContain("No study logged this week.")
         fireEvent.click(within(history()).getByRole("button", { name: "Term" }))
         expect(screen.getByText("Studied on 0 days in this range.")).toBeTruthy()
@@ -266,7 +320,7 @@ describe("History", () => {
 
 describe("achievements", () => {
     it("count the badges, list the next three, and give each medal its id", async () => {
-        await show()
+        await show("Achievements")
         const a = region("Achievements")
         expect(a.textContent).toMatch(/\d+ of 24/)
         expect(within(a).getByRole("heading", { name: "Next up" })).toBeTruthy()
@@ -281,7 +335,7 @@ describe("achievements", () => {
 
     it("open a sticker's sheet, and stop offering New at 30", async () => {
         fake.data.achievements = Array.from({ length: 30 }, (_, i) => ({ id: "a" + i, name: "Sticker " + i, sticker: "data:image/webp;base64,AAAA", rule: "hours", courseId: "anat", itemId: null, target: i ? 50 : 1 }))
-        await show()
+        await show("Achievements")
         const own = within(region("Achievements")).getByRole("group", { name: "Your own" })
         expect(own.textContent).toContain("1 / 30")
         expect(document.getElementById("ach-own-a0")).toBeTruthy()
@@ -301,7 +355,7 @@ describe("the leaderboard", () => {
     it("says Loading… until the totals come", async () => {
         let answer!: (v: unknown) => void
         fake.api.leaderboard.mockReturnValue(new Promise((r) => { answer = r }))
-        await show()
+        await show("Leaderboard")
         expect(lb().textContent).toContain("Loading…")
         await act(async () => { answer({ joined: false, week: [], all: [] }) })
         expect(lb().textContent).toContain("See who has studied the most this week.")
@@ -309,14 +363,14 @@ describe("the leaderboard", () => {
 
     it("waits for the app to show before asking, so booting does not cancel it", async () => {
         showSignInState()
-        await show()
+        await show("Leaderboard")
         expect(fake.api.leaderboard).not.toHaveBeenCalled()
         await act(async () => { showApp() })
         expect(fake.api.leaderboard).toHaveBeenCalledTimes(1)
     })
 
     it("joins: busy while it goes, then the list, with focus on Leave", async () => {
-        await show()
+        await show("Leaderboard")
         let finish!: () => void
         fake.api.leaderboardJoin.mockReturnValue(new Promise<void>((r) => { finish = r }))
         fake.api.leaderboard.mockResolvedValue(joined)
@@ -332,7 +386,7 @@ describe("the leaderboard", () => {
 
     it("ranks the joined list with your row from this device, and switches to all-time", async () => {
         fake.ui.lb = { ...joined, at: Date.now() }
-        await show()
+        await show("Leaderboard")
         expect(fake.api.leaderboard).not.toHaveBeenCalled()   /* fresh: not asked again */
         const rows = within(lb()).getAllByRole("listitem")
         /* your 45 + 30 minutes this week, from this device */
@@ -350,7 +404,7 @@ describe("the leaderboard", () => {
     it("leaves, with focus back on Join", async () => {
         fake.ui.lb = { ...joined, at: Date.now() }
         fake.api.leaderboard.mockResolvedValue({ joined: false, week: [], all: [] })
-        await show()
+        await show("Leaderboard")
         fireEvent.click(within(lb()).getByRole("button", { name: "Leave the leaderboard" }))
         expect(fake.api.leaderboardJoin).toHaveBeenCalledWith(false)
         await waitFor(() => expect(document.activeElement).toBe(within(lb()).getByRole("button", { name: "Join the leaderboard" })))
@@ -359,7 +413,7 @@ describe("the leaderboard", () => {
 
     it("says when joining did not go through, keeping focus on Join", async () => {
         fake.api.leaderboardJoin.mockRejectedValue(new Error("offline"))
-        await show()
+        await show("Leaderboard")
         const join = within(lb()).getByRole("button", { name: "Join the leaderboard" }) as HTMLButtonElement
         act(() => join.focus())
         await act(async () => { fireEvent.click(join) })
@@ -371,7 +425,7 @@ describe("the leaderboard", () => {
     it("needs a connection, and tries again when back online", async () => {
         vi.stubGlobal("navigator", { onLine: false })
         fake.api.leaderboard.mockRejectedValue(new Error("offline"))
-        await show()
+        await show("Leaderboard")
         expect(lb().textContent).toContain("The leaderboard needs a connection. Your own hours are still saved.")
         vi.stubGlobal("navigator", { onLine: true })
         fake.api.leaderboard.mockResolvedValue(joined)
@@ -381,7 +435,7 @@ describe("the leaderboard", () => {
 
     it("says when the totals could not be loaded", async () => {
         fake.api.leaderboard.mockRejectedValue(new Error("500"))
-        await show()
+        await show("Leaderboard")
         expect(lb().textContent).toContain("Could not load the leaderboard. Try again in a minute.")
         expect(within(lb()).queryByRole("button")).toBeNull()
     })
