@@ -10,9 +10,8 @@ import * as store from "@/core/store"
 import { courseGrade, neededLabel, targetsFor, ungraded } from "@/core/grades"
 import { useCourses, useItems } from "@/data/store"
 import { closeSheet, onRequestClose } from "@/data/overlay"
-import { courseChanged, forSaving, MAX_CLASSES, newClass, newCourse, semesterNote, semesterOptions } from "@/data/course-edit"
+import { courseChanged, forSaving, MAX_CLASSES, newClass, newCourse, semesterNote, semesterOptions, semesterPicked } from "@/data/course-edit"
 import { schoolCal } from "@/data/query"
-import { courseTerm } from "@/core/school"
 import { deleteCourse } from "@/data/actions"
 import { accent } from "@/components/views/bits"
 import type { Course, Item, Meeting } from "@/data/types"
@@ -84,7 +83,7 @@ export function CourseSheet({ id }: { id: string | null }) {
                     <TextInput id={f + "inst"} value={draft.instructor || ""} maxLength={60} placeholder="Dr. Alvarez" onChange={(e) => edit({ instructor: e.target.value })} />
                     {cal ? <>
                         <Label htmlFor={f + "term"}>Semester</Label>
-                        <Segmented id={f + "term"} label="Semester" value={courseTerm(cal, draft.term)?.name ?? ""} options={semesterOptions(cal)} onChange={(term) => edit({ term })} />
+                        <Segmented id={f + "term"} label="Semester" value={semesterPicked(cal, draft.term)} options={semesterOptions(cal)} onChange={(term) => edit({ term })} />
                         <span className="col-start-2"><Note>{semesterNote(cal, draft.term || "")}</Note></span>
                     </> : <>
                         <Label htmlFor={f + "term"}>Term</Label>

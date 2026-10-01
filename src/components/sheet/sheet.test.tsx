@@ -239,6 +239,20 @@ describe("the course sheet", () => {
         expect(fake.data.courses[0]).toMatchObject({ term: "Winter 2027" })
     })
 
+    it("presses no semester for an old free-text term, so Both semesters can clear it", async () => {
+        fake.cal = TWO_TERMS
+        fake.data.courses = [{ ...fake.data.courses[0], term: "2026 Autumn" } as { id: string }]
+        show()
+        open({ kind: "course", id: "anat" })
+        const sem = screen.getByRole("group", { name: "Semester" })
+        const both = within(sem).getByRole("button", { name: "Both semesters" })
+        expect(within(sem).queryAllByRole("button", { pressed: true })).toEqual([])
+        fireEvent.click(both)
+        expect(both.getAttribute("aria-pressed")).toBe("true")
+        await act(async () => fireEvent.click(screen.getByRole("button", { name: "Save course" })))
+        expect(fake.data.courses[0]).toMatchObject({ term: "" })
+    })
+
     it("keeps the free-text term without a school calendar", () => {
         show()
         open({ kind: "course", id: "anat" })

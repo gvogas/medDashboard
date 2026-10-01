@@ -30,6 +30,11 @@ export const forSaving = (draft: Course): Course =>
 export const semesterOptions = (cal: SchoolCalendar): [string, string][] =>
     [...cal.terms.map((t): [string, string] => [t.name, t.name]), ["", cal.terms.length === 2 ? "Both semesters" : "All year"]]
 
+/** The option pressed for a course's term: its semester, else both. A term typed before the
+    calendar, naming no semester, presses none (" " is never a name), so both can clear it. */
+export const semesterPicked = (cal: SchoolCalendar, term: string | null | undefined): string =>
+    courseTerm(cal, term)?.name ?? (term?.trim() ? " " : "")
+
 /** What the semester picked means for the classes: "Classes run 8 Sep – 18 Dec." */
 export function semesterNote(cal: SchoolCalendar, term: string): string {
     const t = courseTerm(cal, term)
