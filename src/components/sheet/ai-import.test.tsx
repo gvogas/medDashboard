@@ -116,3 +116,53 @@ describe("reading a timetable", () => {
         expect((getSheet() as { plan: ImportPlan }).plan.courses[0]).toMatchObject({ code: "BIOL266", isNew: true, term: "Winter 2027" })
     })
 })
+
+describe("the Import with AI card", () => {
+    const pick = (label: string, file: File) => fireEvent.change(screen.getByLabelText(label), { target: { files: [file] } })
+    const cfg = (i = 0) => ai.readWithAi.mock.calls[i][1] as { what: string; note: string; done: (r: unknown) => void }
+
+    it("offers the three kinds and the reads left, and reads each kind of file", async () => {
+        fake.ui.aiLeft = 7
+        act(() => openSheet({ kind: "ai" }))
+        expect(await screen.findByText("Class schedule")).toBeTruthy()
+        expect(screen.getByText("Course outline")).toBeTruthy()
+        expect(screen.getByText("School calendar")).toBeTruthy()
+        expect(ai.refreshReads).toHaveBeenCalled()
+        expect(screen.getByRole("meter", { name: "AI reads left today" }).getAttribute("aria-valuenow")).toBe("7")
+        expect(screen.getByText(/7 of 10 AI reads left today/)).toBeTruthy()
+
+        pick("Class schedule: Choose a PDF or image", new File(["x"], "t.png", { type: "image/png" }))
+        pick("Course outline: Choose a file", new File(["x"], "o.pdf", { type: "application/pdf" }))
+        pick("School calendar: Choose a PDF", new File(["x"], "c.pdf", { type: "application/pdf" }))
+        expect([0, 1, 2].map((i) => [cfg(i).what, cfg(i).note])).toEqual([["timetable", "aiNote"], ["outline", "aiNote"], ["calendar", "aiNote"]])
+    })
+
+    it("opens an outline's preview that comes back to the card", async () => {
+        act(() => openSheet({ kind: "ai" }))
+        await screen.findByText("Course outline")
+        pick("Course outline: Choose a file", new File(["x"], "o.pdf", { type: "application/pdf" }))
+        act(() => cfg().done({ code: "PHYS205", name: "Waves", classes: [], assessments: [] }))
+        expect(getSheet()).toMatchObject({ kind: "import", back: "ai" })
+        fireEvent.click(await screen.findByRole("button", { name: "Cancel" }))
+        expect(getSheet()).toEqual({ kind: "ai" })
+    })
+
+    it("says what went wrong, and stops offering reads when none are left", async () => {
+        fake.ui.aiLeft = 0
+        fake.ui.aiNote = { text: "Stopped reading.", error: false }
+        act(() => openSheet({ kind: "ai" }))
+        expect(await screen.findByText("Stopped reading.")).toBeTruthy()
+        expect((screen.getByLabelText("Class schedule: Choose a PDF or image") as HTMLInputElement).disabled).toBe(true)
+        expect(screen.getByText(/No AI reads left today/)).toBeTruthy()
+    })
+
+    it("previews pasted CSV, and says when it cannot", async () => {
+        act(() => openSheet({ kind: "ai" }))
+        fireEvent.change(await screen.findByLabelText("Calendar or CSV text"), { target: { value: "nonsense" } })
+        fireEvent.click(screen.getByRole("button", { name: "Preview" }))
+        expect(screen.getByRole("alert").textContent).toMatch(/No rows were found/)
+        fireEvent.change(screen.getByLabelText("Calendar or CSV text"), { target: { value: "type,course,title,date\nexam,PHYS205,Midterm,2026-10-20" } })
+        fireEvent.click(screen.getByRole("button", { name: "Preview" }))
+        expect(getSheet()).toMatchObject({ kind: "import", back: "ai" })
+    })
+})

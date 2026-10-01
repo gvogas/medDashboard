@@ -14,7 +14,7 @@ import { parseCsv } from "@/core/importers/csv"
 import { planImport, planOutline } from "@/core/importers/plan"
 import type { Outline, Plan } from "@/core/importers/plan"
 import { api } from "@/core/api"
-import { readWithAi } from "./ai-read"
+import { readWithAi, type NoteKey } from "./ai-read"
 import { notify } from "@/bridge"
 import { ui } from "./ui"
 import { openSheet } from "./overlay"
@@ -40,14 +40,14 @@ function note(text: string, error = true) {
 }
 
 /** Read a calendar or CSV and open the preview. Returns an error message, or "" when it opened. */
-export function previewImport(text: string, name = ""): string {
+export function previewImport(text: string, name = "", back?: "ai"): string {
     const isIcs = /BEGIN:VCALENDAR/i.test(text)
     let events
     try { events = isIcs ? parseIcs(text) : parseCsv(text) } catch { return "That file could not be read." }
     if (!events.length) return isIcs ? "No events were found in that calendar." : "No rows were found. The first line must be a header such as type,course,title,date,start,end,room,weight."
     const plan = planImport(events, data, isIcs ? "ics" : "csv") as ImportPlan
     if (!plan.courses.length && !plan.items.length) return "Nothing in that file could be imported." + (plan.notes[0] ? " " + plan.notes[0] : "")
-    openSheet({ kind: "import", plan, name })
+    openSheet({ kind: "import", plan, name, ...(back ? { back } : {}) })
     return ""
 }
 
@@ -66,11 +66,11 @@ export function importPasted(text: string) {
 }
 
 /** A course outline, read by the Worker with AI, then previewed. */
-export function readOutlineFile(file: File) {
+export function readOutlineFile(file: File, note: NoteKey = "importNote", back?: "ai") {
     return readWithAi(file, {
         what: "outline", title: "Reading your course outline",
         steps: ["Reading the document", "Finding dates and deadlines", "Matching it to your courses"],
-        flag: "outlineBusy", note: "importNote", refresh: notify,
+        flag: "outlineBusy", note, refresh: notify,
         errors: {
             outline_empty: "No text was found in that file. A scanned outline needs to be a text PDF.",
             outline_unreadable: "The outline could not be understood. Try again, or import a CSV instead.",
@@ -79,7 +79,7 @@ export function readOutlineFile(file: File) {
         done: (outline: Outline) => {
             const plan = planOutline(outline, data, termStart() || "") as ImportPlan
             for (const c of plan.courses) if (c.isNew) c.term = defaultTerm(schoolCal(), c.term || "", today())
-            openSheet({ kind: "import", plan, name: file.name })
+            openSheet({ kind: "import", plan, name: file.name, ...(back ? { back } : {}) })
         },
     })
 }

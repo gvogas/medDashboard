@@ -24,6 +24,7 @@ import { ui, useUi } from "@/data/ui"
 import { beforeSheetClose, closeSheet } from "@/data/overlay"
 import { coatColour, feedLink, GOAL_MAX, GOALS, hm, REST_DAYS, savedValues, syncLine, TABS, themeLabel, timeZone, toggleRest, type SettingsTab } from "@/data/settings"
 import { importFile, importPasted, readOutlineFile } from "@/data/import-edit"
+import { refreshReads } from "@/data/ai-read"
 import { openSchool, readSchoolFile, removeSchool } from "@/data/school-edit"
 import {
     addQuote, disconnectSpotify, exportData, keepSignedIn, removeQuote, resolveConflict, saveCoat, setSettingsTab, showShortcuts, signOut,
@@ -362,7 +363,9 @@ function Reviews({ profile }: { profile: Profile }) {
 function Import() {
     const busy = useUi((u) => u.outlineBusy)
     const note = useUi((u) => u.importNote)
+    const left = useUi((u) => u.aiLeft)
     const [text, setText] = useState("")
+    useEffect(() => { void refreshReads() }, [])
     return (
         <Group title="Import" state=".ics, CSV or outline" id="importGrp">
             <Row>
@@ -370,7 +373,7 @@ function Import() {
                 <FilePick id="outlineFile" label={busy ? "Reading outline…" : "Course outline…"} busy={busy}
                     accept=".pdf,.docx,.doc,.txt,.md,.html,.odt,application/pdf" onFile={(f) => void readOutlineFile(f)} />
             </Row>
-            <Hint>You see everything before it is saved. Outlines are read by AI, up to 10 a day.</Hint>
+            <Hint>You see everything before it is saved. Outlines, timetables and calendars are read by AI, up to 10 a day{left != null ? " (" + left + " left today)" : ""}.</Hint>
             <details className="text-[11.5px]">
                 <summary className="cursor-pointer text-muted-foreground">Paste instead</summary>
                 <Hint>Calendar text, or CSV with the columns <span className="font-mono">type,course,title,date,start,end,room,weight</span>.</Hint>

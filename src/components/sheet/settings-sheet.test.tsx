@@ -48,7 +48,7 @@ vi.mock("@/core/reviews", () => ({ readSetting: () => fake.review, writeSetting:
 vi.mock("@/data/sync-status", () => ({ runReviews: legacy.runReviews }))
 vi.mock("@/data/study-controller", () => ({ savePrefs: legacy.savePrefs }))
 vi.mock("@/data/theme", () => ({ setTheme: legacy.setTheme, setBg: legacy.setBg }))
-vi.mock("@/data/ai-read", () => ({ readWithAi: vi.fn() }))
+vi.mock("@/data/ai-read", () => ({ readWithAi: vi.fn(), refreshReads: vi.fn(async () => {}), asSent: vi.fn(), MAX_FILE: 5 * 1024 * 1024 }))
 vi.mock("@/lib/fireworks", () => ({ launch: vi.fn() }))
 vi.mock("@/data/actions", () => actions)
 

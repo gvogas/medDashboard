@@ -7,7 +7,7 @@ import { today } from "@/core/dates"
 import { courseTerm, normalizeSchool, renamedTerms, validDate } from "@/core/school"
 import { schoolCal } from "@/data/query"
 import { api } from "@/core/api"
-import { readWithAi } from "./ai-read"
+import { readWithAi, type NoteKey } from "./ai-read"
 import { toast } from "./toast"
 import { notify } from "@/bridge"
 import { ui } from "./ui"
@@ -67,10 +67,10 @@ export function openSchool(read: unknown, source: string | null = null) {
 }
 
 /** A calendar file was picked: read it with AI, then check it in the sheet. */
-export function readSchoolFile(file: File) {
+export function readSchoolFile(file: File, note: NoteKey = "schoolNote") {
     return readWithAi(file, {
         what: "calendar", title: "Reading your school calendar", steps: ["Reading the PDF", "Finding semesters and breaks", "Checking the dates"],
-        flag: "schoolBusy", note: "schoolNote", refresh: notify,
+        flag: "schoolBusy", note, refresh: notify,
         errors: {
             outline_empty: "No text was found in that file. A scanned calendar needs to be a text PDF.",
             school_unreadable: "No semesters could be found in that calendar. Try again, or check it is the academic calendar.",

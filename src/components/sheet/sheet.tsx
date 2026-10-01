@@ -20,6 +20,7 @@ const CourseSheet = lazyNamed(() => import("./course-sheet"), "CourseSheet")
 const SettingsSheet = lazyNamed(() => import("./settings-sheet"), "SettingsSheet")
 const ImportSheet = lazyNamed(() => import("./import-sheet"), "ImportSheet")
 const ScheduleSheet = lazyNamed(() => import("./schedule-sheet"), "ScheduleSheet")
+const AiSheet = lazyNamed(() => import("./ai-sheet"), "AiSheet")
 const SchoolSheet = lazyNamed(() => import("./school-sheet"), "SchoolSheet")
 const SessionSheet = lazyNamed(() => import("./session-sheet"), "SessionSheet")
 const AchievementSheet = lazyNamed(() => import("./achievement-sheet"), "AchievementSheet")
@@ -87,7 +88,8 @@ export function Sheet() {
                 {shown?.kind === "new-item" && <ItemSheet key={shown.draft.id} draft={shown.draft} />}
                 {shown?.kind === "course" && <CourseSheet key={shown.id ?? "new"} id={shown.id} />}
                 {shown?.kind === "settings" && <SettingsSheet tab={shown.tab} focus={shown.focus} />}
-                {shown?.kind === "import" && <ImportSheet key={shown.name} plan={shown.plan} name={shown.name} />}
+                {shown?.kind === "import" && <ImportSheet key={shown.name} plan={shown.plan} name={shown.name} back={shown.back} />}
+                {shown?.kind === "ai" && <AiSheet />}
                 {shown?.kind === "schedule" && <ScheduleSheet key={shown.name} plan={shown.plan} name={shown.name} />}
                 {shown?.kind === "school" && <SchoolSheet draft={shown.draft} />}
                 {shown?.kind === "session" && <SessionSheet key={shown.draft.id} draft={shown.draft} />}
