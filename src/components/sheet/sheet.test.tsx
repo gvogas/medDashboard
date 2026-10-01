@@ -113,6 +113,29 @@ describe("the sheet", () => {
 })
 
 describe("the item sheet", () => {
+    it("repeats a lab every week until the end of its semester, or later", async () => {
+        fake.cal = TWO_TERMS
+        fake.data.items = [item({ id: "l1", type: "lab", title: "Histology lab" })]
+        show()
+        open({ kind: "item", id: "l1" })
+        const rep = screen.getByRole("group", { name: "Repeat" })
+        expect(within(rep).getByRole("button", { name: "Just once" }).getAttribute("aria-pressed")).toBe("true")
+        await act(async () => fireEvent.click(within(rep).getByRole("button", { name: "Every week" })))
+        expect(fake.data.items[0]).toMatchObject({ recur: "weekly", weekday: 3, recurUntil: "2026-12-18" })
+        const until = screen.getByRole("combobox", { name: "Until" }) as HTMLSelectElement
+        expect(Array.from(until.options).map((o) => o.text)).toEqual(["the end of Fall 2026 · 18 Dec", "the end of Winter 2027 · 23 Apr", "no end"])
+        await act(async () => fireEvent.change(until, { target: { value: "2027-04-23" } }))
+        expect(fake.data.items[0]).toMatchObject({ recurUntil: "2027-04-23" })
+        await act(async () => fireEvent.click(within(rep).getByRole("button", { name: "Just once" })))
+        expect(fake.data.items[0]).toMatchObject({ recur: null, weekday: null, recurUntil: null })
+    })
+
+    it("offers no repeat on an assignment", () => {
+        show()
+        open({ kind: "item", id: "i1" })
+        expect(screen.queryByRole("group", { name: "Repeat" })).toBeNull()
+    })
+
     it("saves the title once typing pauses, and at once on close", async () => {
         show()
         open({ kind: "item", id: "i1" })

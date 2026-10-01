@@ -6,7 +6,8 @@ import { useSyncExternalStore } from "react"
 import * as store from "@/core/store"
 import { data } from "@/core/store"
 import { classRoom, normalizeItem, shiftEnd, statusesFor } from "@/core/model"
-import { diffDays, parse, today, DOW } from "@/core/dates"
+import { dayMonth, diffDays, parse, today, DOW } from "@/core/dates"
+import { repeatEnds, type SchoolCalendar, type Term } from "@/core/school"
 import { nextReview } from "@/core/reviews"
 import { launch as fireworks } from "@/lib/fireworks"
 import { useItems } from "./store"
@@ -39,17 +40,27 @@ export const withStatus = (it: Item, status: string): Pick<Item, "status" | "com
 
 export type ItemField = keyof Item
 
+/** The types whose card offers Repeat. */
+export const REPEATS = ["office", "tutoring", "lab"]
+export const REPEAT_CHOICES = [["once", "Just once"], ["weekly", "Every week"]] as const
+
+/** "the end of Fall 2026 · 18 Dec", or "the end of the school year · 22 Dec". */
+export const untilLabel = (x: { end: string; term: Term | null }) =>
+    "the end of " + (x.term ? x.term.name : "the school year") + " · " + dayMonth(x.end)
+
 /**
  * An edit to one field and everything it brings along: the weekday follows the date on a
- * weekly item; the end follows the start; the course or type fill in the title; a status
+ * weekly item; a weekly item ends with its semester by default; the end follows the start; the course or type fill in the title; a status
  * the new type lacks goes back to its first; an exam on a class day takes the class's room
  * unless one was typed. Returns the fields to save.
  */
-export function deriveEdit(it: Item, field: ItemField, value: unknown, courseOf: (id: string | null) => Course | null): Partial<Item> {
+export function deriveEdit(it: Item, field: ItemField, value: unknown, courseOf: (id: string | null) => Course | null, cal: SchoolCalendar | null = null): Partial<Item> {
     const patch: Partial<Item> = {}
     if (field === "recur") {
         const on = !!value
-        Object.assign(patch, { recur: on ? "weekly" : null, weekday: on ? parse(it.date).getDay() : null, recurUntil: on ? it.recurUntil : null })
+        /* switched on, it repeats until the end of the item's semester unless an end was set */
+        const until = it.recurUntil || repeatEnds(cal, it.date)[0]?.end || null
+        Object.assign(patch, { recur: on ? "weekly" : null, weekday: on ? parse(it.date).getDay() : null, recurUntil: on ? until : null })
     } else if (field === "weight") {
         const n = Number(value)
         patch.weight = value === "" || !(n > 0) ? null : Math.min(100, n)

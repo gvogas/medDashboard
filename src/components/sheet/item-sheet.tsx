@@ -5,8 +5,9 @@
 import { useEffect, useId, useState } from "react"
 import { cn } from "@/lib/utils"
 import { baseOf, httpUrl, isComplete, isOpen, isOverdue, isTest, normalizeItem, statusesFor, tmeta, typeList, uid } from "@/core/model"
-import { hhmm, parse, today, DOW } from "@/core/dates"
+import { hhmm, shortDate, today, DOW } from "@/core/dates"
 import * as store from "@/core/store"
+import { repeatEnds } from "@/core/school"
 import { GRADABLE } from "@/core/grades"
 import { fillTopics, prepLabel, prepPace } from "@/core/prep"
 import { schoolCal, termStart } from "@/data/query"
@@ -15,12 +16,12 @@ import { useCourses, useItems, useStudySessions } from "@/data/store"
 import { studiedFor } from "@/data/study"
 import { useUi } from "@/data/ui"
 import { beforeSheetClose, closeSheet, updateDraft } from "@/data/overlay"
-import { celebrate, chainReview, countdown, deriveEdit, editNow, flush, linkUrl, typeInto, useItemView, type ItemField } from "@/data/item-edit"
+import { celebrate, chainReview, countdown, deriveEdit, editNow, flush, linkUrl, REPEAT_CHOICES, REPEATS, typeInto, untilLabel, useItemView, type ItemField } from "@/data/item-edit"
 import { deleteItem, openCourse } from "@/data/actions"
 import { StatusChip, TypeChip } from "@/components/views/bits"
 import type { ChecklistEntry, Course, Item } from "@/data/types"
 import {
-    Button, Checkbox, DateInput, Fields, IconButton, Label, Meter, Note, NumberInput, RemoveButton, Section, Segmented, Select,
+    Button, DateInput, Fields, IconButton, Label, Meter, Note, NumberInput, RemoveButton, Section, Segmented, Select,
     SheetBody, SheetFoot, SheetHead, TextArea, TextInput, TitleArea, CONTROL,
 } from "./fields"
 import { TimeField } from "./time-field"
@@ -54,10 +55,12 @@ export function ItemSheet({ id, draft }: { id?: string; draft?: Item }) {
 
     const m = tmeta(it.type)
     const c = courseOf(it.courseId)
+    const cal = schoolCal()
+    const ends = repeatEnds(cal, it.date)
 
     /** An edit to a field, with what it brings along; `from` is what was pressed, for the show. */
     const set = (field: ItemField, value: unknown, from?: Element) => {
-        const patch = deriveEdit(it, field, value, courseOf)
+        const patch = deriveEdit(it, field, value, courseOf, cal)
         if (isNew) { updateDraft(normalizeItem({ ...it, ...patch }) as Item); return }
         if (TYPED.includes(field)) { typeInto(it.id, patch); return }
         const finishing = field === "status" && !isComplete(it) && isComplete({ ...it, ...patch })
@@ -79,7 +82,6 @@ export function ItemSheet({ id, draft }: { id?: string; draft?: Item }) {
     const prep = !isNew && isTest(it.type) && isOpen(it) ? prepPace(it, today()) : null
     const lectures = !!c && (c.meetings || []).some((x) => x.kind === "Lecture")
     const studied = isNew ? 0 : studiedFor(sessions, it.id)
-    const weekday = it.recur === "weekly" ? it.weekday ?? 0 : parse(it.date).getDay()
     const next = c && (c.meetings || []).length ? [...c.meetings].sort((a, b) => (a.weekday + 6) % 7 - (b.weekday + 6) % 7)[0] : null
 
     return (
@@ -155,12 +157,18 @@ export function ItemSheet({ id, draft }: { id?: string; draft?: Item }) {
                         <Label htmlFor={f + "grade"}>Grade</Label>
                         <NumberInput id={f + "grade"} min={0} max={100} placeholder="%" value={it.grade ?? ""} onChange={(e) => set("grade", e.target.value)} />
                     </>}
-                    {(it.type === "office" || it.type === "tutoring") && <>
-                        <Label htmlFor={f + "recur"}>Repeats</Label>
-                        <Checkbox id={f + "recur"} checked={it.recur === "weekly"} onChange={(on) => set("recur", on)}>every week on {DOW[weekday]}</Checkbox>
+                    {REPEATS.includes(it.type) && <>
+                        <Label htmlFor={f + "recur"}>Repeat</Label>
+                        <Segmented id={f + "recur"} label="Repeat" value={it.recur === "weekly" ? "weekly" : "once"} options={REPEAT_CHOICES} onChange={(v) => set("recur", v === "weekly")} />
                         {it.recur === "weekly" && <>
                             <Label htmlFor={f + "until"}>Until</Label>
-                            <DateInput id={f + "until"} value={it.recurUntil ?? ""} onChange={(e) => set("recurUntil", e.target.value)} />
+                            {ends.length
+                                ? <Select id={f + "until"} value={it.recurUntil ?? ""} onChange={(e) => set("recurUntil", e.target.value)}>
+                                    {ends.map((x) => <option key={x.end} value={x.end}>{untilLabel(x)}</option>)}
+                                    {it.recurUntil && !ends.some((x) => x.end === it.recurUntil) && <option value={it.recurUntil}>{shortDate(it.recurUntil)}</option>}
+                                    <option value="">no end</option>
+                                </Select>
+                                : <DateInput id={f + "until"} value={it.recurUntil ?? ""} onChange={(e) => set("recurUntil", e.target.value)} />}
                         </>}
                         {it.type === "office" && <>
                             <Label htmlFor={f + "dept"}>Dept</Label>
