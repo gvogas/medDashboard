@@ -17,20 +17,20 @@ import type { IcsEvent } from './ics.ts';
 export interface ImportRow { type: string; course: string; courseName?: string; title: string; date: string; start: string; end: string; room?: string; weight: number | null; kind?: string; weekday?: number }
 
 /** What the plan is checked against: the store's courses and items. */
-export interface PlanData { courses?: Pick<Course, 'id' | 'code' | 'name' | 'color' | 'meetings'>[]; items?: Pick<Item, 'type' | 'title' | 'date' | 'start' | 'courseId' | 'recur' | 'weekday'>[] }
+export interface PlanData { courses?: (Pick<Course, 'id' | 'code' | 'name' | 'color' | 'meetings'> & { term?: string })[]; items?: Pick<Item, 'type' | 'title' | 'date' | 'start' | 'courseId' | 'recur' | 'weekday'>[] }
 
 export interface PlanMeeting extends Meeting { include: boolean }
 export interface PlanCourse {
   id: string; code: string; name: string; color: string; isNew: boolean; meetings: PlanMeeting[];
   /* the classes it already has, while planning */
   existing?: Meeting[];
-  /* a new course from an outline */
+  /* a new course from an outline: its teacher and whether to keep it with nothing ticked; term: the semester to save (a new course's, or the one picked for a course that exists; undefined leaves it as it is) */
   instructor?: string; term?: string; keep?: boolean;
 }
 /** An item to create, ready for normalizeItem(). */
 export interface PlanRow { type: string; title: string; courseId: string | null; date: string; start: string; end: string; where: string; status: string; weight: number | null; recur?: 'weekly'; weekday?: number }
 export interface PlanItem { include: boolean; duplicate?: boolean; week?: number; row: PlanRow }
-export interface Plan { courses: PlanCourse[]; items: PlanItem[]; notes: string[]; week1?: string; termStart?: string }
+export interface Plan { courses: PlanCourse[]; items: PlanItem[]; notes: string[]; week1?: string; termStart?: string; kind?: 'outline' | 'schedule' }
 
 /** A course outline as the Worker reads it (worker/outline.js). */
 export interface Outline {
@@ -38,6 +38,12 @@ export interface Outline {
   classes: { kind: string; weekday: number; start: string; end: string; room: string }[];
   officeHours?: { weekday: number; start: string; end: string; room?: string }[];
   assessments: { type: string; title: string; date?: string; week?: number; start: string; end: string; room?: string; weight: number | null }[];
+}
+
+/** A class schedule as the Worker reads it (worker/schedule.js). */
+export interface Schedule {
+  term?: string; truncated?: boolean;
+  courses: { code: string; name: string; classes: { kind: string; weekday: number; start: string; end: string; room: string }[] }[];
 }
 
 /* A class or a single item on its way into the plan. */
@@ -196,6 +202,7 @@ export function planOutline(o: Outline, data: PlanData, termStart = ''): Plan {
     plan.courses.push(pc);
   }
   if (pc.isNew) { pc.instructor = o.instructor || ''; pc.term = o.term || ''; pc.name = name.slice(0, 80); pc.keep = true; }
+  else pc.term = (data.courses || []).find((c) => c.id === pc!.id)?.term ?? '';
 
   plan.week1 = termStart || o.termStart || '';
   const from = plan.week1 || iso(new Date());
@@ -223,6 +230,7 @@ export function planOutline(o: Outline, data: PlanData, termStart = ''): Plan {
   }
   plan.termStart = o.termStart || '';
   if (o.truncated) plan.notes.push('The outline was long, so only the first part was read. Check the end of it by hand.');
+  plan.kind = 'outline';
   return plan;
 }
 
@@ -245,4 +253,40 @@ export function planSummary(plan: Plan): string {
   const ni = plan.items.filter((i) => i.include).length;
   const part = (n: number, one: string, many: string) => n + ' ' + (n === 1 ? one : many);
   return [nc ? part(nc, 'new course', 'new courses') : '', part(nm, 'class', 'classes'), part(ni, 'item', 'items')].filter(Boolean).join(' · ');
+}
+
+/**
+ * A class schedule read by the Worker → the plan: each course read matched to one of yours
+ * by code, else by name ("Matches your course"), or proposed ("New course"); its classes as
+ * meetings, ticked. Codes are compared without case or spaces, so a course the timetable
+ * lists twice ("MATH 205", "math205") becomes one course with both lists of classes.
+ * planImport leaves out the classes a course already has, or that it lists twice, and keeps
+ * a course to 12. Every course found is listed, even when all its classes are there, so that
+ * its semester can still be set: one that exists keeps its own `term`, a new one gets `term`.
+ */
+export function planSchedule(s: Schedule, data: PlanData, term = ''): Plan {
+  const existing = data.courses || [];
+  const norm = (t: unknown) => String(t || '').replace(/\s+/g, ' ').trim().toLowerCase();
+  const key = (t: unknown) => String(t || '').replace(/\s+/g, '').toUpperCase();
+  const rows: ImportRow[] = [];
+  const matched: string[] = [];
+  for (const c of s.courses) {
+    const given = key(c.code);
+    const live = existing.find((x) => given && key(x.code) === given) || existing.find((x) => c.name && norm(x.name) === norm(c.name));
+    if (live) matched.push(live.id);
+    const code = (live ? live.code : given || String(c.name || '').replace(/[^A-Za-z0-9]/g, '').slice(0, 4) || 'NEW').toUpperCase().slice(0, 8);
+    for (const k of c.classes) {
+      rows.push({ type: 'class', kind: k.kind, weekday: k.weekday, course: code, courseName: live ? live.name : (c.name || code), title: k.kind, date: '', start: k.start, end: k.end, room: k.room, weight: null });
+    }
+  }
+  const plan = planImport(rows, data, 'csv');
+  for (const id of matched) {
+    if (plan.courses.some((c) => c.id === id)) continue;
+    const live = existing.find((x) => x.id === id)!;
+    plan.courses.push({ id: live.id, code: live.code, name: live.name, color: live.color, isNew: false, meetings: [] });
+  }
+  for (const pc of plan.courses) pc.term = pc.isNew ? term : (existing.find((x) => x.id === pc.id)?.term ?? '');
+  if (s.truncated) plan.notes.push('The timetable was long, so only the first part was read. Check the last courses by hand.');
+  plan.kind = 'schedule';
+  return plan;
 }

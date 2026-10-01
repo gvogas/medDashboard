@@ -96,6 +96,26 @@ describe('browser API response contracts', () => {
     await expect(client.api.get('quotes', saved.id)).rejects.toMatchObject({ status: 404 });
     expect(await client.api.signOut()).toBeNull();
   });
+
+  it('stops an AI read when its own signal is aborted, and sends a picture as it is', async () => {
+    let seen;
+    vi.stubGlobal('fetch', vi.fn((path, init) => {
+      seen = { path, init };
+      return new Promise((_, reject) => init.signal.addEventListener('abort', () => reject(init.signal.reason)));
+    }));
+    const stop = new AbortController();
+    const read = client.api.readSchedule(new Blob(['x'], { type: 'image/jpeg' }), { name: 't.png', today: '2026-10-01' }, stop.signal);
+    stop.abort(new DOMException('Stopped', 'AbortError'));
+    await expect(read).rejects.toMatchObject({ name: 'AbortError' });
+    expect(seen.path).toBe('/api/ai/schedule?name=t.png&today=2026-10-01');
+    expect(seen.init.headers['content-type']).toBe('image/jpeg');
+  });
+
+  it('asks how many AI reads are left', async () => {
+    respond({ left: 7, limit: 10 });
+    expect(await client.api.aiReads()).toEqual({ left: 7, limit: 10 });
+    expect(fetch.mock.calls[0][0]).toBe('/api/ai/reads');
+  });
 });
 
 describe('browser API cancellation', () => {
