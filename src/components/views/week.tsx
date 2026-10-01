@@ -9,7 +9,7 @@ import { course as courseOf } from "@/core/store"
 import { useWeek, tintOf, type Day, type Entry } from "@/data/views"
 import { newItemOn, openItem, quickAddTask, toggleTask } from "@/data/actions"
 import type { Course, Item } from "@/data/types"
-import { accent, classTitle, Empty, HeadNote, Panel, ScheduleTabs, SchoolTags, statusText, Steps, TINT } from "./bits"
+import { accent, classTitle, Empty, hasSchoolTags, HeadNote, Panel, ScheduleTabs, SchoolTags, statusText, Steps, TINT } from "./bits"
 
 export function WeekView() {
     const { week, officeHours, tasks, empty, schedule } = useWeek()
@@ -53,7 +53,6 @@ function DayRow({ day }: { day: Day }) {
                     <span className="text-[12px] text-muted-foreground">{day.dow}</span>
                 </span>
                 {day.isToday && <span className="text-[11.5px] font-medium text-accent-foreground">Today</span>}
-                <SchoolTags info={day.info} wrap />
                 <button
                     type="button"
                     onClick={() => newItemOn(day.date)}
@@ -63,6 +62,8 @@ function DayRow({ day }: { day: Day }) {
                 >+</button>
             </div>
             <div className="flex min-w-0 flex-col gap-0.5">
+                {/* the school day's tags, in the wide column: the date column cuts long ones */}
+                {hasSchoolTags(day.info) && <span className="flex flex-wrap gap-1 px-2.5 pt-1.5 pb-0.5"><SchoolTags info={day.info} /></span>}
                 {day.entries.length
                     ? day.entries.map((e) => <EntryRow key={e.key} entry={e} />)
                     : <span className="px-2.5 py-1.5 text-[13px] text-muted-foreground">{tint === "off" || tint === "break" ? "" : "Nothing scheduled"}</span>}
