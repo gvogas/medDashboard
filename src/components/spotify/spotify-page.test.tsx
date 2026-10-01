@@ -15,8 +15,10 @@ import { cooldownMessage } from "@/data/spotify"
 import { state as web } from "@/data/spotify/web-player"
 import { SpotifyPage } from "./spotify-page"
 import { SidebarPlayer } from "./sidebar-player"
+import { Icon } from "./bits"
 import { album, artist, fakeApi, page, playlist, resetEngine, results, setPlayer, track } from "./test-spotify"
 import { showApp } from "@/data/signin"
+import { ui } from "@/data/ui"
 
 const WEIGHTLESS = track("t1", { title: "Weightless", progressMs: 191000, url: "https://open.spotify.com/track/t1" })
 
@@ -28,7 +30,7 @@ beforeEach(() => {
     document.body.innerHTML = '<div id="app"></div>'
     showApp()   /* the page's keys work only while the app shows */
 })
-afterEach(() => { cleanup(); vi.useRealTimers() })
+afterEach(() => { cleanup(); vi.useRealTimers(); ui.bg = "med" })
 
 const show = () => render(<SpotifyPage />, { container: document.getElementById("app")! })
 const card = (name: string) => within(screen.getByRole("region", { name }))
@@ -41,7 +43,28 @@ describe("the Spotify page", () => {
         setPlayer({ loaded: true })
         expect(screen.getByText("Spotify is not connected")).toBeTruthy()
         expect(screen.getByRole("link", { name: "Connect Spotify" }).getAttribute("href")).toBe("/api/spotify/connect")
+        expect(screen.getByRole("link", { name: "Connect Spotify" }).className).not.toContain("gradient")
+        expect(screen.getByRole("link", { name: "Connect Spotify" }).className).toContain("bg-primary")
         expect(api.spotifyPlaylists).not.toHaveBeenCalled()
+    })
+
+    it("lays the page out as the prototype: the player 400px wide beside the browser when wide, one column on a phone", () => {
+        show()
+        const grid = screen.getByRole("region", { name: "Player" }).closest(".grid")!
+        expect(grid.className).toContain("[grid-template-columns:minmax(280px,36%)_minmax(0,1fr)]")
+        expect(grid.className).toContain("min-[1280px]:[grid-template-columns:400px_minmax(0,1fr)]")
+        expect(grid.className).toContain("max-[760px]:flex-col")
+        expect(grid.children[0].contains(screen.getByRole("region", { name: "Now playing" }))).toBe(true)
+        expect(grid.children[1].contains(screen.getByRole("region", { name: "Find music" }))).toBe(true)
+    })
+
+    it("on a phone, keeps the player folded behind the pill until ▴ Music", () => {
+        show()
+        const playerCard = screen.getByRole("region", { name: "Player" }).parentElement!
+        expect(playerCard.className).toContain("max-[760px]:hidden")
+        fireEvent.click(within(screen.getByRole("region", { name: "Music" })).getByRole("button", { name: "▴ Music" }))
+        expect(playerCard.className).not.toContain("max-[760px]:hidden")
+        expect(within(screen.getByRole("region", { name: "Music" })).getByRole("button", { name: "▾ Music" }).getAttribute("aria-expanded")).toBe("true")
     })
 
     it("shows what plays and the library once connected", async () => {
@@ -83,12 +106,15 @@ describe("the Spotify page", () => {
         show()
         const player = card("Player")
         expect(await player.findByText("Night Owl")).toBeTruthy()
-        expect(player.getByText("2 next")).toBeTruthy()
+        expect(player.getByText("2 queued")).toBeTruthy()
+        expect(player.getByRole("group", { name: "Show" }).className).toContain("bg-[var(--chip-bg)]")
         expect(player.getByText(/Spotify lets apps add to the queue and skip, but not remove or reorder/)).toBeTruthy()
         expect(player.getByRole("button", { name: "Up next" }).getAttribute("aria-pressed")).toBe("true")
 
         fireEvent.click(player.getByRole("button", { name: "Recent" }))
         expect(await player.findByText("Holocene")).toBeTruthy()
+        expect(player.getByText("Last 1")).toBeTruthy()
+        expect(player.queryByText("2 queued")).toBeNull()
         expect(player.queryByText("Night Owl")).toBeNull()
         fireEvent.click(player.getByRole("button", { name: "Play Holocene" }))
         /* recently played has no context: it plays from the track picked on */
@@ -116,14 +142,14 @@ describe("the Spotify page", () => {
         expect(api.spotifyPlaylistTracks).toHaveBeenCalledWith("pl1", 0)
         expect(music.getByRole("heading", { name: "Study mix" })).toBeTruthy()
         expect(music.getByText("30 tracks")).toBeTruthy()
-        /* the track playing shows the equaliser in place of its length */
+        /* the track playing shows the equaliser in place of its number */
         expect(music.getAllByRole("img", { name: "Playing" })).toHaveLength(1)
 
         fireEvent.change(music.getByRole("searchbox", { name: "Filter tracks" }), { target: { value: "song 1" } })
         expect(music.getByText("1 of 9 loaded")).toBeTruthy()
         expect(music.getByText("Song 2").closest("[hidden]")).toBeTruthy()
 
-        fireEvent.click(music.getByRole("button", { name: "▶ Play all" }))
+        fireEvent.click(music.getByRole("button", { name: "Play all" }))
         await waitFor(() => expect(api.spotifyPlay).toHaveBeenCalledWith({ uri: null, contextUri: "spotify:playlist:pl1" }))
         fireEvent.click(music.getByRole("button", { name: "Show more · 21 left" }))
         await waitFor(() => expect(api.spotifyPlaylistTracks).toHaveBeenLastCalledWith("pl1", 9))
@@ -131,6 +157,40 @@ describe("the Spotify page", () => {
         fireEvent.click(music.getByRole("button", { name: "‹ Back" }))
         expect(music.getByRole("button", { name: "Open Study mix" })).toBeTruthy()
         expect(music.queryByText("Song 0")).toBeNull()
+    })
+
+    it("opens a playlist as the prototype: its cover, kind and name in the serif, numbered rows with ▶ and +", async () => {
+        api.spotifyPlaylists.mockResolvedValue(page([playlist("pl1", "Study mix", { art: "https://i.scdn.co/image/pl1" })]))
+        api.spotifyPlaylistTracks.mockResolvedValue(page([track("s0", { title: "Song 0" }), WEIGHTLESS, track("s2", { title: "Song 2" })]))
+        show()
+        const music = card("Browse music")
+        fireEvent.click(await music.findByRole("button", { name: "Open Study mix" }))
+        await music.findByText("Song 0")
+        expect(music.getByText("Playlist")).toBeTruthy()
+        expect(music.getByRole("heading", { name: "Study mix" }).className).toContain("font-serif")
+        expect(document.querySelector('img[src="https://i.scdn.co/image/pl1"]')).toBeTruthy()
+        expect(music.getByRole("button", { name: "Play all" }).querySelector("svg")).toBeTruthy()
+        expect(music.getByText("Title")).toBeTruthy()       /* the columns' header */
+
+        const row = music.getByText("Song 2").closest("[class*='grid-template-columns']") as HTMLElement
+        expect(within(row).getByText("3")).toBeTruthy()
+        expect(within(row).getByRole("button", { name: "Play Song 2" }).querySelector("svg")).toBeTruthy()
+        expect(within(row).getByRole("button", { name: "Queue Song 2" }).textContent).toBe("+")
+        /* the track playing: tinted, the equaliser in place of its number */
+        const now = music.getByText("Weightless", { selector: "b" }).closest("[data-now]") as HTMLElement
+        expect(now.className).toContain("bg-secondary")
+        expect(within(now).getByRole("img", { name: "Playing" })).toBeTruthy()
+        expect(within(now).queryByText("2")).toBeNull()
+    })
+
+    it("opens Liked Songs with the heart for a cover and says what it is", async () => {
+        api.spotifyPlaylistTracks.mockResolvedValue(page([track("l1"), track("l2")]))
+        show()
+        const music = card("Browse music")
+        fireEvent.click(await music.findByRole("button", { name: "Open Liked Songs" }))
+        await music.findByText("l1")
+        expect(music.getByText("Your saved tracks")).toBeTruthy()
+        expect(music.getByRole("heading", { name: "Liked Songs" })).toBeTruthy()
     })
 
     it("plays Liked Songs from the track picked, as it has no context", async () => {
@@ -206,6 +266,32 @@ describe("the Spotify page", () => {
         await waitFor(() => expect(music.getByRole("button", { name: "Queue Night Owl" }).textContent).toBe("+"), { timeout: 3000 })
     })
 
+    it("draws the player as the prototype: a square cover, the title in the serif, the progress as a progressbar, play in the accent", () => {
+        show()
+        const player = card("Player")
+        const now = within(player.getByRole("region", { name: "Now playing" }))
+        const bar = now.getByRole("progressbar", { name: "Track progress" })
+        expect(bar.getAttribute("aria-valuenow")).toBe("191")
+        expect(bar.getAttribute("aria-valuemax")).toBe("489")
+        expect(bar.getAttribute("aria-valuetext")).toBe("3:11 of 8:09")
+        expect(bar.querySelector("i")!.style.width).toBe((191000 / 489000) * 100 + "%")
+        expect(now.getByRole("link", { name: "Weightless" }).className).toContain("font-serif")
+        expect(now.getByRole("img", { name: "Playing" })).toBeTruthy()
+        expect(now.getByRole("button", { name: "Pause" }).className).toContain("bg-primary")
+        expect(now.getByRole("button", { name: "Shuffle" }).querySelector("svg")).toBeTruthy()
+        expect(now.getByRole("button", { name: "Repeat is off" }).querySelector("svg")).toBeTruthy()
+        /* paused, the equaliser goes */
+        setPlayer({ playing: false })
+        expect(now.queryByRole("img", { name: "Playing" })).toBeNull()
+        /* a report past the track's length never puts the value over the most */
+        setPlayer({ track: { ...WEIGHTLESS, progressMs: 500000 } })
+        expect(bar.getAttribute("aria-valuenow")).toBe("500")
+        expect(bar.getAttribute("aria-valuemax")).toBe("500")
+        /* off, the controls keep still on hover */
+        setPlayer({ track: null, connected: true })
+        expect(now.getByRole("button", { name: "Previous" }).className).toContain("disabled:hover:text-foreground")
+    })
+
     it("plays, pauses, skips, shuffles and repeats", async () => {
         show()
         const player = card("Player")
@@ -221,11 +307,13 @@ describe("the Spotify page", () => {
         const shuffle = player.getByRole("button", { name: "Shuffle" })
         fireEvent.click(shuffle)
         expect(shuffle.getAttribute("aria-pressed")).toBe("true")
+        expect(shuffle.className).toContain("bg-secondary")
         expect(api.spotifyShuffle).toHaveBeenCalledWith(true)
         fireEvent.click(player.getByRole("button", { name: "Repeat is off" }))
         expect(api.spotifyRepeat).toHaveBeenLastCalledWith("context")
         fireEvent.click(player.getByRole("button", { name: "Repeating the playlist or album" }))
-        expect(player.getByRole("button", { name: "Repeating this track" }).textContent).toBe("↻¹")
+        expect(player.getByRole("button", { name: "Repeating this track" }).textContent).toBe("1")
+        expect(player.getByRole("button", { name: "Repeating this track" }).getAttribute("data-mode")).toBe("track")
         expect(api.spotifyRepeat).toHaveBeenLastCalledWith("track")
     })
 
@@ -312,6 +400,65 @@ describe("the Spotify page", () => {
         setPlayer({ track: track("t9", { title: "Holocene" }) })
         await waitFor(() => expect(api.spotifyQueue).toHaveBeenCalledTimes(2))
     })
+
+    it("marks the device with Spotify's dot and the one playing with a tick, and draws no emoji", async () => {
+        Object.assign(web, { status: "ready", deviceId: "rounds" })
+        api.spotifyDevices.mockResolvedValue({ devices: [
+            { id: "mac", name: "MacBook", type: "Computer", active: true, restricted: false },
+            { id: "rounds", name: "Term", type: "Computer", active: false, restricted: false },
+        ] })
+        show()
+        const player = card("Player")
+        const button = player.getByRole("button", { name: "MacBook" })
+        expect(button.querySelector("span[aria-hidden]")!.className).toContain("bg-[var(--spotify)]")
+        fireEvent.click(button)
+        const list = within(await player.findByRole("dialog", { name: "Choose a device" }))
+        await list.findByText("This tab")
+        const mac = list.getByRole("button", { name: /MacBook/ })
+        expect(mac.getAttribute("aria-current")).toBe("true")
+        expect(mac.querySelector("svg")).toBeTruthy()
+        expect(list.getByRole("button", { name: /This tab/ }).querySelector("svg")).toBeNull()
+        expect(player.getByTitle("Volume on MacBook").querySelector("svg")).toBeTruthy()
+        expect(screen.getByRole("region", { name: "Player" }).textContent).not.toMatch(/[🔈🔉🔊🔇💻📱📺🎮🚗]/u)
+    })
+
+    it("puts a search picked for the theme above the library, and runs it", async () => {
+        api.spotifySearch.mockResolvedValue(results("", { playlists: [playlist("pl7", "Night Shift Study")] }))
+        show()
+        const music = card("Browse music")
+        const pick = within(music.getByRole("region", { name: "For the night shift" }))
+        expect(pick.getByText("Picked for the Medicine theme")).toBeTruthy()
+        expect(pick.getByText("Night shift").className).toContain("font-serif")
+        fireEvent.click(pick.getByRole("button", { name: /Night shift/ }))
+        await waitFor(() => expect(api.spotifySearch).toHaveBeenCalledWith("night shift study", null, 0))
+        expect(await music.findByText("Night Shift Study")).toBeTruthy()
+        expect(music.getByText("for “night shift study”")).toBeTruthy()
+        expect((music.getByRole("searchbox", { name: "Search Spotify" }) as HTMLInputElement).value).toBe("night shift study")
+        fireEvent.click(music.getByRole("button", { name: "‹ Library" }))
+        expect(await music.findByRole("region", { name: "For the night shift" })).toBeTruthy()
+    })
+
+    it("names the pick for the theme in use", () => {
+        ui.bg = "cs"
+        show()
+        const pick = within(card("Browse music").getByRole("region", { name: "For deep work" }))
+        expect(pick.getByText("Picked for the Computer Science theme")).toBeTruthy()
+        expect(pick.getByText("Deep work")).toBeTruthy()
+    })
+
+    it("draws the search and the library as the prototype", async () => {
+        show()
+        const music = card("Browse music")
+        const form = within(music.getByRole("search"))
+        expect(form.getByRole("button", { name: "Search" }).className).toContain("bg-foreground")
+        expect(form.getByText("Spotify")).toBeTruthy()
+        expect(music.getByRole("heading", { name: "Library" })).toBeTruthy()
+        const liked = await music.findByRole("button", { name: "Open Liked Songs" })
+        expect(liked.querySelector("svg")).toBeTruthy()
+        expect(liked.textContent).not.toContain("♥")
+        expect(liked.querySelector("span[aria-hidden]")!.className).toContain("bg-primary")
+        expect((await music.findByRole("button", { name: "Play Study mix" })).querySelector("svg")).toBeTruthy()
+    })
 })
 
 describe("the page's keys", () => {
@@ -379,6 +526,7 @@ describe("the sidebar player", () => {
         expect(b.getByText("Marconi Union")).toBeTruthy()
         expect(b.getByText("MacBook")).toBeTruthy()
         expect(badge().querySelector<HTMLElement>("i[style]")?.style.width).toBe((191000 / 489000) * 100 + "%")
+        expect(badge().querySelector<HTMLElement>("i[style]")!.className).toContain("bg-primary")
         fireEvent.click(b.getByRole("button", { name: "Pause" }))
         expect(api.spotifyControl).toHaveBeenCalledWith("pause", null)
         expect(badge().dataset.state).toBe("paused")
@@ -394,5 +542,23 @@ describe("the sidebar player", () => {
         expect(badge().dataset.stale).toBe("true")
         fireEvent.click(within(badge()).getByRole("button", { name: "Play here" }))
         expect(api.spotifyTransfer).toHaveBeenCalledWith("rounds")
+    })
+
+    it("sends a person with nothing to resume to the Music page", () => {
+        render(<SidebarPlayer />)
+        setPlayer({ error: "nothing_to_resume" })
+        expect(within(badge()).getByRole("status").textContent).toBe("Pick something on the Music page")
+    })
+})
+
+describe("the music's icons", () => {
+    it("draw on a 24-unit box, filled or stroked, hidden from screen readers", () => {
+        const { container } = render(<><Icon name="play" /><Icon name="shuffle" /></>)
+        const [play, shuffle] = container.querySelectorAll("svg")
+        expect(play.getAttribute("viewBox")).toBe("0 0 24 24")
+        expect(play.getAttribute("fill")).toBe("currentColor")
+        expect(shuffle.getAttribute("fill")).toBe("none")
+        expect(shuffle.getAttribute("stroke")).toBe("currentColor")
+        for (const svg of [play, shuffle]) expect(svg.getAttribute("aria-hidden")).toBe("true")
     })
 })

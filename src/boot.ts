@@ -47,7 +47,7 @@ export function boot() {
     sync.onUnauthenticated(() => showSignIn("Your session has ended. Sign in again."))
 
     /* ═════════ Spotify ═════════ */
-    /* The sidebar player, the Spotify page and the focus screen's music
+    /* The sidebar player, the Music page and the focus screen's music
        (components/spotify/, components/focus/) redraw through useSpotify(). */
     spotify.onState((s, kind) => {
         if (kind !== "state") return

@@ -6,6 +6,13 @@ describe("the themes", () => {
         expect(BGS.map((bg) => THEMES[bg].preset)).toEqual(["Anki then read", "LeetCode then read", "Brief then outline", "Charts then sim", "Film then drills", "Problems then read"])
     })
 
+    it("picks a Spotify search for the Music page per theme", () => {
+        expect(BGS.map((bg) => THEMES[bg].music.name)).toEqual(["Night shift", "Deep work", "Library hours", "Cruising altitude", "Pre-game", "Workshop"])
+        expect(BGS.map((bg) => THEMES[bg].music.word)).toEqual(["the night shift", "deep work", "library hours", "the cockpit", "game day", "the workshop"])
+        expect(THEMES.med.music.query).toBe("night shift study")
+        for (const bg of BGS) expect(THEMES[bg].music.query.trim().length).toBeGreaterThan(2)
+    })
+
     it("has six, each with its words and six goals", () => {
         expect(BGS).toEqual(["med", "cs", "law", "pilot", "sports", "eng"])
         for (const bg of BGS) {

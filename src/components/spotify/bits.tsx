@@ -1,11 +1,11 @@
-// Small pieces the music shares: the Spotify mark, the control icons, a cover, the
-// equaliser, the empty and loading lines, Show more and ↻, the short note, and the glass
-// tokens that turn any of it dark for the focus screen.
+// Small pieces the music shares: the Spotify mark, the icons (the prototype's, on a
+// 24-unit box), a cover, the equaliser, the empty and loading lines, Show more and ↻,
+// the short note, and the glass tokens that turn any of it dark for the focus screen.
 
 import type { ReactNode } from "react"
 import { cn } from "@/lib/utils"
 
-/** The focus screen's glass: Rounds' tokens re-pointed at the dark --fx-* palette, so the
+/** The focus screen's glass: Term's tokens re-pointed at the dark --fx-* palette, so the
     same parts draw light-on-dark there. The focus screen may set --fx-ph to its phase's
     colour (a break's); it defaults to the study colour. */
 export const FX = cn(
@@ -26,16 +26,45 @@ export const SpotifyMark = ({ className }: { className?: string }) => (
     </svg>
 )
 
-const PATHS = {
-    prev: "M2 1h1.6v10H2zM10 1.5v9L4 6z",
-    next: "M8.4 1H10v10H8.4zM2 1.5v9l6-4.5z",
-    play: "M3.2 1.5v9l7-4.5z",
-    pause: "M2.5 1.5h2.6v9H2.5zM6.9 1.5h2.6v9H6.9z",
+/* The prototype's icons. Filled: the transport and the heart; stroked: the rest. */
+const FILLED = {
+    prev: "M6 5h2v14H6zM20 5v14L9 12z",
+    next: "M16 5h2v14h-2zM4 5v14l11-7z",
+    play: "M8 5v14l11-7z",
+    pause: "M6 5h4v14H6zM14 5h4v14h-4z",
+    heart: "M12 21s-7.5-4.6-9.5-9.2C1.2 8.6 3.3 5 6.8 5c2 0 3.4 1 4.2 2.3h2C13.8 6 15.2 5 17.2 5c3.5 0 5.6 3.6 4.3 6.8C19.5 16.4 12 21 12 21z",
 }
+const STROKED = {
+    shuffle: "M16 3h5v5M4 20 21 3M21 16v5h-5M15 15l6 6M4 4l5 5",
+    repeat: "M17 2l4 4-4 4M3 11V9a3 3 0 0 1 3-3h15M7 22l-4-4 4-4M21 13v2a3 3 0 0 1-3 3H3",
+    volume: "M11 5 6 9H3v6h3l5 4zM15.5 8.5a5 5 0 0 1 0 7",
+    mute: "M11 5 6 9H3v6h3l5 4zM16 9.5l5 5M21 9.5l-5 5",
+    search: "M17.25 10.5a6.75 6.75 0 1 1-13.5 0 6.75 6.75 0 0 1 13.5 0zM15.75 15.75l4.5 4.5",
+    filter: "M4 6h16M7 12h10M10 18h4",
+    check: "m4.5 12.75 4.5 4.5 10.5-10.5",
+    down: "m6 9 6 6 6-6",
+    close: "m6 6 12 12M18 6 6 18",
+    arrow: "M5 12h14M13 6l6 6-6 6",
+}
+export type IconName = keyof typeof FILLED | keyof typeof STROKED
 
-export const Icon = ({ name, className }: { name: keyof typeof PATHS; className?: string }) => (
-    <svg viewBox="0 0 12 12" fill="currentColor" aria-hidden="true" className={cn("size-3", className)}><path d={PATHS[name]} /></svg>
-)
+export function Icon({ name, className }: { name: IconName; className?: string }) {
+    const filled = name in FILLED
+    return (
+        <svg
+            viewBox="0 0 24 24"
+            aria-hidden="true"
+            fill={filled ? "currentColor" : "none"}
+            stroke={filled ? undefined : "currentColor"}
+            strokeWidth={filled ? undefined : 1.8}
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            className={cn("size-3 flex-none", className)}
+        >
+            <path d={filled ? FILLED[name as keyof typeof FILLED] : STROKED[name as keyof typeof STROKED]} />
+        </svg>
+    )
+}
 
 /** 3:07, from milliseconds. */
 export function mmss(ms: number) {
@@ -51,7 +80,7 @@ export function Art({ src, className, round = false }: { src: string | null | un
 
 /** The three bars beside the track that is playing; still with reduced motion. */
 export function Eq({ className }: { className?: string }) {
-    const bar = "h-1.5 w-[3px] origin-bottom rounded-[1px] bg-[var(--spotify)] animate-[spot-eq_1s_ease-in-out_infinite] motion-reduce:animate-none"
+    const bar = "h-1.5 w-[3px] origin-bottom rounded-[1px] bg-primary animate-[spot-eq_1s_ease-in-out_infinite] motion-reduce:animate-none"
     return (
         <i role="img" aria-label="Playing" className={cn("inline-flex h-[11px] items-end gap-[2px] not-italic", className)}>
             <b className={bar} /><b className={cn(bar, "[animation-delay:.25s]")} /><b className={cn(bar, "[animation-delay:.5s]")} />
@@ -74,14 +103,14 @@ export const Loading = ({ what, cooling }: { what: string; cooling: boolean }) =
 
 /** A small heading inside a list, with a count or a button at its end. */
 export const Sub = ({ children, end }: { children: ReactNode; end?: ReactNode }) => (
-    <div className="flex items-center gap-2 px-3.5 pt-2.5 pb-1 text-[9.5px] font-semibold tracking-[.12em] text-muted-foreground uppercase">
+    <div className="flex items-center gap-2 px-3.5 pt-3 pb-1 text-[12px] font-semibold text-muted-foreground">
         {children}
         {end}
     </div>
 )
 
 export const Count = ({ n }: { n: number }) => (
-    <em className="ml-auto text-[10px] tracking-[.04em] text-muted-foreground not-italic">{n}</em>
+    <em className="ml-auto text-[12px] font-normal text-muted-foreground not-italic">{n}</em>
 )
 
 export function More({ onClick, left = 0 }: { onClick: () => void; left?: number }) {
@@ -103,8 +132,8 @@ export const Refresh = ({ onClick, label = "Refresh" }: { onClick: () => void; l
     <button type="button" onClick={onClick} title={label} aria-label={label} className={ghost}>↻</button>
 )
 
-/** A pill-shaped text button, like ‹ Back or ▶ Play all. */
-export const chipButton = "inline-flex flex-none cursor-pointer items-center gap-1 rounded-full border border-border bg-card px-2.5 py-1 text-[11.5px] font-semibold whitespace-nowrap text-ink-2 hover:border-primary hover:text-primary disabled:cursor-default disabled:opacity-45"
+/** A pill-shaped text button, like ‹ Back. */
+export const chipButton = "inline-flex h-7 flex-none cursor-pointer items-center gap-1 rounded-full border border-border bg-card px-2.5 text-[12px] whitespace-nowrap text-ink-2 hover:border-primary hover:text-primary disabled:cursor-default disabled:opacity-45"
 
 /** The short line under the controls: a failure, the cooldown, or a quiet "Playing.". */
 export function Notice({ text, ok = false, className }: { text: string | null | undefined; ok?: boolean; className?: string }) {
@@ -123,7 +152,7 @@ export function Notice({ text, ok = false, className }: { text: string | null | 
 /** What a failed control says, in the sidebar player and the pill. */
 const CONTROL_ERRORS: Record<string, string> = {
     no_device: "Open Spotify somewhere, or use a desktop browser",
-    nothing_to_resume: "Pick something in the Spotify view",
+    nothing_to_resume: "Pick something on the Music page",
     premium_required: "Controls need Spotify Premium",
     not_allowed: "Spotify would not do that right now",
     spotify_unavailable: "Spotify is not answering",
@@ -133,8 +162,3 @@ const CONTROL_ERRORS: Record<string, string> = {
 export const controlError = (code: string | null) => code ? CONTROL_ERRORS[code] || CONTROL_ERRORS.spotify_unavailable : null
 
 export const REPEAT_LABEL: Record<string, string> = { off: "Repeat is off", context: "Repeating the playlist or album", track: "Repeating this track" }
-
-const DEVICE_ICON: Record<string, string> = {
-    Computer: "💻", Smartphone: "📱", Tablet: "📱", Speaker: "🔈", TV: "📺", CastVideo: "📺", CastAudio: "🔈", AVR: "🔈", STB: "📺", GameConsole: "🎮", Automobile: "🚗",
-}
-export const deviceIcon = (type: string) => DEVICE_ICON[type] || "🔈"

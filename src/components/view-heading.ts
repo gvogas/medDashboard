@@ -39,7 +39,7 @@ export function viewHeading(ui: Pick<Ui, "view" | "anchor">): Heading {
             return { title: "Study", sub: "" }
         case "spotify":
             return {
-                title: "Spotify",
+                title: "Music",
                 sub: !spotify.loaded ? "" : !spotify.connected ? "Not connected" : spotify.device ? "Playing on " + spotify.device : "No active device",
             }
         default:

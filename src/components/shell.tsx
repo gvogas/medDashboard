@@ -40,7 +40,7 @@ export function StatsHost({ children }: { children?: ReactNode }) {
     return <div id="stats" hidden={!shown}>{children}</div>
 }
 
-/** The week, month, table, Study or Spotify page. The table and Spotify scroll their own rows. */
+/** The week, month, table, Study or Music page. The table and the Music page scroll their own rows. */
 export function ViewsHost({ children }: { children?: ReactNode }) {
     const view = useUi(shownView)
     return (

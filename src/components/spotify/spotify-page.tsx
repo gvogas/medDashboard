@@ -1,7 +1,9 @@
-// The Spotify page, in #views: two Texture cards, the player on the left (<NowPlaying>,
-// then Up next or Recent) and <MusicBrowser> on the right. Under 760px one column: the pill
-// on top (▴ Music opens the player card), the browser under it. Space plays or pauses and /
-// goes to the search box, when nothing is being typed. Not connected: Connect Spotify.
+// The Music page, in #views: two white cards, the player on the left (<NowPlaying>, then
+// Up next or Recent) and <MusicBrowser> on the right, as the prototype's lines 660–797:
+// the player 400px wide from 1280px, 36% (at least 280px) below that. Under 760px one
+// column: the pill on top (▴ Music unfolds the player card), the browser under it. Space
+// plays or pauses and / goes to the search box, when nothing is being typed. Not
+// connected: Connect Spotify.
 
 import { useEffect, useRef, useState, type ReactNode } from "react"
 import { cn } from "@/lib/utils"
@@ -14,6 +16,7 @@ import { getBusy } from "@/data/ai-read"
 import { getScreen } from "@/data/signin"
 import { Notice, SpotifyMark } from "./bits"
 import { NowPlaying } from "./now-playing"
+import { FocusButton } from "./focus-button"
 import { MusicBrowser, UpNextRecent } from "./music-browser"
 import { useCooling, useFollowTrack } from "./use-music"
 
@@ -58,15 +61,15 @@ export function SpotifyPage() {
         return (
             <div ref={root} className="min-w-0">
                 <Card className="min-w-0">
-                    <div className="px-3.5 py-9 text-center text-[12.5px] text-muted-foreground">
+                    <div className="px-4 py-10 text-center text-[13px] text-muted-foreground">
                         {!s.player.loaded
-                            ? <><b className="mb-0.5 block font-semibold text-ink-2">Spotify</b>Checking your connection…</>
+                            ? <><b className="mb-1 block font-serif text-[20px] font-medium text-foreground">Spotify</b>Checking your connection…</>
                             : <>
-                                <SpotifyMark className="mx-auto mb-2 size-7" />
-                                <b className="mb-0.5 block font-semibold text-ink-2">Spotify is not connected</b>
+                                <SpotifyMark className="mx-auto mb-3 size-8" />
+                                <b className="mb-1 block font-serif text-[20px] font-medium text-foreground">Spotify is not connected</b>
                                 Connect your account to search, browse your playlists, see the queue and set the volume from here.
                                 <br />
-                                <a href="/api/spotify/connect" className="mt-3 inline-flex rounded-[10px] border border-[color-mix(in_srgb,var(--accent)_72%,#000)] bg-[linear-gradient(color-mix(in_srgb,var(--accent)_90%,#fff),color-mix(in_srgb,var(--accent)_92%,#000))] px-3.5 py-1.5 text-[12.5px] font-[650] text-primary-foreground no-underline hover:brightness-110">Connect Spotify</a>
+                                <a href="/api/spotify/connect" className="mt-4 inline-flex h-10 items-center rounded-full bg-primary px-4 text-[13px] font-semibold text-primary-foreground no-underline hover:brightness-110">Connect Spotify</a>
                             </>}
                     </div>
                 </Card>
@@ -75,28 +78,37 @@ export function SpotifyPage() {
     }
 
     return (
-        <div ref={root} className="flex min-h-0 min-w-0 flex-1 flex-col gap-[13px]">
+        <div ref={root} className="flex min-h-0 min-w-0 flex-1 flex-col gap-4">
             <Notice text={cooling ? cooldownMessage(s.retryAt) : s.note?.text} ok={!cooling && !!s.note?.ok} className="flex-none" />
             <div className="flex-none min-[761px]:hidden">
                 <MusicPill tone="page" open={playerOpen} onOpen={() => setPlayerOpen((o) => !o)} />
             </div>
-            <div className="grid min-h-0 flex-1 gap-[13px] [grid-template-columns:minmax(260px,34%)_minmax(0,1fr)] [grid-template-rows:minmax(0,1fr)] max-[760px]:flex max-[760px]:flex-col max-[760px]:overflow-y-auto">
-                <SpotifyCard label="Player" className={cn(!playerOpen && "max-[760px]:hidden")}>
-                    <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto overscroll-contain p-3.5">
-                        <NowPlaying />
-                        <UpNextRecent />
+            <div className={cn(
+                "grid min-h-0 flex-1 gap-4 [grid-template-rows:minmax(0,1fr)]",
+                "[grid-template-columns:minmax(280px,36%)_minmax(0,1fr)] min-[1280px]:[grid-template-columns:400px_minmax(0,1fr)]",
+                "max-[760px]:flex max-[760px]:flex-col max-[760px]:overflow-y-auto",
+            )}>
+                <MusicCard label="Player" className={cn(!playerOpen && "max-[760px]:hidden")}>
+                    <div className="flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain">
+                        <div className="flex-none border-b border-line-2 px-[22px] pt-5 pb-4 max-[560px]:px-4">
+                            <NowPlaying />
+                            <FocusButton />
+                        </div>
+                        <div className="px-[22px] pt-3 pb-3 max-[560px]:px-4">
+                            <UpNextRecent />
+                        </div>
                     </div>
-                </SpotifyCard>
-                <SpotifyCard label="Browse music">
+                </MusicCard>
+                <MusicCard label="Browse music">
                     <MusicBrowser />
-                </SpotifyCard>
+                </MusicCard>
             </div>
         </div>
     )
 }
 
 /** A card whose inside fills the height left, and scrolls its own rows. */
-function SpotifyCard({ label, className, children }: { label: string; className?: string; children: ReactNode }) {
+function MusicCard({ label, className, children }: { label: string; className?: string; children: ReactNode }) {
     return (
         <Card className={cn("flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden max-[760px]:flex-none", className)}>
             <section aria-label={label} className="flex min-h-0 flex-1 flex-col">{children}</section>

@@ -179,7 +179,7 @@ function FocusScreen({ run }: { run: Run }) {
 
                 {!music && (
                     <div className="relative flex justify-center">
-                        <MusicPill onOpen={() => toggleMusic(true)} tone="glass" className="max-w-[560px] bg-[color-mix(in_srgb,var(--fx-bg)_78%,transparent)]" />
+                        <MusicPill onOpen={() => toggleMusic(true)} tone="glass" className="max-w-[560px]" />
                     </div>
                 )}
             </div>
@@ -188,11 +188,11 @@ function FocusScreen({ run }: { run: Run }) {
                 <MusicPanel
                     onClose={() => toggleMusic(false)}
                     className={cn(
-                        "relative z-[1] w-[38%] max-w-[560px] min-w-[320px] flex-none border-y-0 border-r-0 bg-[color-mix(in_srgb,var(--fx-bg)_78%,transparent)]",
+                        "relative z-[1] m-3 ml-0 w-[38%] max-w-[560px] min-w-[320px] flex-none rounded-2xl bg-[color-mix(in_srgb,var(--fx-bg)_70%,transparent)]",
                         "animate-[focus-panel-in_.28s_ease-out] motion-reduce:animate-none",
                         /* a phone: a sheet over the lower 70%, the clock line above it */
-                        "max-[700px]:absolute max-[700px]:inset-x-0 max-[700px]:bottom-0 max-[700px]:h-[70dvh] max-[700px]:w-auto max-[700px]:max-w-none max-[700px]:min-w-0",
-                        "max-[700px]:rounded-t-[18px] max-[700px]:border-x-0 max-[700px]:border-t max-[700px]:border-b-0",
+                        "max-[700px]:absolute max-[700px]:inset-x-0 max-[700px]:bottom-0 max-[700px]:m-0 max-[700px]:h-[70dvh] max-[700px]:w-auto max-[700px]:max-w-none max-[700px]:min-w-0",
+                        "max-[700px]:rounded-t-[18px] max-[700px]:rounded-b-none max-[700px]:border-x-0 max-[700px]:border-t max-[700px]:border-b-0",
                         "max-[700px]:animate-[focus-sheet-in_.28s_ease-out] motion-reduce:max-[700px]:animate-none",
                     )}
                 />

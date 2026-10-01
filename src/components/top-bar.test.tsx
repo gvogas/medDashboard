@@ -73,7 +73,7 @@ describe("the top bar", () => {
         show("study")
         expect(title()).toBe("Study")
         show("spotify")
-        expect(title()).toBe("Spotify")
+        expect(title()).toBe("Music")
         expect(sub()).toBe("Playing on Kitchen")
         fake.spotify.device = null
         act(() => notify())

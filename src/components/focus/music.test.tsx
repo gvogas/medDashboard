@@ -59,6 +59,9 @@ describe("the pill", () => {
         expect(pill().getByText("Weightless")).toBeTruthy()
         expect(pill().getByText("· Marconi Union")).toBeTruthy()
         expect(pill().getByText("MacBook")).toBeTruthy()
+        expect((pill().getByText("MacBook").previousElementSibling as HTMLElement).className).toContain("bg-[var(--spotify)]")
+        expect(screen.getByRole("region", { name: "Music" }).textContent).not.toMatch(/🔈/u)
+        expect(screen.getByRole("region", { name: "Music" }).className).toContain("bg-white/10")
         expect(screen.getByRole("region", { name: "Music" }).querySelector<HTMLElement>("i[style]")?.style.width).toBe("50%")
         fireEvent.click(pill().getByRole("button", { name: "Pause" }))
         expect(api.spotifyControl).toHaveBeenCalledWith("pause", null)
@@ -107,11 +110,22 @@ describe("the panel", () => {
         expect(onClose).toHaveBeenCalledOnce()
     })
 
+    it("is drawn as the prototype: ✕ as an icon, the white play button, the tabs as pills", () => {
+        render(<MusicPanel onClose={() => {}} />)
+        const close = panel().getByRole("button", { name: "Close music" })
+        expect(close.querySelector("svg")).toBeTruthy()
+        expect(close.textContent).toBe("")
+        expect(panel().getByRole("button", { name: "Pause" }).className).toContain("bg-foreground")
+        expect(tab("Library").className).toContain("rounded-full")
+        expect(panel().getByRole("group", { name: "Show" }).className).not.toContain("bg-[var(--chip-bg)]")
+    })
+
     it("offers to connect when Spotify is not", () => {
         resetEngine({ connected: false })
         render(<MusicPanel onClose={() => {}} />)
         expect(panel().getByText("Spotify is not connected")).toBeTruthy()
         expect(panel().getByRole("link", { name: "Connect Spotify" })).toBeTruthy()
+        expect(panel().getByRole("link", { name: "Connect Spotify" }).className).toContain("bg-foreground")
         expect(panel().queryByRole("button", { name: "Up next" })).toBeNull()
     })
 
@@ -122,6 +136,9 @@ describe("the panel", () => {
         expect(tab("Library").getAttribute("aria-pressed")).toBe("true")
         const open = await panel().findByRole("button", { name: "Open Study mix" })
         expect(open.closest(".grid-cols-3")).toBeTruthy()
+        /* the theme's pick is the page's */
+        expect(panel().queryByRole("region", { name: /^For / })).toBeNull()
+        expect(panel().getByRole("heading", { name: "Library" })).toBeTruthy()
     })
 
     it("switches between Up next, Recent and Library", async () => {
@@ -150,6 +167,9 @@ describe("the panel", () => {
         render(<MusicPanel onClose={() => {}} />)
         fireEvent.click(await panel().findByRole("button", { name: "Open Study mix" }))
         expect(await panel().findByText("Song one")).toBeTruthy()
+        /* the panel's opened list: the kind, no columns' header, unnumbered rows */
+        expect(panel().getByText("Playlist")).toBeTruthy()
+        expect(panel().queryByText("Title")).toBeNull()
         fireEvent.click(panel().getByRole("button", { name: "Queue Song one" }))
         await waitFor(() => expect(panel().getByRole("button", { name: "Queue Song one" }).textContent).toBe("✓"))
         fireEvent.click(panel().getByRole("button", { name: "‹ Back" }))
@@ -188,7 +208,7 @@ describe("reduced motion", () => {
         const moving = [...document.querySelectorAll("[class*='animate-[spot-eq']")]
         expect(moving.length).toBeGreaterThanOrEqual(7)      /* three in the row, four in the badge */
         for (const el of moving) expect(el.className).toContain("motion-reduce:animate-none")
-        /* the covers lift on hover, and not with reduced motion */
-        for (const el of document.querySelectorAll("[class*='group-hover/tile:-translate-y']")) expect(el.className).toContain("motion-reduce:group-hover/tile:translate-y-0")
+        /* the covers no longer lift on hover */
+        expect(document.querySelectorAll("[class*='-translate-y']").length).toBe(0)
     })
 })
