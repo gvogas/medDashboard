@@ -1,6 +1,6 @@
 import { env, SELF } from 'cloudflare:test';
 import { describe, expect, it } from 'vitest';
-import { API_LIMIT, SPOTIFY_LIMIT, claimLimit, cooldownRemaining, setCooldown, purgeLimits } from '../worker/limits.js';
+import { API_LIMIT, SPOTIFY_LIMIT, OUTLINE_DAILY_LIMIT, claimLimit, cooldownRemaining, setCooldown, purgeLimits, readsLeft } from '../worker/limits.js';
 import { BASE, signIn } from './helpers.js';
 
 describe('shared request limits', () => {
@@ -56,5 +56,15 @@ describe('shared request limits', () => {
     expect(await cooldownRemaining(env.DB, 'test:cooldown', now)).toBe(120);
     await purgeLimits(env.DB, now + 120000);
     expect(await cooldownRemaining(env.DB, 'test:cooldown', now)).toBe(0);
+  });
+});
+
+describe('AI reads left', () => {
+  it('counts the reads of the window down, and comes back when it ends', async () => {
+    const api = await signIn('reads-left');
+    expect(await (await api('/api/ai/reads')).json()).toEqual({ left: OUTLINE_DAILY_LIMIT, limit: OUTLINE_DAILY_LIMIT });
+    await env.DB.prepare('INSERT INTO request_limits VALUES (?, ?, ?)').bind('outline:u-reads-left', 3, Date.now() + 60000).run();
+    expect(await (await api('/api/ai/reads')).json()).toEqual({ left: OUTLINE_DAILY_LIMIT - 3, limit: OUTLINE_DAILY_LIMIT });
+    expect(await readsLeft(env.DB, 'u-reads-left', Date.now() + 61000)).toEqual({ left: OUTLINE_DAILY_LIMIT, limit: OUTLINE_DAILY_LIMIT });
   });
 });

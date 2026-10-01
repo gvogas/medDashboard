@@ -2,7 +2,7 @@ import { json, readJson, readBytes, HttpError } from './http.js';
 import { requireUser, requireSession, signSession, sessionCookie, clearCookie, deviceCookie, trustedDevice, parseCookies, secureFlag, sameString, hex, RENEW_WITHIN_MS } from './auth.js';
 import { verifyPassword, normalizeUsername } from './password.js';
 import { claimAttempt, recordSuccess } from './throttle.js';
-import { limitLogin, limitOutline } from './limits.js';
+import { limitLogin, limitOutline, readsLeft } from './limits.js';
 import { readOutline, MAX_BYTES } from './outline.js';
 import { readSchool } from './school.js';
 import { validateProfile, validateCourse, validateItem, validateQuote, validateStudySession, validateAchievement, validateId } from './validate.js';
@@ -112,9 +112,9 @@ async function spotifyCallback({ request, env, url }) {
 
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
 
-/* Read an uploaded document with Workers AI: a course outline or a school calendar. The
-   body is the file; ?name= is its file name and ?today= / ?termStart= help the model place
-   "Week 3" on a date. Both count toward the same daily reads. */
+/* Read an uploaded document with Workers AI: a course outline, a school calendar or a class
+   schedule. The body is the file; ?name= is its file name and ?today= / ?termStart= help the
+   model place "Week 3" on a date. All three count toward the same daily reads. */
 const aiRead = (read, what) => async ({ request, env, url }) => {
   const userId = await requireUser(request, env);
   const bytes = await readBytes(request, MAX_BYTES);
@@ -135,6 +135,7 @@ const aiRead = (read, what) => async ({ request, env, url }) => {
 const routes = [
   ['POST', /^\/api\/outline$/, aiRead(readOutline, 'outline')],
   ['POST', /^\/api\/school-calendar$/, aiRead(readSchool, 'calendar')],
+  ['GET', /^\/api\/ai\/reads$/, async ({ request, env }) => json(await readsLeft(env.DB, await requireUser(request, env)))],
   // Username + password. Accounts are created with `npm run user:add`.
   ['POST', /^\/api\/login$/, async ({ request, env, url }) => {
     await limitLogin(request, env);

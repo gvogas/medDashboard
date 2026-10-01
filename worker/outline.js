@@ -12,6 +12,7 @@
 // scored 18/21 against 14/21 for Llama 3.3 70B; see the study-tools spec.
 
 import { HttpError } from './http.js';
+import { runModel } from './ai.js';
 
 export const MODEL = '@cf/openai/gpt-oss-120b';
 export const MAX_BYTES = 5 * 1024 * 1024;
@@ -200,14 +201,8 @@ export async function askModel(ai, { bytes, type, name, claim }, messages) {
   const truncated = text.length > MAX_CHARS;
   if (truncated) text = text.slice(0, MAX_CHARS);
   if (claim) await claim();
-  try {
-    const out = await ai.run(MODEL, { messages: messages(text), max_tokens: MAX_TOKENS, temperature: 0 });
-    return { answer: out?.response ?? out, truncated };
-  } catch (e) {
-    /* 4006: the account's free daily neurons are spent; it resets at 00:00 UTC. */
-    if (/\b4006\b|daily free allocation/i.test(e?.message || '')) throw new HttpError(429, { error: 'outline_quota' });
-    throw e;
-  }
+  const out = await runModel(ai, MODEL, { messages: messages(text), max_tokens: MAX_TOKENS, temperature: 0 }, 'outline');
+  return { answer: out?.response ?? out, truncated };
 }
 
 export async function readOutline(ai, { today, termStart, ...doc }) {
