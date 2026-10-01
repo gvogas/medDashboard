@@ -117,7 +117,7 @@ describe("the panel", () => {
         expect(close.textContent).toBe("")
         expect(panel().getByRole("button", { name: "Pause" }).className).toContain("bg-foreground")
         expect(tab("Library").className).toContain("rounded-full")
-        expect(panel().getByRole("group", { name: "Music" }).className).not.toContain("bg-[var(--chip-bg)]")
+        expect(panel().getByRole("group", { name: "Show" }).className).not.toContain("bg-[var(--chip-bg)]")
     })
 
     it("offers to connect when Spotify is not", () => {

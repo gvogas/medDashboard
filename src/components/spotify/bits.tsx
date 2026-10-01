@@ -5,7 +5,7 @@
 import type { ReactNode } from "react"
 import { cn } from "@/lib/utils"
 
-/** The focus screen's glass: Rounds' tokens re-pointed at the dark --fx-* palette, so the
+/** The focus screen's glass: Term's tokens re-pointed at the dark --fx-* palette, so the
     same parts draw light-on-dark there. The focus screen may set --fx-ph to its phase's
     colour (a break's); it defaults to the study colour. */
 export const FX = cn(

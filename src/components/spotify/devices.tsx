@@ -34,7 +34,7 @@ export function Devices({ s, cooling, beside }: { s: SpotifySnapshot; cooling: b
 
     return (
         <div ref={box} className="flex min-w-0 flex-col gap-2">
-            <div className="flex min-w-0 items-center gap-3">
+            <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-2">
                 <button
                     ref={button}
                     type="button"
@@ -42,7 +42,7 @@ export function Devices({ s, cooling, beside }: { s: SpotifySnapshot; cooling: b
                     title="Choose where Spotify plays"
                     onClick={() => toggleDevices()}
                     className={cn(
-                        "inline-flex h-[34px] max-w-[190px] min-w-0 flex-none cursor-pointer items-center gap-2 rounded-full border bg-card px-3 text-[12.5px] whitespace-nowrap text-foreground hover:border-primary",
+                        "inline-flex h-[34px] max-w-[190px] min-w-0 flex-initial cursor-pointer items-center gap-2 rounded-full border bg-card px-3 text-[12.5px] whitespace-nowrap text-foreground hover:border-primary",
                         open ? "border-primary" : "border-border",
                     )}
                 >
@@ -95,7 +95,7 @@ export function Volume({ s, className }: { s: SpotifySnapshot; className?: strin
     return (
         <div
             title={can ? "Volume on " + p.device : p.device ? "This device does not take volume from here" : "Nothing is playing"}
-            className={cn("flex min-w-0 flex-1 items-center gap-2 text-[12px] text-muted-foreground", !can && "opacity-55", className)}
+            className={cn("flex min-w-0 flex-1 basis-[120px] items-center gap-2 text-[12px] text-muted-foreground", !can && "opacity-55", className)}
         >
             <Icon name={vol === 0 ? "mute" : "volume"} className="size-[15px]" />
             <input

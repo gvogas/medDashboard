@@ -27,7 +27,7 @@ export const ui: Ui = {
     importNote: null,        /* the last import's result or error, shown once in Settings */
     outlineBusy: false,      /* a course outline is being read */
     spotifyNote: null,       /* 'connected' | 'error' after the Spotify round trip, shown once in Settings */
-    /* the music (the Spotify page, the focus screen's): which list is open, and the filter inside it */
+    /* the music (the Music page, the focus screen's): which list is open, and the filter inside it */
     spotify: { pane: "home", playlistId: null, albumId: null, artistId: null, q: "", filter: "" },
     focus: false,            /* the focus screen is up: the study clock and Spotify, nothing else */
     focusMusic: false,       /* the focus screen's music panel is open */

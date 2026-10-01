@@ -54,7 +54,7 @@ export interface Ui {
     focus: boolean
     /* the focus screen's music panel is open */
     focusMusic: boolean
-    /* which part of the music is open, shared by the Spotify page and the focus panel */
+    /* which part of the music is open, shared by the Music page and the focus panel */
     spotify: SpotifyPlace
     /* what the next study run is logged against */
     study: { courseId: string | null; itemId: string | null }

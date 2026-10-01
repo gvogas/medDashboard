@@ -106,7 +106,7 @@ export function Library({ s, cooling, compact }: ListProps & { compact: boolean 
             : pl.next && <More onClick={() => more("playlists")} left={pl.total - pl.items.length} />
     if (compact) return <>{tiles}{after}</>
     return (
-        <div className="flex flex-col gap-[22px] p-[18px] max-[560px]:p-3.5">
+        <div className="flex flex-col gap-[22px] p-[18px] @max-[560px]:p-3.5">
             <ForTheme />
             <section aria-label="Your library" className="flex flex-col gap-2.5">
                 <div className="flex min-h-7 items-center gap-2">
@@ -187,7 +187,7 @@ function Filter({ s, items }: { s: SpotifySnapshot; items: Track[] }) {
     if (items.length < 8) return null
     const shown = f.trim() ? items.filter((t) => matchesFilter(t, f)).length : 0
     return (
-        <label className="mx-4 mb-2 flex h-9 items-center gap-2 rounded-[6px] border border-border px-3 text-[12px] text-muted-foreground focus-within:border-primary">
+        <label className="mx-[18px] mb-2 flex h-9 items-center gap-2 rounded-[6px] border border-border px-3 text-[12px] text-muted-foreground focus-within:border-primary">
             <Icon name="filter" className="size-[13px]" />
             <input
                 type="search"

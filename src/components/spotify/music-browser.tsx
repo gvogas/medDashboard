@@ -59,7 +59,7 @@ function SearchBox({ q, page }: { q: string; page: boolean }) {
                 typed("")                                   /* no delayed search after this one */
                 openRoot(() => search(value))
             }}
-            className="flex min-w-0 flex-1 basis-[240px] items-center gap-2"
+            className="flex min-w-0 items-center gap-2"
         >
             <label className="group/search flex h-10 min-w-0 flex-1 items-center gap-2 rounded-full border border-border px-3.5 text-muted-foreground focus-within:border-primary">
                 <Icon name="search" className="size-[15px]" />
@@ -135,7 +135,7 @@ export function MusicBrowser({ compact = false }: { compact?: boolean }) {
                 "flex flex-none flex-col gap-2.5 border-b",
                 compact ? "border-white/10 px-5 pt-3 pb-2.5" : "border-line-2 px-[18px] py-3.5 max-[560px]:px-3.5",
             )}>
-                {compact && <Tabs label="Music" tone="pills" tabs={TABS} value={tab} onPick={pick} />}
+                {compact && <Tabs label="Show" tone="pills" tabs={TABS} value={tab} onPick={pick} />}
                 <SearchBox q={s.place.q} page={!compact} />
                 {head}
             </div>
@@ -184,7 +184,7 @@ export function UpNextRecent() {
                     {side === "queue" ? <QueueActions /> : <RecentActions s={s} />}
                 </span>
             </div>
-            <div className="-mx-[18px]">
+            <div className="-mx-[18px] max-[560px]:-mx-3">
                 {side === "queue" ? <QueueList s={s} cooling={cooling} /> : <RecentList s={s} cooling={cooling} />}
             </div>
         </section>

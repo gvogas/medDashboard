@@ -20,7 +20,7 @@ const act = "grid size-8 cursor-pointer place-items-center rounded-full border-0
 /* an opened list's columns: #, title, artist, time, the buttons; the header in lists.tsx uses the same */
 export const COLUMNS = "[grid-template-columns:28px_minmax(0,1fr)_minmax(0,.7fr)_52px_72px] @max-[560px]:[grid-template-columns:28px_minmax(0,1fr)_44px_72px]"
 
-/** Play inside the click, so the Rounds tab may make sound. */
+/** Play inside the click, so the Term tab may make sound. */
 function playNow(uri: string | null, contextUri?: string | null, list?: string | null) {
     activate()
     void play(uri, contextUri, list)
