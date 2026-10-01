@@ -16,6 +16,7 @@ import { getBusy } from "@/data/ai-read"
 import { getScreen } from "@/data/signin"
 import { Notice, SpotifyMark } from "./bits"
 import { NowPlaying } from "./now-playing"
+import { FocusButton } from "./focus-button"
 import { MusicBrowser, UpNextRecent } from "./music-browser"
 import { useCooling, useFollowTrack } from "./use-music"
 
@@ -91,6 +92,7 @@ export function SpotifyPage() {
                     <div className="flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain">
                         <div className="flex-none border-b border-line-2 px-[22px] pt-5 pb-4 max-[560px]:px-4">
                             <NowPlaying />
+                            <FocusButton />
                         </div>
                         <div className="px-[22px] pt-3 pb-3 max-[560px]:px-4">
                             <UpNextRecent />
