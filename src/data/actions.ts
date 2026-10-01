@@ -242,6 +242,8 @@ export function openSettings(focus?: string) {
     ui.settingsTab = tab
     openSheet({ kind: "settings", tab, focus: focus ?? null })
 }
+/** The top bar's Import with AI: the card with the three kinds of file. */
+export const openAiImport = () => openSheet({ kind: "ai" })
 /** The gear: Settings, or shut if it is open. */
 export const toggleSettings = () => (getSheet()?.kind === "settings" ? closeSheet() : openSettings())
 

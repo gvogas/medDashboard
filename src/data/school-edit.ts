@@ -7,7 +7,7 @@ import { today } from "@/core/dates"
 import { courseTerm, normalizeSchool, renamedTerms, validDate } from "@/core/school"
 import { schoolCal } from "@/data/query"
 import { api } from "@/core/api"
-import { readWithAi } from "./ai-read"
+import { readWithAi, type NoteKey } from "./ai-read"
 import { toast } from "./toast"
 import { notify } from "@/bridge"
 import { ui } from "./ui"
@@ -67,15 +67,16 @@ export function openSchool(read: unknown, source: string | null = null) {
 }
 
 /** A calendar file was picked: read it with AI, then check it in the sheet. */
-export function readSchoolFile(file: File) {
+export function readSchoolFile(file: File, note: NoteKey = "schoolNote") {
     return readWithAi(file, {
-        what: "calendar", title: "Reading your school calendar", stage: "Finding the semesters, breaks and days off with AI…",
-        flag: "schoolBusy", note: "schoolNote", refresh: notify,
+        what: "calendar", title: "Reading your school calendar", steps: ["Reading the document", "Finding semesters and breaks", "Checking the dates"],
+        flag: "schoolBusy", note, refresh: notify,
         errors: {
             outline_empty: "No text was found in that file. A scanned calendar needs to be a text PDF.",
             school_unreadable: "No semesters could be found in that calendar. Try again, or check it is the academic calendar.",
         },
-        call: (body: Blob) => api.readSchool(body, { name: file.name, today: today() }),
+        cache: ["calendar", String(store.data.profile?.id ?? ""), today().slice(0, 7)],
+        call: (body, signal) => api.readSchool(body, { name: file.name, today: today() }, signal),
         done: (read: unknown) => openSchool(read, file.name),
     })
 }

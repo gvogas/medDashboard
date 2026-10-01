@@ -20,7 +20,7 @@ vi.mock("@/core/api", () => ({ api: {} }))
 
 import { normalizeCourse } from "@/core/model"
 import { feedLink, hm, savedValues, syncLine, TAB_OF, themeLabel, toggleRest } from "./settings"
-import { commitImport, importCount, type ImportPlan } from "./import-edit"
+import { commitImport, defaultTerm, importCount, type ImportPlan } from "./import-edit"
 import { normalizeSchool } from "@/core/school"
 import { dayOk, footHint, groupDays, moveFrom, saveSchool, toSave, valid, type SchoolDraft } from "./school-edit"
 
@@ -100,6 +100,31 @@ describe("importing", () => {
         fake.cal = { terms: [] }
         await commitImport({ ...plan(), week1: "2026-09-07" })
         expect(fake.profile).toEqual([])
+    })
+
+    it("saves a semester picked for a course that exists, even with no new classes", async () => {
+        fake.data.courses = [normalizeCourse({ id: "old", code: "ANAT", name: "Anatomy", term: "", meetings: [] }, 0) as { id: string; meetings: unknown[] }]
+        const p: ImportPlan = { notes: [], items: [], courses: [{ id: "old", code: "ANAT", name: "Anatomy", color: "#E4749B", isNew: false, meetings: [], term: "Fall 2026" }] }
+        expect(await commitImport(p)).toBe("Updated the semester.")
+        expect(fake.rows.map((r) => [r.row.id, (r.row as unknown as { term: string }).term])).toEqual([["old", "Fall 2026"]])
+        fake.rows = []
+        p.courses[0].term = undefined
+        await commitImport(p)
+        expect(fake.rows).toEqual([])
+    })
+
+    it("counts the semesters changed when nothing else is added", async () => {
+        fake.data.courses = ["a", "b"].map((id) => normalizeCourse({ id, code: id.toUpperCase(), name: id, term: "", meetings: [] }, 0) as { id: string; meetings: unknown[] })
+        const p: ImportPlan = { notes: [], items: [], courses: ["a", "b"].map((id) => ({ id, code: id.toUpperCase(), name: id, color: "#E4749B", isNew: false, meetings: [], term: "Fall 2026" })) }
+        expect(await commitImport(p)).toBe("Updated 2 semesters.")
+    })
+
+    it("gives a new course the semester its file names, else the current one", () => {
+        const cal = normalizeSchool({ name: "Uni", days: [], terms: [{ name: "Fall 2026", start: "2026-09-08", end: "2026-12-18" }, { name: "Winter 2027", start: "2027-01-11", end: "2027-04-23" }] })
+        expect(defaultTerm(cal, "fall 2026", "2027-02-01")).toBe("Fall 2026")
+        expect(defaultTerm(cal, "", "2027-02-01")).toBe("Winter 2027")
+        expect(defaultTerm(cal, "Autumn", "2026-10-01")).toBe("Fall 2026")
+        expect(defaultTerm(null, "2026 Autumn", "2027-02-01")).toBe("2026 Autumn")
     })
 })
 

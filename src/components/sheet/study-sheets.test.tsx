@@ -29,7 +29,7 @@ vi.mock("@/core/sync", () => ({ status: { state: "idle", pending: 0, message: ""
 vi.mock("@/data/study-controller", () => ({ deleteWithUndo: vi.fn(), deleteLater: vi.fn(), setView: vi.fn() }))
 vi.mock("@/lib/fireworks", () => ({ launch: vi.fn() }))
 vi.mock("@/core/api", () => ({ api: {}, spotifyRetryAt: () => 0 }))
-vi.mock("@/data/ai-read", () => ({ readWithAi: vi.fn() }))
+vi.mock("@/data/ai-read", () => ({ readWithAi: vi.fn(), refreshReads: vi.fn(async () => {}), asSent: vi.fn(), MAX_FILE: 5 * 1024 * 1024 }))
 vi.mock("@/core/sticker", () => ({
     readPicture: vi.fn(async (file: File) => (file.name.endsWith(".heic") ? null : { width: 400, height: 300 })),
     drawSticker: vi.fn(),

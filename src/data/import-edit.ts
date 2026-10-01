@@ -7,13 +7,15 @@ import * as store from "@/core/store"
 import { data } from "@/core/store"
 import { classRoom, normalizeCourse, normalizeItem } from "@/core/model"
 import { today } from "@/core/dates"
+import { courseTerm, currentTerm, type SchoolCalendar } from "@/core/school"
 import { schoolCal, termStart } from "@/data/query"
 import { parseIcs } from "@/core/importers/ics"
 import { parseCsv } from "@/core/importers/csv"
 import { planImport, planOutline } from "@/core/importers/plan"
 import type { Outline, Plan } from "@/core/importers/plan"
 import { api } from "@/core/api"
-import { readWithAi } from "./ai-read"
+import { readWithAi, type NoteKey } from "./ai-read"
+import { readContext } from "./ai-context"
 import { notify } from "@/bridge"
 import { ui } from "./ui"
 import { openSheet } from "./overlay"
@@ -25,6 +27,13 @@ export type ImportPlan = Plan
 
 export const MAX_BYTES = 2_000_000
 
+/** A new course's semester: with a school calendar, the one its file names, else the current
+    one; without one, the file's own words, as before. */
+export function defaultTerm(cal: SchoolCalendar | null, named: string, day: string): string {
+    if (!cal) return named
+    return (courseTerm(cal, named) ?? currentTerm(cal, day))?.name ?? ""
+}
+
 /** A problem to show under Import in Settings. */
 function note(text: string, error = true) {
     ui.importNote = { text, error }
@@ -32,14 +41,14 @@ function note(text: string, error = true) {
 }
 
 /** Read a calendar or CSV and open the preview. Returns an error message, or "" when it opened. */
-export function previewImport(text: string, name = ""): string {
+export function previewImport(text: string, name = "", back?: "ai"): string {
     const isIcs = /BEGIN:VCALENDAR/i.test(text)
     let events
     try { events = isIcs ? parseIcs(text) : parseCsv(text) } catch { return "That file could not be read." }
     if (!events.length) return isIcs ? "No events were found in that calendar." : "No rows were found. The first line must be a header such as type,course,title,date,start,end,room,weight."
     const plan = planImport(events, data, isIcs ? "ics" : "csv") as ImportPlan
     if (!plan.courses.length && !plan.items.length) return "Nothing in that file could be imported." + (plan.notes[0] ? " " + plan.notes[0] : "")
-    openSheet({ kind: "import", plan, name })
+    openSheet({ kind: "import", plan, name, ...(back ? { back } : {}) })
     return ""
 }
 
@@ -58,15 +67,23 @@ export function importPasted(text: string) {
 }
 
 /** A course outline, read by the Worker with AI, then previewed. */
-export function readOutlineFile(file: File) {
+export function readOutlineFile(file: File, note: NoteKey = "importNote", back?: "ai") {
     return readWithAi(file, {
-        what: "outline", stage: "Reading the dates and grades with AI…", flag: "outlineBusy", note: "importNote", refresh: notify,
+        what: "outline", title: "Reading your course outline",
+        steps: ["Reading the document", "Finding dates and deadlines", "Matching it to your courses"],
+        flag: "outlineBusy", note, refresh: notify,
         errors: {
             outline_empty: "No text was found in that file. A scanned outline needs to be a text PDF.",
             outline_unreadable: "The outline could not be understood. Try again, or import a CSV instead.",
         },
-        call: (body: Blob) => api.readOutline(body, { name: file.name, today: today(), termStart: termStart() || "" }),
-        done: (outline: Outline) => openSheet({ kind: "import", plan: planOutline(outline, data, termStart() || "") as ImportPlan, name: file.name }),
+        cache: ["outline", String(data.profile?.id ?? ""), today().slice(0, 7), termStart() || "", JSON.stringify(readContext())],
+        call: (body, signal) => api.readOutline(body, { name: file.name, today: today(), termStart: termStart() || "", ...readContext() }, signal),
+        done: (outline: Outline) => {
+            const plan = planOutline(outline, data, termStart() || "") as ImportPlan
+            const cal = schoolCal()
+            for (const c of plan.courses) if (c.isNew) c.term = defaultTerm(cal, c.term || "", today())
+            openSheet({ kind: "import", plan, name: file.name, ...(back ? { back } : {}) })
+        },
     })
 }
 
@@ -77,18 +94,21 @@ export const importCount = (plan: ImportPlan) =>
 
 /** Write the ticked rows in one save, courses first so the items can point at them. Returns a summary line. */
 export async function commitImport(plan: ImportPlan): Promise<string> {
-    let classes = 0, items = 0
+    let classes = 0, items = 0, terms = 0
     const rows: { kind: "courses" | "items"; row: Course | Item }[] = []
     const wanted = new Set(plan.items.filter((i) => i.include).map((i) => i.row.courseId).filter(Boolean))
     for (const c of plan.courses) {
         const add = c.meetings.filter((m) => m.include).map(({ include: _, ...m }) => m)
-        if (!add.length && !(c.isNew && (c.keep || wanted.has(c.id)))) continue
         if (c.isNew) {
+            if (!add.length && !(c.keep || wanted.has(c.id))) continue
             rows.push({ kind: "courses", row: normalizeCourse({ id: c.id, code: c.code, name: c.name, color: c.color, instructor: c.instructor || "", term: c.term || "", meetings: add }) as Course })
         } else {
             const live = store.course(c.id) as Course | null
-            if (!live) continue
-            rows.push({ kind: "courses", row: { ...live, meetings: [...live.meetings, ...add].slice(0, 12) } })
+            /* a semester picked in the preview; undefined (a calendar or CSV import) leaves it */
+            const term = c.term ?? live?.term ?? ""
+            if (!live || (!add.length && term === live.term)) continue
+            rows.push({ kind: "courses", row: { ...live, term, meetings: [...live.meetings, ...add].slice(0, 12) } })
+            if (term !== live.term) terms++
         }
         classes += add.length
     }
@@ -105,5 +125,7 @@ export async function commitImport(plan: ImportPlan): Promise<string> {
     const start = plan.week1 || plan.termStart
     const profile = data.profile
     if (start && profile && !profile.termStart && !schoolCal()) await store.saveProfile({ termStart: start })
+    /* only semesters picked: say that, not "Imported 0 classes" */
+    if (!classes && !items && terms) return terms === 1 ? "Updated the semester." : "Updated " + terms + " semesters."
     return "Imported " + classes + " class" + (classes === 1 ? "" : "es") + " and " + items + " item" + (items === 1 ? "" : "s") + "."
 }

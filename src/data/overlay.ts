@@ -1,5 +1,5 @@
 // What is on top of the page, and so what takes focus: the sheet (components/sheet/) and
-// the overlays above it (the shortcuts panel, the busy card; components/overlays.tsx).
+// the overlays above it (the shortcuts panel, the reading card; components/overlays.tsx).
 // While the sheet is open the page behind is inert, so Tab stays inside; closed, the sheet
 // is inert itself. An overlay makes both inert. The scrim belongs to the sheet while it is
 // open, and to the phone sidebar (sidebar.ts) otherwise. <App> draws all of that from
@@ -18,7 +18,9 @@ export type SheetState =
     | { kind: "new-item"; draft: Item }
     | { kind: "course"; id: string | null }
     | { kind: "settings"; tab: SettingsTab; focus: string | null }
-    | { kind: "import"; plan: ImportPlan; name: string }
+    | { kind: "import"; plan: ImportPlan; name: string; back?: "ai" }
+    | { kind: "schedule"; plan: ImportPlan; name: string }
+    | { kind: "ai" }
     | { kind: "school"; draft: SchoolDraft }
     | { kind: "session"; draft: SessionDraft }
     | { kind: "achievement"; draft: AchievementDraft }

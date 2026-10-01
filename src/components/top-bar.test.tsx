@@ -22,6 +22,7 @@ const fake = vi.hoisted(() => {
 })
 const actions = vi.hoisted(() => ({
     goToday: vi.fn(), step: vi.fn(), setSearch: vi.fn(), newItem: vi.fn(), showSidebar: vi.fn(),
+    openAiImport: vi.fn(),
 }))
 vi.mock("@/data/actions", () => actions)
 vi.mock("@/data/ui", async () => (await import("@/data/fake-ui")).fakeUi(fake.ui))
@@ -54,6 +55,12 @@ afterEach(() => {
 })
 
 describe("the top bar", () => {
+    it("opens Import with AI", () => {
+        render(<TopBar />)
+        fireEvent.click(screen.getByRole("button", { name: "Import with AI" }))
+        expect(actions.openAiImport).toHaveBeenCalled()
+    })
+
     it("shows the date line over the title, the title in the serif", () => {
         render(<TopBar />)
         const h1 = screen.getByRole("heading", { level: 1 })

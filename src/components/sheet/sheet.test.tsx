@@ -34,7 +34,7 @@ vi.mock("@/core/sync", () => ({ status: { state: "idle", pending: 0, message: ""
 vi.mock("@/data/spotify/player", () => ({ state: { loaded: true, connected: false } }))
 vi.mock("@/data/spotify/web-player", () => ({ state: { status: "off" } }))
 vi.mock("@/core/api", () => ({ api: {}, spotifyRetryAt: () => 0 }))
-vi.mock("@/data/ai-read", () => ({ readWithAi: vi.fn() }))
+vi.mock("@/data/ai-read", () => ({ readWithAi: vi.fn(), refreshReads: vi.fn(async () => {}), asSent: vi.fn(), MAX_FILE: 5 * 1024 * 1024 }))
 
 import * as store from "@/core/store"
 import { normalizeCourse, normalizeItem } from "@/core/model"

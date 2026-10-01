@@ -1,0 +1,97 @@
+{
+  "courses": [
+    {
+      "classes": [
+        {
+          "day": "Tue",
+          "end": "10:00",
+          "kind": "Lecture",
+          "room": "H-110",
+          "start": "08:30"
+        },
+        {
+          "day": "Thu",
+          "end": "10:00",
+          "kind": "Lecture",
+          "room": "H-110",
+          "start": "08:30"
+        }
+      ],
+      "code": "CHEM 271",
+      "name": "Organic Chemistry I"
+    },
+    {
+      "classes": [
+        {
+          "day": "Fri",
+          "end": "16:00",
+          "kind": "Lab",
+          "room": "SP-265",
+          "start": "13:00"
+        }
+      ],
+      "code": "CHEM 271",
+      "name": "Organic Chemistry I"
+    },
+    {
+      "classes": [
+        {
+          "day": "Mon",
+          "end": "10:30",
+          "kind": "Lecture",
+          "room": "Hall B",
+          "start": "09:00"
+        },
+        {
+          "day": "Wed",
+          "end": "10:30",
+          "kind": "Lecture",
+          "room": "Hall B",
+          "start": "09:00"
+        }
+      ],
+      "code": "PHYS 205",
+      "name": "Waves and Optics"
+    },
+    {
+      "classes": [
+        {
+          "day": "Wed",
+          "end": "16:00",
+          "kind": "Tutorial",
+          "room": "Room 2.04",
+          "start": "15:00"
+        }
+      ],
+      "code": "PHYS 205",
+      "name": "Waves and Optics"
+    },
+    {
+      "classes": [
+        {
+          "day": "Mon",
+          "end": "14:30",
+          "kind": "Lecture",
+          "room": "CC-301",
+          "start": "13:00"
+        }
+      ],
+      "code": "BIOL 266",
+      "name": "Cell Biology"
+    },
+    {
+      "classes": [
+        {
+          "day": "Thu",
+          "end": "17:00",
+          "kind": "Lab",
+          "room": "SP-110",
+          "start": "14:00"
+        }
+      ],
+      "code": "BIOL 266",
+      "name": "Cell Biology"
+    }
+  ],
+  "term": "Fall 2026"
+}

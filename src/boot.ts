@@ -16,11 +16,18 @@ import { refreshAfterSync, runHeldRefresh, pointerPressed, pointerReleased, runR
 import { boot as openSession, showSignIn, onStoreEvent, onStorage } from "@/data/session"
 import { commitUndo, finishDelete } from "@/data/study-controller"
 import { onKeydown } from "@/data/keyboard"
+import { forgetReads } from "@/data/ai-cache"
 // Listen to the store and sync from the start, before any component mounts.
 import "@/data/store"
 import "@/data/sync"
 
 let booted = false
+
+/* The server ended the session (a 401): the sign-in, and the AI answers kept here go, as on any sign-out. */
+function sessionEnded() {
+    forgetReads()
+    showSignIn("Your session has ended. Sign in again.")
+}
 
 /** Everything the page listens to, and then the account opens. Runs once. */
 export function boot() {
@@ -44,7 +51,7 @@ export function boot() {
     document.addEventListener("focusout", runHeldRefresh)
     document.addEventListener("pointerdown", pointerPressed, true)
     for (const type of ["pointerup", "pointercancel"]) document.addEventListener(type, pointerReleased, true)
-    sync.onUnauthenticated(() => showSignIn("Your session has ended. Sign in again."))
+    sync.onUnauthenticated(sessionEnded)
 
     /* ═════════ Spotify ═════════ */
     /* The sidebar player, the Music page and the focus screen's music
@@ -57,7 +64,7 @@ export function boot() {
     web.onChange(() => {
         notify()   /* Settings says whether this tab is a device */
     })
-    spotify.onUnauthenticated(() => showSignIn("Your session has ended. Sign in again."))
+    spotify.onUnauthenticated(sessionEnded)
 
     /* ═════════ session ═════════ */
     store.subscribe(onStoreEvent)
