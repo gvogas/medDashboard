@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest"
 import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react"
 import { stubMatchMedia } from "./test-media"
 
@@ -6,7 +6,7 @@ import { stubMatchMedia } from "./test-media"
    core/model.ts, data/query.ts and the actions are the real ones, so the filter logic is too. */
 const fake = vi.hoisted(() => ({
     data: { items: [] as unknown[], courses: [] as unknown[], quotes: [] as unknown[], study_sessions: [] as unknown[], profile: null as unknown },
-    ui: { view: "week", search: "", types: {} as Record<string, boolean>, course: "all", bg: "med", anchor: "2026-09-28", settings: false },
+    ui: { view: "week", search: "", types: {} as Record<string, boolean>, course: "all", sem: null as string | null, bg: "med", anchor: "2026-09-28", settings: false },
 }))
 vi.mock("@/core/store", () => ({
     data: fake.data,
@@ -40,6 +40,7 @@ beforeEach(() => {
     fake.data.profile = { id: "p", username: "demo", displayName: "Dr Demo", coat: { name: "", role: "MS2 · Block 3", color: "" }, types: [] }
     fake.ui.types = {}
     fake.ui.course = "all"
+    fake.ui.sem = null
     fake.ui.search = ""
     fake.ui.bg = "med"
 })
@@ -82,6 +83,68 @@ describe("the courses", () => {
         expect(openCourse).toHaveBeenCalledWith("c1")
         fireEvent.click(coursesNav().getByRole("button", { name: "+ New course" }))
         expect(openCourse).toHaveBeenLastCalledWith(null)
+    })
+})
+
+describe("the semester select", () => {
+    const TERMS = [{ name: "Fall 2026", start: "2026-09-08", end: "2026-12-18" }, { name: "Winter 2027", start: "2027-01-11", end: "2027-04-23" }]
+    beforeAll(() => { vi.useFakeTimers({ toFake: ["Date"] }); vi.setSystemTime(new Date(2026, 8, 23, 12)) })
+    afterAll(() => { vi.useRealTimers() })
+    beforeEach(() => {
+        fake.data.profile = { ...(fake.data.profile as object), schoolCalendar: { name: "", terms: TERMS, days: [] } }
+        fake.data.courses = [
+            { id: "f", name: "Fall course", color: "#C2571A", archived: false, term: "Fall 2026", meetings: [] },
+            { id: "w", name: "Winter course", color: "#1E628F", archived: false, term: "Winter 2027", meetings: [] },
+            { id: "b", name: "Year course", color: "#3F7A2E", archived: false, term: "", meetings: [] },
+        ]
+    })
+
+    it("lists the current semester's courses and the all-year ones, marked Both", () => {
+        render(<Sidebar />)
+        expect(coursesNav().getByRole("button", { name: "Semester: Fall 2026" }).getAttribute("aria-expanded")).toBe("false")
+        expect(coursesNav().getByRole("button", { name: /^Fall course/ })).toBeTruthy()
+        expect(coursesNav().queryByRole("button", { name: /^Winter course/ })).toBeNull()
+        expect(coursesNav().getByRole("button", { name: /^Year course/ }).textContent).toContain("Both")
+        expect(coursesNav().getByRole("button", { name: /^Fall course/ }).textContent).not.toContain("Both")
+    })
+
+    it("switches semester; a course picked outside it goes back to All courses", () => {
+        fake.ui.course = "f"
+        render(<Sidebar />)
+        fireEvent.click(coursesNav().getByRole("button", { name: "Semester: Fall 2026" }))
+        const list = coursesNav().getByRole("listbox", { name: "Semester" })
+        expect(within(list).getByRole("option", { name: /Fall 2026/ }).getAttribute("aria-selected")).toBe("true")
+        expect(document.activeElement).toBe(within(list).getByRole("option", { name: /Fall 2026/ }))
+        fireEvent.keyDown(list, { key: "ArrowDown" })
+        fireEvent.click(document.activeElement as HTMLElement)
+        expect(coursesNav().queryByRole("listbox")).toBeNull()
+        expect(fake.ui.sem).toBe("Winter 2027")
+        expect(fake.ui.course).toBe("all")
+        expect(coursesNav().getByRole("button", { name: /^Winter course/ })).toBeTruthy()
+        expect(coursesNav().queryByRole("button", { name: /^Fall course/ })).toBeNull()
+    })
+
+    it("still shows the course picked when the semester shown leaves it out", () => {
+        fake.ui.course = "w"
+        render(<Sidebar />)
+        expect(coursesNav().getByRole("button", { name: /^Winter course/ }).getAttribute("aria-pressed")).toBe("true")
+    })
+
+    it("closes on Escape without picking, focus back on the button", () => {
+        render(<Sidebar />)
+        const button = coursesNav().getByRole("button", { name: "Semester: Fall 2026" })
+        fireEvent.click(button)
+        fireEvent.keyDown(coursesNav().getByRole("listbox"), { key: "Escape" })
+        expect(coursesNav().queryByRole("listbox")).toBeNull()
+        expect(document.activeElement).toBe(button)
+        expect(fake.ui.sem).toBeNull()
+    })
+
+    it("is not there with one semester", () => {
+        fake.data.profile = { ...(fake.data.profile as object), schoolCalendar: { name: "", terms: TERMS.slice(0, 1), days: [] } }
+        render(<Sidebar />)
+        expect(coursesNav().queryByRole("button", { name: /^Semester/ })).toBeNull()
+        expect(coursesNav().queryByText("Both")).toBeNull()
     })
 })
 

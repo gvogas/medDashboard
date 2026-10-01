@@ -6,7 +6,7 @@ import { useMemo, useSyncExternalStore } from "react"
 import { getVersion, subscribe } from "@/bridge"
 import { isOpen, isOverdue, isTest, normalizePrefs, occurrences, statusLabel, tmeta } from "@/core/model"
 import { addDays, diffDays, dur, iso, monday, parse, today as todayIso, DOW, MON } from "@/core/dates"
-import { classWeekday, dayInfo, weekOf } from "@/core/school"
+import { classWeekday, courseRunsOn, currentTerm, dayInfo, inTerm, weekOf } from "@/core/school"
 import type { SchoolCalendar } from "@/core/school"
 import { weekLabel } from "@/lib/school-bits"
 import { schoolCal } from "@/data/query"
@@ -85,6 +85,10 @@ const byWeekday = (list: ClassSlot[]) => {
     return out
 }
 
+/** The classes of a weekday that run on `date`: a course set to one semester has none outside it. */
+const runningOn = (list: ClassSlot[] | undefined, cal: SchoolCal, date: string) =>
+    (list || []).filter((slot) => courseRunsOn(cal, slot.course.term, date))
+
 /* ── the school calendar ── */
 
 /** A day as the school calendar sees it (dayInfo in core/school.ts). */
@@ -151,7 +155,7 @@ export function weekDays({ items, courses, filters, schedule, anchor, today, cal
         const d = addDays(start, i), date = iso(d)
         const wd = classWeekday(cal, date) as number | null
         const timed: { at: string; entry: Entry }[] = [
-            ...(wd === null ? [] : slots.get(wd) || []).map((slot) => ({ at: slot.mtg.start, entry: { kind: "class" as const, key: "c" + slot.course.id + slot.mtg.id, slot } })),
+            ...(wd === null ? [] : runningOn(slots.get(wd), cal, date)).map((slot) => ({ at: slot.mtg.start, entry: { kind: "class" as const, key: "c" + slot.course.id + slot.mtg.id, slot } })),
             ...list.filter((x) => x.date === date).map((inst) => ({ at: timeOf(inst.item), entry: { kind: "item" as const, key: "i" + inst.item.id, inst } })),
         ]
         /* a stable sort: at the same time, classes before items */
@@ -226,13 +230,13 @@ export function monthCells({ items, courses, filters, schedule, anchor, today, c
         const d = addDays(start, i), date = iso(d), info = infoOf(cal, date)
         const wd = classWeekday(cal, date) as number | null
         const due = byDate.get(date) || []
-        const cls = schedule === "deadlines" || wd === null ? [] : slots.get(wd) || []
+        const cls = schedule === "deadlines" || wd === null ? [] : runningOn(slots.get(wd), cal, date)
         const chips: Chip[] = [
             ...due.map((inst) => ({ kind: "due" as const, key: "i" + inst.item.id, inst })),
             ...cls.map((slot) => ({ kind: "class" as const, key: "c" + slot.course.id + slot.mtg.id, slot })),
         ]
         const shown = chips.length > PER_CELL ? PER_CELL - 1 : chips.length
-        const off = schedule !== "deadlines" && info && ["off", "break", "exams"].includes(info.kind) ? (slots.get(d.getDay()) || []).length : 0
+        const off = schedule !== "deadlines" && info && ["off", "break", "exams"].includes(info.kind) ? runningOn(slots.get(d.getDay()), cal, date).length : 0
         cells.push({
             date, day: d.getDate(), dow: DOW[d.getDay()], out: d.getMonth() !== a.getMonth(), isToday: date === today, info,
             chips: chips.slice(0, shown), more: chips.length - shown, due: due.length, classes: cls.length, off,
@@ -251,9 +255,13 @@ export function cellLabel(c: Cell): string {
 
 export interface TimetableDay { weekday: number; dow: string; hours: number; slots: ClassSlot[] }
 
-/** The weekly timetable, Monday to Saturday, and Sunday only if a class lands there. */
-export function timetable(courses: Course[], f: Filters): TimetableDay[] {
-    const slots = byWeekday(classes(courses, f))
+/**
+ * The weekly timetable, Monday to Saturday, and Sunday only if a class lands there. With a
+ * calendar it holds the anchor's semester (the current one between semesters) and all-year courses.
+ */
+export function timetable(courses: Course[], f: Filters, cal: SchoolCal = null, anchor = ""): TimetableDay[] {
+    const term = cal ? dayInfo(cal, anchor).term ?? currentTerm(cal, anchor) : null
+    const slots = byWeekday(classes(courses.filter((c) => inTerm(cal, c.term, term)), f))
     return [1, 2, 3, 4, 5, 6, 0]
         .filter((w) => (w !== 0 && w !== 6) || (slots.get(w) || []).length)
         .map((w) => {
@@ -379,7 +387,7 @@ export const useWeek = () => {
 
 export const useMonth = () => {
     const input = useViewInput()
-    return useMemo(() => ({ month: monthCells(input), timetable: timetable(input.courses, input.filters), schedule: input.schedule }), [input])
+    return useMemo(() => ({ month: monthCells(input), timetable: timetable(input.courses, input.filters, input.cal, input.anchor),schedule: input.schedule }), [input])
 }
 
 export const useTable = () => {

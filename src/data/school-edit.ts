@@ -4,7 +4,7 @@
 
 import * as store from "@/core/store"
 import { today } from "@/core/dates"
-import { normalizeSchool, validDate } from "@/core/school"
+import { courseTerm, normalizeSchool, renamedTerms, validDate } from "@/core/school"
 import { schoolCal } from "@/data/query"
 import { api } from "@/core/api"
 import { readWithAi } from "./ai-read"
@@ -80,9 +80,17 @@ export function readSchoolFile(file: File) {
     })
 }
 
+/** Save the calendar; the courses of a semester renamed in it go under the new name. */
 export async function saveSchool(s: SchoolDraft) {
     if (!valid(s)) return
-    await store.saveProfile({ schoolCalendar: toSave(s) })
+    const before = schoolCal(), saved = toSave(s)
+    const renamed = renamedTerms(before, normalizeSchool(saved))
+    const moved = store.data.courses.flatMap((c) => {
+        const name = renamed.get(courseTerm(before, c.term)?.name ?? "")
+        return name ? [{ kind: "courses" as const, row: { ...c, term: name } }] : []
+    })
+    await store.saveProfile({ schoolCalendar: saved })
+    if (moved.length) await store.saveRows(moved)
     closeSheet()
     notify()
     toast("School calendar saved")

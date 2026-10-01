@@ -46,6 +46,16 @@ export function normalizeSchool(raw: unknown): SchoolCalendar | null {
     .map((t) => ({ name: cut(t.name, SCHOOL_LIMITS.term) || 'Semester', start: t.start, end: t.end }))
     .sort((a, b) => a.start.localeCompare(b.start)).slice(0, SCHOOL_LIMITS.terms);
   if (!terms.length) return null;
+  /* names are how courses find their semester: a later name taken already gets " 2", " 3"… */
+  const taken = new Set<string>();
+  for (const t of terms) {
+    const base = t.name;
+    for (let n = 2; taken.has(t.name.toLowerCase()); n++) {
+      const tail = ' ' + n;
+      t.name = base.slice(0, SCHOOL_LIMITS.term - tail.length).trimEnd() + tail;
+    }
+    taken.add(t.name.toLowerCase());
+  }
   const days = (Array.isArray(r.days) ? r.days as Record<string, unknown>[] : [])
     .filter((d): d is { from: string; to?: unknown; kind: SchoolKind; label?: unknown; follows?: unknown } => d && validDate(d.from) && isKind(d.kind))
     .map((d) => {
@@ -126,6 +136,62 @@ export function weekOf(cal: SchoolCalendar | null, date: string): WeekInfo | nul
 export function currentTerm(cal: SchoolCalendar | null, today: string): Term | null {
   if (!cal) return null;
   return [...cal.terms].reverse().find((t) => t.start <= today) || cal.terms[0];
+}
+
+/** The semester a course's `term` names, matched by name with case and spacing aside. Null
+    means all year: an empty term, one that names no semester, or no calendar. */
+export function courseTerm(cal: SchoolCalendar | null, text: string | null | undefined): Term | null {
+  const want = (text || '').replace(/\s+/g, ' ').trim().toLowerCase();
+  if (!cal || !want) return null;
+  return cal.terms.find((t) => t.name.toLowerCase() === want) || null;
+}
+
+/** Whether a course of semester `text` can have classes on `date`: all-year courses always. */
+export function courseRunsOn(cal: SchoolCalendar | null, text: string | null | undefined, date: string): boolean {
+  const t = courseTerm(cal, text);
+  return !t || (t.start <= date && date <= t.end);
+}
+
+/** Whether a course goes under semester `term` in the sidebar: its own, or all year. */
+export function inTerm(cal: SchoolCalendar | null, text: string | null | undefined, term: Term | null): boolean {
+  const t = courseTerm(cal, text);
+  return !t || !term || t === term;
+}
+
+/** The semester the sidebar shows: the one picked while the calendar still has it, else the current one. */
+export function pickedTerm(cal: SchoolCalendar | null, picked: string | null, today: string): Term | null {
+  if (!cal) return null;
+  return cal.terms.find((t) => t.name === picked) || currentTerm(cal, today);
+}
+
+/**
+ * The semesters a calendar edit renamed, old name to new: an old semester whose name is gone,
+ * when the semester in its place has a name the old calendar did not have.
+ */
+export function renamedTerms(before: SchoolCalendar | null, after: SchoolCalendar | null): Map<string, string> {
+  const out = new Map<string, string>();
+  if (!before || !after) return out;
+  const key = (t: Term) => t.name.toLowerCase();
+  const was = new Set(before.terms.map(key)), now = new Set(after.terms.map(key));
+  before.terms.forEach((t, i) => {
+    const next = after.terms[i];
+    if (next && !now.has(key(t)) && !was.has(key(next))) out.set(t.name, next.name);
+  });
+  return out;
+}
+
+/**
+ * When a weekly item can repeat until, for an item dated `date`: the end of each semester
+ * still to end, then the school year's last day (its last exam day) when that is later.
+ * The first is the default. Empty without a calendar.
+ */
+export function repeatEnds(cal: SchoolCalendar | null, date: string): { end: string; term: Term | null }[] {
+  if (!cal) return [];
+  const out: { end: string; term: Term | null }[] = cal.terms.filter((t) => t.end >= date).map((t) => ({ end: t.end, term: t }));
+  const last = cal.days.filter((d) => d.kind === 'exams').map((d) => d.to)
+    .reduce((a, b) => (b > a ? b : a), cal.terms[cal.terms.length - 1].end);
+  if (last >= date && !out.some((o) => o.end === last)) out.push({ end: last, term: null });
+  return out;
 }
 
 /** The term start the app goes by: the school calendar's current semester, else the one set. */

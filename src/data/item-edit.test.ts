@@ -11,6 +11,7 @@ vi.mock("@/core/store", () => ({
 vi.mock("@/lib/fireworks", () => ({ launch: vi.fn() }))
 
 import { httpUrl, normalizeCourse, normalizeItem } from "@/core/model"
+import { normalizeSchool } from "@/core/school"
 import { autoTitleFor, countdown, deriveEdit, editNow, flush, linkUrl, pendingFor, typeInto, TYPING_MS } from "./item-edit"
 import { courseChanged, forSaving, newCourse } from "./course-edit"
 import type { Course, Item } from "./types"
@@ -51,6 +52,31 @@ describe("what an edit brings along", () => {
         expect(deriveEdit(item({ recur: "weekly", weekday: 3 }), "date", "2026-09-25", courseOf).weekday).toBe(5)
         expect(deriveEdit(item({}), "recur", true, courseOf)).toMatchObject({ recur: "weekly", weekday: 3 })
         expect(deriveEdit(item({ recur: "weekly", weekday: 3, recurUntil: "2026-12-01" }), "recur", false, courseOf)).toMatchObject({ recur: null, weekday: null, recurUntil: null })
+    })
+
+    it("repeats until the end of the item's semester by default", () => {
+        const cal = normalizeSchool({ terms: [
+            { name: "Fall 2026", start: "2026-09-08", end: "2026-12-18" },
+            { name: "Winter 2027", start: "2027-01-11", end: "2027-04-23" },
+        ] })
+        expect(deriveEdit(item({}), "recur", true, courseOf, cal)).toMatchObject({ recur: "weekly", weekday: 3, recurUntil: "2026-12-18" })
+        expect(deriveEdit(item({ recurUntil: "2026-11-01" }), "recur", true, courseOf, cal).recurUntil).toBe("2026-11-01")
+        expect(deriveEdit(item({}), "recur", true, courseOf).recurUntil).toBeNull()
+    })
+
+    it("moves a weekly item's default end with its date, and an end the date passed", () => {
+        const cal = normalizeSchool({ terms: [
+            { name: "Fall 2026", start: "2026-09-08", end: "2026-12-18" },
+            { name: "Winter 2027", start: "2027-01-11", end: "2027-04-23" },
+        ] })
+        const lab = (recurUntil: string) => item({ type: "lab", recur: "weekly", weekday: 3, recurUntil })
+        expect(deriveEdit(lab("2026-12-18"), "date", "2027-01-15", courseOf, cal).recurUntil).toBe("2027-04-23")
+        expect(deriveEdit(lab("2026-11-01"), "date", "2027-01-15", courseOf, cal).recurUntil).toBe("2027-04-23")
+        expect(deriveEdit(lab("2026-12-18"), "date", "2026-10-07", courseOf, cal).recurUntil).toBe("2026-12-18")
+        expect(deriveEdit(lab("2026-11-01"), "date", "2026-10-07", courseOf, cal)).not.toHaveProperty("recurUntil")
+        expect(deriveEdit(lab("2026-11-01"), "date", "2026-11-04", courseOf)).toMatchObject({ recurUntil: null })
+        expect(deriveEdit(item({ type: "lab", recur: "weekly", weekday: 3 }), "date", "2027-01-15", courseOf, cal)).not.toHaveProperty("recurUntil")
+        expect(deriveEdit(item({ recurUntil: "2026-11-01" }), "date", "2026-11-04", courseOf, cal)).not.toHaveProperty("recurUntil")
     })
 
     it("reads weights and grades", () => {

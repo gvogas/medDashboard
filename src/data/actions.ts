@@ -6,7 +6,8 @@ import * as store from "@/core/store"
 import { data } from "@/core/store"
 import * as sync from "@/core/sync"
 import { isOpen, normalizeItem, typeList, typePrefsFrom, uid, TYPE_COLOURS, MAX_CUSTOM_TYPES, ACHIEVEMENT_LIMIT } from "@/core/model"
-import { typeOn } from "@/data/query"
+import { schoolCal, typeOn } from "@/data/query"
+import { inTerm, pickedTerm } from "@/core/school"
 import { addDays, iso, parse, today } from "@/core/dates"
 import { setSide } from "./sidebar"
 import { openKeys } from "./keys"
@@ -73,6 +74,15 @@ export const isTypeOn = (id: string): boolean => typeOn(id)
 export function setCourse(id: string) {
     ui.course = id
     ui.listFrom = null                         /* picking a course ends a stat tile's list */
+    notify()
+}
+
+/** The sidebar's semester. A course picked that is not in it goes back to All courses. */
+export function setSem(name: string) {
+    ui.sem = name
+    const cal = schoolCal(), term = pickedTerm(cal, name, today())
+    const c = ui.course === "all" ? null : (data.courses as Course[]).find((x) => x.id === ui.course)
+    if (c && !inTerm(cal, c.term, term)) { ui.course = "all"; ui.listFrom = null }
     notify()
 }
 
