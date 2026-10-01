@@ -163,7 +163,9 @@
   .fc-clock { --flip-h: calc(var(--flip-w) * 1.42); --flip-fs: var(--flip-w); --flip-gap: calc(var(--flip-w) * .15); --flip-r: calc(var(--flip-w) * .13);
     display: inline-flex; align-items: center; gap: var(--flip-gap); position: relative; }
   .fc-big { --flip-w: clamp(52px, 8.4vw, 108px); }
-  .fc-mid { --flip-w: clamp(40px, 5vw, 58px); }
+  /* the Study page's Ready card: cards 96px high (spec §8), smaller on a phone */
+  .fc-ready { --flip-w: 68px; --flip-h: 96px; }
+  @media (max-width: 520px) { .fc-ready { --flip-w: 50px; --flip-h: 71px; } }
   .fc-mini { --flip-w: 20px; --flip-fs: 19px; --flip-gap: 5px; --flip-r: 4px; }
   .fc-pair { display: flex; gap: calc(var(--flip-gap) * .45); }
   .fc-colon { display: flex; flex-direction: column; gap: calc(var(--flip-h) * .18); padding-inline: calc(var(--flip-gap) * .2); }

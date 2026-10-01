@@ -37,7 +37,7 @@ vi.mock("@/core/store", () => ({
 import * as focus from "@/data/run"
 import { getStudyBadge, notify, subscribe } from "@/bridge"
 import {
-    addStep, applyPreset, clockTime, delStep, doneAt, escapeFocus, leaveFocus, openFocus, flowTotals, nextLine, pickFor, setRounds, setStepKind, setStepMinutes, skip, startRun,
+    addStep, applyPreset, clockTime, delStep, doneAt, escapeFocus, flowName, leaveFocus, openFocus, flowTotals, nextLine, pickFor, presetsFor, sameFlow, setRounds, setStepKind, setStepMinutes, skip, startRun,
     stopRun, stripSegments, tickTitle, timeText, todaySoFar, toggleMusic, togglePause, useFlow, useRun, type Run,
 } from "./study-timer"
 import { ui } from "./ui"
@@ -73,6 +73,30 @@ const session = (startedAt: number, studyMinutes: number): StudySession =>
 
 /* promises inside run.ts (the meta store, the session save) settle */
 const settle = () => act(async () => { for (let i = 0; i < 20; i++) await Promise.resolve() })
+
+describe("the presets and the flow's name", () => {
+    const READ: Flow = { steps: [["study", 20], ["break", 5], ["study", 40], ["break", 15]], rounds: 2 }
+
+    it("name the third preset for the theme, with the same flow in every theme", () => {
+        expect(presetsFor("med").map(([name]) => name)).toEqual(["Classic 25/5", "Deep 50/10", "Anki then read"])
+        expect(presetsFor("cs")[2]).toEqual(["LeetCode then read", READ])
+        expect(presetsFor("eng")[0]).toEqual(["Classic 25/5", CLASSIC])
+    })
+
+    it("tell flows apart by their steps and rounds", () => {
+        expect(sameFlow(CLASSIC, { steps: [["study", 25], ["break", 5]], rounds: 4 })).toBe(true)
+        expect(sameFlow(CLASSIC, { ...CLASSIC, rounds: 3 })).toBe(false)
+        expect(sameFlow(CLASSIC, { steps: [["study", 25], ["study", 5]], rounds: 4 })).toBe(false)
+        expect(sameFlow(CLASSIC, { steps: [["study", 25]], rounds: 4 })).toBe(false)
+    })
+
+    it("call the flow by its preset and rounds, else Your flow", () => {
+        expect(flowName(CLASSIC, "med")).toBe("Classic 25/5 · 4 rounds")
+        expect(flowName(READ, "law")).toBe("Brief then outline · 2 rounds")
+        expect(flowName({ ...CLASSIC, rounds: 3 }, "med")).toBe("Your flow · 3 rounds")
+        expect(flowName({ steps: [["study", 25]], rounds: 1 }, "med")).toBe("Your flow · 1 round")
+    })
+})
 
 describe("the flow's totals", () => {
     it("adds the study and every step, times the rounds", () => {
@@ -471,14 +495,15 @@ describe("a run", () => {
         expect(getStudyBadge()).toBeNull()
     })
 
-    it("opens the focus screen on Start, and goes to the Study page when it ends", async () => {
+    it("opens the focus screen on Start, and goes to the Study page's Timer tab when it ends", async () => {
         ui.view = "week"
         ui.focus = false
+        ui.studyTab = "achievements"
         await begin(CLASSIC)
         expect(ui.focus).toBe(true)
         expect(redraw).toHaveBeenCalled()
         await act(() => stopRun())
-        expect(ui).toMatchObject({ focus: false, view: "study" })
+        expect(ui).toMatchObject({ focus: false, view: "study", studyTab: "timer" })   /* Today lists the session */
     })
 
     it("is gone after sign-out forgets it", async () => {

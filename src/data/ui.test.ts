@@ -25,7 +25,22 @@ describe("the remembered schedule tab", () => {
         const state = await load({ schedule: "deadlines", monthDeadlines: false })
         expect(state.ui.schedule).toBe("deadlines")
         state.rememberUi()
-        expect(JSON.parse(localStorage.getItem("rounds.ui")!)).toEqual({ view: "week", schedule: "deadlines" })
+        expect(JSON.parse(localStorage.getItem("rounds.ui")!)).toEqual({ view: "week", schedule: "deadlines", studyTab: "timer" })
+    })
+})
+
+describe("the remembered Study tab", () => {
+    it("starts on Timer, keeps a saved tab, and ignores one it does not know", async () => {
+        expect((await load({})).ui.studyTab).toBe("timer")
+        expect((await load({ studyTab: "leaderboard" })).ui.studyTab).toBe("leaderboard")
+        expect((await load({ studyTab: "music" })).ui.studyTab).toBe("timer")
+    })
+
+    it("is saved with the view", async () => {
+        const state = await load({ studyTab: "history" })
+        state.ui.studyTab = "achievements"
+        state.rememberUi()
+        expect(JSON.parse(localStorage.getItem("rounds.ui")!)).toEqual({ view: "week", schedule: "all", studyTab: "achievements" })
     })
 })
 

@@ -113,9 +113,15 @@ export function celebrateAchievements({ quiet = false }: { quiet?: boolean } = {
     if (studyPrefs().celebrate) fireworks(window.innerWidth / 2, window.innerHeight * 0.7, { rockets: 5 })
 }
 
-function showAchievement(id: string) {
-    if (ui.view !== "study") { ui.view = "study"; rememberUi(); notify() }
-    /* the Study page is drawn by the next frame when it was not showing */
+/** An achievement toast's See: the Study page's Achievements tab, the medal brought into view with a pop. */
+export function showAchievement(id: string) {
+    if (ui.view !== "study" || ui.studyTab !== "achievements") {
+        ui.view = "study"
+        ui.studyTab = "achievements"
+        rememberUi()
+        notify()
+    }
+    /* the tab is drawn by the next frame when it was not showing */
     requestAnimationFrame(() => {
         const el = document.getElementById("ach-" + id)
         if (!el) return

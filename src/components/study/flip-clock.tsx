@@ -6,7 +6,7 @@
 import { useEffect, useState } from "react"
 import { cn } from "@/lib/utils"
 
-export type ClockSize = "big" | "mid" | "mini"
+export type ClockSize = "big" | "ready" | "mini"
 
 const FLIP_MS = 500
 const still = () => !!window.matchMedia?.("(prefers-reduced-motion: reduce)").matches
