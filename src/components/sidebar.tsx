@@ -46,10 +46,12 @@ function CourseList() {
     const term = pickedTerm(cal, sem, today())
     /* the select shows with two semesters or more; a course goes under its own or every one */
     const picker = !!cal && cal.terms.length > 1
-    const courses = useCourses().filter((c) => !c.archived && inTerm(cal, c.term, picker ? term : null))
+    const selected = useUi((ui) => ui.course)
+    /* the course picked stays listed even when the semester shown leaves it out, so the
+       filter in force can be seen */
+    const courses = useCourses().filter((c) => !c.archived && (c.id === selected || inTerm(cal, c.term, picker ? term : null)))
     const yearTag = cal && cal.terms.length === 2 ? "Both" : "All year"
     const items = useItems()
-    const selected = useUi((ui) => ui.course)
     const n: Record<string, number> = {}
     for (const it of items) if (it.courseId && counts(it)) n[it.courseId] = (n[it.courseId] || 0) + 1
 
