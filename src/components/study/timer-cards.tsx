@@ -2,8 +2,8 @@
 // so starting feels like stepping into the focus screen (the phase in the theme's word,
 // the flip clock on the first step, the flow's name, the round strip, the course and item
 // picked, and Start); on the right Your flow (the steps, the rounds and the Quick start
-// presets; every change saves the flow to the profile, study-timer.ts) and Today (today-card.tsx). Under 960px, one
-// column (the Ready clock needs about 350px, so the two-column split stops fitting there).
+// presets; every change saves the flow to the profile, study-timer.ts) and Today (today-card.tsx). Under 1000px, one
+// column (the 314px Ready clock plus the card's padding does not fit beside the 260px sidebar and Your flow below about 996px; the card trims its padding to 24px under 1100px).
 
 import { useState, type KeyboardEvent, type ReactNode } from "react"
 import { cn } from "@/lib/utils"
@@ -27,7 +27,7 @@ const MIN = 60_000
 export function TimerCards({ className }: { className?: string }) {
     const flow = useFlow()
     return (
-        <div className={cn("grid items-stretch gap-4 [grid-template-columns:minmax(0,1.4fr)_minmax(0,1fr)] max-[960px]:[grid-template-columns:minmax(0,1fr)]", className)}>
+        <div className={cn("grid items-stretch gap-4 [grid-template-columns:minmax(0,1.4fr)_minmax(0,1fr)] max-[1000px]:[grid-template-columns:minmax(0,1fr)]", className)}>
             <ReadyCard flow={flow} />
             <div className="flex min-w-0 flex-col gap-4">
                 <FlowCard flow={flow} />
@@ -49,7 +49,7 @@ function ReadyCard({ flow }: { flow: Flow }) {
     return (
         <section
             aria-label="Ready"
-            className="study-fx flex min-w-0 flex-col justify-center gap-6 rounded-[10px] bg-[var(--fx-bg)] px-11 py-9 text-[var(--fx-ink)] shadow-[inset_0_0_0_1px_rgba(255,255,255,.06)] max-[520px]:gap-5 max-[520px]:px-5 max-[520px]:py-6"
+            className="study-fx flex min-w-0 flex-col justify-center gap-6 rounded-[10px] bg-[var(--fx-bg)] px-11 py-9 max-[1100px]:px-6 text-[var(--fx-ink)] shadow-[inset_0_0_0_1px_rgba(255,255,255,.06)] max-[520px]:gap-5 max-[520px]:px-5 max-[520px]:py-6"
         >
             <PhaseLabel className="text-[12px] font-medium tracking-[.04em] normal-case">
                 {THEMES[bg].studyWord} · round 1 of {flow.rounds}
@@ -95,7 +95,7 @@ const GoButton = ({ onClick, children }: { onClick: () => void; children: ReactN
     <button
         type="button"
         onClick={onClick}
-        className="inline-flex h-12 cursor-pointer items-center gap-2 rounded-full border-0 bg-white px-6 font-[inherit] text-[15px] font-semibold text-[#1C1C1A] hover:bg-white/90 active:bg-white/80 [&_svg]:size-3"
+        className="inline-flex h-12 cursor-pointer outline-none focus-visible:shadow-[0_0_0_2px_var(--fx-bg),0_0_0_4px_var(--ph)] items-center gap-2 rounded-full border-0 bg-white px-6 font-[inherit] text-[15px] font-semibold text-[#1C1C1A] hover:bg-white/90 active:bg-white/80 [&_svg]:size-3"
     >
         {children}
     </button>
