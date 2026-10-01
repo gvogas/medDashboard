@@ -184,7 +184,7 @@ export function UpNextRecent() {
                     {side === "queue" ? <QueueActions /> : <RecentActions s={s} />}
                 </span>
             </div>
-            <div className="-mx-3">
+            <div className="-mx-[18px]">
                 {side === "queue" ? <QueueList s={s} cooling={cooling} /> : <RecentList s={s} cooling={cooling} />}
             </div>
         </section>

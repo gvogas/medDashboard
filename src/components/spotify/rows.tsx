@@ -11,12 +11,12 @@ import { openFrom } from "./use-music"
 import { Art, Eq, Icon, mmss } from "./bits"
 
 const row = "group/row mx-2 flex h-12 items-center gap-2.5 rounded-[6px] px-2.5 text-[13px]"
-const rowHover = "hover:bg-[var(--line-2)]"
+const rowHover = "hover:bg-line-2"
 const what = "min-w-0 flex-1 leading-[1.3]"
 const line1 = "block truncate font-normal text-foreground"
 const line2 = "block truncate text-[12px] text-muted-foreground"
 const acts = "flex flex-none justify-end gap-0.5"
-const act = "grid size-8 cursor-pointer place-items-center rounded-full border-0 bg-transparent p-0 text-[15px] leading-none text-foreground hover:bg-[var(--line-2)] hover:text-primary pointer-coarse:size-10"
+const act = "grid size-8 cursor-pointer place-items-center rounded-full border-0 bg-transparent p-0 text-[15px] leading-none text-foreground hover:bg-border hover:text-primary pointer-coarse:size-10"
 /* an opened list's columns: #, title, artist, time, the buttons; the header in lists.tsx uses the same */
 export const COLUMNS = "[grid-template-columns:28px_minmax(0,1fr)_minmax(0,.7fr)_52px_72px] @max-[560px]:[grid-template-columns:28px_minmax(0,1fr)_44px_72px]"
 

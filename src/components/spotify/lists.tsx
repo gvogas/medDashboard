@@ -134,7 +134,9 @@ export const LibraryHead = ({ s }: { s: SpotifySnapshot }) => (
 const playlistArt = (c: SpotifySnapshot["cache"], id: string) =>
     c.playlists?.items.find((p) => p.id === id)?.art ?? c.results?.playlists.find((p) => p.id === id)?.art ?? null
 
-const coverBox = "size-full rounded-[6px] shadow-[0_8px_24px_rgba(28,28,26,.14)]"
+/* a cover's size and shadow; coverBox adds the corners (an artist's is round instead, by Art's prop) */
+const coverFit = "size-full shadow-[0_8px_24px_rgba(28,28,26,.14)]"
+const coverBox = cn(coverFit, "rounded-[6px]")
 const LikedCover = () => (
     <span aria-hidden="true" className={cn(coverBox, "grid place-items-center bg-primary text-primary-foreground")}>
         <Icon name="heart" className="size-1/3" />
@@ -146,12 +148,12 @@ function OpenHead({ compact, kind, name, line, cover, children }: {
     compact: boolean; kind: string; name: string; line?: ReactNode; cover: ReactNode; children?: ReactNode
 }) {
     return (
-        <div className={cn("flex flex-wrap items-end", compact ? "gap-3 px-5 pt-3 pb-2" : "gap-[18px] px-[18px] pt-[18px] pb-3 max-[560px]:gap-3 max-[560px]:px-3.5")}>
-            <span className={cn("flex-none", compact ? "size-16" : "size-[132px] max-[560px]:size-24")}>{cover}</span>
+        <div className={cn("flex flex-wrap items-end", compact ? "gap-3 px-5 pt-3 pb-2" : "gap-[18px] px-[18px] pt-[18px] pb-3 @max-[560px]:gap-3 @max-[560px]:px-3.5")}>
+            <span className={cn("flex-none", compact ? "size-16" : "size-[132px] @max-[560px]:size-24")}>{cover}</span>
             <div className="flex min-w-0 flex-1 basis-[180px] flex-col gap-1.5">
                 <button type="button" onClick={goBack} className={cn(chipButton, "self-start")}>‹ Back</button>
                 <span className="text-[12px] text-muted-foreground">{kind}</span>
-                <h3 className={cn("m-0 truncate font-serif leading-[1.1] font-medium text-foreground", compact ? "text-[20px]" : "text-[30px] max-[560px]:text-[22px]")}>{name}</h3>
+                <h3 className={cn("m-0 truncate font-serif leading-[1.1] font-medium text-foreground", compact ? "text-[20px]" : "text-[30px] @max-[560px]:text-[22px]")}>{name}</h3>
                 {line && <span className="truncate text-[13px] text-ink-2">{line}</span>}
             </div>
             <span className="flex flex-none items-center gap-2">{children}</span>
@@ -265,7 +267,7 @@ export function OpenList({ s, cooling, compact = false }: ListProps & { compact?
     const id = place.artistId || "", a = c.artists[id] || { name: "Artist", uri: "spotify:artist:" + id, art: null }, list = c.artistAlbums[id]
     return (
         <>
-            <OpenHead compact={compact} kind="Artist" name={a.name} cover={<Art src={a.art} className={cn(coverBox, "rounded-full")} />}>
+            <OpenHead compact={compact} kind="Artist" name={a.name} cover={<Art src={a.art} round className={coverFit} />}>
                 <PlayAll s={s} label="Play" run={() => void play(null, a.uri)} />
             </OpenHead>
             {!list

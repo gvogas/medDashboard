@@ -283,6 +283,13 @@ describe("the Spotify page", () => {
         /* paused, the equaliser goes */
         setPlayer({ playing: false })
         expect(now.queryByRole("img", { name: "Playing" })).toBeNull()
+        /* a report past the track's length never puts the value over the most */
+        setPlayer({ track: { ...WEIGHTLESS, progressMs: 500000 } })
+        expect(bar.getAttribute("aria-valuenow")).toBe("500")
+        expect(bar.getAttribute("aria-valuemax")).toBe("500")
+        /* off, the controls keep still on hover */
+        setPlayer({ track: null, connected: true })
+        expect(now.getByRole("button", { name: "Previous" }).className).toContain("disabled:hover:text-foreground")
     })
 
     it("plays, pauses, skips, shuffles and repeats", async () => {

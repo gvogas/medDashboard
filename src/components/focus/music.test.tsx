@@ -208,7 +208,7 @@ describe("reduced motion", () => {
         const moving = [...document.querySelectorAll("[class*='animate-[spot-eq']")]
         expect(moving.length).toBeGreaterThanOrEqual(7)      /* three in the row, four in the badge */
         for (const el of moving) expect(el.className).toContain("motion-reduce:animate-none")
-        /* the covers lift on hover, and not with reduced motion */
-        for (const el of document.querySelectorAll("[class*='group-hover/tile:-translate-y']")) expect(el.className).toContain("motion-reduce:group-hover/tile:translate-y-0")
+        /* the covers no longer lift on hover */
+        expect(document.querySelectorAll("[class*='-translate-y']").length).toBe(0)
     })
 })

@@ -71,7 +71,7 @@ export function Devices({ s, cooling, beside }: { s: SpotifySnapshot; cooling: b
                                         onClick={() => { activate(); void pickDevice(d.id) }}
                                         className={cn(
                                             "flex min-h-11 w-full cursor-pointer items-center gap-2.5 border-0 px-3.5 text-left disabled:cursor-default disabled:opacity-50",
-                                            d.active ? "bg-secondary" : "bg-transparent hover:bg-[var(--line-2)] disabled:hover:bg-transparent",
+                                            d.active ? "bg-secondary" : "bg-transparent hover:bg-line-2 disabled:hover:bg-transparent",
                                         )}
                                     >
                                         <span className="flex min-w-0 flex-1 flex-col leading-[1.3]">

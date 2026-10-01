@@ -52,7 +52,7 @@ export function NowPlaying({ compact = false }: { compact?: boolean }) {
                 role="progressbar"
                 aria-label="Track progress"
                 aria-valuemin={0}
-                aria-valuemax={secs(t?.durationMs)}
+                aria-valuemax={Math.max(secs(t?.durationMs), secs(t?.progressMs))}
                 aria-valuenow={secs(t?.progressMs)}
                 aria-valuetext={mmss(t?.progressMs ?? 0) + " of " + mmss(t?.durationMs ?? 0)}
                 className={cn("block overflow-hidden rounded-full", compact ? "h-[3px] bg-white/15" : "h-1 bg-line-2")}
@@ -72,9 +72,12 @@ export function NowPlaying({ compact = false }: { compact?: boolean }) {
         compact ? "size-[38px]" : "size-10",
         on
             ? compact ? "bg-white/20 text-foreground" : "bg-secondary text-primary"
-            : compact ? "bg-transparent text-foreground hover:bg-white/10" : "bg-transparent text-ink-2 hover:text-primary",
+            : compact ? "bg-transparent text-foreground hover:bg-white/10 disabled:hover:bg-transparent" : "bg-transparent text-ink-2 hover:text-primary disabled:hover:text-ink-2",
     )
-    const skip = "grid size-11 flex-none cursor-pointer place-items-center rounded-full border-0 bg-transparent p-0 text-foreground hover:text-primary disabled:cursor-default disabled:opacity-40"
+    const skip = cn(
+        "grid size-11 flex-none cursor-pointer place-items-center rounded-full border-0 bg-transparent p-0 text-foreground disabled:cursor-default disabled:opacity-40",
+        compact ? "hover:bg-white/10 disabled:hover:bg-transparent" : "hover:text-primary disabled:hover:text-foreground",
+    )
     const icon = compact ? "size-4" : "size-[17px]"
     const skipIcon = compact ? "size-[18px]" : "size-5"
 
@@ -117,7 +120,7 @@ export function NowPlaying({ compact = false }: { compact?: boolean }) {
                     aria-label={p.playing ? "Pause" : t ? "Play" : "Play in Term"}
                     onClick={() => { activate(); void control(p.playing ? "pause" : "play") }}
                     className={cn(
-                        "grid flex-none cursor-pointer place-items-center rounded-full border-0 p-0 disabled:cursor-default disabled:opacity-40",
+                        "grid flex-none cursor-pointer place-items-center rounded-full border-0 p-0 disabled:cursor-default disabled:opacity-40 disabled:hover:brightness-100",
                         compact
                             ? "size-[52px] bg-foreground text-background hover:brightness-90"
                             : "size-[60px] bg-primary text-primary-foreground shadow-[0_6px_16px_rgba(28,28,26,.18)] hover:brightness-110",
