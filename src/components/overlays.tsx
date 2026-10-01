@@ -1,6 +1,6 @@
 // What sits over everything, in its own root (#overlays, outside #app and #sheet): the
-// keyboard shortcuts panel and the reading card while an outline or school calendar is read
-// with AI. While one is up, cover() (data/overlay.ts) keeps everything beneath inert.
+// keyboard shortcuts panel and the reading card while a class schedule, an outline or a school
+// calendar is read with AI. While one is up, cover() (data/overlay.ts) keeps everything beneath inert.
 
 import { useEffect, useRef, useState } from "react"
 import { cn } from "@/lib/utils"
@@ -94,7 +94,7 @@ function BusyCard({ busy }: { busy: Busy }) {
                         return (
                             <li key={label} aria-current={on ? "step" : undefined}
                                 className={cn("flex items-center gap-2.5 text-[13px]", done || on ? "text-foreground" : "text-muted-foreground", on && "font-semibold")}>
-                                <span aria-hidden="true" className={cn("grid size-[18px] flex-none place-items-center rounded-full text-white",
+                                <span aria-hidden="true" className={cn("grid size-[18px] flex-none place-items-center rounded-full text-primary-foreground",
                                     done ? "bg-primary" : on ? "bg-[color-mix(in_srgb,var(--accent)_45%,var(--panel))]" : "bg-border")}>
                                     {done && <svg viewBox="0 0 16 16" className="size-2.5" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="m3 8.5 3 3 7-7" /></svg>}
                                 </span>

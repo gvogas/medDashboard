@@ -13,7 +13,7 @@ vi.mock("@/core/pdftext", () => ({ pdfText: vi.fn(async () => "the text") }))
 vi.mock("@/data/ui", async () => (await import("@/data/fake-ui")).fakeUi(fake.ui))
 
 import { closeKeys, keysOpen, openKeys } from "@/data/keys"
-import { readWithAi } from "@/data/ai-read"
+import { readWithAi, refreshReads } from "@/data/ai-read"
 import { closeSheet, openSheet } from "@/data/overlay"
 import { Overlays } from "./overlays"
 import { Page, SheetHost } from "./shell"
@@ -119,6 +119,50 @@ describe("the reading card", () => {
         fireEvent.keyDown(screen.getByRole("alertdialog"), { key: "Escape" })
         await act(async () => { await reading })
         expect(fake.ui.importNote).toEqual({ text: "Stopped reading.", error: false })
+    })
+
+    it("stops on Cancel while the file is still being opened: the card closes at once and nothing is read", async () => {
+        const call = vi.fn(), done = vi.fn()
+        let reading!: Promise<void>
+        await act(async () => { reading = read(call, done, vi.fn(), () => new Promise<Blob>(() => {})) })
+        const card = screen.getByRole("alertdialog")
+        expect(step(card, "Reading the document").getAttribute("aria-current")).toBe("step")
+        fireEvent.click(within(card).getByRole("button", { name: "Cancel" }))
+        await act(async () => { await reading })
+        expect(screen.queryByRole("alertdialog")).toBeNull()
+        expect(call).not.toHaveBeenCalled()
+        expect(done).not.toHaveBeenCalled()
+        expect(fake.ui.outlineBusy).toBe(false)
+        expect(fake.ui.importNote).toEqual({ text: "Stopped reading.", error: false })
+    })
+
+    it("opens nothing when the answer comes after Cancel", async () => {
+        const done = vi.fn()
+        let reading!: Promise<void>
+        await act(async () => {
+            reading = read((_, signal) => new Promise((r) => signal.addEventListener("abort", () => r({ ok: 1 }))), done)
+        })
+        fireEvent.click(within(screen.getByRole("alertdialog")).getByRole("button", { name: "Cancel" }))
+        await act(async () => { await reading })
+        expect(done).not.toHaveBeenCalled()
+        expect(fake.ui.importNote).toEqual({ text: "Stopped reading.", error: false })
+    })
+
+    it("counts a read aborted from elsewhere (signing out) as stopped, and a timeout as a problem", async () => {
+        await act(() => read(async () => { throw new DOMException("Signed out", "AbortError") }))
+        expect(fake.ui.importNote).toEqual({ text: "Stopped reading.", error: false })
+        await act(() => read(async () => { throw new DOMException("Too slow", "TimeoutError") }))
+        expect((fake.ui.importNote as { error: boolean }).error).toBe(true)
+    })
+
+    it("keeps the reads left it knew when the answer is malformed", async () => {
+        fake.ui.aiLeft = 5
+        fake.api.aiReads.mockResolvedValueOnce({} as never)
+        await refreshReads()
+        expect(fake.ui.aiLeft).toBe(5)
+        fake.api.aiReads.mockResolvedValueOnce({ left: 3, limit: 10 })
+        await refreshReads()
+        expect(fake.ui.aiLeft).toBe(3)
     })
 
     it("puts what went wrong in the note", async () => {

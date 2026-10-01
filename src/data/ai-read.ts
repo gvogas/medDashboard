@@ -82,9 +82,21 @@ export interface AiRead<T> {
 export async function refreshReads() {
     try {
         const r = await api.aiReads()
-        ui.aiLeft = Number.isInteger(r?.left) ? r.left : null
+        if (!Number.isInteger(r?.left)) return
+        ui.aiLeft = r.left
         notify()
     } catch { /* offline or signed out */ }
+}
+
+/** `work`, or the signal's reason as soon as it aborts, whichever comes first. */
+function untilAborted<T>(work: Promise<T>, signal: AbortSignal): Promise<T> {
+    if (signal.aborted) return Promise.reject(signal.reason)
+    let onAbort!: () => void
+    const aborted = new Promise<never>((_, reject) => {
+        onAbort = () => reject(signal.reason)
+        signal.addEventListener("abort", onAbort, { once: true })
+    })
+    return Promise.race([work, aborted]).finally(() => signal.removeEventListener("abort", onAbort))
 }
 
 /**
@@ -101,7 +113,8 @@ export async function readWithAi<T>(file: File, { what, title, steps, flag, note
     try {
         show(0)
         let body: Blob
-        try { body = await prepare(file) } catch (e) {
+        try { body = await untilAborted(prepare(file), stop.signal) } catch (e) {
+            if (stop.signal.aborted) throw e
             const own = (e as Error)?.name === "FileError"
             throw Object.assign(new Error(own ? (e as Error).message : "That file could not be opened. Is it a damaged or locked PDF?"), { name: "FileError" })
         }
@@ -116,7 +129,8 @@ export async function readWithAi<T>(file: File, { what, title, steps, flag, note
         u[flag] = false; hideBusy()
         const failed = err instanceof ApiError ? err as ApiError & { body?: { error?: string }; status: number } : null
         const code = failed?.body?.error ?? ""
-        u[note] = stop.signal.aborted ? { text: "Stopped reading.", error: false }
+        const stopped = stop.signal.aborted || (err as Error)?.name === "AbortError"
+        u[note] = stopped ? { text: "Stopped reading.", error: false }
             : (err as Error)?.name === "FileError" ? { text: (err as Error).message, error: true }
             : {
                 text: errors[code] || AI_ERRORS[code] || (failed

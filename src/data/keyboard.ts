@@ -33,6 +33,9 @@ function shortcut(e: KeyboardEvent): boolean {
 export async function onKeydown(e: KeyboardEvent) {
     if (e.key === "Escape") {
         if (e.defaultPrevented) return   /* a field used it, like the time picker closing its list */
+        /* a file being read: Escape cancels it wherever focus is (the card takes it itself when focus is inside) */
+        const busy = getBusy()
+        if (busy) { busy.cancel(); return }
         if (keysOpen()) { closeKeys(); return }
         if (sideOpen()) { setSide(false); return }
         /* the sheet takes Escape itself when focus is inside it; this is for when it is not */
