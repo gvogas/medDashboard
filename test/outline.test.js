@@ -91,6 +91,7 @@ describe('readOutline', () => {
     const [, model, input] = ai.calls[1];
     expect(model).toBe(MODEL);
     expect(input.response_format).toBeUndefined();
+    expect(input.reasoning).toBeUndefined();
     expect(input.messages[0].content).toContain('"officeHours"');
     expect(input.messages[1].content).toContain('The term started on 2026-09-07.');
     expect(input.messages[1].content).toContain(OUTLINE);

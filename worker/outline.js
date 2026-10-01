@@ -19,7 +19,7 @@ export const MAX_BYTES = 5 * 1024 * 1024;
 export const MAX_CHARS = 48_000;          /* about 12k tokens of outline */
 const MAX_TOKENS = 6000;            /* a reasoning model: its thinking counts too */
 
-const KINDS = ['Lecture', 'Lab', 'Seminar', 'Tutorial', 'PBL', 'Clinical'];
+export const KINDS = ['Lecture', 'Lab', 'Seminar', 'Tutorial', 'PBL', 'Clinical'];
 export const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const TYPES = ['exam', 'quiz', 'assignment', 'lab', 'project', 'task'];
 const TEXT_TYPES = /^text\/(plain|markdown|csv)\b/i;
@@ -109,7 +109,7 @@ function prompt(text, today, termStart) {
 }
 
 export const dayIndex = (d) => DAYS.indexOf(String(d || '').slice(0, 3).replace(/^./, (c) => c.toUpperCase()));
-const clip = (v, n) => (typeof v === 'string' ? v.replace(/\s+/g, ' ').trim().slice(0, n) : '');
+export const clip = (v, n) => (typeof v === 'string' ? v.replace(/\s+/g, ' ').trim().slice(0, n) : '');
 
 /** "9:00", "0900", "2pm", "14.30" → "HH:MM", or '' */
 export function cleanTime(v) {
@@ -121,6 +121,34 @@ export function cleanTime(v) {
   if (m[3] === 'am' && h === 12) h = 0;
   if (h > 23 || min > 59) return '';
   return String(h).padStart(2, '0') + ':' + String(min).padStart(2, '0');
+}
+
+/** A class kind as the app keeps it, from the words timetables and outlines use. */
+export function cleanKind(v) {
+  const t = String(v || '').trim().toLowerCase();
+  const exact = KINDS.find((k) => k.toLowerCase() === t);
+  if (exact) return exact;
+  if (/\bpbl\b|problem[- ]based/.test(t)) return 'PBL';
+  if (/\blab|laborato|practical/.test(t)) return 'Lab';
+  if (/tut|^td$|\bdisc/.test(t)) return 'Tutorial';
+  if (/semin/.test(t)) return 'Seminar';
+  if (/clinic|ward|placement|bedside/.test(t)) return 'Clinical';
+  return 'Lecture';
+}
+
+/** A course code as the app keeps it: at most 8 characters, "CHEM 271" → CHEM271, "420-521-VA" → 420521VA. */
+export function cleanCode(v) {
+  let code = clip(v, 24).toUpperCase().replace(/[^A-Z0-9-]/g, '');
+  if (code.length > 8) code = code.replace(/-/g, '');
+  return code.slice(0, 8);
+}
+
+/** Weekly classes as the model gave them, made safe: a weekday and a start each, an end only after the start, at most `max`. */
+export function cleanClasses(list, max = 12) {
+  return (Array.isArray(list) ? list : []).map((c) => {
+    const start = cleanTime(c?.start), end = cleanTime(c?.end);
+    return { kind: cleanKind(c?.kind), weekday: dayIndex(c?.day), start, end: end > start ? end : '', room: clip(c?.room, 40) };
+  }).filter((c) => c.weekday >= 0 && c.start).slice(0, max);
 }
 
 function cleanDate(v) {
@@ -145,19 +173,8 @@ export function modelJson(raw) {
 export function cleanOutline(raw) {
   const o = modelJson(raw);
   if (!o) throw new HttpError(502, { error: 'outline_unreadable' });
-  /* Codes are at most 8 characters: "CHEM 271" → CHEM271, "420-521-VA" → 420521VA. */
-  let code = clip(o.code, 24).toUpperCase().replace(/[^A-Z0-9-]/g, '');
-  if (code.length > 8) code = code.replace(/-/g, '');
-  code = code.slice(0, 8);
-  const classes = (Array.isArray(o.classes) ? o.classes : []).map((c) => {
-    const start = cleanTime(c?.start), end = cleanTime(c?.end);
-    return {
-      kind: KINDS.includes(c?.kind) ? c.kind : 'Lecture',
-      weekday: dayIndex(c?.day),
-      start, end: end > start ? end : '',
-      room: clip(c?.room, 40),
-    };
-  }).filter((c) => c.weekday >= 0 && c.start).slice(0, 12);
+  const code = cleanCode(o.code);
+  const classes = cleanClasses(o.classes);
   const assessments = (Array.isArray(o.assessments) ? o.assessments : []).map((a) => {
     const w = typeof a?.weight === 'number' ? a.weight : parseFloat(a?.weight);
     const start = cleanTime(a?.start), end = cleanTime(a?.end);
@@ -195,13 +212,13 @@ export async function outlineText(ai, bytes, type, name) {
  * `claim` runs just before the model does: only a document that reaches the model uses
  * one of the day's attempts, not a file that could not be converted or has no text.
  */
-export async function askModel(ai, { bytes, type, name, claim }, messages) {
+export async function askModel(ai, { bytes, type, name, claim }, messages, { effort, maxTokens = MAX_TOKENS, what = 'outline' } = {}) {
   let text = (await outlineText(ai, bytes, type, name)).trim();
   if (text.length < 40) throw new HttpError(422, { error: 'outline_empty' });
   const truncated = text.length > MAX_CHARS;
   if (truncated) text = text.slice(0, MAX_CHARS);
   if (claim) await claim();
-  const out = await runModel(ai, MODEL, { messages: messages(text), max_tokens: MAX_TOKENS, temperature: 0 }, 'outline');
+  const out = await runModel(ai, MODEL, { messages: messages(text), max_tokens: maxTokens, temperature: 0, ...(effort ? { reasoning: { effort } } : {}) }, what);
   return { answer: out?.response ?? out, truncated };
 }
 
