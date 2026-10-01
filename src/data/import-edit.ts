@@ -60,12 +60,14 @@ export function importPasted(text: string) {
 /** A course outline, read by the Worker with AI, then previewed. */
 export function readOutlineFile(file: File) {
     return readWithAi(file, {
-        what: "outline", stage: "Reading the dates and grades with AI…", flag: "outlineBusy", note: "importNote", refresh: notify,
+        what: "outline", title: "Reading your course outline",
+        steps: ["Reading the document", "Finding dates and deadlines", "Matching it to your courses"],
+        flag: "outlineBusy", note: "importNote", refresh: notify,
         errors: {
             outline_empty: "No text was found in that file. A scanned outline needs to be a text PDF.",
             outline_unreadable: "The outline could not be understood. Try again, or import a CSV instead.",
         },
-        call: (body: Blob) => api.readOutline(body, { name: file.name, today: today(), termStart: termStart() || "" }),
+        call: (body, signal) => api.readOutline(body, { name: file.name, today: today(), termStart: termStart() || "" }, signal),
         done: (outline: Outline) => openSheet({ kind: "import", plan: planOutline(outline, data, termStart() || "") as ImportPlan, name: file.name }),
     })
 }

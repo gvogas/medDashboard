@@ -75,6 +75,12 @@ export interface Ui {
     spotifyNote: "connected" | "error" | null
     outlineBusy: boolean
     schoolBusy: boolean
+    /* a class schedule is being read */
+    scheduleBusy: boolean
+    /* the AI reads left today, as the Worker last said; null until asked */
+    aiLeft: number | null
+    /* what the Import with AI card has to say: a read stopped or gone wrong */
+    aiNote: Note | null
     schoolAsk: boolean
     signoutAsk: { everywhere: boolean } | null
     feed: Feed | null

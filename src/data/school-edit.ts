@@ -69,13 +69,13 @@ export function openSchool(read: unknown, source: string | null = null) {
 /** A calendar file was picked: read it with AI, then check it in the sheet. */
 export function readSchoolFile(file: File) {
     return readWithAi(file, {
-        what: "calendar", title: "Reading your school calendar", stage: "Finding the semesters, breaks and days off with AI…",
+        what: "calendar", title: "Reading your school calendar", steps: ["Reading the PDF", "Finding semesters and breaks", "Checking the dates"],
         flag: "schoolBusy", note: "schoolNote", refresh: notify,
         errors: {
             outline_empty: "No text was found in that file. A scanned calendar needs to be a text PDF.",
             school_unreadable: "No semesters could be found in that calendar. Try again, or check it is the academic calendar.",
         },
-        call: (body: Blob) => api.readSchool(body, { name: file.name, today: today() }),
+        call: (body, signal) => api.readSchool(body, { name: file.name, today: today() }, signal),
         done: (read: unknown) => openSchool(read, file.name),
     })
 }
