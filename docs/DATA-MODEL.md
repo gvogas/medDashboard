@@ -127,7 +127,7 @@ The twelve course colours; the first five are also the coat colours:
 | `name` | text | 1–80 | `Cardiovascular Block`. |
 | `color` | text | one of the twelve | Drives every chip, pip and card for this course. |
 | `instructor` | text | ≤ 60 | `Dr. Alvarez`. |
-| `term` | text | ≤ 40 | `2026 Autumn`. Used later for archiving. |
+| `term` | text | ≤ 40 | The school calendar semester the course runs in, by name (`Winter 2027`); its classes show only between that semester's first and last day. `''`, or a name no semester has, means all year. |
 | `archived` | int 0/1 | | Hidden from the sidebar, kept for the record. |
 | `meetings` | JSON array | ≤ 12 | The class timetable. |
 | `created_at`, `updated_at`, `deleted_at` | int | | |

@@ -32,7 +32,7 @@ export function TimerCards({ className }: { className?: string }) {
 
 /* ── Ready ── */
 
-const PICK = "min-w-0 flex-[1_1_190px] max-w-[280px] cursor-pointer rounded-[9px] border border-white/15 bg-white/[.06] px-2.5 py-[7px] font-[inherit] text-[13px] text-[var(--fx-ink)] outline-none hover:border-white/30 focus-visible:border-[var(--ph)] focus-visible:shadow-[0_0_0_3px_var(--ph-soft)]"
+const PICK = "min-w-0 flex-[1_1_190px] max-w-[280px] cursor-pointer rounded-[9px] border border-white/15 bg-white/[.06] px-2.5 py-[7px] font-[inherit] text-[13px] text-[var(--fx-ink)] outline-none hover:border-white/30 focus-visible:border-[var(--ph)] focus-visible:shadow-[0_0_0_3px_var(--ph-soft)] [&_option]:bg-card [&_option]:text-foreground"
 
 function ReadyCard({ flow }: { flow: Flow }) {
     const pick = useStudyPick()

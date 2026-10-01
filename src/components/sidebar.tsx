@@ -8,9 +8,13 @@ import { MotionConfig } from "framer-motion"
 import { useCourses, useItems } from "@/data/store"
 import { useUi } from "@/data/ui"
 import { THEMES } from "@/data/themes"
-import { openCourse, setCourse } from "@/data/actions"
+import { openCourse, setCourse, setSem } from "@/data/actions"
+import { today } from "@/core/dates"
+import { courseTerm, inTerm, pickedTerm } from "@/core/school"
+import { schoolCal } from "@/data/query"
 import { SidebarWho } from "./sidebar-who"
 import { Count, counts, Heading, Pip, Row } from "./sidebar-parts"
+import { SemesterMenu } from "./semester-menu"
 import { SideNav } from "./side-nav"
 import { SideFoot } from "./side-foot"
 import { SidebarPlayer } from "./spotify/sidebar-player"
@@ -37,15 +41,23 @@ export function Sidebar() {
 }
 
 function CourseList() {
-    const courses = useCourses().filter((c) => !c.archived)       // legacy activeCourses()
-    const items = useItems()
+    const cal = schoolCal()
+    const sem = useUi((ui) => ui.sem)
+    const term = pickedTerm(cal, sem, today())
+    /* the select shows with two semesters or more; a course goes under its own or every one */
+    const picker = !!cal && cal.terms.length > 1
     const selected = useUi((ui) => ui.course)
+    /* the course picked stays listed even when the semester shown leaves it out, so the
+       filter in force can be seen */
+    const courses = useCourses().filter((c) => !c.archived && (c.id === selected || inTerm(cal, c.term, picker ? term : null)))
+    const yearTag = cal && cal.terms.length === 2 ? "Both" : "All year"
+    const items = useItems()
     const n: Record<string, number> = {}
     for (const it of items) if (it.courseId && counts(it)) n[it.courseId] = (n[it.courseId] || 0) + 1
 
     return (
         <section aria-label="Courses">
-            <Heading>Courses</Heading>
+            <Heading action={picker && term ? <SemesterMenu names={cal!.terms.map((t) => t.name)} value={term.name} onPick={setSem} /> : undefined}>Courses</Heading>
             <div className="flex flex-col gap-px">
                 <Row pressed={selected === "all"} onClick={() => setCourse("all")}>
                     <span className="min-w-0 truncate">All courses</span>
@@ -55,6 +67,7 @@ function CourseList() {
                         <Row pressed={selected === c.id} onClick={() => setCourse(c.id)} className={selected === c.id ? undefined : "hover:bg-transparent"}>
                             <Pip color={c.color} />
                             <span className="min-w-0 truncate">{c.name}</span>
+                            {picker && !courseTerm(cal, c.term) && <span className="shrink-0 text-[11px] text-muted-foreground">{yearTag}</span>}
                             <Count n={n[c.id] || 0} />
                         </Row>
                         <button

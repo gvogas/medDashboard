@@ -7,7 +7,7 @@
 // two devices that both generate a step write the same row.
 
 import { parse, addDays, iso, diffDays, shortDate } from './dates.ts';
-import { classWeekday } from './school.ts';
+import { classWeekday, courseRunsOn } from './school.ts';
 import type { SchoolCalendar } from './school.ts';
 import type { Course, Item, Meeting } from './types.ts';
 
@@ -19,7 +19,7 @@ export interface ReviewRow { id: string; type: 'task'; title: string; courseId: 
 
 /** A queued operation, as far as untouchedReview reads it. */
 /** What reviews read of a course. */
-type Timetabled = Pick<Course, 'id' | 'code' | 'archived' | 'meetings'>;
+type Timetabled = Pick<Course, 'id' | 'code' | 'archived' | 'meetings'> & { term?: string };
 
 interface Op { op: string; key: string; body: Record<string, unknown> | null }
 
@@ -62,7 +62,7 @@ export function lectureDates(courses: Timetabled[], from: string | null | undefi
   while (d <= last && n++ <= MAX_SPAN * 3) {
     const date = iso(d), wd = classWeekday(cal, date);
     for (const c of courses) {
-      if (c.archived) continue;
+      if (c.archived || !courseRunsOn(cal, c.term, date)) continue;
       for (const m of c.meetings || []) if (m.kind === 'Lecture' && m.weekday === wd) out.push({ course: c, meeting: m, date });
     }
     d = addDays(d, 1);

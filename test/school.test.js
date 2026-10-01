@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { normalizeSchool, dayInfo, classWeekday, weekOf, currentTerm, termStartFor, schoolStatus } from '../src/core/school.ts';
+import { normalizeSchool, dayInfo, classWeekday, weekOf, currentTerm, termStartFor, schoolStatus, courseTerm, courseRunsOn, inTerm, pickedTerm, renamedTerms, repeatEnds } from '../src/core/school.ts';
 import { lectureDates } from '../src/core/reviews.ts';
 import { cleanSchool, readSchool } from '../worker/school.js';
 import { MODEL } from '../worker/outline.js';
@@ -41,6 +41,18 @@ describe('a school calendar', () => {
     ]);
     expect(normalizeSchool({ terms: [] })).toBeNull();
     expect(normalizeSchool({})).toBeNull();
+  });
+
+  it('gives each semester its own name', () => {
+    const term = (name, start) => ({ name, start, end: start });
+    const c = normalizeSchool({ terms: [
+      term('', '2026-09-01'), term(' ', '2026-10-01'), term('Fall', '2026-11-01'), term('fall', '2026-12-01'),
+    ] });
+    expect(c.terms.map((t) => t.name)).toEqual(['Semester', 'Semester 2', 'Fall', 'fall 2']);
+    const twice = normalizeSchool({ terms: [term('Fall 2026', '2026-09-01'), term('Fall 2026', '2026-10-01')] });
+    expect(twice.terms.map((t) => t.name)).toEqual(['Fall 2026', 'Fall 2026 2']);
+    const long = 'x'.repeat(40);
+    expect(normalizeSchool({ terms: [term(long, '2026-09-01'), term(long, '2026-10-01')] }).terms[1].name).toBe('x'.repeat(38) + ' 2');
   });
 
   it('says what kind of day each date is', () => {
@@ -85,6 +97,71 @@ describe('a school calendar', () => {
     const course = { id: 'n', code: 'NEURO', meetings: [{ id: 'm', kind: 'Lecture', weekday: 1 }] };
     const dates = lectureDates([course], '2026-10-01', '2026-10-14', cal).map((x) => x.date);
     expect(dates).toEqual(['2026-10-06']);   /* the 5th and 12th are off; the 6th runs Monday's */
+  });
+
+  it("keeps lecture reviews to the course's semester", () => {
+    const course = { id: 'w', code: 'NEURO', term: 'Winter 2027', meetings: [{ id: 'm', kind: 'Lecture', weekday: 2 }] };
+    const dates = lectureDates([course], '2026-12-01', '2027-01-26', cal).map((x) => x.date);
+    expect(dates).toEqual(['2027-01-19', '2027-01-26']);   /* not the Autumn Tuesdays 1 and 8 Dec */
+  });
+});
+
+describe("a course's semester", () => {
+  it('is the semester its term names, else all year', () => {
+    expect(courseTerm(cal, 'Winter 2027')).toBe(cal.terms[1]);
+    expect(courseTerm(cal, '  winter   2027 ')).toBe(cal.terms[1]);
+    expect(courseTerm(cal, '')).toBeNull();
+    expect(courseTerm(cal, '2026 Autumn')).toBeNull();   /* free text from before */
+    expect(courseTerm(null, 'Winter 2027')).toBeNull();
+  });
+
+  it('has classes only inside it; all-year courses always', () => {
+    expect(courseRunsOn(cal, 'Autumn 2026', '2026-12-10')).toBe(true);
+    expect(courseRunsOn(cal, 'Autumn 2026', '2027-01-19')).toBe(false);
+    expect(courseRunsOn(cal, 'Winter 2027', '2026-09-14')).toBe(false);
+    expect(courseRunsOn(cal, '', '2027-01-19')).toBe(true);
+    expect(courseRunsOn(null, 'Winter 2027', '2026-09-14')).toBe(true);
+  });
+
+  it('is listed under its own semester, all-year courses under every one', () => {
+    expect(inTerm(cal, 'Autumn 2026', cal.terms[0])).toBe(true);
+    expect(inTerm(cal, 'Autumn 2026', cal.terms[1])).toBe(false);
+    expect(inTerm(cal, '', cal.terms[1])).toBe(true);
+    expect(inTerm(null, 'Autumn 2026', null)).toBe(true);
+  });
+
+  it('the sidebar shows the semester picked while it exists, else the current one', () => {
+    expect(pickedTerm(cal, 'Winter 2027', '2026-09-23')).toBe(cal.terms[1]);
+    expect(pickedTerm(cal, null, '2026-09-23')).toBe(cal.terms[0]);
+    expect(pickedTerm(cal, 'Gone 2025', '2027-02-01')).toBe(cal.terms[1]);
+    expect(pickedTerm(null, 'Winter 2027', '2026-09-23')).toBeNull();
+  });
+
+  it('knows which semesters were renamed: a name gone, a new one in its place', () => {
+    const renamed = (...names) => normalizeSchool({ ...VANIER, terms: VANIER.terms.map((t, i) => ({ ...t, name: names[i] })) });
+    expect([...renamedTerms(cal, renamed('Fall 2026', 'Winter 2027'))]).toEqual([['Autumn 2026', 'Fall 2026']]);
+    expect([...renamedTerms(cal, renamed('autumn 2026', 'Winter 2027'))]).toEqual([]);   /* the same name to a course */
+    expect([...renamedTerms(cal, renamed('Winter 2027', 'Spring 2027'))]).toEqual([]);   /* Autumn's place went to a name it had */
+    expect([...renamedTerms(cal, normalizeSchool({ terms: [{ name: 'Fall', start: '2026-09-01', end: '2026-12-01' }] }))])
+      .toEqual([['Autumn 2026', 'Fall']]);
+    expect([...renamedTerms(null, cal)]).toEqual([]);
+    expect([...renamedTerms(cal, null)]).toEqual([]);
+  });
+
+  it('gives the ends a weekly item can repeat until', () => {
+    expect(repeatEnds(cal, '2026-09-23')).toEqual([
+      { end: '2026-12-10', term: cal.terms[0] },
+      { end: '2027-05-14', term: cal.terms[1] },
+    ]);
+    expect(repeatEnds(cal, '2027-02-01')).toEqual([{ end: '2027-05-14', term: cal.terms[1] }]);
+    expect(repeatEnds(cal, '2027-06-01')).toEqual([]);
+    expect(repeatEnds(null, '2026-09-23')).toEqual([]);
+    /* exams after the last semester make the school year end later */
+    const one = normalizeSchool({ terms: [VANIER.terms[0]], days: [{ from: '2026-12-11', to: '2026-12-22', kind: 'exams', label: '' }] });
+    expect(repeatEnds(one, '2026-09-23')).toEqual([
+      { end: '2026-12-10', term: one.terms[0] },
+      { end: '2026-12-22', term: null },
+    ]);
   });
 });
 
@@ -140,6 +217,13 @@ describe('reading and saving a school calendar', () => {
 describe('the calendar feed with a school calendar', () => {
   const course = { id: 'n', code: 'NEURO', name: 'Neuroscience', archived: 0, created_at: Date.UTC(2026, 7, 1),
     meetings: JSON.stringify([{ id: 'm', kind: 'Lecture', weekday: 1, start: '10:00', end: '11:00', room: '' }]) };
+
+  it('repeats a one-semester course through that semester only', () => {
+    const ics = unfold(buildCalendar({ courses: [{ ...course, term: 'Winter 2027' }], items: [], school: cal, now: Date.UTC(2026, 8, 26) }));
+    expect(ics).not.toContain('UID:class-n-m-2026-08-24@rounds');
+    expect(ics).toContain('UID:class-n-m-2027-01-19@rounds');
+    expect(ics).toContain('RRULE:FREQ=WEEKLY;BYDAY=MO;UNTIL=20270514T235959');
+  });
 
   it('repeats each class within a semester, skips days off, and adds swapped days', () => {
     const ics = unfold(buildCalendar({ courses: [course], items: [], school: cal, now: Date.UTC(2026, 8, 26) }));

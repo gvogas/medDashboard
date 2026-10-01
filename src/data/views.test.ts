@@ -29,6 +29,12 @@ const input = (items: Item[], courses: Course[], over: Partial<ViewInput> = {}):
 const anat = course({ id: "anat", color: "#C2571A", meetings: [mtg("m1", 1, "09:00", "10:30", "Hall B"), mtg("m2", 3, "14:00", "15:00")] })
 const phys = course({ id: "phys", color: "#1E628F", meetings: [mtg("m3", 3, "08:00", "09:00")] }, 1)
 
+/* Fall ends on Tuesday 22 September 2026 so the test week holds both semesters. */
+const TWO = normalizeSchool({ terms: [
+    { name: "Fall 2026", start: "2026-09-01", end: "2026-09-22" },
+    { name: "Winter 2027", start: "2026-09-23", end: "2026-12-18" },
+] })
+
 describe("filters", () => {
     it("drop other courses and search misses, and never filter by type", () => {
         const items = [item({ id: "a", courseId: "anat" }), item({ id: "b", type: "lab", courseId: "phys" }), item({ id: "c", title: "Renal set" })]
@@ -93,6 +99,16 @@ describe("the week", () => {
         expect(w.days[0].entries).toEqual([])
         expect(w.days[3].entries.map((e) => e.kind === "class" && e.slot.mtg.id)).toEqual(["m3", "m2"])
     })
+
+    it("shows a course's classes only in its semester; all-year courses in both", () => {
+        const fall = course({ ...anat, term: "Fall 2026" }), winter = course({ ...phys, term: "winter 2027" }, 1)
+        const w = weekDays(input([], [fall, winter], { cal: TWO }))
+        const ids = (i: number) => w.days[i].entries.map((e) => e.kind === "class" && e.slot.mtg.id)
+        expect(ids(0)).toEqual(["m1"])          /* Monday is still Fall */
+        expect(ids(2)).toEqual(["m3"])          /* Wednesday is Winter: Anatomy's Wednesday class is gone */
+        const both = course({ ...anat, term: "" })
+        expect(weekDays(input([], [both], { cal: TWO })).days[2].entries).toHaveLength(1)
+    })
 })
 
 describe("the side panels", () => {
@@ -116,6 +132,14 @@ describe("the side panels", () => {
 })
 
 describe("the month", () => {
+    it("puts a course's classes only on days in its semester", () => {
+        const fall = course({ ...anat, term: "Fall 2026" })
+        const m = monthCells(input([], [fall], { cal: TWO, schedule: "classes" }))
+        const cell = (date: string) => m.cells.find((c) => c.date === date)!
+        expect(cell("2026-09-16").classes).toBe(1)   /* a Wednesday in Fall */
+        expect(cell("2026-09-30").classes).toBe(0)   /* a Wednesday in Winter */
+    })
+
     it("has 42 cells from the Monday on or before the 1st", () => {
         const m = monthCells(input([], [anat]))
         expect(m.cells).toHaveLength(42)
@@ -162,6 +186,16 @@ describe("the month", () => {
         expect(t[2].hours).toBe(2)
         const sun = course({ id: "s", meetings: [mtg("m4", 0, "10:00", "11:00")] })
         expect(timetable([sun], ALL).map((d) => d.dow)).toEqual(["Mon", "Tue", "Wed", "Thu", "Fri", "Sun"])
+    })
+
+    it("keeps the timetable to the anchor's semester and all-year courses", () => {
+        const fall = course({ ...anat, term: "Fall 2026" }), winter = course({ ...phys, term: "Winter 2027" }, 1)
+        const ids = (t: ReturnType<typeof timetable>) => t.flatMap((d) => d.slots.map((x) => x.mtg.id))
+        expect(ids(timetable([fall, winter], ALL, TWO, "2026-10-14"))).toEqual(["m3"])
+        expect(ids(timetable([fall, winter], ALL, TWO, "2026-09-07"))).toEqual(["m1", "m2"])
+        const both = course({ ...anat, term: "" })
+        expect(ids(timetable([both, winter], ALL, TWO, "2026-10-14"))).toEqual(["m1", "m3", "m2"])
+        expect(ids(timetable([fall, winter], ALL, null, "2026-10-14"))).toEqual(["m1", "m3", "m2"])
     })
 })
 
