@@ -128,6 +128,46 @@ export function currentTerm(cal: SchoolCalendar | null, today: string): Term | n
   return [...cal.terms].reverse().find((t) => t.start <= today) || cal.terms[0];
 }
 
+/** The semester a course's `term` names, matched by name with case and spacing aside. Null
+    means all year: an empty term, one that names no semester, or no calendar. */
+export function courseTerm(cal: SchoolCalendar | null, text: string | null | undefined): Term | null {
+  const want = (text || '').replace(/\s+/g, ' ').trim().toLowerCase();
+  if (!cal || !want) return null;
+  return cal.terms.find((t) => t.name.toLowerCase() === want) || null;
+}
+
+/** Whether a course of semester `text` can have classes on `date`: all-year courses always. */
+export function courseRunsOn(cal: SchoolCalendar | null, text: string | null | undefined, date: string): boolean {
+  const t = courseTerm(cal, text);
+  return !t || (t.start <= date && date <= t.end);
+}
+
+/** Whether a course goes under semester `term` in the sidebar: its own, or all year. */
+export function inTerm(cal: SchoolCalendar | null, text: string | null | undefined, term: Term | null): boolean {
+  const t = courseTerm(cal, text);
+  return !t || !term || t === term;
+}
+
+/** The semester the sidebar shows: the one picked while the calendar still has it, else the current one. */
+export function pickedTerm(cal: SchoolCalendar | null, picked: string | null, today: string): Term | null {
+  if (!cal) return null;
+  return cal.terms.find((t) => t.name === picked) || currentTerm(cal, today);
+}
+
+/**
+ * When a weekly item can repeat until, for an item dated `date`: the end of each semester
+ * still to end, then the school year's last day (its last exam day) when that is later.
+ * The first is the default. Empty without a calendar.
+ */
+export function repeatEnds(cal: SchoolCalendar | null, date: string): { end: string; term: Term | null }[] {
+  if (!cal) return [];
+  const out: { end: string; term: Term | null }[] = cal.terms.filter((t) => t.end >= date).map((t) => ({ end: t.end, term: t }));
+  const last = cal.days.filter((d) => d.kind === 'exams').map((d) => d.to)
+    .reduce((a, b) => (b > a ? b : a), cal.terms[cal.terms.length - 1].end);
+  if (last >= date && !out.some((o) => o.end === last)) out.push({ end: last, term: null });
+  return out;
+}
+
 /** The term start the app goes by: the school calendar's current semester, else the one set. */
 export function termStartFor(profile: { schoolCalendar?: unknown; termStart?: string | null } | null | undefined, today: string): string | null {
   const cal = normalizeSchool(profile?.schoolCalendar);

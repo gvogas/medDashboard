@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { normalizeSchool, dayInfo, classWeekday, weekOf, currentTerm, termStartFor, schoolStatus } from '../src/core/school.ts';
+import { normalizeSchool, dayInfo, classWeekday, weekOf, currentTerm, termStartFor, schoolStatus, courseTerm, courseRunsOn, inTerm, pickedTerm, repeatEnds } from '../src/core/school.ts';
 import { lectureDates } from '../src/core/reviews.ts';
 import { cleanSchool, readSchool } from '../worker/school.js';
 import { MODEL } from '../worker/outline.js';
@@ -85,6 +85,54 @@ describe('a school calendar', () => {
     const course = { id: 'n', code: 'NEURO', meetings: [{ id: 'm', kind: 'Lecture', weekday: 1 }] };
     const dates = lectureDates([course], '2026-10-01', '2026-10-14', cal).map((x) => x.date);
     expect(dates).toEqual(['2026-10-06']);   /* the 5th and 12th are off; the 6th runs Monday's */
+  });
+});
+
+describe("a course's semester", () => {
+  it('is the semester its term names, else all year', () => {
+    expect(courseTerm(cal, 'Winter 2027')).toBe(cal.terms[1]);
+    expect(courseTerm(cal, '  winter   2027 ')).toBe(cal.terms[1]);
+    expect(courseTerm(cal, '')).toBeNull();
+    expect(courseTerm(cal, '2026 Autumn')).toBeNull();   /* free text from before */
+    expect(courseTerm(null, 'Winter 2027')).toBeNull();
+  });
+
+  it('has classes only inside it; all-year courses always', () => {
+    expect(courseRunsOn(cal, 'Autumn 2026', '2026-12-10')).toBe(true);
+    expect(courseRunsOn(cal, 'Autumn 2026', '2027-01-19')).toBe(false);
+    expect(courseRunsOn(cal, 'Winter 2027', '2026-09-14')).toBe(false);
+    expect(courseRunsOn(cal, '', '2027-01-19')).toBe(true);
+    expect(courseRunsOn(null, 'Winter 2027', '2026-09-14')).toBe(true);
+  });
+
+  it('is listed under its own semester, all-year courses under every one', () => {
+    expect(inTerm(cal, 'Autumn 2026', cal.terms[0])).toBe(true);
+    expect(inTerm(cal, 'Autumn 2026', cal.terms[1])).toBe(false);
+    expect(inTerm(cal, '', cal.terms[1])).toBe(true);
+    expect(inTerm(null, 'Autumn 2026', null)).toBe(true);
+  });
+
+  it('the sidebar shows the semester picked while it exists, else the current one', () => {
+    expect(pickedTerm(cal, 'Winter 2027', '2026-09-23')).toBe(cal.terms[1]);
+    expect(pickedTerm(cal, null, '2026-09-23')).toBe(cal.terms[0]);
+    expect(pickedTerm(cal, 'Gone 2025', '2027-02-01')).toBe(cal.terms[1]);
+    expect(pickedTerm(null, 'Winter 2027', '2026-09-23')).toBeNull();
+  });
+
+  it('gives the ends a weekly item can repeat until', () => {
+    expect(repeatEnds(cal, '2026-09-23')).toEqual([
+      { end: '2026-12-10', term: cal.terms[0] },
+      { end: '2027-05-14', term: cal.terms[1] },
+    ]);
+    expect(repeatEnds(cal, '2027-02-01')).toEqual([{ end: '2027-05-14', term: cal.terms[1] }]);
+    expect(repeatEnds(cal, '2027-06-01')).toEqual([]);
+    expect(repeatEnds(null, '2026-09-23')).toEqual([]);
+    /* exams after the last semester make the school year end later */
+    const one = normalizeSchool({ terms: [VANIER.terms[0]], days: [{ from: '2026-12-11', to: '2026-12-22', kind: 'exams', label: '' }] });
+    expect(repeatEnds(one, '2026-09-23')).toEqual([
+      { end: '2026-12-10', term: one.terms[0] },
+      { end: '2026-12-22', term: null },
+    ]);
   });
 });
 
