@@ -86,6 +86,12 @@ describe('a school calendar', () => {
     const dates = lectureDates([course], '2026-10-01', '2026-10-14', cal).map((x) => x.date);
     expect(dates).toEqual(['2026-10-06']);   /* the 5th and 12th are off; the 6th runs Monday's */
   });
+
+  it("keeps lecture reviews to the course's semester", () => {
+    const course = { id: 'w', code: 'NEURO', term: 'Winter 2027', meetings: [{ id: 'm', kind: 'Lecture', weekday: 2 }] };
+    const dates = lectureDates([course], '2026-12-01', '2027-01-26', cal).map((x) => x.date);
+    expect(dates).toEqual(['2027-01-19', '2027-01-26']);   /* not the Autumn Tuesdays 1 and 8 Dec */
+  });
 });
 
 describe("a course's semester", () => {

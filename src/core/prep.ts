@@ -37,7 +37,7 @@ export function examWindow(exam: Dated, items: Dated[], termStart: string | null
  * The exam's checklist with a step per lecture appended; existing text is not repeated.
  * Returns { checklist, added, left } — left is how many did not fit under the cap.
  */
-export function fillTopics(exam: Dated & Pick<Item, 'checklist'>, course: Pick<Course, 'id' | 'code' | 'archived' | 'meetings'>, items: Dated[], termStart: string | null | undefined, cal: SchoolCalendar | null = null): { checklist: ChecklistEntry[]; added: number; left: number } {
+export function fillTopics(exam: Dated & Pick<Item, 'checklist'>, course: Pick<Course, 'id' | 'code' | 'archived' | 'meetings'> & { term?: string }, items: Dated[], termStart: string | null | undefined, cal: SchoolCalendar | null = null): { checklist: ChecklistEntry[]; added: number; left: number } {
   const { from, to } = examWindow(exam, items, termStart);
   const list = (exam.checklist || []).slice();
   const have = new Set(list.map((s) => s.text.trim().toLowerCase()));
