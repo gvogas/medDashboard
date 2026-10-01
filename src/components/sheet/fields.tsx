@@ -1,6 +1,7 @@
 // The sheet's parts and form controls, in the Texture look: the head, body and foot, a
 // section, the two-column field grid and its controls. The item and course sheets use
-// them now, Settings in 4b.
+// them now, Settings in 4b. The item card adds its rows (Props, Prop), its type buttons
+// (Chips) and the folded parts' buttons (AddButton).
 
 import { useLayoutEffect, useRef, type ComponentProps, type ReactNode } from "react"
 import { cn } from "@/lib/utils"
@@ -19,8 +20,8 @@ export function SheetHead({ color, kind, children, onClose }: { color?: string; 
     )
 }
 
-export const SheetBody = ({ children }: { children: ReactNode }) => (
-    <div className="flex flex-1 flex-col gap-3.5 overflow-y-auto px-[18px] pt-4 pb-[26px]">{children}</div>
+export const SheetBody = ({ className, children }: { className?: string; children: ReactNode }) => (
+    <div className={cn("flex flex-1 flex-col gap-3.5 overflow-y-auto px-[18px] pt-4 pb-[26px]", className)}>{children}</div>
 )
 
 /** The foot: a hint on the left, the buttons on the right. */
@@ -94,6 +95,60 @@ export const Label = ({ htmlFor, children }: { htmlFor?: string; children: React
         ? <label htmlFor={htmlFor} className="text-[12px] font-[550] text-muted-foreground">{children}</label>
         : <span className="text-[12px] font-[550] text-muted-foreground">{children}</span>
 
+/** The item card's property list, a line between rows. */
+export const Props = ({ children }: { children: ReactNode }) => (
+    <div className="flex flex-col border-t border-line-2 text-[13px]">{children}</div>
+)
+
+/** One property: an icon and its name on the left, the control on the right. `top` lines the
+    name up with the first line of a tall control (Date, Repeat). */
+export function Prop({ icon, label, htmlFor, top = false, children }: { icon: ReactNode; label: string; htmlFor?: string; top?: boolean; children: ReactNode }) {
+    const name = cn("flex items-center gap-2 text-[13px] text-muted-foreground", top && "h-8")
+    return (
+        <div className={cn("grid min-h-12 grid-cols-[104px_minmax(0,1fr)] gap-x-2 border-b border-line-2", top ? "items-start py-2.5" : "items-center py-1.5")}>
+            {htmlFor ? <label htmlFor={htmlFor} className={name}>{icon}{label}</label> : <span className={name}>{icon}{label}</span>}
+            <div className="min-w-0">{children}</div>
+        </div>
+    )
+}
+
+/** Buttons in a row, one pressed, each with its colour: the item's type. */
+export function Chips({ label, value, options, onChange }: {
+    label: string; value: string; options: readonly { id: string; label: string; color: string }[]; onChange: (id: string) => void
+}) {
+    return (
+        <div role="group" aria-label={label} className="flex flex-wrap gap-1.5">
+            {options.map((o) => (
+                <button
+                    key={o.id}
+                    type="button"
+                    style={accent(o.color)}
+                    aria-pressed={o.id === value}
+                    onClick={() => { if (o.id !== value) onChange(o.id) }}
+                    className={cn(
+                        "flex h-8 cursor-pointer items-center gap-[7px] rounded-full border border-border bg-card px-3 font-[inherit] text-[12.5px] text-foreground transition-colors hover:border-[var(--c)]",
+                        o.id === value && "border-[var(--c)] bg-[color-mix(in_srgb,var(--c)_10%,var(--panel))] font-semibold",
+                    )}
+                >
+                    <span aria-hidden="true" className="size-[7px] rounded-[2px] bg-[var(--c)]" />{o.label}
+                </button>
+            ))}
+        </div>
+    )
+}
+
+/** A dashed "+ Notes" that opens a folded part. Give it an aria-label that starts "Add". */
+export const AddButton = ({ className, children, ...props }: ComponentProps<"button">) => (
+    <button
+        type="button"
+        {...props}
+        className={cn("flex h-[34px] cursor-pointer items-center gap-1.5 rounded-full border border-dashed border-[var(--box-line)] bg-transparent px-3 font-[inherit] text-[12.5px] text-ink-2 hover:border-[var(--accent)] hover:text-foreground", className)}
+    >
+        <svg viewBox="0 0 16 16" width="11" height="11" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden="true"><path d="M8 3v10M3 8h10" /></svg>
+        {children}
+    </button>
+)
+
 /** What every text-like control looks like: a soft well, an accent ring on focus. */
 export const CONTROL = cn(
     "w-full min-w-0 rounded-[10px] border border-transparent bg-muted px-2.5 py-1.5 font-[inherit] text-[12.5px] text-foreground outline-none",
@@ -101,7 +156,10 @@ export const CONTROL = cn(
     "placeholder:text-muted-foreground aria-[invalid=true]:border-[var(--red-ink)]",
 )
 
-export const TextInput = ({ className, ...props }: ComponentProps<"input">) => <input type="text" {...props} className={cn(CONTROL, className)} />
+/** A control with no well until hovered or focused: the item card's rows. Put it after CONTROL in cn(). */
+export const QUIET = "bg-transparent hover:bg-muted focus-visible:bg-card"
+
+export const TextInput =({ className, ...props }: ComponentProps<"input">) => <input type="text" {...props} className={cn(CONTROL, className)} />
 export const NumberInput = ({ className, ...props }: ComponentProps<"input">) => <input type="number" {...props} className={cn(CONTROL, className)} />
 export const DateInput = ({ className, ...props }: ComponentProps<"input">) => <input type="date" {...props} className={cn(CONTROL, className)} />
 export const Select = ({ className, ...props }: ComponentProps<"select">) => <select {...props} className={cn(CONTROL, "cursor-pointer", className)} />
