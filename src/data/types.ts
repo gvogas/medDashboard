@@ -45,6 +45,8 @@ export interface Ui {
     types: Record<string, boolean>
     show: Show
     course: string
+    /* the sidebar's semester: a school calendar semester's name, or null for the current one */
+    sem: string | null
     /* "tile" while the table shows a stat tile's list, which leaves out the course and the search */
     listFrom: "tile" | null
     focus: boolean

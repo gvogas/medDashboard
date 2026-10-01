@@ -8,9 +8,13 @@ import { MotionConfig } from "framer-motion"
 import { useCourses, useItems } from "@/data/store"
 import { useUi } from "@/data/ui"
 import { THEMES } from "@/data/themes"
-import { openCourse, setCourse } from "@/data/actions"
+import { openCourse, setCourse, setSem } from "@/data/actions"
+import { today } from "@/core/dates"
+import { courseTerm, inTerm, pickedTerm, type SchoolCalendar } from "@/core/school"
+import { schoolCal } from "@/data/query"
+import { cn } from "@/lib/utils"
 import { SidebarWho } from "./sidebar-who"
-import { Count, counts, Heading, Pip, Row } from "./sidebar-parts"
+import { Count, counts, Heading, headingButton, Pip, Row } from "./sidebar-parts"
 import { SideNav } from "./side-nav"
 import { SideFoot } from "./side-foot"
 import { SidebarPlayer } from "./spotify/sidebar-player"
@@ -37,7 +41,13 @@ export function Sidebar() {
 }
 
 function CourseList() {
-    const courses = useCourses().filter((c) => !c.archived)       // legacy activeCourses()
+    const cal = schoolCal()
+    const sem = useUi((ui) => ui.sem)
+    const term = pickedTerm(cal, sem, today())
+    /* the select shows with two semesters or more; a course goes under its own or every one */
+    const picker = !!cal && cal.terms.length > 1
+    const courses = useCourses().filter((c) => !c.archived && inTerm(cal, c.term, picker ? term : null))
+    const yearTag = cal && cal.terms.length === 2 ? "Both" : "All year"
     const items = useItems()
     const selected = useUi((ui) => ui.course)
     const n: Record<string, number> = {}
@@ -45,7 +55,7 @@ function CourseList() {
 
     return (
         <section aria-label="Courses">
-            <Heading>Courses</Heading>
+            <Heading action={picker && term ? <SemesterSelect cal={cal!} value={term.name} /> : undefined}>Courses</Heading>
             <div className="flex flex-col gap-px">
                 <Row pressed={selected === "all"} onClick={() => setCourse("all")}>
                     <span className="min-w-0 truncate">All courses</span>
@@ -55,6 +65,7 @@ function CourseList() {
                         <Row pressed={selected === c.id} onClick={() => setCourse(c.id)} className={selected === c.id ? undefined : "hover:bg-transparent"}>
                             <Pip color={c.color} />
                             <span className="min-w-0 truncate">{c.name}</span>
+                            {picker && !courseTerm(cal, c.term) && <span className="shrink-0 text-[11px] text-muted-foreground">{yearTag}</span>}
                             <Count n={n[c.id] || 0} />
                         </Row>
                         <button
@@ -76,5 +87,14 @@ function CourseList() {
                 </button>
             </div>
         </section>
+    )
+}
+
+/** Which semester's courses the list shows. */
+function SemesterSelect({ cal, value }: { cal: SchoolCalendar; value: string }) {
+    return (
+        <select aria-label="Semester" value={value} onChange={(e) => setSem(e.target.value)} className={cn(headingButton, "cursor-pointer font-medium text-foreground")}>
+            {cal.terms.map((t) => <option key={t.name} value={t.name}>{t.name}</option>)}
+        </select>
     )
 }
