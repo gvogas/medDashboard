@@ -174,7 +174,7 @@ function WeekPane({ w, goal, onDelete }: { w: WeekHist; goal: number; onDelete: 
                     <ol className="m-0 grid list-none grid-cols-7 gap-2 p-0 text-center text-[11px] text-ink-2 tabular-nums">
                         {w.days.map((d) => (
                             <li key={d.date} className="flex min-w-0 flex-col gap-px">
-                                <b className={cn("text-[11.5px] font-semibold text-foreground", d.isToday && "font-extrabold text-[var(--study-ink)]")}>{d.label}</b>
+                                <b className={cn("text-[11.5px] font-semibold whitespace-nowrap text-foreground @max-[420px]:text-[10.5px]", d.isToday && "font-extrabold text-[var(--study-ink)]")}>{d.label}</b>
                                 {d.isToday && <span className="sr-only">today</span>}
                                 {d.total > 0 && duration(d.total)}
                             </li>
