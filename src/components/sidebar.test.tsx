@@ -124,6 +124,12 @@ describe("the semester select", () => {
         expect(coursesNav().queryByRole("button", { name: /^Fall course/ })).toBeNull()
     })
 
+    it("still shows the course picked when the semester shown leaves it out", () => {
+        fake.ui.course = "w"
+        render(<Sidebar />)
+        expect(coursesNav().getByRole("button", { name: /^Winter course/ }).getAttribute("aria-pressed")).toBe("true")
+    })
+
     it("closes on Escape without picking, focus back on the button", () => {
         render(<Sidebar />)
         const button = coursesNav().getByRole("button", { name: "Semester: Fall 2026" })
