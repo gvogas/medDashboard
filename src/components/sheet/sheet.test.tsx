@@ -210,10 +210,50 @@ describe("the item sheet", () => {
         await act(() => vi.advanceTimersByTimeAsync(TYPING_MS))
         expect(fake.data.items[0]).toMatchObject({ title: "Renal set 2" })
 
+        fireEvent.click(screen.getByRole("button", { name: "Add notes" }))
         fireEvent.change(screen.getByRole("textbox", { name: "Notes" }), { target: { value: "p. 40" } })
         await act(async () => closeSheet())
         await act(() => flush())
         expect(fake.data.items[0]).toMatchObject({ notes: "p. 40" })
+    })
+
+    it("folds the checklist, notes and links until wanted, and opens what the item has", () => {
+        fake.data.items = [item({ id: "e1", type: "exam", title: "Midterm" })]
+        show()
+        open({ kind: "item", id: "e1" })
+        expect(screen.queryByRole("textbox", { name: "Notes" })).toBeNull()
+        expect(screen.queryByRole("textbox", { name: "Add a step" })).toBeNull()
+        expect(screen.queryByRole("textbox", { name: "Link URL" })).toBeNull()
+
+        fireEvent.click(screen.getByRole("button", { name: "Add topics" }))   /* an exam's checklist is its topics */
+        expect(screen.getByRole("textbox", { name: "Add a step" })).toBe(document.activeElement)
+        expect(screen.queryByRole("button", { name: "Add topics" })).toBeNull()
+        fireEvent.click(screen.getByRole("button", { name: "Add notes" }))
+        expect(screen.getByRole("textbox", { name: "Notes" })).toBe(document.activeElement)
+        fireEvent.click(screen.getByRole("button", { name: "Add links" }))
+        expect(screen.getByRole("textbox", { name: "Link label" })).toBe(document.activeElement)
+    })
+
+    it("shows an item's steps, notes and links open, and keeps notes open when emptied", async () => {
+        fake.data.items = [item({ id: "i3", title: "Essay", notes: "p. 12", checklist: [{ id: "s", text: "Outline", done: false }], links: [{ label: "Brief", url: "https://x.org" }] })]
+        show()
+        open({ kind: "item", id: "i3" })
+        expect(screen.queryByRole("button", { name: "Add a checklist" })).toBeNull()
+        expect(screen.queryByRole("button", { name: "Add notes" })).toBeNull()
+        expect(screen.queryByRole("button", { name: "Add links" })).toBeNull()
+        const notes = screen.getByRole("textbox", { name: "Notes" })
+        fireEvent.change(notes, { target: { value: "" } })
+        await act(() => vi.advanceTimersByTimeAsync(TYPING_MS))
+        expect(screen.getByRole("textbox", { name: "Notes" })).toBeTruthy()
+    })
+
+    it("fills an exam's topics from the lectures once Topics is open", () => {
+        fake.data.items = [item({ id: "e2", type: "exam", title: "Final", courseId: "anat", date: "2026-10-14" })]
+        show()
+        open({ kind: "item", id: "e2" })
+        expect(screen.queryByRole("button", { name: "Fill topics from lectures" })).toBeNull()
+        fireEvent.click(screen.getByRole("button", { name: "Add topics" }))
+        expect(screen.getByRole("button", { name: "Fill topics from lectures" })).toBeTruthy()
     })
 
     it("keeps what is typed when a sync reloads the item", async () => {

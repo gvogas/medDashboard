@@ -23,7 +23,7 @@ import { deleteItem, openCourse } from "@/data/actions"
 import { accent, StatusChip } from "@/components/views/bits"
 import type { ChecklistEntry, Course, Item } from "@/data/types"
 import {
-    Button, Chips, DateInput, IconButton, Meter, Note, NumberInput, Prop, Props, QUIET, RemoveButton, Section, Segmented, Select,
+    AddButton, Button, Chips, DateInput, IconButton, Meter, Note, NumberInput, Prop, Props, QUIET, RemoveButton, Section, Segmented, Select,
     SheetBody, SheetFoot, SheetHead, TextArea, TextInput, TitleArea, CONTROL,
 } from "./fields"
 import { TimeField } from "./time-field"
@@ -46,6 +46,12 @@ export function ItemSheet({ id, draft }: { id?: string; draft?: Item }) {
     const bg = useUi((u) => u.bg)
     const [fillNote, setFillNote] = useState("")
     const f = useId()
+    /* Checklist, Notes and Links start folded; one the item has opens by itself and stays
+       open while the card is, even emptied. `focus` is the part a + just opened. */
+    const [unfolded, setUnfolded] = useState(() => ({
+        steps: !!it?.checklist?.length, notes: !!it?.notes, links: !!it?.links?.length,
+    }))
+    const [focus, setFocus] = useState<"steps" | "notes" | "links" | null>(null)
 
     /* closing, or switching to another item, saves what is being typed */
     useEffect(() => {
@@ -90,6 +96,13 @@ export function ItemSheet({ id, draft }: { id?: string; draft?: Item }) {
 
     const busy = busyDays(items, it.id)
     const gradable = GRADABLE.includes(baseOf(it.type))
+    const show = {
+        steps: unfolded.steps || (it.checklist || []).length > 0,
+        notes: unfolded.notes || !!it.notes,
+        links: unfolded.links || (it.links || []).length > 0,
+    }
+    const unfold = (part: "steps" | "notes" | "links") => { setUnfolded((u) => ({ ...u, [part]: true })); setFocus(part) }
+    const test = isTest(it.type)
 
     return (
         <>
@@ -209,26 +222,39 @@ export function ItemSheet({ id, draft }: { id?: string; draft?: Item }) {
                     )}
                 </Props>
 
-                <Section title="Notes">
-                    <TextArea aria-label="Notes" value={it.notes} maxLength={5000} placeholder="What to revise, what the lecturer said, page numbers."
-                        onChange={(e) => set("notes", e.target.value)} onBlur={() => void flush()} />
-                </Section>
+                {show.steps && (
+                    <Checklist
+                        item={it}
+                        autoFocus={focus === "steps"}
+                        /* a step typed waits for the pause like other text; a tick, an add or a remove saves at once */
+                        onChange={(list, typing) => { if (typing || isNew) set("checklist", list); else void editNow(it.id, { checklist: list }) }}
+                        fill={!isNew && test && lectures ? () => {
+                            const r = fillTopics(it, c, store.data.items, termStart(), schoolCal())
+                            if (r.added) void editNow(it.id, { checklist: r.checklist })
+                            setFillNote(r.added
+                                ? "Added " + r.added + " lecture" + (r.added === 1 ? "" : "s") + "." + (r.left ? " " + r.left + " more did not fit under the 50-step limit." : "")
+                                : r.left ? "The list is full: 50 steps is the most an item can hold." : "Every lecture before this " + m.label.toLowerCase() + " is already listed.")
+                        } : null}
+                        fillNote={fillNote}
+                    />
+                )}
 
-                <Checklist
-                    item={it}
-                    /* a step typed waits for the pause like other text; a tick, an add or a remove saves at once */
-                    onChange={(list, typing) => { if (typing || isNew) set("checklist", list); else void editNow(it.id, { checklist: list }) }}
-                    fill={!isNew && isTest(it.type) && lectures ? () => {
-                        const r = fillTopics(it, c, store.data.items, termStart(), schoolCal())
-                        if (r.added) void editNow(it.id, { checklist: r.checklist })
-                        setFillNote(r.added
-                            ? "Added " + r.added + " lecture" + (r.added === 1 ? "" : "s") + "." + (r.left ? " " + r.left + " more did not fit under the 50-step limit." : "")
-                            : r.left ? "The list is full: 50 steps is the most an item can hold." : "Every lecture before this " + m.label.toLowerCase() + " is already listed.")
-                    } : null}
-                    fillNote={fillNote}
-                />
+                {show.notes && (
+                    <Section title="Notes">
+                        <TextArea aria-label="Notes" autoFocus={focus === "notes"} value={it.notes} maxLength={5000} placeholder="What to revise, what the lecturer said, page numbers."
+                            onChange={(e) => set("notes", e.target.value)} onBlur={() => void flush()} />
+                    </Section>
+                )}
 
-                <Links item={it} onChange={(links) => set("links", links)} />
+                {show.links && <Links item={it} autoFocus={focus === "links"} onChange={(links) => set("links", links)} />}
+
+                {!(show.steps && show.notes && show.links) && (
+                    <div className="flex flex-wrap gap-2">
+                        {!show.steps && <AddButton aria-label={test ? "Add topics" : "Add a checklist"} onClick={() => unfold("steps")}>{test ? "Topics" : "Checklist"}</AddButton>}
+                        {!show.notes && <AddButton aria-label="Add notes" onClick={() => unfold("notes")}>Notes</AddButton>}
+                        {!show.links && <AddButton aria-label="Add links" onClick={() => unfold("links")}>Links</AddButton>}
+                    </div>
+                )}
             </SheetBody>
 
             {isNew ? (
@@ -246,8 +272,8 @@ export function ItemSheet({ id, draft }: { id?: string; draft?: Item }) {
     )
 }
 
-function Checklist({ item, onChange, fill, fillNote }: {
-    item: Item; onChange: (list: ChecklistEntry[], typing: boolean) => void; fill: (() => void) | null; fillNote: string
+function Checklist({ item, onChange, fill, fillNote, autoFocus = false }: {
+    item: Item; onChange: (list: ChecklistEntry[], typing: boolean) => void; fill: (() => void) | null; fillNote: string; autoFocus?: boolean
 }) {
     const list = item.checklist || []
     const done = list.filter((s) => s.done).length
@@ -295,6 +321,7 @@ function Checklist({ item, onChange, fill, fillNote }: {
                     value={adding}
                     maxLength={140}
                     aria-label="Add a step"
+                    autoFocus={autoFocus}
                     placeholder="Add a step, press Enter"
                     onChange={(e) => setAdding(e.target.value)}
                     onKeyDown={(e) => {
@@ -310,7 +337,7 @@ function Checklist({ item, onChange, fill, fillNote }: {
     )
 }
 
-function Links({ item, onChange }: { item: Item; onChange: (links: Item["links"]) => void }) {
+function Links({ item, onChange, autoFocus = false }: { item: Item; onChange: (links: Item["links"]) => void; autoFocus?: boolean }) {
     const links = item.links || []
     const [label, setLabel] = useState("")
     const [url, setUrl] = useState("")
@@ -337,7 +364,7 @@ function Links({ item, onChange }: { item: Item; onChange: (links: Item["links"]
             ))}
             {links.length < MAX_LINKS && (
                 <div className="flex gap-1.5">
-                    <input type="text" value={label} maxLength={60} placeholder="Label" aria-label="Link label" onChange={(e) => setLabel(e.target.value)} onKeyDown={onEnter} className={cn(CONTROL, "flex-[0_0_96px] border-border")} />
+                    <input type="text" value={label} maxLength={60} placeholder="Label" aria-label="Link label" autoFocus={autoFocus} onChange={(e) => setLabel(e.target.value)} onKeyDown={onEnter} className={cn(CONTROL, "flex-[0_0_96px] border-border")} />
                     <input type="url" value={url} maxLength={500} placeholder="https://…" aria-label="Link URL" aria-invalid={bad || undefined}
                         onChange={(e) => { setUrl(e.target.value); setBad(false) }} onKeyDown={onEnter} className={cn(CONTROL, "flex-1 border-border")} />
                 </div>
