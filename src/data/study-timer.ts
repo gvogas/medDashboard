@@ -17,7 +17,7 @@ import { getSheet } from "./overlay"
 import { useCourses, useItems, useProfile, useStudySessions } from "./store"
 import { shownSessions } from "./study"
 import { ui, useUi } from "./ui"
-import { THEMES } from "./themes"
+import { THEMES, type Bg } from "./themes"
 import type { Course, Flow, Item, StepKind, StudySession } from "./types"
 
 const MIN = 60_000
@@ -85,13 +85,14 @@ subscribeBridge(() => {
 
 /* What a run does to the page: Start opens the focus screen; a new Study step pulls you
    back into it (unless a sheet is open); Stop & log, or the flow's end, goes to the
-   Study page, where the session now shows. */
+   Study page's Timer tab, whose Today card now lists the session. */
 focus.onTick((s: { kind: StepKind } | null, event: string) => {
     let moved = false
     if (event === "start") { ui.focus = true; moved = true }
     else if (event === "end") {
         ui.focus = false
         ui.view = "study"
+        ui.studyTab = "timer"
         rememberUi()
         moved = true
     } else if (event === "step" && s?.kind === "study" && !ui.focus && !getSheet()) { ui.focus = true; moved = true }
@@ -283,6 +284,20 @@ export function applyPreset(i: number): Promise<boolean> {
     return preset ? saveFlow(copy(preset[1])) : Promise.resolve(false)
 }
 
+/** The Quick start presets as a theme names them: the third is the theme's own ("LeetCode then read"). */
+export const presetsFor = (bg: Bg): [string, Flow][] =>
+    PRESETS.map(([name, f], i): [string, Flow] => [i === 2 ? THEMES[bg].preset : name, f])
+
+/** Whether two flows have the same steps and rounds. */
+export const sameFlow = (a: Flow, b: Flow) =>
+    a.rounds === b.rounds && a.steps.length === b.steps.length && a.steps.every(([k, m], i) => k === b.steps[i][0] && m === b.steps[i][1])
+
+/** The Ready card's name for the flow: "Classic 25/5 · 4 rounds", or "Your flow · 1 round" when it is no preset. */
+export function flowName(f: Flow, bg: Bg): string {
+    const preset = presetsFor(bg).find(([, p]) => sameFlow(p, f))
+    return (preset ? preset[0] : "Your flow") + " · " + f.rounds + (f.rounds === 1 ? " round" : " rounds")
+}
+
 /* ── what the cards, the focus screen and the dock show ── */
 
 /** Minutes of study and in all, over every round. */
@@ -340,11 +355,7 @@ export function timeText(ms: number): string {
     return String(m).padStart(2, "0") + ":" + String(s).padStart(2, "0")
 }
 
-/** A time of day as the clock shows it: "15:40". */
-export function clockTime(ms: number): string {
-    const d = new Date(ms)
-    return String(d.getHours()).padStart(2, "0") + ":" + String(d.getMinutes()).padStart(2, "0")
-}
+export { clockTime } from "./study"
 
 /** The tab's title: the time left and the phase during a run. */
 export const tickTitle = (r: Run | null, word = "Study") => (r ? timeText(r.leftMs) + " · " + (r.kind === "study" ? word : "Break") : "Term")

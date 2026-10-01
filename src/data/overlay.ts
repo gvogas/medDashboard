@@ -25,6 +25,8 @@ export type SheetState =
     | null
 
 let sheet: SheetState = null
+/* what had focus when the sheet opened, for focus to go back to */
+let opener: Element | null = null
 let covers = 0
 const listeners = new Set<() => void>()
 
@@ -59,9 +61,17 @@ export function onRequestClose(fn: (() => void) | null) { askClose = fn }
 /** Open the sheet, saving what the one open before had pending. */
 export function openSheet(next: Exclude<SheetState, null>) {
     for (const fn of beforeSheetClose) fn()
+    if (sheet === null) opener = document.activeElement
     sheet = next
     askClose = null
     emit()
+}
+
+/** What had focus when the sheet opened, once: the sheet gives focus back to it on close. */
+export function takeOpener(): Element | null {
+    const o = opener
+    opener = null
+    return o
 }
 
 /** A new item's draft, edited: it lives only here until it is saved. */

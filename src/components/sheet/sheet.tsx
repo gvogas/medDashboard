@@ -8,7 +8,7 @@ import { Suspense, useLayoutEffect, useRef, useState } from "react"
 import { cn } from "@/lib/utils"
 import { tmeta } from "@/core/model"
 import { refind } from "@/lib/dom"
-import { requestCloseSheet, useSheet, type SheetState } from "@/data/overlay"
+import { requestCloseSheet, takeOpener, useSheet, type SheetState } from "@/data/overlay"
 import { lazyNamed } from "@/lib/lazy"
 import * as store from "@/core/store"
 import type { Item } from "@/data/types"
@@ -41,18 +41,15 @@ export function Sheet() {
     /* what it last showed stays drawn while it slides out */
     const [shown, setShown] = useState<SheetState>(state)
     const panel = useRef<HTMLDivElement>(null)
-    const opener = useRef<Element | null>(null)
     if (state !== null && state !== shown) setShown(state)
 
     useLayoutEffect(() => {
         if (open) {
-            if (!panel.current?.contains(document.activeElement)) opener.current = document.activeElement
             /* a new one focuses its title (autoFocus); anything else, the sheet */
             requestAnimationFrame(() => { if (!panel.current?.contains(document.activeElement)) panel.current?.focus() })
-        } else if (opener.current) {
+        } else {
             /* back to what opened it, or its successor if a redraw replaced it */
-            ;(refind(opener.current) as HTMLElement | null)?.focus()
-            opener.current = null
+            ;(refind(takeOpener()) as HTMLElement | null)?.focus()
         }
     }, [open, state?.kind, state?.kind === "item" || state?.kind === "course" ? state.id : state?.kind === "session" || state?.kind === "achievement" ? state.draft.id : null])
 

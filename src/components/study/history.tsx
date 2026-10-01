@@ -1,7 +1,8 @@
-// The History card on the Study page: Week, Month and Term. The week is a bar a day, split
-// by course, against the goal; the month a calendar whose days open their sessions; the
-// term a heatmap from its start, whose days open their month. A deleted session waits in
-// the card's foot for Undo, whichever tab is showing.
+// The History card on the Study page's History tab: Week, Month and Term. The week is a
+// bar a day, split by course, against the goal, beside its sessions when the card is wide;
+// the month a calendar whose days open their sessions; the term a heatmap from its start,
+// whose days open their month. A deleted session waits in the card's foot for Undo,
+// whichever tab is showing.
 
 import { useEffect, useRef, useState, type CSSProperties, type KeyboardEvent, type ReactNode } from "react"
 import { cn } from "@/lib/utils"
@@ -12,7 +13,7 @@ import { course as courseOf, item as itemOf } from "@/core/store"
 import { accent, Panel } from "@/components/views/bits"
 import { Segmented } from "@/components/sheet/fields"
 import {
-    pickDay, setHistTab, stepHist, undoSessionDelete, useHistory,
+    clockTime, NO_COURSE, pickDay, setHistTab, stepHist, undoSessionDelete, useHistory,
     type HeatWeek, type MonthHist, type TermHist, type WeekHist,
 } from "@/data/study"
 import { deleteSession, openSession } from "@/data/actions"
@@ -21,7 +22,6 @@ import type { Course, HistTab, Item, SessionUndo, StudySession } from "@/data/ty
 const TABS = [["week", "Week"], ["month", "Month"], ["term", "Term"]] as const
 
 /* A course's colour for --c; sessions with none, or a course since deleted, are grey. */
-const NO_COURSE = "#7D8A99"
 const courseColour = (id: string | null): CSSProperties | undefined => accent((courseOf(id) as Course | null)?.color) ?? accent(NO_COURSE)
 const courseCode = (id: string | null) => (courseOf(id) as Course | null)?.code || "No course"
 const plural = (n: number, one: string) => n + " " + one + (n === 1 ? "" : "s")
@@ -43,7 +43,7 @@ const DAY_TINT = [
     "bg-[color-mix(in_srgb,var(--study)_36%,var(--panel))]",
 ]
 
-export function HistoryCard({ className }: { className?: string }) {
+export function HistoryCard() {
     const h = useHistory()
     const card = useRef<HTMLDivElement>(null)
     /* a heatmap day, to bring into view once its month is drawn */
@@ -82,7 +82,7 @@ export function HistoryCard({ className }: { className?: string }) {
     }
 
     return (
-        <div ref={card} className={cn("min-w-0", className)}>
+        <div ref={card} className="min-w-0">
             <Panel
                 label="History"
                 title="History"
@@ -91,7 +91,7 @@ export function HistoryCard({ className }: { className?: string }) {
                     {h.week && <Stepper unit="week" offset={h.week.offset} range={h.week.range} />}
                     {h.month && <Stepper unit="month" offset={h.month.offset} range={h.month.title} />}
                     {h.term && <span className="font-mono text-[12px] text-ink-2">{h.term.title} · {h.term.range}</span>}
-                    <button type="button" onClick={() => openSession(null)}
+                    <button type="button" onClick={() => openSession(null)} data-log
                         className="ml-auto inline-flex cursor-pointer items-center gap-1.5 rounded-[9px] border border-border bg-[linear-gradient(var(--panel),var(--panel-2))] px-2.5 py-1 font-[inherit] text-[12px] font-semibold text-ink-2 shadow-[var(--shadow-1),inset_0_1px_0_var(--rim-hi)] hover:border-[color-mix(in_srgb,var(--accent)_50%,var(--line))] hover:text-accent-foreground">
                         <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden="true" className="size-3.5"><path d="M8 3v10M3 8h10" /></svg>
                         Log study
@@ -146,46 +146,51 @@ const Hint = ({ children }: { children: ReactNode }) => <p className="m-0 px-0.5
 
 function WeekPane({ w, goal, onDelete }: { w: WeekHist; goal: number; onDelete: (id: string) => void }) {
     return (
-        <>
-            <div className="flex flex-wrap items-baseline gap-2">
-                <b className="font-mono text-[28px] font-extrabold tracking-[-.02em] text-foreground">{duration(w.total)}</b>
-                <span className="text-[12.5px] text-ink-2">{w.summary}</span>
-            </div>
-            <div>
-                <div className="relative mb-1.5 h-[130px]">
-                    <div aria-hidden="true" className="grid h-full grid-cols-7 gap-2">
-                        {w.days.map((d) => (
-                            <span key={d.date} title={d.title} className={cn(
-                                "box-border flex h-full flex-col-reverse gap-0.5 rounded-md",
-                                d.future ? "border-[1.5px] border-dashed border-border" : "bg-[repeating-linear-gradient(to_top,var(--line-2)_0_1px,transparent_1px_25%)]",
-                            )}>
-                                {d.bars.map((b) => <i key={b.courseId} style={{ ...courseColour(b.courseId || null), height: b.height + "%" }} className="block min-h-0.5 rounded bg-[var(--c)]" />)}
-                            </span>
-                        ))}
-                    </div>
-                    {w.goalLine !== null && (
-                        <span aria-hidden="true" style={{ bottom: w.goalLine + "%" }}
-                            className="pointer-events-none absolute right-0 left-0 border-t-[1.5px] border-dashed border-[color-mix(in_srgb,var(--study)_60%,transparent)]">
-                            <em className="absolute -top-[17px] right-0 rounded bg-card px-1 text-[11px] font-semibold text-[var(--study-ink)] not-italic">{duration(goal)} goal</em>
-                        </span>
-                    )}
+        <div className="grid items-start gap-x-8 gap-y-3.5 @min-[880px]:grid-cols-2">
+            <div data-col="chart" className="flex min-w-0 flex-col gap-3.5">
+                <div className="flex flex-wrap items-baseline gap-2">
+                    <b className="font-mono text-[28px] font-extrabold tracking-[-.02em] text-foreground">{duration(w.total)}</b>
+                    <span className="text-[12.5px] text-ink-2">{w.summary}</span>
                 </div>
-                <ol className="m-0 grid list-none grid-cols-7 gap-2 p-0 text-center text-[11px] text-ink-2 tabular-nums">
-                    {w.days.map((d) => (
-                        <li key={d.date} className="flex min-w-0 flex-col gap-px">
-                            <b className={cn("text-[11.5px] font-semibold text-foreground", d.isToday && "font-extrabold text-[var(--study-ink)]")}>{d.label}</b>
-                            {d.isToday && <span className="sr-only">today</span>}
-                            {d.total > 0 && duration(d.total)}
-                        </li>
-                    ))}
-                </ol>
+                <div>
+                    <div className="relative mb-1.5 h-[130px] @min-[880px]:h-[210px]">
+                        <div aria-hidden="true" className="grid h-full grid-cols-7 gap-2">
+                            {w.days.map((d) => (
+                                <span key={d.date} title={d.title} className={cn(
+                                    "box-border flex h-full flex-col-reverse gap-0.5 rounded-md",
+                                    d.future ? "border-[1.5px] border-dashed border-border" : "bg-[repeating-linear-gradient(to_top,var(--line-2)_0_1px,transparent_1px_25%)]",
+                                )}>
+                                    {d.bars.map((b) => <i key={b.courseId} style={{ ...courseColour(b.courseId || null), height: b.height + "%" }} className="block min-h-0.5 rounded bg-[var(--c)]" />)}
+                                </span>
+                            ))}
+                        </div>
+                        {w.goalLine !== null && (
+                            <span aria-hidden="true" style={{ bottom: w.goalLine + "%" }}
+                                className="pointer-events-none absolute right-0 left-0 border-t-[1.5px] border-dashed border-[color-mix(in_srgb,var(--study)_60%,transparent)]">
+                                <em className="absolute -top-[17px] right-0 rounded bg-card px-1 text-[11px] font-semibold text-[var(--study-ink)] not-italic">{duration(goal)} goal</em>
+                            </span>
+                        )}
+                    </div>
+                    <ol className="m-0 grid list-none grid-cols-7 gap-2 p-0 text-center text-[11px] text-ink-2 tabular-nums">
+                        {w.days.map((d) => (
+                            <li key={d.date} className="flex min-w-0 flex-col gap-px">
+                                <b className={cn("text-[11.5px] font-semibold whitespace-nowrap text-foreground @max-[420px]:text-[10.5px]", d.isToday && "font-extrabold text-[var(--study-ink)]")}>{d.label}</b>
+                                {d.isToday && <span className="sr-only">today</span>}
+                                {d.total > 0 && duration(d.total)}
+                            </li>
+                        ))}
+                    </ol>
+                </div>
+                {w.perCourse.length > 0 && <CourseBars list={w.perCourse} />}
             </div>
-            {w.perCourse.length > 0 && <CourseBars list={w.perCourse} />}
-            <SubHead note="newest first">Sessions</SubHead>
-            {w.sessions.length
-                ? <Sessions list={w.sessions} withDay onDelete={onDelete} />
-                : <Hint>No study logged this week.</Hint>}
-        </>
+            {/* its own container: the rows take two lines when this column is narrow */}
+            <div data-col="sessions" className="@container flex min-w-0 flex-col gap-3.5">
+                <SubHead note="newest first">Sessions</SubHead>
+                {w.sessions.length
+                    ? <Sessions list={w.sessions} withDay onDelete={onDelete} />
+                    : <Hint>No study logged this week.</Hint>}
+            </div>
+        </div>
     )
 }
 
@@ -219,8 +224,6 @@ function Sessions({ list, withDay, onDelete }: { list: StudySession[]; withDay: 
     )
 }
 
-const hm = (ms: number) => { const d = new Date(ms); return String(d.getHours()).padStart(2, "0") + ":" + String(d.getMinutes()).padStart(2, "0") }
-
 /** When, the course, what, how long, Timer or By hand, ✎ and ✕. Narrow, it takes two lines. */
 function SessionRow({ s, withDay, onDelete }: { s: StudySession; withDay: boolean; onDelete: (id: string) => void }) {
     const it = s.itemId ? (itemOf(s.itemId) as Item | null) : null
@@ -229,26 +232,26 @@ function SessionRow({ s, withDay, onDelete }: { s: StudySession; withDay: boolea
     return (
         <li data-session={s.id} className={cn(
             "grid items-center gap-x-2.5 gap-y-1 border-t border-line-2 px-0.5 py-[7px] text-[13px] text-foreground",
-            "[grid-template-columns:108px_84px_minmax(0,1fr)_64px_70px_auto]",
-            "@max-[560px]:py-2.5 @max-[560px]:[grid-template-areas:'chip_what_mins'_'tm_src_acts'] @max-[560px]:[grid-template-columns:auto_minmax(0,1fr)_auto]",
+            "[grid-template-columns:108px_72px_minmax(0,1fr)_56px_64px_auto]",
+            "@max-[520px]:py-2.5 @max-[520px]:[grid-template-areas:'chip_what_mins'_'tm_src_acts'] @max-[520px]:[grid-template-columns:auto_minmax(0,1fr)_auto]",
         )}>
-            <span className="font-mono text-[12px] whitespace-nowrap text-ink-2 @max-[560px]:[grid-area:tm]">
-                {withDay && DOW[at.getDay()] + " " + at.getDate() + " · "}{hm(s.startedAt)}
+            <span className="font-mono text-[12px] whitespace-nowrap text-ink-2 @max-[520px]:[grid-area:tm]">
+                {withDay && DOW[at.getDay()] + " " + at.getDate() + " · "}{clockTime(s.startedAt)}
             </span>
             <span style={courseColour(s.courseId)}
-                className="inline-flex max-w-full items-center gap-1.5 justify-self-start overflow-hidden rounded-md bg-muted px-2 py-[3px] text-[11px] font-bold tracking-[.05em] whitespace-nowrap @max-[560px]:[grid-area:chip]">
+                className="inline-flex max-w-full items-center gap-1.5 justify-self-start overflow-hidden rounded-md bg-muted px-2 py-[3px] text-[11px] font-bold tracking-[.05em] whitespace-nowrap @max-[520px]:[grid-area:chip]">
                 <i aria-hidden="true" className="size-[7px] flex-none rounded-full bg-[var(--c)]" />{courseCode(s.courseId)}
             </span>
-            <span className="flex min-w-0 flex-col @max-[560px]:[grid-area:what]">
+            <span className="flex min-w-0 flex-col @max-[520px]:[grid-area:what]">
                 <b className="truncate font-semibold">{it ? it.title : (courseOf(s.courseId) as Course | null)?.name || "No course"}</b>
                 {note && <em className="truncate font-serif text-[12.5px] text-ink-2 italic">{note}</em>}
             </span>
-            <span className="text-right font-mono font-semibold @max-[560px]:[grid-area:mins]">{duration(s.studyMinutes)}</span>
+            <span className="text-right font-mono font-semibold @max-[520px]:[grid-area:mins]">{duration(s.studyMinutes)}</span>
             <span className={cn(
-                "justify-self-start rounded-full px-2 py-0.5 text-[11px] font-semibold @max-[560px]:[grid-area:src]",
+                "justify-self-start rounded-full px-2 py-0.5 text-[11px] font-semibold @max-[520px]:[grid-area:src]",
                 s.manual ? "bg-[var(--chip-bg)] text-[var(--chip-ink)]" : "bg-[var(--study-soft)] text-[var(--study-ink)]",
             )}>{s.manual ? "By hand" : "Timer"}</span>
-            <span className="flex gap-0.5 @max-[560px]:justify-self-end @max-[560px]:[grid-area:acts]">
+            <span className="flex gap-0.5 @max-[520px]:justify-self-end @max-[520px]:[grid-area:acts]">
                 <RowButton label="Edit this session" data-edit onClick={() => openSession(s.id)}>
                     <path d="M11 2.5l2.5 2.5L6 12.5 3 13l.5-3z" strokeWidth="1.6" strokeLinejoin="round" />
                 </RowButton>
@@ -262,7 +265,7 @@ function SessionRow({ s, withDay, onDelete }: { s: StudySession; withDay: boolea
 
 const RowButton = ({ label, onClick, children, ...rest }: { label: string; onClick: () => void; children: ReactNode; "data-edit"?: boolean }) => (
     <button type="button" aria-label={label} onClick={onClick} {...rest}
-        className="grid size-8 cursor-pointer place-items-center rounded-md border-0 bg-transparent p-0 text-muted-foreground hover:bg-line-2 hover:text-foreground @max-[560px]:size-10">
+        className="grid size-8 cursor-pointer place-items-center rounded-md border-0 bg-transparent p-0 text-muted-foreground hover:bg-line-2 hover:text-foreground @max-[520px]:size-10">
         <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" aria-hidden="true" className="size-3.5">{children}</svg>
     </button>
 )

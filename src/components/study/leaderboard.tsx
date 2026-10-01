@@ -1,5 +1,5 @@
 // The Leaderboard card on the Study page: who has studied the most this week, or ever,
-// among those who joined. Not joined, it says what joining shares. It loads when the page
+// among those who joined. Not joined, it says what joining shares. It loads when its tab
 // opens and the totals are missing or a minute old, and again when the device comes back
 // online after saying it needed a connection.
 
@@ -27,7 +27,7 @@ export function LeaderboardCard({ className }: { className?: string }) {
        cancelled when the account is bound (core/api.ts), so wait for the app to show. */
     const screen = useScreen()
     useEffect(() => {
-        if (screen === "app" && lbStale()) void loadLeaderboard()
+        if (screen === "app" && (lbStale() || (ui.lb?.offline && navigator.onLine))) void loadLeaderboard()
     }, [screen])
 
     useEffect(() => {
