@@ -3,6 +3,8 @@
 // views/drawer-course.js.
 
 import { HEXES, normalizeCourse, uid } from "@/core/model"
+import { courseTerm, type SchoolCalendar } from "@/core/school"
+import { dayMonth } from "@/core/dates"
 import type { Course, Meeting } from "./types"
 
 export const MAX_CLASSES = 12
@@ -23,3 +25,13 @@ export function courseChanged(draft: Course, stored: Course | null): boolean {
 /** The course as it is saved: a missing code becomes the name's first four letters. */
 export const forSaving = (draft: Course): Course =>
     ({ ...draft, code: draft.code.trim() || draft.name.trim().slice(0, 4).toUpperCase() })
+
+/** The course sheet's semester choices: each semester of the calendar, then all year ('' is stored). */
+export const semesterOptions = (cal: SchoolCalendar): [string, string][] =>
+    [...cal.terms.map((t): [string, string] => [t.name, t.name]), ["", cal.terms.length === 2 ? "Both semesters" : "All year"]]
+
+/** What the semester picked means for the classes: "Classes run 8 Sep – 18 Dec." */
+export function semesterNote(cal: SchoolCalendar, term: string): string {
+    const t = courseTerm(cal, term)
+    return t ? "Classes run " + dayMonth(t.start) + " – " + dayMonth(t.end) + "." : "Classes run in every semester."
+}

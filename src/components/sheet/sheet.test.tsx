@@ -10,7 +10,7 @@ const fake = vi.hoisted(() => {
         data[kind] = data[kind].some((x) => x.id === row.id) ? data[kind].map((x) => (x.id === row.id ? row : x)) : [...data[kind], row]
         for (const fn of listeners) fn({ type: "change" })
     }
-    return { data, listeners, put, ui: { bg: "med", view: "week", course: "all", search: "", types: {} } }
+    return { data, listeners, put, cal: null as unknown, ui: { bg: "med", view: "week", course: "all", search: "", types: {} } }
 })
 const actions = vi.hoisted(() => ({ deleteItem: vi.fn(), deleteCourse: vi.fn(), openCourse: vi.fn() }))
 vi.mock("@/core/store", () => ({
@@ -22,7 +22,7 @@ vi.mock("@/core/store", () => ({
     subscribe: (fn: (e: { type: string }) => void) => { fake.listeners.add(fn); return () => fake.listeners.delete(fn) },
 }))
 vi.mock("@/data/ui", async () => (await import("@/data/fake-ui")).fakeUi(fake.ui))
-vi.mock("@/data/query", () => ({ schoolCal: () => null, termStart: () => "2026-09-01" }))
+vi.mock("@/data/query", () => ({ schoolCal: () => fake.cal, termStart: () => "2026-09-01" }))
 vi.mock("@/core/reviews", () => ({ nextReview: () => null }))
 vi.mock("@/lib/fireworks", () => ({ launch: vi.fn() }))
 vi.mock("@/data/actions", () => actions)
@@ -38,6 +38,7 @@ vi.mock("@/data/ai-read", () => ({ readWithAi: vi.fn() }))
 
 import * as store from "@/core/store"
 import { normalizeCourse, normalizeItem } from "@/core/model"
+import { normalizeSchool } from "@/core/school"
 import { launch as fireworks } from "@/lib/fireworks"
 import { closeSheet, cover, getSheet, openSheet } from "@/data/overlay"
 import { flush, TYPING_MS } from "@/data/item-edit"
@@ -46,6 +47,10 @@ import { Page, Scrim, SheetHost } from "@/components/shell"
 import type { Item } from "@/data/types"
 
 const item = (row: Record<string, unknown>) => normalizeItem({ type: "assignment", date: "2026-09-23", status: "todo", ...row }) as Item
+const TWO_TERMS = normalizeSchool({ terms: [
+    { name: "Fall 2026", start: "2026-09-08", end: "2026-12-18" },
+    { name: "Winter 2027", start: "2027-01-11", end: "2027-04-23" },
+] })
 
 beforeAll(() => { vi.useFakeTimers({ toFake: ["Date", "setTimeout", "clearTimeout"], shouldAdvanceTime: true }); vi.setSystemTime(new Date(2026, 8, 23, 12)) })
 afterAll(() => { vi.useRealTimers() })
@@ -59,6 +64,7 @@ beforeEach(() => {
     vi.mocked(store.saveCourse).mockClear()
 })
 afterEach(async () => {
+    fake.cal = null
     act(() => closeSheet())
     await flush()
     cleanup()
@@ -197,6 +203,26 @@ describe("the item sheet", () => {
 })
 
 describe("the course sheet", () => {
+    it("picks a semester from the school calendar, or both", async () => {
+        fake.cal = TWO_TERMS
+        show()
+        open({ kind: "course", id: "anat" })
+        const sem = screen.getByRole("group", { name: "Semester" })
+        expect(within(sem).getByRole("button", { name: "Both semesters" }).getAttribute("aria-pressed")).toBe("true")
+        expect(screen.getByText("Classes run in every semester.")).toBeTruthy()
+        fireEvent.click(within(sem).getByRole("button", { name: "Winter 2027" }))
+        expect(screen.getByText("Classes run 11 Jan – 23 Apr.")).toBeTruthy()
+        await act(async () => fireEvent.click(screen.getByRole("button", { name: "Save course" })))
+        expect(fake.data.courses[0]).toMatchObject({ term: "Winter 2027" })
+    })
+
+    it("keeps the free-text term without a school calendar", () => {
+        show()
+        open({ kind: "course", id: "anat" })
+        expect(screen.getByRole("textbox", { name: "Term" })).toBeTruthy()
+        expect(screen.queryByRole("group", { name: "Semester" })).toBeNull()
+    })
+
     it("keeps edits in the draft until Save", async () => {
         show()
         open({ kind: "course", id: "anat" })

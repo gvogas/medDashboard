@@ -10,12 +10,14 @@ import * as store from "@/core/store"
 import { courseGrade, neededLabel, targetsFor, ungraded } from "@/core/grades"
 import { useCourses, useItems } from "@/data/store"
 import { closeSheet, onRequestClose } from "@/data/overlay"
-import { courseChanged, forSaving, MAX_CLASSES, newClass, newCourse } from "@/data/course-edit"
+import { courseChanged, forSaving, MAX_CLASSES, newClass, newCourse, semesterNote, semesterOptions } from "@/data/course-edit"
+import { schoolCal } from "@/data/query"
+import { courseTerm } from "@/core/school"
 import { deleteCourse } from "@/data/actions"
 import { accent } from "@/components/views/bits"
 import type { Course, Item, Meeting } from "@/data/types"
 import {
-    Button, Checkbox, Fields, Label, Meter, Note, NumberInput, RemoveButton, Section, SheetBody, SheetFoot, SheetHead, Swatches,
+    Button, Checkbox, Fields, Label, Meter, Note, NumberInput, RemoveButton, Section, Segmented, SheetBody, SheetFoot, SheetHead, Swatches,
     TextInput, TitleArea, Warning, CONTROL,
 } from "./fields"
 import { TimeField } from "./time-field"
@@ -34,6 +36,7 @@ export function CourseSheet({ id }: { id: string | null }) {
     const keep = useRef<HTMLButtonElement>(null)
     const isNew = !stored
     const changed = courseChanged(draft, stored)
+    const cal = schoolCal()
 
     /* ✕, Escape and the scrim ask before throwing changes away; asked, they discard */
     useEffect(() => {
@@ -79,8 +82,14 @@ export function CourseSheet({ id }: { id: string | null }) {
                     <TextInput id={f + "code"} value={draft.code} maxLength={8} placeholder="CVS, ANAT…" onChange={(e) => edit({ code: e.target.value })} />
                     <Label htmlFor={f + "inst"}>Teacher</Label>
                     <TextInput id={f + "inst"} value={draft.instructor || ""} maxLength={60} placeholder="Dr. Alvarez" onChange={(e) => edit({ instructor: e.target.value })} />
-                    <Label htmlFor={f + "term"}>Term</Label>
-                    <TextInput id={f + "term"} value={draft.term || ""} maxLength={40} placeholder="2026 Autumn" onChange={(e) => edit({ term: e.target.value })} />
+                    {cal ? <>
+                        <Label htmlFor={f + "term"}>Semester</Label>
+                        <Segmented id={f + "term"} label="Semester" value={courseTerm(cal, draft.term)?.name ?? ""} options={semesterOptions(cal)} onChange={(term) => edit({ term })} />
+                        <span className="col-start-2"><Note>{semesterNote(cal, draft.term || "")}</Note></span>
+                    </> : <>
+                        <Label htmlFor={f + "term"}>Term</Label>
+                        <TextInput id={f + "term"} value={draft.term || ""} maxLength={40} placeholder="2026 Autumn" onChange={(e) => edit({ term: e.target.value })} />
+                    </>}
                     <Label>Colour</Label>
                     <Swatches value={draft.color} colors={PALETTE} onChange={(color) => edit({ color })} />
                     <span className="col-start-2 text-[11px] text-muted-foreground">{colourName(draft.color)}</span>
