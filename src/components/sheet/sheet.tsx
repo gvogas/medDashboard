@@ -56,6 +56,9 @@ export function Sheet() {
         }
     }, [open, state?.kind, state?.kind === "item" || state?.kind === "course" ? state.id : state?.kind === "session" || state?.kind === "achievement" ? state.draft.id : null])
 
+    /* the item card is wider, with a smaller radius (spec §7); the other sheets keep theirs */
+    const card = shown?.kind === "item" || shown?.kind === "new-item"
+
     return (
         <div
             ref={panel}
@@ -70,10 +73,11 @@ export function Sheet() {
             }}
             onTransitionEnd={(e) => { if (e.target === e.currentTarget && !open) setShown(null) }}
             className={cn(
-                "fixed top-2.5 right-2.5 bottom-2.5 z-50 flex w-[420px] max-w-[calc(100%-20px)] flex-col overflow-hidden rounded-[20px] border border-border outline-none",
+                "fixed top-2.5 right-2.5 bottom-2.5 z-50 flex max-w-[calc(100%-20px)] flex-col overflow-hidden border border-border outline-none",
+                card ? "w-[460px] rounded-2xl" : "w-[420px] rounded-[20px]",
                 "bg-[linear-gradient(var(--panel),color-mix(in_srgb,var(--panel-2)_60%,var(--panel)))] shadow-[var(--lift),0_0_0_1px_var(--rim-hi),inset_0_1px_0_var(--rim-hi)]",
                 "transition-transform duration-[320ms] ease-[cubic-bezier(.2,.9,.3,1)] motion-reduce:transition-none",
-                "max-[700px]:top-0 max-[700px]:right-0 max-[700px]:bottom-0 max-[700px]:w-[min(420px,calc(100%-12px))] max-[700px]:max-w-none max-[700px]:rounded-l-[20px] max-[700px]:rounded-r-none max-[700px]:border-r-0",
+                "max-[700px]:top-0 max-[700px]:right-0 max-[700px]:bottom-0 max-[700px]:w-[min(460px,calc(100%-12px))] max-[700px]:max-w-none max-[700px]:rounded-l-[20px] max-[700px]:rounded-r-none max-[700px]:border-r-0",
                 open ? "translate-x-0" : "translate-x-[calc(100%+80px)]",
             )}
         >
