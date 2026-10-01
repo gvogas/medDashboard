@@ -6,6 +6,7 @@ import { limitLogin, limitOutline, readsLeft } from './limits.js';
 import { readOutline, MAX_BYTES } from './outline.js';
 import { readSchool } from './school.js';
 import { readSchedule } from './schedule.js';
+import { listParam } from './ai.js';
 import { validateProfile, validateCourse, validateItem, validateQuote, validateStudySession, validateAchievement, validateId } from './validate.js';
 import { getUserForLogin, getProfile, updateProfile, getRow, upsertRow, deleteRow, syncPage, bumpPasswordGen, saveSpotifyTokens, deleteSpotifyTokens } from './db.js';
 import * as spotify from './spotify.js';
@@ -115,7 +116,9 @@ const DATE = /^\d{4}-\d{2}-\d{2}$/;
 
 /* Read an uploaded document with Workers AI: a course outline, a school calendar or a class
    schedule. The body is the file; ?name= is its file name and ?today= / ?termStart= help the
-   model place "Week 3" on a date. All three count toward the same daily reads. */
+   model place "Week 3" on a date; ?terms= (the school's semesters, "|"-separated) and ?codes=
+   (your course codes, ","-separated) let it name them as the app does. All three count toward
+   the same daily reads. */
 const aiRead = (read, what) => async ({ request, env, url }) => {
   const userId = await requireUser(request, env);
   const bytes = await readBytes(request, MAX_BYTES);
@@ -125,6 +128,7 @@ const aiRead = (read, what) => async ({ request, env, url }) => {
     return json(await read(env.AI, {
       bytes, type: request.headers.get('content-type') || '', name: (url.searchParams.get('name') || what).slice(0, 120),
       today: date('today') || new Date().toISOString().slice(0, 10), termStart: date('termStart'), claim: () => limitOutline(env, userId),
+      terms: listParam(url.searchParams.get('terms'), '|', 6, 40), codes: listParam(url.searchParams.get('codes'), ',', 30, 8),
     }));
   } catch (e) {
     if (e instanceof HttpError) throw e;

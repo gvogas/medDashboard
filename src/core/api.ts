@@ -163,6 +163,10 @@ async function changes(cursor: number): Promise<Page & { reset: boolean; more: b
   return page;
 }
 
+/* A read's query: only the values given, in the order given. */
+const query = (o: Record<string, string | undefined>) => new URLSearchParams(Object.entries(o).filter((e): e is [string, string] => !!e[1])).toString()
+type ReadQuery = { name: string; today: string; termStart?: string; terms?: string; codes?: string }
+
 export const api = {
   me: () => record<ServerProfile & Row>(request('GET', '/api/me'), accountId),
   saveMe: (profile: Record<string, unknown> & { id?: string; revision?: number }) => record<ServerProfile & Row>(request('PUT', '/api/me', profile, match(profile.revision)), accountId || profile.id, profile.revision),
@@ -178,12 +182,9 @@ export const api = {
   calendarStop: () => empty(request('DELETE', '/api/calendar')),
   leaderboard: (since: string | number) => request('GET', `/api/leaderboard?since=${since}`),
   leaderboardJoin: (joined: boolean) => empty(request('PUT', '/api/leaderboard', { joined })),
-  readOutline: (file: Blob, { name, today, termStart }: { name: string; today: string; termStart?: string }, signal?: AbortSignal) =>
-    request('POST', '/api/outline?' + new URLSearchParams({ name, today, ...(termStart ? { termStart } : {}) }), file, undefined, signal),
-  readSchool: (file: Blob, { name, today }: { name: string; today: string }, signal?: AbortSignal) =>
-    request('POST', '/api/school-calendar?' + new URLSearchParams({ name, today }), file, undefined, signal),
-  readSchedule: (file: Blob, { name, today }: { name: string; today: string }, signal?: AbortSignal) =>
-    request('POST', '/api/ai/schedule?' + new URLSearchParams({ name, today }), file, undefined, signal),
+  readOutline: (file: Blob, q: ReadQuery, signal?: AbortSignal) => request('POST', '/api/outline?' + query(q), file, undefined, signal),
+  readSchool: (file: Blob, q: ReadQuery, signal?: AbortSignal) => request('POST', '/api/school-calendar?' + query(q), file, undefined, signal),
+  readSchedule: (file: Blob, q: ReadQuery, signal?: AbortSignal) => request('POST', '/api/ai/schedule?' + query(q), file, undefined, signal),
   aiReads: (): Promise<{ left: number; limit: number }> => request('GET', '/api/ai/reads'),
   spotifyPlayer: () => request('GET', '/api/spotify/player'),
   spotifyStatus: () => request('GET', '/api/spotify/status'),

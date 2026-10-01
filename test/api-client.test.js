@@ -111,6 +111,12 @@ describe('browser API response contracts', () => {
     expect(seen.init.headers['content-type']).toBe('image/jpeg');
   });
 
+  it('sends what the app knows with an AI read', async () => {
+    respond({});
+    await client.api.readOutline(new Blob(['x'], { type: 'text/plain' }), { name: 'o.pdf', today: '2026-10-01', termStart: '', terms: 'Fall 2026|Winter 2027', codes: 'CHEM271' });
+    expect(fetch.mock.calls[0][0]).toBe('/api/outline?name=o.pdf&today=2026-10-01&terms=Fall+2026%7CWinter+2027&codes=CHEM271');
+  });
+
   it('asks how many AI reads are left', async () => {
     respond({ left: 7, limit: 10 });
     expect(await client.api.aiReads()).toEqual({ left: 7, limit: 10 });

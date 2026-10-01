@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { SELF, env } from 'cloudflare:test';
-import { cleanOutline, cleanTime, readOutline, outlineText, MODEL, MAX_CHARS } from '../worker/outline.js';
+import { cleanOutline, cleanTime, cleanKind, dayIndex, readOutline, outlineText, MODEL, MAX_CHARS } from '../worker/outline.js';
 import { signIn, BASE } from './helpers.js';
 import { OUTLINE_DAILY_LIMIT } from '../worker/limits.js';
 
@@ -83,6 +83,23 @@ describe('cleanOutline', () => {
   });
 });
 
+describe('days and kinds as models write them', () => {
+  it('reads a weekday in any case, and the short forms of Tuesday and Thursday', () => {
+    expect(['TUE', 'THU', 'monday', 'Th', 'Thu', 'R', 'Tu', 'tu', 'th', 'r', 'FRI', 'sunday'].map(dayIndex))
+      .toEqual([2, 4, 1, 4, 4, 4, 2, 2, 4, 4, 5, 0]);
+    expect(['', 'X', 'Someday', null].map(dayIndex)).toEqual([-1, -1, -1, -1]);
+  });
+
+  it('reads a tutorial only at the start of a word', () => {
+    expect(cleanKind('Lecture at the Institute')).toBe('Lecture');
+    expect(cleanKind('Tut')).toBe('Tutorial');
+    expect(cleanKind('TUT')).toBe('Tutorial');
+    expect(cleanKind('Tutorial group')).toBe('Tutorial');
+    expect(cleanKind('TD')).toBe('Tutorial');
+    expect(cleanKind('Discussion')).toBe('Tutorial');
+  });
+});
+
 describe('readOutline', () => {
   it('refuses a picture before any model or read: toMarkdown would describe it with a model', async () => {
     const ai = fakeAi(MODEL_REPLY);
@@ -100,6 +117,15 @@ describe('readOutline', () => {
     const sent = ai.calls[0][2].messages[1].content;
     expect(sent.match(/PHARM 101 header/g)).toHaveLength(1);
     expect(sent).not.toContain('Page 2 of 3');
+  });
+
+  it('tells the model the semesters and course codes, and drops dates far from today', async () => {
+    const ai = fakeAi({ ...MODEL_REPLY, assessments: [{ title: 'Midterm exam', type: 'exam', date: '2016-10-20', weight: 30 }, { title: 'Final', type: 'exam', date: '2026-12-15', weight: 50 }] });
+    const out = await readOutline(ai, { bytes: new TextEncoder().encode(OUTLINE), type: 'text/plain', today: '2026-09-23', terms: ['Fall 2026', 'Winter 2027'], codes: ['PHARM101'] });
+    const user = ai.calls[0][2].messages[1].content;
+    expect(user).toContain('"Fall 2026", "Winter 2027"');
+    expect(user).toContain('the codes PHARM101');
+    expect(out.assessments.map((a) => [a.title, a.date])).toEqual([['Midterm exam', ''], ['Final', '2026-12-15']]);
   });
 
   it('converts a PDF with toMarkdown and extracts with the JSON schema', async () => {

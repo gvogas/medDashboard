@@ -166,3 +166,13 @@ describe("the Import with AI card", () => {
         expect(getSheet()).toMatchObject({ kind: "import", back: "ai" })
     })
 })
+
+describe("what a read is told", () => {
+    it("is the school calendar's semesters and the codes of the courses kept", async () => {
+        const { readContext } = await import("@/data/ai-context")
+        expect(readContext()).toEqual({})
+        fake.cal = CAL
+        fake.data.courses = [CHEM, { ...CHEM, id: "c2", code: "OLD1", archived: true }]
+        expect(readContext()).toEqual({ terms: "Fall 2026|Winter 2027", codes: "CHEM271" })
+    })
+})

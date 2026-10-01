@@ -93,3 +93,15 @@ export async function askJson(ai, model, input, clean, what = 'ai') {
   }, what + ' retry'));
   return clean(again);
 }
+
+/** A list sent as one query value ("Fall 2026|Winter 2027"), trimmed, at most `max` of `len` characters. */
+export const listParam = (value, sep, max, len) =>
+  String(value || '').split(sep).map((s) => s.trim().slice(0, len)).filter(Boolean).slice(0, max);
+
+/** What the app already knows, said to the model: the school's semester names and the student's course codes. */
+export function knownContext({ terms = [], codes = [] } = {}) {
+  return [
+    terms.length ? 'The school\'s semesters are named ' + terms.map((t) => '"' + t + '"').join(', ') + '; when the document is for one of them, write term exactly as that name.' : '',
+    codes.length ? 'The student\'s courses so far have the codes ' + codes.join(', ') + '; when a course is one of these, write its code exactly like that.' : '',
+  ].filter(Boolean).join(' ');
+}

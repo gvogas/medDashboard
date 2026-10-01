@@ -9,7 +9,7 @@
 
 import { HttpError } from './http.js';
 import { DAYS, KINDS, askModel, cleanClasses, cleanCode, clip } from './outline.js';
-import { askJson, modelJson } from './ai.js';
+import { askJson, knownContext, modelJson } from './ai.js';
 
 const MAX_COURSES = 15;
 const TEXT_TOKENS = 3000;
@@ -20,7 +20,9 @@ const TEXT_CHARS = 16_000;    /* a timetable is a page or two; a long PDF picked
 // ~600 prompt tokens in at 24,545 neurons/M, ~600 out at 77,273/M. Measured in Task 13.
 export const VISION_MODEL = '@cf/meta/llama-4-scout-17b-16e-instruct';
 export const MAX_IMAGE_BYTES = 4 * 1024 * 1024;
-const IMAGE_TYPES = /^image\/(png|jpeg)$/i;
+/* the pictures it reads, by the type they are sent as: "image/png; x=y" is image/png, image/jpg is image/jpeg */
+const IMAGE_TYPES = { 'image/png': 'image/png', 'image/jpeg': 'image/jpeg', 'image/jpg': 'image/jpeg' };
+const imageType = (type) => IMAGE_TYPES[String(type || '').split(';')[0].trim().toLowerCase()] || '';
 const VISION_TOKENS = 2000;    /* its default is 256: too few for a timetable */
 
 const SCHEMA = {
@@ -66,10 +68,10 @@ const RULES = [
   'Leave out exams, office hours, breaks and anything that is not a weekly class. Never invent courses, times or rooms.',
 ];
 
-function textPrompt(text, today) {
+function textPrompt(text, today, known = '') {
   return [
     { role: 'system', content: [...RULES, 'Answer with one JSON object, no other text, using exactly this JSON Schema: ' + JSON.stringify(SCHEMA)].join(' ') },
-    { role: 'user', content: 'Today is ' + today + '.\n\nTimetable:\n\n' + text },
+    { role: 'user', content: 'Today is ' + today + '.' + (known ? ' ' + known : '') + '\n\nTimetable:\n\n' + text },
   ];
 }
 
@@ -92,15 +94,15 @@ export function toBase64(bytes) {
   return btoa(s);
 }
 
-async function askImage(ai, { bytes, type, claim }, today) {
+async function askImage(ai, { bytes, type, claim }, today, known = '') {
   if (bytes.byteLength > MAX_IMAGE_BYTES) throw new HttpError(413, { error: 'too_large' });
   if (claim) await claim();
   return askJson(ai, VISION_MODEL, {
     messages: [
       { role: 'system', content: RULES.join(' ') },
       { role: 'user', content: [
-        { type: 'text', text: 'Today is ' + today + '. Read this timetable.' },
-        { type: 'image_url', image_url: { url: 'data:' + type.toLowerCase() + ';base64,' + toBase64(bytes) } },
+        { type: 'text', text: 'Today is ' + today + '.' + (known ? ' ' + known : '') + ' Read this timetable.' },
+        { type: 'image_url', image_url: { url: 'data:' + imageType(type) + ';base64,' + toBase64(bytes) } },
       ] },
     ],
     response_format: { type: 'json_schema', json_schema: SCHEMA },
@@ -109,11 +111,12 @@ async function askImage(ai, { bytes, type, claim }, today) {
   }, cleanSchedule, 'schedule');
 }
 
-export async function readSchedule(ai, { today, ...doc }) {
+export async function readSchedule(ai, { today, terms, codes, ...doc }) {
+  const known = knownContext({ terms, codes });
   if (/^image\//i.test(doc.type || '')) {
     /* toMarkdown would describe other pictures with a model of its own: refuse them here */
-    if (!IMAGE_TYPES.test(doc.type)) throw new HttpError(415, { error: 'image_unsupported' });
-    return { ...await askImage(ai, doc, today), truncated: false };
+    if (!imageType(doc.type)) throw new HttpError(415, { error: 'image_unsupported' });
+    return { ...await askImage(ai, doc, today, known), truncated: false };
   }
-  return askModel(ai, doc, (text) => textPrompt(text, today), cleanSchedule, { effort: 'low', maxTokens: TEXT_TOKENS, maxChars: TEXT_CHARS, what: 'schedule' });
+  return askModel(ai, doc, (text) => textPrompt(text, today, known), cleanSchedule, { effort: 'low', maxTokens: TEXT_TOKENS, maxChars: TEXT_CHARS, what: 'schedule' });
 }

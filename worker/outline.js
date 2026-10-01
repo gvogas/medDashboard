@@ -12,7 +12,7 @@
 // scored 18/21 against 14/21 for Llama 3.3 70B; see the study-tools spec.
 
 import { HttpError } from './http.js';
-import { askJson, modelJson, tidyText } from './ai.js';
+import { askJson, knownContext, modelJson, tidyText } from './ai.js';
 
 export { modelJson };
 
@@ -83,7 +83,7 @@ const SCHEMA = {
   required: ['code', 'name', 'classes', 'officeHours', 'assessments'],
 };
 
-function prompt(text, today, termStart) {
+function prompt(text, today, termStart, known = '') {
   return [
     {
       role: 'system',
@@ -105,12 +105,20 @@ function prompt(text, today, termStart) {
     },
     {
       role: 'user',
-      content: 'Today is ' + today + '.' + (termStart ? ' The term started on ' + termStart + '.' : '') + '\n\nCourse outline:\n\n' + text,
+      content: 'Today is ' + today + '.' + (termStart ? ' The term started on ' + termStart + '.' : '') + (known ? ' ' + known : '') + '\n\nCourse outline:\n\n' + text,
     },
   ];
 }
 
-export const dayIndex = (d) => DAYS.indexOf(String(d || '').slice(0, 3).replace(/^./, (c) => c.toUpperCase()));
+/* the short forms timetables use: "Tu", "Th", and "R" for Thursday */
+const SHORT_DAYS = { tu: 2, th: 4, r: 4 };
+
+/** A weekday (0 = Sunday) from "Tue", "THU", "monday", "Th", "R"…; -1 when it is none. */
+export function dayIndex(d) {
+  const t = String(d || '').trim().toLowerCase();
+  if (Object.hasOwn(SHORT_DAYS, t)) return SHORT_DAYS[t];
+  return DAYS.findIndex((day) => day.toLowerCase() === t.slice(0, 3));
+}
 export const clip = (v, n) => (typeof v === 'string' ? v.replace(/\s+/g, ' ').trim().slice(0, n) : '');
 
 /** "9:00", "0900", "2pm", "14.30" → "HH:MM", or '' */
@@ -132,7 +140,7 @@ export function cleanKind(v) {
   if (exact) return exact;
   if (/\bpbl\b|problem[- ]based/.test(t)) return 'PBL';
   if (/\blab|laborato|practical/.test(t)) return 'Lab';
-  if (/tut|^td$|\bdisc/.test(t)) return 'Tutorial';
+  if (/\btut|^td$|\bdisc/.test(t)) return 'Tutorial';   /* at a word's start: not "institute" */
   if (/semin/.test(t)) return 'Seminar';
   if (/clinic|ward|placement|bedside/.test(t)) return 'Clinical';
   return 'Lecture';
@@ -145,12 +153,18 @@ export function cleanCode(v) {
   return code.slice(0, 8);
 }
 
-/** Weekly classes as the model gave them, made safe: a weekday and a start each, an end only after the start, at most `max`. */
+/* "1:00" in a timetable that leaves out am/pm is 13:00: no class starts between midnight and 6 */
+const daytime = (t) => (t && t < '06:00' ? String(+t.slice(0, 2) + 12).padStart(2, '0') + t.slice(2) : t);
+
+/**
+ * Weekly classes as the model gave them, made safe: a weekday and a start each, an end only
+ * after the start, a small-hours time read as the afternoon, each weekday-and-start once, at most `max`.
+ */
 export function cleanClasses(list, max = 12) {
   return (Array.isArray(list) ? list : []).map((c) => {
-    const start = cleanTime(c?.start), end = cleanTime(c?.end);
+    const start = daytime(cleanTime(c?.start)), end = daytime(cleanTime(c?.end));
     return { kind: cleanKind(c?.kind), weekday: dayIndex(c?.day), start, end: end > start ? end : '', room: clip(c?.room, 40) };
-  }).filter((c) => c.weekday >= 0 && c.start).slice(0, max);
+  }).filter((c, i, all) => c.weekday >= 0 && c.start && all.findIndex((x) => x.weekday === c.weekday && x.start === c.start) === i).slice(0, max);
 }
 
 function cleanDate(v) {
@@ -161,9 +175,11 @@ function cleanDate(v) {
 }
 
 /** Whatever the model returned, made safe and bounded. */
-export function cleanOutline(raw) {
+export function cleanOutline(raw, { today } = {}) {
   const o = modelJson(raw);
   if (!o) throw new HttpError(502, { error: 'outline_unreadable' });
+  /* a date more than 18 months from today is a misread year: it shows as "no date" in the preview's notes */
+  const near = (d) => !d || !today || Math.abs(Date.parse(d) - Date.parse(today)) <= 548 * 86_400_000;
   const code = cleanCode(o.code);
   const classes = cleanClasses(o.classes);
   const assessments = (Array.isArray(o.assessments) ? o.assessments : []).map((a) => {
@@ -172,7 +188,7 @@ export function cleanOutline(raw) {
     return {
       title: clip(a?.title, 140),
       type: TYPES.includes(a?.type) ? a.type : 'task',
-      date: cleanDate(a?.date),
+      date: near(cleanDate(a?.date)) ? cleanDate(a?.date) : '',
       week: Number.isInteger(a?.week) && a.week >= 1 && a.week <= 20 ? a.week : null,
       start, end: start && end > start ? end : '',
       room: clip(a?.room, 80),
@@ -217,6 +233,6 @@ export async function askModel(ai, { bytes, type, name, claim }, messages, clean
   return { ...await askJson(ai, MODEL, input, clean, what), truncated };
 }
 
-export async function readOutline(ai, { today, termStart, ...doc }) {
-  return askModel(ai, doc, (text) => prompt(text, today, termStart), cleanOutline);
+export async function readOutline(ai, { today, termStart, terms, codes, ...doc }) {
+  return askModel(ai, doc, (text) => prompt(text, today, termStart, knownContext({ terms, codes })), (raw) => cleanOutline(raw, { today }));
 }

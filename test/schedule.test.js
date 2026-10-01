@@ -74,7 +74,8 @@ describe('the class kinds', () => {
 describe('readSchedule, text', () => {
   it("reads a timetable's text with the text model, thinking little, after claiming the read", async () => {
     const ai = fakeAi(REPLY);
-    const claims = [];
+    const claims = [];   /* the read is claimed before the model runs */
+    const run = ai.run; ai.run = async (...a) => { claims.push('run'); return run(...a); };
     const out = await readSchedule(ai, { bytes: new TextEncoder().encode(TIMETABLE), type: 'text/plain', name: 't.pdf', today: '2026-09-01', claim: async () => { claims.push('claim'); } });
     const [model, input] = ai.calls[0];
     expect(model).toBe(MODEL);
@@ -83,7 +84,7 @@ describe('readSchedule, text', () => {
     expect(input.messages[0].content).toContain('"courses"');
     expect(input.messages[1].content).toContain('Today is 2026-09-01.');
     expect(input.messages[1].content).toContain('CHEM 271 Organic Chemistry I');
-    expect(claims).toEqual(['claim']);
+    expect(claims).toEqual(['claim', 'run']);
     expect(out.courses.map((c) => c.code)).toEqual(['CHEM271', 'PHYS205']);
     expect(out).toMatchObject({ term: 'Fall 2026', truncated: false });
   });
@@ -103,12 +104,36 @@ describe('readSchedule, text', () => {
   });
 });
 
+describe('the answers checked', () => {
+  it('reads a "1:00" class as 13:00 and keeps the same class once', () => {
+    expect(cleanClasses([
+      { kind: 'Lecture', day: 'Mon', start: '1:00', end: '2:30' },
+      { kind: 'Lecture', day: 'Mon', start: '13:00', end: '14:30' },
+      { kind: 'Lab', day: 'Tue', start: '08:00', end: '11:00' },
+    ])).toEqual([
+      { kind: 'Lecture', weekday: 1, start: '13:00', end: '14:30', room: '' },
+      { kind: 'Lab', weekday: 2, start: '08:00', end: '11:00', room: '' },
+    ]);
+  });
+
+  it('tells both models the semesters and course codes', async () => {
+    const known = { terms: ['Fall 2026'], codes: ['CHEM271'] };
+    const text = fakeAi(REPLY);
+    await readSchedule(text, { bytes: new TextEncoder().encode(TIMETABLE), type: 'text/plain', today: '2026-09-01', ...known });
+    expect(text.calls[0][1].messages[1].content).toContain('"Fall 2026"');
+    const image = fakeAi(REPLY);
+    await readSchedule(image, { bytes: new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 1, 2, 3]), type: 'image/jpeg', today: '2026-09-01', ...known });
+    expect(image.calls[0][1].messages[1].content[0].text).toContain('the codes CHEM271');
+  });
+});
+
 describe('readSchedule, a screenshot', () => {
   const jpeg = new Uint8Array([0xff, 0xd8, 0xff, 0xe0, ...new Array(200).fill(7)]);
 
   it('goes to the vision model as a data URI, in JSON mode, after claiming the read', async () => {
     const ai = fakeAi(REPLY);   /* in JSON mode the model answers an object */
-    const claims = [];
+    const claims = [];   /* the read is claimed before the model runs */
+    const run = ai.run; ai.run = async (...a) => { claims.push('run'); return run(...a); };
     const out = await readSchedule(ai, { bytes: jpeg, type: 'image/jpeg', name: 'shot.jpg', today: '2026-09-01', claim: async () => { claims.push('claim'); } });
     const [model, input] = ai.calls[0];
     expect(model).toBe(VISION_MODEL);
@@ -121,7 +146,7 @@ describe('readSchedule, a screenshot', () => {
     expect(image.image_url.url.startsWith('data:image/jpeg;base64,/9j/4')).toBe(true);
     expect(input.response_format).toEqual({ type: 'json_schema', json_schema: expect.objectContaining({ type: 'object' }) });
     expect(input.max_tokens).toBe(2000);
-    expect(claims).toEqual(['claim']);
+    expect(claims).toEqual(['claim', 'run']);
     expect(out).toMatchObject({ term: 'Fall 2026', truncated: false });
     expect(out.courses).toHaveLength(2);
   });
@@ -138,6 +163,15 @@ describe('readSchedule, a screenshot', () => {
     await expect(readSchedule(fakeAi(REPLY), { bytes: new Uint8Array(MAX_IMAGE_BYTES + 1), type: 'image/png', today: '2026-09-01', claim }))
       .rejects.toMatchObject({ status: 413, body: { error: 'too_large' } });
     expect(claim).not.toHaveBeenCalled();
+  });
+
+  it('takes a type with parameters and image/jpg, and builds the data URI from the bare type', async () => {
+    const png = fakeAi(REPLY);
+    await readSchedule(png, { bytes: jpeg, type: 'image/png; x=y', today: '2026-09-01' });
+    expect(png.calls[0][1].messages[1].content[1].image_url.url.startsWith('data:image/png;base64,')).toBe(true);
+    const jpg = fakeAi(REPLY);
+    await readSchedule(jpg, { bytes: jpeg, type: 'Image/JPG', today: '2026-09-01' });
+    expect(jpg.calls[0][1].messages[1].content[1].image_url.url.startsWith('data:image/jpeg;base64,/9j/4')).toBe(true);
   });
 
   it('writes base64 in chunks', () => {

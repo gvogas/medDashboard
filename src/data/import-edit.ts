@@ -15,6 +15,7 @@ import { planImport, planOutline } from "@/core/importers/plan"
 import type { Outline, Plan } from "@/core/importers/plan"
 import { api } from "@/core/api"
 import { readWithAi, type NoteKey } from "./ai-read"
+import { readContext } from "./ai-context"
 import { notify } from "@/bridge"
 import { ui } from "./ui"
 import { openSheet } from "./overlay"
@@ -75,7 +76,7 @@ export function readOutlineFile(file: File, note: NoteKey = "importNote", back?:
             outline_empty: "No text was found in that file. A scanned outline needs to be a text PDF.",
             outline_unreadable: "The outline could not be understood. Try again, or import a CSV instead.",
         },
-        call: (body, signal) => api.readOutline(body, { name: file.name, today: today(), termStart: termStart() || "" }, signal),
+        call: (body, signal) => api.readOutline(body, { name: file.name, today: today(), termStart: termStart() || "", ...readContext() }, signal),
         done: (outline: Outline) => {
             const plan = planOutline(outline, data, termStart() || "") as ImportPlan
             for (const c of plan.courses) if (c.isNew) c.term = defaultTerm(schoolCal(), c.term || "", today())

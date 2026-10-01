@@ -11,6 +11,7 @@ import { api } from "@/core/api"
 import { schoolCal } from "@/data/query"
 import { notify } from "@/bridge"
 import { asSent, MAX_FILE, readWithAi, type NoteKey } from "./ai-read"
+import { readContext } from "./ai-context"
 import { commitImport, defaultTerm, type ImportPlan } from "./import-edit"
 import { closeSheet, openSheet } from "./overlay"
 import { toast } from "./toast"
@@ -34,7 +35,7 @@ export function readScheduleFile(file: File, note: NoteKey = "aiNote") {
             schedule_unreadable: "No classes could be found in that timetable. Try a clearer screenshot, or the PDF.",
             image_unsupported: "That kind of picture cannot be read. Use a PNG or JPG screenshot.",
         },
-        call: (body, signal) => api.readSchedule(body, { name: file.name, today: today() }, signal),
+        call: (body, signal) => api.readSchedule(body, { name: file.name, today: today(), ...readContext() }, signal),
         done: (read: Schedule) => openSheet({
             kind: "schedule", name: file.name,
             plan: planSchedule(read, data, defaultTerm(schoolCal(), read.term || "", today())) as ImportPlan,

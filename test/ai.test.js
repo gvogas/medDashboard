@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { runModel, askJson, modelJson, tidyText } from '../worker/ai.js';
+import { runModel, askJson, modelJson, tidyText, knownContext, listParam } from '../worker/ai.js';
 import { HttpError } from '../worker/http.js';
 
 describe('runModel', () => {
@@ -87,5 +87,20 @@ describe('tidyText', () => {
 
   it('squeezes spaces and blank lines in text without pages', () => {
     expect(tidyText('a   b\t c\n\n\n\nd')).toBe('a b c\nd');
+  });
+});
+
+describe('what the app knows', () => {
+  it('reads the lists sent with a read, bounded', () => {
+    expect(listParam('Fall 2026| Winter 2027 ||', '|', 6, 40)).toEqual(['Fall 2026', 'Winter 2027']);
+    expect(listParam(null, ',', 30, 8)).toEqual([]);
+    expect(listParam('A,B,C', ',', 2, 8)).toEqual(['A', 'B']);
+    expect(listParam('CHEM271XYZ', ',', 30, 8)).toEqual(['CHEM271X']);
+  });
+
+  it('says the semesters and the course codes in a sentence each', () => {
+    expect(knownContext({ terms: ['Fall 2026', 'Winter 2027'], codes: ['CHEM271'] }))
+      .toBe('The school\'s semesters are named "Fall 2026", "Winter 2027"; when the document is for one of them, write term exactly as that name. The student\'s courses so far have the codes CHEM271; when a course is one of these, write its code exactly like that.');
+    expect(knownContext({})).toBe('');
   });
 });
