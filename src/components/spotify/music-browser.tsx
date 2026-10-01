@@ -131,8 +131,11 @@ export function MusicBrowser({ compact = false }: { compact?: boolean }) {
 
     return (
         <section aria-label="Find music" className="flex min-h-0 min-w-0 flex-1 flex-col">
-            <div className={cn("flex flex-none flex-col gap-2.5 border-b border-line-2", compact ? "px-5 pt-3 pb-2.5" : "px-[18px] py-3.5 max-[560px]:px-3.5")}>
-                {compact && <Tabs label="Music" tabs={TABS} value={tab} onPick={pick} />}
+            <div className={cn(
+                "flex flex-none flex-col gap-2.5 border-b",
+                compact ? "border-white/10 px-5 pt-3 pb-2.5" : "border-line-2 px-[18px] py-3.5 max-[560px]:px-3.5",
+            )}>
+                {compact && <Tabs label="Music" tone="pills" tabs={TABS} value={tab} onPick={pick} />}
                 <SearchBox q={s.place.q} page={!compact} />
                 {head}
             </div>

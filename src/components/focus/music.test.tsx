@@ -59,6 +59,9 @@ describe("the pill", () => {
         expect(pill().getByText("Weightless")).toBeTruthy()
         expect(pill().getByText("· Marconi Union")).toBeTruthy()
         expect(pill().getByText("MacBook")).toBeTruthy()
+        expect((pill().getByText("MacBook").previousElementSibling as HTMLElement).className).toContain("bg-[var(--spotify)]")
+        expect(screen.getByRole("region", { name: "Music" }).textContent).not.toMatch(/🔈/u)
+        expect(screen.getByRole("region", { name: "Music" }).className).toContain("bg-white/10")
         expect(screen.getByRole("region", { name: "Music" }).querySelector<HTMLElement>("i[style]")?.style.width).toBe("50%")
         fireEvent.click(pill().getByRole("button", { name: "Pause" }))
         expect(api.spotifyControl).toHaveBeenCalledWith("pause", null)
@@ -107,11 +110,22 @@ describe("the panel", () => {
         expect(onClose).toHaveBeenCalledOnce()
     })
 
+    it("is drawn as the prototype: ✕ as an icon, the white play button, the tabs as pills", () => {
+        render(<MusicPanel onClose={() => {}} />)
+        const close = panel().getByRole("button", { name: "Close music" })
+        expect(close.querySelector("svg")).toBeTruthy()
+        expect(close.textContent).toBe("")
+        expect(panel().getByRole("button", { name: "Pause" }).className).toContain("bg-foreground")
+        expect(tab("Library").className).toContain("rounded-full")
+        expect(panel().getByRole("group", { name: "Music" }).className).not.toContain("bg-[var(--chip-bg)]")
+    })
+
     it("offers to connect when Spotify is not", () => {
         resetEngine({ connected: false })
         render(<MusicPanel onClose={() => {}} />)
         expect(panel().getByText("Spotify is not connected")).toBeTruthy()
         expect(panel().getByRole("link", { name: "Connect Spotify" })).toBeTruthy()
+        expect(panel().getByRole("link", { name: "Connect Spotify" }).className).toContain("bg-foreground")
         expect(panel().queryByRole("button", { name: "Up next" })).toBeNull()
     })
 
