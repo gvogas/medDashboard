@@ -1,6 +1,6 @@
 # Shared classes (collaboration v1) — design
 
-Approved in brainstorming 2026-10-02. Not built yet. The source request is
+Agreed in brainstorming 2026-10-02; written spec awaiting George's review. Not built yet. The source request is
 `TERM-COLLABORATION-PLANNING-PROMPT.md`; this spec answers its 20 points in order.
 
 Decisions taken with George:
@@ -93,7 +93,7 @@ with `scripts/move-db.mjs`, the procedure used for v2–v6. The move rewrites
 | `items` | Shared rows: `CHECK (scope GLOB 'u:*' OR (grade IS NULL AND checklist = '[]' AND status = 'todo' AND completed_at IS NULL AND type NOT GLOB 'c-*'))`. Shared `notes` and `links` are the class's notes and links |
 | `study_sessions`, `achievements` | `space_id` (nullable): set when `course_id`/`item_id` point at a shared row |
 | `users` | `hidden_sources` JSON array ≤ 40 (course ids, class space ids, `personal`): the calendar filter |
-| `changes` | `user_id` → `scope`; `UNIQUE (scope, kind, row_id)`; index `(scope, seq)`. Triggers on `quotes`, `study_sessions`, `achievements`, `marks`, `course_prefs` write `'u:' \|\| user_id`; `spaces` and `members` rows go into their space's scope |
+| `changes` | `user_id` → `scope`; `UNIQUE (scope, kind, row_id)`; index `(scope, seq)`. Triggers on `quotes`, `study_sessions`, `achievements`, `marks`, `course_prefs` write `'u:' \|\| user_id`. Only `courses` and `items` ever write an `s:` scope; spaces and members are not in the feed (they come with each sync response, section 5) |
 
 ### Indexes
 
@@ -120,7 +120,7 @@ between scopes, so study sessions and achievements only gain or lose a `space_id
 |---|---|---|
 | `courses`, `items`, … | `id` | Personal rows, unchanged |
 | `shared_courses`, `shared_items` | `[scope, id]` | Class rows. Keeping them out of the personal stores means a shared id can never shadow a personal row or its pending op |
-| `spaces`, `members` | `id` / `[space_id, user_id]` | The classes you're in and their member lists |
+| `spaces` | `id` | The classes you're in, with role, archived and members (`{userId, name, role}`), replaced from each sync response's `scopes`; it gives "Edited by Alex" its name offline |
 | `marks`, `course_prefs` | `[space_id, item_id]` / `[space_id, course_id]` | Your layer |
 | `meta.cursors` | | `{scope: seq}`. The upgrade moves `meta.syncCursor` to `u:<me>` |
 
@@ -140,17 +140,21 @@ between scopes, so study sessions and achievements only gain or lose a `space_id
 
 ### Pull: `GET /api/sync?v=3&cursors=u:<me>.812,s:abc.640`
 
-1. The Worker pages up to 100 changes in **one statement**:
+1. A first query reads your live memberships with their spaces and member names
+   (≤ 20 spaces × ≤ 30 members, joined to `users` for display names). The scopes to
+   page are `u:<me>` plus those spaces. A scope the client hasn't seen starts at 0, so a
+   new class loads in full.
+2. A second statement pages up to 100 changes:
    `SELECT * FROM (SELECT … FROM changes WHERE scope = ? AND seq > ? AND <guard> ORDER BY seq LIMIT 101) UNION ALL … ORDER BY seq LIMIT 101`.
    Each branch reads at most 101 rows. `<guard>` for a space is
-   `EXISTS (SELECT 1 FROM members WHERE space_id = ? AND user_id = ? AND deleted_at IS NULL)`,
-   evaluated inside the statement so there is no gap between "is a member" and "read".
-2. The scopes queried are `u:<me>` plus every live membership (read in the same D1
-   batch). A scope the client hasn't seen starts at 0, so a new class loads in full.
+   `EXISTS (SELECT 1 FROM members m JOIN spaces s ON s.id = m.space_id WHERE m.space_id = ? AND m.user_id = ? AND m.deleted_at IS NULL AND s.deleted_at IS NULL)`,
+   evaluated inside the statement, so a removal between the two queries cannot leak a page.
 3. If the page ends at sequence X, every scope's rows up to X are delivered; each
    cursor becomes `max(cursor, X)`, or the head on the last page.
 4. Response:
-   `{scopes:[{id, role, archived, name}], cursors, changes, more, reset:[scope], revoked:[scope], inbox}`.
+   `{scopes:[{id, role, archived, name, members:[{userId, name, role}]}], cursors, changes, more, reset:[scope], revoked:[scope], inbox}`.
+   Sending spaces and members whole each time keeps them out of the change feed (no
+   member triggers, renamed people show their new name) at a few dozen rows read per sync.
    `reset` is per scope: only that scope's clean rows are rebuilt. `revoked` lists
    scopes the client sent that it may no longer read. `inbox` is the unread count.
 5. `cursors` holds at most 25 entries; malformed input is `400`.
@@ -229,18 +233,25 @@ Rules:
   grade. Adding an assignment is one write, joining is one write.
 - **Absorb** (personal → class), one set-based D1 batch (`INSERT … SELECT`, pairs via
   `json_each()`), idempotent by construction:
-  - **convert** (`POST /api/spaces {convertCourseId}`): copy your course and its items
-    into a new class under the same ids, move your personal fields into marks and
-    course prefs, set `space_id` on your sessions and achievements, archive the old
-    course;
+  - **convert** (`POST /api/spaces {convertCourseId}`): create the class with you as
+    owner, copy your course and its items into it under the same ids, move your personal
+    fields into marks and course prefs, set `space_id` on your sessions and
+    achievements, then soft-delete the personal course and items (written directly in
+    the batch, not through the course-delete path that would null `course_id`);
   - **merge on join** (`POST /api/spaces/:sid/absorb {courseId, pairs}`): for matched
-    pairs, write marks from your item and soft-delete it; set `class_id` on unmatched
-    items in place; repoint sessions and achievements; archive your course.
+    pairs, write marks from your item, repoint sessions and achievements from your item
+    id to the shared one, and soft-delete your item; set `class_id` on unmatched items
+    in place (lecture reviews included; the review generator's `through` watermark stops
+    it re-creating past steps); then soft-delete the now-empty personal course.
+  - Absorb by a member never writes a shared row: only marks, prefs and the member's own
+    rows. The Worker checks every `mine` id is yours and in `courseId`, and every
+    `shared` id is a live item of that class.
 - **Detach** (class → personal), the reverse: copy the course and items into your scope
-  under the same ids (reviving your original soft-deleted rows when you had converted),
-  fold marks back in, repoint `class_id` items, clear `space_id` on sessions and
-  achievements. Runs on leave (opt out with a checkbox), on removal (always), and per
-  item on **Keep as mine**. A rare id clash with a live personal row gets a new id.
+  under the same ids (an upsert, so a converted course's tombstones, if not yet purged,
+  are revived rather than duplicated), fold marks back in, repoint `class_id` items,
+  clear `space_id` on sessions and achievements. Runs on leave (opt out with a
+  checkbox), on removal (always), and per item on **Keep as mine**. A rare id clash with
+  a live personal row gets a new id.
 
 ## 8. Calendar integration
 
@@ -254,6 +265,13 @@ Rules:
   devices and the ICS feed honours it. It's separate from the existing sidebar course
   selection, which is a temporary focus.
 - Each person's semester for a class comes from `course_prefs.term` (section 9).
+- **ICS feed:** in addition to personal items and courses, it includes your classes'
+  courses and items with your mark applied (✓ when complete, cancelled when missed, left
+  out when hidden), and personal items under a class. `hidden_sources` and archived
+  course prefs are skipped. Membership is joined in the query, so a removed member's next
+  fetch leaves the class out. Shared events' UIDs carry the space id
+  (`item-<spaceId>-<id>`, `class-<spaceId>-<courseId>-…`), since ids are only unique
+  per scope; converting a course therefore shows in calendar apps as a delete plus an add.
 
 ## 9. Study and grade integration
 
@@ -263,8 +281,9 @@ only and don't change. Per-course totals group by `(space_id, course_id)`. The t
 study and achievement pickers list merged items.
 
 - **Lecture reviews** are personal tasks generated from the shared course's meetings,
-  with `class_id` set; their ids come from the lecture, so a converted course keeps its
-  chain.
+  with `class_id` set. A converted course keeps its course id, so review ids (derived
+  from the lecture) carry on; after a merge, existing reviews move under the class and
+  the `through` watermark prevents duplicates.
 - **Exam prep** writes its lecture checklist into your mark.
 - **Achievements:** built-in ones read merged items. Custom `hours`/`grade` achievements
   gain `space_id`. Once shown as earned, a built-in achievement is never taken back
@@ -288,7 +307,9 @@ Your relabelled or recoloured built-in types and hidden types apply to shared it
 - **By username** (owner, editor): `POST /api/spaces/:sid/invites {username}`. Unknown
   username is `404 {error:'no_user'}`, shown as "No Term account named 'gabriel'".
   20 invites an hour per user (`limits.js`). The invite appears in the recipient's inbox
-  with **Accept** and **Decline**.
+  with **Accept** and **Decline**. Inviting a current member is `409 {error:'member'}`;
+  joining by code marks any pending invite to you as accepted; re-inviting someone who
+  declined resets it to pending.
 - **By code or link** (owner): 8 characters of Crockford base32 (~40 bits), stored as
   SHA-256, valid 7 days, up to 10 uses; a new code retires the old one. The link is
   `/#join=<code>`, handled like `#spotify=` in `src/data/session.ts`: a hash never reaches
@@ -387,8 +408,9 @@ longest-standing editor, else member, else archives it, then removes memberships
 - Personal routes and `sync?v=2` are kept, so a stale tab keeps working until it reloads.
 - IndexedDB v5 upgrade moves the cursor, creates the new stores, keeps pending ops and
   conflicts.
-- Conversion is safe because it's reversible: the original personal rows are soft-deleted
-  under the same ids and come back on detach.
+- Conversion is safe because it's reversible: leaving (or removal) detaches a full
+  personal copy under the same ids, with your marks folded back in, so study sessions,
+  achievements and grades line up again.
 
 ## 15. Security risks
 
@@ -445,7 +467,12 @@ discovery.
 
 ## 19. Recommended MVP and phases
 
-**v1 — shared classes**, in seven stages like the Term redesign, each released on its own:
+**v1 — shared classes**, in seven stages like the Term redesign, each merged and
+deployed on its own. Stages 1–2 are invisible. From stage 3, **New shared class**,
+**Join with code** and invites are shown only to admins (`isAdmin`, so George can test
+with a second account) until stage 5 is live; otherwise someone could join a class
+before they could keep a grade on it (stage 4) or leave it (stage 5). Stages 6–7 add
+to a feature that is already open to everyone.
 
 1. **rounds-v7 and the scope refactor.** `scope` columns, `access.js`, `changes` by
    scope, `move-db.mjs`. No visible change; every existing test passes.
@@ -469,6 +496,25 @@ Month with an "Assigned to me" marker; the inbox gains assignment and completion
 **Phase 3:** moderator role and suggested changes for whole classes, comments, personal
 date overrides, class leaderboards, meeting-level merge, `.ics`/CSV into classes,
 templates, conflict detection.
+
+## Testing
+
+- **Worker** (vitest in the Workers runtime, local D1, as today):
+  - an access matrix for every new route: non-member → 404, member on an editor action
+    → 403 `forbidden`, archived class → 403 `archived`, owner-only actions;
+  - sync v3: paging across scopes in global order, cursor rules, a new scope from 0,
+    per-scope reset, `revoked`, and a removal landing between the two queries;
+  - field-level merge: disjoint fields merge, same field conflicts, JSON fields compared
+    by value, edit vs delete both ways, the lost-race retry;
+  - absorb, convert and detach run **twice** with identical results; ids, marks,
+    sessions and achievements line up after convert → leave;
+  - activity coalescing (bursts, imports, a change undone within the bucket);
+  - `move-db.mjs` against the legacy fixture, and the schema's new `CHECK`s.
+- **Client** (vitest + jsdom): `effectiveItems()` and `courseGrade()` on merged items
+  (weight override, hidden, removed-but-kept), the IndexedDB v5 upgrade keeping pending
+  ops and conflicts, 403 handling in the sync loop, the merge sheet's matching.
+- **By hand, two accounts:** convert, invite, join with merge, edit on both sides
+  offline, demote, remove, leave, with the ICS feed checked after each step.
 
 ## 20. Open design questions
 
