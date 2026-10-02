@@ -63,8 +63,14 @@ export interface Profile {
     studyPrefs?: unknown
     studyFlow?: unknown
     termStart?: string | null
+    /** May open the Admin page (the Worker checks it again on every admin call). */
+    isAdmin?: boolean
+    /** The admins' message to everyone, from GET /api/me while it lasts. */
+    announcement?: Announcement | null
     revision?: number
 }
+
+export interface Announcement { id: number; text: string; until: number }
 
 /** A type as the profile stores it: built-ins only carry what differs from their default. */
 export interface TypePref { id: string; label?: string; color?: string; kind?: string | null; hidden?: boolean }

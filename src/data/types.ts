@@ -8,7 +8,7 @@ import type { StudySession } from "../core/types"
 
 export type * from "../core/types"
 
-export type View = "week" | "month" | "table" | "spotify" | "study"
+export type View = "week" | "month" | "table" | "spotify" | "study" | "admin"
 
 /** The History card on the Study page: its tab, the week and month shown, the day picked, a delete Undo can take back. */
 export type HistTab = "week" | "month" | "term"

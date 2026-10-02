@@ -2,6 +2,8 @@ import { handleApi } from './api.js';
 import { purgeTombstones } from './db.js';
 import { purgeThrottle } from './throttle.js';
 import { purgeLimits } from './limits.js';
+import { purgeErrors } from './errors.js';
+import { adminHousekeeping } from './admin.js';
 
 const TOMBSTONE_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 
@@ -12,10 +14,13 @@ export default {
     return env.ASSETS.fetch(request);
   },
 
-  // Nightly (see triggers.crons in wrangler.jsonc): drop tombstones older than 30 days.
+  // Nightly (see triggers.crons in wrangler.jsonc): drop tombstones older than 30 days,
+  // old errors and audit entries, and note the run for the Admin page's health panel.
   async scheduled(_controller, env, ctx) {
     ctx.waitUntil(purgeTombstones(env.DB, Date.now() - TOMBSTONE_TTL_MS));
     ctx.waitUntil(purgeThrottle(env.DB, Date.now() - 24 * 60 * 60 * 1000));
     ctx.waitUntil(purgeLimits(env.DB));
+    ctx.waitUntil(purgeErrors(env.DB));
+    ctx.waitUntil(adminHousekeeping(env.DB));
   },
 };

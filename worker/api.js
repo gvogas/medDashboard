@@ -12,6 +12,8 @@ import { getUserForLogin, getProfile, updateProfile, getRow, upsertRow, deleteRo
 import * as spotify from './spotify.js';
 import { feedState, renewFeed, stopFeed, serveFeed } from './calendar.js';
 import { leaderboard, setJoined } from './leaderboard.js';
+import { adminRoutes, markSeen, readAnnouncement } from './admin.js';
+import { logError, messageOf } from './errors.js';
 
 function revisionOf(request) {
   const raw = request.headers.get('if-match');
@@ -142,6 +144,7 @@ const aiRead = (read, what) => async ({ request, env, url }) => {
   } catch (e) {
     if (e instanceof HttpError) throw e;
     console.error(what + ':', e?.message || e);
+    await logError(env.DB, { method: request.method, route: url.pathname, status: 503, message: messageOf(e), userId });
     throw new HttpError(503, { error: 'outline_unavailable' });
   }
 };
@@ -190,14 +193,15 @@ const routes = [
 
   ['GET', /^\/api\/me$/, async ({ request, env, url }) => {
     const session = await requireSession(request, env);
-    const profile = await getProfile(env.DB, session.userId);
+    const [profile, announcement] = await Promise.all([getProfile(env.DB, session.userId), readAnnouncement(env.DB)]);
     if (!profile) throw new HttpError(401, { error: 'unauthenticated' });
+    await markSeen(env.DB, session.userId);
     // Keep a regular user signed in: a cookie in its last week is re-issued.
     const headers = {};
     if (session.expiresAt - Date.now() < RENEW_WITHIN_MS) {
       headers['set-cookie'] = sessionCookie(await signSession(session.userId, session.gen, env.SESSION_SECRET), url);
     }
-    return json(profile, 200, headers);
+    return json({ ...profile, announcement }, 200, headers);
   }],
 
   ['PUT', /^\/api\/me$/, async ({ request, env }) => {
@@ -357,6 +361,7 @@ const routes = [
     return new Response(null, { status: 204 });
   }],
 
+  ...adminRoutes,
 ];
 
 /**
@@ -399,6 +404,7 @@ export async function handleApi(request, env, url) {
       // A schema the code expects but D1 lacks means a migration was not applied remotely.
       if (/no such (table|column)/i.test(e?.message || '')) console.error('D1 schema is behind the code; run `npm run db:remote`.');
       console.error(e);
+      await logError(env.DB, { method: request.method, route: url.pathname, status: 500, message: messageOf(e) });
       res = json({ error: 'internal' }, 500);
     }
   }

@@ -2,7 +2,7 @@
 import { HttpError } from './http.js';
 
 const PROFILE_COLS =
-  'id, username, display_name, coat_name, coat_role, coat_color, theme, bg, types, study_flow, study_prefs, school_calendar, term_start, created_at, updated_at, revision';
+  'id, username, display_name, coat_name, coat_role, coat_color, theme, bg, types, study_flow, study_prefs, school_calendar, term_start, is_admin, created_at, updated_at, revision';
 
 function profileFromRow(r) {
   return {
@@ -17,6 +17,7 @@ function profileFromRow(r) {
     studyPrefs: prefsOut(r.study_prefs),
     schoolCalendar: prefsOut(r.school_calendar),
     termStart: r.term_start,
+    isAdmin: r.is_admin === 1,
     createdAt: r.created_at,
     updatedAt: r.updated_at,
     revision: r.revision,

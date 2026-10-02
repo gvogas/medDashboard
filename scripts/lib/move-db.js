@@ -4,7 +4,7 @@
 /* What moves, in an order the foreign keys accept. Throttles, request windows,
    OAuth attempts and refresh leases are short-lived, so they start empty. */
 export const TABLES = {
-  users: ['id', 'username', 'password_hash', 'pw_gen', 'display_name', 'coat_name', 'coat_role', 'coat_color', 'theme', 'bg', 'term_start', 'types', 'study_flow', 'feed_gen', 'study_prefs', 'school_calendar', 'leaderboard', 'created_at', 'updated_at', 'revision'],
+  users: ['id', 'username', 'password_hash', 'pw_gen', 'display_name', 'coat_name', 'coat_role', 'coat_color', 'theme', 'bg', 'term_start', 'types', 'study_flow', 'feed_gen', 'study_prefs', 'school_calendar', 'leaderboard', 'is_admin', 'last_seen_day', 'created_at', 'updated_at', 'revision'],
   courses: ['user_id', 'id', 'code', 'name', 'color', 'instructor', 'term', 'archived', 'meetings', 'target', 'created_at', 'updated_at', 'deleted_at', 'revision'],
   items: ['user_id', 'id', 'type', 'title', 'course_id', 'date', 'start', 'end', 'location', 'status', 'grade', 'weight', 'notes', 'checklist', 'links', 'recur', 'weekday', 'recur_until', 'dept', 'completed_at', 'created_at', 'updated_at', 'deleted_at', 'revision'],
   quotes: ['user_id', 'id', 'text', 'source', 'created_at', 'updated_at', 'deleted_at', 'revision'],
@@ -12,11 +12,13 @@ export const TABLES = {
   achievements: ['user_id', 'id', 'name', 'sticker', 'rule', 'course_id', 'item_id', 'target', 'created_at', 'updated_at', 'deleted_at', 'revision'],
   spotify_tokens: ['user_id', 'refresh_token', 'access_token', 'expires_at', 'updated_at'],
   changes: ['seq', 'user_id', 'kind', 'row_id', 'payload', 'deleted_at'],
+  admin_log: ['id', 'at', 'admin', 'action', 'target', 'detail'],
 };
 
-const ORDER_BY = { users: 'id', changes: 'seq', spotify_tokens: 'user_id' };
-/* Short-lived, or filled by the fresh schema itself. */
-const LEFT_BEHIND = ['login_throttle', 'request_limits', 'spotify_oauth_states', 'spotify_refresh_locks', 'sync_state', 'd1_migrations'];
+const ORDER_BY = { users: 'id', changes: 'seq', spotify_tokens: 'user_id', admin_log: 'id' };
+/* Short-lived, or filled by the fresh schema itself. The error log, the announcement and
+   the cron's last run start fresh too. */
+const LEFT_BEHIND = ['error_log', 'app_meta', 'login_throttle', 'request_limits', 'spotify_oauth_states', 'spotify_refresh_locks', 'sync_state', 'd1_migrations'];
 
 /** Every column of the database's own tables, as rows of {tbl, col}. */
 export const COLUMNS_QUERY = `SELECT m.name AS tbl, p.name AS col FROM sqlite_master AS m, pragma_table_info(m.name) AS p

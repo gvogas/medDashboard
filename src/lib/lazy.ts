@@ -12,16 +12,17 @@ const all: Array<() => Promise<unknown>> = []
 /**
  * A named export from a module loaded on first render, with `preload()`. Unlike
  * React.lazy, once the module is here it draws at once, without a suspended frame.
- * Render it inside <Suspense>.
+ * Render it inside <Suspense>. `idle: false` leaves it out of preloadAll: a page only some
+ * people can open (Admin) loads when it is first shown, and not for everyone else.
  */
-export function lazyNamed<M, K extends keyof M>(load: () => Promise<M>, name: K) {
+export function lazyNamed<M, K extends keyof M>(load: () => Promise<M>, name: K, { idle = true }: { idle?: boolean } = {}) {
     let mod: M | null = null
     let loading: Promise<M> | null = null
     const preload = () => (loading ||= load().then((m) => (mod = m), (e) => { loading = null; throw e }))
     function Lazy(props: object) {
         return createElement((mod ?? use(preload()))[name] as Any, props)
     }
-    all.push(preload)
+    if (idle) all.push(preload)
     return Object.assign(Lazy, { preload }) as unknown as M[K] & { preload: () => Promise<M> }
 }
 

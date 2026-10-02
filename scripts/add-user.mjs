@@ -2,6 +2,8 @@
 // Create an account: `npm run user:add -- <username> [--remote] [--name "Display Name"]`
 // Change a password:  `npm run user:add -- <username> --reset [--remote]`
 // Delete an account:  `npm run user:add -- <username> --delete [--remote]` (and all its data)
+// Make an admin:      `npm run user:add -- <username> --admin [--remote]` (opens the Admin page;
+//                     `--admin --off` takes it away). After the first, the page does the rest.
 // Prompts for the password without echoing it, hashes it exactly as the Worker does,
 // and inserts the row with wrangler. --remote targets production; otherwise the
 // local dev database.
@@ -10,11 +12,14 @@ import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { hashPassword, normalizeUsername } from '../worker/password.js';
 import { throttleRowsFor } from '../worker/throttle.js';
+import { ACCOUNT_TABLES } from '../worker/accounts.js';
 
 const args = process.argv.slice(2);
 const remote = args.includes('--remote');
 const reset = args.includes('--reset');
 const remove = args.includes('--delete');
+const admin = args.includes('--admin');
+const off = args.includes('--off');
 const nameIx = args.indexOf('--name');
 const displayName = (nameIx >= 0 ? args[nameIx + 1] || '' : '').replace(/[\x00-\x1f\x7f]/g, '').trim().slice(0, 60);
 const rawUser = args.find((a, i) => !a.startsWith('--') && (nameIx < 0 || i !== nameIx + 1));
@@ -24,6 +29,7 @@ if (!username) {
   console.error('Usage: npm run user:add -- <username> [--remote] [--name "Display Name"]');
   console.error('       npm run user:add -- <username> --reset [--remote]   (change the password)');
   console.error('       npm run user:add -- <username> --delete [--remote]  (remove the account and its data)');
+  console.error('       npm run user:add -- <username> --admin [--off] [--remote]  (give or take the Admin page)');
   console.error('Usernames: 3–32 characters, letters, digits, dot, dash, underscore.');
   process.exit(1);
 }
@@ -63,15 +69,13 @@ async function ask(prompt) {
 }
 
 let sql;
-if (remove) {
+if (admin) {
+  sql = `UPDATE users SET is_admin = ${off ? 0 : 1} WHERE username = '${username}';`;
+} else if (remove) {
   const typed = await ask(`This deletes ${username} and every course, item, quote, study session and achievement it owns. Type the username to confirm: `);
   if (typed.trim().toLowerCase() !== username) { console.error('Not deleted.'); process.exit(1); }
-  sql = `DELETE FROM achievements WHERE user_id IN (SELECT id FROM users WHERE username = '${username}');
-         DELETE FROM study_sessions WHERE user_id IN (SELECT id FROM users WHERE username = '${username}');
-         DELETE FROM items WHERE user_id IN (SELECT id FROM users WHERE username = '${username}');
-         DELETE FROM quotes WHERE user_id IN (SELECT id FROM users WHERE username = '${username}');
-         DELETE FROM courses WHERE user_id IN (SELECT id FROM users WHERE username = '${username}');
-         DELETE FROM spotify_tokens WHERE user_id IN (SELECT id FROM users WHERE username = '${username}');
+  const owned = `user_id IN (SELECT id FROM users WHERE username = '${username}')`;
+  sql = `${ACCOUNT_TABLES.map((t) => `DELETE FROM ${t} WHERE ${owned};`).join(' ')}
          DELETE FROM users WHERE username = '${username}';
          DELETE FROM login_throttle WHERE ${throttleRowsFor(username)};`;
 } else {
@@ -107,13 +111,13 @@ function run(statement) {
   return null;
 }
 
-if (reset || remove) {
+if (reset || remove || admin) {
   const found = run(`SELECT 1 AS x FROM users WHERE username = '${username}';`);
   if (!found || found[0].results.length !== 1) { console.error(`No account called ${username}.`); process.exit(1); }
 }
 const ok = run(sql);
 if (!ok) {
-  console.error(remove ? 'Could not delete the account.' : reset ? 'Could not change the password.' : 'Could not create the account. If the username already exists, pick another.');
+  console.error(admin ? 'Could not change admin access.' : remove ? 'Could not delete the account.' : reset ? 'Could not change the password.' : 'Could not create the account. If the username already exists, pick another.');
   process.exit(1);
 }
-console.log(`${remove ? 'Deleted' : reset ? 'Password changed for' : 'Created'} ${username} on the ${remote ? 'production' : 'local'} database.`);
+console.log(`${admin ? (off ? 'Admin removed from' : 'Admin given to') : remove ? 'Deleted' : reset ? 'Password changed for' : 'Created'} ${username} on the ${remote ? 'production' : 'local'} database.`);

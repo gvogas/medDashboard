@@ -24,8 +24,9 @@ CREATE TABLE users (
   coat_color     TEXT NOT NULL DEFAULT '#17B3AE'
                  CHECK (coat_color IN ('#E4749B', '#8B5CC7', '#17B3AE', '#79B6EA', '#BCA6E6')),
   theme          TEXT NOT NULL DEFAULT 'system' CHECK (theme IN ('light', 'dark', 'system')),
-  -- The background art (Med or CS), independent of the light/dark theme.
-  bg             TEXT NOT NULL DEFAULT 'med' CHECK (bg IN ('med', 'cs')),
+  -- The theme (Medicine, Computer Science, Law, Aviation, Sports, Engineering),
+  -- independent of the light/dark appearance.
+  bg             TEXT NOT NULL DEFAULT 'med' CHECK (bg IN ('med', 'cs', 'law', 'pilot', 'sports', 'eng')),
   term_start     TEXT CHECK (term_start IS NULL
                              OR term_start GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]'),
   -- The person's item types as JSON: overrides for the built-ins (label, colour,
