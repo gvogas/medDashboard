@@ -18,6 +18,7 @@ import { Sheet } from "@/components/sheet/sheet"
 import { Overlays } from "@/components/overlays"
 import { StudyDock } from "@/components/study/study-dock"
 import { Focus } from "@/components/focus/focus-screen"
+import { AnnouncementBanner } from "@/components/admin/announcement-banner"
 
 export function App() {
     return (
@@ -58,6 +59,7 @@ function Content() {
         <div className="content" inert={side.narrow && side.open}>
             <header className="bar"><TopBar /></header>
             <div className="scroll" id="scroll">
+                <AnnouncementBanner />
                 <StatsHost><Stats /></StatsHost>
                 <ViewsHost><Views /></ViewsHost>
             </div>

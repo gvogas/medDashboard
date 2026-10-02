@@ -1,4 +1,4 @@
-// The pages, in the sidebar: Week, Month, All items, Study, Music. The view is the UI
+// The pages, in the sidebar: Week, Month, All items, Study, Music, and Admin for admins. The view is the UI
 // state's (ui.view); this reads it through the bridge and changes it with setView, the
 // same call the 1–5 keys make. It replaces the dock that sat in the top bar. On a narrow
 // screen, where the sidebar slides over the page, picking a page closes it.
@@ -9,6 +9,7 @@ import { subscribe, getStudyBadge } from "@/bridge"
 import { ui } from "@/data/ui"
 import { setView } from "@/data/study-controller"
 import { setSide, sideOpen } from "@/data/sidebar"
+import { useProfile } from "@/data/store"
 import type { View } from "@/data/types"
 
 export const PAGES: { id: View; label: string; shortcut: string }[] = [
@@ -19,22 +20,26 @@ export const PAGES: { id: View; label: string; shortcut: string }[] = [
     { id: "spotify", label: "Music", shortcut: "5" },
 ]
 
+/* Only for admins, and without a number key. */
+const ADMIN = { id: "admin" as View, label: "Admin", shortcut: "" }
+
 const currentView = () => ui.view as View
 
 export function SideNav() {
     const view = useSyncExternalStore(subscribe, currentView)
     const badge = useSyncExternalStore(subscribe, getStudyBadge)
+    const admin = !!useProfile()?.isAdmin
     return (
         <nav aria-label="Pages" className="flex flex-col gap-0.5">
-            {PAGES.map((p) => {
+            {(admin ? [...PAGES, ADMIN] : PAGES).map((p) => {
                 const on = p.id === view
                 return (
                     <button
                         key={p.id}
                         type="button"
                         aria-current={on ? "page" : undefined}
-                        title={p.label + " (" + p.shortcut + ")"}
-                        aria-keyshortcuts={p.shortcut}
+                        title={p.shortcut ? p.label + " (" + p.shortcut + ")" : p.label}
+                        aria-keyshortcuts={p.shortcut || undefined}
                         onClick={() => { setView(p.id); if (sideOpen()) setSide(false) }}
                         className={cn(
                             "flex h-8 cursor-pointer items-center justify-between rounded-[6px] border-0 px-2.5 text-left text-[14px]",

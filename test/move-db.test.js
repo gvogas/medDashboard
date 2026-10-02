@@ -40,6 +40,8 @@ it('copies an old-schema database into a fresh one, row for row, with the change
   await from.prepare("INSERT INTO spotify_tokens (user_id, refresh_token, access_token, expires_at, updated_at) VALUES ('ana', 'enc', 'acc', 999, 280)").run();
   await from.prepare('UPDATE sync_state SET floor = 2 WHERE id = 1').run();
   await from.prepare("INSERT INTO login_throttle (username, fails, updated_at) VALUES ('ana', 3, 1)").run();
+  await from.prepare("UPDATE users SET is_admin = 1, last_seen_day = '2026-10-01' WHERE id = 'ana'").run();
+  await from.prepare("INSERT INTO admin_log (at, admin, action, target, detail) VALUES (5, 'ana', 'create', 'ben', '')").run();
   const head = (await from.prepare("SELECT seq FROM sqlite_sequence WHERE name = 'changes'").first()).seq;
   await from.prepare("INSERT INTO changes (seq, user_id, kind, row_id, payload) VALUES (?, 'ana', 'x', 'x', '{}')").bind(head + 5).run();
   await from.prepare("DELETE FROM changes WHERE kind = 'x'").run();

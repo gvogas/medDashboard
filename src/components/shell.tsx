@@ -9,13 +9,13 @@ import { getSheet, requestCloseSheet, useCovered, useSheet } from "@/data/overla
 import { useUi } from "@/data/ui"
 import type { Ui } from "@/data/types"
 
-const PAGES = ["week", "month", "table", "study", "spotify"]
+const PAGES = ["week", "month", "table", "study", "spotify", "admin"]
 
 /** The page shown, or null on the focus screen. #views is hidden without one. */
 export const shownView = (u: Ui) => (u.focus ? null : PAGES.includes(u.view) ? u.view : null)
 
 /** The tiles show above the week, month and table, off the focus screen. */
-export const statsShown = (u: Ui) => !u.focus && u.view !== "spotify" && u.view !== "study"
+export const statsShown = (u: Ui) => !u.focus && u.view !== "spotify" && u.view !== "study" && u.view !== "admin"
 
 /** Shown until boot has opened an account, and after a session ends. */
 export function SignInScreen({ children }: { children?: ReactNode }) {
@@ -40,7 +40,7 @@ export function StatsHost({ children }: { children?: ReactNode }) {
     return <div id="stats" hidden={!shown}>{children}</div>
 }
 
-/** The week, month, table, Study or Music page. The table and the Music page scroll their own rows. */
+/** The week, month, table, Study, Music or Admin page. The table and the Music page scroll their own rows. */
 export function ViewsHost({ children }: { children?: ReactNode }) {
     const view = useUi(shownView)
     return (
