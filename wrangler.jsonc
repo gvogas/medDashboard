@@ -18,8 +18,7 @@
   },
 
   // rounds-v6 was built fresh from migrations/0001_schema.sql and filled by
-  // scripts/move-db.mjs from rounds-v5 on 2026-10-01 (the Admin page); rounds-v5 is
-  // kept as a backup until the move is confirmed.
+  // scripts/move-db.mjs from rounds-v5 on 2026-10-01 (the Admin page).
   "d1_databases": [
     {
       "binding": "DB",
