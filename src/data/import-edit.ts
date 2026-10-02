@@ -17,7 +17,6 @@ import { api } from "@/core/api"
 import { readWithAi, type NoteKey } from "./ai-read"
 import { readContext } from "./ai-context"
 import { notify } from "@/bridge"
-import { ui } from "./ui"
 import { openSheet } from "./overlay"
 import type { Course, Item } from "./types"
 
@@ -34,40 +33,26 @@ export function defaultTerm(cal: SchoolCalendar | null, named: string, day: stri
     return (courseTerm(cal, named) ?? currentTerm(cal, day))?.name ?? ""
 }
 
-/** A problem to show under Import in Settings. */
-function note(text: string, error = true) {
-    ui.importNote = { text, error }
-    notify()
-}
-
 /** Read a calendar or CSV and open the preview. Returns an error message, or "" when it opened. */
-export function previewImport(text: string, name = "", back?: "ai"): string {
+export function previewImport(text: string, name = ""): string {
     const isIcs = /BEGIN:VCALENDAR/i.test(text)
     let events
     try { events = isIcs ? parseIcs(text) : parseCsv(text) } catch { return "That file could not be read." }
     if (!events.length) return isIcs ? "No events were found in that calendar." : "No rows were found. The first line must be a header such as type,course,title,date,start,end,room,weight."
     const plan = planImport(events, data, isIcs ? "ics" : "csv") as ImportPlan
     if (!plan.courses.length && !plan.items.length) return "Nothing in that file could be imported." + (plan.notes[0] ? " " + plan.notes[0] : "")
-    openSheet({ kind: "import", plan, name, ...(back ? { back } : {}) })
+    openSheet({ kind: "import", plan, name })
     return ""
 }
 
-/** A file picked under Import: over 2 MB is refused; a problem shows as the import note. */
-export async function importFile(file: File) {
-    if (file.size > MAX_BYTES) { note("That file is over 2 MB; export a single term instead."); return }
-    const error = previewImport(await file.text(), file.name)
-    if (error) note(error)
-}
-
-/** Text pasted under Import. */
-export function importPasted(text: string) {
-    if (!text.trim()) return
-    const error = previewImport(text)
-    if (error) note(error)
+/** A calendar or CSV file picked in Import with AI: over 2 MB is refused. Returns an error message, or "" when it opened. */
+export async function importFile(file: File): Promise<string> {
+    if (file.size > MAX_BYTES) return "That file is over 2 MB; export a single term instead."
+    return previewImport(await file.text(), file.name)
 }
 
 /** A course outline, read by the Worker with AI, then previewed. */
-export function readOutlineFile(file: File, note: NoteKey = "importNote", back?: "ai") {
+export function readOutlineFile(file: File, note: NoteKey = "aiNote") {
     return readWithAi(file, {
         what: "outline", title: "Reading your course outline",
         steps: ["Reading the document", "Finding dates and deadlines", "Matching it to your courses"],
@@ -82,7 +67,7 @@ export function readOutlineFile(file: File, note: NoteKey = "importNote", back?:
             const plan = planOutline(outline, data, termStart() || "") as ImportPlan
             const cal = schoolCal()
             for (const c of plan.courses) if (c.isNew) c.term = defaultTerm(cal, c.term || "", today())
-            openSheet({ kind: "import", plan, name: file.name, ...(back ? { back } : {}) })
+            openSheet({ kind: "import", plan, name: file.name })
         },
     })
 }

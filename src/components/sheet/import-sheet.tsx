@@ -10,15 +10,14 @@ import { semesterOptions, semesterPicked } from "@/data/course-edit"
 import { planSummary, setWeek1 } from "@/core/importers/plan"
 import { data } from "@/core/store"
 import { notify } from "@/bridge"
-import { useUi, ui } from "@/data/ui"
+import { useUi } from "@/data/ui"
 import { commitImport, importCount, type ImportPlan, type PlanItem } from "@/data/import-edit"
-import { openSettings } from "@/data/actions"
 import { closeSheet, openSheet } from "@/data/overlay"
 import { toast } from "@/data/toast"
 import { accent } from "@/components/views/bits"
 import { Button, CONTROL, Section, Segmented, SheetBody, SheetFoot, SheetHead, Warning } from "./fields"
 
-export function ImportSheet({ plan: initial, name, back }: { plan: ImportPlan; name: string; back?: "ai" }) {
+export function ImportSheet({ plan: initial, name }: { plan: ImportPlan; name: string }) {
     /* the plan is changed in place by the ticks, as the planner expects; `v` redraws */
     const [plan] = useState(initial)
     const [, setV] = useState(0)
@@ -36,16 +35,15 @@ export function ImportSheet({ plan: initial, name, back }: { plan: ImportPlan; n
     const rows = plan.items.map((it, i) => ({ it, i }))
     const groups = plan.courses.map((c) => ({ c, items: rows.filter((x) => x.it.row.courseId === c.id) }))
     const loose = rows.filter((x) => !x.it.row.courseId)
-    const cancel = () => (back ? openSheet({ kind: "ai" }) : openSettings("importGrp"))
+    const cancel = () => openSheet({ kind: "ai" })
 
     const commit = async () => {
         setBusy(true)
         let note
         try { note = { text: await commitImport(plan), error: false } } catch (error) { note = { text: "The import stopped part-way: " + (error as Error).message, error: true } }
         notify()
-        if (back) { closeSheet(); toast(note.text, { error: note.error }); return }
-        ui.importNote = note
-        openSettings("importGrp")
+        closeSheet()
+        toast(note.text, { error: note.error })
     }
 
     return (

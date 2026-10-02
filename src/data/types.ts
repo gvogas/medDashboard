@@ -69,7 +69,7 @@ export interface Ui {
     sort: { key: SortKey; dir: 1 | -1 }
     quoteIx: number
     /* Settings: the last tab, what AI reads and imports said, and its questions */
-    settingsTab: "you" | "study" | "spotify" | "account"
+    settingsTab: "you" | "study" | "connections" | "account"
     importNote: Note | null
     schoolNote: Note | null
     spotifyNote: "connected" | "error" | null

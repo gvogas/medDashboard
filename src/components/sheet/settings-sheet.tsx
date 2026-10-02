@@ -1,6 +1,7 @@
 // Settings in the sheet, in four tabs: You (theme, where you're headed, name, look, quotes), Study
-// (the goal and streak, reviews, import, the school calendar, the calendar feed), Spotify,
-// and Account (data, saved copies, signing out). Everything saves as it changes.
+// (the goal and streak, reviews, the school calendar), Connections (the calendar feed, Spotify)
+// and Account (data, saved copies, signing out). Files come in through Import with AI, not here.
+// Everything saves as it changes.
 
 import { useEffect, useId, useRef, useState, type ReactNode } from "react"
 import { cn } from "@/lib/utils"
@@ -23,16 +24,14 @@ import { useSyncStatus } from "@/data/sync"
 import { ui, useUi } from "@/data/ui"
 import { beforeSheetClose, closeSheet } from "@/data/overlay"
 import { coatColour, feedLink, GOAL_MAX, GOALS, hm, REST_DAYS, savedValues, syncLine, TABS, themeLabel, timeZone, toggleRest, type SettingsTab } from "@/data/settings"
-import { importFile, importPasted, readOutlineFile } from "@/data/import-edit"
-import { refreshReads } from "@/data/ai-read"
-import { openSchool, readSchoolFile, removeSchool } from "@/data/school-edit"
+import { openSchool, removeSchool } from "@/data/school-edit"
 import {
-    addQuote, disconnectSpotify, exportData, keepSignedIn, removeQuote, resolveConflict, saveCoat, setSettingsTab, showShortcuts, signOut,
+    addQuote, disconnectSpotify, exportData, keepSignedIn, openAiImport, removeQuote, resolveConflict, saveCoat, setSettingsTab, showShortcuts, signOut,
 } from "@/data/actions"
 import { BGS, GOALS as THEME_GOALS, THEMES, goalFor, type Bg } from "@/data/themes"
 import type { Feed, Profile } from "@/data/types"
 import { radioKeys, rovingTab } from "./radio-keys"
-import { Button, CONTROL, RemoveButton, SheetBody, SheetFoot, SheetHead, Swatches, TextArea, TextInput } from "./fields"
+import { Button, CONTROL, RemoveButton, SheetBody, SheetFoot, SheetHead, Swatches, TextInput } from "./fields"
 
 export function SettingsSheet({ tab, focus }: { tab: SettingsTab; focus: string | null }) {
     const profile = useProfile()
@@ -42,7 +41,7 @@ export function SettingsSheet({ tab, focus }: { tab: SettingsTab; focus: string 
     /* what was said and asked goes when Settings closes */
     useEffect(() => {
         const forget = () => {
-            ui.importNote = null; ui.schoolNote = null; ui.spotifyNote = null
+            ui.schoolNote = null; ui.spotifyNote = null
             ui.signoutAsk = null; ui.schoolAsk = false
             if (ui.feed) ui.feed.confirm = null
         }
@@ -84,7 +83,7 @@ export function SettingsSheet({ tab, focus }: { tab: SettingsTab; focus: string 
             <SheetBody>
                 {tab === "you" && <YouTab profile={profile} />}
                 {tab === "study" && <StudyTab profile={profile} />}
-                {tab === "spotify" && <SpotifyTab />}
+                {tab === "connections" && <ConnectionsTab />}
                 {tab === "account" && <AccountTab profile={profile} />}
             </SheetBody>
             <SheetFoot hint="Term">
@@ -126,20 +125,6 @@ const Chip = ({ on, tone = "accent", ...props }: React.ComponentProps<"button"> 
                 : "border-[var(--accent)] bg-accent font-bold text-accent-foreground"),
         )} />
 )
-
-/** A file picker that looks like a button. */
-function FilePick({ id, label, busy = false, accept, onFile }: { id: string; label: string; busy?: boolean; accept: string; onFile: (f: File) => void }) {
-    return (
-        <label className={cn(
-            "relative inline-flex cursor-pointer items-center rounded-[10px] border border-border bg-[linear-gradient(var(--panel),var(--panel-2))] px-3.5 py-[7px] text-[12.5px] font-[550] text-ink-2 shadow-[var(--shadow-1),inset_0_1px_0_var(--rim-hi)] focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-[var(--accent)] hover:text-foreground",
-            busy && "cursor-progress opacity-70",
-        )}>
-            {label}
-            <input id={id} type="file" accept={accept} disabled={busy} className="absolute inset-0 w-full cursor-pointer opacity-0"
-                onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) onFile(f) }} />
-        </label>
-    )
-}
 
 /* ── You ── */
 
@@ -288,9 +273,7 @@ function StudyTab({ profile }: { profile: Profile }) {
             <Goal profile={profile} />
             <Streak profile={profile} />
             <Reviews profile={profile} />
-            <Import />
             <School />
-            <FeedGroup />
         </>
     )
 }
@@ -360,34 +343,7 @@ function Reviews({ profile }: { profile: Profile }) {
     )
 }
 
-function Import() {
-    const busy = useUi((u) => u.outlineBusy)
-    const note = useUi((u) => u.importNote)
-    const left = useUi((u) => u.aiLeft)
-    const reads = useUi((u) => u.aiLimit) ?? 10
-    const [text, setText] = useState("")
-    useEffect(() => { void refreshReads() }, [])
-    return (
-        <Group title="Import" state=".ics, CSV or outline" id="importGrp">
-            <Row>
-                <FilePick id="importFile" label="Calendar or CSV…" accept=".ics,.csv,.txt,text/calendar,text/csv" onFile={(f) => void importFile(f)} />
-                <FilePick id="outlineFile" label={busy ? "Reading outline…" : "Course outline…"} busy={busy}
-                    accept=".pdf,.docx,.doc,.txt,.md,.html,.odt,application/pdf" onFile={(f) => void readOutlineFile(f)} />
-            </Row>
-            <Hint>You see everything before it is saved. Outlines, timetables and calendars are read by AI, up to {reads} a day{left != null ? " (" + left + " left today)" : ""}.</Hint>
-            <details className="text-[11.5px]">
-                <summary className="cursor-pointer text-muted-foreground">Paste instead</summary>
-                <Hint>Calendar text, or CSV with the columns <span className="font-mono">type,course,title,date,start,end,room,weight</span>.</Hint>
-                <TextArea rows={4} className="my-1.5 min-h-0" value={text} aria-label="Calendar or CSV text" placeholder="Paste calendar or CSV text" onChange={(e) => setText(e.target.value)} />
-                <Button variant="ghost" onClick={() => importPasted(text)}>Preview</Button>
-            </details>
-            {note && <Hint error={note.error}>{note.text}</Hint>}
-        </Group>
-    )
-}
-
 function School() {
-    const busy = useUi((u) => u.schoolBusy)
     const asking = useUi((u) => u.schoolAsk)
     const note = useUi((u) => u.schoolNote)
     useProfile()   /* the calendar lives on the profile */
@@ -395,14 +351,11 @@ function School() {
     const keep = useRef<HTMLButtonElement>(null)
     useEffect(() => { if (asking) keep.current?.focus() }, [asking])
     const ask = (on: boolean) => { ui.schoolAsk = on; notify() }
-    const pick = (label: string) => (
-        <FilePick id="schoolFile" label={busy ? "Reading calendar…" : label} busy={busy} accept=".pdf,.docx,.txt,.html,application/pdf" onFile={(f) => void readSchoolFile(f)} />
-    )
     return (
         <Group title="School calendar" state={cal ? "on" : "off"} id="schoolGrp">
             {!cal ? <>
-                <Hint>Upload your school’s academic calendar (PDF). Term marks days off, breaks and exams, skips classes when there are none, and numbers your weeks.</Hint>
-                <Row>{pick("Upload calendar…")}</Row>
+                <Hint>Add your school’s academic calendar with Import with AI. Term marks days off, breaks and exams, skips classes when there are none, and numbers your weeks.</Hint>
+                <Row><Button variant="ghost" onClick={openAiImport}>Import with AI…</Button></Row>
             </> : asking ? <>
                 <Hint>Remove the school calendar? Classes show every week again, and the term start goes back to the one you had.</Hint>
                 <Row>
@@ -418,7 +371,7 @@ function School() {
                 </span>
                 <Row>
                     <Button variant="ghost" onClick={() => openSchool(null)}>Review dates</Button>
-                    {pick("Replace…")}
+                    <Button variant="ghost" onClick={openAiImport}>Replace…</Button>
                     <Button variant="ghost" onClick={() => ask(true)}>Remove</Button>
                 </Row>
             </>}
@@ -427,8 +380,19 @@ function School() {
     )
 }
 
+/* ── Connections ── */
+
+function ConnectionsTab() {
+    return (
+        <>
+            <FeedGroup />
+            <SpotifyGroup />
+        </>
+    )
+}
+
 /* The calendar feed: a private link Google or Apple Calendar subscribes to. Asked about
-   once a session, the first time the Study tab opens; kept in ui.feed across tabs. */
+   once a session, the first time the Connections tab opens; kept in ui.feed across tabs. */
 function FeedGroup() {
     const f = useUi((u) => u.feed)
     const set = (next: Feed | null) => { ui.feed = next; notify() }
@@ -505,8 +469,6 @@ function FeedGroup() {
     )
 }
 
-/* ── Spotify ── */
-
 const SpotifyMark = () => (
     <svg viewBox="0 0 24 24" aria-hidden="true" className="size-4 flex-none text-[var(--spotify)]">
         <circle cx="12" cy="12" r="12" fill="currentColor" />
@@ -514,7 +476,7 @@ const SpotifyMark = () => (
     </svg>
 )
 
-function SpotifyTab() {
+function SpotifyGroup() {
     const note = useUi((u) => u.spotifyNote)
     useUi((u) => u.view)   /* redrawn as the player's state changes (boot.ts notifies) */
     const on = spotify.connected, retry = spotifyRetryAt()

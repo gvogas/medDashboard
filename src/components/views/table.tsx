@@ -97,7 +97,7 @@ export function TableView() {
                                     <td className={cn(td, "max-[640px]:text-right")}><TypeChip type={it.type} /></td>
                                     <td className={td}>
                                         {c
-                                            ? <span style={accent(c.color)} className="inline-flex items-center gap-1.5 text-[11.5px] whitespace-nowrap text-ink-2"><i aria-hidden="true" className="size-[7px] flex-none rounded-[2px] bg-[var(--c)]" />{c.code}</span>
+                                            ? <span style={accent(c.color)} title={c.code || undefined} className="inline-flex max-w-[220px] items-center gap-1.5 text-[11.5px] whitespace-nowrap text-ink-2"><i aria-hidden="true" className="size-[7px] flex-none rounded-[2px] bg-[var(--c)]" /><span className="truncate">{c.name || c.code}</span></span>
                                             : <span className="text-muted-foreground max-[640px]:hidden">—</span>}
                                     </td>
                                     <td className={cn(td, "font-mono whitespace-nowrap text-ink-2 max-[640px]:text-right")}>{when(it)}</td>

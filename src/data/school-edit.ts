@@ -67,7 +67,7 @@ export function openSchool(read: unknown, source: string | null = null) {
 }
 
 /** A calendar file was picked: read it with AI, then check it in the sheet. */
-export function readSchoolFile(file: File, note: NoteKey = "schoolNote") {
+export function readSchoolFile(file: File, note: NoteKey = "aiNote") {
     return readWithAi(file, {
         what: "calendar", title: "Reading your school calendar", steps: ["Reading the document", "Finding semesters and breaks", "Checking the dates"],
         flag: "schoolBusy", note, refresh: notify,
