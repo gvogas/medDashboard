@@ -663,8 +663,8 @@ are invisible; from stage 3 the class features are shown only to admins (George 
 with a second account made admin for the purpose) until stage 5 is live, so nobody can
 join a class before they can keep grades in it (stage 4) or leave it (stage 5).
 
-1. rounds-v7 and the scope refactor: `scope` columns, `access.js`, `changes` by scope, `move-db.mjs`.
-2. Sync v3: cursors per scope, `revoked`, split shared stores, `effectiveItems()`, field-level merge, 403 handling.
+1. rounds-v7 and the scope refactor: `scope` on courses, items and `changes`, the new columns on existing tables (so no table is rebuilt later), `move-db.mjs`. Nothing visible changes.
+2. Spaces and sync v3: `spaces` and `members` tables, `access.js`, cursors per scope, `revoked`, split shared stores, `effectiveItems()`, field-level merge, 403 handling.
 3. Classes: create, convert, invites, codes, join, members, roles.
 4. The personal layer: marks, prefs, the split item card, markers, eye filter, merge sheet.
 5. Leaving and removal: detach, leave, remove, archive, transfer, Keep/Dismiss, account deletion.
