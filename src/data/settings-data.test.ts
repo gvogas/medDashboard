@@ -44,8 +44,9 @@ describe("what Settings says", () => {
 
     it("opens a deep link on its tab", () => {
         expect(TAB_OF.qText).toBe("you")
-        expect(TAB_OF.importGrp).toBe("study")
-        expect(TAB_OF.spotifyGrp).toBe("spotify")
+        expect(TAB_OF.schoolGrp).toBe("study")
+        expect(TAB_OF.feedGrp).toBe("connections")
+        expect(TAB_OF.spotifyGrp).toBe("connections")
     })
 
     it("writes minutes, rest days and the feed link", () => {

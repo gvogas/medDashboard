@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
-import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react"
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react"
 
 // The app is not booted: a store in memory, the reads, the API and the toast as fakes, the
 // real planner and commit. The class schedule preview, reading a timetable, and (Task 8) the
@@ -186,7 +186,7 @@ describe("the Import with AI card", () => {
         await screen.findByText("Course outline")
         pick("Course outline: Choose a file", new File(["x"], "o.pdf", { type: "application/pdf" }))
         act(() => cfg().done({ code: "PHYS205", name: "Waves", classes: [], assessments: [] }))
-        expect(getSheet()).toMatchObject({ kind: "import", back: "ai" })
+        expect(getSheet()).toMatchObject({ kind: "import" })
         fireEvent.click(await screen.findByRole("button", { name: "Cancel" }))
         expect(getSheet()).toEqual({ kind: "ai" })
     })
@@ -219,7 +219,16 @@ describe("the Import with AI card", () => {
         expect(screen.getByRole("alert").parentElement!.contains(screen.getByRole("button", { name: "Preview" }))).toBe(true)
         fireEvent.change(screen.getByLabelText("Calendar or CSV text"), { target: { value: "type,course,title,date\nexam,PHYS205,Midterm,2026-10-20" } })
         fireEvent.click(screen.getByRole("button", { name: "Preview" }))
-        expect(getSheet()).toMatchObject({ kind: "import", back: "ai" })
+        expect(getSheet()).toMatchObject({ kind: "import" })
+    })
+
+    it("previews a calendar or CSV file, and says when it cannot", async () => {
+        act(() => openSheet({ kind: "ai" }))
+        const input = await screen.findByLabelText("Calendar or CSV file")
+        await act(async () => fireEvent.change(input, { target: { files: [new File(["nonsense"], "x.csv", { type: "text/csv" })] } }))
+        expect((await screen.findByRole("alert")).textContent).toMatch(/No rows were found/)
+        await act(async () => fireEvent.change(input, { target: { files: [new File(["type,course,title,date\nexam,PHYS205,Midterm,2026-10-20"], "x.csv", { type: "text/csv" })] } }))
+        await waitFor(() => expect(getSheet()).toMatchObject({ kind: "import", name: "x.csv" }))
     })
 })
 

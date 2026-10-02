@@ -87,7 +87,12 @@ afterEach(() => {
 })
 
 const settle = () => act(async () => { for (let i = 0; i < 20; i++) await Promise.resolve() })
-const tickFor = (ms: number) => act(async () => { await vi.advanceTimersByTimeAsync(ms) })
+/* the run reads the clock, so jump it and let one 250 ms tick redraw, rather than
+   stepping through every tick (minutes of them made these the slowest tests) */
+const tickFor = (ms: number) => act(async () => {
+    vi.setSystemTime(Date.now() + Math.max(0, ms - 250))
+    await vi.advanceTimersByTimeAsync(Math.min(ms, 250))
+})
 const screenEl = () => screen.queryByRole("region", { name: "Focus" })
 const stage = () => within(screenEl()!)
 const dock = () => screen.queryByRole("region", { name: "Study timer" })

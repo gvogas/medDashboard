@@ -22,7 +22,7 @@ const fake = vi.hoisted(() => {
 })
 const actions = vi.hoisted(() => ({
     addQuote: vi.fn(async () => true), removeQuote: vi.fn(), saveCoat: vi.fn(), exportData: vi.fn(), resolveConflict: vi.fn(),
-    disconnectSpotify: vi.fn(), showShortcuts: vi.fn(), signOut: vi.fn(), keepSignedIn: vi.fn(), openSettings: vi.fn(),
+    disconnectSpotify: vi.fn(), showShortcuts: vi.fn(), signOut: vi.fn(), keepSignedIn: vi.fn(), openSettings: vi.fn(), openAiImport: vi.fn(),
     setSettingsTab: vi.fn(), deleteItem: vi.fn(), deleteCourse: vi.fn(), openCourse: vi.fn(),
 }))
 const api = vi.hoisted(() => ({
@@ -73,7 +73,7 @@ afterEach(() => {
     fake.cal = null
 })
 
-const settings = (tab: "you" | "study" | "spotify" | "account", focus: string | null = null) => act(() => openSheet({ kind: "settings", tab, focus }))
+const settings = (tab: "you" | "study" | "connections" | "account", focus: string | null = null) => act(() => openSheet({ kind: "settings", tab, focus }))
 
 describe("Settings", () => {
     it("switches tabs, and a deep link focuses its field", async () => {
@@ -180,8 +180,16 @@ describe("Settings", () => {
         expect(legacy.runReviews).toHaveBeenCalled()
     })
 
-    it("loads the calendar feed, copies it, and asks before a new link or turning it off", async () => {
+    it("has no Import on the Study tab, and sends the school calendar to Import with AI", () => {
         settings("study")
+        expect(screen.queryByText("Import")).toBeNull()
+        expect(screen.queryByLabelText("Calendar or CSV text")).toBeNull()
+        fireEvent.click(screen.getByRole("button", { name: "Import with AI…" }))
+        expect(actions.openAiImport).toHaveBeenCalled()
+    })
+
+    it("loads the calendar feed, copies it, and asks before a new link or turning it off", async () => {
+        settings("connections")
         await screen.findByRole("textbox", { name: "Calendar feed link" })
         expect(api.calendarFeed).toHaveBeenCalledOnce()
         fireEvent.click(screen.getByRole("button", { name: "Turn off" }))
@@ -199,7 +207,7 @@ describe("Settings", () => {
     })
 
     it("shows the Spotify connection", () => {
-        settings("spotify")
+        settings("connections")
         expect(screen.getByText("Kitchen")).toBeTruthy()
         expect(screen.getByText(/device called/)).toBeTruthy()
         fireEvent.click(screen.getByRole("button", { name: "Disconnect" }))
@@ -253,14 +261,13 @@ describe("the import sheet", () => {
 
         await act(async () => fireEvent.click(screen.getByRole("button", { name: /^Import \d/ })))
         expect(legacy.saveRows).toHaveBeenCalled()
-        expect(actions.openSettings).toHaveBeenCalledWith("importGrp")
-        expect(fake.ui.importNote).toMatchObject({ error: false })
+        expect(getSheet()).toBeNull()
     })
 
-    it("goes back to Settings on Cancel", () => {
+    it("goes back to Import with AI on Cancel", () => {
         act(() => openSheet({ kind: "import", plan: plan(), name: "phys.csv" }))
         fireEvent.click(screen.getByRole("button", { name: "Cancel" }))
-        expect(actions.openSettings).toHaveBeenCalledWith("importGrp")
+        expect(getSheet()).toEqual({ kind: "ai" })
     })
 
     it("asks an outline's semester when there is a school calendar, and saves it with the course", async () => {

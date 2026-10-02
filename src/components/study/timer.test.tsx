@@ -86,7 +86,12 @@ const flow = () => fake.data.profile!.studyFlow as Flow
 const region = (name: string) => screen.getByRole("region", { name })
 /* the store's saves and the redraws after them settle */
 const settle = () => act(async () => { for (let i = 0; i < 20; i++) await Promise.resolve() })
-const tickFor = (ms: number) => act(async () => { await vi.advanceTimersByTimeAsync(ms) })
+/* the run reads the clock, so jump it and let one 250 ms tick redraw, rather than
+   stepping through every tick (minutes of them made these the slowest tests) */
+const tickFor = (ms: number) => act(async () => {
+    vi.setSystemTime(Date.now() + Math.max(0, ms - 250))
+    await vi.advanceTimersByTimeAsync(Math.min(ms, 250))
+})
 const cards = () => render(<TimerCards />)
 const start = async () => {
     fireEvent.click(within(region("Ready")).getByRole("button", { name: "Start focus" }))
