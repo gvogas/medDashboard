@@ -32,8 +32,8 @@
 | 2 | Spaces and sync v3: `spaces`, `members`, `access.js`, `/api/sync?v=3` with cursors per scope and `revoked`, IndexedDB v5 (shared stores, cursors), `effectiveItems()`, field-level merge, 403 in the sync loop. Invisible (no way to create a space yet) | `collab-2-sync` | migration `0002_spaces.sql` | written when Stage 1 is merged |
 | 3 | Classes: create (blank, convert), invites, codes, join, members, roles; admin-only | `collab-3-classes` | `0003_invites.sql` | written when Stage 2 is merged |
 | 4 | Personal layer: `marks`, `space_prefs`, the split item card, source markers, eye filter, merge sheet; admin-only | `collab-4-layer` | `0004_marks.sql` | written when Stage 3 is merged |
-| 5 | Leaving and removal: detach, leave, remove, archive, transfer, Keep/Dismiss, account deletion; **opens classes to everyone** | `collab-5-leave` | none expected | written when Stage 4 is merged |
-| 6 | ICS feed and outline import into a class; class from an outline; school-calendar offer | `collab-6-feed` | none expected | written when Stage 5 is merged |
+| 5 | Leaving and removal: detach, leave, remove, archive, transfer, Keep/Dismiss, account deletion, the extended nightly purge | `collab-5-leave` | none expected | written when Stage 4 is merged |
+| 6 | ICS feed and outline import into a class; class from an outline; school-calendar offer; **opens classes to everyone** (a converted course must not drop out of people's calendar feeds) | `collab-6-feed` | none expected | written when Stage 5 is merged |
 | 7 | Inbox and activity (triggers, coalescing, inbox, activity tab) | `collab-7-inbox` | `0005_activity.sql` | written when Stage 6 is merged |
 | 8 | Projects core: project spaces, project item, tasks, assignees, member task rules, link to an assignment | `collab-8-projects` | none (columns exist from Stage 1) | written when Stage 7 is merged |
 | 9 | Projects in the views: assigned-to-me, chip folding, project sheet, progress, workload | `collab-9-project-views` | none | written when Stage 8 is merged |
@@ -47,23 +47,26 @@ Each stage branches off `main` after the previous stage is merged and deployed. 
 - `migrations/0002_spaces.sql`: `spaces` (Worker-made 12-char ids, `kind`, `archived`, `school_calendar`, `parent_space`, `parent_item`, code columns, timestamps, `revision`) and `members` (`role`, the partial unique owner index, `members (user_id) WHERE deleted_at IS NULL`). Extend `scripts/lib/move-db.js` TABLES with both.
 - `worker/access.js`: `memberGuard(scope)` and `editorGuard(scope)` returning `{sql, binds}` fragments; `roleOf(db, userId, scope)`; `parseScope('c:abc')`. Tests: a matrix of non-member / member / editor / owner / archived.
 - `worker/db.js`: shared variants of `getRow/upsertRow/deleteRow` taking a scope and a guard; the field-level merge (`changed`), compared with stable JSON; `updated_by`.
-- `syncPageV3(db, userId, cursors)`: memberships query, the `UNION ALL` page with per-branch guards, cursor rule, `scopes`, `revoked`, per-scope `reset`. Route `GET /api/sync?v=3`. Keep v2.
+- `syncPageV3(db, userId, cursors, sv)`: memberships query (≤ 20 rows), member lists only for spaces whose `revision` > `sv`, the `UNION ALL` page with per-branch guards, cursor rule, `scopes`, `revoked`, per-scope `reset` (cursor 0 never resets). Route `GET /api/sync?v=3`. Keep v2. Member and space writes bump `spaces.revision` to the next global sequence value in the same batch.
 - `/api/spaces/:sid/{courses,items}/:id` routes (guarded), unused by the UI yet; tests create spaces directly in D1.
-- Client: `src/core/db.ts` version 5 (stores `shared_courses`, `shared_items` keyed `[scope, id]`, `spaces`, `meta.cursors` migrated from `syncCursor`); `src/core/sync.ts` pulls v3, applies `revoked`, treats 403 like 409, pushes shared ops with `base`/`changed`; `src/data` `effectiveItems()`/`effectiveCourses()` used by every view (returns today's items while there are no spaces).
-- Tests: v3 paging across scopes in global order, a new scope from 0, a removal between the two queries, `revoked` purge, field-merge cases, IndexedDB upgrade keeps pending ops.
+- Field-level merge applies to shared rows (and, from Stage 4, `marks`) only; personal rows, `space_prefs` and the profile keep whole-row `If-Match`. A member's task write applies only allowed fields named in `changed`; `updated_by`/`completed_by` come from the session.
+- Client: `src/core/db.ts` version 5 (stores `shared_courses`, `shared_items` keyed `[scope, id]`, `spaces`, `meta.cursors` migrated from `syncCursor`); pending keys `shared_items:<scope>:<id>` / `shared_courses:<scope>:<id>`; `src/core/sync.ts` pulls v3 (sending `sv`, 0 on the first sync after opening), applies `revoked` after the last page, adds 403 to the statuses rejected at once (today `[400, 404, 409, 413, 422]`), pushes shared ops with `base`/`changed`; `src/data` `effectiveItems()`/`effectiveCourses()` used by every view, keyed by `scope/id` (returns today's items while there are no spaces).
+- Tests: v3 paging across scopes in global order, a new scope from 0, a removal between the two queries, member lists only above `sv`, `revoked` purge after the last page, field-merge cases (incl. a deleted current row always conflicting), IndexedDB upgrade keeps pending ops.
 
 **Stage 3 — Classes** (spec §5, §11, §13 convert, §14, §15).
-- `0003_invites.sql`: `invites`. Routes: create class (blank / convert), invites (username, accept, decline, revoke), code + `/api/join`, members (role, remove without detach yet is **not** allowed — remove arrives in Stage 5, so the button is hidden), transfer. Limits via `worker/limits.js`.
-- Convert as a set-based batch (§13), safe to retry.
-- UI behind `profile.isAdmin`: the + menu, course sheet Members tab, inbox stub listing pending invites, `/#join=` handling in `src/data/session.ts`.
+- `0003_invites.sql`: `invites`. Routes: create class (blank / convert), invites (username, accept, decline, revoke), code + `/api/join`, members (role, remove without detach yet is **not** allowed — remove arrives in Stage 5, so the button is hidden), transfer. Limits via `worker/limits.js`; 20 spaces per user (`409 limit`).
+- Convert as a set-based batch (§13), safe to retry, with the item picker: tasks start unticked; lecture reviews and custom-typed items stay personal under the class (`class_id`).
+- Accept/join/create write the joiner's `space_prefs` in the same batch (the table arrives in Stage 4, so Stage 3's batches add that statement then).
+- UI behind `profile.isAdmin`, **and** the create/accept/join routes refuse non-admins (`403`) until Stage 6: the + menu, course sheet Members tab, inbox stub listing pending invites, `/#join=` handling in `src/data/session.ts`.
 
 **Stage 4 — The personal layer** (spec §4, §7, §8, §9, §15).
-- `0004_marks.sql`: `marks`, `space_prefs` (single text `id`), their triggers writing `'u:' || user_id`; profile `hiddenSources` in `worker/validate.js` and `PUT /api/me` with the field-level merge.
-- `effectiveItems()` merges marks; grades, stats, achievements, exam prep, reviews and pickers read it; the item card's Class/Yours sections; eye toggles; markers; the merge sheet + absorb route.
+- `0004_marks.sql`: `marks`, `space_prefs` (single text `id`), their triggers writing `'u:' || user_id`; profile `hiddenSources` (`course:<id>`, `space:<sid>`, `personal`) in `worker/validate.js` and `PUT /api/me`, whole-row as today, kept when absent like `types`.
+- Old-client safety: `sync?v=2` pages only `courses`, `items`, `quotes`, `study_sessions`, `achievements`; personal `PUT`s without `classId`/`spaceId` keep the stored values.
+- `effectiveItems()` merges marks; grades, stats, achievements, exam prep, reviews (chain steps inherit `class_id`) and pickers read it; the item card's Class/Yours sections; eye toggles; markers; the merge sheet + absorb route (custom-typed items never paired).
 
-**Stage 5 — Leaving and removal** (spec §13). Detach (set-based, idempotent), leave, remove, archive, transfer, delete class, Keep/Dismiss + the nightly auto-detach in `purgeTombstones`, admin account deletion transferring spaces. Remove the admin-only gate.
+**Stage 5 — Leaving and removal** (spec §13). Detach (set-based, idempotent), leave (with or without a copy), remove, archive, transfer, delete class, Keep/Dismiss, the extended nightly purge in §13's order, admin account deletion transferring spaces or deleting those with nobody else (and `ACCOUNT_TABLES` gaining `marks`, `space_prefs`, `members`, `invites`). Client: `revoked` carries saved mark edits onto a detached copy.
 
-**Stage 6 — Feed and import** (spec §8, §9). `worker/calendar.js` adds class rows with marks, `hidden_sources`, scoped UIDs; outline import target picker and diff preview; class from an outline; school-calendar snapshot offer on join.
+**Stage 6 — Feed and import** (spec §8, §9). `worker/calendar.js` adds class rows with marks, `hidden_sources`, scoped UIDs; outline import target picker and diff preview; class from an outline; school-calendar snapshot offer on join. **Remove the admin-only gate** (client and routes).
 
 **Stage 7 — Inbox and activity** (spec §12). `0005_activity.sql`: `activity`, `inbox_seen`, the shared-row triggers (verify D1 accepts the upsert inside a trigger first; else the Worker-batch fallback); routes; the bell and inbox sheet; activity tab; nightly purge.
 
@@ -157,6 +160,13 @@ describe('scopes in the schema', () => {
     await expect(insertCourse('p:proj1', 'c')).rejects.toThrow(FAILS);
   });
 
+  it('keeps each member\'s target and sidebar archive off a class course', async () => {
+    await expect(env.DB.prepare("INSERT INTO courses (scope, id, code, name, color, target, created_at, updated_at) VALUES ('c:class4', 'c', 'BIO', 'Biology', '#17B3AE', 80, 1, 1)").run()).rejects.toThrow(FAILS);
+    await expect(env.DB.prepare("INSERT INTO courses (scope, id, code, name, color, archived, created_at, updated_at) VALUES ('c:class4', 'c', 'BIO', 'Biology', '#17B3AE', 1, 1, 1)").run()).rejects.toThrow(FAILS);
+    const id = await createUser('scope-target');
+    await env.DB.prepare("INSERT INTO courses (scope, id, code, name, color, target, archived, created_at, updated_at) VALUES (?, 'c', 'BIO', 'Biology', '#17B3AE', 80, 1, 1, 1)").bind('u:' + id).run();
+  });
+
   it('keeps personal fields off a class row, which always hangs off the class course', async () => {
     await insertCourse('c:class2', 'c');
     const row = (extra) => ({ course_id: 'c', ...extra });
@@ -238,8 +248,8 @@ with
 (b) In `users`, after the `last_seen_day` column and before `created_at`, add:
 
 ```sql
-  -- What the person has hidden from their calendar: course ids, space ids and 'personal'.
-  -- The calendar feed honours it too.
+  -- What the person has hidden from their calendar: 'course:<id>', 'space:<id>' and
+  -- 'personal'. The calendar feed honours it too.
   hidden_sources TEXT NOT NULL DEFAULT '[]'
                  CHECK (json_valid(hidden_sources) AND json_type(hidden_sources) = 'array'
                         AND json_array_length(hidden_sources) <= 40),
@@ -273,7 +283,10 @@ CREATE TABLE courses (
   updated_at  INTEGER NOT NULL,
   deleted_at  INTEGER,
   revision    INTEGER NOT NULL DEFAULT 1 CHECK (typeof(revision) = 'integer' AND revision > 0),
-  PRIMARY KEY (scope, id)
+  PRIMARY KEY (scope, id),
+  -- A class's course holds the class's facts only: each member's target and "archived in
+  -- my sidebar" live in their space_prefs. Its colour and term are the class's defaults.
+  CHECK (scope GLOB 'u:*' OR (target IS NULL AND archived = 0))
 );
 ```
 
@@ -314,7 +327,8 @@ CREATE TABLE items (
   -- The member who last wrote a shared row; NULL on a person's own.
   updated_by    TEXT,
   -- A personal item kept under a shared class (the class's space id): an extra quiz, a
-  -- lecture review. No foreign key, since it crosses scopes; the Worker checks membership.
+  -- lecture review. No foreign key, since it crosses scopes. A label on the person's own
+  -- row: it is shape-checked only and never grants access.
   class_id      TEXT CHECK (class_id IS NULL OR length(class_id) BETWEEN 1 AND 24),
   -- A task's assignees: user ids, or ["*"] for everyone. Project rows only.
   assignees     TEXT NOT NULL DEFAULT '[]'
@@ -468,7 +482,7 @@ FROM users AS u;
 - [ ] **Step 4: Run the schema test**
 
 Run: `npx vitest run test/scope.test.js`
-Expected: PASS (6 tests). Most other Worker test files now fail until Task 5; that is expected.
+Expected: PASS (7 tests). Most other Worker test files now fail until Task 5; that is expected.
 
 - [ ] **Step 5: Commit**
 
