@@ -76,10 +76,10 @@ with `scripts/move-db.mjs`, the procedure used for v2–v6. The move rewrites
 
 | Table | Key | Columns and rules |
 |---|---|---|
-| `spaces` | `id` (`[A-Za-z0-9_-]`, ≤ 24) | `kind` (`class`), `name` (projects only; a class shows its course), `owner_id`, `archived` 0/1, `school_calendar` JSON snapshot (offered to joiners), `code_hash`, `code_expires`, `code_uses_left`, `created_at`, `updated_at`, `deleted_at`, `revision` |
-| `members` | `(space_id, user_id)` | `role` `owner`\|`editor`\|`member`, `joined_at`, `updated_at`, `deleted_at` (left/removed), `revision`. One live owner per space |
+| `spaces` | `id` (`[A-Za-z0-9_-]`, ≤ 24) | `kind` (`class`), `name` (projects only; a class shows its course), `archived` 0/1, `school_calendar` JSON snapshot (offered to joiners), `code_hash`, `code_expires`, `code_uses_left`, `created_at`, `updated_at`, `deleted_at`, `revision` |
+| `members` | `(space_id, user_id)` | `role` `owner`\|`editor`\|`member`, `joined_at`, `updated_at`, `deleted_at` (left/removed), `revision`. Exactly one live owner per space, enforced by a partial unique index on `(space_id) WHERE role = 'owner' AND deleted_at IS NULL`; the owner is read from here, never stored twice |
 | `invites` | `(space_id, user_id)` | `invited_by`, `status` `pending`\|`accepted`\|`declined`, `created_at` |
-| `marks` | `(user_id, space_id, item_id)` | `status`, `grade`, `weight` (override), `notes`, `checklist`, `completed_at`, `hidden` 0/1, timestamps, `deleted_at`, `revision` |
+| `marks` | `(user_id, space_id, item_id)` | `status`, `grade`, `weight` (override), `notes`, `checklist`, `completed_at`, `hidden` 0/1, timestamps, `deleted_at`, `revision`. The same `CHECK`s as the matching `items` columns |
 | `course_prefs` | `(user_id, space_id, course_id)` | `color` (one of the twelve), `target`, `term` (your semester name), `archived`, timestamps, `revision` |
 | `activity` | `seq` autoincrement | `space_id`, `actor_id`, `verb`, `subject` (item, course or user id; `''` for creations, never NULL, so the unique key can match), `subject_user` (for member verbs), `detail` JSON, `bucket` (10-minute bucket), `at`. Unique `(space_id, actor_id, verb, subject, bucket)` for coalescing |
 | `inbox_seen` | `user_id` | `seq`: the last activity row read. Kept off `users` so reading the inbox never bumps the profile revision |
@@ -92,7 +92,7 @@ with `scripts/move-db.mjs`, the procedure used for v2–v6. The move rewrites
 | `items` | `class_id` (nullable space id): a personal item under a class. No FK (it crosses scopes); the Worker checks membership. `CHECK (class_id IS NULL OR (course_id IS NULL AND scope GLOB 'u:*'))` |
 | `items` | Shared rows: `CHECK (scope GLOB 'u:*' OR (grade IS NULL AND checklist = '[]' AND status = 'todo' AND completed_at IS NULL AND type NOT GLOB 'c-*'))`. Shared `notes` and `links` are the class's notes and links |
 | `study_sessions`, `achievements` | `space_id` (nullable): set when `course_id`/`item_id` point at a shared row |
-| `users` | `hidden_sources` JSON array ≤ 40 (course ids, class space ids, `personal`): the calendar filter |
+| `users` | `hidden_sources` JSON array ≤ 40 (course ids, class space ids, `personal`): the calendar filter. Hiding a class also hides your personal items under it. Profile saves join the field-level merge (section 5), so toggling different settings on two devices doesn't produce a profile conflict |
 | `changes` | `user_id` → `scope`; `UNIQUE (scope, kind, row_id)`; index `(scope, seq)`. Triggers on `quotes`, `study_sessions`, `achievements`, `marks`, `course_prefs` write `'u:' \|\| user_id`. Only `courses` and `items` ever write an `s:` scope; spaces and members are not in the feed (they come with each sync response, section 5) |
 
 ### Indexes
@@ -166,7 +166,7 @@ visible. No WebSockets.
 
 ### Push: field-level merge for shared rows and marks
 
-Personal tables keep today's whole-row `If-Match`. For shared courses, shared items and
+Other personal tables keep today's whole-row `If-Match`. For the profile, shared courses, shared items and
 marks, the client sends the full row plus `changed: {field: oldValue}` (from `base`):
 
 1. Revision matches → write as today.
@@ -210,10 +210,10 @@ course-pref puts → course deletes. A mark on an item that was created offline 
 | Invite by username | ✓ | ✓ | |
 | Invite code, change roles, remove members | ✓ | | |
 | Archive or unarchive, refresh the school-calendar snapshot, transfer ownership | ✓ | | |
-| Delete the class | when the only member | | |
+| Delete the class (with **Keep a copy**, on by default) | when the only member | | |
 | Leave | after transferring | ✓ | ✓ |
 
-One live owner per space, enforced inside the UPDATE so two requests cannot race.
+One live owner per space (the partial unique index makes a racing second owner fail). Transfer swaps roles in one batch: the new owner becomes `owner`, the old one `editor`. An owner can't demote or remove themselves; they transfer first.
 Moderators and suggested changes are phase 3, for whole classes.
 
 All guards come from one module, `worker/access.js`; `db.js` functions take a scope
@@ -344,7 +344,7 @@ was removed or changed role; the class archived or unarchived; ownership transfe
   `PUT /api/inbox/seen {seq}` moves `inbox_seen`.
 - **A class's Activity tab** fetches on open (`GET /api/spaces/:sid/activity?before=`);
   offline it says "Connect to see activity".
-- Rows older than 90 days are deleted by the nightly cron.
+- Activity rows, and answered invites, older than 90 days are deleted by the nightly cron.
 
 ## 12. API changes (endpoints only)
 
@@ -469,8 +469,8 @@ discovery.
 
 **v1 — shared classes**, in seven stages like the Term redesign, each merged and
 deployed on its own. Stages 1–2 are invisible. From stage 3, **New shared class**,
-**Join with code** and invites are shown only to admins (`isAdmin`, so George can test
-with a second account) until stage 5 is live; otherwise someone could join a class
+**Join with code** and invites are shown only to admins (`isAdmin`; George tests with a second account made admin
+for the purpose) until stage 5 is live; otherwise someone could join a class
 before they could keep a grade on it (stage 4) or leave it (stage 5). Stages 6–7 add
 to a feature that is already open to everyone.
 
