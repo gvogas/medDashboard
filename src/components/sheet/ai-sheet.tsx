@@ -1,13 +1,13 @@
 // Import with AI (spec §10), from the top bar: a class schedule, a course outline or a school
 // calendar, each read by AI and shown in its preview before anything is saved; the reads left
-// today; and pasting a calendar or CSV instead. Settings keeps its own Import and School
-// calendar entries.
+// today; and a calendar or CSV, pasted or picked as a file, instead. Settings only shows and
+// removes the school calendar.
 
 import { useEffect, useState } from "react"
 import { cn } from "@/lib/utils"
 import { ui, useUi } from "@/data/ui"
 import { refreshReads } from "@/data/ai-read"
-import { previewImport, readOutlineFile } from "@/data/import-edit"
+import { importFile, previewImport, readOutlineFile } from "@/data/import-edit"
 import { readSchoolFile } from "@/data/school-edit"
 import { readScheduleFile } from "@/data/schedule-edit"
 import { beforeSheetClose, closeSheet } from "@/data/overlay"
@@ -26,7 +26,7 @@ const KINDS = [
         blurb: "The syllabus from your professor. It pulls out every quiz, exam, assignment and lab with its date and weight, and the class times.",
         icon: "M7 3h7l4 4v14H7zM14 3v4h4M10 12h5M10 16h5",
         accept: ".pdf,.docx,.doc,.txt,.md,.html,.odt,application/pdf",
-        read: (f: File) => readOutlineFile(f, "aiNote", "ai"),
+        read: (f: File) => readOutlineFile(f, "aiNote"),
     },
     {
         id: "calendar", title: "School calendar", pick: "Choose a file", note: "PDF, Word or text · read by AI",
@@ -57,7 +57,7 @@ export function AiSheet() {
 
     const paste = () => {
         if (!text.trim()) return
-        setPasteError(previewImport(text, "", "ai"))
+        setPasteError(previewImport(text))
     }
 
     return (
@@ -103,8 +103,13 @@ export function AiSheet() {
                 )}
                 {note && <p role={note.error ? "alert" : "status"} className={cn("m-0 text-[12.5px]", note.error ? "text-destructive" : "text-ink-2")}>{note.text}</p>}
                 <details className="text-[12.5px] text-ink-2">
-                    <summary className="min-h-7 cursor-pointer">Paste a calendar or CSV instead</summary>
-                    <p className="mt-2 mb-1.5">Calendar text, or CSV with the columns <span className="font-mono">type,course,title,date,start,end,room,weight</span>.</p>
+                    <summary className="min-h-7 cursor-pointer">Use a calendar or CSV instead</summary>
+                    <p className="mt-2 mb-1.5">A .ics calendar, or CSV with the columns <span className="font-mono">type,course,title,date,start,end,room,weight</span>. Choose the file or paste its text.</p>
+                    <label className="relative mb-1.5 inline-flex cursor-pointer items-center rounded-[10px] border border-border bg-[linear-gradient(var(--panel),var(--panel-2))] px-3.5 py-[7px] text-[12.5px] font-[550] text-ink-2 shadow-[var(--shadow-1),inset_0_1px_0_var(--rim-hi)] focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-[var(--accent)] hover:text-foreground">
+                        Choose a file…
+                        <input type="file" accept=".ics,.csv,.txt,text/calendar,text/csv" aria-label="Calendar or CSV file" className="absolute inset-0 w-full cursor-pointer opacity-0"
+                            onChange={async (e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) setPasteError(await importFile(f)) }} />
+                    </label>
                     <TextArea rows={4} className="min-h-0 font-mono text-[12px]" value={text} aria-label="Calendar or CSV text" placeholder="Paste calendar or CSV text" onChange={(e) => { setText(e.target.value); setPasteError("") }} />
                     <div className="mt-1.5 flex flex-wrap items-center gap-2.5">
                         <Button variant="ghost" onClick={paste}>Preview</Button>

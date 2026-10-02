@@ -88,7 +88,7 @@ export function Sheet() {
                 {shown?.kind === "new-item" && <ItemSheet key={shown.draft.id} draft={shown.draft} />}
                 {shown?.kind === "course" && <CourseSheet key={shown.id ?? "new"} id={shown.id} />}
                 {shown?.kind === "settings" && <SettingsSheet tab={shown.tab} focus={shown.focus} />}
-                {shown?.kind === "import" && <ImportSheet key={shown.name} plan={shown.plan} name={shown.name} back={shown.back} />}
+                {shown?.kind === "import" && <ImportSheet key={shown.name} plan={shown.plan} name={shown.name} />}
                 {shown?.kind === "ai" && <AiSheet />}
                 {shown?.kind === "schedule" && <ScheduleSheet key={shown.name} plan={shown.plan} name={shown.name} />}
                 {shown?.kind === "school" && <SchoolSheet draft={shown.draft} />}
