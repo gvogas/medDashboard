@@ -79,10 +79,15 @@ with `scripts/move-db.mjs`, the procedure used for v2–v6. The move rewrites
 | `spaces` | `id` (`[A-Za-z0-9_-]`, ≤ 24) | `kind` (`class`), `name` (projects only; a class shows its course), `archived` 0/1, `school_calendar` JSON snapshot (offered to joiners), `code_hash`, `code_expires`, `code_uses_left`, `created_at`, `updated_at`, `deleted_at`, `revision` |
 | `members` | `(space_id, user_id)` | `role` `owner`\|`editor`\|`member`, `joined_at`, `updated_at`, `deleted_at` (left/removed), `revision`. Exactly one live owner per space, enforced by a partial unique index on `(space_id) WHERE role = 'owner' AND deleted_at IS NULL`; the owner is read from here, never stored twice |
 | `invites` | `(space_id, user_id)` | `invited_by`, `status` `pending`\|`accepted`\|`declined`, `created_at` |
-| `marks` | `(user_id, space_id, item_id)` | `status`, `grade`, `weight` (override), `notes`, `checklist`, `completed_at`, `hidden` 0/1, timestamps, `deleted_at`, `revision`. The same `CHECK`s as the matching `items` columns |
-| `course_prefs` | `(user_id, space_id, course_id)` | `color` (one of the twelve), `target`, `term` (your semester name), `archived`, timestamps, `revision` |
+| `marks` | `(user_id, id)` with `id = space_id \|\| ':' \|\| item_id`, unique `(user_id, space_id, item_id)` | `space_id`, `item_id`, `status`, `grade`, `weight` (override), `notes`, `checklist`, `completed_at`, `hidden` 0/1, timestamps, `deleted_at`, `revision`. The same `CHECK`s as the matching `items` columns |
+| `course_prefs` | `(user_id, id)` with `id = space_id \|\| ':' \|\| course_id`, unique `(user_id, space_id, course_id)` | `space_id`, `course_id`, `color` (one of the twelve), `target`, `term` (your semester name), `archived`, timestamps, `revision` |
 | `activity` | `seq` autoincrement | `space_id`, `actor_id`, `verb`, `subject` (item, course or user id; `''` for creations, never NULL, so the unique key can match), `subject_user` (for member verbs), `detail` JSON, `bucket` (10-minute bucket), `at`. Unique `(space_id, actor_id, verb, subject, bucket)` for coalescing |
 | `inbox_seen` | `user_id` | `seq`: the last activity row read. Kept off `users` so reading the inbox never bumps the profile revision |
+
+`marks` and `course_prefs` carry a single text `id` like every other personal table, so
+they fit the existing `changes` key `(scope, kind, row_id)`, `applyPage`'s `row.id`
+lookups and pending keys (`marks:<space>:<item>`) unchanged. Space ids can't contain
+`:`, so the id splits unambiguously.
 
 ### Changed tables
 
@@ -121,7 +126,7 @@ between scopes, so study sessions and achievements only gain or lose a `space_id
 | `courses`, `items`, … | `id` | Personal rows, unchanged |
 | `shared_courses`, `shared_items` | `[scope, id]` | Class rows. Keeping them out of the personal stores means a shared id can never shadow a personal row or its pending op |
 | `spaces` | `id` | The classes you're in, with role, archived and members (`{userId, name, role}`), replaced from each sync response's `scopes`; it gives "Edited by Alex" its name offline |
-| `marks`, `course_prefs` | `[space_id, item_id]` / `[space_id, course_id]` | Your layer |
+| `marks`, `course_prefs` | `id` (`<space>:<item>` / `<space>:<course>`) | Your layer; personal stores like the others |
 | `meta.cursors` | | `{scope: seq}`. The upgrade moves `meta.syncCursor` to `u:<me>` |
 
 - Pending ops gain `base`, a snapshot of the row when the op was first queued, and
@@ -164,7 +169,7 @@ between scopes, so study sessions and achievements only gain or lose a `space_id
 Freshness is unchanged: sync after each edit, on focus, and every 5 minutes while
 visible. No WebSockets.
 
-### Push: field-level merge for shared rows and marks
+### Push: field-level merge for shared rows, marks and the profile
 
 Other personal tables keep today's whole-row `If-Match`. For the profile, shared courses, shared items and
 marks, the client sends the full row plus `changed: {field: oldValue}` (from `base`):
@@ -191,7 +196,7 @@ or `409`. Mark writes check membership and that the item is in that space.
 
 | Situation | Behaviour |
 |---|---|
-| Removed while offline with pending edits | Next sync lists the scope in `revoked`; one IndexedDB transaction deletes its rows and moves its pending ops to Conflicts ("You no longer have access to Web Services"). Detach (section 7) wrote your personal copy in the same server batch, so it arrives in the same response |
+| Removed while offline with pending edits | Next sync lists the scope in `revoked`; one IndexedDB transaction deletes its rows and moves its pending ops to Conflicts ("You no longer have access to Web Services"). Detach (section 7) wrote your personal copy in the same server batch, so it arrives in the same response. A pending edit to one of your personal items under the class meets a revision bumped by detach and lands in Conflicts too, with your copy shown beside it |
 | Made view-only while offline | Pushes get `403 forbidden`; the sync loop treats 403 like 409 (rejects to Conflicts at once). Today 403 would be retried three times |
 | Class archived | `403 archived` for shared writes; marks still save |
 | Edit to a row deleted meanwhile | `409` with the tombstone; the conflict copy says "Deleted by Alex"; an editor may restore it (upsert revives) |
@@ -213,7 +218,7 @@ course-pref puts → course deletes. A mark on an item that was created offline 
 | Delete the class (with **Keep a copy**, on by default) | when the only member | | |
 | Leave | after transferring | ✓ | ✓ |
 
-One live owner per space (the partial unique index makes a racing second owner fail). Transfer swaps roles in one batch: the new owner becomes `owner`, the old one `editor`. An owner can't demote or remove themselves; they transfer first.
+One live owner per space (the partial unique index makes a racing second owner fail). Transfer swaps roles in one batch, demoting the old owner to `editor` **before** promoting the new one, since the index is checked statement by statement. An owner can't demote or remove themselves; they transfer first.
 Moderators and suggested changes are phase 3, for whole classes.
 
 All guards come from one module, `worker/access.js`; `db.js` functions take a scope
@@ -230,7 +235,8 @@ instead of a user id; personal routes pass `u:${user.id}`. Non-members always ge
 Rules:
 
 - **No fan-out.** A mark exists only once you touch an item; no mark means todo, no
-  grade. Adding an assignment is one write, joining is one write.
+  grade. Adding an assignment is one write; joining writes your membership and course
+  prefs, and nothing for anyone else.
 - **Absorb** (personal → class), one set-based D1 batch (`INSERT … SELECT`, pairs via
   `json_each()`), idempotent by construction:
   - **convert** (`POST /api/spaces {convertCourseId}`): create the class with you as
@@ -327,8 +333,13 @@ Your relabelled or recoloured built-in types and hidden types apply to shared it
 ## 11. Notification and activity model
 
 **Activity** is server-side, user-facing and separate from `changes`, which stays an
-internal sync log. The Worker writes it in the same batch as each shared write, for
-meaningful events only: item created, deleted or restored; an item's date, times, weight
+internal sync log. Item and course activity is written by `AFTER INSERT/UPDATE` triggers
+on shared rows (`WHEN NEW.scope GLOB 's:*'`), which see `OLD` and `NEW`, so "from → to"
+is the real previous value, not one the client claims, and the actor is
+`NEW.updated_by`. (If D1's SQLite refuses an upsert inside a trigger, the coalescing
+statement moves into the Worker's write batch, which reads the old row first;
+stage 7 checks this.) Member and class events are
+written by their routes. Only meaningful events count: item created, deleted or restored; an item's date, times, weight
 or title changed; course meetings, room or instructor changed; a member joined, left,
 was removed or changed role; the class archived or unarchived; ownership transferred.
 
