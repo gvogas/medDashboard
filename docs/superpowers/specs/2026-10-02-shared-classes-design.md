@@ -1,539 +1,705 @@
-# Shared classes (collaboration v1) — design
+# Collaboration: shared classes and team projects — design
 
-Agreed in brainstorming 2026-10-02; written spec awaiting George's review. Not built yet. The source request is
-`TERM-COLLABORATION-PLANNING-PROMPT.md`; this spec answers its 20 points in order.
+Agreed in brainstorming 2026-10-02; this document is the source of truth for the
+architecture. Not built yet. It answers `TERM-COLLABORATION-PLANNING-PROMPT.md`.
+v1 builds **shared classes**; **team projects** are v2 on the same foundation and are
+fully designed here so the foundation does not need to change for them.
 
 Decisions taken with George:
 
 | Question | Decision |
 |---|---|
-| Scale | Small groups, 2–10 people (accounts are still created by the admin) |
-| First feature | Shared classes. Team projects are phase 2 on the same foundation |
-| Who edits shared facts | Owner + editors they choose; members read and keep their own layer |
+| Scale | Small groups, 2–10 people; accounts are still created by the admin |
+| First feature | Shared classes (v1); team projects (v2) |
+| Who edits a class's shared facts | Owner + editors they choose; members read and keep their own layer |
 | Joining with a personal copy of the course | Offer to merge it into the class |
-| Model | A **scope** on courses and items + a **personal layer** (option A of three) |
+| Model | A **scope** on courses and items + a **personal layer** |
 | Editors may invite | Yes; only the owner makes codes, removes people, changes roles |
-| A removed member | Always keeps a personal copy |
+| A member removed from a class | Always keeps a personal copy |
 | Unknown username on invite | Clear error ("No Term account named …") |
 | Activity history | Kept 90 days |
 
 ---
 
-## 1. Collaboration model
+## 1. The model, and why
 
-A **space** is a group of members that owns data. v1 has one kind, `class`: a space
-holding exactly one course and its items. Phase 2 adds `project`. Every course and item
-has a **scope**: `u:<userId>` (personal) or `s:<spaceId>` (shared). Things only a person
-holds about a shared row (status, grade, notes, checklist, colour, target) live in
-**personal-layer** tables keyed by that person.
+Data is owned by a **scope**:
 
-Why this and not the alternatives:
+| Scope | Owner | Holds |
+|---|---|---|
+| `u:<userId>` | one user | everything Term has today |
+| `c:<spaceId>` | a **class** space | exactly one course and its shared items |
+| `p:<spaceId>` | a **project** space | exactly one project item and its tasks |
 
-- **Separate shared tables** (`space_items` next to `items`) would duplicate validators,
-  triggers, the feed builder, the ICS builder and every view selector, and phase 2 would
-  add a third copy.
-- **A copy per member with server fan-out** has no authoritative object; every deadline
-  change is N writes and copies drift after offline edits.
-- Term already makes ownership part of the primary key, `(user_id, id)`. A scope
-  generalises that from "which user" to "which owner", keeping the rule that every query
-  is keyed by its owner, and keeping one `items` and one `courses` table, so Week,
-  Month, the table, grades and the ICS feed keep working on one item shape.
+A **space** is a group of members with roles. Its kind is fixed at creation and is part of
+its scope prefix, so the schema can enforce different rules for class rows and project
+rows. Things a person holds about a shared row (status, grade, notes, checklist,
+colour, target) live in **personal-layer** tables keyed by that person.
 
-## 2. Entity relationships
+Why:
 
-```mermaid
-erDiagram
-    users ||--o{ members : "belongs via"
-    spaces ||--o{ members : has
-    spaces ||--o{ invites : has
-    spaces ||--|| courses : "class: one course (scope s:)"
-    spaces ||--o{ items : "scope s:"
-    users ||--o{ courses : "scope u:"
-    users ||--o{ items : "scope u:"
-    users ||--o{ marks : "my layer on"
-    items ||--o{ marks : "per member"
-    users ||--o{ course_prefs : "my settings for"
-    courses ||--o{ course_prefs : "per member"
-    users ||--o{ study_sessions : owns
-    spaces ||--o{ activity : logs
-    items }o--o| spaces : "class_id: personal item under a class"
-```
+- Term already makes ownership part of every primary key, `(user_id, id)`. A scope
+  generalises "which user" to "which owner". The rule "every query is keyed by its
+  owner" survives, and there is still one `items` and one `courses` table, so the
+  validators, triggers, views, grade maths and ICS builder keep one item shape.
+- Rejected: **separate shared tables** (`space_items`), which duplicate every validator,
+  trigger, selector and the ICS builder, with a third copy for projects; and **a copy per
+  member with server fan-out**, which has no authoritative record, turns each edit into N
+  writes, and drifts after offline edits.
+- What changes in existing systems, and why: `courses`/`items` swap `user_id` for
+  `scope` (shared rows have no single user); `changes` is keyed by scope (a member must
+  read a class's feed); sync takes one cursor per scope (a newly joined class must load
+  from 0); shared rows merge field by field (several people edit them). Everything else
+  — auth, cookies, `If-Match`/409 for personal rows, soft deletion, the nightly purge,
+  Web Locks, BroadcastChannel, AI routes that never save — stays as it is.
 
-- A **shared item** belongs to the class's course (same scope, composite FK).
-- A **personal item under a class** (an extra quiz you track, a lecture review) stays in
-  your scope with `class_id` pointing at the space.
-- A **mark** is your layer on one shared item; it exists only once you touch the item.
-- **Study sessions and achievements** stay personal and may point at shared rows via
-  `space_id` + `item_id`/`course_id`.
+## 2. Entities: ownership, access, storage
 
-## 3. Database changes
+| Entity | Owned by | Read | Create | Edit | Delete | D1 | IndexedDB | Revision | Soft delete | In `changes` | On revocation |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| User | — | self; members see display name | admin | self (profile) | admin | `users` | `meta.profile` | yes | no (hard, admin) | no (`/api/me`) | — |
+| Space | its members | members | any user (becomes owner) | owner | owner (rules §13) | `spaces` | `spaces` | yes | yes | no: sent whole in each sync response | row removed locally |
+| Membership | the space | members of that space | owner/editor invite + accept; code join | owner (role) | owner (remove), self (leave) | `members` | inside `spaces` | yes | yes | no: sent with the space | — |
+| Invite | the space | the space's owner/editors; the invitee | owner/editor | — | inviter/owner (revoke); invitee (decline) | `invites` | inbox cache | no | answered rows purged after 90 d | no | deleted with the space |
+| Personal course/item | `u:` | self | self | self | self | `courses`/`items` | `courses`/`items` | yes | yes | `u:` | — |
+| Class course | `c:` | class members | created with the class | owner/editor | never (archive the class) | `courses` | `shared_courses` | yes | yes | `c:` | purged locally; detach copy |
+| Class item | `c:` | class members | owner/editor | owner/editor | owner/editor | `items` | `shared_items` | yes | yes | `c:` | purged locally; detach copy |
+| Project item | `p:` | project members | created with the project | owner/editor | never (archive/delete the project) | `items` | `shared_items` | yes | yes | `p:` | purged locally |
+| Task | `p:` | project members | owner/editor | owner/editor; member: status and claiming of own tasks | owner/editor | `items` | `shared_items` | yes | yes | `p:` | purged locally |
+| Mark (my layer on a shared item) | user | self only | self | self | self | `marks` | `marks` | yes | yes | `u:` | class: folded into detach copy; project: deleted |
+| Space prefs (my colour, target, semester, archived) | user | self only | self (on join) | self | self | `space_prefs` | `space_prefs` | yes | yes | `u:` | deleted |
+| Study session | user | self only (leaderboard: opt-in totals) | self | self | self | `study_sessions` | `study_sessions` | yes | yes | `u:` | kept; link repointed by detach, or labelled "a project you left" |
+| Achievement | user | self only | self | self | self | `achievements` | `achievements` | yes | yes | `u:` | kept; class links repointed by detach |
+| Activity | the space | members (inbox: rows about you, even after leaving) | Worker (triggers, routes) | — | cron, 90 d | `activity` | inbox cache | no | no (hard, 90 d) | no | not readable for that space |
+| Inbox read marker | user | self | Worker | self | — | `inbox_seen` | — | no | no | no | — |
+| Calendar visibility | user | self | self | self | — | `users.hidden_sources` | profile | profile revision | — | via `/api/me` | stale ids ignored |
 
-A new database, **rounds-v7**, built from a re-squashed `0001_schema.sql` and filled
-with `scripts/move-db.mjs`, the procedure used for v2–v6. The move rewrites
-`user_id` to `'u:' || user_id` in `courses`, `items` and `changes`. Nothing becomes shared.
+Notifications are not an entity: the inbox is derived from activity and invites (§12).
+
+## 3. Database
+
+A new database, **rounds-v7**, from a re-squashed `migrations/0001_schema.sql`, filled
+by `scripts/move-db.mjs` (the procedure used for v2–v6), which rewrites `user_id` to
+`'u:' || user_id` in `courses`, `items` and `changes`. No data becomes shared.
 
 ### New tables
 
 | Table | Key | Columns and rules |
 |---|---|---|
-| `spaces` | `id` (`[A-Za-z0-9_-]`, ≤ 24) | `kind` (`class`), `name` (projects only; a class shows its course), `archived` 0/1, `school_calendar` JSON snapshot (offered to joiners), `code_hash`, `code_expires`, `code_uses_left`, `created_at`, `updated_at`, `deleted_at`, `revision` |
-| `members` | `(space_id, user_id)` | `role` `owner`\|`editor`\|`member`, `joined_at`, `updated_at`, `deleted_at` (left/removed), `revision`. Exactly one live owner per space, enforced by a partial unique index on `(space_id) WHERE role = 'owner' AND deleted_at IS NULL`; the owner is read from here, never stored twice |
-| `invites` | `(space_id, user_id)` | `invited_by`, `status` `pending`\|`accepted`\|`declined`, `created_at` |
-| `marks` | `(user_id, id)` with `id = space_id \|\| ':' \|\| item_id`, unique `(user_id, space_id, item_id)` | `space_id`, `item_id`, `status`, `grade`, `weight` (override), `notes`, `checklist`, `completed_at`, `hidden` 0/1, timestamps, `deleted_at`, `revision`. The same `CHECK`s as the matching `items` columns |
-| `course_prefs` | `(user_id, id)` with `id = space_id \|\| ':' \|\| course_id`, unique `(user_id, space_id, course_id)` | `space_id`, `course_id`, `color` (one of the twelve), `target`, `term` (your semester name), `archived`, timestamps, `revision` |
-| `activity` | `seq` autoincrement | `space_id`, `actor_id`, `verb`, `subject` (item, course or user id; `''` for creations, never NULL, so the unique key can match), `subject_user` (for member verbs), `detail` JSON, `bucket` (10-minute bucket), `at`. Unique `(space_id, actor_id, verb, subject, bucket)` for coalescing |
-| `inbox_seen` | `user_id` | `seq`: the last activity row read. Kept off `users` so reading the inbox never bumps the profile revision |
+| `spaces` | `id`: 12 chars `[a-z0-9]`, **made by the Worker** | `kind` `class`\|`project`; `name` (project only, 1–80; a class shows its course); `archived` 0/1; `school_calendar` JSON snapshot (class only); `parent_space`, `parent_item` (project only: the class assignment it belongs to; nullable, no FK); `code_hash`, `code_expires`, `code_uses_left`; `created_at`, `updated_at`, `deleted_at`, `revision` |
+| `members` | `(space_id, user_id)` | `role` `owner`\|`editor`\|`member`; `joined_at`, `updated_at`, `deleted_at` (left/removed), `revision`. Partial unique index `(space_id) WHERE role = 'owner' AND deleted_at IS NULL`: exactly one live owner, stored nowhere else |
+| `invites` | `(space_id, user_id)` | `invited_by`, `role` (given on accept), `status` `pending`\|`accepted`\|`declined`, `created_at`, `expires_at` (30 days) |
+| `marks` | `(user_id, id)`, `id = space_id \|\| ':' \|\| item_id`; unique `(user_id, space_id, item_id)` | `space_id`, `item_id`, `status`, `grade`, `weight` (override), `notes`, `checklist`, `completed_at`, `hidden` 0/1, timestamps, `deleted_at`, `revision`. Same `CHECK`s as the matching `items` columns. On a project row only `notes` and `hidden` are used (the Worker refuses the rest) |
+| `space_prefs` | `(user_id, id)`, `id = space_id` | `space_id`, `color` (one of the twelve), `target`, `term` (your semester name; class only), `archived` 0/1, timestamps, `deleted_at`, `revision` |
+| `activity` | `seq` autoincrement | `space_id`, `actor_id`, `verb`, `subject` (item or user id; `''` for creations, never NULL, so the unique key can match), `subject_user` (who it is about, for member and assignment verbs), `detail` JSON (titles and from → to, so it reads after the item is gone), `bucket` (10-minute bucket), `at`. Unique `(space_id, actor_id, verb, subject, bucket)` for coalescing |
+| `inbox_seen` | `user_id` | `seq`: the last activity row read. Kept off `users`, so reading never bumps the profile revision |
 
-`marks` and `course_prefs` carry a single text `id` like every other personal table, so
-they fit the existing `changes` key `(scope, kind, row_id)`, `applyPage`'s `row.id`
-lookups and pending keys (`marks:<space>:<item>`) unchanged. Space ids can't contain
-`:`, so the id splits unambiguously.
+`marks` and `space_prefs` carry one text `id` like every other personal table, so the
+existing `changes` key, `applyPage`'s `row.id` lookups and pending keys
+(`marks:<space>:<item>`) keep their shape. Space ids are `[a-z0-9]`, so the id splits
+unambiguously; user ids are UUIDs.
 
 ### Changed tables
 
 | Table | Change |
 |---|---|
-| `courses`, `items` | `user_id` → `scope`; PK `(scope, id)`; `updated_by` (user id). Items FK becomes `(scope, course_id) → courses(scope, id)` |
-| `items` | `class_id` (nullable space id): a personal item under a class. No FK (it crosses scopes); the Worker checks membership. `CHECK (class_id IS NULL OR (course_id IS NULL AND scope GLOB 'u:*'))` |
-| `items` | Shared rows: `CHECK (scope GLOB 'u:*' OR (grade IS NULL AND checklist = '[]' AND status = 'todo' AND completed_at IS NULL AND type NOT GLOB 'c-*'))`. Shared `notes` and `links` are the class's notes and links |
+| `courses` | `user_id` → `scope` (`u:` or `c:` only); PK `(scope, id)`; `updated_by` |
+| `items` | `user_id` → `scope`; PK `(scope, id)`; FK `(scope, course_id) → courses(scope, id)`; `updated_by`; `class_id` (personal item under a class; no FK, the Worker checks membership); `assignees` JSON array (user ids, or `["*"]` for everyone; ≤ 30); `completed_by` |
+| `items` CHECKs | `u:` rows: `assignees = '[]'`, `completed_by IS NULL`; `class_id` only with `course_id IS NULL`. `c:` rows: `grade IS NULL`, `checklist = '[]'`, `status = 'todo'`, `completed_at IS NULL`, `completed_by IS NULL`, `assignees = '[]'`, `class_id IS NULL`, built-in `type`. `p:` rows: `grade IS NULL`, `weight IS NULL`, `course_id IS NULL`, `class_id IS NULL`, `type IN ('project','task')`; status, `completed_at`, `completed_by` and the checklist (subtasks) belong to the team |
 | `study_sessions`, `achievements` | `space_id` (nullable): set when `course_id`/`item_id` point at a shared row |
-| `users` | `hidden_sources` JSON array ≤ 40 (course ids, class space ids, `personal`): the calendar filter. Hiding a class also hides your personal items under it. Profile saves join the field-level merge (section 5), so toggling different settings on two devices doesn't produce a profile conflict |
-| `changes` | `user_id` → `scope`; `UNIQUE (scope, kind, row_id)`; index `(scope, seq)`. Triggers on `quotes`, `study_sessions`, `achievements`, `marks`, `course_prefs` write `'u:' \|\| user_id`. Only `courses` and `items` ever write an `s:` scope; spaces and members are not in the feed (they come with each sync response, section 5) |
+| `users` | `hidden_sources` JSON array ≤ 40 (personal course ids, space ids, `personal`) |
+| `changes` | `user_id` → `scope`; `UNIQUE (scope, kind, row_id)`; index `(scope, seq)`. Triggers on personal tables write `'u:' \|\| user_id`; only `courses` and `items` write `c:`/`p:` |
 
-### Indexes
+Shared `notes` and `links` on class and project rows belong to the space (class notes,
+project description) and are edited by owner/editor.
 
-`marks (user_id, space_id)`, `course_prefs (user_id, space_id)`, `members (user_id)`
-where live, `activity (space_id, seq)`, `activity (subject_user, seq)`,
-`items (class_id)` where set, `study_sessions (user_id, space_id)`; existing
-`(user_id, …)` indexes on `courses`/`items` become `(scope, …)`.
+### Query patterns and indexes
+
+| Query | Served by |
+|---|---|
+| My spaces, with members and names (each sync) | `members (user_id) WHERE deleted_at IS NULL` → `members` PK `(space_id, user_id)` → `users` PK |
+| Members of a space | `members` PK prefix `space_id` |
+| Check membership / role (every guard) | `members` PK `(space_id, user_id)` |
+| Changes since a cursor, per scope | `changes (scope, seq)` |
+| Shared rows of a space (ICS, detach, absorb) | `courses`/`items` PK prefix `scope` |
+| Tasks assigned to me (ICS) | `items` PK prefix `p:<sid>` for my project scopes, filtered with `json_each(assignees)`; ≤ 200 rows per project |
+| My marks / prefs in a space (detach, revoke) | `marks (user_id, space_id)`; `space_prefs` PK |
+| Personal items under a class | `items (class_id) WHERE class_id IS NOT NULL` |
+| Sessions linked to a space | `study_sessions (user_id, space_id)` |
+| Inbox: activity in my spaces since seen | `activity (space_id, seq)` per space |
+| Inbox: activity about me | `activity (subject_user, seq)` |
+| Invites to me | `invites (user_id) WHERE status = 'pending'` |
+| Activity tab | `activity (space_id, seq)` |
+| Purges | existing `*_deleted` indexes; `activity (at)`; `invites (created_at)` |
+| Join by code | `spaces (code_hash) WHERE code_hash IS NOT NULL` |
 
 ### Limits
 
-At most 30 live members per space and 20 spaces per user (Worker). A class has exactly
-one course, and it cannot be deleted; the class is archived instead.
+30 live members per space; 20 spaces per user; 200 live tasks per project (Worker).
 
-### Ids
+## 4. Shared vs personal
 
-Ids keep their current form. They only need to be unique within a scope: shared rows
-live in their own client stores keyed `[scope, id]` (section 4), and every reference to
-a shared row carries its space. Absorb, convert and detach keep ids when moving rows
-between scopes, so study sessions and achievements only gain or lose a `space_id`.
+| Thing | Shared (one row; who edits) | Personal (only you; in `marks`, `space_prefs` or your own rows) |
+|---|---|---|
+| Class course | code, name, instructor, meetings, default `term` (owner/editor) | colour, grade target, your semester, archived in your sidebar |
+| Class item (assignment, exam, quiz, lab, …) | type (built-in), title, date, start/end, location, weight, recurrence, class notes, links (owner/editor) | status, completion time, grade, weight override, checklist, your notes, hidden |
+| Project item | title, due date, description, links, status (owner/editor) | your notes, hidden |
+| Task | title, date, times, notes, links, subtasks, assignees, status, completed by/at (owner/editor; members: status and claiming of their own tasks) | your notes, hidden |
+| Everything else | — | study sessions, achievements, what-if scores, lecture reviews, exam-prep checklists, calendar visibility |
 
-## 4. Local IndexedDB changes (version 5)
+Term has no reminder feature today; if one is added, its settings go in `marks`.
+
+How private data stays private: marks, prefs, sessions and achievements are only ever
+read with `user_id = <session user>`; no route returns another user's rows or an
+aggregate of them; `u:<me>` is only ever paged for that user; the ICS feed is built per
+user; activity records only shared fields. A member sees other members' display names,
+roles and authorship of shared changes, and nothing else.
+
+## 5. Permissions
+
+| Operation | Owner | Editor | Member | Server check |
+|---|:-:|:-:|:-:|---|
+| Read the space; keep your own layer | ✓ | ✓ | ✓ | membership guard in the statement |
+| Create / edit / delete / restore class items; edit class course facts | ✓ | ✓ | | role guard in the statement; space not archived |
+| Create / edit / delete tasks; assign; edit the project item | ✓ | ✓ | | same |
+| Complete or reopen a task assigned to you or to everyone | ✓ | ✓ | ✓ | members: the Worker diffs against the current row; only `status`/`completed_*` may change |
+| Claim an unassigned task (`[]` → `[you]`) or unclaim yourself | ✓ | ✓ | ✓ | members: only that change to `assignees` |
+| Import an outline into a class | ✓ | ✓ | | ordinary shared writes |
+| Invite by username with the space's default role | ✓ | ✓ | | owner/editor guard |
+| Invite with another role; invite code; change roles; remove | ✓ | | | owner guard |
+| Archive / unarchive; refresh school calendar; link a project; transfer | ✓ | | | owner guard; linking also needs class membership |
+| Delete a class | when the only member | | | owner guard + member count in the statement |
+| Delete a project | ✓ (typed confirm) | | | owner guard |
+| Leave | after transferring | ✓ | ✓ | self |
+| Suggest / approve a change (moderator) | later | later | later | — |
+
+Default role on joining: **member** for a class, **editor** for a project (small teams
+edit directly; the original prompt's §10). One live owner per space. Transfer demotes the
+old owner to editor **before** promoting the new one, since the one-owner index is
+checked statement by statement. An owner cannot demote or remove themselves.
+
+All guards are built by one module, `worker/access.js`, and run inside the SQL statement
+(the pattern of `courseGuard`/`capGuard` in `worker/db.js`), so there is no gap between
+check and act. `db.js` functions take a scope; personal routes pass `u:${user.id}`; no
+route trusts a scope or user id from the client. Non-members get `404` for everything in
+a space, so ids reveal nothing; members on a forbidden action get
+`403 {error:'forbidden'}`; writes to an archived space get `403 {error:'archived'}`. The
+UI hides what you cannot do, but the server is the boundary.
+
+## 6. Sync
+
+### Pull: `GET /api/sync?v=3&cursors=u:<me>:812,c:ab12cd34ef56:640`
+
+Each entry is `scope:seq`, split at its last `:`.
+
+1. **Memberships.** One query reads my live memberships with their spaces and members'
+   names. The scopes to page are `u:<me>` plus those spaces; one the client did not send
+   starts at 0, so a new space loads in full.
+2. **Page.** One statement, each branch capped:
+   `SELECT * FROM (SELECT … FROM changes WHERE scope = ? AND seq > ? AND <guard> ORDER BY seq LIMIT 101) UNION ALL … ORDER BY seq LIMIT 101`.
+   `<guard>` re-checks live membership of a live space inside the statement, so a
+   removal between the two queries cannot leak a page.
+3. **Cursors.** If the page ends at sequence X, every scope's rows up to X have been
+   delivered, so each cursor becomes `max(cursor, X)`, or the head on the last page.
+4. **Response.**
+   `{scopes:[{id, kind, role, archived, name, parent, members:[{userId, name, role}]}], cursors, changes, more, reset:[scope], revoked:[scope], inbox}`.
+   `reset` is per scope: that scope's cursor fell below the purge floor, so only its
+   clean rows are rebuilt. `revoked` lists scopes the client sent that it may no longer
+   read. `inbox` is the unread count.
+5. `cursors` holds ≤ 25 entries; malformed input is `400`. `/api/sync?v=2` and the
+   personal routes remain, scoped to `u:<me>`, for clients that have not updated.
+
+Freshness: sync after each edit, on focus, and every 5 minutes while visible, as today.
+No WebSockets and no extra polling.
+
+### Push
+
+Personal courses, items, quotes, sessions and achievements keep whole-row `If-Match`.
+Shared courses and items, marks, space prefs and the profile use a **field-level
+merge**: the pending op keeps `base` (the row when first queued) and sends the full row
+plus `changed: {field: oldValue}`.
+
+1. Revision matches → write as today.
+2. Otherwise each changed field is safe if its current value equals the old or the new
+   value; if all are safe, only those fields are written onto the current row, guarded by
+   the current revision, with one retry on a lost race.
+3. Otherwise `409 {current, fields, by}` → the Conflicts review ("Gabriel changed Date
+   to Oct 18").
+
+JSON fields (`meetings`, `links`, `checklist`, `assignees`) count as one field each,
+compared after stable re-serialisation. For a member's task write the Worker compares the
+body with the **current row** (it never trusts `changed`) to enforce §5.
+
+### End to end: one member edits, another sees it
+
+1. The editor saves in the item card → one IndexedDB transaction writes `shared_items`
+   and a pending op `items:c:<sid>:<id>` with `base`; `notify()` redraws; BroadcastChannel
+   tells other tabs.
+2. Sync, holding the Web Lock, pushes `PUT /api/spaces/<sid>/items/<id>` with `If-Match`.
+3. The Worker resolves the user from the cookie and runs the upsert carrying the role
+   guard. D1 sets `revision` from the global sequence, `updated_by` and `updated_at`; the
+   items trigger writes `changes` (scope `c:<sid>`) and, for meaningful fields, `activity`.
+4. The saved row comes back → `settleOperation` replaces the local row and drops the op.
+5. Another member's next sync pages `c:<sid>` past their cursor → `applyPage` writes
+   `shared_items` (skipping rows they have a pending op on, or hold at a newer revision)
+   → `notify()` → `effectiveItems()` recomputes → Week and Month redraw.
+
+### Offline and concurrency
+
+| Case | Outcome |
+|---|---|
+| Gabriel (rev 4) changes the deadline; Alex (rev 4, offline) the description; Gabriel syncs first | Alex's push: revision is 5, not 4; `description` still equals Alex's base, so it is safe and is written onto rev 5 → rev 6. Both changes stand; nobody sees a conflict |
+| Both change the date | The second push conflicts on `date` → `409`; their version goes to Conflicts with "Gabriel changed Date to Oct 18", to restore (another guarded write) or discard |
+| Gabriel edits offline; Alex deletes the item | Gabriel's push: `409` with the tombstone → Conflicts: "Deleted by Alex"; Gabriel, as editor, may restore it, which revives the row |
+| Alex deletes an item Gabriel has since edited | Alex's delete: `409` → "Gabriel edited this. Delete anyway?" |
+| Gabriel edits shared data offline, is removed, reconnects | Push: `404` → Conflicts ("You no longer have access to Web Services"). Pull: the scope is in `revoked` → one IndexedDB transaction deletes its rows, marks and prefs and moves its pending ops to Conflicts. For a class, the detach copy written by the removal batch arrives in the same response, so his grades and notes reappear as a personal course |
+| Made view-only while offline | Push: `403 forbidden` → Conflicts at once (the sync loop adds 403 to the statuses it rejects; today it would retry three times) |
+| Space archived while offline | Shared pushes: `403 archived` → Conflicts; marks still save |
+| Pending edit to your personal item under a class when detach ran | Detach bumped its revision → `409` → Conflicts, beside your copy |
+| A mark on an item created offline | Upload order: course puts → item puts → mark and pref puts → course deletes. A mark whose item was refused goes to Conflicts |
+
+### Revocation
+
+- **Server access stops at once:** every read and write statement re-checks membership.
+- **The client learns** from `revoked` on its next sync, or from `404` when it pushes.
+  Until then it shows only what it already had, which its user had seen.
+- **Cached data is removed** in one transaction on `revoked`; nothing in IndexedDB keeps
+  showing the space.
+- **Pending writes** are rejected (`404`) and kept in Conflicts.
+- **ICS:** the feed joins live membership, so the next fetch leaves the space out.
+- **Inbox:** activity in a space you left stops appearing; rows about you (removed, role
+  changed, ownership transferred) stay visible through `subject_user`.
+
+## 7. IndexedDB (version 5)
 
 | Store | Key | Holds |
 |---|---|---|
-| `courses`, `items`, … | `id` | Personal rows, unchanged |
-| `shared_courses`, `shared_items` | `[scope, id]` | Class rows. Keeping them out of the personal stores means a shared id can never shadow a personal row or its pending op |
-| `spaces` | `id` | The classes you're in, with role, archived and members (`{userId, name, role}`), replaced from each sync response's `scopes`; it gives "Edited by Alex" its name offline |
-| `marks`, `course_prefs` | `id` (`<space>:<item>` / `<space>:<course>`) | Your layer; personal stores like the others |
-| `meta.cursors` | | `{scope: seq}`. The upgrade moves `meta.syncCursor` to `u:<me>` |
+| `courses`, `items`, `quotes`, `study_sessions`, `achievements` | `id` | personal rows, unchanged |
+| `shared_courses`, `shared_items` | `[scope, id]` | class and project rows. Separate stores mean a shared id can never shadow a personal row or its pending op |
+| `marks`, `space_prefs` | `id` | your layer |
+| `spaces` | `id` | from each sync's `scopes`: kind, role, archived, name, parent, members with names |
+| `meta.cursors` | | `{scope: seq}`; the upgrade moves `syncCursor` to `u:<me>` |
+| `meta.inbox` | | the last inbox fetched, for offline |
+| `pending`, `conflicts` | | unchanged; ops gain `base`; shared keys are `items:c:<sid>:<id>` |
 
-- Pending ops gain `base`, a snapshot of the row when the op was first queued, and
-  shared keys are `items:s:<space>:<id>`.
-- `effectiveItems()` (memoised in `src/data/`) returns personal items plus each live,
-  unhidden shared item merged with its mark, each tagged
-  `source: {kind: 'personal'} | {kind: 'class', spaceId, role}`. Week, Month, All items,
-  stats, grades, achievements, exam prep and the pickers read it. The same goes for
-  `effectiveCourses()` (shared course + `course_prefs`).
-- The item editor splits a save: shared fields → `shared_items` (editors), personal
-  fields → `marks`.
-- A shared item that arrives deleted stays in `shared_items` when your mark on it holds
-  anything (grade, notes, checklist, status other than todo); see section 16.
+`effectiveItems()` (memoised, in `src/data/`) is what every view reads:
 
-## 5. Sync protocol changes
+- personal items as today, `source: personal` (with `classId` when under a class);
+- class items merged with your mark (status, grade, weight override, checklist, notes,
+  completion), skipped when hidden, `source: class`;
+- the project item and tasks with the team's status and your notes, skipped when hidden,
+  `source: project` with `assignedToMe`;
+- a class item that arrives deleted but holds a meaningful mark of yours (grade, notes,
+  checklist, status other than todo) stays, flagged `removed`.
 
-### Pull: `GET /api/sync?v=3&cursors=u:<me>.812,s:abc.640`
+`effectiveCourses()` returns personal courses plus each class course with your
+`space_prefs` applied. The item editor splits a save: shared fields go to `shared_items`
+(editors; members see them read-only), personal fields to `marks`.
 
-1. A first query reads your live memberships with their spaces and member names
-   (≤ 20 spaces × ≤ 30 members, joined to `users` for display names). The scopes to
-   page are `u:<me>` plus those spaces. A scope the client hasn't seen starts at 0, so a
-   new class loads in full.
-2. A second statement pages up to 100 changes:
-   `SELECT * FROM (SELECT … FROM changes WHERE scope = ? AND seq > ? AND <guard> ORDER BY seq LIMIT 101) UNION ALL … ORDER BY seq LIMIT 101`.
-   Each branch reads at most 101 rows. `<guard>` for a space is
-   `EXISTS (SELECT 1 FROM members m JOIN spaces s ON s.id = m.space_id WHERE m.space_id = ? AND m.user_id = ? AND m.deleted_at IS NULL AND s.deleted_at IS NULL)`,
-   evaluated inside the statement, so a removal between the two queries cannot leak a page.
-3. If the page ends at sequence X, every scope's rows up to X are delivered; each
-   cursor becomes `max(cursor, X)`, or the head on the last page.
-4. Response:
-   `{scopes:[{id, role, archived, name, members:[{userId, name, role}]}], cursors, changes, more, reset:[scope], revoked:[scope], inbox}`.
-   Sending spaces and members whole each time keeps them out of the change feed (no
-   member triggers, renamed people show their new name) at a few dozen rows read per sync.
-   `reset` is per scope: only that scope's clean rows are rebuilt. `revoked` lists
-   scopes the client sent that it may no longer read. `inbox` is the unread count.
-5. `cursors` holds at most 25 entries; malformed input is `400`.
-6. `/api/sync?v=2` and the personal routes stay as they are (scope `u:<me>`), so
-   clients that haven't updated keep working without seeing classes.
+## 8. Existing features
 
-Freshness is unchanged: sync after each edit, on focus, and every 5 minutes while
-visible. No WebSockets.
-
-### Push: field-level merge for shared rows, marks and the profile
-
-Other personal tables keep today's whole-row `If-Match`. For the profile, shared courses, shared items and
-marks, the client sends the full row plus `changed: {field: oldValue}` (from `base`):
-
-1. Revision matches → write as today.
-2. Otherwise, for each changed field: if the current value equals the old value or the
-   new value, it's safe. If every changed field is safe, write only those fields onto the
-   current row, guarded by the current revision, retrying once on a lost race.
-3. Otherwise `409 {current, fields, by}`, and the existing Conflicts review shows
-   "Gabriel changed Date to Oct 18".
-
-JSON fields (`meetings`, `links`, `checklist`) count as one field, compared after
-stable re-serialisation. Merging individual meetings is phase 3.
-
-### Writes are authorised in the statement
-
-Shared upserts and deletes carry
-`EXISTS (SELECT 1 FROM members m JOIN spaces s … WHERE m.role IN ('owner','editor') AND s.archived = 0 AND s.deleted_at IS NULL)`,
-the same pattern as `courseGuard`/`capGuard` in `worker/db.js`. A miss reads once to
-choose `404` (not a member), `403 {error:'forbidden'}` (member), `403 {error:'archived'}`
-or `409`. Mark writes check membership and that the item is in that space.
-
-### Offline edits, membership and permission changes
-
-| Situation | Behaviour |
+| Feature | With collaboration |
 |---|---|
-| Removed while offline with pending edits | Next sync lists the scope in `revoked`; one IndexedDB transaction deletes its rows and moves its pending ops to Conflicts ("You no longer have access to Web Services"). Detach (section 7) wrote your personal copy in the same server batch, so it arrives in the same response. A pending edit to one of your personal items under the class meets a revision bumped by detach and lands in Conflicts too, with your copy shown beside it |
-| Made view-only while offline | Pushes get `403 forbidden`; the sync loop treats 403 like 409 (rejects to Conflicts at once). Today 403 would be retried three times |
-| Class archived | `403 archived` for shared writes; marks still save |
-| Edit to a row deleted meanwhile | `409` with the tombstone; the conflict copy says "Deleted by Alex"; an editor may restore it (upsert revives) |
-| Delete of a row edited meanwhile | `409`; "Alex edited this. Delete anyway?" |
+| Week | Personal items, class items, project items, tasks assigned to you or everyone; class meetings by your semester. Unassigned and others' tasks are not shown here |
+| Month | The same set, with class meetings as today |
+| All items | Everything visible, plus a **Source** filter (Personal / a class / a project); choosing a project lists all its tasks with assignees |
+| Stats | Open and overdue count class items by your mark (not hidden, not complete) and open tasks assigned to you; next exam includes class exams |
+| Grades | `courseGrade()` unchanged, fed merged items: weight `mark.weight ?? item.weight`, grade and status from the mark, plus personal items under the class. Target from `space_prefs`; what-if scores on the device. Project rows carry no weight (CHECK), so they never enter grades: a team project's grade is your mark on the class assignment |
+| Study | Sessions personal; `space_id` set when logged against a shared course or item. History, goal, streak, heatmap and leaderboard count your minutes only. Per-course totals group by `(space_id, course_id)`. Pickers list merged items |
+| Achievements | Built-in ones read merged items; "tasks done" counts tasks with `completed_by = you`; once shown as earned they are not withdrawn because an item was hidden. Custom achievements gain `space_id` |
+| Exam prep | Works on class exams; its lecture checklist goes into your mark |
+| Lecture reviews | Personal tasks from a class's meetings, with `class_id`. A converted course keeps its id, so the review chain carries on; after a merge existing reviews move under the class and the `through` watermark prevents duplicates |
+| Semesters | Everyone keeps their own school calendar. `space_prefs.term` picks your semester for a class (on join: the same name, else the one covering today, confirmed by you). A class offers its owner's calendar snapshot to joiners who have none |
+| Custom types | Shared items use built-in types; your labels, colours and hidden types apply to them |
+| ICS feed | §9 |
+| Imports | The outline import can target a class you edit, with a diff preview (New / Changed / Already there; Changed starts unticked). `.ics`, CSV, school calendar and schedule imports stay personal in v1 |
+| AI import | AI reads return JSON and never save, as today; shared data changes only through ordinary guarded writes after the person ticks and confirms in the preview |
+| Offline | Everything already synced can be read and edited offline; shared edits merge on reconnect. Joining, inviting, removing, leaving, converting and creating spaces need a connection (they are server batches) and say so |
+| Admin | The accounts table counts personal rows (`scope = 'u:' ‖ id`); deleting an account transfers or archives its spaces (§13) |
 
-Upload order (`rank()`): course puts → item puts (shared and personal) → mark and
-course-pref puts → course deletes. A mark on an item that was created offline waits for it.
+## 9. Calendar behaviour
 
-## 6. Permission model
+- **No duplicates.** A class item is one row for everyone. When a project is linked to
+  a class assignment you can see and the project item has the same date, the project item
+  folds into the assignment's chip ("Team · Fire Response API"); different dates show
+  both, since a team's internal deadline is a separate fact. A merged personal copy is
+  soft-deleted by absorb.
+- **Stable ids.** Shared rows keep their ids for life, and absorb, convert and detach keep
+  ids across scopes. ICS UIDs carry the scope for shared events (`item-<sid>-<id>`,
+  `class-<sid>-<courseId>-<meeting>-<term>`), because ids are only unique within a scope;
+  converting a course therefore shows in calendar apps once as a delete plus an add.
+- **Colours.** A class uses your `space_prefs.color` (on join: the owner's colour unless
+  you already use it, else the first free of the twelve). A project uses its linked
+  class's colour, else its own pref.
+- **Labels.** Shared chips carry a two-person glyph (class) or a team glyph (project), and
+  tasks an "assigned to me" pip, each with an aria-label ("Shared · Web Services", "Team
+  task · assigned to you"). A "you" pip marks a personal item under a class.
+- **Visibility.** An eye toggle on each sidebar row (personal courses, classes, projects,
+  and *Personal items*) writes `users.hidden_sources`. Hidden rows stay listed, dimmed.
+  Hiding a class hides your personal items under it. It syncs across devices and the ICS
+  feed honours it.
+- **Propagation.** Shared edits reach others on their next sync, and the ICS feed on the
+  calendar app's next (hourly) fetch.
+- **Removal and archiving.** A revoked space leaves Week and Month at once and the ICS
+  feed on its next fetch. An archived space stays visible and read-only; you can hide it
+  with the eye or archive it in your own sidebar (`space_prefs.archived`).
 
-| Action | Owner | Editor | Member |
-|---|:-:|:-:|:-:|
-| See the class; keep marks, prefs and personal items under it | ✓ | ✓ | ✓ |
-| Create, edit, delete and restore shared items; edit course facts (meetings, rooms, instructor) | ✓ | ✓ | |
-| Import an outline into the class | ✓ | ✓ | |
-| Invite by username | ✓ | ✓ | |
-| Invite code, change roles, remove members | ✓ | | |
-| Archive or unarchive, refresh the school-calendar snapshot, transfer ownership | ✓ | | |
-| Delete the class (with **Keep a copy**, on by default) | when the only member | | |
-| Leave | after transferring | ✓ | ✓ |
+## 10. Team projects (v2)
 
-One live owner per space (the partial unique index makes a racing second owner fail). Transfer swaps roles in one batch, demoting the old owner to `editor` **before** promoting the new one, since the index is checked statement by statement. An owner can't demote or remove themselves; they transfer first.
-Moderators and suggested changes are phase 3, for whole classes.
+**Structure.** A project space holds one item of type `project` with the id `project`
+(`(p:<sid>, 'project')`, created with the space, never deleted): title, due date,
+description, links, status. Tasks are `task` items in the same scope: title, date,
+times, notes, subtasks (the checklist), `assignees`, status, `completed_by/at`.
 
-All guards come from one module, `worker/access.js`; `db.js` functions take a scope
-instead of a user id; personal routes pass `u:${user.id}`. Non-members always get `404`.
+**Course → Assignment → Project → Tasks.** `spaces.parent_space` + `parent_item` link a
+project to a class assignment; the owner sets it and must be a class member when
+linking. The link stores ids only: project members who are not in the class see no class
+information, because the client shows the link only when it holds that class. Nothing is
+duplicated: the assignment's date and weight and your grade live on the class item and
+your mark; the project item holds the team's own deadline and description.
 
-## 7. Shared vs personal data rules
+- Assignment deleted, or class archived: the project is unaffected; its header says
+  "Linked assignment removed" and the owner may relink.
+- Project moves to another course: the owner relinks (`PATCH /api/spaces/:sid`).
+- Leaving or being removed from the class does not touch project membership, and the
+  other way round.
 
-| Shared (one row, editors change it) | Personal (per member, only you see it) |
+**Assignment rules.** `assignees` is `[]` (nobody), `[id, …]` (one or several) or
+`["*"]` (everyone). Owners and editors assign; any member may claim an unassigned task
+or unclaim themselves; assignees (everyone, for `*`) and editors may complete. A
+removed member is stripped from every `assignees` list in the removal batch; a task left
+with nobody becomes unassigned, and the activity says so.
+
+**Progress and workload** are worked out on the device from synced tasks: "12 / 18 ·
+67%", and each member's open tasks in the next 14 days beside the assignee picker.
+
+**Removal from a project.** The scope is revoked; your marks there (notes, hidden) are
+deleted in the removal batch; your study sessions keep their minutes, labelled "a project
+you left"; nothing is copied, because project rows are the team's. Grades are untouched:
+a team project's grade is on the class assignment.
+
+## 11. Invitations
+
+Accounts are created only by the admin; invites never create accounts and never use
+email.
+
+| Path | Behaviour |
 |---|---|
-| Course: code, name, instructor, meetings, default `term` | Course: colour, grade target, your semester, archived |
-| Item: type (built-in only), title, date, times, location, weight, recurrence, class notes, links | Item: status, completion, grade, weight override, checklist, your notes, hidden |
-| | Study sessions, achievements, what-if scores, reviews, exam-prep checklists |
+| Invite by username | Owner/editor: `POST /api/spaces/:sid/invites {username}`. Unknown name → `404 {error:'no_user'}` ("No Term account named 'gabriel'"); 20 an hour per user. Upserts on `(space_id, user_id)`, so a repeat refreshes the one invite |
+| The invitee sees it | In the inbox (pending invites count towards the unread number in each sync response), with **Accept** / **Decline** |
+| Accept | `POST /api/invites/:sid/accept` → one batch: check pending and unexpired, insert or revive the membership with the invite's role, mark accepted, write activity → the next sync loads the scope from cursor 0 |
+| Decline | Status `declined`; the inviter sees it under Members |
+| Expired (30 days) | Accept returns `410 {error:'expired'}`; shown as expired |
+| Revoked | Inviter or owner: `DELETE …/invites/:uid`; accept then returns `404` |
+| Already a member | Invite returns `409 {error:'member'}` |
+| Removed, then invited again | Allowed; accepting revives the membership row. For a class, the merge sheet pairs the detached personal copy back **by id** |
+| Space deleted before accepting | Its invites are deleted in the same batch; accept returns `404` ("This class no longer exists") |
+| Code or link | The owner makes an 8-character Crockford base32 code (~40 bits), stored as SHA-256, valid 7 days, ≤ 10 uses; a new code retires the old one. The link is `/#join=<code>`, read like `#spotify=` in `src/data/session.ts`, so the code never reaches server logs or `Referer`, and is cleared after reading. 10 join attempts an hour per user; a full space is `409 {error:'full'}`; joining by code accepts any pending invite to you |
 
-Rules:
+**Joining a class** continues on the device: "Downloading Web Services…" until the first
+page lands; choose a semester and colour; take the class's school calendar if you have
+none; then the **merge sheet** if a personal course matches (identical ids first, then
+type + normalised title + closest date; unsure pairs are left unpaired; "Not the same
+item" undoes a pair; **Skip** leaves a banner for later).
 
-- **No fan-out.** A mark exists only once you touch an item; no mark means todo, no
-  grade. Adding an assignment is one write; joining writes your membership and course
-  prefs, and nothing for anyone else.
-- **Absorb** (personal → class), one set-based D1 batch (`INSERT … SELECT`, pairs via
-  `json_each()`), idempotent by construction:
-  - **convert** (`POST /api/spaces {convertCourseId}`): create the class with you as
-    owner, copy your course and its items into it under the same ids, move your personal
-    fields into marks and course prefs, set `space_id` on your sessions and
-    achievements, then soft-delete the personal course and items (written directly in
-    the batch, not through the course-delete path that would null `course_id`);
-  - **merge on join** (`POST /api/spaces/:sid/absorb {courseId, pairs}`): for matched
-    pairs, write marks from your item, repoint sessions and achievements from your item
-    id to the shared one, and soft-delete your item; set `class_id` on unmatched items
-    in place (lecture reviews included; the review generator's `through` watermark stops
-    it re-creating past steps); then soft-delete the now-empty personal course.
-  - Absorb by a member never writes a shared row: only marks, prefs and the member's own
-    rows. The Worker checks every `mine` id is yours and in `courseId`, and every
-    `shared` id is a live item of that class.
-- **Detach** (class → personal), the reverse: copy the course and items into your scope
-  under the same ids (an upsert, so a converted course's tombstones, if not yet purged,
-  are revived rather than duplicated), fold marks back in, repoint `class_id` items,
-  clear `space_id` on sessions and achievements. Runs on leave (opt out with a
-  checkbox), on removal (always), and per item on **Keep as mine**. A rare id clash with
-  a live personal row gets a new id.
+## 12. Activity and inbox
 
-## 8. Calendar integration
+**Activity** is user-facing and separate from `changes`, which stays an internal sync
+log: it keeps only the latest change per row, with no actor and no previous value, so it
+cannot serve as history. Item and course events come from `AFTER INSERT/UPDATE`
+triggers on shared rows (`WHEN NEW.scope NOT GLOB 'u:*'`), which see `OLD` and `NEW`, so
+"from → to" is the real previous value and the actor is `NEW.updated_by`. Member and
+space events are written by their routes. If D1's SQLite refuses the coalescing upsert
+inside a trigger, the statement moves into the Worker's write batch, which reads the old
+row first; the first stage that writes activity checks this.
 
-- Week, Month and All items read `effectiveItems()`: shared items appear like any other,
-  in your colour for the class, with a small two-person glyph and an aria-label
-  ("Shared · Web Services"), so colour is never the only cue. A "you" pip marks a
-  personal item under a class.
-- All items gains a **Source** filter (Personal, or a class).
-- **Calendar filter:** an eye toggle on each sidebar course row plus a *Personal items*
-  row writes `users.hidden_sources`. Hidden courses stay listed, dimmed. It syncs across
-  devices and the ICS feed honours it. It's separate from the existing sidebar course
-  selection, which is a temporary focus.
-- Each person's semester for a class comes from `course_prefs.term` (section 9).
-- **ICS feed:** in addition to personal items and courses, it includes your classes'
-  courses and items with your mark applied (✓ when complete, cancelled when missed, left
-  out when hidden), and personal items under a class. `hidden_sources` and archived
-  course prefs are skipped. Membership is joined in the query, so a removed member's next
-  fetch leaves the class out. Shared events' UIDs carry the space id
-  (`item-<spaceId>-<id>`, `class-<spaceId>-<courseId>-…`), since ids are only unique
-  per scope; converting a course therefore shows in calendar apps as a delete plus an add.
+Recorded events: item or task created, deleted, restored; date, times, weight or title
+changed; course meetings, room or instructor changed; task assigned (one row per newly
+added assignee, `subject_user` = them), completed, reopened; member joined, left,
+removed, role changed; space archived, unarchived, linked; ownership transferred.
 
-## 9. Study and grade integration
+- **Coalescing:** changes coalesce per (space, actor, verb, subject, 10-minute bucket),
+  keeping the first `from`; a change that returns to where it started is deleted.
+  Creations use `subject = ''`, so an import is one row with up to 10 titles.
+- **Inbox** (derived; no per-user notification rows): pending invites to you; others'
+  activity in your live spaces, filtered to what concerns you (new or deleted items, date
+  changes, tasks assigned to you, completion of tasks assigned to you, archiving); and
+  rows with `subject_user = you`, even after you left. Titles come from `detail`, so a
+  row still reads after its item is deleted. `GET /api/inbox` when the sheet opens
+  (cached for offline); the unread count in each sync response; `PUT /api/inbox/seen
+  {seq}`.
+- **Offline users** see the count on their next sync; nothing is pushed.
+- **No duplicates:** one activity row per coalesced event, read by everyone it concerns.
+- **Permission changes** ("Gabriel made you an editor") and removals are `subject_user`
+  rows, so they reach the person concerned.
+- **Activity tab** per space: `GET /api/spaces/:sid/activity?before=`; offline it says
+  "Connect to see activity".
+- Activity and answered invites older than 90 days are deleted nightly.
 
-**Study.** Sessions stay personal; `space_id` is set when one is logged against a class
-or its item. History, streaks, daily goal, heatmap and the leaderboard count your minutes
-only and don't change. Per-course totals group by `(space_id, course_id)`. The timer, Log
-study and achievement pickers list merged items.
+## 13. Deletion and archiving
 
-- **Lecture reviews** are personal tasks generated from the shared course's meetings,
-  with `class_id` set. A converted course keeps its course id, so review ids (derived
-  from the lecture) carry on; after a merge, existing reviews move under the class and
-  the `through` watermark prevents duplicates.
-- **Exam prep** writes its lecture checklist into your mark.
-- **Achievements:** built-in ones read merged items. Custom `hours`/`grade` achievements
-  gain `space_id`. Once shown as earned, a built-in achievement is never taken back
-  because you hide an item.
+| Action | Behaviour | Personal history |
+|---|---|---|
+| Delete a class item | Soft delete. A member with a meaningful mark keeps it as "Removed from … by Alex" with **Keep as mine** (one-item detach) / **Dismiss**; it counts in their grades until they choose. An editor's restore reconnects everything. Before the nightly purge hard-deletes it, meaningful marks are detached automatically | grades, notes, sessions kept |
+| Delete a task | Soft delete; your note on it goes with it at purge | sessions keep their minutes |
+| Delete a personal course | As today (its items lose their course, sessions their link) | as today |
+| Class course / project item | Cannot be deleted; archive or delete the space | — |
+| Archive a class or project | Read-only for everyone until unarchived; marks and prefs still save; still visible; a linked project is unaffected | untouched |
+| Delete a class | Only when the owner is the only member; **Keep a copy** (on by default) detaches first | kept |
+| Delete a project | Owner, typed confirm; members told; scopes revoked | sessions keep their minutes |
+| A member leaves a class | Detach (opt out with a checkbox); membership soft-deleted | kept |
+| A member is removed from a class | Detach, always | kept |
+| A member leaves or is removed from a project | §10: marks deleted, stripped from assignees | sessions keep their minutes |
+| Transfer ownership | Old owner → editor, then new owner → owner, in one batch | — |
+| An owner's account is deleted (admin) | Each owned space transfers to the longest-standing editor, else member; with nobody left, a class is archived and a project deleted; memberships removed; the account's own rows deleted as today | — |
 
-**Grades.** `courseGrade()` is unchanged and receives merged items: weight is
-`mark.weight ?? item.weight`, status and grade come from the mark, and personal items
-under the class count too. The target comes from `course_prefs.target`; what-if scores
-stay on the device. Marks are only ever read with `user_id = me`; there is no class
-average. If an editor changes a weight you've overridden, the card says
-"Class weight changed to 25% · yours: 20%" with **Use class weight**.
+**Absorb** (personal → class) and **detach** (class → personal) are set-based D1 batches
+(`INSERT … SELECT`, pairs via `json_each()`): a handful of statements whatever the size,
+and safe to retry.
 
-**Semesters.** Everyone keeps their own school calendar. On join, Term picks your
-semester whose name matches the course's `term`, else the one covering today, and asks
-you to confirm. The owner's school-calendar snapshot on the space is offered to a joiner
-who has none ("Use Vanier College 2026–27 from this class"), copied into their profile.
-Your relabelled or recoloured built-in types and hidden types apply to shared items too.
+- **Convert** (`POST /api/spaces {kind:'class', convertCourseId}`): create the class
+  with you as owner; copy the course and items in under the same ids; move your personal
+  fields into marks and prefs; set `space_id` on your sessions and achievements;
+  soft-delete the personal course and items directly (not through the course-delete path,
+  which would null `course_id`).
+- **Merge on join** (`POST /api/spaces/:sid/absorb {courseId, pairs}`): for each pair,
+  write a mark from your item, repoint sessions and achievements to the shared id and
+  soft-delete your item; set `class_id` on unmatched items; soft-delete the empty personal
+  course. A member's absorb writes no shared row. The Worker checks every `mine` id is
+  yours and in `courseId`, and every `shared` id is a live item of that class.
+- **Share one item** (editor; `POST /api/spaces/:sid/absorb {items:[id]}`): a personal
+  item under the class becomes a class item under the same id, your fields moving to a
+  mark.
+- **Detach:** copy the class course and items into your scope under the same ids (an
+  upsert, so unpurged tombstones from a convert revive rather than duplicate), fold your
+  marks in, repoint `class_id` items to the copy, clear `space_id` on sessions and
+  achievements, delete your marks and prefs. A rare clash with a live personal id gets a
+  new id.
 
-## 10. Invitation flow
-
-- **By username** (owner, editor): `POST /api/spaces/:sid/invites {username}`. Unknown
-  username is `404 {error:'no_user'}`, shown as "No Term account named 'gabriel'".
-  20 invites an hour per user (`limits.js`). The invite appears in the recipient's inbox
-  with **Accept** and **Decline**. Inviting a current member is `409 {error:'member'}`;
-  joining by code marks any pending invite to you as accepted; re-inviting someone who
-  declined resets it to pending.
-- **By code or link** (owner): 8 characters of Crockford base32 (~40 bits), stored as
-  SHA-256, valid 7 days, up to 10 uses; a new code retires the old one. The link is
-  `/#join=<code>`, handled like `#spotify=` in `src/data/session.ts`: a hash never reaches
-  the server, request logs or `Referer`, and it's cleared with `history.replaceState`.
-  10 join attempts an hour per user. A full class returns `409 {error:'full'}`.
-- **Joining** inserts your membership row; sync then downloads the class. The join
-  screen shows "Downloading Web Services…" until the first page arrives, picks your
-  semester and colour (the owner's colour unless you already use it, else the first free
-  of the twelve), offers the school calendar, and opens the **merge sheet** if it finds a
-  matching personal course (type + normalised title, then closest date; unsure pairs are
-  left unpaired; "Not the same item" undoes a pair; **Skip** leaves a banner for later).
-- No arbitrary email addresses and no account creation from an invite: accounts still
-  come from the admin.
-
-## 11. Notification and activity model
-
-**Activity** is server-side, user-facing and separate from `changes`, which stays an
-internal sync log. Item and course activity is written by `AFTER INSERT/UPDATE` triggers
-on shared rows (`WHEN NEW.scope GLOB 's:*'`), which see `OLD` and `NEW`, so "from → to"
-is the real previous value, not one the client claims, and the actor is
-`NEW.updated_by`. (If D1's SQLite refuses an upsert inside a trigger, the coalescing
-statement moves into the Worker's write batch, which reads the old row first;
-stage 7 checks this.) Member and class events are
-written by their routes. Only meaningful events count: item created, deleted or restored; an item's date, times, weight
-or title changed; course meetings, room or instructor changed; a member joined, left,
-was removed or changed role; the class archived or unarchived; ownership transferred.
-
-- **Coalescing** via the unique key: changes coalesce per (space, actor, verb, subject,
-  10-minute bucket), keeping the first `from` and updating `to`; a change that ends where
-  it started is deleted. Creations use `subject = ''` and so coalesce per (space, actor, bucket), with up to 10
-  titles, so an import is one row.
-- **The inbox** is derived, not stored: invites to you, plus others' activity in your
-  live classes filtered to what concerns you (new items, date changes, deletions, your
-  role, archiving), plus rows with `subject_user = you` (removed, ownership transferred)
-  that stay visible after you leave. `GET /api/inbox` loads it when the sheet opens; it's
-  cached in IndexedDB for offline. The unread count comes with each sync response.
-  `PUT /api/inbox/seen {seq}` moves `inbox_seen`.
-- **A class's Activity tab** fetches on open (`GET /api/spaces/:sid/activity?before=`);
-  offline it says "Connect to see activity".
-- Activity rows, and answered invites, older than 90 days are deleted by the nightly cron.
-
-## 12. API changes (endpoints only)
+## 14. API (endpoints only)
 
 ```
 GET    /api/sync?v=3&cursors=…
-GET    /api/spaces                                   the classes I'm in
-POST   /api/spaces                                   create: blank, from an outline, or {convertCourseId}
-GET|PATCH|DELETE /api/spaces/:sid                    archive/unarchive, refresh school calendar, delete (only member)
-GET|PUT|DELETE   /api/spaces/:sid/courses/:id
-GET|PUT|DELETE   /api/spaces/:sid/items/:id
-POST   /api/spaces/:sid/items/:id/keep               detach one removed item
-POST   /api/spaces/:sid/absorb                       {courseId, pairs:[{mine, shared}]}
-PUT    /api/spaces/:sid/members/:uid                 change role (owner)
-DELETE /api/spaces/:sid/members/:uid                 remove (owner); always detaches their copy
-POST   /api/spaces/:sid/leave                        {keepCopy}
-POST   /api/spaces/:sid/transfer                     {userId}
-POST   /api/spaces/:sid/invites                      {username}
+POST   /api/spaces                          {kind:'class', course | convertCourseId | outline} · {kind:'project', name, parent?}
+GET    /api/spaces/:sid                     details (school-calendar snapshot, code status)
+PATCH  /api/spaces/:sid                     archive/unarchive, refresh school calendar, link a project
+DELETE /api/spaces/:sid                     {keepCopy} (class: only member; project: owner)
+GET|PUT|DELETE /api/spaces/:sid/courses/:id
+GET|PUT|DELETE /api/spaces/:sid/items/:id   class items, the project item, tasks
+POST   /api/spaces/:sid/items/:id/keep      one-item detach
+POST   /api/spaces/:sid/absorb              {courseId, pairs} · {items}
+PUT    /api/spaces/:sid/members/:uid        {role}
+DELETE /api/spaces/:sid/members/:uid        remove
+POST   /api/spaces/:sid/leave               {keepCopy}
+POST   /api/spaces/:sid/transfer            {userId}
+POST   /api/spaces/:sid/invites             {username, role?}
 DELETE /api/spaces/:sid/invites/:uid
 POST   /api/invites/:sid/accept · /decline
-POST|DELETE /api/spaces/:sid/code                    new code · turn off
-POST   /api/join                                     {code}
+POST|DELETE /api/spaces/:sid/code
+POST   /api/join                            {code}
 GET|PUT|DELETE /api/marks/:sid/:itemId
-GET|PUT|DELETE /api/course_prefs/:sid/:courseId
+GET|PUT|DELETE /api/space_prefs/:sid
 GET    /api/spaces/:sid/activity?before=
 GET    /api/inbox
-PUT    /api/inbox/seen
+PUT    /api/inbox/seen                      {seq}
 ```
 
-The admin's account deletion (`worker/accounts.js`) transfers each owned class to the
-longest-standing editor, else member, else archives it, then removes memberships.
+Errors keep the existing shape `{error, field?}`; rate limits use `worker/limits.js`.
 
-## 13. UX changes
+## 15. UX
 
-- **Sidebar:** classes sit in the course list with the shared glyph, hover "Shared · 5
-  members", and the eye toggle. **+ New course** becomes a menu: *New course*, *New shared
-  class*, *Join with code*. No separate Groups page.
-- **Course sheet** for a class: the existing tab plus **Members** (display names, roles,
+- **Sidebar:** classes in the course list (two-person glyph; hover "Shared · 5
+  members"); a **Projects** group below (team glyph, progress ring); eye toggles on every
+  row. **+ New course** becomes a menu: *New course*, *New shared class*, *New team
+  project* (v2), *Join with code*. No separate Groups page.
+- **Course sheet** for a class: the existing content plus **Members** (names, roles,
   invite, code, remove, transfer, archive, merge my personal course) and **Activity**.
-  *Convert to shared class* appears on a personal course.
-- **Item card:** a **Class** section (title, date, weight, class notes and links,
-  "Edited by Alex · 2h ago"; read-only with a lock for members) and a **Yours** section
-  (status, grade, checklist, my notes, weight override, Hide). Hiding a graded item asks
-  first ("Its 87% will stop counting toward Web Services"). A hidden item stays listed
-  under the class with **Show again**.
-- **Removed items:** "Removed from Web Services by Alex" with **Keep as mine** and
-  **Dismiss**; it keeps counting in grades until you choose.
-- **Top bar:** a bell with the unread count opens the inbox sheet.
-- **Import:** the outline import gets a target picker (My courses, or a class you edit)
-  and, for a class, a diff preview (New / Changed / Already there, for items and course
-  facts; Changed rows start unticked). *New shared class → From course outline* uses the
-  same flow. AI never saves.
-- **Conflicts** in Settings show who made the competing change.
+  *Convert to shared class* on a personal course.
+- **Project sheet** (v2): **Tasks** (by date, assignee chips, claim, progress, workload
+  beside the picker), **Members**, **Activity**, and the linked assignment.
+- **Item card:** a **Class** or **Team** section (shared fields, "Edited by Alex · 2h
+  ago", locked for members) and **Yours** (status, grade, checklist and weight override
+  on class items; notes and Hide on all). Hiding a graded item asks first. Hidden items
+  stay listed under their space with **Show again**. An override that differs from a
+  changed class weight says so, with **Use class weight**.
+- **Removed items:** "Removed from Web Services by Alex" with **Keep as mine** /
+  **Dismiss**.
+- **Top bar:** a bell with the unread count opens the inbox sheet (full-screen on phones).
+- **Import:** target picker and diff preview for outlines; *New shared class → From
+  course outline*.
+- **Conflicts** in Settings name who made the competing change.
 
-## 14. Migration and backwards compatibility
+## 16. Migration and compatibility
 
-- rounds-v7 via the clean-db procedure; `move-db.mjs` maps `user_id` → `'u:' || user_id`
-  for `courses`, `items`, `changes`, with a test against the legacy fixture. Remote
-  migrations still have to be applied by hand (Git builds skip them).
-- All existing data stays personal. Sharing happens only through *Convert to shared
-  class*, merge on join, or creating a new class.
-- Personal routes and `sync?v=2` are kept, so a stale tab keeps working until it reloads.
-- IndexedDB v5 upgrade moves the cursor, creates the new stores, keeps pending ops and
+- rounds-v7 by the clean-db procedure; `move-db.mjs` maps `user_id → 'u:' || user_id`
+  for `courses`, `items`, `changes`, tested against the legacy fixture. Remote migrations
+  are applied by hand (Git builds skip them).
+- Existing courses, items, grades, sessions, semesters and calendar feeds stay personal
+  and keep working; nothing is converted automatically. Sharing happens only by convert,
+  merge on join, share one item, or creating a space.
+- `sync?v=2` and the personal routes remain for stale tabs; they never see shared data.
+- The IndexedDB v5 upgrade moves the cursor and adds stores, keeping pending ops and
   conflicts.
-- Conversion is safe because it's reversible: leaving (or removal) detaches a full
-  personal copy under the same ids, with your marks folded back in, so study sessions,
-  achievements and grades line up again.
+- Converting is reversible: detach rebuilds a personal copy under the same ids with your
+  marks folded back in.
 
-## 15. Security risks
+## 17. Security
 
-| Risk | Mitigation |
+| Threat | Defence |
 |---|---|
-| A route or query forgets authorisation | Guards inside each statement, built only by `access.js`; per-route tests: non-member → 404, member on an editor action → 403 |
-| Id collision or spoofing across scopes | Separate `[scope, id]` client stores; space-id charset; every shared reference carries its space |
-| Invite-code guessing | ~40 bits, hashed, 7-day expiry, use limit, 10 attempts an hour |
+| IDOR / guessed ids | Every shared statement re-checks membership and role; ids are not secrets; non-members get 404 |
+| Missing membership checks | One builder (`access.js`); a test per route for non-member, member, editor, owner, archived |
+| Client-controlled ownership | Scope comes from the route and session, never the body; space ids are made by the Worker; absorb ids are verified |
+| Role escalation | Role changes are owner-only; editors invite only with the default role; members' task writes are diffed against the current row; one-owner index |
+| Unauthorised sync data / a removed member still syncing | Guard inside the paging statement; `revoked` purges the device |
+| Invitation abuse | Rate limits; invites only to existing accounts; upsert prevents duplicate rows |
+| Guessable codes | ~40 bits, hashed, 7-day expiry, use limit, 10 attempts an hour |
+| ICS exposure | The feed URL is per user (HMAC token, as today); its query joins live membership |
+| Private grades, notes, study history | Read only with `user_id = me`; no aggregates; activity records only shared fields |
+| Cross-space access | Composite keys `(scope, id)`; FKs inside one scope; `class_id` and project links verified at write time |
+| Cached unauthorised data | Purged on `revoked`; until then it is data the user already saw |
 | Username enumeration | Accepted for an invited group; rate-limited; login lockouts protect each name |
-| Grade leakage | Marks read only with `user_id = me`; no aggregates; ICS built per user |
-| A removed member keeps data | Accepted; they had it already, and the copy is intended |
-| A careless or hostile editor | Activity shows who did what; conflict copies; restore of deleted items; owner can demote or remove |
-| Removal race | Membership guard evaluated inside the sync and write statements |
 
-## 16. Important edge cases
+## 18. Cloudflare free tier
 
-- **Delete vs offline edit:** 409 with the tombstone → Conflicts; editors can restore.
-- **An editor deletes an item you graded:** the item stays on your device as "Removed…"
-  until you Keep or Dismiss; before the nightly purge hard-deletes it, meaningful marks
-  are detached automatically, so a grade can't be lost by waiting.
-- **Lose access while offline:** pending shared edits → Conflicts; your copy arrives via
-  detach in the same response.
-- **Joining with a personal copy:** the merge sheet; nothing duplicates for long.
-- **Owner leaves or their account is deleted:** transfer first; account deletion
-  transfers automatically or archives.
-- **Two devices press Keep:** same ids, upserts; the second is a no-op.
-- **Mismatched semester names:** `course_prefs.term` per person.
-- **Colour clash on join:** first free colour.
-- **Recurring shared items** (office hours): one status per series, as today, on your mark.
-- **Expired cursor:** that scope alone resets.
-- **Clients that haven't updated:** keep v2 and personal routes, see no classes.
-- **A class of 30:** joins fail with `full`; v1 is built for 2–10.
-
-## 17. Cloudflare free-tier considerations
-
-- **Requests:** no polling and no new background traffic. The unread count rides on
-  sync; the inbox and activity load on open.
-- **D1 reads:** sync reads at most 101 rows per scope per page through `(scope, seq)`;
-  the ICS feed is four queries in one batch, fetched hourly by calendar apps.
-- **D1 writes:** no fan-out (marks on touch); activity coalesces; absorb, detach and
-  convert are a handful of set-based statements in one batch even for 200 items.
-- **Workers AI:** one editor's outline import serves the whole class, and the shared
-  school-calendar snapshot saves each joiner a read.
-- **Storage:** activity pruned at 90 days; tombstones at 30 as today.
+- **Requests:** nothing new in the background; the unread count rides on sync; inbox and
+  activity load on open.
+- **D1 reads:** sync reads ≤ 101 rows per scope per page via `(scope, seq)` plus a few
+  dozen membership rows; the ICS feed is a few queries per hourly fetch.
+- **D1 writes:** no fan-out (a mark exists only once you touch an item; joining writes
+  your membership and prefs); activity coalesces; absorb, detach and convert are a
+  handful of set-based statements; the nightly cron adds two deletes.
+- **Workers AI:** one editor's outline import serves the class; the shared school
+  calendar saves each joiner a read.
+- **Storage:** activity 90 days; tombstones 30 days.
 - No Durable Objects, WebSockets, Queues, R2 or paid services.
 
-## 18. Not in the first version
+## 19. Edge cases
 
-Team projects (phase 2); moderators and suggested changes; comments; attachments
-(links only); subtask trees; task dependencies; personal date overrides; class
-leaderboards; meeting-level merge; `.ics`, CSV, school-calendar and schedule import into
-classes; templates; meeting conflict detection; WebSockets or push; email; public class
-discovery.
+| Case | Behaviour |
+|---|---|
+| Two users edit at once | Field-level merge; the same field → Conflicts, naming who and what |
+| Edit offline; lose permission offline | §6 |
+| Owner leaves | Must transfer first; the last member may archive or delete |
+| Last owner tries to leave | Refused: "Transfer ownership or archive the class first" |
+| Project with no members | Impossible: the owner is a member; account deletion transfers or deletes |
+| Assignment in an archived class | Visible, read-only; marks still save; a linked project is unaffected |
+| Task assigned to a removed member | Stripped in the removal batch; unassigned if nobody is left |
+| Shared assignment deleted after someone recorded a grade | Kept as "Removed…" until Keep/Dismiss; detached automatically before purge |
+| User hides a shared calendar | Eye toggle; membership untouched; ICS honours it |
+| User rejoins a space they left | Membership revived; full reload from cursor 0; a class merge pairs by id with the detached copy |
+| Duplicate invitations | Upsert on `(space_id, user_id)` |
+| Duplicate imports | The diff preview marks "Already there" |
+| Course changes semester | Editors change the default `term`; members who picked their own keep it |
+| Project moves to another course | The owner relinks; nothing is copied |
+| Shared item becomes personal | **Keep as mine** (removed items), or leaving with detach |
+| Personal item becomes shared | **Share with class** on a personal item under the class (editors) |
+| Two devices press Keep | Same ids, upserts; the second does nothing |
+| Recurring shared items | One status per series, on your mark, as today |
+| Expired cursor | That scope alone resets |
+| Space full | `409 full` |
+| One person on two devices | Web Locks and pending ops as today; their marks merge field by field |
+| Clients that have not updated | v2 sync and personal routes; no shared data |
 
-## 19. Recommended MVP and phases
+## 20. Flows
 
-**v1 — shared classes**, in seven stages like the Term redesign, each merged and
-deployed on its own. Stages 1–2 are invisible. From stage 3, **New shared class**,
-**Join with code** and invites are shown only to admins (`isAdmin`; George tests with a second account made admin
-for the purpose) until stage 5 is live; otherwise someone could join a class
-before they could keep a grade on it (stage 4) or leave it (stage 5). Stages 6–7 add
-to a feature that is already open to everyone.
+**Create a class.** *New shared class* (blank, from an outline, or *Convert* on a
+personal course) → `POST /api/spaces` → one batch: space (Worker id), owner membership,
+course (and items) in `c:<sid>`, prefs, activity → the next sync pages the new scope.
 
-1. **rounds-v7 and the scope refactor.** `scope` columns, `access.js`, `changes` by
-   scope, `move-db.mjs`. No visible change; every existing test passes.
-2. **Sync v3.** Per-scope cursors, revocation, split shared stores, `effectiveItems()`,
-   field-level merge, 403 handling.
-3. **Classes.** Create, convert, invites, codes, join, members, roles.
-4. **The personal layer.** Marks, course prefs, the split item card, source markers, the
-   eye filter, the merge sheet.
-5. **Leaving and removal.** Detach, leave, remove, archive, transfer, Keep/Dismiss,
-   account deletion.
-6. **ICS feed and outline import into a class**, class from an outline, school-calendar
-   offer.
-7. **Inbox and activity.**
+**Join a class.** Invite → inbox → **Accept** (or a `/#join=` code) → membership batch →
+sync loads `c:<sid>` from 0 → join screen (semester, colour, school calendar) → merge
+sheet → absorb batch.
 
-**Phase 2 — team projects:** `project` spaces; tasks as items with an `item_assignees`
-table (nobody, one, several, everyone); claiming; progress (12 / 18 · 67%); workload;
-milestones as tasks; a project linked to a class assignment
-(Course → Assignment → Team project → Tasks). Members see assigned tasks in Week and
-Month with an "Assigned to me" marker; the inbox gains assignment and completion events.
+**Create a shared assignment.** An editor adds an item with the class as its course →
+`shared_items` + pending op → `PUT /api/spaces/:sid/items/:id` → guard, write; the
+trigger writes `changes` and coalesced activity → members see it on their next sync and
+in their inbox.
 
-**Phase 3:** moderator role and suggested changes for whole classes, comments, personal
-date overrides, class leaderboards, meeting-level merge, `.ics`/CSV into classes,
-templates, conflict detection.
+**Create a project** (v2). *New team project* → `POST /api/spaces {kind:'project', name,
+parent?}` → one batch: space, owner membership, the `project` item, prefs → invite
+teammates, who join as editors.
 
-## Testing
+**Assign a task** (v2). An editor sets `assignees` → field-merge write → the trigger
+writes `task.assigned` per new assignee → their inbox; the task appears in their Week.
 
-- **Worker** (vitest in the Workers runtime, local D1, as today):
-  - an access matrix for every new route: non-member → 404, member on an editor action
-    → 403 `forbidden`, archived class → 403 `archived`, owner-only actions;
-  - sync v3: paging across scopes in global order, cursor rules, a new scope from 0,
-    per-scope reset, `revoked`, and a removal landing between the two queries;
-  - field-level merge: disjoint fields merge, same field conflicts, JSON fields compared
-    by value, edit vs delete both ways, the lost-race retry;
-  - absorb, convert and detach run **twice** with identical results; ids, marks,
-    sessions and achievements line up after convert → leave;
-  - activity coalescing (bursts, imports, a change undone within the bucket);
-  - `move-db.mjs` against the legacy fixture, and the schema's new `CHECK`s.
-- **Client** (vitest + jsdom): `effectiveItems()` and `courseGrade()` on merged items
-  (weight override, hidden, removed-but-kept), the IndexedDB v5 upgrade keeping pending
-  ops and conflicts, 403 handling in the sync loop, the merge sheet's matching.
-- **By hand, two accounts:** convert, invite, join with merge, edit on both sides
-  offline, demote, remove, leave, with the ICS feed checked after each step.
+**Offline edit, conflict, leave, remove, revocation:** §6 and §13.
 
-## 20. Open design questions
+## 21. Trace test
 
-All of George's questions are answered (table at the top). Left for the implementation
-plan, with the default this spec assumes:
+1. The admin creates Gabriel's and Alex's accounts (Admin page or `user:add`).
+2. Gabriel: *New shared class* → `POST /api/spaces` → `c:<web>` with its course; he is owner.
+3. Gabriel invites `alex` → invite row (role member) + activity.
+4. Alex's next sync counts the invite in his inbox → **Accept** → membership.
+5. Alex's next sync: `c:<web>` is new → cursor 0 → the course and items land in `shared_courses` / `shared_items`; join screen; he has no personal copy, so no merge.
+6. Gabriel adds "REST API Project, Oct 15, 20%" → guarded write → `changes` + activity.
+7. Alex syncs, then goes offline: the item is in `shared_items` and drawn from IndexedDB.
+8. Alex writes notes → `marks` row `<web>:<item>` locally, with a pending op.
+9. Gabriel cannot see them: marks live in `u:<alex>`, are read only with Alex's user id, and activity never records marks.
+10. Gabriel: *New team project* "Fire Response API", linked to the assignment → `p:<fire>`, parent `c:<web>` / item; Gabriel is owner.
+11. Gabriel invites Alex to the project → accept → editor; Alex's next sync adds `p:<fire>`.
+12. Gabriel creates "Create incidents endpoint" with `assignees: [alex]` → the trigger writes `task.assigned` (`subject_user` Alex).
+13. Alex, offline, marks it done → `shared_items` status `done`, `completed_by` Alex, pending op with `base`.
+14. Gabriel moves the assignment to Oct 18 → the `c:<web>` item's revision moves on; activity "Oct 15 → Oct 18".
+15. Alex reconnects → push: the task write succeeds (he is an editor in the project, and its revision has not moved); his mark uploads.
+16. Pull: the assignment's new date arrives. The project item (Oct 30) has a different date from the assignment, so both show.
+17. Alex's inbox count includes "REST API Project: Oct 15 → Oct 18".
+18. Alex records 87% → his mark.
+19. Private, as in step 9.
+20. Alex studies it for 1h 25m → a `study_sessions` row in `u:<alex>` with `space_id = web` and the `item_id`.
+21. Private: sessions are read only by their owner; the leaderboard shows opt-in totals only.
+22. Gabriel removes Alex from the project → one batch: membership soft-deleted, Alex stripped from assignees, his project marks deleted, activity (`subject_user` Alex).
+23. Alex's next sync: `p:<fire>` is in `revoked` → its rows are purged locally; a push to it would get 404.
+24. Alex is still in `c:<web>`: membership is per space.
+25. The assignment stays in his Week, with his grade and notes.
+26. The project item and tasks are gone from his device; his inbox keeps "You were removed from Fire Response API".
+27. His study sessions keep their minutes; the one on the class assignment is untouched; his grade lives on the class item.
+28. His ICS feed: the next fetch joins live memberships, so it has the class and nothing from the project.
 
-- **Stage 1 deploy window:** the move to rounds-v7 takes the site briefly read-only, as
-  earlier moves did. Default: do it at a quiet hour with the announcement banner.
-- **Inbox on mobile:** the bell sits in the top bar at every width. Default: same sheet,
-  full-screen on phones.
-- **Phase 2 trigger:** start team projects only after v1 has been used for a few weeks.
+## 22. MVP boundary
+
+**v1 — shared classes**, seven stages, each merged and deployed on its own. Stages 1–2
+are invisible; from stage 3 the class features are shown only to admins (George tests
+with a second account made admin for the purpose) until stage 5 is live, so nobody can
+join a class before they can keep grades in it (stage 4) or leave it (stage 5).
+
+1. rounds-v7 and the scope refactor: `scope` columns, `access.js`, `changes` by scope, `move-db.mjs`.
+2. Sync v3: cursors per scope, `revoked`, split shared stores, `effectiveItems()`, field-level merge, 403 handling.
+3. Classes: create, convert, invites, codes, join, members, roles.
+4. The personal layer: marks, prefs, the split item card, markers, eye filter, merge sheet.
+5. Leaving and removal: detach, leave, remove, archive, transfer, Keep/Dismiss, account deletion.
+6. ICS feed and outline import into a class; a class from an outline; the school-calendar offer.
+7. Inbox and activity.
+
+**v2 — team projects** on v1's foundation: project spaces and the project item; tasks
+with assignees, claiming and completion rules; the link to an assignment and chip
+folding; progress and workload; the project sheet; task events in the inbox and ICS.
+
+**Later:** moderator role and suggested changes (whole classes); comments; milestones
+and task dependencies; personal date overrides; reminders; class leaderboards;
+meeting-level merge; `.ics`/CSV/schedule import into classes; templates; meeting
+conflict detection.
+
+**Avoid for now:** live collaboration, WebSockets or push, attachments (links only),
+email, public class discovery.
+
+## 23. Testing
+
+- **Worker** (vitest in the Workers runtime, local D1): an access matrix for every route
+  (non-member 404, member 403, archived 403, owner-only); sync v3 paging, cursors, a new
+  scope from 0, per-scope reset, `revoked`, a removal between the two queries;
+  field-level merge cases (disjoint, same field, JSON by value, edit vs delete both ways,
+  lost race); member task-write rules; absorb, convert and detach run twice with
+  identical results; activity triggers and coalescing; `move-db.mjs` against the fixture;
+  every new `CHECK`.
+- **Client** (vitest + jsdom): `effectiveItems()` and grades on merged items (override,
+  hidden, removed-but-kept, project status); the IndexedDB v5 upgrade; 403 in the sync
+  loop; the `revoked` purge; the merge sheet's matching.
+- **By hand, two accounts:** the §21 trace (steps 10–26 once v2 lands), offline on both
+  sides, the ICS feed after each step.
+
+## 24. Open decisions
+
+None block implementation planning. Choices this document makes that George may still
+change: default join roles (class: member, project: editor); removal from a project keeps
+no copy; a project may be deleted while others are members (typed confirm).
