@@ -20,7 +20,9 @@ piece. Four times in September 2026 the live data moved into a fresh database bu
 folding in the study timer, quizzes, grade targets and the calendar feed, then
 `rounds-v3` into `rounds-v4`, folding in study history, achievements, the school
 calendar and the leaderboard, then `rounds-v4` into `rounds-v5`, widening the theme to
-six. The databases before `rounds-v3` have been deleted. The schema the last move copied from is kept as a test
+six, then `rounds-v5` into `rounds-v6`, adding the Admin page (`users.is_admin`,
+`users.last_seen_day`, `error_log`, `admin_log`, `app_meta`). `rounds-v6` is the only
+database left. The schema the last move copied from is kept as a test
 fixture in `test/fixtures/legacy-migrations/`. Later changes are new numbered files.
 
 ## Structure at a glance
