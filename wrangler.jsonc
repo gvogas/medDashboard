@@ -17,14 +17,14 @@
     "run_worker_first": ["/api", "/api/*"]
   },
 
-  // rounds-v5 was built fresh from migrations/0001_schema.sql and filled by
-  // scripts/move-db.mjs from rounds-v4 on 2026-09-30 (the six themes); rounds-v4 is
+  // rounds-v6 was built fresh from migrations/0001_schema.sql and filled by
+  // scripts/move-db.mjs from rounds-v5 on 2026-10-01 (the Admin page); rounds-v5 is
   // kept as a backup until the move is confirmed.
   "d1_databases": [
     {
       "binding": "DB",
-      "database_name": "rounds-v5",
-      "database_id": "5cfbf16a-d02b-4293-8605-923d71f8fbff",
+      "database_name": "rounds-v6",
+      "database_id": "c1597a84-3183-48f7-8391-76d1e6160ac6",
       "migrations_dir": "migrations"
     }
   ],
