@@ -44,7 +44,7 @@ Each stage branches off `main` after the previous stage is merged and deployed. 
 ### What each later stage must cover (its plan starts from this)
 
 **Stage 2 — Spaces and sync v3** (spec §3, §6, §7).
-- `migrations/0002_spaces.sql`: `spaces` (Worker-made 12-char ids, `kind`, `name`, `archived`, `school_calendar`, `parent_space`, `parent_item`, code columns, timestamps, `revision`) and `members` (`role`, the partial unique owner index, `members (user_id) WHERE deleted_at IS NULL`). Extend `scripts/lib/move-db.js` TABLES with both.
+- `migrations/0002_spaces.sql`: `spaces` (Worker-made 12-char ids, `kind`, `archived`, `school_calendar`, `parent_space`, `parent_item`, code columns, timestamps, `revision`) and `members` (`role`, the partial unique owner index, `members (user_id) WHERE deleted_at IS NULL`). Extend `scripts/lib/move-db.js` TABLES with both.
 - `worker/access.js`: `memberGuard(scope)` and `editorGuard(scope)` returning `{sql, binds}` fragments; `roleOf(db, userId, scope)`; `parseScope('c:abc')`. Tests: a matrix of non-member / member / editor / owner / archived.
 - `worker/db.js`: shared variants of `getRow/upsertRow/deleteRow` taking a scope and a guard; the field-level merge (`changed`), compared with stable JSON; `updated_by`.
 - `syncPageV3(db, userId, cursors)`: memberships query, the `UNION ALL` page with per-branch guards, cursor rule, `scopes`, `revoked`, per-scope `reset`. Route `GET /api/sync?v=3`. Keep v2.
@@ -149,21 +149,24 @@ const FAILS = /CHECK constraint failed/;
 describe('scopes in the schema', () => {
   it('accepts the three scope kinds and nothing else', async () => {
     await insertItem('u:someone', 'a');
-    await insertItem('c:class1', 'a');
+    await insertCourse('c:class1', 'c');
+    await insertItem('c:class1', 'a', { course_id: 'c' });
     await insertItem('p:proj1', 'project', { type: 'project' });
     await expect(insertItem('x:other', 'a')).rejects.toThrow(FAILS);
     await expect(insertItem('u:', 'b')).rejects.toThrow(FAILS);
-    await insertCourse('c:class1', 'c');
     await expect(insertCourse('p:proj1', 'c')).rejects.toThrow(FAILS);
   });
 
-  it('keeps personal fields off a class row', async () => {
-    await expect(insertItem('c:class2', 'g', { type: 'exam', grade: 80 })).rejects.toThrow(FAILS);
-    await expect(insertItem('c:class2', 's', { status: 'done' })).rejects.toThrow(FAILS);
-    await expect(insertItem('c:class2', 'k', { checklist: '[{"id":"a","text":"x","done":false}]' })).rejects.toThrow(FAILS);
-    await expect(insertItem('c:class2', 't', { type: 'c-quiz1' })).rejects.toThrow(FAILS);
-    await expect(insertItem('c:class2', 'n', { assignees: '["u1"]' })).rejects.toThrow(FAILS);
-    await insertItem('c:class2', 'ok', { type: 'assignment', weight: 20, notes: 'Teams of 3', links: '[{"label":"Brief","url":"https://example.edu"}]' });
+  it('keeps personal fields off a class row, which always hangs off the class course', async () => {
+    await insertCourse('c:class2', 'c');
+    const row = (extra) => ({ course_id: 'c', ...extra });
+    await expect(insertItem('c:class2', 'g', row({ type: 'exam', grade: 80 }))).rejects.toThrow(FAILS);
+    await expect(insertItem('c:class2', 's', row({ status: 'done' }))).rejects.toThrow(FAILS);
+    await expect(insertItem('c:class2', 'k', row({ checklist: '[{"id":"a","text":"x","done":false}]' }))).rejects.toThrow(FAILS);
+    await expect(insertItem('c:class2', 't', row({ type: 'c-quiz1' }))).rejects.toThrow(FAILS);
+    await expect(insertItem('c:class2', 'n', row({ assignees: '["u1"]' }))).rejects.toThrow(FAILS);
+    await expect(insertItem('c:class2', 'none', { type: 'exam' })).rejects.toThrow(FAILS);
+    await insertItem('c:class2', 'ok', row({ type: 'assignment', weight: 20, notes: 'Teams of 3', links: '[{"label":"Brief","url":"https://example.edu"}]' }));
   });
 
   it('lets a project row carry the team status but no grade, weight or course', async () => {
@@ -187,9 +190,10 @@ describe('scopes in the schema', () => {
   it('writes each change into its scope, with the scope in the payload of courses and items', async () => {
     const id = await createUser('scope-feed');
     await insertItem('u:' + id, 'i1');
-    await insertItem('c:class3', 'i2', { type: 'exam' });
+    await insertCourse('c:class3', 'c');
+    await insertItem('c:class3', 'i2', { type: 'exam', course_id: 'c' });
     await env.DB.prepare("INSERT INTO quotes (user_id, id, text, created_at, updated_at) VALUES (?, 'q1', 'Go', 1, 1)").bind(id).run();
-    const rows = (await env.DB.prepare('SELECT scope, kind, row_id, payload FROM changes WHERE row_id IN (?, ?, ?) ORDER BY seq').bind('i1', 'i2', 'q1').all()).results;
+    const rows = (await env.DB.prepare("SELECT scope, kind, row_id, payload FROM changes WHERE kind != 'courses' AND row_id IN (?, ?, ?) ORDER BY seq").bind('i1', 'i2', 'q1').all()).results;
     expect(rows.map((r) => [r.scope, r.kind, r.row_id])).toEqual([['u:' + id, 'items', 'i1'], ['c:class3', 'items', 'i2'], ['u:' + id, 'quotes', 'q1']]);
     expect(JSON.parse(rows[0].payload)).toMatchObject({ scope: 'u:' + id, id: 'i1', assignees: '[]' });
     expect(JSON.parse(rows[0].payload)).not.toHaveProperty('user_id');
@@ -329,12 +333,13 @@ CREATE TABLE items (
   FOREIGN KEY (scope, course_id) REFERENCES courses(scope, id) ON DELETE RESTRICT,
   -- A weekly slot needs a weekday.
   CHECK (recur IS NULL OR weekday IS NOT NULL),
-  -- What each kind of scope may hold. A class row is the class's facts only: everyone's
+  -- What each kind of scope may hold. A class row hangs off the class's one course and is
+  -- the class's facts only: everyone's
   -- status, grade and checklist live in their own marks. A project row's status,
   -- completion and checklist (subtasks) are the team's; it never carries a grade or weight.
   CHECK (CASE substr(scope, 1, 2)
     WHEN 'u:' THEN assignees = '[]' AND completed_by IS NULL AND (class_id IS NULL OR course_id IS NULL)
-    WHEN 'c:' THEN grade IS NULL AND checklist = '[]' AND status = 'todo' AND completed_at IS NULL
+    WHEN 'c:' THEN course_id IS NOT NULL AND grade IS NULL AND checklist = '[]' AND status = 'todo' AND completed_at IS NULL
                    AND completed_by IS NULL AND assignees = '[]' AND class_id IS NULL AND type NOT GLOB 'c-*'
     ELSE grade IS NULL AND weight IS NULL AND course_id IS NULL AND class_id IS NULL AND type IN ('project', 'task')
   END)
@@ -504,7 +509,8 @@ describe('the Worker reads and writes a person\'s own scope', () => {
 
   it('never reads a class row through a personal route', async () => {
     const id = await createUser('scope-isolated');
-    await env.DB.prepare("INSERT INTO items (scope, id, type, title, date, status, created_at, updated_at) VALUES ('c:' || ?, 'x', 'exam', 'Shared', '2026-10-01', 'todo', 1, 1)").bind(id).run();
+    await env.DB.prepare("INSERT INTO courses (scope, id, code, name, color, created_at, updated_at) VALUES ('c:' || ?, 'cc', 'SH', 'Shared', '#17B3AE', 1, 1)").bind(id).run();
+    await env.DB.prepare("INSERT INTO items (scope, id, type, title, course_id, date, status, created_at, updated_at) VALUES ('c:' || ?, 'x', 'exam', 'Shared', 'cc', '2026-10-01', 'todo', 1, 1)").bind(id).run();
     expect(await getRow(env.DB, 'items', id, 'x')).toBeNull();
     expect((await syncPage(env.DB, id, 0)).changes).toEqual([]);
   });
