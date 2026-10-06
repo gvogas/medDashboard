@@ -3827,6 +3827,8 @@ Claude-Session: https://claude.ai/code/session_01JpUR1JXMY3ehtkiJwuij95"
 
 ### Task 15: Apply the migration remotely, then merge and push
 
+> **Superseded (2026-10-06): Stages 3 and 4 ship together.** Skip this task. After Task 14, go on to Stage 4's Tasks 16–30 (`docs/superpowers/plans/2026-10-06-collab-stage-4-layer.md`) on this branch; its Task 30 applies `0003_invites.sql` and `0004_marks.sql` remotely, then merges and pushes.
+
 **Only with George's yes** (rule 6): ask him before Step 1, and run nothing below until he says yes. The order matters: the new Worker's class routes and the admin page's health check read `invites`, and the Cloudflare Git build does **not** apply migrations, so the remote database must have `0003_invites.sql` **before** `main` moves. This stage changes no IndexedDB version, so a client rollback stays possible; the migration only adds a table.
 
 - [ ] **Step 1: Ask George, then apply the migration to the live database**
