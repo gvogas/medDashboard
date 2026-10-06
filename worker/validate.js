@@ -7,7 +7,7 @@ import { SCHOOL_KINDS, SCHOOL_LIMITS, validDate } from '../src/core/school.ts';
 import { SHARED_FIELDS } from '../src/core/shared.ts';
 
 const COLOURS = ['#E4749B', '#8B5CC7', '#17B3AE', '#79B6EA', '#BCA6E6'];   /* the coat's */
-const COURSE_COLOURS = [...COLOURS, '#F08A6C', '#E8B33A', '#4FBF8B', '#8FAE86', '#4F74D9', '#B8457E', '#7D8A99'];
+export const COURSE_COLOURS = [...COLOURS, '#F08A6C', '#E8B33A', '#4FBF8B', '#8FAE86', '#4F74D9', '#B8457E', '#7D8A99'];
 const TYPES = ['exam', 'quiz', 'assignment', 'lab', 'tutoring', 'office', 'task', 'project'];
 const STATUSES = ['todo', 'submitted', 'graded', 'done', 'missed'];
 // Custom item types: an id, and the swatches and behaviours a type can have.
@@ -91,6 +91,25 @@ function list(v, field, max, each) {
   return v.map((entry, i) => each(obj(entry, `${field}[${i}]`), `${field}[${i}]`));
 }
 
+const SPACE_ID = /^[a-z0-9]{12}$/;
+/* A label on your own row naming a space (spec §5): its shape only, since it opens nothing.
+   Absent (an old client) is undefined, and the stored value stays (spec §16); null clears. */
+function spaceLabel(v, field) {
+  if (v === undefined) return undefined;
+  if (v === null) return null;
+  if (typeof v !== 'string' || !SPACE_ID.test(v)) fail(field);
+  return v;
+}
+
+/* What you hid from your Week and Month (spec §9): 'course:<id>', 'space:<sid>', 'personal'. */
+const SOURCE = /^(?:course:[^\u0000-\u001f\u007f]{1,24}|space:[a-z0-9]{12}|personal)$/;
+function sourceList(v) {
+  if (!Array.isArray(v) || v.length > 40) fail('hiddenSources');
+  v.forEach((s, i) => { if (typeof s !== 'string' || !SOURCE.test(s)) fail(`hiddenSources[${i}]`); });
+  if (new Set(v).size !== v.length) fail('hiddenSources');
+  return v;
+}
+
 export function validateId(id) {
   if (typeof id !== 'string' || id.length < 1 || id.length > 24 || /[\u0000-\u001f\u007f]/.test(id)) fail('id');
   return id;
@@ -150,6 +169,8 @@ export function validateProfile(body) {
     studyPrefs: body.studyPrefs === undefined ? null : studyPrefs(body.studyPrefs),
     // Nor a school calendar; {} removes it.
     schoolCalendar: body.schoolCalendar === undefined ? null : schoolCalendar(body.schoolCalendar),
+    // Nor hidden sources; the stored ones are kept (null here).
+    hiddenSources: body.hiddenSources === undefined ? null : sourceList(body.hiddenSources),
   };
 }
 
@@ -271,8 +292,11 @@ export function validateItem(body) {
     recurUntil: optDate(body.recurUntil, 'recurUntil'),
     dept: str(body.dept ?? '', 'dept', 40),
     completedAt: optInt(body.completedAt, 'completedAt'),
+    classId: spaceLabel(body.classId, 'classId'),
   };
   if (out.recur === 'weekly' && out.weekday === null) fail('weekday');
+  // A personal item is under a course of yours or filed under a class, never both (the u: CHECK).
+  if (out.classId && out.courseId) fail('classId');
   // The client sets a weekday only on a weekly item (normalizeItem in src/core/model.ts).
   if (out.recur === null && out.weekday !== null) fail('weekday');
   if (out.start && out.end && out.end <= out.start) fail('end');
@@ -290,6 +314,7 @@ export function validateStudySession(body) {
     roundsDone: int(body.roundsDone ?? 0, 'roundsDone', 0, 12),
     note: str(body.note ?? '', 'note', 200),
     manual: bool(body.manual ?? false, 'manual'),
+    spaceId: spaceLabel(body.spaceId, 'spaceId'),
   };
 }
 
@@ -317,6 +342,7 @@ export function validateAchievement(body) {
     courseId: rule === 'hours' ? str(body.courseId, 'courseId', 40, 1) : null,
     itemId: rule === 'grade' ? str(body.itemId, 'itemId', 24, 1) : null,
     target: int(body.target, 'target', 1, rule === 'grade' ? 100 : 1000),
+    spaceId: spaceLabel(body.spaceId, 'spaceId'),
   };
 }
 
@@ -345,13 +371,13 @@ export function validateSharedItem(body, kind, id) {
   if (kind === 'class') {
     if (CUSTOM_TYPE.test(out.type)) fail('type');
     if (!out.courseId) fail('courseId');
-    return { ...out, status: 'todo', grade: null, checklist: [], completedAt: null, assignees: [] };
+    return { ...out, status: 'todo', grade: null, checklist: [], completedAt: null, assignees: [], classId: null };
   }
   if (!['task', 'project'].includes(out.type) || (out.type === 'project') !== (id === 'project')) fail('type');
   if (out.courseId !== null) fail('courseId');
   if (out.grade !== null) fail('grade');
   if (out.weight !== null) fail('weight');
-  return { ...out, assignees: assigneeList(body.assignees ?? []) };
+  return { ...out, assignees: assigneeList(body.assignees ?? []), classId: null };
 }
 
 /** `changed`: {field: value before}, naming only the shared fields of `set` ('courses', 'class' or 'project'); absent for a whole-row write. */

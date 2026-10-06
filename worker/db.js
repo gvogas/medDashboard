@@ -7,7 +7,7 @@ import { SPACE_LIMIT } from './spaces.js';
 import { stable } from '../src/core/shared.ts';
 
 const PROFILE_COLS =
-  'id, username, display_name, coat_name, coat_role, coat_color, theme, bg, types, study_flow, study_prefs, school_calendar, term_start, is_admin, created_at, updated_at, revision';
+  'id, username, display_name, coat_name, coat_role, coat_color, theme, bg, types, study_flow, study_prefs, school_calendar, hidden_sources, term_start, is_admin, created_at, updated_at, revision';
 
 function profileFromRow(r) {
   return {
@@ -21,6 +21,7 @@ function profileFromRow(r) {
     studyFlow: flowOut(r.study_flow),
     studyPrefs: prefsOut(r.study_prefs),
     schoolCalendar: prefsOut(r.school_calendar),
+    hiddenSources: jsonOut(r.hidden_sources),
     termStart: r.term_start,
     isAdmin: r.is_admin === 1,
     createdAt: r.created_at,
@@ -51,9 +52,9 @@ export async function getProfile(db, userId) {
 export async function updateProfile(db, userId, p, now = Date.now(), revision) {
   const saved = await db
     .prepare(
-      `UPDATE users SET display_name = ?, coat_name = ?, coat_role = ?, coat_color = ?, theme = ?, bg = ?, types = COALESCE(?, types), study_flow = COALESCE(?, study_flow), study_prefs = COALESCE(?, study_prefs), school_calendar = COALESCE(?, school_calendar), term_start = ?, updated_at = ?, revision = revision + 1 WHERE id = ? AND revision = ? RETURNING ${PROFILE_COLS}`,
+      `UPDATE users SET display_name = ?, coat_name = ?, coat_role = ?, coat_color = ?, theme = ?, bg = ?, types = COALESCE(?, types), study_flow = COALESCE(?, study_flow), study_prefs = COALESCE(?, study_prefs), school_calendar = COALESCE(?, school_calendar), hidden_sources = COALESCE(?, hidden_sources), term_start = ?, updated_at = ?, revision = revision + 1 WHERE id = ? AND revision = ? RETURNING ${PROFILE_COLS}`,
     )
-    .bind(p.displayName, p.coatName, p.coatRole, p.coatColor, p.theme, p.bg, p.types === null ? null : JSON.stringify(p.types), p.studyFlow ? JSON.stringify(p.studyFlow) : null, p.studyPrefs ? JSON.stringify(p.studyPrefs) : null, p.schoolCalendar ? JSON.stringify(p.schoolCalendar) : null, p.termStart, now, userId, revision ?? -1)
+    .bind(p.displayName, p.coatName, p.coatRole, p.coatColor, p.theme, p.bg, p.types === null ? null : JSON.stringify(p.types), p.studyFlow ? JSON.stringify(p.studyFlow) : null, p.studyPrefs ? JSON.stringify(p.studyPrefs) : null, p.schoolCalendar ? JSON.stringify(p.schoolCalendar) : null, p.hiddenSources ? JSON.stringify(p.hiddenSources) : null, p.termStart, now, userId, revision ?? -1)
     .first();
   if (!saved) throw new HttpError(409, { error: 'conflict', current: await getProfile(db, userId) });
   return profileFromRow(saved);
@@ -90,6 +91,7 @@ const TABLES = {
       type: 'type', title: 'title', courseId: 'course_id', date: 'date', start: 'start', end: 'end', where: 'location',
       status: 'status', grade: 'grade', weight: 'weight', notes: 'notes', checklist: 'checklist', links: 'links',
       recur: 'recur', weekday: 'weekday', recurUntil: 'recur_until', dept: 'dept', completedAt: 'completed_at',
+      classId: 'class_id',
     },
     toRow: (i) => ({ ...i, checklist: jsonIn(i.checklist), links: jsonIn(i.links) }),
     fromRow: (r) => ({ checklist: jsonOut(r.checklist), links: jsonOut(r.links) }),
@@ -100,12 +102,12 @@ const TABLES = {
     fromRow: () => ({}),
   },
   study_sessions: {
-    cols: { courseId: 'course_id', itemId: 'item_id', startedAt: 'started_at', studyMinutes: 'study_minutes', roundsDone: 'rounds_done', note: 'note', manual: 'manual' },
+    cols: { courseId: 'course_id', itemId: 'item_id', startedAt: 'started_at', studyMinutes: 'study_minutes', roundsDone: 'rounds_done', note: 'note', manual: 'manual', spaceId: 'space_id' },
     toRow: (s) => ({ ...s, note: s.note ?? '', manual: s.manual ? 1 : 0 }),
     fromRow: (r) => ({ note: r.note ?? '', manual: r.manual === 1 }),
   },
   achievements: {
-    cols: { name: 'name', sticker: 'sticker', rule: 'rule', courseId: 'course_id', itemId: 'item_id', target: 'target' },
+    cols: { name: 'name', sticker: 'sticker', rule: 'rule', courseId: 'course_id', itemId: 'item_id', spaceId: 'space_id', target: 'target' },
     toRow: (a) => a,
     fromRow: () => ({}),
   },
@@ -113,6 +115,8 @@ const TABLES = {
 
 /* Live achievements an account may hold; each carries its sticker picture. */
 const ACHIEVEMENT_LIMIT = 30;
+/* Labels an old client never sends (spec §16): left out of a body, the stored value stays. */
+const KEPT_WHEN_ABSENT = new Set(['classId', 'spaceId']);
 
 /** The scope of a person's own courses and items. */
 export const personal = (userId) => 'u:' + userId;
@@ -146,7 +150,9 @@ export async function getRow(db, table, userId, id) {
 function upsertStmt(db, table, userId, id, fields, now, revision) {
   const t = TABLES[table];
   const row = t.toRow(fields);
-  const cols = Object.entries(t.cols);
+  /* An old client giving a filed item a course of yours unfiles it (the u: CHECK allows one or the other). */
+  const kept = (field) => KEPT_WHEN_ABSENT.has(field) && fields[field] === undefined && !(field === 'classId' && fields.courseId);
+  const cols = Object.entries(t.cols).filter(([field]) => !kept(field));
   const owner = ownerCol(table), who = ownerOf(table, userId);
   const names = [owner, 'id', ...cols.map(([, col]) => col), 'created_at', 'updated_at', 'deleted_at'];
   const values = [who, id, ...cols.map(([field]) => row[field] ?? null), now, now, null];
@@ -238,7 +244,9 @@ const courseStmt = (db, userId, id) =>
 export async function syncPage(db, userId, cursor, limit = 100) {
   const [state, page] = await db.batch([
     db.prepare("SELECT floor, COALESCE((SELECT seq FROM sqlite_sequence WHERE name = 'changes'), 0) AS head FROM sync_state WHERE id = 1"),
-    db.prepare('SELECT seq, kind, payload FROM changes WHERE scope = ? AND seq > ? ORDER BY seq LIMIT ?').bind(personal(userId), cursor, limit + 1),
+    /* only the kinds a client from before Stage 4 knows (spec §16): marks and prefs never reach it */
+    db.prepare(`SELECT seq, kind, payload FROM changes WHERE scope = ? AND seq > ? AND kind IN ('courses', 'items', 'quotes', 'study_sessions', 'achievements')
+      ORDER BY seq LIMIT ?`).bind(personal(userId), cursor, limit + 1),
   ]);
   const { floor, head } = state.results[0];
   if (cursor && (cursor < floor || cursor > head)) return { reset: true, cursor: 0, changes: [], more: false };
