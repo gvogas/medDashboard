@@ -151,12 +151,18 @@ function upsertStmt(db, table, userId, id, fields, now, revision) {
   const t = TABLES[table];
   const row = t.toRow(fields);
   /* An old client giving a filed item a course of yours unfiles it (the u: CHECK allows one or the other). */
-  const kept = (field) => KEPT_WHEN_ABSENT.has(field) && fields[field] === undefined && !(field === 'classId' && fields.courseId);
-  const cols = Object.entries(t.cols).filter(([field]) => !kept(field));
+  const absent = (field) => KEPT_WHEN_ABSENT.has(field) && field in t.cols && fields[field] === undefined;
+  const cols = Object.entries(t.cols).filter(([field]) => !(field === 'classId' && absent('classId') && !fields.courseId));
   const owner = ownerCol(table), who = ownerOf(table, userId);
   const names = [owner, 'id', ...cols.map(([, col]) => col), 'created_at', 'updated_at', 'deleted_at'];
   const values = [who, id, ...cols.map(([field]) => row[field] ?? null), now, now, null];
-  const updates = [...cols.map(([, col]) => `${col} = excluded.${col}`), 'updated_at = excluded.updated_at', 'deleted_at = NULL', 'revision = revision + 1'];
+  /* A session's or achievement's space, left out, stays while it still names the same course and item;
+     pointed elsewhere, the label no longer fits and goes. A new row starts with none. */
+  const setCol = ([field, col]) =>
+    field === 'spaceId' && absent('spaceId')
+      ? `${col} = CASE WHEN ${table}.course_id IS excluded.course_id AND ${table}.item_id IS excluded.item_id THEN ${table}.${col} END`
+      : `${col} = excluded.${col}`;
+  const updates = [...cols.map(setCol), 'updated_at = excluded.updated_at', 'deleted_at = NULL', 'revision = revision + 1'];
   const courseGuard = table === 'items' ? ' AND (? IS NULL OR EXISTS (SELECT 1 FROM courses WHERE scope = ? AND id = ? AND deleted_at IS NULL))' : '';
   const courseBindings = table === 'items' ? [fields.courseId ?? null, who, fields.courseId ?? null] : [];
   /* a new or revived achievement must fit under the limit; an edit to a live one always does */

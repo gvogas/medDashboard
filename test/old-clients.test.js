@@ -54,6 +54,25 @@ describe('a client from before Stage 4', () => {
     expect(await (await api('/api/study_sessions/s2', { method: 'PUT', body: session({ spaceId: 7 }) })).json()).toEqual({ error: 'invalid', field: 'spaceId' });
   });
 
+  it("drops a session's and an achievement's space when an old client points them at another course or item", async () => {
+    const api = await signIn('old-move');
+    expect((await (await api('/api/study_sessions/s1', { method: 'PUT', body: session({ itemId: 'q1', spaceId: SID }) })).json()).spaceId).toBe(SID);
+    /* same course and item: kept */
+    expect(await (await api('/api/study_sessions/s1', { method: 'PUT', body: session({ itemId: 'q1', note: 'ch. 2' }) })).json()).toMatchObject({ note: 'ch. 2', spaceId: SID });
+    /* another item: the label no longer fits */
+    expect(await (await api('/api/study_sessions/s1', { method: 'PUT', body: session({ itemId: 'q2' }) })).json()).toMatchObject({ itemId: 'q2', spaceId: null });
+    /* another course, item unchanged */
+    expect((await (await api('/api/study_sessions/s2', { method: 'PUT', body: session({ spaceId: SID }) })).json()).spaceId).toBe(SID);
+    expect(await (await api('/api/study_sessions/s2', { method: 'PUT', body: session({ courseId: 'bio' }) })).json()).toMatchObject({ courseId: 'bio', spaceId: null });
+    /* a new row left without one starts with none */
+    expect((await (await api('/api/study_sessions/s3', { method: 'PUT', body: session() })).json()).spaceId).toBeNull();
+
+    const ach = (over) => ({ name: 'Quiz', sticker: PNG, rule: 'grade', itemId: 'q1', target: 90, ...over });
+    expect((await (await api('/api/achievements/a1', { method: 'PUT', body: ach({ spaceId: SID }) })).json()).spaceId).toBe(SID);
+    expect(await (await api('/api/achievements/a1', { method: 'PUT', body: ach({ target: 80 }) })).json()).toMatchObject({ target: 80, spaceId: SID });
+    expect(await (await api('/api/achievements/a1', { method: 'PUT', body: ach({ itemId: 'q2' }) })).json()).toMatchObject({ itemId: 'q2', spaceId: null });
+  });
+
   it('keeps the hidden sources when PUT /api/me leaves them out', async () => {
     const api = await signIn('old-hidden');
     expect((await (await api('/api/me')).json()).hiddenSources).toEqual([]);
