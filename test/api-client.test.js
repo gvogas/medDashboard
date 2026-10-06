@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { SELF } from 'cloudflare:test';
 import { BASE, signIn } from './helpers.js';
+import { makeSpace } from './spaces.js';
 
 let client;
 const row = { id: 'i1', title: 'Study', revision: 2 };
@@ -95,6 +96,32 @@ describe('browser API response contracts', () => {
     expect(deleted.changes[0].row.deletedAt).toBeTypeOf('number');
     await expect(client.api.get('quotes', saved.id)).rejects.toMatchObject({ status: 404 });
     expect(await client.api.signOut()).toBeNull();
+  });
+
+  it('accepts the real Worker v3 page and shared writes, and refuses a v3 cursor that moves back', async () => {
+    const session = await signIn();
+    vi.stubGlobal('fetch', (path, options) => SELF.fetch(BASE + path, {
+      ...options, redirect: 'manual', headers: { ...options.headers, cookie: session.cookie },
+    }));
+    const profile = await client.api.me();
+    client.bindAccount(profile.id);
+    const web = await makeSpace({ members: { [profile.id]: 'owner' } });
+    const own = 'u:' + profile.id;
+    const first = await client.api.syncV3({ [own]: 0 }, 0);
+    expect(first.scopes).toMatchObject([{ id: web.id, scope: web.scope, role: 'owner', members: [{ userId: profile.id }] }]);
+    expect(first.changes).toContainEqual(expect.objectContaining({ scope: web.scope, kind: 'courses' }));
+    const saved = await client.api.shared.put(web.scope, 'items', 'a1',
+      { type: 'assignment', title: 'Lab report', courseId: 'web', date: '2026-10-15', status: 'todo', revision: 0 }, { title: null });
+    expect(saved).toMatchObject({ id: 'a1', scope: web.scope, updatedBy: profile.id });
+    expect(await client.api.shared.get(web.scope, 'items', 'a1')).toEqual(saved);
+    const next = await client.api.syncV3(first.cursors, first.scopes[0].revision);
+    expect(next.changes).toEqual([{ scope: web.scope, kind: 'items', row: saved }]);
+    expect(next.scopes[0]).not.toHaveProperty('members');
+    expect(await client.api.shared.del(web.scope, 'items', 'a1', saved.revision)).toBeNull();
+    respond({ ...next, cursors: { [own]: 0 } });
+    await expect(client.api.syncV3({ [own]: 5 }, 0)).rejects.toMatchObject({ status: 502 });
+    respond({ ...next, changes: [{ scope: own, kind: 'marks', row: saved }] });
+    await expect(client.api.syncV3({}, 0)).rejects.toMatchObject({ status: 502 });
   });
 
   it('stops an AI read when its own signal is aborted, and sends a picture as it is', async () => {

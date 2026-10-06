@@ -2,6 +2,7 @@
 
 import type { Row } from './db.ts';
 import type { Page, ServerProfile } from './store.ts';
+import type { Space } from './types.ts';
 
 /** An error's body as the Worker sends it: its code, and for some the server's copy or a wait. */
 export interface ErrorBody { error?: string; retryAfter?: unknown; current?: Row | null; [field: string]: unknown }
@@ -162,6 +163,30 @@ async function changes(cursor: number): Promise<Page & { reset: boolean; more: b
     : page.cursor < cursor || (page.more && page.cursor === cursor)) throw invalidResponse();
   return page;
 }
+/** A v3 page (spec §6): changes across your own scope and your spaces', a cursor per scope. */
+export interface PageV3 extends Page { cursors: Record<string, number>; scopes: Space[]; more: boolean; reset: string[]; revoked: string[] }
+const SCOPE = /^(u:[^,]+|[cp]:[a-z0-9]{12})$/;
+const KINDS = ['courses', 'items', 'quotes', 'study_sessions', 'achievements'];
+const scopeList = (v: unknown): v is string[] => Array.isArray(v) && v.every((s) => typeof s === 'string' && SCOPE.test(s));
+async function changesV3(cursors: Record<string, number>, sv: number): Promise<PageV3> {
+  const list = Object.entries(cursors).map(([scope, seq]) => `${scope}:${seq}`).join(',');
+  const page = await request('GET', `/api/sync?v=3&cursors=${encodeURIComponent(list)}&sv=${sv}`);
+  const valid = !!page && typeof page.more === 'boolean' && scopeList(page.reset) && scopeList(page.revoked)
+    && !!page.cursors && typeof page.cursors === 'object'
+    && Object.entries(page.cursors).every(([s, n]) => SCOPE.test(s) && Number.isSafeInteger(n) && (n as number) >= 0)
+    && Array.isArray(page.scopes) && page.scopes.every((s: Space | null) => !!s && typeof s.id === 'string' && SCOPE.test(s.scope) && Number.isSafeInteger(s.revision))
+    && Array.isArray(page.changes) && page.changes.every((c: { scope?: unknown; kind?: unknown; row?: Row } | null) =>
+      !!c && typeof c.scope === 'string' && SCOPE.test(c.scope) && KINDS.includes(c.kind as string)
+      && (c.scope.startsWith('u:') || c.kind === 'courses' || c.kind === 'items') && validRecord(c.row));
+  if (!valid) throw invalidResponse();
+  /* a cursor never moves back, except to 0 for a scope that reset */
+  for (const [scope, seq] of Object.entries(page.cursors as Record<string, number>)) {
+    if (seq < (cursors[scope] || 0) && !page.reset.includes(scope)) throw invalidResponse();
+  }
+  return page;
+}
+/* A shared row's URL: the space id is the scope without its 'c:' or 'p:'. */
+const sharedPath = (scope: string, kind: string, id: string) => `/api/spaces/${scope.slice(2)}/${kind}/${encodeURIComponent(id)}`;
 
 /* A read's query: only the values given, in the order given. */
 const query = (o: Record<string, string | undefined>) => new URLSearchParams(Object.entries(o).filter((e): e is [string, string] => !!e[1])).toString()
@@ -173,6 +198,14 @@ export const api = {
   login: (username: string, password: string) => record<ServerProfile & Row>(request('POST', '/api/login', { username, password })),
   signOut: () => empty(request('DELETE', '/api/session')),
   sync: changes,
+  syncV3: changesV3,
+  /* a class's or a project's course or item; `changed` is {field: value before} (spec §6 Push) */
+  shared: {
+    get: (scope: string, kind: string, id: string) => record(request('GET', sharedPath(scope, kind, id)), id),
+    put: (scope: string, kind: string, id: string, row: { revision?: number; [field: string]: unknown }, changed?: Record<string, unknown>) =>
+      record(request('PUT', sharedPath(scope, kind, id), changed ? { ...row, changed } : row, match(row.revision)), id, row.revision),
+    del: (scope: string, kind: string, id: string, revision = 0) => empty(request('DELETE', sharedPath(scope, kind, id), undefined, match(revision))),
+  },
   get: (kind: string, id: string) => record(request('GET', `/api/${kind}/${encodeURIComponent(id)}`), id),
   put: (kind: string, id: string, row: { revision?: number; [field: string]: unknown }) => record(request('PUT', `/api/${kind}/${encodeURIComponent(id)}`, row, match(row.revision)), id, row.revision),
   revokeAll: () => empty(request('POST', '/api/session/revoke-all')),
