@@ -206,8 +206,10 @@ test('a v3 page files shared rows by scope beside a personal row with the same i
  assert.equal(first.spaceRevision(), 6);
  assert.deepEqual(await first.meta.get('cursors'), { [own]: 5, [WEB]: 6 });
  /* a page without the member list keeps the one held */
- await first.applyPage({ cursors: {}, scopes: [webSpace()], changes: [] });
+ await first.applyPage({ cursors: { [WEB]: 'r7.40' }, scopes: [webSpace()], changes: [] });
  assert.equal(first.data.spaces[0].members[0].name, 'Gabriel');
+ /* a resync's tagged cursor is kept as it came, to go back on the next page */
+ assert.deepEqual(await first.meta.get('cursors'), { [own]: 5, [WEB]: 'r7.40' });
  await first.applyRevoked([WEB]);
  assert.deepEqual([first.data.shared_items, first.data.shared_courses, first.data.spaces], [[], [], []]);
  assert.deepEqual(await first.meta.get('cursors'), { [own]: 5 });

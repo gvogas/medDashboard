@@ -8,7 +8,7 @@ import { readSchool } from './school.js';
 import { readSchedule } from './schedule.js';
 import { listParam, cleanTerm, TIMEOUT_MS } from './ai.js';
 import { validateProfile, validateCourse, validateItem, validateQuote, validateStudySession, validateAchievement, validateId, validateSharedCourse, validateSharedItem, validateChanged } from './validate.js';
-import { getUserForLogin, getProfile, updateProfile, getRow, upsertRow, deleteRow, syncPage, syncPageV3, bumpPasswordGen, saveSpotifyTokens, deleteSpotifyTokens, getShared, upsertShared, deleteShared, memberTaskWrite } from './db.js';
+import { getUserForLogin, getProfile, updateProfile, getRow, upsertRow, deleteRow, syncPage, syncPageV3, parseCursor, bumpPasswordGen, saveSpotifyTokens, deleteSpotifyTokens, getShared, upsertShared, deleteShared, memberTaskWrite } from './db.js';
 import { parseScope, roleOf, scopeOf } from './access.js';
 import * as spotify from './spotify.js';
 import { feedState, renewFeed, stopFeed, serveFeed } from './calendar.js';
@@ -23,7 +23,8 @@ function revisionOf(request) {
   return Number(raw.slice(1, -1));
 }
 
-/** `cursors=u:<me>:812,c:<space id>:640`: each entry split at its last ':'. At most 25; anything malformed is a 400. */
+/** `cursors=u:<me>:812,c:<space id>:r640.700`: each entry split at its last ':', a sequence or a
+    resync's tagged cursor (db.js parseCursor). At most 25; anything malformed is a 400. */
 export function cursorsParam(raw) {
   if (!raw) return [];
   const bad = () => new HttpError(400, { error: 'invalid', field: 'cursors' });
@@ -32,9 +33,10 @@ export function cursorsParam(raw) {
   const seen = new Set();
   return parts.map((part) => {
     const at = part.lastIndexOf(':'), scope = part.slice(0, at), seq = part.slice(at + 1);
-    if (at < 0 || !parseScope(scope) || seen.has(scope) || !/^\d{1,16}$/.test(seq) || !Number.isSafeInteger(Number(seq))) throw bad();
+    const cursor = parseCursor(seq);
+    if (at < 0 || !parseScope(scope) || seen.has(scope) || !cursor) throw bad();
     seen.add(scope);
-    return [scope, Number(seq)];
+    return [scope, cursor.base === null ? cursor.seq : seq];
   });
 }
 

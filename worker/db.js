@@ -494,26 +494,52 @@ export async function readPage(db, userId, wanted, limit = 100) {
 }
 
 /**
- * One v3 page. `cursors` is [[scope, seq]] as the client sent them; `sv` the highest space
- * revision it holds (0 on its first sync after opening). The Worker pages the scopes it
- * builds itself, the person's own and their spaces': a scope sent that is not among them
+ * A v3 cursor: a sequence, or `r<seq>.<floor>` for a scope resyncing from 0 that is still
+ * below the floor, naming the floor its resync began at. Returns {seq, base} (base null
+ * for a plain cursor), or null when malformed.
+ */
+export function parseCursor(token) {
+  const m = typeof token === 'number' ? [null, String(token)] : /^(?:(\d{1,16})|r(\d{1,16})\.(\d{1,16}))$/.exec(String(token));
+  if (!m) return null;
+  const seq = Number(m[1] ?? m[2]), base = m[3] === undefined ? null : Number(m[3]);
+  if (!Number.isSafeInteger(seq) || seq < 0 || (base !== null && !Number.isSafeInteger(base))) return null;
+  return { seq, base };
+}
+
+/**
+ * One v3 page. `cursors` is [[scope, cursor]] as the client sent them; `sv` the highest
+ * space revision it holds (0 on its first sync after opening). The Worker pages the scopes
+ * it builds itself, the person's own and their spaces': a scope sent that is not among them
  * comes back in `revoked`, and one not sent starts at 0. A non-zero cursor below the floor
- * (or above the head) comes back in `reset` at 0, its rows left out, with `more` set. Each
- * cursor moves to the last sequence delivered (the head on the last page), never back.
+ * (or above the head) comes back in `reset` at 0, its rows left out, with `more` set;
+ * except a resync's tagged cursor (`r<seq>.<floor>`) while the floor has not moved since
+ * it began: the client wiped that scope, so a tombstone purged before then is nothing it
+ * holds, and a purge since would move the floor. Each cursor moves to just below its
+ * scope's first row not delivered (the head when none is left), never back; one still
+ * below the floor after a resync from 0 comes back tagged.
  */
 export async function syncPageV3(db, userId, cursors, sv, limit = 100) {
   const spaces = await readMemberships(db, userId, sv);
-  const sent = new Map(cursors);
+  const sent = new Map(cursors.map(([s, c]) => [s, parseCursor(c) || { seq: 0, base: null }]));
   const scopes = [personal(userId), ...spaces.map((s) => s.scope)];
   const revoked = [...sent.keys()].filter((s) => !scopes.includes(s));
-  const { floor, head, rows: all } = await readPage(db, userId, scopes.map((s) => [s, sent.get(s) || 0]), limit);
-  const reset = scopes.filter((s) => { const c = sent.get(s) || 0; return c > 0 && (c < floor || c > head); });
+  const from = (s) => sent.get(s) || { seq: 0, base: null };
+  const { floor, head, rows: all } = await readPage(db, userId, scopes.map((s) => [s, from(s).seq]), limit);
+  const reset = scopes.filter((s) => {
+    const { seq, base } = from(s);
+    return seq > head || (seq > 0 && seq < floor && base !== floor);
+  });
   const rows = all.filter((r) => !reset.includes(r.scope));
   const full = rows.length > limit, page = rows.slice(0, limit);
-  const end = full ? page.at(-1).seq : head;
+  const next = (s) => {
+    const { seq, base } = from(s);
+    const left = rows.slice(limit).find((r) => r.scope === s);
+    const at = Math.max(seq, left ? left.seq - 1 : head);
+    return at >= floor || at === 0 ? at : `r${at}.${base ?? floor}`;
+  };
   return {
     scopes: spaces,
-    cursors: Object.fromEntries(scopes.map((s) => [s, reset.includes(s) ? 0 : Math.max(sent.get(s) || 0, end)])),
+    cursors: Object.fromEntries(scopes.map((s) => [s, reset.includes(s) ? 0 : next(s)])),
     changes: page.map((r) => {
       const raw = JSON.parse(r.payload);
       return { scope: r.scope, kind: r.kind, row: r.scope.startsWith('u:') ? rowToApi(r.kind, raw) : sharedToApi(r.kind, raw) };

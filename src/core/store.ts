@@ -21,7 +21,10 @@ export type ServerProfile = Omit<Partial<Profile>, 'coat'> & { id: string; coat?
  * own), carries a cursor per scope and the person's spaces; v2's single `cursor` is the
  * person's own.
  */
-export interface Page { cursor?: number; cursors?: Record<string, number>; scopes?: Space[]; changes: { scope?: string; kind: Kind; row: Row }[] }
+/** A v3 cursor: a sequence, or `r<seq>.<floor>` while a scope's resync from 0 is still below
+    the floor. Kept as it came and sent back as it is; the Worker drops the tag once past. */
+export type Cursor = number | string;
+export interface Page { cursor?: number; cursors?: Record<string, Cursor>; scopes?: Space[]; changes: { scope?: string; kind: Kind; row: Row }[] }
 
 export const data: {
   profile: Profile | null;
@@ -355,7 +358,7 @@ export function applyPage(page: Page, reset: boolean | string[] = false): Promis
       const held = await a('spaces').get(space.id);
       await a('spaces').put({ ...space, members: space.members ?? held?.members ?? [] });
     }
-    const cursors = (await a('meta').get('cursors'))?.value as Record<string, number> | undefined;
+    const cursors = (await a('meta').get('cursors'))?.value as Record<string, Cursor> | undefined;
     await a('meta').put({ key: 'cursors', value: { ...cursors, ...(page.cursors ?? (page.cursor !== undefined ? { [own]: page.cursor } : {})) } });
     return wipe.length > 0 || page.changes.length > 0;
   }, 'synced');
@@ -372,7 +375,7 @@ export function applyRevoked(scopes: string[]): Promise<boolean> {
   return mutate(async (a) => {
     for (const s of SHARED_STORES) for (const row of await a(s).all()) if (scopes.includes(row.scope)) await a(s).del([row.scope, row.id]);
     for (const space of await a('spaces').all()) if (scopes.includes(space.scope)) await a('spaces').del(space.id);
-    const cursors = { ...((await a('meta').get('cursors'))?.value as Record<string, number> | undefined) };
+    const cursors = { ...((await a('meta').get('cursors'))?.value as Record<string, Cursor> | undefined) };
     for (const s of scopes) delete cursors[s];
     await a('meta').put({ key: 'cursors', value: cursors });
     return true;

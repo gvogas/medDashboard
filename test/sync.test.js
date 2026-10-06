@@ -61,6 +61,17 @@ describe('persisted operation synchronization', () => {
    expect(store.applyRevoked).toHaveBeenCalledWith(['c:zzzzzzzzzzzz']);
    store.meta.get.mockImplementation(() => 1);
  });
+ it("sends a resync's tagged cursor back while the scope is below the floor, and the plain one once past it", async () => {
+   store.meta.get.mockImplementation(async (key) => (key === 'cursors' ? {} : undefined));
+   const page = (over) => ({ changes: [], scopes: [], more: true, reset: [], revoked: [], ...over });
+   api.syncV3.mockResolvedValueOnce(page({ cursors: { 'u:u1': 'r3.9' } }))
+     .mockResolvedValueOnce(page({ cursors: { 'u:u1': 'r6.9' } }))
+     .mockResolvedValueOnce(page({ cursors: { 'u:u1': 12 }, more: false }));
+   await sync.syncNow();
+   expect(api.syncV3.mock.calls.map(([cursors]) => cursors)).toEqual([{}, { 'u:u1': 'r3.9' }, { 'u:u1': 'r6.9' }]);
+   expect(store.applyPage.mock.calls.at(-1)[0].cursors).toEqual({ 'u:u1': 12 });
+   store.meta.get.mockImplementation(() => 1);
+ });
  it("sends sv 0 on an account's first sync after the app opens, then the highest space revision held", async () => {
    store.data.profile = { id: 'u9' };
    store.spaceRevision.mockReturnValue(42);

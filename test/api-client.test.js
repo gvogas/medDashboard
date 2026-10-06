@@ -120,6 +120,14 @@ describe('browser API response contracts', () => {
     expect(await client.api.shared.del(web.scope, 'items', 'a1', saved.revision)).toBeNull();
     respond({ ...next, cursors: { [own]: 0 } });
     await expect(client.api.syncV3({ [own]: 5 }, 0)).rejects.toMatchObject({ status: 502 });
+    /* a resync's tagged cursor goes out as it came, and its sequence never moves back either */
+    respond({ ...next, cursors: { [own]: 'r6.40' } });
+    expect((await client.api.syncV3({ [own]: 'r5.40' }, 0)).cursors[own]).toBe('r6.40');
+    expect(new URL(fetch.mock.calls.at(-1)[0], BASE).searchParams.get('cursors')).toBe(`${own}:r5.40`);
+    respond({ ...next, cursors: { [own]: 'r4.40' } });
+    await expect(client.api.syncV3({ [own]: 'r5.40' }, 0)).rejects.toMatchObject({ status: 502 });
+    respond({ ...next, cursors: { [own]: 'r6' } });
+    await expect(client.api.syncV3({ [own]: 0 }, 0)).rejects.toMatchObject({ status: 502 });
     respond({ ...next, changes: [{ scope: own, kind: 'marks', row: saved }] });
     await expect(client.api.syncV3({}, 0)).rejects.toMatchObject({ status: 502 });
   });

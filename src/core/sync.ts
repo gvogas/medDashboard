@@ -4,7 +4,7 @@ import * as store from './store.ts';
 import { untouchedReview } from './reviews.ts';
 import { changedFields, parseKey } from './shared.ts';
 import type { PendingOp, Row } from './db.ts';
-import type { ServerProfile } from './store.ts';
+import type { Cursor, ServerProfile } from './store.ts';
 import type { SyncState, SyncStatus } from './types.ts';
 
 /** One sync cycle: its cancel signal, the account it is for, and the edits it held back. */
@@ -133,7 +133,7 @@ function rank(op: PendingOp): number { return /^(shared_)?courses:/.test(op.key)
 let listsFor: string | null = null;
 async function pullAll(cycle: Cycle): Promise<boolean> {
   const stored = await store.meta.get('cursors');
-  let cursors: Record<string, number> = stored && typeof stored === 'object' ? { ...(stored as Record<string, number>) } : {};
+  let cursors: Record<string, Cursor> = stored && typeof stored === 'object' ? { ...(stored as Record<string, Cursor>) } : {};
   const sv = listsFor === cycle.account ? store.spaceRevision() : 0;
   let wipe: string[] = [], revoked: string[] = [], complete = false;
   // Bound resets as well as ordinary pages, then yield the account's sync lock.

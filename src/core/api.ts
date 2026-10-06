@@ -1,7 +1,7 @@
 // The only file that knows the API's URLs. Same-origin, cookie session.
 
 import type { Row } from './db.ts';
-import type { Page, ServerProfile } from './store.ts';
+import type { Cursor, Page, ServerProfile } from './store.ts';
 import type { Space } from './types.ts';
 
 /** An error's body as the Worker sends it: its code, and for some the server's copy or a wait. */
@@ -164,24 +164,30 @@ async function changes(cursor: number): Promise<Page & { reset: boolean; more: b
   return page;
 }
 /** A v3 page (spec §6): changes across your own scope and your spaces', a cursor per scope. */
-export interface PageV3 extends Page { cursors: Record<string, number>; scopes: Space[]; more: boolean; reset: string[]; revoked: string[] }
+export interface PageV3 extends Page { cursors: Record<string, Cursor>; scopes: Space[]; more: boolean; reset: string[]; revoked: string[] }
 const SCOPE = /^(u:[^,]+|[cp]:[a-z0-9]{12})$/;
 const KINDS = ['courses', 'items', 'quotes', 'study_sessions', 'achievements'];
 const scopeList = (v: unknown): v is string[] => Array.isArray(v) && v.every((s) => typeof s === 'string' && SCOPE.test(s));
-async function changesV3(cursors: Record<string, number>, sv: number): Promise<PageV3> {
+/* A cursor's sequence: a plain one, or a resync's `r<seq>.<floor>`; NaN when malformed. */
+const RESYNC = /^r(\d{1,16})\.\d{1,16}$/;
+function cursorSeq(c: unknown): number {
+  const n = typeof c === 'number' ? c : typeof c === 'string' && RESYNC.test(c) ? Number(RESYNC.exec(c)![1]) : NaN;
+  return Number.isSafeInteger(n) && n >= 0 ? n : NaN;
+}
+async function changesV3(cursors: Record<string, Cursor>, sv: number): Promise<PageV3> {
   const list = Object.entries(cursors).map(([scope, seq]) => `${scope}:${seq}`).join(',');
   const page = await request('GET', `/api/sync?v=3&cursors=${encodeURIComponent(list)}&sv=${sv}`);
   const valid = !!page && typeof page.more === 'boolean' && scopeList(page.reset) && scopeList(page.revoked)
     && !!page.cursors && typeof page.cursors === 'object'
-    && Object.entries(page.cursors).every(([s, n]) => SCOPE.test(s) && Number.isSafeInteger(n) && (n as number) >= 0)
+    && Object.entries(page.cursors).every(([s, n]) => SCOPE.test(s) && !Number.isNaN(cursorSeq(n)))
     && Array.isArray(page.scopes) && page.scopes.every((s: Space | null) => !!s && typeof s.id === 'string' && SCOPE.test(s.scope) && Number.isSafeInteger(s.revision))
     && Array.isArray(page.changes) && page.changes.every((c: { scope?: unknown; kind?: unknown; row?: Row } | null) =>
       !!c && typeof c.scope === 'string' && SCOPE.test(c.scope) && KINDS.includes(c.kind as string)
       && (c.scope.startsWith('u:') || c.kind === 'courses' || c.kind === 'items') && validRecord(c.row));
   if (!valid) throw invalidResponse();
   /* a cursor never moves back, except to 0 for a scope that reset */
-  for (const [scope, seq] of Object.entries(page.cursors as Record<string, number>)) {
-    if (seq < (cursors[scope] || 0) && !page.reset.includes(scope)) throw invalidResponse();
+  for (const [scope, cursor] of Object.entries(page.cursors as Record<string, Cursor>)) {
+    if (cursorSeq(cursor) < (cursorSeq(cursors[scope] ?? 0) || 0) && !page.reset.includes(scope)) throw invalidResponse();
   }
   return page;
 }

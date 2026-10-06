@@ -85,12 +85,60 @@ describe('sync v3', () => {
     }
   });
 
+  it('finishes a resync from 0 that pages below the floor, rather than resetting it forever', async () => {
+    const ana = await createUser('v3-resync'), owner = await createUser('v3-resync-o');
+    for (const id of ['q1', 'q2', 'q3']) await upsertRow(env.DB, 'quotes', ana, id, { text: id, source: '' });
+    const floor = (await syncPageV3(env.DB, ana, [], 0)).cursors[personal(ana)];
+    const web = await makeSpace({ members: { [owner]: 'owner', [ana]: 'member' } });   /* its rows lie above the floor */
+    await env.DB.prepare('UPDATE sync_state SET floor = ? WHERE id = 1').bind(floor).run();
+    try {
+      let cursors = {}, more = true;
+      const pages = [];
+      for (let n = 0; more && n < 10; n++) {
+        const page = await syncPageV3(env.DB, ana, Object.entries(cursors), 0, 1);
+        pages.push(page);
+        ({ cursors, more } = page);
+      }
+      expect(more).toBe(false);
+      expect(pages.flatMap((p) => p.reset)).toEqual([]);
+      expect(pages.flatMap((p) => p.changes.map((c) => c.row.id))).toEqual(['q1', 'q2', 'q3', 'web']);
+      /* below the floor, the cursor says it is a resync begun at this floor */
+      expect(pages[0].cursors[personal(ana)]).toMatch(new RegExp(`^r\\d+\\.${floor}$`));
+      /* the space paged nothing yet, but its cursor waits just below its first row, above the floor */
+      expect(pages[0].cursors[web.scope]).toBeGreaterThanOrEqual(floor);
+      expect(Object.values(cursors).every((c) => typeof c === 'number' && c >= floor)).toBe(true);
+    } finally {
+      await env.DB.prepare('UPDATE sync_state SET floor = 0 WHERE id = 1').run();
+    }
+  });
+
+  it('resets a resync begun at an older floor, and an untagged cursor below the floor', async () => {
+    const ana = await createUser('v3-resync-old');
+    for (const id of ['q1', 'q2']) await upsertRow(env.DB, 'quotes', ana, id, { text: id, source: '' });
+    const head = (await syncPageV3(env.DB, ana, [], 0)).cursors[personal(ana)];
+    await env.DB.prepare('UPDATE sync_state SET floor = ? WHERE id = 1').bind(head).run();
+    try {
+      const first = await syncPageV3(env.DB, ana, [], 0, 1);
+      const token = first.cursors[personal(ana)];
+      expect(token).toMatch(/^r\d+\.\d+$/);
+      expect((await syncPageV3(env.DB, ana, [[personal(ana), token]], 0, 1)).reset).toEqual([]);
+      const seq = Number(token.slice(1).split('.')[0]);
+      expect((await syncPageV3(env.DB, ana, [[personal(ana), seq]], 0, 1)).reset).toEqual([personal(ana)]);
+      await env.DB.prepare('UPDATE sync_state SET floor = ? WHERE id = 1').bind(head + 1).run();   /* a purge since the resync began */
+      expect((await syncPageV3(env.DB, ana, [[personal(ana), token]], 0, 1)).reset).toEqual([personal(ana)]);
+    } finally {
+      await env.DB.prepare('UPDATE sync_state SET floor = 0 WHERE id = 1').run();
+    }
+  });
+
   it('answers GET /api/sync?v=3, refuses malformed cursors, and keeps v2 as it was', async () => {
     const api = await signIn('v3-route');
     const ok = await (await api('/api/sync?v=3&cursors=' + encodeURIComponent('u:u-v3-route:0,c:abcdefghij12:4') + '&sv=0')).json();
     expect(ok).toMatchObject({ scopes: [], more: false, reset: [], revoked: ['c:abcdefghij12'] });
     expect(Object.keys(ok.cursors)).toEqual(['u:u-v3-route']);
-    for (const bad of ['u:u-v3-route', 'x:1:2', 'c:abcdefghij12:-1', 'u:a:1,u:a:2', Array.from({ length: 26 }, (_, i) => `u:x${i}:1`).join(',')]) {
+    const tagged = await api('/api/sync?v=3&cursors=' + encodeURIComponent('u:u-v3-route:r0.0'));
+    expect(tagged.status).toBe(200);
+    for (const bad of ['u:u-v3-route', 'x:1:2', 'c:abcdefghij12:-1', 'u:a:1,u:a:2', 'u:a:r1', 'u:a:r.1', 'u:a:r1.', 'u:a:R1.2', 'u:a:r1.2.3', Array.from({ length: 26 }, (_, i) => `u:x${i}:1`).join(',')]) {
       expect((await api('/api/sync?v=3&cursors=' + encodeURIComponent(bad))).status).toBe(400);
     }
     expect((await api('/api/sync?v=3&sv=x')).status).toBe(400);
