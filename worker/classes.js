@@ -5,7 +5,7 @@ import { json, readJson, HttpError } from './http.js';
 import { requireUser } from './auth.js';
 import { requireAdmin } from './admin.js';
 import { validateSharedCourse } from './validate.js';
-import { ADMINS_ONLY, checkConvert, createClass, priorConvert, setRole, spaceDetails, transfer } from './spaces.js';
+import { ADMINS_ONLY, absorb, checkConvert, createClass, priorConvert, setRole, spaceDetails, transfer } from './spaces.js';
 import { acceptInvite, declineInvite, dropCode, invite, joinByCode, makeCode, myInvites, revokeInvite } from './invites.js';
 
 const SID = '([a-z0-9]{12})';
@@ -33,6 +33,20 @@ export function classBody(body) {
   const items = body.items ?? [];
   if (!Array.isArray(items) || items.length > 500) throw bad('items');
   return { convertCourseId: idOf(body.convertCourseId, 'convertCourseId'), items: [...new Set(items.map((id) => idOf(id, 'items')))] };
+}
+
+/** POST /api/spaces/:sid/absorb: {courseId, pairs: [[your item id, the class's item id]], fromCourse?}; each id once. */
+export function absorbBody(body) {
+  const courseId = idOf(body.courseId, 'courseId');
+  const pairs = body.pairs ?? [];
+  if (!Array.isArray(pairs) || pairs.length > 500) throw bad('pairs');
+  const out = pairs.map((p) => {
+    if (!Array.isArray(p) || p.length !== 2) throw bad('pairs');
+    return [idOf(p[0], 'pairs'), idOf(p[1], 'pairs')];
+  });
+  if (new Set(out.map((p) => p[0])).size !== out.length || new Set(out.map((p) => p[1])).size !== out.length) throw bad('pairs');
+  if (body.fromCourse != null && typeof body.fromCourse !== 'boolean') throw bad('fromCourse');
+  return { courseId, pairs: out, fromCourse: body.fromCourse === true };
 }
 
 export const classRoutes = [
@@ -87,4 +101,6 @@ export const classRoutes = [
     const userId = await joiner(request, env);
     return json({ space: await joinByCode(env.DB, userId, (await readJson(request)).code) });
   }],
+  ['POST', route(`spaces/${SID}/absorb`), async ({ request, env, params: [sid] }) =>
+    json(await absorb(env.DB, await requireUser(request, env), sid, absorbBody(await readJson(request))))],
 ];

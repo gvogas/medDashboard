@@ -273,3 +273,93 @@ export async function transfer(db, userId, spaceId, targetId, now = Date.now()) 
   ]);
   if (!demoted.meta.changes) throw new HttpError(404, { error: 'not_found' });
 }
+
+/**
+ * Merge a course of yours into a class you are in (spec §13, merge on join): for each pair
+ * [your item, the class's item], a mark from your item when it holds anything of yours (its
+ * weight an override only when it differs from the class's; a mark you already had wins
+ * field by field), your sessions and achievements on it and on the course moved to the
+ * class's ids with the space, your item soft-deleted; your other items of the course filed
+ * under the class; your target (always, while your prefs have none) and, with `fromCourse`,
+ * your colour, term and archive flag into your prefs; the course soft-deleted. Writes no
+ * shared row. Pairs name live items of your course (never a custom-typed one) and live items
+ * of the class. A course already gone answers {paired: 0, filed: 0}: a retry.
+ */
+export async function absorb(db, userId, spaceId, { courseId, pairs, fromCourse = false }, now = Date.now()) {
+  const me = await assertAllowed(db, userId, spaceId, 'read');
+  if (me.kind !== 'class') throw new HttpError(404, { error: 'not_found' });
+  const mine = 'u:' + userId, scope = scopeOf('class', spaceId), J = JSON.stringify(pairs);
+  const [course, own, theirs] = await db.batch([
+    db.prepare('SELECT deleted_at FROM courses WHERE scope = ? AND id = ?').bind(mine, courseId),
+    db.prepare(`SELECT id, type FROM items WHERE scope = ? AND course_id = ? AND deleted_at IS NULL
+      AND id IN (SELECT json_extract(value, '$[0]') FROM json_each(?))`).bind(mine, courseId, J),
+    db.prepare(`SELECT id FROM items WHERE scope = ? AND deleted_at IS NULL
+      AND id IN (SELECT json_extract(value, '$[1]') FROM json_each(?))`).bind(scope, J),
+  ]);
+  const c = course.results[0];
+  if (!c) throw new HttpError(400, { error: 'invalid', field: 'courseId' });
+  if (c.deleted_at !== null) return { paired: 0, filed: 0 };
+  if (own.results.length !== pairs.length || theirs.results.length !== pairs.length || own.results.some((r) => r.type.startsWith('c-'))) {
+    throw new HttpError(400, { error: 'invalid', field: 'pairs' });
+  }
+  const g = memberGuard(spaceId, userId), f = fromCourse ? 1 : 0;
+  const P = `(SELECT json_extract(value, '$[0]') AS mine, json_extract(value, '$[1]') AS shared FROM json_each(?))`;
+  const CLASS_COURSE = '(SELECT id FROM courses WHERE scope = ? AND deleted_at IS NULL LIMIT 1)';
+  /* the course not merged yet: a second merge racing this one writes nothing */
+  const LIVE = 'EXISTS (SELECT 1 FROM courses WHERE scope = ? AND id = ? AND deleted_at IS NULL)';
+  /* rows the statement just before changed: meta.changes would also count the change log's trigger writes */
+  const COUNT = db.prepare('SELECT changes() AS n');
+  const results = await db.batch([
+    db.prepare(`INSERT INTO marks (user_id, id, space_id, item_id, status, grade, weight, notes, checklist, completed_at, hidden, created_at, updated_at, revision)
+      SELECT ?, ? || ':' || p.shared, ?, p.shared, i.status, i.grade, CASE WHEN i.weight IS NOT s.weight THEN i.weight END, i.notes, i.checklist, i.completed_at, 0, ?, ?, ${NEXT_ROW_REVISION}
+      FROM ${P} AS p JOIN items AS i ON i.scope = ? AND i.id = p.mine AND i.course_id = ? AND i.deleted_at IS NULL
+        JOIN items AS s ON s.scope = ? AND s.id = p.shared AND s.deleted_at IS NULL
+      WHERE (i.status != 'todo' OR i.grade IS NOT NULL OR i.notes != '' OR i.checklist != '[]' OR i.completed_at IS NOT NULL OR (i.weight IS NOT NULL AND i.weight IS NOT s.weight))
+        AND ${g.sql} AND ${LIVE}
+      ON CONFLICT (user_id, id) DO UPDATE SET
+        status = CASE WHEN marks.status = 'todo' THEN excluded.status ELSE marks.status END,
+        grade = COALESCE(marks.grade, excluded.grade), weight = COALESCE(marks.weight, excluded.weight),
+        notes = CASE WHEN marks.notes = '' THEN excluded.notes ELSE marks.notes END,
+        checklist = CASE WHEN marks.checklist = '[]' THEN excluded.checklist ELSE marks.checklist END,
+        completed_at = COALESCE(marks.completed_at, excluded.completed_at),
+        hidden = 0, deleted_at = NULL, updated_at = excluded.updated_at, revision = marks.revision + 1`)
+      .bind(userId, spaceId, spaceId, now, now, J, mine, courseId, scope, ...g.binds, mine, courseId),
+    db.prepare(`UPDATE study_sessions SET space_id = ?, course_id = ${CLASS_COURSE},
+        item_id = (SELECT p.shared FROM ${P} AS p WHERE p.mine = study_sessions.item_id), updated_at = ?, revision = revision + 1
+      WHERE user_id = ? AND deleted_at IS NULL AND space_id IS NULL AND (course_id IS NULL OR course_id = ?)
+        AND item_id IN (SELECT p.mine FROM ${P} AS p) AND ${g.sql} AND ${LIVE}`)
+      .bind(spaceId, scope, J, now, userId, courseId, J, ...g.binds, mine, courseId),
+    db.prepare(`UPDATE study_sessions SET space_id = ?, course_id = ${CLASS_COURSE}, updated_at = ?, revision = revision + 1
+      WHERE user_id = ? AND deleted_at IS NULL AND space_id IS NULL AND course_id = ? AND item_id IS NULL AND ${g.sql} AND ${LIVE}`)
+      .bind(spaceId, scope, now, userId, courseId, ...g.binds, mine, courseId),
+    db.prepare(`UPDATE study_sessions SET course_id = NULL, updated_at = ?, revision = revision + 1
+      WHERE user_id = ? AND deleted_at IS NULL AND space_id IS NULL AND course_id = ? AND ${g.sql} AND ${LIVE}`)
+      .bind(now, userId, courseId, ...g.binds, mine, courseId),
+    db.prepare(`UPDATE achievements SET space_id = ?,
+        course_id = CASE WHEN rule = 'hours' THEN ${CLASS_COURSE} ELSE course_id END,
+        item_id = CASE WHEN rule = 'grade' THEN (SELECT p.shared FROM ${P} AS p WHERE p.mine = achievements.item_id) ELSE item_id END,
+        updated_at = ?, revision = revision + 1
+      WHERE user_id = ? AND deleted_at IS NULL AND space_id IS NULL
+        AND ((rule = 'hours' AND course_id = ?) OR (rule = 'grade' AND item_id IN (SELECT p.mine FROM ${P} AS p))) AND ${g.sql} AND ${LIVE}`)
+      .bind(spaceId, scope, J, now, userId, courseId, J, ...g.binds, mine, courseId),
+    db.prepare(`INSERT INTO space_prefs (user_id, id, space_id, color, target, term, archived, created_at, updated_at, revision)
+      SELECT ?, ?, ?, color, target, term, archived, ?, ?, ${NEXT_ROW_REVISION} FROM courses WHERE scope = ? AND id = ? AND deleted_at IS NULL AND ${g.sql}
+      ON CONFLICT (user_id, id) DO UPDATE SET target = COALESCE(space_prefs.target, excluded.target),
+        color = CASE WHEN ? THEN excluded.color ELSE space_prefs.color END,
+        term = CASE WHEN ? THEN excluded.term ELSE space_prefs.term END,
+        archived = CASE WHEN ? THEN excluded.archived ELSE space_prefs.archived END,
+        deleted_at = NULL, updated_at = excluded.updated_at, revision = space_prefs.revision + 1`)
+      .bind(userId, spaceId, spaceId, now, now, mine, courseId, ...g.binds, f, f, f),
+    db.prepare(`UPDATE items SET deleted_at = ?, updated_at = ?, revision = revision + 1
+      WHERE scope = ? AND course_id = ? AND deleted_at IS NULL AND id IN (SELECT p.mine FROM ${P} AS p) AND ${g.sql} AND ${LIVE}`)
+      .bind(now, now, mine, courseId, J, ...g.binds, mine, courseId),
+    COUNT,
+    db.prepare(`UPDATE items SET class_id = ?, course_id = NULL, updated_at = ?, revision = revision + 1
+      WHERE scope = ? AND course_id = ? AND deleted_at IS NULL AND ${g.sql} AND ${LIVE}`)
+      .bind(spaceId, now, mine, courseId, ...g.binds, mine, courseId),
+    COUNT,
+    db.prepare(`UPDATE courses SET deleted_at = ?, updated_at = ?, revision = revision + 1 WHERE scope = ? AND id = ? AND deleted_at IS NULL AND ${g.sql}`)
+      .bind(now, now, mine, courseId, ...g.binds),
+  ]);
+  return { paired: results[7].results[0].n, filed: results[9].results[0].n };
+}
