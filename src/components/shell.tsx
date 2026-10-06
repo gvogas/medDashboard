@@ -7,6 +7,7 @@ import { useScreen } from "@/data/signin"
 import { setSide, sideOpen, useSide } from "@/data/sidebar"
 import { getSheet, requestCloseSheet, useCovered, useSheet } from "@/data/overlay"
 import { useUi } from "@/data/ui"
+import { pageFeature, useMaintenance } from "@/data/maintenance"
 import type { Ui } from "@/data/types"
 
 const PAGES = ["week", "month", "table", "study", "spotify", "admin"]
@@ -34,10 +35,11 @@ export function Page({ children }: { children?: ReactNode }) {
     )
 }
 
-/** The stat tiles; hidden with them, so the gap goes too. */
+/** The stat tiles; hidden with them, so the gap goes too, and over a page in maintenance. */
 export function StatsHost({ children }: { children?: ReactNode }) {
     const shown = useUi(statsShown)
-    return <div id="stats" hidden={!shown}>{children}</div>
+    const blocked = useMaintenance(pageFeature(useUi(shownView))) === "blocked"
+    return <div id="stats" hidden={!shown || blocked}>{children}</div>
 }
 
 /** The week, month, table, Study, Music or Admin page. The table and the Music page scroll their own rows. */

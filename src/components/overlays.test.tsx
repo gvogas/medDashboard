@@ -236,6 +236,10 @@ describe("the reading card", () => {
         await act(() => read(async () => { throw new TypeError("Failed to fetch") }))
         expect(fake.ui.importNote).toEqual({ text: "You seem to be offline. Reading outlines needs a connection.", error: true })
 
+        /* switched off by the admins mid-read: their words, not a generic error */
+        await act(() => read(async () => { throw new fake.ApiError(503, { error: "maintenance", feature: "import" }) }))
+        expect(fake.ui.importNote).toEqual({ text: "We’re fixing something here. Your data is safe and keeps syncing. Check back soon.", error: true })
+
         await act(() => read(async () => { throw new fake.ApiError(504, { error: "ai_timeout" }) }))
         expect(fake.ui.importNote).toEqual({ text: "The AI took too long to answer. Try again in a minute.", error: true })
 

@@ -11,6 +11,8 @@ import { importFile, previewImport, readOutlineFile } from "@/data/import-edit"
 import { readSchoolFile } from "@/data/school-edit"
 import { readScheduleFile } from "@/data/schedule-edit"
 import { beforeSheetClose, closeSheet } from "@/data/overlay"
+import { useMaintenance } from "@/data/maintenance"
+import { MaintenanceBar, MaintenancePage } from "@/components/maintenance"
 import { Button, SheetBody, SheetHead, TextArea } from "./fields"
 
 const KINDS = [
@@ -37,7 +39,20 @@ const KINDS = [
     },
 ] as const
 
+/** The card; while the admins have Import with AI switched off, their message instead
+    (an admin keeps the card, under the bar). */
 export function AiSheet() {
+    const maintenance = useMaintenance("import")
+    if (maintenance !== "blocked") return <Importer bar={maintenance === "admin"} />
+    return (
+        <>
+            <SheetHead kind="Import with AI" onClose={closeSheet} />
+            <SheetBody><MaintenancePage feature="import" inSheet /></SheetBody>
+        </>
+    )
+}
+
+function Importer({ bar }: { bar: boolean }) {
     const left = useUi((u) => u.aiLeft)
     /* the Worker's limit once it has said */
     const reads = useUi((u) => u.aiLimit) ?? 10
@@ -64,6 +79,7 @@ export function AiSheet() {
         <>
             <SheetHead kind="Import with AI" onClose={closeSheet} />
             <SheetBody className="gap-4">
+                {bar && <MaintenanceBar className="mb-0" />}
                 <p className="m-0 text-[13px] leading-normal text-ink-2">Give it a document and it finds the dates for you. You see everything before anything is saved.</p>
                 {KINDS.map((k) => (
                     <section key={k.id} aria-labelledby={"ai-" + k.id + "-t"} className="flex flex-col gap-3 rounded-[10px] border border-border p-4 max-[420px]:p-3">
