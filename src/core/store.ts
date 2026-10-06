@@ -358,9 +358,10 @@ export function applyPage(page: Page, reset: boolean | string[] = false): Promis
       const held = await a('spaces').get(space.id);
       await a('spaces').put({ ...space, members: space.members ?? held?.members ?? [] });
     }
+    const changed = wipe.length > 0 || page.changes.length > 0 || (page.scopes?.length ?? 0) > 0;
     const cursors = (await a('meta').get('cursors'))?.value as Record<string, Cursor> | undefined;
     await a('meta').put({ key: 'cursors', value: { ...cursors, ...(page.cursors ?? (page.cursor !== undefined ? { [own]: page.cursor } : {})) } });
-    return wipe.length > 0 || page.changes.length > 0;
+    return changed;
   }, 'synced');
 }
 

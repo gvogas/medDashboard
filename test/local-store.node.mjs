@@ -249,3 +249,9 @@ test('a reset of one space wipes only that space\'s clean rows', async () => {
  assert.deepEqual(first.data.shared_items.map((r) => `${r.scope}/${r.id}:${r.title}`).sort(), [`${WEB}/b:Offline`, `${LAB}/a:Lab A`]);
  assert.equal(first.item('a').title, 'Mine');
 });
+
+test('a page that only moves a space is reported as a change', async () => {
+ await first.open(p());
+ assert.equal(await first.applyPage({ cursors: {}, changes: [], scopes: [webSpace()] }), true);
+ assert.equal(await first.applyPage({ cursors: {}, changes: [] }), false);
+});
