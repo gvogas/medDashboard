@@ -17,13 +17,13 @@
     "run_worker_first": ["/api", "/api/*"]
   },
 
-  // rounds-v6 was built fresh from migrations/0001_schema.sql and filled by
-  // scripts/move-db.mjs from rounds-v5 on 2026-10-01 (the Admin page).
+  // rounds-v7 was built fresh from migrations/0001_schema.sql and filled by
+  // scripts/move-db.mjs from rounds-v6 on 2026-10-05 (courses, items and the change feed by scope).
   "d1_databases": [
     {
       "binding": "DB",
-      "database_name": "rounds-v6",
-      "database_id": "c1597a84-3183-48f7-8391-76d1e6160ac6",
+      "database_name": "rounds-v7",
+      "database_id": "28f27774-ca21-4ef7-a2ac-416c22b462d0",
       "migrations_dir": "migrations"
     }
   ],
