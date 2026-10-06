@@ -76,12 +76,12 @@ function CourseList() {
                     <span className="min-w-0 truncate">All courses</span>
                 </Row>
                 {courses.map((c) => {
-                    const key = keyOf(c), source = courseSource(c), off = hidden.includes(source)
+                    const key = keyOf(c), source = courseSource(c), off = admin && hidden.includes(source)
                     const space = c.spaceId ? spaces.find((s) => s.id === c.spaceId) ?? null : null
                     const members = space ? space.members.length + (space.members.length === 1 ? " member" : " members") : ""
                     return (
                         <div key={key} title={space ? "Shared · " + members : undefined} className="group flex items-center rounded-[9px] hover:bg-muted">
-                            <Row pressed={selected === key} dim={off || undefined} onClick={() => setCourse(key)} className={selected === key ? undefined : "hover:bg-transparent"}>
+                            <Row pressed={selected === key} dim={off && selected !== key ? true : undefined} onClick={() => setCourse(key)} className={selected === key ? undefined : "hover:bg-transparent"}>
                                 <Pip color={c.color} />
                                 <span className="min-w-0 truncate">{c.name}</span>
                                 {space && <span className="sr-only">, shared, {members}</span>}
