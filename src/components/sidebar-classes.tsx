@@ -1,38 +1,13 @@
-// The sidebar's shared classes, for admins until Stage 6 (spec §15): each class under the
-// courses with the shared glyph, opening the class sheet (its items stay out of the views
-// until Stage 4); a row for the invites waiting; and + New as a menu: a course, a shared
-// class, or joining with a code. The menu follows the ARIA menu pattern.
+// The sidebar's shared-class parts, for admins until Stage 6 (spec §15): a row for the invites
+// waiting, and + New as a menu: a course, a shared class, or joining with a code. The menu
+// follows the ARIA menu pattern. Classes themselves are rows of the course list (sidebar.tsx).
 
 import { useEffect, useRef, useState, type KeyboardEvent } from "react"
-import { useSharedCourses, useSpaces } from "@/data/store"
-import { openClass, openInvites, openJoin, openNewClass, useInvites } from "@/data/classes"
+import { openInvites, openJoin, openNewClass, useInvites } from "@/data/classes"
 import { openCourse } from "@/data/actions"
-import { SharedGlyph } from "./shared-glyph"
-import { Count, Pip } from "./sidebar-parts"
+import { Count } from "./sidebar-parts"
 
 const ROW = "flex w-full min-w-0 items-center gap-2.5 rounded-[9px] border-0 bg-transparent px-2 py-1.5 text-left text-[13px] font-medium text-ink-2 hover:bg-muted hover:text-foreground"
-
-/** Your classes, a row each, opening the class. */
-export function ClassRows() {
-    const spaces = useSpaces().filter((s) => s.kind === "class")
-    const courses = useSharedCourses()
-    return (
-        <>
-            {spaces.map((s) => {
-                const c = courses.find((x) => x.scope === s.scope)
-                const n = s.members.length, members = n + (n === 1 ? " member" : " members")
-                return (
-                    <button key={s.id} type="button" className={ROW} title={"Shared · " + members} onClick={() => openClass(s.id)}>
-                        <Pip color={c?.color ?? "var(--ink-3)"} />
-                        <span className="min-w-0 truncate">{s.name || c?.name || "Class"}</span>
-                        <span className="sr-only">, shared, {members}</span>
-                        <span className="ml-auto text-muted-foreground"><SharedGlyph /></span>
-                    </button>
-                )
-            })}
-        </>
-    )
-}
 
 /** The invites waiting for you; with none, no row. */
 export function InvitesRow() {

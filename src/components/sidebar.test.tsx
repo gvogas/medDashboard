@@ -28,6 +28,7 @@ const classes = vi.hoisted(() => ({ openClass: vi.fn(), openInvites: vi.fn(), op
 vi.mock("@/data/classes", () => ({ ...classes, useInvites: () => fake.invites }))
 
 import { openCourse, openSettings } from "@/data/actions"
+import { saveProfile } from "@/core/store"
 import { Sidebar } from "./sidebar"
 
 stubMatchMedia({ reducedMotion: true })
@@ -203,10 +204,12 @@ describe("shared classes, for admins", () => {
         fake.invites = [{ spaceId: "sp0000000002", expired: false }, { spaceId: "sp0000000003", expired: true }]
     })
 
-    it("list each class under the courses, opening the class, and the invites waiting", () => {
+    it("list each class under the courses: the row filters the views, its ✎ opens the class; the invites waiting", () => {
         render(<Sidebar />)
         fireEvent.click(coursesNav().getByRole("button", { name: /^Web Services, shared, 2 members/ }))
-        expect(classes.openClass).toHaveBeenCalledWith("sp0000000001")
+        expect(fake.ui.course).toBe("c:sp0000000001/web")
+        fireEvent.click(coursesNav().getByRole("button", { name: "Edit Web Services" }))
+        expect(openCourse).toHaveBeenCalledWith("c:sp0000000001/web")
         expect(coursesNav().getByRole("button", { name: /^Invites/ }).textContent).toBe("Invites1")
         fireEvent.click(coursesNav().getByRole("button", { name: /^Invites/ }))
         expect(classes.openInvites).toHaveBeenCalled()
@@ -246,5 +249,28 @@ describe("shared classes, for everyone else", () => {
         expect(coursesNav().queryByRole("button", { name: /^Invites/ })).toBeNull()
         expect(coursesNav().getByRole("button", { name: "+ New course" })).toBeTruthy()
         expect(coursesNav().queryByRole("button", { name: "+ New" })).toBeNull()
+    })
+})
+
+describe("eye toggles", () => {
+    beforeEach(() => {
+        fake.data.courses = [{ id: "anat", code: "ANAT", name: "Anatomy", color: "#E4749B", term: "", archived: false, meetings: [] }]
+    })
+
+    it("hide a course or Personal items from an admin's calendar, and show a hidden one again", () => {
+        fake.data.profile = { ...(fake.data.profile as object), isAdmin: true, hiddenSources: ["course:anat"] }
+        render(<Sidebar />)
+        const show = coursesNav().getByRole("button", { name: "Show Anatomy on your calendar" })
+        expect(show.getAttribute("aria-pressed")).toBe("true")
+        fireEvent.click(show)
+        expect(saveProfile).toHaveBeenCalledWith({ hiddenSources: [] })
+        fireEvent.click(coursesNav().getByRole("button", { name: "Hide Personal items on your calendar" }))
+        expect(saveProfile).toHaveBeenLastCalledWith({ hiddenSources: ["course:anat", "personal"] })
+    })
+
+    it("are not there for anyone else", () => {
+        render(<Sidebar />)
+        expect(coursesNav().queryByRole("button", { name: /on your calendar/ })).toBeNull()
+        expect(coursesNav().queryByText("Personal items")).toBeNull()
     })
 })
