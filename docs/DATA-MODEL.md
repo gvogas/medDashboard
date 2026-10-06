@@ -1,8 +1,10 @@
 # Rounds — data model
 
-Cloudflare D1 (SQLite), several users, every row stamped with the owner's `user_id`.
+Cloudflare D1 (SQLite), several users, every row stamped with its owner: a `scope` on
+courses and items (`u:<user id>` for a person's own; `c:`/`p:` for shared spaces, coming
+with collaboration), a `user_id` on the rest.
 The browser never talks to the database. A Worker reads the session cookie, resolves
-the user, and every query it runs has `user_id = ?` in it.
+the user, and every query it runs has `user_id = ?` (or the user's scope) in it.
 
 ```
 users            one row per account: username, password hash, profile, coat, theme, background
@@ -21,8 +23,9 @@ folding in the study timer, quizzes, grade targets and the calendar feed, then
 `rounds-v3` into `rounds-v4`, folding in study history, achievements, the school
 calendar and the leaderboard, then `rounds-v4` into `rounds-v5`, widening the theme to
 six, then `rounds-v5` into `rounds-v6`, adding the Admin page (`users.is_admin`,
-`users.last_seen_day`, `error_log`, `admin_log`, `app_meta`). `rounds-v6` is the only
-database left. The schema the last move copied from is kept as a test
+`users.last_seen_day`, `error_log`, `admin_log`, `app_meta`), then `rounds-v6` into
+`rounds-v7`, giving courses, items and the change feed a scope. `rounds-v7` is the live
+database. The schema the last move copied from is kept as a test
 fixture in `test/fixtures/legacy-migrations/`. Later changes are new numbered files.
 
 ## Structure at a glance
@@ -37,19 +40,19 @@ fixture in `test/fixtures/legacy-migrations/`. Later changes are new numbered fi
 
 ```mermaid
 erDiagram
-    users ||--o{ courses : owns
-    users ||--o{ items : owns
+    users ||--o{ courses : "owns (scope u:)"
+    users ||--o{ items : "owns (scope u:)"
     users ||--o{ quotes : owns
     users ||--o{ study_sessions : owns
     courses o|--o{ items : groups
-    users ||--o{ changes : syncs
+    users ||--o{ changes : "syncs (scope u:)"
     users ||--o| spotify_tokens : connects
     users ||--o| spotify_oauth_states : authorizes
     users ||--o| spotify_refresh_locks : refreshes
 ```
 
-An item's optional course relationship is `(user_id, course_id)` to
-`courses(user_id, id)`, so ownership cannot cross account boundaries. Direct hard
+An item's optional course relationship is `(scope, course_id)` to
+`courses(scope, id)`, so ownership cannot cross scope boundaries. Direct hard
 deletion of a referenced course is restricted. The application's soft-delete
 transaction clears only `course_id`, increments affected item revisions, and
 records the resulting changes before a later purge can remove the course.
@@ -58,8 +61,8 @@ Account removal remains an explicit operation that deletes dependent records fir
 Conventions used throughout:
 
 - **Ids** are client-generated strings, up to 24 chars (the prototype's are 7). The
-  primary key of every user-owned table is `(user_id, id)`, so two people can hold the
-  same id without colliding and ownership is part of the key, not a filter you might
+  primary key is `(scope, id)` for courses and items, `(user_id, id)` for the others, so
+  two people can hold the same id without colliding and ownership is part of the key, not a filter you might
   forget.
 - **Dates** are `YYYY-MM-DD` strings in *your* local calendar, never a timestamp.
   A deadline of "Friday 23:59" must not shift because you opened the app in another
@@ -96,6 +99,7 @@ Conventions used throughout:
 | `created_at`, `updated_at` | int | | |
 | `revision` | int | starts at 1 | Optimistic concurrency for profile edits. |
 | `pw_gen` | int | starts at 0 | Password/session generation; changing it revokes existing sessions. |
+| `hidden_sources` | JSON array | | For collaboration; see `docs/superpowers/specs/2026-10-02-shared-classes-design.md`. |
 
 A row is created by `npm run user:add`, with the defaults. The API
 exposes it as the **profile**, with the coat fields nested: `{coat: {name, role,
@@ -124,7 +128,7 @@ The twelve course colours; the first five are also the coat colours:
 
 | Column | Type | Rules | Notes |
 | --- | --- | --- | --- |
-| `user_id`, `id` | text, PK | | |
+| `scope`, `id` | text, PK | | `u:<user id>` (personal), `c:<space id>` (class), `p:<space id>` (project; items only). |
 | `code` | text | 1–8 | `CVS`, `ANAT`. Shown in the table and month chips. |
 | `name` | text | 1–80 | `Cardiovascular Block`. |
 | `color` | text | one of the twelve | Drives every chip, pip and card for this course. |
@@ -132,6 +136,7 @@ The twelve course colours; the first five are also the coat colours:
 | `term` | text | ≤ 40 | The school calendar semester the course runs in, by name (`Winter 2027`); its classes show only between that semester's first and last day. `''`, or a name no semester has, means all year. |
 | `archived` | int 0/1 | | Hidden from the sidebar, kept for the record. |
 | `meetings` | JSON array | ≤ 12 | The class timetable. |
+| `updated_by` | text | | For collaboration; see `docs/superpowers/specs/2026-10-02-shared-classes-design.md`. |
 | `created_at`, `updated_at`, `deleted_at` | int | | |
 
 ### `meetings[]` — one weekly class
@@ -157,7 +162,7 @@ values apply, and the week board and table need them interleaved by date.
 
 | Column | API field | Type | Rules | Notes |
 | --- | --- | --- | --- | --- |
-| `user_id`, `id` | `id` | text, PK | | |
+| `scope`, `id` | `id` | text, PK | | `u:<user id>` (personal), `c:<space id>` (class), `p:<space id>` (project; items only). |
 | `type` | | text | see below | Fixed at creation, editable in the drawer. |
 | `title` | | text | 1–140 | |
 | `course_id` | `courseId` | text \| null | FK to `courses` | Cleared on every matching item when a course is deleted. The FK is composite, so it cannot point at another user's course. |
@@ -175,6 +180,10 @@ values apply, and the week board and table need them interleaved by date.
 | `recur_until` | `recurUntil` | text \| null | `YYYY-MM-DD` | End of term; null means open-ended. |
 | `dept` | | text | ≤ 40 | Office hours only: the faculty's department, shown greyed. |
 | `completed_at` | `completedAt` | int \| null | | Stamped when status leaves `todo`. |
+| `updated_by` | `updatedBy` | text | | For collaboration; see `docs/superpowers/specs/2026-10-02-shared-classes-design.md`. |
+| `class_id` | `classId` | text | | For collaboration; see `docs/superpowers/specs/2026-10-02-shared-classes-design.md`. |
+| `assignees` | | JSON array | | For collaboration; see `docs/superpowers/specs/2026-10-02-shared-classes-design.md`. |
+| `completed_by` | `completedBy` | text | | For collaboration; see `docs/superpowers/specs/2026-10-02-shared-classes-design.md`. |
 | `created_at`, `updated_at`, `deleted_at` | camelCase | int | | |
 
 The Worker converts between `snake_case` columns and the camelCase the prototype
@@ -239,6 +248,7 @@ progress lives in the browser's IndexedDB on that device and does not sync.
 | `rounds_done` | int | 0–12, rounds whose every step finished |
 | `note` | text | up to 200 characters: what was covered |
 | `manual` | int | 1 when logged by hand, 0 when the timer recorded it |
+| `space_id` | text | for collaboration; see `docs/superpowers/specs/2026-10-02-shared-classes-design.md` |
 | `created_at`, `updated_at`, `deleted_at` | int | |
 
 The flow itself is `users.study_flow`, JSON `{"steps":[["study",25],["break",5]],"rounds":4}`:
@@ -277,6 +287,7 @@ device from sessions and items, as is whether one of these is earned
 | `course_id` | text | `hours` only: the course whose study time counts. A plain reference; a deleted course leaves it locked. |
 | `item_id` | text | `grade` only: the exam or quiz. A deleted one leaves it locked. |
 | `target` | int | hours 1–1000, or the least grade, 1–100 |
+| `space_id` | text | for collaboration; see `docs/superpowers/specs/2026-10-02-shared-classes-design.md` |
 | `created_at`, `updated_at`, `deleted_at` | int | |
 
 ---
@@ -301,10 +312,10 @@ reads it to call Spotify on the user's behalf.
 | --- | --- |
 | `study_sessions (user_id, started_at)` | the week's study log |
 | `study_sessions (user_id, course_id)`, `(user_id, item_id)` | unlinking a deleted course or item |
-| `items (user_id, date)` | any future "this term only" query |
-| `items (user_id, course_id)` | course detachment and composite foreign-key lookups, including tombstones |
+| `items (scope, date)` | any future "this term only" query |
+| `items (scope, course_id)` | course detachment and composite foreign-key lookups, including tombstones |
 | `*_deleted (deleted_at)` | the nightly tombstone purge |
-| `changes (user_id, seq)` | current paginated sync protocol |
+| `changes (scope, seq)` | current paginated sync protocol |
 | `changes (deleted_at)` | expired deletion-history cleanup |
 | `login_throttle (updated_at, locked_until)` | expired login-attempt cleanup |
 | `request_limits (reset_at)` | expired request-window cleanup |
@@ -414,7 +425,8 @@ supported incremental cursor.
    client cannot overwrite current data. Deletes use the same precondition.
 4. `GET /api/sync?v=2&cursor=0` starts reconciliation. Pages contain at most 100
    `{kind, row}` changes, `cursor`, `more`, and `reset`. SQLite triggers capture each
-   write transaction in an increasing sequence; repeated updates retain the latest
+   write transaction in an increasing sequence keyed by scope (`'u:' || user_id` for a
+   person's own rows); repeated updates retain the latest
    change for that entity. Profile reads use `/api/me` and revisions separately.
 5. The nightly purge advances the cursor floor before deleting old tombstones and
    their change entries, in one transaction. An expired cursor receives `reset:true`.
@@ -435,7 +447,7 @@ supported incremental cursor.
 ## Security model
 
 1. **Ownership** — `requireUser()` runs first in every handler and every SQL statement
-   filters on that `user_id`. No route accepts a `user_id` from the client. A row that
+   filters on that user (`user_id`, or the scope `u:<user id>` for courses and items). No route accepts a `user_id` from the client. A row that
    belongs to someone else is a `404`, indistinguishable from a row that doesn't exist.
 2. **Shape** — `CHECK` constraints in the schema enforce enums, lengths, date and
    time formats, JSON validity and array caps. `validate.js` runs the same rules first
