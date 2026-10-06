@@ -15,6 +15,7 @@ import { feedState, renewFeed, stopFeed, serveFeed } from './calendar.js';
 import { leaderboard, setJoined } from './leaderboard.js';
 import { adminRoutes, markSeen, readAnnouncement } from './admin.js';
 import { logError, messageOf } from './errors.js';
+import { guardMaintenance, publicMaintenance } from './maintenance.js';
 
 function revisionOf(request) {
   const raw = request.headers.get('if-match');
@@ -266,7 +267,7 @@ const routes = [
 
   ['GET', /^\/api\/me$/, async ({ request, env, url }) => {
     const session = await requireSession(request, env);
-    const [profile, announcement] = await Promise.all([getProfile(env.DB, session.userId), readAnnouncement(env.DB)]);
+    const [profile, announcement, maintenance] = await Promise.all([getProfile(env.DB, session.userId), readAnnouncement(env.DB), publicMaintenance(env.DB)]);
     if (!profile) throw new HttpError(401, { error: 'unauthenticated' });
     await markSeen(env.DB, session.userId);
     // Keep a regular user signed in: a cookie in its last week is re-issued.
@@ -274,7 +275,7 @@ const routes = [
     if (session.expiresAt - Date.now() < RENEW_WITHIN_MS) {
       headers['set-cookie'] = sessionCookie(await signSession(session.userId, session.gen, env.SESSION_SECRET), url);
     }
-    return json({ ...profile, announcement }, 200, headers);
+    return json({ ...profile, announcement, maintenance }, 200, headers);
   }],
 
   ['PUT', /^\/api\/me$/, async ({ request, env }) => {
@@ -466,6 +467,7 @@ export async function handleApi(request, env, url) {
         let params;
         try { params = m.slice(1).map(decodeURIComponent); }
         catch { throw new HttpError(400, { error: 'invalid', field: 'path' }); }
+        await guardMaintenance(request, env, url.pathname);
         res = await handler({ request, env, url, params });
         break;
       }
