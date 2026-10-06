@@ -186,7 +186,8 @@ export async function joinByCode(db, userId, raw, now = Date.now()) {
       .bind(now, space.id),
     acceptedStmt(db, space.id, userId),
   ]);
-  if (joined.meta.changes) return spaceSummary(db, userId, space.id);
+  const member = await spaceSummary(db, userId, space.id);
+  if (joined.meta.changes || member) return member;
   const why = await db.prepare(`SELECT ${MY_SPACES} AS mine, ${LIVE_MEMBERS('?')} AS n`).bind(userId, space.id).first();
   if (why.mine >= SPACE_LIMIT) throw new HttpError(409, { error: 'limit' });
   if (why.n >= MEMBER_LIMIT) throw new HttpError(409, { error: 'full' });
