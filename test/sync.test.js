@@ -105,6 +105,18 @@ describe('persisted operation synchronization', () => {
    expect(store.applyPage.mock.calls.map(([, wipe]) => wipe)).toEqual([['u:u1'], []]);
    store.meta.get.mockImplementation(() => 1);
  });
+ it.each([['cross_site'], ['rate']])('keeps a personal write that answers 403 %s on the retry path', async (error) => {
+   api.put.mockRejectedValue(new ApiError(403, { error }));
+   vi.spyOn(api, 'get').mockResolvedValue({ id: 'i1', revision: 1 });
+   expect(await sync.syncNow()).toBe(false);
+   expect(store.rejectOperation).not.toHaveBeenCalled();
+ });
+ it('sets a personal write aside on 403 archived', async () => {
+   api.put.mockRejectedValue(new ApiError(403, { error: 'archived' }));
+   vi.spyOn(api, 'get').mockResolvedValue({ id: 'i1', revision: 1 });
+   await sync.syncNow();
+   expect(store.rejectOperation).toHaveBeenCalled();
+ });
  it('sets a refused shared edit aside at once on 403, saying why', async () => {
    const shared = { key: 'shared_items:c:abcdefghij12:x', op: 'put', body: { id: 'x', title: 'New', revision: 4 }, base: { id: 'x', title: 'Old', revision: 4 }, revision: 4, token: 's' };
    store.pending.mockResolvedValue([shared]);

@@ -52,8 +52,11 @@ const STOPS = [401, 408, 428, 429, 503];
 const MAX_TRIES = 3;
 const tries = new Map<string, number>();   /* op token → cycles it failed in */
 /* Answers no retry can change: the edit goes to the saved copies at once. A lost
-   permission (403) does not come back by retrying (spec §6). */
-const REFUSED = [400, 403, 404, 409, 413, 422];
+   permission on a shared row (403) does not come back by retrying (spec §6). A personal
+   write's 403 is the cross-site guard (or the like): that stays on the retry path. */
+const REFUSED = [400, 404, 409, 413, 422];
+const refused = (op: PendingOp, e: ApiError) => REFUSED.includes(e.status)
+  || (e.status === 403 && (!!parseKey(op.key).scope || e.body?.error === 'forbidden' || e.body?.error === 'archived'));
 /* 'shared_items' → 'items', for the shared routes. */
 const sharedKind = (store: string) => store.slice('shared_'.length);
 /* Why an edit was set aside, as Settings shows it. */
@@ -101,7 +104,7 @@ async function pushAll(cycle: Cycle): Promise<boolean> {
       tries.delete(op.token);   /* it got through after all */
     } catch (e) {
       if (!active(cycle)) return false;
-      if (e instanceof ApiError && REFUSED.includes(e.status)) {
+      if (e instanceof ApiError && refused(op, e)) {
         const current = await serverCopy(op, e);
         if (!active(cycle)) return false;
         // A review step another device made first, or already deleted: its copy stands.
