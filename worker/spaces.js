@@ -4,6 +4,7 @@
 import { HttpError } from './http.js';
 import { assertAllowed, assertOwner, memberGuard, ownerGuard, scopeOf } from './access.js';
 import { REVIEW_ID } from '../src/core/shared.ts';
+import { COURSE_COLOURS } from './validate.js';
 
 /* Classes are open to admins only until Stage 6 (spec §22): the routes that make or join a
    space refuse anyone else, and an invite to anyone else is refused. Stage 6 sets this false. */
@@ -60,6 +61,76 @@ const MADE_FROM = `SELECT s.id FROM spaces AS s JOIN members AS m ON m.space_id 
   WHERE m.user_id = ? AND m.role = 'owner' AND m.deleted_at IS NULL AND s.kind = 'class' AND s.deleted_at IS NULL
     AND EXISTS (SELECT 1 FROM courses WHERE scope = 'c:' || s.id AND id = ?)`;
 
+const PALETTE = JSON.stringify(COURSE_COLOURS);
+/* The colours a person already uses (?1 the user, ?2 the space): their live courses' and their other spaces'. */
+const USED = `(SELECT u.color FROM courses AS u WHERE u.scope = 'u:' || ?1 AND u.deleted_at IS NULL AND u.archived = 0
+  UNION SELECT q.color FROM space_prefs AS q WHERE q.user_id = ?1 AND q.deleted_at IS NULL AND q.id != ?2)`;
+
+/**
+ * The joiner's prefs (spec §9, §11), in the batch that makes the membership: the class
+ * course's colour unless they use it, else the first of the twelve they do not use; the
+ * class's term. Only for a live member of a class; a live prefs row is left as it is (an
+ * accept retried), a deleted one revived with these defaults (a rejoin).
+ */
+export const joinPrefs = (db, userId, spaceId, now = Date.now()) => db.prepare(`INSERT INTO space_prefs (user_id, id, space_id, color, target, term, archived, created_at, updated_at, revision)
+  SELECT ?1, ?2, ?2, COALESCE(
+      (SELECT c.color FROM courses AS c WHERE c.scope = 'c:' || ?2 AND c.deleted_at IS NULL AND c.color NOT IN ${USED}),
+      (SELECT p.value FROM json_each(?3) AS p WHERE p.value NOT IN ${USED} ORDER BY p.key LIMIT 1),
+      (SELECT c.color FROM courses AS c WHERE c.scope = 'c:' || ?2 LIMIT 1),
+      '#17B3AE'),
+    NULL, COALESCE((SELECT c.term FROM courses AS c WHERE c.scope = 'c:' || ?2 AND c.deleted_at IS NULL LIMIT 1), ''), 0, ?4, ?4, ${NEXT_ROW_REVISION}
+  WHERE EXISTS (SELECT 1 FROM members WHERE space_id = ?2 AND user_id = ?1 AND deleted_at IS NULL)
+    AND EXISTS (SELECT 1 FROM spaces WHERE id = ?2 AND kind = 'class' AND deleted_at IS NULL)
+  ON CONFLICT (user_id, id) DO UPDATE SET color = excluded.color, target = NULL, term = excluded.term, archived = 0,
+    updated_at = excluded.updated_at, deleted_at = NULL, revision = space_prefs.revision + 1
+    WHERE space_prefs.deleted_at IS NOT NULL`).bind(userId, spaceId, PALETTE, now);
+
+/** The class you made from your course `courseId` before, as the routes answer it; null if none. */
+export async function priorConvert(db, userId, courseId) {
+  const prior = await db.prepare(MADE_FROM).bind(userId, courseId).first();
+  return prior ? spaceSummary(db, userId, prior.id) : null;
+}
+
+/**
+ * What a convert moves besides the course and the ticked items (spec §13), each statement
+ * running only if the space `spaceId` was made in this batch: a mark from each ticked item
+ * that holds anything of yours; your prefs from the course; the space on your sessions and
+ * achievements that point at the course or a moved item (a session on the course and an
+ * item that stays yours loses its course link instead, as deleting a course does); the
+ * ticked items and the course soft-deleted directly (the course-delete path would clear
+ * their course); every other live item of the course filed under the class.
+ */
+function moveIntoClass(db, userId, spaceId, courseId, ticked, now) {
+  const mine = 'u:' + userId, made = 'EXISTS (SELECT 1 FROM spaces WHERE id = ?)';
+  const TICKED = '(SELECT value FROM json_each(?))';
+  return [
+    db.prepare(`INSERT INTO marks (user_id, id, space_id, item_id, status, grade, weight, notes, checklist, completed_at, hidden, created_at, updated_at, revision)
+      SELECT ?, ? || ':' || id, ?, id, status, grade, NULL, notes, checklist, completed_at, 0, ?, ?, ${NEXT_ROW_REVISION} FROM items
+      WHERE scope = ? AND course_id = ? AND deleted_at IS NULL AND type NOT GLOB 'c-*' AND id IN ${TICKED}
+        AND (status != 'todo' OR grade IS NOT NULL OR notes != '' OR checklist != '[]' OR completed_at IS NOT NULL) AND ${made}`)
+      .bind(userId, spaceId, spaceId, now, now, mine, courseId, ticked, spaceId),
+    db.prepare(`INSERT INTO space_prefs (user_id, id, space_id, color, target, term, archived, created_at, updated_at, revision)
+      SELECT ?, ?, ?, color, target, term, archived, ?, ?, ${NEXT_ROW_REVISION} FROM courses WHERE scope = ? AND id = ? AND deleted_at IS NULL AND ${made}`)
+      .bind(userId, spaceId, spaceId, now, now, mine, courseId, spaceId),
+    db.prepare(`UPDATE study_sessions SET space_id = ?, updated_at = ?, revision = revision + 1
+      WHERE user_id = ? AND deleted_at IS NULL AND space_id IS NULL
+        AND ((course_id = ? AND (item_id IS NULL OR item_id IN ${TICKED})) OR (course_id IS NULL AND item_id IN ${TICKED})) AND ${made}`)
+      .bind(spaceId, now, userId, courseId, ticked, ticked, spaceId),
+    db.prepare(`UPDATE study_sessions SET course_id = NULL, updated_at = ?, revision = revision + 1
+      WHERE user_id = ? AND deleted_at IS NULL AND space_id IS NULL AND course_id = ? AND ${made}`).bind(now, userId, courseId, spaceId),
+    db.prepare(`UPDATE achievements SET space_id = ?, updated_at = ?, revision = revision + 1
+      WHERE user_id = ? AND deleted_at IS NULL AND space_id IS NULL
+        AND ((rule = 'hours' AND course_id = ?) OR (rule = 'grade' AND item_id IN ${TICKED})) AND ${made}`)
+      .bind(spaceId, now, userId, courseId, ticked, spaceId),
+    db.prepare(`UPDATE items SET deleted_at = ?, updated_at = ?, revision = revision + 1
+      WHERE scope = ? AND course_id = ? AND deleted_at IS NULL AND id IN ${TICKED} AND ${made}`).bind(now, now, mine, courseId, ticked, spaceId),
+    db.prepare(`UPDATE items SET class_id = ?, course_id = NULL, updated_at = ?, revision = revision + 1
+      WHERE scope = ? AND course_id = ? AND deleted_at IS NULL AND ${made}`).bind(spaceId, now, mine, courseId, spaceId),
+    db.prepare(`UPDATE courses SET deleted_at = ?, updated_at = ?, revision = revision + 1
+      WHERE scope = ? AND id = ? AND deleted_at IS NULL AND ${made}`).bind(now, now, mine, courseId, spaceId),
+  ];
+}
+
 /**
  * A convert's course must be a live course of yours, and each item named a live item of it
  * that a class can take: not one of your own types (the c: CHECK refuses them) and not a
@@ -81,8 +152,9 @@ export async function checkConvert(db, userId, courseId, ids) {
 /**
  * A new class with you as its owner (spec §13, §20), in one batch: the space, your
  * membership and its course: a blank one from `course`, or a copy of your course
- * `convertCourseId` with the items named in `items`, in class shape. Stage 3 copies and
- * leaves your own rows as they are (plan Decision 1). The space INSERT carries the 20-space
+ * `convertCourseId` with the items named in `items`, in class shape. A convert then moves
+ * your layer and your course (moveIntoClass; Stage 4 plan, Decision 6); a blank class gives
+ * you its colour and term as your prefs. The space INSERT carries the 20-space
  * limit and, for a convert, "you own no class made from this course yet"; every later
  * statement runs only if that row was made, so a refusal leaves nothing. A repeated convert
  * answers the class it made ({created: false}). Past 20 spaces: 409 limit.
@@ -112,6 +184,11 @@ export async function createClass(db, userId, { course, convertCourseId = null, 
         recur, weekday, recur_until, dept, ?, ?, ?, ${NEXT_ROW_REVISION} FROM items
       WHERE scope = ? AND course_id = ? AND deleted_at IS NULL AND type NOT GLOB 'c-*' AND id IN (SELECT value FROM json_each(?)) AND ${made}`)
       .bind(scope, userId, now, now, mine, courseId, JSON.stringify(items), id));
+  }
+  if (copy) stmts.push(...moveIntoClass(db, userId, id, courseId, JSON.stringify(items), now));
+  else {
+    stmts.push(db.prepare(`INSERT INTO space_prefs (user_id, id, space_id, color, target, term, archived, created_at, updated_at, revision)
+      SELECT ?, ?, ?, ?, NULL, ?, 0, ?, ?, ${NEXT_ROW_REVISION} WHERE ${made}`).bind(userId, id, id, course.color, course.term, now, now, id));
   }
   const [space] = await db.batch(stmts);
   if (space.meta.changes) return { created: true, space: await spaceSummary(db, userId, id) };

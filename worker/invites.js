@@ -6,7 +6,7 @@ import { claimLimit, rateLimited } from './limits.js';
 import { normalizeUsername } from './password.js';
 import { hex } from './auth.js';
 import { assertAllowed, assertOwner, editorGuard, ownerGuard } from './access.js';
-import { ADMINS_ONLY, LIVE_MEMBERS, MEMBER_LIMIT, MY_SPACES, NEXT_SPACE_REVISION, SPACE_LIMIT, spaceSummary, touchSpace } from './spaces.js';
+import { ADMINS_ONLY, LIVE_MEMBERS, MEMBER_LIMIT, MY_SPACES, NEXT_SPACE_REVISION, SPACE_LIMIT, joinPrefs, spaceSummary, touchSpace } from './spaces.js';
 import { normalizeCode } from '../src/core/shared.ts';
 
 const HOUR_MS = 60 * 60 * 1000;
@@ -107,6 +107,8 @@ export async function acceptInvite(db, userId, spaceId, now = Date.now()) {
       ${REVIVE}`).bind(now, now, spaceId, userId, now, userId, SPACE_LIMIT, MEMBER_LIMIT),
     touchSpace(db, spaceId, now, { ifChanged: true }),
     acceptedStmt(db, spaceId, userId),
+    /* last: touchSpace above reads changes() from the membership statement just before it */
+    joinPrefs(db, userId, spaceId, now),
   ]);
   const held = await spaceSummary(db, userId, spaceId);
   if (joined.meta.changes || held) return held;
@@ -185,6 +187,7 @@ export async function joinByCode(db, userId, raw, now = Date.now()) {
     db.prepare(`UPDATE spaces SET code_uses_left = code_uses_left - 1, updated_at = ?, revision = ${NEXT_SPACE_REVISION} WHERE id = ? AND changes() > 0`)
       .bind(now, space.id),
     acceptedStmt(db, space.id, userId),
+    joinPrefs(db, userId, space.id, now),
   ]);
   const member = await spaceSummary(db, userId, space.id);
   if (joined.meta.changes || member) return member;

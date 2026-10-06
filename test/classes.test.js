@@ -42,7 +42,7 @@ describe('making a class', () => {
     expect(page.changes.filter((c) => c.scope === space.scope).map((c) => c.kind)).toEqual(['courses']);
   });
 
-  it('converts a course: copies it and the items ticked, in class shape, and leaves your own as they were', async () => {
+  it('converts a course: moves it and the items ticked into the class, your layer into marks and prefs; again answers the class', async () => {
     const put = (path, body) => owner(path, { method: 'PUT', body });
     expect((await put('/api/courses/db', { code: 'DB', name: 'Databases', color: '#4F74D9', instructor: 'Dr. Ito', term: 'Fall 2026', archived: false, meetings: [], target: 85 })).status).toBe(200);
     const item = (id, over = {}) => put('/api/items/' + id, {
@@ -55,6 +55,13 @@ describe('making a class', () => {
       item('t1', { type: 'task', status: 'done', grade: null, weight: null, links: [] }),
       item('c1', { type: 'c-viva', links: [] }),
       item('rvab12cd31', { type: 'task', title: 'Review 1/4 DB Lecture', status: 'todo', grade: null, weight: null, notes: '', links: [] }),
+    ])) expect(res.status).toBe(200);
+    const PNG = 'data:image/png;base64,iVBORw0KGgo=';
+    const session = (id, over = {}) => put('/api/study_sessions/' + id, { courseId: 'db', itemId: null, startedAt: 1_790_000_000_000, studyMinutes: 30, ...over });
+    for (const res of await Promise.all([
+      session('s-course'), session('s-a1', { itemId: 'a1' }), session('s-t1', { itemId: 't1' }),
+      put('/api/achievements/h1', { name: 'DB hours', sticker: PNG, rule: 'hours', courseId: 'db', target: 10 }),
+      put('/api/achievements/g1', { name: 'A1 grade', sticker: PNG, rule: 'grade', itemId: 'a1', target: 90 }),
     ])) expect(res.status).toBe(200);
     const refused = async (items) => (await make(owner, { kind: 'class', convertCourseId: 'db', items })).json();
     expect(await refused(['a1', 'c1'])).toEqual({ error: 'invalid', field: 'items' });
@@ -71,21 +78,37 @@ describe('making a class', () => {
       { id: 'a1', type: 'assignment', status: 'todo', grade: null, notes: '', checklist: '[]', courseId: 'db', updatedBy: owner.id },
       { id: 'q1', type: 'quiz', status: 'todo', grade: null, notes: '', checklist: '[]', courseId: 'db', updatedBy: owner.id },
     ]);
-    const a1 = await env.DB.prepare("SELECT links, weight FROM items WHERE scope = ? AND id = 'a1'").bind(space.scope).first();
-    expect({ links: JSON.parse(a1.links), weight: a1.weight }).toEqual({ links: [{ label: 'Spec', url: 'https://example.com' }], weight: 20 });
 
-    /* your own course and items are as they were: Stage 4 moves your layer (plan Decision 1) */
-    const mine = await env.DB.prepare("SELECT id, status, grade, notes, deleted_at AS gone FROM items WHERE scope = ? ORDER BY id").bind('u:' + owner.id).all();
-    expect(mine.results.find((r) => r.id === 'a1')).toEqual({ id: 'a1', status: 'graded', grade: 91, notes: 'mine', gone: null });
-    expect(mine.results.filter((r) => r.gone === null)).toHaveLength(5);
-    expect(await env.DB.prepare("SELECT target, deleted_at AS gone FROM courses WHERE scope = ? AND id = 'db'").bind('u:' + owner.id).first()).toEqual({ target: 85, gone: null });
+    /* your layer moved with it (spec §13): a mark for the item you had touched; your colour, target and term */
+    expect((await env.DB.prepare('SELECT id, status, grade, weight, notes FROM marks WHERE user_id = ?').bind(owner.id).all()).results)
+      .toEqual([{ id: space.id + ':a1', status: 'graded', grade: 91, weight: null, notes: 'mine' }]);
+    expect(await env.DB.prepare('SELECT color, target, term, archived FROM space_prefs WHERE user_id = ? AND id = ?').bind(owner.id, space.id).first())
+      .toEqual({ color: '#4F74D9', target: 85, term: 'Fall 2026', archived: 0 });
+    /* your course and the ticked items are gone from your own rows; the rest are filed under the class */
+    expect((await env.DB.prepare('SELECT id, course_id AS courseId, class_id AS classId, deleted_at IS NOT NULL AS gone FROM items WHERE scope = ? ORDER BY id').bind('u:' + owner.id).all()).results).toEqual([
+      { id: 'a1', courseId: 'db', classId: null, gone: 1 },
+      { id: 'c1', courseId: null, classId: space.id, gone: 0 },
+      { id: 'q1', courseId: 'db', classId: null, gone: 1 },
+      { id: 'rvab12cd31', courseId: null, classId: space.id, gone: 0 },
+      { id: 't1', courseId: null, classId: space.id, gone: 0 },
+    ]);
+    expect(await env.DB.prepare("SELECT deleted_at IS NOT NULL AS gone FROM courses WHERE scope = ? AND id = 'db'").bind('u:' + owner.id).first()).toEqual({ gone: 1 });
+    /* sessions and achievements on the class's rows carry its space; one on an item that stays yours loses its course */
+    expect((await env.DB.prepare('SELECT id, course_id AS courseId, item_id AS itemId, space_id AS spaceId FROM study_sessions WHERE user_id = ? ORDER BY id').bind(owner.id).all()).results).toEqual([
+      { id: 's-a1', courseId: 'db', itemId: 'a1', spaceId: space.id },
+      { id: 's-course', courseId: 'db', itemId: null, spaceId: space.id },
+      { id: 's-t1', courseId: null, itemId: 't1', spaceId: null },
+    ]);
+    expect((await env.DB.prepare('SELECT id, space_id AS spaceId FROM achievements WHERE user_id = ? ORDER BY id').bind(owner.id).all()).results)
+      .toEqual([{ id: 'g1', spaceId: space.id }, { id: 'h1', spaceId: space.id }]);
 
-    /* the same convert again answers the class it made and makes nothing */
+    /* the same convert again answers the class it made and writes nothing */
     const again = await make(owner, { kind: 'class', convertCourseId: 'db', items: ['a1', 'q1'] });
     expect(again.status).toBe(200);
     expect((await again.json()).space.id).toBe(space.id);
     expect((await env.DB.prepare("SELECT count(*) AS n FROM courses WHERE scope GLOB 'c:*' AND id = 'db'").first()).n).toBe(1);
     expect(await classRows(space.scope)).toHaveLength(2);
+    expect((await env.DB.prepare('SELECT count(*) AS n FROM marks WHERE user_id = ?').bind(owner.id).first()).n).toBe(1);
   });
 
   it('stops at 20 spaces with 409 limit, and leaves nothing half made', async () => {

@@ -5,7 +5,7 @@ import { json, readJson, HttpError } from './http.js';
 import { requireUser } from './auth.js';
 import { requireAdmin } from './admin.js';
 import { validateSharedCourse } from './validate.js';
-import { ADMINS_ONLY, checkConvert, createClass, setRole, spaceDetails, transfer } from './spaces.js';
+import { ADMINS_ONLY, checkConvert, createClass, priorConvert, setRole, spaceDetails, transfer } from './spaces.js';
 import { acceptInvite, declineInvite, dropCode, invite, joinByCode, makeCode, myInvites, revokeInvite } from './invites.js';
 
 const SID = '([a-z0-9]{12})';
@@ -39,7 +39,12 @@ export const classRoutes = [
   ['POST', route('spaces'), async ({ request, env }) => {
     const userId = await joiner(request, env);
     const body = classBody(await readJson(request));
-    if (body.convertCourseId) await checkConvert(env.DB, userId, body.convertCourseId, body.items);
+    if (body.convertCourseId) {
+      /* a convert repeated after it moved your course: the course is gone, so answer the class first */
+      const prior = await priorConvert(env.DB, userId, body.convertCourseId);
+      if (prior) return json({ space: prior }, 200);
+      await checkConvert(env.DB, userId, body.convertCourseId, body.items);
+    }
     const { created, space } = await createClass(env.DB, userId, body);
     return json({ space }, created ? 201 : 200);
   }],
