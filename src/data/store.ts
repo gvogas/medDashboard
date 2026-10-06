@@ -38,6 +38,11 @@ const sharedItems = () => data.shared_items ?? NONE
 export const useSpaces = () => useSyncExternalStore(subscribe, spaces)
 export const useSharedCourses = () => useSyncExternalStore(subscribe, sharedCourses)
 export const useSharedItems = () => useSyncExternalStore(subscribe, sharedItems)
+const marks = () => data.marks ?? NONE
+const spacePrefs = () => data.space_prefs ?? NONE
+/** Your marks on shared items, and your prefs for your spaces: the class item card and the class sheet read them. */
+export const useMarks = () => useSyncExternalStore(subscribe, marks)
+export const useSpacePrefs = () => useSyncExternalStore(subscribe, spacePrefs)
 
 /** Edits the server turned down, kept on this device. The store changes this list in place,
     so the bridge's version is the snapshot. */
