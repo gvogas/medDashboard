@@ -33,6 +33,9 @@ vi.mock("@/data/toast", () => ({ toast: fake.toast }))
 
 import { ApiError } from "@/core/api"
 import { ClassSheet } from "./class-sheet"
+import { NewClassSheet } from "./new-class-sheet"
+import { ConvertSheet } from "./convert-sheet"
+import { ShareCourse } from "./share-course"
 
 const SID = "sp0000000001", SCOPE = "c:" + SID
 const space = (role = "owner") => ({
@@ -151,5 +154,123 @@ describe("the Members tab", () => {
         expect(screen.queryByRole("textbox")).toBeNull()
         expect(screen.queryByRole("combobox")).toBeNull()
         expect(screen.queryByRole("button", { name: /join code/ })).toBeNull()
+    })
+})
+
+describe("a new shared class", () => {
+    it("makes a blank one with a colour you do not use, waits for it, then opens its Members", async () => {
+        fake.data.courses = [{ id: "c1", name: "Anatomy", color: "#E4749B", archived: false }]
+        fake.api.spaces.create.mockResolvedValue({ ...summary, role: "owner", name: "Operating Systems" })
+        fake.syncNow.mockImplementation(async () => { fake.data.spaces = [space()]; fake.data.shared_courses = [course]; return true })
+        render(<NewClassSheet />)
+        fireEvent.click(screen.getByRole("button", { name: "Continue" }))
+        expect(screen.getByText("Give it a name and a code.")).toBeTruthy()
+        fireEvent.change(screen.getByRole("textbox", { name: "Name" }), { target: { value: "Operating Systems" } })
+        fireEvent.change(screen.getByRole("textbox", { name: "Code" }), { target: { value: "OS" } })
+        fireEvent.click(screen.getByRole("button", { name: "Continue" }))
+        await waitFor(() => expect(fake.overlay.openSheet).toHaveBeenCalledWith({ kind: "class", spaceId: SID, tab: "members" }))
+        expect(fake.api.spaces.create).toHaveBeenCalledWith({ kind: "class", course: { code: "OS", name: "Operating Systems", color: "#8B5CC7", instructor: "", term: "", meetings: [] } })
+        expect(fake.syncNow).toHaveBeenCalledTimes(1)
+    })
+
+    it("goes on to the item picker for a course of yours", () => {
+        fake.data.courses = [{ id: "db", name: "Databases", color: "#4F74D9", archived: false }, { id: "old", name: "Old", color: "#7D8A99", archived: true }]
+        render(<NewClassSheet />)
+        fireEvent.click(screen.getByRole("radio", { name: /Convert a course you have/ }))
+        const select = screen.getByRole("combobox", { name: "Course" })
+        expect(within(select).getAllByRole("option").map((o) => o.textContent)).toEqual(["Databases"])
+        fireEvent.click(screen.getByRole("button", { name: "Continue" }))
+        expect(fake.overlay.openSheet).toHaveBeenCalledWith({ kind: "convert", courseId: "db" })
+    })
+
+    it("gives the maintenance page to someone who is not an admin while classes are off, and an admin the bar", () => {
+        fake.data.profile = { id: "u-me", isAdmin: false, maintenance: { features: ["classes"], message: "" } }
+        render(<NewClassSheet />)
+        expect(screen.getByRole("heading", { name: /being worked on/ })).toBeTruthy()
+        expect(screen.queryByRole("button", { name: "Continue" })).toBeNull()
+        cleanup()
+        fake.data.profile = { id: "u-me", isAdmin: true, maintenance: { features: ["classes"], message: "" } }
+        render(<NewClassSheet />)
+        expect(screen.getByText(/only admins see this/)).toBeTruthy()
+        expect(screen.getByRole("button", { name: "Continue" })).toBeTruthy()
+    })
+})
+
+describe("converting a course", () => {
+    beforeEach(() => {
+        fake.data.courses = [{ id: "db", name: "Databases", color: "#4F74D9", archived: false }]
+        fake.data.items = [
+            { id: "a1", type: "assignment", title: "Project", courseId: "db", date: "2026-10-15", grade: 91, links: [{ label: "Spec", url: "https://example.com" }] },
+            { id: "t1", type: "task", title: "Read chapter 3", courseId: "db", date: "2026-10-02", grade: null, links: [] },
+            { id: "c1", type: "c-viva", title: "Viva", courseId: "db", date: "2026-10-20", grade: null, links: [] },
+            { id: "rvab12cd31", type: "task", title: "Review 1/4", courseId: "db", date: "2026-10-03", grade: null, links: [] },
+            { id: "z1", type: "quiz", title: "Elsewhere", courseId: "other", date: "2026-10-03", grade: null, links: [] },
+        ]
+    })
+
+    it("ticks all but tasks; lecture reviews and your own types stay yours; warns about links", async () => {
+        fake.api.spaces.create.mockResolvedValue({ ...summary, role: "owner", name: "Databases" })
+        render(<ConvertSheet courseId="db" />)
+        const box = (name: RegExp) => screen.getByRole("checkbox", { name }) as HTMLInputElement
+        expect(box(/^Project/).checked).toBe(true)
+        expect(box(/^Read chapter 3/).checked).toBe(false)
+        expect(box(/^Viva/).disabled).toBe(true)
+        expect(box(/^Review 1\/4/).disabled).toBe(true)
+        expect(screen.queryByRole("checkbox", { name: /Elsewhere/ })).toBeNull()
+        expect(screen.getByText("Links on ticked items become visible to the class.")).toBeTruthy()
+        fireEvent.click(box(/^Read chapter 3/))
+        fireEvent.click(screen.getByRole("button", { name: "Create class" }))
+        await waitFor(() => expect(fake.api.spaces.create).toHaveBeenCalledWith({ kind: "class", convertCourseId: "db", items: ["t1", "a1"] }))
+        await waitFor(() => expect(fake.toast).toHaveBeenCalled())
+    })
+
+    it("says why it failed and lets you try again", async () => {
+        fake.api.spaces.create.mockRejectedValue(new ApiError(409, { error: "limit" }))
+        render(<ConvertSheet courseId="db" />)
+        fireEvent.click(screen.getByRole("button", { name: "Create class" }))
+        expect(await screen.findByText(/20 classes/)).toBeTruthy()
+        expect((screen.getByRole("button", { name: "Create class" }) as HTMLButtonElement).disabled).toBe(false)
+    })
+
+    it("gives the maintenance page to someone who is not an admin while classes are off, and an admin the bar", () => {
+        fake.data.profile = { id: "u-me", isAdmin: false, maintenance: { features: ["classes"], message: "" } }
+        render(<ConvertSheet courseId="db" />)
+        expect(screen.getByRole("heading", { name: /being worked on/ })).toBeTruthy()
+        expect(screen.queryByRole("checkbox")).toBeNull()
+        cleanup()
+        fake.data.profile = { id: "u-me", isAdmin: true, maintenance: { features: ["classes"], message: "" } }
+        render(<ConvertSheet courseId="db" />)
+        expect(screen.getByText(/only admins see this/)).toBeTruthy()
+        expect(screen.getByRole("button", { name: "Create class" })).toBeTruthy()
+    })
+})
+
+describe("Share this course, in the course sheet", () => {
+    it("offers Convert, or opens the class already made from the course", () => {
+        render(<ShareCourse courseId="db" dirty={false} />)
+        fireEvent.click(screen.getByRole("button", { name: "Convert to shared class" }))
+        expect(fake.overlay.openSheet).toHaveBeenCalledWith({ kind: "convert", courseId: "db" })
+        cleanup()
+        fake.data.spaces = [{ ...space(), name: "Databases" }]
+        fake.data.shared_courses = [{ ...course, id: "db" }]
+        render(<ShareCourse courseId="db" dirty={false} />)
+        fireEvent.click(screen.getByRole("button", { name: "Open the class" }))
+        expect(fake.overlay.openSheet).toHaveBeenLastCalledWith({ kind: "class", spaceId: SID, tab: "details" })
+    })
+
+    it("waits for the course's changes to be saved", () => {
+        render(<ShareCourse courseId="db" dirty />)
+        expect((screen.getByRole("button", { name: "Convert to shared class" }) as HTMLButtonElement).disabled).toBe(true)
+        expect(screen.getByText("Save your changes first.")).toBeTruthy()
+    })
+
+    it("shows nothing to someone who is not an admin, also while classes are off", () => {
+        fake.data.profile = { id: "u-me", isAdmin: false }
+        const first = render(<ShareCourse courseId="db" dirty={false} />)
+        expect(first.container.textContent).toBe("")
+        cleanup()
+        fake.data.profile = { id: "u-me", isAdmin: false, maintenance: { features: ["classes"], message: "" } }
+        const again = render(<ShareCourse courseId="db" dirty={false} />)
+        expect(again.container.textContent).toBe("")
     })
 })

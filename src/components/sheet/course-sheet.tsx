@@ -8,7 +8,7 @@ import { colourName, KINDS, PALETTE } from "@/core/model"
 import { dur, DOW } from "@/core/dates"
 import * as store from "@/core/store"
 import { courseGrade, neededLabel, targetsFor, ungraded } from "@/core/grades"
-import { useCourses, useItems } from "@/data/store"
+import { useCourses, useItems, useProfile } from "@/data/store"
 import { closeSheet, onRequestClose } from "@/data/overlay"
 import { courseChanged, forSaving, MAX_CLASSES, newClass, newCourse, semesterNote, semesterOptions, semesterPicked } from "@/data/course-edit"
 import { schoolCal } from "@/data/query"
@@ -20,6 +20,7 @@ import {
     TextInput, TitleArea, Warning, CONTROL,
 } from "./fields"
 import { TimeField } from "./time-field"
+import { ShareCourse } from "./share-course"
 
 const WEEK = [1, 2, 3, 4, 5, 6, 0]
 
@@ -36,6 +37,7 @@ export function CourseSheet({ id }: { id: string | null }) {
     const isNew = !stored
     const changed = courseChanged(draft, stored)
     const cal = schoolCal()
+    const admin = !!useProfile()?.isAdmin
 
     /* ✕, Escape and the scrim ask before throwing changes away; asked, they discard */
     useEffect(() => {
@@ -123,6 +125,7 @@ export function CourseSheet({ id }: { id: string | null }) {
                 </Section>
 
                 {!isNew && <Grades course={draft} items={mine} whatIf={whatIf} setWhatIf={setWhatIf} onTarget={(target) => edit({ target })} />}
+                {!isNew && admin && <ShareCourse courseId={draft.id} dirty={changed} />}
                 {!isNew && mine.length > 0 && (
                     <Warning>{mine.length} item{mine.length === 1 ? "" : "s"} {mine.length === 1 ? "is" : "are"} filed under this course. Deleting it leaves them without a course.</Warning>
                 )}
