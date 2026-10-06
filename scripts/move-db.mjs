@@ -3,7 +3,7 @@
 // from one D1 database into a fresh one built from migrations/0001_schema.sql, then
 // read both back and compare. The source is only read.
 //
-//   node scripts/move-db.mjs --from rounds-v3 --to rounds-v4 [--remote]
+//   node scripts/move-db.mjs --from rounds-v6 --to rounds-v7 [--remote]
 import { spawnSync } from 'node:child_process';
 import { mkdtempSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -42,7 +42,8 @@ function d1(db, ...rest) {
 
 function dump(db) {
   const out = {};
-  for (const [name, sql] of readQueries()) {
+  const columns = d1(db, '--command', COLUMNS_QUERY)[0].results;
+  for (const [name, sql] of readQueries(columns)) {
     const rows = d1(db, '--command', sql)[0].results;
     out[name] = name === 'state' ? rows[0] : rows;
   }

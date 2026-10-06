@@ -1,80 +1,91 @@
 import { applyD1Migrations, env } from 'cloudflare:test';
 import { expect, it } from 'vitest';
-import { upsertRow, deleteRow, syncPage } from '../worker/db.js';
-import { normalizeItem, normalizeCourse } from '../src/core/model.ts';
+import { upsertRow, syncPage } from '../worker/db.js';
+import { normalizeCourse } from '../src/core/model.ts';
 import { readQueries, copyStatements, COLUMNS_QUERY, uncopied } from '../scripts/lib/move-db.js';
 
+const columns = async (db) => (await db.prepare(COLUMNS_QUERY).all()).results;
 async function dump(db) {
   const out = {};
-  for (const [name, sql] of readQueries()) {
+  for (const [name, sql] of readQueries(await columns(db))) {
     const rows = (await db.prepare(sql).all()).results;
     out[name] = name === 'state' ? rows[0] : rows;
   }
   return out;
 }
 
-it('copies an old-schema database into a fresh one, row for row, with the change feed and its head', async () => {
+/* rounds-v6 rows, written with plain SQL (today's Worker writes the new shape); that
+   schema's own triggers fill its change feed. */
+async function fillLegacy(db) {
+  for (const id of ['ana', 'ben']) {
+    await db.prepare(`INSERT INTO users (id, username, password_hash, types, study_flow, feed_gen, study_prefs, school_calendar, leaderboard, bg, is_admin, last_seen_day, created_at, updated_at)
+      VALUES (?1, ?1, 'hash', '[{"id":"c-quiz1","label":"Quiz","color":"#B03A7A","kind":"graded"}]', '{"steps":[["study",50],["break",10]],"rounds":3}', ?2, '{"goal":105}', '{"terms":[]}', ?3, ?4, ?3, '2026-10-01', 100, 100)`)
+      .bind(id, id === 'ana' ? 2 : null, id === 'ana' ? 1 : 0, id === 'ana' ? 'cs' : 'med').run();
+    await db.prepare(`INSERT INTO courses (user_id, id, code, name, color, meetings, target, created_at, updated_at, revision)
+      VALUES (?, 'bio', 'BIO', 'Biology ''n'' more', '#17B3AE', '[{"id":"m","kind":"Lecture","weekday":1,"start":"09:00","end":"10:00","room":"Hall B"}]', 85, 200, 200, 10)`).bind(id).run();
+    await db.prepare(`INSERT INTO items (user_id, id, type, title, course_id, date, start, end, location, status, grade, weight, notes, checklist, links, completed_at, created_at, updated_at, revision)
+      VALUES (?, 'mid', 'exam', 'Midterm: α & β', 'bio', '2026-10-05', '09:00', '10:00', 'Hall B', 'graded', 87.5, 20, 'Line one
+line ''two''', '[{"id":"s","text":"Review","done":true}]', '[{"label":"Notes","url":"https://example.edu"}]', 205, 210, 210, 11)`).bind(id).run();
+    await db.prepare("INSERT INTO items (user_id, id, type, title, date, status, created_at, updated_at, revision) VALUES (?, 'q', 'c-quiz1', 'Quiz', '2026-10-06', 'todo', 220, 220, 12)").bind(id).run();
+    await db.prepare("INSERT INTO quotes (user_id, id, text, source, created_at, updated_at, revision) VALUES (?, 'k', 'Keep going', '', 230, 230, 13)").bind(id).run();
+    await db.prepare(`INSERT INTO study_sessions (user_id, id, course_id, item_id, started_at, study_minutes, rounds_done, note, manual, created_at, updated_at, revision)
+      VALUES (?, 's1', 'bio', 'mid', 1000, 50, 1, 'Krebs cycle, ''again''', 1, 235, 235, 14)`).bind(id).run();
+    await db.prepare(`INSERT INTO achievements (user_id, id, name, sticker, rule, course_id, target, created_at, updated_at, revision)
+      VALUES (?, 'a1', 'Bio buff', 'data:image/png;base64,iVBORw0KGgo=', 'hours', 'bio', 10, 236, 236, 15)`).bind(id).run();
+  }
+  await db.prepare("INSERT INTO items (user_id, id, type, title, date, status, created_at, updated_at, deleted_at, revision) VALUES ('ana', 'old', 'task', 'Old', '2026-10-01', 'todo', 240, 250, 250, 16)").run();
+  /* a later write replaces an earlier change, so the head sits above the last kept seq */
+  await db.prepare("INSERT INTO courses (user_id, id, code, name, color, created_at, updated_at, revision) VALUES ('ben', 'extra', 'X', 'Extra', '#8B5CC7', 260, 260, 17)").run();
+  await db.prepare("UPDATE courses SET name = 'Extra 2', updated_at = 270, revision = 18 WHERE user_id = 'ben' AND id = 'extra'").run();
+  await db.prepare("INSERT INTO spotify_tokens (user_id, refresh_token, access_token, expires_at, updated_at) VALUES ('ana', 'enc', 'acc', 999, 280)").run();
+  await db.prepare('UPDATE sync_state SET floor = 2 WHERE id = 1').run();
+  await db.prepare("INSERT INTO login_throttle (username, fails, updated_at) VALUES ('ana', 3, 1)").run();
+  await db.prepare("INSERT INTO admin_log (at, admin, action, target, detail) VALUES (5, 'ana', 'create', 'ben', '')").run();
+  const head = (await db.prepare("SELECT seq FROM sqlite_sequence WHERE name = 'changes'").first()).seq;
+  await db.prepare("INSERT INTO changes (seq, user_id, kind, row_id, payload) VALUES (?, 'ana', 'x', 'x', '{}')").bind(head + 5).run();
+  await db.prepare("DELETE FROM changes WHERE kind = 'x'").run();
+}
+
+it('copies a rounds-v6 database into the scoped schema, row for row, with the change feed and its head', async () => {
   const from = env.MIGRATION_DB, to = env.MOVE_DB;
   await applyD1Migrations(from, env.LEGACY_MIGRATIONS);
   await applyD1Migrations(to, env.TEST_MIGRATIONS);
-
-  for (const id of ['ana', 'ben']) {
-    await from.prepare("INSERT INTO users (id, username, password_hash, types, study_flow, feed_gen, study_prefs, school_calendar, leaderboard, bg, created_at, updated_at) VALUES (?, ?, 'hash', '[{\"id\":\"c-quiz1\",\"label\":\"Quiz\",\"color\":\"#B03A7A\",\"kind\":\"graded\"}]', '{\"steps\":[[\"study\",50],[\"break\",10]],\"rounds\":3}', ?, '{\"goal\":105}', '{\"semesters\":[]}', ?, ?, 100, 100)")
-      .bind(id, id, id === 'ana' ? 2 : null, id === 'ana' ? 1 : 0, id === 'ana' ? 'cs' : 'med').run();
-    await upsertRow(from, 'courses', id, 'bio', normalizeCourse({ id: 'bio', code: 'BIO', name: "Biology 'n' more", color: '#17B3AE', target: 85, meetings: [{ id: 'm', kind: 'Lecture', weekday: 1, start: '09:00', end: '10:00', room: 'Hall B' }] }), 200);
-    await upsertRow(from, 'items', id, 'mid', normalizeItem({
-      id: 'mid', title: 'Midterm: α & β', type: 'exam', courseId: 'bio', date: '2026-10-05', start: '09:00', end: '10:00',
-      where: 'Hall B', status: 'graded', grade: 87.5, weight: 20, notes: "Line one\nline 'two'",
-      checklist: [{ id: 's', text: 'Review', done: true }], links: [{ label: 'Notes', url: 'https://example.edu' }],
-    }), 210);
-    await upsertRow(from, 'items', id, 'q', normalizeItem({ id: 'q', title: 'Quiz', type: 'c-quiz1', date: '2026-10-06' }), 220);
-    await upsertRow(from, 'quotes', id, 'k', { text: 'Keep going', source: '' }, 230);
-    await upsertRow(from, 'study_sessions', id, 's1', { courseId: 'bio', itemId: 'mid', startedAt: 1000, studyMinutes: 50, roundsDone: 1, note: "Krebs cycle, 'again'", manual: true }, 235);
-    await upsertRow(from, 'achievements', id, 'a1', { name: 'Bio buff', sticker: 'data:image/png;base64,iVBORw0KGgo=', rule: 'hours', courseId: 'bio', itemId: null, target: 10 }, 236);
-  }
-  const gone = await upsertRow(from, 'items', 'ana', 'old', normalizeItem({ id: 'old', title: 'Old' }), 240);
-  await deleteRow(from, 'items', 'ana', 'old', 250, gone.revision);
-  /* a later write replaces an earlier change, so the head sits above the last kept seq */
-  const bio = await upsertRow(from, 'courses', 'ben', 'extra', normalizeCourse({ id: 'extra', code: 'X', name: 'Extra', color: '#8B5CC7' }), 260);
-  await upsertRow(from, 'courses', 'ben', 'extra', normalizeCourse({ id: 'extra', code: 'X', name: 'Extra 2', color: '#8B5CC7' }), 270, bio.revision);
-  await from.prepare("INSERT INTO spotify_tokens (user_id, refresh_token, access_token, expires_at, updated_at) VALUES ('ana', 'enc', 'acc', 999, 280)").run();
-  await from.prepare('UPDATE sync_state SET floor = 2 WHERE id = 1').run();
-  await from.prepare("INSERT INTO login_throttle (username, fails, updated_at) VALUES ('ana', 3, 1)").run();
-  await from.prepare("UPDATE users SET is_admin = 1, last_seen_day = '2026-10-01' WHERE id = 'ana'").run();
-  await from.prepare("INSERT INTO admin_log (at, admin, action, target, detail) VALUES (5, 'ana', 'create', 'ben', '')").run();
-  const head = (await from.prepare("SELECT seq FROM sqlite_sequence WHERE name = 'changes'").first()).seq;
-  await from.prepare("INSERT INTO changes (seq, user_id, kind, row_id, payload) VALUES (?, 'ana', 'x', 'x', '{}')").bind(head + 5).run();
-  await from.prepare("DELETE FROM changes WHERE kind = 'x'").run();
+  await fillLegacy(from);
 
   const source = await dump(from);
+  /* read through the adapter: owners are scopes, a course's or item's change names its scope */
+  expect(source.courses.map((c) => c.scope)).toEqual(['u:ana', 'u:ben', 'u:ben']);
+  expect(source.items.every((i) => i.assignees === '[]' && i.class_id === null)).toBe(true);
+  expect(source.users.every((u) => u.hidden_sources === '[]')).toBe(true);
+  for (const change of source.changes) {
+    const payload = JSON.parse(change.payload);
+    if (change.kind === 'courses' || change.kind === 'items') {
+      expect(payload.scope).toBe(change.scope);
+      expect(payload).not.toHaveProperty('user_id');
+    } else expect(change.scope).toBe('u:' + payload.user_id);
+  }
   expect(source.state.head).toBeGreaterThan(Math.max(...source.changes.map((c) => c.seq)));
-  await to.batch(copyStatements(source).map((sql) => to.prepare(sql)));
-  const copied = await dump(to);
 
-  expect(copied).toEqual(source);
+  await to.batch(copyStatements(source).map((sql) => to.prepare(sql)));
+  expect(await dump(to)).toEqual(source);
   expect((await to.prepare('SELECT count(*) AS n FROM login_throttle').first()).n).toBe(0);
   expect(await to.prepare('PRAGMA foreign_key_check').all()).toMatchObject({ results: [] });
-  for (const cursor of [0, 3]) {
-    expect(await syncPage(to, 'ben', cursor, 50)).toEqual(await syncPage(from, 'ben', cursor, 50));
-  }
-  /* the next write in the copy numbers on from the old head */
-  const next = await upsertRow(to, 'quotes', 'ana', 'n', { text: 'New', source: '' }, 300);
+
+  /* devices sync on from the same cursor: ben's feed in the copy holds his rows */
+  const page = await syncPage(to, 'ben', 0, 50);
+  expect(page.changes.map((c) => `${c.kind}:${c.row.id}`).sort())
+    .toEqual(['achievements:a1', 'courses:bio', 'courses:extra', 'items:mid', 'items:q', 'quotes:k', 'study_sessions:s1']);
+  expect(page.changes.find((c) => c.row.id === 'extra').row.name).toBe('Extra 2');
+  expect(page.changes.find((c) => c.kind === 'items' && c.row.id === 'mid').row).toMatchObject({ grade: 87.5, weight: 20, courseId: 'bio' });
+  expect(page.cursor).toBe(source.state.head);
+  /* the next write numbers on from the old head, in the person's own scope */
+  const next = await upsertRow(to, 'courses', 'ana', 'n', normalizeCourse({ id: 'n', code: 'N', name: 'New', color: '#7D8A99' }), 300);
   expect(next.revision).toBe(source.state.head + 1);
-  /* the new database accepts a theme the old CHECK never had */
-  await to.prepare("UPDATE users SET bg = 'law' WHERE id = 'ana'").run();
-  expect((await to.prepare("SELECT bg FROM users WHERE id = 'ana'").first()).bg).toBe('law');
-  /* and the twelve colours are accepted there */
-  await upsertRow(to, 'courses', 'ana', 'c12', normalizeCourse({ id: 'c12', code: 'SL', name: 'Slate', color: '#7D8A99' }), 310);
-  /* and so are quizzes and a grade target */
-  expect((await upsertRow(to, 'items', 'ana', 'q2', normalizeItem({ id: 'q2', title: 'Quiz 2', type: 'quiz', date: '2026-10-08' }), 320)).type).toBe('quiz');
-  expect((await upsertRow(to, 'courses', 'ana', 'tg', normalizeCourse({ id: 'tg', code: 'TG', name: 'Target', color: '#7D8A99', target: 80 }), 330)).target).toBe(80);
-  /* and a grade-rule achievement, beside the copied one */
-  expect((await upsertRow(to, 'achievements', 'ana', 'a2', { name: 'Ace', sticker: 'data:image/png;base64,iVBORw0KGgo=', rule: 'grade', courseId: null, itemId: 'mid', target: 90 }, 340)).rule).toBe('grade');
+  expect(await to.prepare("SELECT scope FROM courses WHERE id = 'n'").first()).toEqual({ scope: 'u:ana' });
 });
 
 it('names every source column the copy would leave behind, so a move stops before losing data', async () => {
-  const columns = async (db) => (await db.prepare(COLUMNS_QUERY).all()).results;
-  /* the old-schema source above and today's schema: TABLES names every column of both */
+  /* the rounds-v6 source above and today's schema: TABLES (with the scope adapter) covers both */
   expect(uncopied(await columns(env.MIGRATION_DB))).toEqual([]);
   expect(uncopied(await columns(env.DB))).toEqual([]);
   /* and a column added later is caught, not dropped */
