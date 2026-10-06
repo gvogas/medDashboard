@@ -36,6 +36,8 @@ import { ClassSheet } from "./class-sheet"
 import { NewClassSheet } from "./new-class-sheet"
 import { ConvertSheet } from "./convert-sheet"
 import { ShareCourse } from "./share-course"
+import { JoinSheet } from "./join-sheet"
+import { InvitesSheet } from "./invites-sheet"
 
 const SID = "sp0000000001", SCOPE = "c:" + SID
 const space = (role = "owner") => ({
@@ -49,7 +51,7 @@ const details = (role = "owner") => ({
     invites: role === "member" ? [] : [{ userId: "u-tay", username: "taylor", name: "Taylor", role: "member", status: "pending", createdAt: Date.UTC(2026, 9, 1, 12), expiresAt: Date.UTC(2026, 9, 31), invitedBy: "u-me" }],
     code: null,
 })
-const summary = { id: SID, scope: SCOPE, kind: "class", name: "Web Services", role: "member", members: 3 }
+const summary = { id: SID, scope: SCOPE, kind: "class" as const, name: "Web Services", role: "member" as const, members: 3 }
 
 beforeEach(() => {
     Object.assign(fake.data, { profile: { id: "u-me", isAdmin: true }, courses: [], items: [], spaces: [], shared_courses: [], shared_items: [] })
@@ -272,5 +274,97 @@ describe("Share this course, in the course sheet", () => {
         fake.data.profile = { id: "u-me", isAdmin: false, maintenance: { features: ["classes"], message: "" } }
         const again = render(<ShareCourse courseId="db" dirty={false} />)
         expect(again.container.textContent).toBe("")
+    })
+})
+
+describe("joining with a code", () => {
+    it("checks the code, joins, shows the class downloading, then says you are in", async () => {
+        fake.api.join.mockResolvedValue(summary)
+        let arrive = () => {}
+        fake.syncNow.mockImplementation(() => new Promise<boolean>((done) => {
+            arrive = () => { fake.data.spaces = [space("member")]; fake.data.shared_courses = [course]; done(true) }
+        }))
+        render(<JoinSheet code="" space={null} />)
+        const box = screen.getByRole("textbox", { name: "Join code" })
+        fireEvent.change(box, { target: { value: "7kq2" } })
+        fireEvent.click(screen.getByRole("button", { name: "Join" }))
+        expect(screen.getByText("A code is 8 characters.")).toBeTruthy()
+        expect(fake.api.join).not.toHaveBeenCalled()
+        fireEvent.change(box, { target: { value: "7kq2 m9xd" } })
+        fireEvent.click(screen.getByRole("button", { name: "Join" }))
+        expect(await screen.findByText("Downloading Web Services…")).toBeTruthy()
+        expect(fake.api.join).toHaveBeenCalledWith("7kq2 m9xd")
+        await act(async () => arrive())
+        expect(await screen.findByText("You're in Web Services")).toBeTruthy()
+        expect(screen.getByText("3 members · you joined as a member.")).toBeTruthy()
+        fireEvent.click(screen.getByRole("button", { name: "Open the class" }))
+        expect(fake.overlay.openSheet).toHaveBeenCalledWith({ kind: "class", spaceId: SID, tab: "details" })
+    })
+
+    it("starts from a link's code, and says why a code fails", async () => {
+        fake.api.join.mockRejectedValue(new ApiError(410, { error: "expired" }))
+        render(<JoinSheet code="7KQ2M9XD" space={null} />)
+        expect((screen.getByRole("textbox", { name: "Join code" }) as HTMLInputElement).value).toBe("7KQ2M9XD")
+        fireEvent.click(screen.getByRole("button", { name: "Join" }))
+        expect(await screen.findByText("That has expired. Ask for a new code or invite.")).toBeTruthy()
+    })
+
+    it("follows a class joined from an invite straight to its download", async () => {
+        fake.syncNow.mockImplementation(async () => { fake.data.spaces = [space("member")]; fake.data.shared_courses = [course]; return true })
+        render(<JoinSheet code="" space={summary} />)
+        expect(await screen.findByText("You're in Web Services")).toBeTruthy()
+        expect(screen.queryByText(/hasn't finished downloading/)).toBeNull()
+    })
+
+    it("gives the maintenance page to someone who is not an admin while classes are off, and an admin the bar", () => {
+        fake.data.profile = { id: "u-me", isAdmin: false, maintenance: { features: ["classes"], message: "" } }
+        render(<JoinSheet code="7KQ2M9XD" space={null} />)
+        expect(screen.getByRole("heading", { name: /being worked on/ })).toBeTruthy()
+        expect(screen.queryByRole("textbox", { name: "Join code" })).toBeNull()
+        cleanup()
+        fake.data.profile = { id: "u-me", isAdmin: true, maintenance: { features: ["classes"], message: "" } }
+        render(<JoinSheet code="7KQ2M9XD" space={null} />)
+        expect(screen.getByText(/only admins see this/)).toBeTruthy()
+        expect(screen.getByRole("textbox", { name: "Join code" })).toBeTruthy()
+    })
+})
+
+describe("invites to you", () => {
+    const inv = (spaceId: string, over: Record<string, unknown> = {}) => ({
+        spaceId, kind: "class", name: "Web Services", role: "member", from: "Gabriel",
+        createdAt: Date.UTC(2026, 9, 1, 12), expiresAt: Date.UTC(2026, 9, 31), expired: false, ...over,
+    })
+
+    it("are listed with who sent each; Decline drops one, Accept follows the class as it downloads", async () => {
+        fake.api.invites.list.mockResolvedValue({ invites: [inv(SID), inv("sp0000000002", { name: "Databases" }), inv("sp0000000003", { name: "Old class", expired: true })] })
+        fake.api.invites.accept.mockResolvedValue(summary)
+        render(<InvitesSheet />)
+        await screen.findByText("Databases")
+        const row = (name: string) => within(screen.getByText(name).closest("li") as HTMLElement)
+        expect(row("Web Services").getByText("Gabriel")).toBeTruthy()
+        expect(row("Old class").getByText("This invite has expired. Ask for a new one.")).toBeTruthy()
+        expect(row("Old class").queryByRole("button")).toBeNull()
+        fireEvent.click(row("Databases").getByRole("button", { name: "Decline the invite to Databases" }))
+        await waitFor(() => expect(screen.queryByText("Databases")).toBeNull())
+        expect(fake.api.invites.decline).toHaveBeenCalledWith("sp0000000002")
+        fireEvent.click(row("Web Services").getByRole("button", { name: "Accept the invite to Web Services" }))
+        await waitFor(() => expect(fake.overlay.openSheet).toHaveBeenCalledWith({ kind: "join", code: "", space: summary }))
+    })
+
+    it("say so when there are none", async () => {
+        render(<InvitesSheet />)
+        expect(await screen.findByText("Nothing new.")).toBeTruthy()
+    })
+
+    it("give the maintenance page to someone who is not an admin while classes are off, and an admin the bar", async () => {
+        fake.data.profile = { id: "u-me", isAdmin: false, maintenance: { features: ["classes"], message: "" } }
+        render(<InvitesSheet />)
+        expect(screen.getByRole("heading", { name: /being worked on/ })).toBeTruthy()
+        expect(screen.queryByText("Nothing new.")).toBeNull()
+        cleanup()
+        fake.data.profile = { id: "u-me", isAdmin: true, maintenance: { features: ["classes"], message: "" } }
+        render(<InvitesSheet />)
+        expect(screen.getByText(/only admins see this/)).toBeTruthy()
+        expect(await screen.findByText("Nothing new.")).toBeTruthy()
     })
 })

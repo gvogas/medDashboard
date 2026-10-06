@@ -28,6 +28,8 @@ const AchievementSheet = lazyNamed(() => import("./achievement-sheet"), "Achieve
 const ClassSheet = lazyNamed(() => import("./class-sheet"), "ClassSheet", { idle: false })
 const NewClassSheet = lazyNamed(() => import("./new-class-sheet"), "NewClassSheet", { idle: false })
 const ConvertSheet = lazyNamed(() => import("./convert-sheet"), "ConvertSheet", { idle: false })
+const JoinSheet = lazyNamed(() => import("./join-sheet"), "JoinSheet", { idle: false })
+const InvitesSheet = lazyNamed(() => import("./invites-sheet"), "InvitesSheet", { idle: false })
 
 /** What the dialog is called: the item's type, "New assignment", "Course". */
 export function sheetLabel(s: Exclude<SheetState, null>): string {
@@ -106,6 +108,8 @@ export function Sheet() {
                 {shown?.kind === "class" && <ClassSheet key={shown.spaceId} spaceId={shown.spaceId} tab={shown.tab} />}
                 {shown?.kind === "new-class" && <NewClassSheet />}
                 {shown?.kind === "convert" && <ConvertSheet key={shown.courseId} courseId={shown.courseId} />}
+                {shown?.kind === "join" && <JoinSheet key={shown.space?.id ?? "code:" + shown.code} code={shown.code} space={shown.space} />}
+                {shown?.kind === "invites" && <InvitesSheet />}
             </Suspense>
         </div>
     )
