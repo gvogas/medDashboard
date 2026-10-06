@@ -30,9 +30,13 @@ vi.mock("@/data/overlay", () => fake.overlay)
 vi.mock("@/data/toast", () => ({ toast: fake.toast }))
 vi.mock("@/data/study-controller", () => ({ setView: vi.fn(), deleteLater: vi.fn(), deleteWithUndo: vi.fn() }))
 vi.mock("@/data/sidebar", () => ({ setSide: vi.fn() }))
+vi.mock("@/data/actions", () => ({ deleteCourse: vi.fn(), openCourse: vi.fn() }))
 
 import { JoinSheet } from "./join-sheet"
 import { MergeSheet } from "./merge-sheet"
+import { ClassSheet } from "./class-sheet"
+import { CourseSheet } from "./course-sheet"
+import { ShareCourse } from "./share-course"
 
 const SID = "sp0000000001", WEB = "c:" + SID
 const space = (role = "member") => ({
@@ -97,5 +101,67 @@ describe("the merge sheet", () => {
         fireEvent.click(screen.getByRole("button", { name: "Skip" }))
         expect(fake.overlay.closeSheet).toHaveBeenCalled()
         expect(fake.api.spaces.absorb).not.toHaveBeenCalled()
+    })
+})
+
+describe("the class sheet's Details", () => {
+    beforeEach(() => {
+        fake.data.spaces = [space("owner")]
+        fake.data.shared_items = [
+            { scope: WEB, id: "a1", type: "assignment", title: "REST API Project", courseId: "web", date: "2026-10-15", status: "todo", grade: null, weight: 20, notes: "", checklist: [], links: [] },
+            { scope: WEB, id: "h1", type: "quiz", title: "Pop quiz", courseId: "web", date: "2026-10-02", status: "todo", grade: null, weight: 10, notes: "", checklist: [], links: [] },
+        ]
+        fake.data.marks = [
+            { id: SID + ":a1", spaceId: SID, itemId: "a1", status: "graded", grade: 80, weight: null, notes: "", checklist: [], completedAt: 1, hidden: false },
+            { id: SID + ":h1", spaceId: SID, itemId: "h1", status: "todo", grade: null, weight: null, notes: "", checklist: [], completedAt: null, hidden: true },
+        ]
+    })
+
+    it("shows your colour, your grade so far, and what you hid, to show again", async () => {
+        render(<ClassSheet spaceId={SID} tab="details" />)
+        expect(screen.getByRole("heading", { name: /^Your grade so far/ })).toBeTruthy()
+        expect(within(screen.getByRole("list", { name: "Class items" })).queryByText("Pop quiz")).toBeNull()
+        fireEvent.click(screen.getByRole("button", { name: "Royal blue" }))
+        await waitFor(() => expect(fake.store.saveSpacePref).toHaveBeenCalledWith(expect.objectContaining({ id: SID, color: "#4F74D9" })))
+        fireEvent.click(screen.getByRole("button", { name: "Show Pop quiz again" }))
+        await waitFor(() => expect(fake.store.saveMark).toHaveBeenCalledWith(expect.objectContaining({ id: SID + ":h1", hidden: false })))
+    })
+
+    it("opens an item in its card, and the class's details for its owner", () => {
+        render(<ClassSheet spaceId={SID} tab="details" />)
+        fireEvent.click(screen.getByRole("button", { name: "REST API Project" }))
+        expect(fake.overlay.openSheet).toHaveBeenCalledWith({ kind: "item", id: WEB + "/a1" })
+        fireEvent.click(screen.getByRole("button", { name: "Edit class details" }))
+        expect(fake.overlay.openSheet).toHaveBeenLastCalledWith({ kind: "course", id: WEB + "/web" })
+    })
+
+    it("offers to merge a course of yours like the class", () => {
+        fake.data.courses = [{ id: "web", code: "CS 446", name: "Web (my copy)", color: "#B8457E", archived: false, meetings: [], term: "" }]
+        render(<ClassSheet spaceId={SID} tab="details" />)
+        fireEvent.click(screen.getByRole("button", { name: "Merge…" }))
+        expect(fake.overlay.openSheet).toHaveBeenCalledWith({ kind: "merge", spaceId: SID, courseId: "web", fromCourse: true })
+    })
+})
+
+describe("the class's details in the course sheet", () => {
+    it("are its shared facts, saved for everyone; no grades, archive or delete", async () => {
+        fake.data.spaces = [space("editor")]
+        render(<CourseSheet id={WEB + "/web"} />)
+        expect(screen.queryByRole("button", { name: "Delete" })).toBeNull()
+        expect(screen.queryByText(/hidden from the sidebar/)).toBeNull()
+        fireEvent.change(screen.getByRole("textbox", { name: "Teacher" }), { target: { value: "Dr. Lin" } })
+        fireEvent.click(screen.getByRole("button", { name: "Save course" }))
+        await waitFor(() => expect(fake.store.saveShared).toHaveBeenCalledWith("shared_courses", expect.objectContaining({ scope: WEB, id: "web", instructor: "Dr. Lin", target: null, archived: false })))
+        expect(fake.store.saveCourse).not.toHaveBeenCalled()
+    })
+})
+
+describe("Share this course, with a class like it", () => {
+    it("offers merging the course into the class", () => {
+        fake.data.spaces = [space("owner")]
+        fake.data.courses = [{ id: "web", code: "CS 446", name: "Web", color: "#B8457E", archived: false, meetings: [], term: "" }]
+        render(<ShareCourse courseId="web" dirty={false} />)
+        fireEvent.click(screen.getByRole("button", { name: "Merge into the class" }))
+        expect(fake.overlay.openSheet).toHaveBeenCalledWith({ kind: "merge", spaceId: SID, courseId: "web", fromCourse: true })
     })
 })
