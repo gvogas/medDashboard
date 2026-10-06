@@ -96,3 +96,15 @@ it('reads only the columns rounds-v7 added as defaults, and stops on any other g
   const source = await columns(env.MIGRATION_DB);
   expect(() => readQueries(source.filter(({ tbl, col }) => !(tbl === 'users' && col === 'username')))).toThrow('users.username is not in the source database');
 });
+
+it('reads spaces and members as empty from a database made before them, and copies them after users', async () => {
+  const queries = new Map(readQueries(await columns(env.MIGRATION_DB)));
+  expect((await env.MIGRATION_DB.prepare(queries.get('spaces')).all()).results).toEqual([]);
+  expect((await env.MIGRATION_DB.prepare(queries.get('members')).all()).results).toEqual([]);
+  const sql = copyStatements({
+    users: [{ id: 'ana', username: 'ana' }],
+    spaces: [{ id: 'abcdefghij12', kind: 'class', archived: 0, created_at: 1, updated_at: 1, revision: 4 }],
+    members: [{ space_id: 'abcdefghij12', user_id: 'ana', role: 'owner', joined_at: 1, updated_at: 1, revision: 4 }],
+  });
+  expect(sql.slice(0, 3).map((s) => s.split(' ').slice(0, 3).join(' '))).toEqual(['INSERT INTO users', 'INSERT INTO spaces', 'INSERT INTO members']);
+});

@@ -7,6 +7,8 @@
    user, so a run that failed partway is never continued on top of itself. */
 export const TABLES = {
   users: ['id', 'username', 'password_hash', 'pw_gen', 'display_name', 'coat_name', 'coat_role', 'coat_color', 'theme', 'bg', 'term_start', 'types', 'study_flow', 'feed_gen', 'study_prefs', 'school_calendar', 'leaderboard', 'is_admin', 'last_seen_day', 'hidden_sources', 'created_at', 'updated_at', 'revision'],
+  spaces: ['id', 'kind', 'archived', 'school_calendar', 'parent_space', 'parent_item', 'code_hash', 'code_expires', 'code_uses_left', 'created_at', 'updated_at', 'deleted_at', 'revision'],
+  members: ['space_id', 'user_id', 'role', 'joined_at', 'updated_at', 'deleted_at', 'revision'],
   courses: ['scope', 'id', 'code', 'name', 'color', 'instructor', 'term', 'archived', 'meetings', 'target', 'updated_by', 'created_at', 'updated_at', 'deleted_at', 'revision'],
   items: ['scope', 'id', 'type', 'title', 'course_id', 'date', 'start', 'end', 'location', 'status', 'grade', 'weight', 'notes', 'checklist', 'links', 'recur', 'weekday', 'recur_until', 'dept', 'completed_at', 'updated_by', 'class_id', 'assignees', 'completed_by', 'created_at', 'updated_at', 'deleted_at', 'revision'],
   quotes: ['user_id', 'id', 'text', 'source', 'created_at', 'updated_at', 'deleted_at', 'revision'],
@@ -17,7 +19,9 @@ export const TABLES = {
   admin_log: ['id', 'at', 'admin', 'action', 'target', 'detail'],
 };
 
-const ORDER_BY = { users: 'id', courses: 'scope, id', items: 'scope, id', changes: 'seq', spotify_tokens: 'user_id', admin_log: 'id' };
+/* Tables migrations/0002_spaces.sql added: a database made before it has none of their rows. */
+const ADDED_TABLES = new Set(['spaces', 'members']);
+const ORDER_BY ={ users: 'id', spaces: 'id', members: 'space_id, user_id', courses: 'scope, id', items: 'scope, id', changes: 'seq', spotify_tokens: 'user_id', admin_log: 'id' };
 
 /* Reading rounds-v6 or older, whose courses, items and change feed name a user: the owner
    becomes the scope of that person's own rows, a course's or item's change names the
@@ -52,6 +56,7 @@ export function uncopied(columns) {
  */
 export function readQueries(columns) {
   const has = new Set(columns.map(({ tbl, col }) => `${tbl}.${col}`));
+  const tables = new Set(columns.map(({ tbl }) => tbl));
   const pick = (table, col) => {
     if (has.has(`${table}.${col}`)) return `"${col}"`;
     if (col === 'scope' && has.has(`${table}.user_id`)) return SCOPE_FROM_USER;
@@ -61,6 +66,7 @@ export function readQueries(columns) {
     return `${DEFAULTS[col] ?? 'NULL'} AS "${col}"`;
   };
   const out = Object.entries(TABLES).map(([table, cols]) => {
+    if (ADDED_TABLES.has(table) && !tables.has(table)) return [table, `SELECT ${cols.map((col) => `NULL AS "${col}"`).join(', ')} WHERE 0`];
     const list = cols.map((col) => (table === 'changes' && col === 'payload' && has.has('changes.user_id') ? PAYLOAD_FROM_USER : pick(table, col)));
     return [table, `SELECT ${list.join(', ')} FROM ${table} ORDER BY ${ORDER_BY[table] || 'user_id, id'}`];
   });
