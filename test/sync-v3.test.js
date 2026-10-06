@@ -67,6 +67,42 @@ describe('sync v3', () => {
     expect((await syncPageV3(env.DB, ana, [[web.scope, 0]], 0)).revoked).toEqual([web.scope]);
   });
 
+  it('drops a space removed between reading memberships and the page: no cursor moves on, a sent one is revoked', async () => {
+    const ana = await createUser('v3-race2'), owner = await createUser('v3-race2-o');
+    const web = await makeSpace({ members: { [owner]: 'owner', [ana]: 'member' } });
+    const held = (await syncPageV3(env.DB, ana, [], 0)).cursors;
+    await sharedItem(web.scope, 'later', { course_id: 'web' });
+    /* the removal lands after readMemberships' batch, before readPage's */
+    const racing = () => {
+      let batches = 0;
+      return {
+        prepare: (sql) => env.DB.prepare(sql),
+        batch: async (list) => {
+          if (++batches === 2) await setMember(web.id, ana, null);
+          return env.DB.batch(list);
+        },
+      };
+    };
+    try {
+      const page = await syncPageV3(racing(), ana, Object.entries(held), 0);
+      expect(page.changes.filter((c) => c.scope === web.scope)).toEqual([]);
+      expect(page.cursors).not.toHaveProperty(web.scope);
+      expect(page.scopes.map((s) => s.scope)).not.toContain(web.scope);
+      expect(page.revoked).toEqual([web.scope]);
+      /* re-added before the next sync: the row written meanwhile still comes */
+      await setMember(web.id, ana, 'member');
+      const back = await syncPageV3(env.DB, ana, Object.entries(page.cursors), 0);
+      expect(back.changes.map((c) => c.row.id)).toEqual(['web', 'later']);
+      /* not sent: neither paged nor revoked */
+      await setMember(web.id, ana, 'member');
+      const fresh = await syncPageV3(racing(), ana, [[personal(ana), held[personal(ana)]]], 0);
+      expect(fresh.cursors).not.toHaveProperty(web.scope);
+      expect(fresh.revoked).toEqual([]);
+    } finally {
+      await setMember(web.id, ana, 'member');
+    }
+  });
+
   it('resets only a scope whose cursor fell below the floor; cursor 0 never resets', async () => {
     const ana = await createUser('v3-reset'), owner = await createUser('v3-reset-o');
     const web = await makeSpace({ members: { [owner]: 'owner', [ana]: 'member' } });

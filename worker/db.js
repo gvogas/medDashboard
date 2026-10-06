@@ -478,19 +478,23 @@ export async function readMemberships(db, userId, sv) {
  * floor and head: a statement per scope, each capped at limit + 1 and, for a space, guarded
  * by live membership inside the statement, so a removal since readMemberships pages
  * nothing. D1 refuses a compound SELECT of more than five terms, so this is a batch rather
- * than one UNION ALL. Rows come back in sequence order, not yet cut.
+ * than one UNION ALL. Rows come back in sequence order, not yet cut; `lost` lists the
+ * scopes the guard refused, checked in the same batch.
  */
 export async function readPage(db, userId, wanted, limit = 100) {
-  const [state, ...pages] = await db.batch([
+  const guards = wanted.map(([scope]) => {
+    const p = parseScope(scope);
+    return p.kind === 'user' ? { sql: p.userId === userId ? '1' : '0', binds: [] } : memberGuard(p.spaceId, userId);
+  });
+  const [state, access, ...pages] = await db.batch([
     db.prepare("SELECT floor, COALESCE((SELECT seq FROM sqlite_sequence WHERE name = 'changes'), 0) AS head FROM sync_state WHERE id = 1"),
-    ...wanted.map(([scope, cursor]) => {
-      const p = parseScope(scope);
-      const g = p.kind === 'user' ? { sql: p.userId === userId ? '1' : '0', binds: [] } : memberGuard(p.spaceId, userId);
-      return db.prepare(`SELECT seq, scope, kind, payload FROM changes WHERE scope = ? AND seq > ? AND ${g.sql} ORDER BY seq LIMIT ?`)
-        .bind(scope, cursor, ...g.binds, limit + 1);
-    }),
+    db.prepare(`SELECT ${guards.map((g, i) => `(${g.sql}) AS a${i}`).join(', ') || '1 AS none'}`).bind(...guards.flatMap((g) => g.binds)),
+    ...wanted.map(([scope, cursor], i) =>
+      db.prepare(`SELECT seq, scope, kind, payload FROM changes WHERE scope = ? AND seq > ? AND ${guards[i].sql} ORDER BY seq LIMIT ?`)
+        .bind(scope, cursor, ...guards[i].binds, limit + 1)),
   ]);
-  return { ...state.results[0], rows: pages.flatMap((p) => p.results).sort((a, b) => a.seq - b.seq) };
+  const lost = wanted.map(([scope]) => scope).filter((_, i) => !access.results[0][`a${i}`]);
+  return { ...state.results[0], lost, rows: pages.flatMap((p) => p.results).sort((a, b) => a.seq - b.seq) };
 }
 
 /**
@@ -519,12 +523,14 @@ export function parseCursor(token) {
  * below the floor after a resync from 0 comes back tagged.
  */
 export async function syncPageV3(db, userId, cursors, sv, limit = 100) {
-  const spaces = await readMemberships(db, userId, sv);
+  const held = await readMemberships(db, userId, sv);
   const sent = new Map(cursors.map(([s, c]) => [s, parseCursor(c) || { seq: 0, base: null }]));
+  const from = (s) => sent.get(s) || { seq: 0, base: null };
+  const { floor, head, lost, rows: all } = await readPage(db, userId, [personal(userId), ...held.map((s) => s.scope)].map((s) => [s, from(s).seq]), limit);
+  /* a space left since readMemberships pages nothing and keeps no cursor: gone, as if never read */
+  const spaces = held.filter((s) => !lost.includes(s.scope));
   const scopes = [personal(userId), ...spaces.map((s) => s.scope)];
   const revoked = [...sent.keys()].filter((s) => !scopes.includes(s));
-  const from = (s) => sent.get(s) || { seq: 0, base: null };
-  const { floor, head, rows: all } = await readPage(db, userId, scopes.map((s) => [s, from(s).seq]), limit);
   const reset = scopes.filter((s) => {
     const { seq, base } = from(s);
     return seq > head || (seq > 0 && seq < floor && base !== floor);
