@@ -5,7 +5,8 @@ import { stubMatchMedia } from "./test-media"
 /* The app is not booted: a store with data, a ui, and redraws that only notify.
    core/model.ts, data/query.ts and the actions are the real ones, so the filter logic is too. */
 const fake = vi.hoisted(() => ({
-    data: { items: [] as unknown[], courses: [] as unknown[], quotes: [] as unknown[], study_sessions: [] as unknown[], profile: null as unknown },
+    data: { items: [] as unknown[], courses: [] as unknown[], quotes: [] as unknown[], study_sessions: [] as unknown[], profile: null as unknown, spaces: [] as unknown[], shared_courses: [] as unknown[] },
+    invites: [] as { spaceId: string; expired: boolean }[],
     ui: { view: "week", search: "", types: {} as Record<string, boolean>, course: "all", sem: null as string | null, bg: "med", anchor: "2026-09-28", settings: false },
 }))
 vi.mock("@/core/store", () => ({
@@ -23,6 +24,8 @@ vi.mock("@/data/actions", async (importOriginal) => ({
     openCourse: vi.fn(),
     openSettings: vi.fn(),
 }))
+const classes = vi.hoisted(() => ({ openClass: vi.fn(), openInvites: vi.fn(), openJoin: vi.fn(), openNewClass: vi.fn() }))
+vi.mock("@/data/classes", () => ({ ...classes, useInvites: () => fake.invites }))
 
 import { openCourse, openSettings } from "@/data/actions"
 import { Sidebar } from "./sidebar"
@@ -37,6 +40,9 @@ const coursesNav = () => within(screen.getByRole("region", { name: "Courses" }))
 beforeEach(() => {
     fake.data.items = []
     fake.data.courses = []
+    fake.data.spaces = []
+    fake.data.shared_courses = []
+    fake.invites = []
     fake.data.profile = { id: "p", username: "demo", displayName: "Dr Demo", coat: { name: "", role: "MS2 · Block 3", color: "" }, types: [] }
     fake.ui.types = {}
     fake.ui.course = "all"
@@ -183,5 +189,62 @@ describe("who this is", () => {
         expect(screen.getByText("Law")).toBeTruthy()
         expect(screen.getByRole("img", { name: /Suit jacket/ })).toBeTruthy()
         expect(screen.getByRole("button", { name: /Headed for/ }).textContent).toBe("Headed forLitigator")
+    })
+})
+
+describe("shared classes, for admins", () => {
+    beforeEach(() => {
+        fake.data.profile = { ...(fake.data.profile as object), isAdmin: true }
+        fake.data.spaces = [{
+            id: "sp0000000001", scope: "c:sp0000000001", kind: "class", role: "owner", name: "Web Services", archived: false, parent: null, revision: 5,
+            members: [{ userId: "p", name: "Dr Demo", role: "owner" }, { userId: "q", name: "Sam", role: "member" }],
+        }]
+        fake.data.shared_courses = [{ scope: "c:sp0000000001", id: "web", name: "Web Services", color: "#17B3AE" }]
+        fake.invites = [{ spaceId: "sp0000000002", expired: false }, { spaceId: "sp0000000003", expired: true }]
+    })
+
+    it("list each class under the courses, opening the class, and the invites waiting", () => {
+        render(<Sidebar />)
+        fireEvent.click(coursesNav().getByRole("button", { name: /^Web Services, shared, 2 members/ }))
+        expect(classes.openClass).toHaveBeenCalledWith("sp0000000001")
+        expect(coursesNav().getByRole("button", { name: /^Invites/ }).textContent).toBe("Invites1")
+        fireEvent.click(coursesNav().getByRole("button", { name: /^Invites/ }))
+        expect(classes.openInvites).toHaveBeenCalled()
+    })
+
+    it("turn + New course into a menu: a course, a shared class, or joining with a code", () => {
+        render(<Sidebar />)
+        expect(coursesNav().queryByRole("button", { name: "+ New course" })).toBeNull()
+        const menu = () => { fireEvent.click(coursesNav().getByRole("button", { name: "+ New" })); return within(coursesNav().getByRole("menu", { name: "New" })) }
+        fireEvent.click(menu().getByRole("menuitem", { name: /^New shared class/ }))
+        expect(classes.openNewClass).toHaveBeenCalled()
+        expect(coursesNav().queryByRole("menu")).toBeNull()
+        fireEvent.click(menu().getByRole("menuitem", { name: /^Join with code/ }))
+        expect(classes.openJoin).toHaveBeenCalled()
+        fireEvent.click(menu().getByRole("menuitem", { name: /^New course/ }))
+        expect(openCourse).toHaveBeenLastCalledWith(null)
+    })
+
+    it("close the menu on Escape, focus back on + New", () => {
+        render(<Sidebar />)
+        const button = coursesNav().getByRole("button", { name: "+ New" })
+        fireEvent.click(button)
+        const menu = coursesNav().getByRole("menu", { name: "New" })
+        expect(document.activeElement).toBe(within(menu).getAllByRole("menuitem")[0])
+        fireEvent.keyDown(menu, { key: "Escape" })
+        expect(coursesNav().queryByRole("menu")).toBeNull()
+        expect(document.activeElement).toBe(button)
+    })
+})
+
+describe("shared classes, for everyone else", () => {
+    it("are not there: no class rows, no invites, + New course as before", () => {
+        fake.data.spaces = [{ id: "sp0000000001", scope: "c:sp0000000001", kind: "class", role: "owner", name: "Web Services", archived: false, parent: null, revision: 5, members: [] }]
+        fake.invites = [{ spaceId: "sp0000000002", expired: false }]
+        render(<Sidebar />)
+        expect(coursesNav().queryByRole("button", { name: /Web Services/ })).toBeNull()
+        expect(coursesNav().queryByRole("button", { name: /^Invites/ })).toBeNull()
+        expect(coursesNav().getByRole("button", { name: "+ New course" })).toBeTruthy()
+        expect(coursesNav().queryByRole("button", { name: "+ New" })).toBeNull()
     })
 })

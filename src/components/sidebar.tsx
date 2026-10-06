@@ -5,7 +5,7 @@
 // data/sidebar.ts.
 
 import { MotionConfig } from "framer-motion"
-import { useCourses, useItems } from "@/data/store"
+import { useCourses, useItems, useProfile } from "@/data/store"
 import { useUi } from "@/data/ui"
 import { THEMES } from "@/data/themes"
 import { openCourse, setCourse, setSem } from "@/data/actions"
@@ -18,6 +18,7 @@ import { SemesterMenu } from "./semester-menu"
 import { SideNav } from "./side-nav"
 import { SideFoot } from "./side-foot"
 import { SidebarPlayer } from "./spotify/sidebar-player"
+import { ClassRows, InvitesRow, NewMenu } from "./sidebar-classes"
 
 export function Sidebar() {
     const bg = useUi((u) => u.bg)
@@ -42,6 +43,8 @@ export function Sidebar() {
 
 function CourseList() {
     const cal = schoolCal()
+    /* shared classes are for admins until Stage 6 */
+    const admin = !!useProfile()?.isAdmin
     const sem = useUi((ui) => ui.sem)
     const term = pickedTerm(cal, sem, today())
     /* the select shows with two semesters or more; a course goes under its own or every one */
@@ -80,13 +83,17 @@ function CourseList() {
                         </button>
                     </div>
                 ))}
-                <button
-                    type="button"
-                    onClick={() => openCourse(null)}
-                    className="mt-1.5 w-full rounded-[9px] border border-dashed border-border bg-transparent px-2 py-1.5 text-left text-[12px] text-ink-2 hover:border-primary hover:text-primary"
-                >
-                    + New course
-                </button>
+                {admin && <ClassRows />}
+                {admin && <InvitesRow />}
+                {admin ? <NewMenu /> : (
+                    <button
+                        type="button"
+                        onClick={() => openCourse(null)}
+                        className="mt-1.5 w-full rounded-[9px] border border-dashed border-border bg-transparent px-2 py-1.5 text-left text-[12px] text-ink-2 hover:border-primary hover:text-primary"
+                    >
+                        + New course
+                    </button>
+                )}
             </div>
         </section>
     )
