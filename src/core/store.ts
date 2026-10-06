@@ -1,9 +1,10 @@
 // The database is authoritative; memory is a render cache, never the shared queue.
 import { openDb, deleteDb, STORES as stores } from './db.ts';
 import { normalizeItem, normalizeCourse, normalizeQuote, normalizeStudySession, normalizeAchievement, normalizeFlow, normalizePrefs, DEFAULT_COAT } from './model.ts';
-import type { Accessor, Conflict, Db, PendingOp, Row, Rows } from './db.ts';
+import { parseKey, sharedKey, SHARED_STORES, type SharedStore } from './shared.ts';
+import type { Access, Accessor, Conflict, Db, PendingOp, Row, Rows } from './db.ts';
 import type { Raw, RawCourse, RawItem } from './model.ts';
-import type { Achievement, Coat, Course, Item, Profile, Quote, StudySession } from './types.ts';
+import type { Achievement, Coat, Course, Item, Profile, Quote, SharedCourse, SharedItem, Space, StudySession } from './types.ts';
 
 /** The kinds of row the store keeps, each in its own object store. */
 export type Kind = 'items' | 'courses' | 'quotes' | 'study_sessions' | 'achievements';
@@ -15,8 +16,12 @@ export type SaveRow = { [K in Kind]: { kind: K; row: RawOf[K] } }[Kind];
 export interface StoreEvent { type: string; message?: string }
 /** The profile as the server sends it; the store fills in what it lacks. */
 export type ServerProfile = Omit<Partial<Profile>, 'coat'> & { id: string; coat?: Partial<Coat> };
-/** A page of changes from the server. */
-export interface Page { cursor: number; changes: { kind: Kind; row: Row }[] }
+/**
+ * A page of changes from the server. v3 names each change's scope (none: the person's
+ * own), carries a cursor per scope and the person's spaces; v2's single `cursor` is the
+ * person's own.
+ */
+export interface Page { cursor?: number; cursors?: Record<string, number>; scopes?: Space[]; changes: { scope?: string; kind: Kind; row: Row }[] }
 
 export const data: {
   profile: Profile | null;
@@ -25,7 +30,11 @@ export const data: {
   quotes: Quote[];
   study_sessions: StudySession[];
   achievements: Achievement[];
-} = { profile: null, courses: [], items: [], quotes: [], study_sessions: [], achievements: [] };
+  /* a class's or a project's rows, and the spaces themselves (spec §7) */
+  shared_courses: SharedCourse[];
+  shared_items: SharedItem[];
+  spaces: Space[];
+} = { profile: null, courses: [], items: [], quotes: [], study_sessions: [], achievements: [], shared_courses: [], shared_items: [], spaces: [] };
 const dirty: Record<string, string> = {};
 export const conflicts: Conflict[] = [];
 const listeners = new Set<(evt: StoreEvent) => void>();
@@ -33,6 +42,16 @@ const normal: { [K in Kind]: (raw: RawOf[K]) => Rows[K] } = { items: normalizeIt
 const kinds = Object.keys(normal) as Kind[];
 /* A stored or downloaded row may hold anything; each normalizer takes whatever it is given. */
 const normalizer = (kind: Kind) => normal[kind] as (raw: unknown, index?: number) => Rows[Kind];
+/* A shared row keeps its scope, who last wrote it and, for an item, the team's fields. */
+const normalShared = {
+  shared_courses: (r: Row): SharedCourse => ({ ...normalizeCourse(r as unknown as RawCourse), scope: r.scope as string, updatedBy: (r.updatedBy as string | null) ?? null }),
+  shared_items: (r: Row): SharedItem => ({
+    ...normalizeItem(r as unknown as RawItem), scope: r.scope as string, updatedBy: (r.updatedBy as string | null) ?? null,
+    assignees: Array.isArray(r.assignees) ? r.assignees as string[] : [], completedBy: (r.completedBy as string | null) ?? null,
+  }),
+};
+/* The shared store a change of `kind` goes to: only courses and items are shared. */
+const sharedStoreOf = (kind: Kind): SharedStore | null => (kind === 'courses' ? 'shared_courses' : kind === 'items' ? 'shared_items' : null);
 /* Which tab queued an edit. It lasts as long as the tab, reloads included: a new id on
    every load made an unsynced edit look like another tab's once the page reloaded. */
 const owner = (() => {
@@ -54,10 +73,11 @@ export const course = (id: string | null | undefined): Course | null => byId.cou
 export const item = (id: string | null | undefined): Item | null => byId.items.get(id!) || null;
 const index = () => { byId = { courses: new Map(data.courses.map((r) => [r.id, r])), items: new Map(data.items.map((r) => [r.id, r])) }; };
 const profile = (p: ServerProfile): Profile => ({ ...p, types: Array.isArray(p.types) ? p.types : [], studyFlow: normalizeFlow(p.studyFlow), studyPrefs: normalizePrefs(p.studyPrefs), coat: { name: '', role: '', color: DEFAULT_COAT, ...p.coat }, revision: p.revision || 0 });
-const rowStore = (key: string) => (key === 'profile' ? 'meta' : key.split(':')[0]) as Kind | 'meta';
-const rowId = (key: string) => key === 'profile' ? 'profile' : key.slice(key.indexOf(':') + 1);
+/* A pending key's store, and the row's key in it: [scope, id] for a shared row (src/core/shared.ts). */
+const rowStore = (key: string) => parseKey(key).store as Kind | SharedStore | 'meta';
+const rowId = (key: string): IDBValidKey => { const k = parseKey(key); return k.scope ? [k.scope, k.id] : k.id; };
 /* The profile is kept in `meta` under its key; any other row is stored as it is. */
-const wrap: { (key: 'profile', row: unknown): Rows['meta']; (key: string, row: unknown): Rows[Kind | 'meta'] } =
+const wrap: { (key: 'profile', row: unknown): Rows['meta']; (key: string, row: unknown): Rows[Kind | SharedStore | 'meta'] } =
   (key: string, row: unknown) => (key === 'profile' ? { key: 'profile', value: row } : row) as Rows['meta'];
 
 /* Rows a delete is waiting on: gone from every view while Undo can still bring them back. */
@@ -73,11 +93,15 @@ export async function reload(): Promise<void> {
   if (!handle) return;
   const snapshot = await handle.transaction(stores, 'readonly', async (a) => ({
     courses: await a('courses').all(), items: await a('items').all(), quotes: await a('quotes').all(), study_sessions: await a('study_sessions').all(), achievements: await a('achievements').all(),
+    shared_courses: await a('shared_courses').all(), shared_items: await a('shared_items').all(), spaces: await a('spaces').all(),
     profile: (await a('meta').get('profile'))?.value as Profile | undefined,
     pending: await a('pending').all(), conflicts: await a('conflicts').all(),
   }));
   if (db !== handle) return;
   for (const kind of kinds) (data as Record<Kind, Rows[Kind][]>)[kind] = snapshot[kind].filter((r) => !hidden.has(kind + ':' + r.id)).map(normalizer(kind));
+  data.shared_courses = snapshot.shared_courses.filter((r) => !hidden.has(sharedKey('shared_courses', r.scope, r.id))).map((r) => normalShared.shared_courses(r as unknown as Row));
+  data.shared_items = snapshot.shared_items.filter((r) => !hidden.has(sharedKey('shared_items', r.scope, r.id))).map((r) => normalShared.shared_items(r as unknown as Row));
+  data.spaces = snapshot.spaces;
   index();
   data.profile = snapshot.profile || null;
   for (const key of Object.keys(dirty)) delete dirty[key];
@@ -114,6 +138,7 @@ export async function close(): Promise<void> {
   channel?.close(); channel = null;
   data.profile = null;
   for (const kind of kinds) data[kind] = [];
+  data.shared_courses = []; data.shared_items = []; data.spaces = [];
   index();
   for (const key of Object.keys(dirty)) delete dirty[key];
   conflicts.length = 0;
@@ -143,13 +168,16 @@ function mutate<T>(fn: (a: Accessor) => T | Promise<T>, event = 'change'): Promi
   return run;
 }
 
-async function queue(a: Accessor, key: string, op: string, body: Row | null) {
+/* `base` (a shared row's edit only): the row before this edit; an op already queued keeps
+   the base it started from, so `changed` covers every edit since the last upload. */
+async function queue(a: Accessor, key: string, op: string, body: Row | null, base?: Row | null) {
   const previous = await a('pending').get(key);
   if (previous && previous.owner !== owner) {
     await a('conflicts').put({ id: crypto.randomUUID(), ...previous, reason: 'Another tab edited this record.', at: Date.now() });
   }
   const revision = previous?.revision ?? body?.revision ?? 0;
-  await a('pending').put({ key, op, body, revision, reviewRequired: !!previous?.reviewRequired, token: crypto.randomUUID(), owner });
+  const kept = base === undefined ? {} : { base: previous ? previous.base ?? null : base };
+  await a('pending').put({ key, op, body, revision, reviewRequired: !!previous?.reviewRequired, token: crypto.randomUUID(), owner, ...kept });
 }
 
 /* The server refuses an item with no title. A title cleared while editing keeps the
@@ -188,6 +216,25 @@ export const saveQuote = (row: Raw<Quote>) => saveRow('quotes', row);
 export const saveStudySession = (row: Raw<StudySession>) => saveRow('study_sessions', row);
 export const deleteStudySession = (id: string) => deleteRow('study_sessions', id);
 export const saveAchievement = (row: Raw<Achievement>) => saveRow('achievements', row);
+/** Save a class's or a project's course or item; it uploads with the row it started from (spec §6 Push). The UI calls this from Stage 4. */
+export function saveShared(store: SharedStore, row: Row & { scope: string }): Promise<SharedCourse | SharedItem> {
+  const clean = normalShared[store](structuredClone(row));
+  return mutate(async (a) => {
+    const shared = a(store) as unknown as Access<'shared_items'>;
+    const before = await shared.get([clean.scope, clean.id]);
+    await shared.put(clean as SharedItem);
+    await queue(a, sharedKey(store, clean.scope, clean.id), 'put', clean as unknown as Row, (before as unknown as Row | undefined) ?? null);
+    return clean;
+  });
+}
+/** Delete a class's or a project's row on this device and queue the delete. */
+export function removeShared(store: SharedStore, scope: string, id: string): Promise<void> {
+  return mutate(async (a) => {
+    const before = await a(store).get([scope, id]) as unknown as Row | undefined;
+    await queue(a, sharedKey(store, scope, id), 'delete', before ?? { id, scope }, before ?? null);
+    await a(store).del([scope, id]);
+  });
+}
 export const deleteAchievement = (id: string) => deleteRow('achievements', id);
 export const deleteItem = (id: string) => deleteRow('items', id, (a) => unlinkSessions(a, 'itemId', id));
 /* The server clears a deleted course's or item's link on its sessions in the same
@@ -269,22 +316,71 @@ export function rejectOperation(op: PendingOp, current: Row | null | undefined, 
   }, 'synced');
 }
 
-export function applyPage(page: Page, reset = false): Promise<boolean> {
+/**
+ * Apply a page. A change in the person's own scope (or with none) goes to the personal
+ * stores; a class's or a project's course or item to the shared ones, under [scope, id].
+ * `reset` lists scopes whose clean rows are wiped first (true: the person's own, as v2
+ * did). A row with a pending edit, or held at a newer revision, is left alone.
+ */
+export function applyPage(page: Page, reset: boolean | string[] = false): Promise<boolean> {
   return mutate(async (a) => {
-    if (reset) for (const kind of kinds) {
-      for (const row of await a(kind).all()) if (!(await a('pending').get(`${kind}:${row.id}`))) await a(kind).del(row.id);
+    const own = 'u:' + userId;
+    const wipe = reset === true ? [own] : reset || [];
+    for (const scope of wipe) {
+      if (scope === own) {
+        for (const kind of kinds) for (const row of await a(kind).all()) if (!(await a('pending').get(`${kind}:${row.id}`))) await a(kind).del(row.id);
+      } else for (const s of SHARED_STORES) {
+        for (const row of await a(s).all()) if (row.scope === scope && !(await a('pending').get(sharedKey(s, scope, row.id)))) await a(s).del([scope, row.id]);
+      }
     }
-    for (const { kind, row } of page.changes) {
-      if (await a('pending').get(`${kind}:${row.id}`)) continue;
-      const local = await a(kind).get(row.id);
+    for (const { scope = own, kind, row } of page.changes) {
+      if (scope === own) {
+        if (await a('pending').get(`${kind}:${row.id}`)) continue;
+        const local = await a(kind).get(row.id);
+        if (local && local.revision! > row.revision!) continue;
+        if (row.deletedAt) await a(kind).del(row.id);
+        else await a(kind).put(normalizer(kind)(row));
+        continue;
+      }
+      const s = sharedStoreOf(kind);
+      if (!s || await a('pending').get(sharedKey(s, scope, row.id))) continue;
+      const store = a(s) as unknown as Access<'shared_items'>;
+      const local = await store.get([scope, row.id]);
       if (local && local.revision! > row.revision!) continue;
-      if (row.deletedAt) await a(kind).del(row.id);
-      else await a(kind).put(normalizer(kind)(row));
+      if (row.deletedAt) await store.del([scope, row.id]);
+      else await store.put(normalShared[s]({ ...row, scope }) as SharedItem);
     }
-    await a('meta').put({ key: 'syncCursor', value: page.cursor });
-    return reset || page.changes.length > 0;
+    /* a space's member list comes only when it moved (spec §6): keep the one held */
+    for (const space of page.scopes || []) {
+      const held = await a('spaces').get(space.id);
+      await a('spaces').put({ ...space, members: space.members ?? held?.members ?? [] });
+    }
+    const cursors = (await a('meta').get('cursors'))?.value as Record<string, number> | undefined;
+    await a('meta').put({ key: 'cursors', value: { ...cursors, ...(page.cursors ?? (page.cursor !== undefined ? { [own]: page.cursor } : {})) } });
+    return wipe.length > 0 || page.changes.length > 0;
   }, 'synced');
 }
+
+/**
+ * Take away what this device holds of scopes it may no longer read (sync's `revoked`,
+ * applied after the cycle's last page): their shared rows, their space, their cursor.
+ * Pending edits to them stay queued; uploading them gets 404 and moves them to the saved
+ * copies, so nothing is silently thrown away (spec §6 Revocation).
+ */
+export function applyRevoked(scopes: string[]): Promise<boolean> {
+  if (!scopes.length) return Promise.resolve(false);
+  return mutate(async (a) => {
+    for (const s of SHARED_STORES) for (const row of await a(s).all()) if (scopes.includes(row.scope)) await a(s).del([row.scope, row.id]);
+    for (const space of await a('spaces').all()) if (scopes.includes(space.scope)) await a('spaces').del(space.id);
+    const cursors = { ...((await a('meta').get('cursors'))?.value as Record<string, number> | undefined) };
+    for (const s of scopes) delete cursors[s];
+    await a('meta').put({ key: 'cursors', value: cursors });
+    return true;
+  }, 'synced');
+}
+
+/** The highest space revision this device holds: sync's `sv`. */
+export const spaceRevision = (): number => Math.max(0, ...data.spaces.map((s) => s.revision));
 export function applyServerProfile(p: ServerProfile): Promise<void> {
   return mutate(async (a) => {
     if (!(await a('pending').get('profile'))) {
@@ -307,7 +403,8 @@ export function resolveConflict(id: string, restore: boolean): Promise<void> {
       const body = { ...conflict.body, revision: current?.revision || 0 } as Row;
       const existing = await a('pending').get(conflict.key);
       if (existing) throw new Error('Wait for the pending edit to sync before restoring this copy.');
-      await queue(a, conflict.key, conflict.op, body);
+      /* a shared copy restored merges against the server's row as it now is */
+      await queue(a, conflict.key, conflict.op, body, parseKey(conflict.key).scope ? (current as Row | undefined) ?? null : undefined);
       if (conflict.op === 'put') await a(rowStore(conflict.key)).put(wrap(conflict.key, body));
       else await a(rowStore(conflict.key)).del(rowId(conflict.key));
     }

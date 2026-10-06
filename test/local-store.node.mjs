@@ -188,3 +188,62 @@ test('version 4 upgrade keeps pending edits and moves the cursor to the person\'
  assert.equal(await first.meta.get('syncCursor'), undefined);
  assert.equal(first.item('a').title, 'Unsent');
 });
+
+const WEB = 'c:abcdefghij12', LAB = 'c:bbbbbbbbbbb2';
+const webSpace = (over = {}) => ({ id: 'abcdefghij12', scope: WEB, kind: 'class', role: 'member', archived: false, name: 'Web', parent: null, revision: 6, ...over });
+
+test('a v3 page files shared rows by scope beside a personal row with the same id; revoking the space removes them', async () => {
+ const user = p(); await first.open(user);
+ const own = `u:${user.id}`;
+ await first.applyPage({ cursors: { [own]: 5, [WEB]: 6 }, scopes: [webSpace({ members: [{ userId: 'g', name: 'Gabriel', role: 'owner' }] })], changes: [
+  { scope: own, kind: 'items', row: { id: 'a', title: 'Mine', revision: 4 } },
+  { scope: WEB, kind: 'items', row: { id: 'a', title: 'Class', courseId: 'web', revision: 5 } },
+  { scope: WEB, kind: 'courses', row: { id: 'web', code: 'WEB', name: 'Web', revision: 6 } },
+ ] });
+ assert.equal(first.item('a').title, 'Mine');
+ assert.deepEqual(first.data.shared_items.map((r) => [r.scope, r.id, r.title]), [[WEB, 'a', 'Class']]);
+ assert.deepEqual(first.data.shared_courses.map((r) => [r.scope, r.id]), [[WEB, 'web']]);
+ assert.equal(first.spaceRevision(), 6);
+ assert.deepEqual(await first.meta.get('cursors'), { [own]: 5, [WEB]: 6 });
+ /* a page without the member list keeps the one held */
+ await first.applyPage({ cursors: {}, scopes: [webSpace()], changes: [] });
+ assert.equal(first.data.spaces[0].members[0].name, 'Gabriel');
+ await first.applyRevoked([WEB]);
+ assert.deepEqual([first.data.shared_items, first.data.shared_courses, first.data.spaces], [[], [], []]);
+ assert.deepEqual(await first.meta.get('cursors'), { [own]: 5 });
+ assert.equal(first.item('a').title, 'Mine');
+});
+
+test('a shared edit queues under its scope with the row it started from', async () => {
+ await first.open(p());
+ await first.applyPage({ cursors: {}, changes: [{ scope: WEB, kind: 'items', row: { id: 'x', title: 'Old', date: '2026-10-15', courseId: 'web', revision: 7 } }] });
+ const [stored] = first.data.shared_items;
+ await first.saveShared('shared_items', { ...stored, title: 'New' });
+ await first.saveShared('shared_items', { ...stored, title: 'Newer' });
+ const [op] = await first.pending();
+ assert.equal(op.key, `shared_items:${WEB}:x`);
+ assert.equal(op.base.title, 'Old'); assert.equal(op.body.title, 'Newer'); assert.equal(op.revision, 7);
+ /* a page cannot overwrite a row with a pending edit */
+ await first.applyPage({ cursors: {}, changes: [{ scope: WEB, kind: 'items', row: { ...stored, title: 'Server', revision: 8 } }] });
+ assert.equal(first.data.shared_items[0].title, 'Newer');
+ await first.settleOperation(op, { ...op.body, scope: WEB, revision: 9 });
+ assert.equal(first.data.shared_items[0].revision, 9);
+ assert.deepEqual(await first.pending(), []);
+ await first.removeShared('shared_items', WEB, 'x');
+ assert.deepEqual(first.data.shared_items, []);
+ assert.deepEqual((await first.pending()).map((o) => [o.key, o.op]), [[`shared_items:${WEB}:x`, 'delete']]);
+});
+
+test('a reset of one space wipes only that space\'s clean rows', async () => {
+ await first.open(p());
+ await first.applyPage({ cursors: {}, changes: [
+  { scope: WEB, kind: 'items', row: { id: 'a', title: 'Web A', revision: 1 } },
+  { scope: WEB, kind: 'items', row: { id: 'b', title: 'Web B', revision: 1 } },
+  { scope: LAB, kind: 'items', row: { id: 'a', title: 'Lab A', revision: 1 } },
+  { kind: 'items', row: { id: 'a', title: 'Mine', revision: 1 } },
+ ] });
+ await first.saveShared('shared_items', { ...first.data.shared_items.find((r) => r.scope === WEB && r.id === 'b'), title: 'Offline' });
+ await first.applyPage({ cursors: { [WEB]: 9 }, changes: [] }, [WEB]);
+ assert.deepEqual(first.data.shared_items.map((r) => `${r.scope}/${r.id}:${r.title}`).sort(), [`${WEB}/b:Offline`, `${LAB}/a:Lab A`]);
+ assert.equal(first.item('a').title, 'Mine');
+});

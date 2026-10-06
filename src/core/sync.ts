@@ -119,7 +119,7 @@ async function pullAll(cycle: Cycle): Promise<boolean> {
     if (!active(cycle)) return false;
     if (page.reset) { cursor = 0; reset = true; continue; }
     await store.applyPage(page, reset);
-    reset = false; cursor = page.cursor;
+    reset = false; cursor = page.cursor!;
     if (!page.more) { complete = true; break; }
   }
   if (!active(cycle)) return false;
