@@ -14,7 +14,7 @@ import { minutesByDay, streak } from "@/core/history"
 
 import { prepPace } from "@/core/prep"
 import { useCourses, useItems, useProfile, useQuotes, useStudySessions } from "./store"
-import { courseKeyOf, keyOf, onCalendar } from "./effective"
+import { courseKeyOf, keyOf, onCalendar, sharedShown } from "./effective"
 import { ui } from "./ui"
 import type { Course, Item, Meeting, Quote, Schedule, Show, SortKey, StudySession } from "./types"
 
@@ -139,6 +139,8 @@ export interface ViewInput {
     anchor: string
     today: string
     cal: SchoolCal
+    /** every item before the calendar filter: hiding each source is not a first run */
+    total?: number
 }
 
 export interface Week { days: Day[]; count: number; any: boolean }
@@ -372,8 +374,9 @@ function useViewInput(calendar = false): ViewInput {
     const version = useSyncExternalStore(subscribe, getVersion)
     return useMemo(
         () => {
-            const shown = calendar ? onCalendar(items, courses, profile?.hiddenSources ?? []) : { items, courses }
-            return { items: shown.items, courses: shown.courses, filters: filtersOf(), schedule: ui.schedule, anchor: ui.anchor, today: todayIso(), cal: schoolCal() }
+            const hidden = sharedShown() ? profile?.hiddenSources ?? [] : []
+            const shown = calendar ? onCalendar(items, courses, hidden) : { items, courses }
+            return { items: shown.items, courses: shown.courses, total: items.length, filters: filtersOf(), schedule: ui.schedule, anchor: ui.anchor, today: todayIso(), cal: schoolCal() }
         },
         // eslint-disable-next-line react-hooks/exhaustive-deps -- `version` stands for the ui
         [items, courses, profile, version, calendar],
@@ -386,7 +389,7 @@ export const useWeek = () => {
         week: weekDays(input),
         officeHours: officeHours(input.items, input.courses, input.filters),
         tasks: tasks(input.items, input.courses, input.filters),
-        empty: input.items.length === 0,
+        empty: (input.total ?? input.items.length) === 0,
         schedule: input.schedule,
     }), [input])
 }
