@@ -1,7 +1,9 @@
 // Spaces (migrations/0002_spaces.sql) and what the class routes share: the gate, the limits,
 // Worker-made ids, the space revision and a space's summary. Making a class, its details,
 // roles and transfer follow below; invites and join codes are in worker/invites.js.
+import { HttpError } from './http.js';
 import { scopeOf } from './access.js';
+import { REVIEW_ID } from '../src/core/shared.ts';
 
 /* Classes are open to admins only until Stage 6 (spec §22): the routes that make or join a
    space refuse anyone else, and an invite to anyone else is refused. Stage 6 sets this false. */
@@ -49,4 +51,75 @@ export async function spaceSummary(db, userId, spaceId) {
     FROM spaces AS s JOIN members AS m ON m.space_id = s.id AND m.user_id = ? AND m.deleted_at IS NULL
     WHERE s.id = ? AND s.deleted_at IS NULL`).bind(userId, spaceId).first();
   return r ? { id: r.id, scope: scopeOf(r.kind, r.id), kind: r.kind, name: r.name ?? '', role: r.role, members: r.members } : null;
+}
+
+/* A row's first revision: the change feed's next sequence value, as worker/db.js writes it. */
+const NEXT_ROW_REVISION = "COALESCE((SELECT seq FROM sqlite_sequence WHERE name = 'changes'), 0) + 1";
+/* A live class this person owns whose course has the id bound second: an earlier convert of that course. */
+const MADE_FROM = `SELECT s.id FROM spaces AS s JOIN members AS m ON m.space_id = s.id
+  WHERE m.user_id = ? AND m.role = 'owner' AND m.deleted_at IS NULL AND s.kind = 'class' AND s.deleted_at IS NULL
+    AND EXISTS (SELECT 1 FROM courses WHERE scope = 'c:' || s.id AND id = ?)`;
+
+/**
+ * A convert's course must be a live course of yours, and each item named a live item of it
+ * that a class can take: not one of your own types (the c: CHECK refuses them) and not a
+ * lecture review, which is yours alone (spec §13).
+ */
+export async function checkConvert(db, userId, courseId, ids) {
+  const mine = 'u:' + userId;
+  const [course, found] = await db.batch([
+    db.prepare('SELECT 1 AS x FROM courses WHERE scope = ? AND id = ? AND deleted_at IS NULL').bind(mine, courseId),
+    db.prepare('SELECT id, type FROM items WHERE scope = ? AND course_id = ? AND deleted_at IS NULL AND id IN (SELECT value FROM json_each(?))')
+      .bind(mine, courseId, JSON.stringify(ids)),
+  ]);
+  if (!course.results.length) throw new HttpError(400, { error: 'invalid', field: 'convertCourseId' });
+  if (found.results.length !== ids.length || found.results.some((r) => r.type.startsWith('c-') || (r.type === 'task' && REVIEW_ID.test(r.id)))) {
+    throw new HttpError(400, { error: 'invalid', field: 'items' });
+  }
+}
+
+/**
+ * A new class with you as its owner (spec §13, §20), in one batch: the space, your
+ * membership and its course: a blank one from `course`, or a copy of your course
+ * `convertCourseId` with the items named in `items`, in class shape. Stage 3 copies and
+ * leaves your own rows as they are (plan Decision 1). The space INSERT carries the 20-space
+ * limit and, for a convert, "you own no class made from this course yet"; every later
+ * statement runs only if that row was made, so a refusal leaves nothing. A repeated convert
+ * answers the class it made ({created: false}). Past 20 spaces: 409 limit.
+ */
+export async function createClass(db, userId, { course, convertCourseId = null, items = [] }, now = Date.now()) {
+  const id = randomId(), scope = scopeOf('class', id), mine = 'u:' + userId;
+  const copy = convertCourseId !== null, courseId = copy ? convertCourseId : randomId();
+  const made = 'EXISTS (SELECT 1 FROM spaces WHERE id = ?)';
+  const stmts = [
+    db.prepare(`INSERT INTO spaces (id, kind, created_at, updated_at, revision) SELECT ?, 'class', ?, ?, ${NEXT_SPACE_REVISION}
+      WHERE ${MY_SPACES} < ?${copy ? ` AND EXISTS (SELECT 1 FROM courses WHERE scope = ? AND id = ? AND deleted_at IS NULL) AND NOT EXISTS (${MADE_FROM})` : ''}`)
+      .bind(id, now, now, userId, SPACE_LIMIT, ...(copy ? [mine, courseId, userId, courseId] : [])),
+    db.prepare(`INSERT INTO members (space_id, user_id, role, joined_at, updated_at) SELECT ?, ?, 'owner', ?, ? WHERE ${made}`).bind(id, userId, now, now, id),
+    copy
+      ? db.prepare(`INSERT INTO courses (scope, id, code, name, color, instructor, term, archived, meetings, target, updated_by, created_at, updated_at, revision)
+          SELECT ?, id, code, name, color, instructor, term, 0, meetings, NULL, ?, ?, ?, ${NEXT_ROW_REVISION} FROM courses
+          WHERE scope = ? AND id = ? AND deleted_at IS NULL AND ${made}`).bind(scope, userId, now, now, mine, courseId, id)
+      : db.prepare(`INSERT INTO courses (scope, id, code, name, color, instructor, term, archived, meetings, target, updated_by, created_at, updated_at, revision)
+          SELECT ?, ?, ?, ?, ?, ?, ?, 0, ?, NULL, ?, ?, ?, ${NEXT_ROW_REVISION} WHERE ${made}`)
+          .bind(scope, courseId, course.code, course.name, course.color, course.instructor, course.term, JSON.stringify(course.meetings), userId, now, now, id),
+  ];
+  if (copy && items.length) {
+    /* the class's facts only: no status, grade, checklist or notes of yours (the c: CHECK) */
+    stmts.push(db.prepare(`INSERT INTO items (scope, id, type, title, course_id, date, start, end, location, status, weight, notes, links,
+        recur, weekday, recur_until, dept, updated_by, created_at, updated_at, revision)
+      SELECT ?, id, type, title, course_id, date, start, end, location, 'todo', weight, '', links,
+        recur, weekday, recur_until, dept, ?, ?, ?, ${NEXT_ROW_REVISION} FROM items
+      WHERE scope = ? AND course_id = ? AND deleted_at IS NULL AND type NOT GLOB 'c-*' AND id IN (SELECT value FROM json_each(?)) AND ${made}`)
+      .bind(scope, userId, now, now, mine, courseId, JSON.stringify(items), id));
+  }
+  const [space] = await db.batch(stmts);
+  if (space.meta.changes) return { created: true, space: await spaceSummary(db, userId, id) };
+  if (copy) {
+    const prior = await db.prepare(MADE_FROM).bind(userId, courseId).first();
+    if (prior) return { created: false, space: await spaceSummary(db, userId, prior.id) };
+  }
+  const { n } = await db.prepare(`SELECT ${MY_SPACES} AS n`).bind(userId).first();
+  if (n >= SPACE_LIMIT) throw new HttpError(409, { error: 'limit' });
+  throw new HttpError(400, { error: 'invalid', field: 'convertCourseId' });
 }

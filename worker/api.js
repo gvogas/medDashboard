@@ -14,6 +14,7 @@ import * as spotify from './spotify.js';
 import { feedState, renewFeed, stopFeed, serveFeed } from './calendar.js';
 import { leaderboard, setJoined } from './leaderboard.js';
 import { adminRoutes, markSeen, readAnnouncement } from './admin.js';
+import { classRoutes } from './classes.js';
 import { logError, messageOf } from './errors.js';
 import { guardMaintenance, publicMaintenance } from './maintenance.js';
 
@@ -440,6 +441,7 @@ const routes = [
     return new Response(null, { status: 204 });
   }],
 
+  ...classRoutes,
   ...adminRoutes,
 ];
 
