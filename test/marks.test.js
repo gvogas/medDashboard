@@ -64,6 +64,20 @@ describe('your mark on a shared item', () => {
     expect((await me(`/api/marks/${s.id}/c1`, { method: 'DELETE', headers: at(v2.revision + 1) })).status).toBe(204);
     expect((await me(`/api/marks/${s.id}/c1`)).status).toBe(404);
   });
+
+  it('revives a mark you deleted when a device writes it fresh at revision 0', async () => {
+    await sharedItem(s.scope, 'd1', { course_id: 'web' });
+    const v1 = await (await put(me, s.id, 'd1', { ...blank, notes: 'first' })).json();
+    expect((await me(`/api/marks/${s.id}/d1`, { method: 'DELETE', headers: at(v1.revision) })).status).toBe(204);
+    const res = await put(me, s.id, 'd1', { ...blank, status: 'done', grade: 91, changed: { status: null, grade: null } });
+    expect(res.status).toBe(200);
+    const revived = await res.json();
+    expect(revived).toMatchObject({ status: 'done', grade: 91, notes: '', deletedAt: null });
+    expect(revived.revision).toBeGreaterThan(v1.revision);
+    expect(await (await me(`/api/marks/${s.id}/d1`)).json()).toMatchObject({ status: 'done', grade: 91 });
+    /* the guard still holds: a deleted item's mark is not revived */
+    expect((await put(me, s.id, 'gone', { ...blank, notes: 'x' })).status).toBe(404);
+  });
 });
 
 describe('your prefs for a space', () => {

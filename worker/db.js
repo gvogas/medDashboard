@@ -624,6 +624,13 @@ export async function upsertMark(db, userId, spaceId, itemId, fields, { revision
   for (let attempt = 0; ; attempt++) {
     if (!(await passes(db, guard))) throw new HttpError(404, { error: 'not_found' });
     const current = await getRow(db, 'marks', userId, id);
+    /* a first write onto a mark you deleted revives it whole, still only where you may keep one */
+    if (current?.deletedAt && revision === 0) {
+      const revived = await upsertStmt(db, 'marks', userId, id, row, now, current.revision, guard).first();
+      if (revived) return rowToApi('marks', revived);
+      if (attempt) throw conflict(await getRow(db, 'marks', userId, id), changed && Object.keys(changed));
+      continue;
+    }
     if (!current || current.deletedAt || !changed) throw conflict(current, changed && Object.keys(changed));
     const keys = Object.keys(changed);
     const old = (f) => (revision === 0 ? MARK_DEFAULTS[f] : changed[f]);

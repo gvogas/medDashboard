@@ -284,6 +284,13 @@ describe('persisted operation synchronization', () => {
    await sync.syncNow();
    expect(api.put).toHaveBeenCalledWith('marks', 'abcdefghij12:a1', { ...mark.body, revision: 3 }, { notes: 'old' });
  });
+ it("sends a device's first mark as the fields it moved off the defaults, so two devices' first marks combine", async () => {
+   const body = { id: 'abcdefghij12:a1', status: 'done', grade: null, weight: null, notes: '', checklist: [], completedAt: null, hidden: false, revision: 0 };
+   store.pending.mockResolvedValue([{ key: 'marks:abcdefghij12:a1', op: 'put', revision: 0, token: 'f', owner: 'x', body, base: null }]);
+   api.put.mockResolvedValue({ ...body, revision: 1 });
+   await sync.syncNow();
+   expect(api.put).toHaveBeenCalledWith('marks', 'abcdefghij12:a1', body, { status: 'todo' });
+ });
  it('uploads course puts, then items, then marks and prefs, then course deletes', async () => {
    const at = (key, op = 'put') => ({ key, op, revision: 1, token: key, owner: 'x', body: { id: key.split(/:(.*)/s)[1], revision: 1 } });
    store.pending.mockResolvedValue([at('marks:abcdefghij12:a1'), at('courses:c1', 'delete'), at('space_prefs:abcdefghij12'), at('items:i1'), at('courses:c2')]);

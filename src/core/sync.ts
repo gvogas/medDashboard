@@ -2,7 +2,7 @@
 import { api, ApiError, retryDelayMs } from './api.ts';
 import * as store from './store.ts';
 import { untouchedReview } from './reviews.ts';
-import { changedFields, parseKey } from './shared.ts';
+import { changedFields, MARK_DEFAULTS, parseKey } from './shared.ts';
 import type { PendingOp, Row } from './db.ts';
 import type { Cursor, ServerProfile } from './store.ts';
 import type { SyncState, SyncStatus } from './types.ts';
@@ -100,7 +100,8 @@ async function pushAll(cycle: Cycle): Promise<boolean> {
           catch (e) { if (!(e instanceof ApiError && e.status === 404)) throw e; }
         } else if (k.store === 'marks') {
           /* your mark merges field by field: two of your devices may both have made it (spec §6) */
-          saved = await api.put(k.store, k.id, { ...op.body, revision: op.revision }, changedFields('marks', '', op.body || {}, op.base));
+          /* a first mark (no base) names only the fields it moved off the defaults */
+          saved = await api.put(k.store, k.id, { ...op.body, revision: op.revision }, changedFields('marks', '', op.body || {}, op.base ?? MARK_DEFAULTS));
         } else saved = await api.put(k.store, k.id, { ...op.body, revision: op.revision });
       }
       if (!active(cycle)) return false;
