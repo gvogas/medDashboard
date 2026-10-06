@@ -69,7 +69,7 @@ CREATE TABLE users (
   hidden_sources TEXT NOT NULL DEFAULT '[]'
                  CHECK (json_valid(hidden_sources) AND json_type(hidden_sources) = 'array'
                         AND json_array_length(hidden_sources) <= 40),
-  created_at    INTEGER NOT NULL,
+  created_at     INTEGER NOT NULL,
   updated_at     INTEGER NOT NULL,
   revision       INTEGER NOT NULL DEFAULT 1 CHECK (typeof(revision) = 'integer' AND revision > 0)
 );
