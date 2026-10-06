@@ -381,7 +381,10 @@ export async function upsertShared(db, table, scope, userId, id, fields, { revis
  * A project member's write to a task (spec §5): never the body as a whole. `changed` names
  * only status/completedAt (complete or reopen a task assigned to you or to everyone) or
  * only assignees (claim an unassigned task, or unclaim yourself, computed from the current
- * list). Checked against the current row, written at its revision, one retry.
+ * list). A member sets only 'todo' or 'done'; the completion time is the Worker's: kept
+ * when the task was already complete, now when it becomes so, cleared on reopening.
+ * Checked against the current row, written at its revision, one retry; a write that
+ * changes nothing is answered with the current row, its revision unmoved.
  */
 export async function memberTaskWrite(db, scope, userId, id, fields, { changed, now = Date.now() } = {}) {
   const { spaceId } = parseScope(scope);
@@ -390,6 +393,7 @@ export async function memberTaskWrite(db, scope, userId, id, fields, { changed, 
   if (!kind) throw new HttpError(403, { error: 'forbidden' });
   const guard = writerGuard(spaceId, userId);
   const forbidden = () => new HttpError(403, { error: 'forbidden' });
+  if (keys.includes('status') && fields.status !== 'todo' && fields.status !== 'done') throw forbidden();
   for (let attempt = 0; ; attempt++) {
     await assertAllowed(db, userId, spaceId, 'write');
     const current = await getShared(db, 'items', scope, userId, id);
@@ -399,12 +403,12 @@ export async function memberTaskWrite(db, scope, userId, id, fields, { changed, 
     let set, binds;
     if (kind === 'status') {
       if (!current.assignees.includes(userId) && !current.assignees.includes('*')) throw forbidden();
-      const unsafe = keys.filter((f) => stable(current[f]) !== stable(changed[f]) && stable(current[f]) !== stable(fields[f]));
-      if (unsafe.length) throw conflict(current, unsafe);
-      const status = keys.includes('status') ? fields.status : current.status;
-      const completedAt = keys.includes('completedAt') ? fields.completedAt ?? null : current.completedAt;
+      /* only the status is the member's; a completion time sent alone changes nothing */
+      if (!keys.includes('status') || current.status === fields.status) return current;
+      if (current.status !== changed.status) throw conflict(current, ['status']);
+      const completedAt = fields.status === 'todo' ? null : current.completedAt ?? now;
       set = 'status = ?, completed_at = ?, completed_by = CASE WHEN ? IS NULL THEN NULL WHEN completed_at IS NOT NULL THEN completed_by ELSE ? END';
-      binds = [status, completedAt, completedAt, userId];
+      binds = [fields.status, completedAt, completedAt, userId];
     } else {
       const mine = current.assignees.includes(userId), wants = (fields.assignees || []).includes(userId);
       let next = current.assignees;
@@ -412,6 +416,7 @@ export async function memberTaskWrite(db, scope, userId, id, fields, { changed, 
         if (current.assignees.length) throw forbidden();   // assigned to someone else
         next = [userId];
       } else if (!wants && mine) next = current.assignees.filter((u) => u !== userId);
+      if (next === current.assignees) return current;
       set = 'assignees = ?';
       binds = [JSON.stringify(next)];
     }

@@ -120,8 +120,33 @@ describe('a project member writing a task', () => {
   it('completes a task assigned to them: only status and completion are written, and the Worker names who', async () => {
     const p = await space('mt-done', 'project');
     await upsertShared(env.DB, 'items', p.scope, p.owner, 't', task({ assignees: [p.member] }));
-    const done = await memberTaskWrite(env.DB, p.scope, p.member, 't', task({ title: 'Hacked', status: 'done', completedAt: 5, assignees: [] }), { changed: { status: 'todo', completedAt: null } });
-    expect(done).toMatchObject({ status: 'done', completedAt: 5, completedBy: p.member, title: 'Create incidents endpoint', assignees: [p.member], updatedBy: p.member });
+    const done = await memberTaskWrite(env.DB, p.scope, p.member, 't', task({ title: 'Hacked', status: 'done', completedAt: 5, assignees: [] }), { changed: { status: 'todo', completedAt: null }, now: 7000 });
+    expect(done).toMatchObject({ status: 'done', completedAt: 7000, completedBy: p.member, title: 'Create incidents endpoint', assignees: [p.member], updatedBy: p.member });
+  });
+
+  it('sets only todo or done, with the completion time the Worker\'s own', async () => {
+    const p = await space('mt-status', 'project');
+    const v1 = await upsertShared(env.DB, 'items', p.scope, p.owner, 't', task({ assignees: [p.member] }));
+    for (const status of ['graded', 'submitted', 'missed']) {
+      await expect(memberTaskWrite(env.DB, p.scope, p.member, 't', task({ status, completedAt: 5 }), { changed: { status: 'todo', completedAt: null } }))
+        .rejects.toMatchObject({ status: 403, body: { error: 'forbidden' } });
+    }
+    /* a completion time alone is the Worker's to set: nothing is written */
+    expect(await memberTaskWrite(env.DB, p.scope, p.member, 't', task({ completedAt: 5 }), { changed: { completedAt: null } })).toMatchObject({ completedAt: null, revision: v1.revision });
+    const done = await memberTaskWrite(env.DB, p.scope, p.member, 't', task({ status: 'done', completedAt: 5 }), { changed: { status: 'todo', completedAt: null }, now: 7000 });
+    expect(done).toMatchObject({ status: 'done', completedAt: 7000 });
+    /* done again (another device, offline) changes nothing and keeps the first time */
+    const again = await memberTaskWrite(env.DB, p.scope, p.member, 't', task({ status: 'done', completedAt: 9 }), { changed: { status: 'todo', completedAt: null }, now: 8000 });
+    expect(again).toMatchObject({ completedAt: 7000, revision: done.revision });
+    const reopened = await memberTaskWrite(env.DB, p.scope, p.member, 't', task({ status: 'todo', completedAt: 9 }), { changed: { status: 'done', completedAt: 7000 } });
+    expect(reopened).toMatchObject({ status: 'todo', completedAt: null, completedBy: null });
+  });
+
+  it('writes nothing for a claim or unclaim that changes nothing', async () => {
+    const p = await space('mt-noop', 'project');
+    const v1 = await upsertShared(env.DB, 'items', p.scope, p.owner, 't', task({ assignees: [p.member] }));
+    expect(await memberTaskWrite(env.DB, p.scope, p.member, 't', task({ assignees: [p.member] }), { changed: { assignees: [] } })).toMatchObject({ revision: v1.revision });
+    expect(await memberTaskWrite(env.DB, p.scope, p.other, 't', task({ assignees: [p.member] }), { changed: { assignees: [p.member, p.other] } })).toMatchObject({ revision: v1.revision, assignees: [p.member] });
   });
 
   it('refuses a task assigned to someone else, any other field, a whole-row write and an archived project', async () => {
