@@ -2,6 +2,7 @@
 // one yet. Storage is per test file, so a counter keeps ids apart.
 import { env } from 'cloudflare:test';
 import { NEXT_SPACE_REVISION, touchSpace } from '../worker/spaces.js';
+import { signIn } from './helpers.js';
 
 let n = 0;
 /** A fresh space id: 12 characters of [a-z0-9]. */
@@ -44,3 +45,14 @@ export function sharedItem(scope, id, cols = {}) {
 }
 
 export const spaceRevision = async (id) => (await env.DB.prepare('SELECT revision FROM spaces WHERE id = ?').bind(id).first()).revision;
+
+/** Sign in as a new admin (classes are open to admins only until Stage 6). `api.id` is the user id. */
+export async function signInAdmin(username) {
+  const api = await signIn(username);
+  await env.DB.prepare('UPDATE users SET is_admin = 1 WHERE username = ?').bind(username).run();
+  api.id = 'u-' + username;
+  return api;
+}
+
+/** A POST with a JSON body. */
+export const post = (api, path, body = {}) => api(path, { method: 'POST', body });

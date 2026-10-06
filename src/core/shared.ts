@@ -58,3 +58,16 @@ export function changedFields(store: string, scope: string, body: Record<string,
   }
   return out
 }
+
+/** A generated lecture review's id (core/reviews.ts): 'rv', seven characters, its step. A review is yours alone and never goes into a class (spec §13). */
+export const REVIEW_ID = /^rv[0-9a-z]{7}([1-4])$/
+
+/**
+ * A join code as typed: Crockford base32 read the forgiving way (any case, O as 0, I and L
+ * as 1, spaces and hyphens dropped). The eight characters, or null (spec §11).
+ */
+export function normalizeCode(raw: unknown): string | null {
+  if (typeof raw !== 'string') return null
+  const code = raw.toUpperCase().replace(/[\s-]/g, '').replace(/O/g, '0').replace(/[IL]/g, '1')
+  return /^[0-9A-HJKMNP-TV-Z]{8}$/.test(code) ? code : null
+}

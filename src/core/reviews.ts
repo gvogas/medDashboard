@@ -10,6 +10,7 @@ import { parse, addDays, iso, diffDays, shortDate } from './dates.ts';
 import { classWeekday, courseRunsOn } from './school.ts';
 import type { SchoolCalendar } from './school.ts';
 import type { Course, Item, Meeting } from './types.ts';
+import { REVIEW_ID as ID } from './shared.ts';
 
 /** The setting, per account: on or off, and the last lecture date already handled. */
 export interface ReviewSetting { on: boolean; through: string | null }
@@ -26,7 +27,6 @@ interface Op { op: string; key: string; body: Record<string, unknown> | null }
 const STEPS = 4;
 const GAP: Record<number, number> = { 1: 2, 2: 4, 3: 14 };          /* days from finishing step n to step n + 1 */
 const KEY = 'rounds.reviews';
-const ID = /^rv[0-9a-z]{7}([1-4])$/;
 const MAX_SPAN = 120;                         /* never walk more than this many days at once */
 
 const keyFor = (account: string) => KEY + ':' + account;

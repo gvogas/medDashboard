@@ -3,6 +3,7 @@
 // tables belong to the user directly.
 import { HttpError } from './http.js';
 import { assertAllowed, editorGuard, memberGuard, parseScope, scopeOf, writerGuard } from './access.js';
+import { SPACE_LIMIT } from './spaces.js';
 import { stable } from '../src/core/shared.ts';
 
 const PROFILE_COLS =
@@ -452,9 +453,6 @@ export async function deleteShared(db, table, scope, userId, id, now = Date.now(
 }
 
 // ── sync v3: a cursor per scope (spec §6 Pull) ──────────────────────────────
-
-/* The most spaces a person holds (spec §3 Limits). */
-const SPACE_LIMIT = 20;
 
 /**
  * The person's live spaces (at most 20) as sync describes them, each with its member list
