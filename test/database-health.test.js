@@ -21,15 +21,23 @@ describe('read-only database checks', () => {
   it('detects a missing change entry and does not repair or erase data', async () => {
     const id = await createUser('health-missing');
     await upsertRow(env.DB, 'quotes', id, 'q', { text: 'Keep this', source: '' });
-    await env.DB.prepare('DELETE FROM changes WHERE user_id = ?').bind(id).run();
+    await env.DB.prepare("DELETE FROM changes WHERE scope = 'u:' || ?").bind(id).run();
     const report = await check();
     expect(report.ok).toBe(false);
     expect(report.checks).toContainEqual({ name: 'Change-feed record coverage', issues: 1 });
     expect(await env.DB.prepare('SELECT text FROM quotes WHERE user_id = ?').bind(id).first()).toEqual({ text: 'Keep this' });
-    expect(await env.DB.prepare('SELECT count(*) AS n FROM changes WHERE user_id = ?').bind(id).first()).toEqual({ n: 0 });
+    expect(await env.DB.prepare("SELECT count(*) AS n FROM changes WHERE scope = 'u:' || ?").bind(id).first()).toEqual({ n: 0 });
   });
 
   it('fails closed on incomplete command output', () => {
     expect(() => summarizeDatabase([])).toThrow(/incomplete result/);
+  });
+
+  it('finds personal rows whose account is gone', async () => {
+    await env.DB.prepare("INSERT INTO courses (scope, id, code, name, color, created_at, updated_at) VALUES ('u:nobody', 'c', 'X', 'Orphan', '#17B3AE', 1, 1)").run();
+    const report = await check();
+    expect(report.checks).toContainEqual({ name: 'Personal rows with an account', issues: 2 });   // the course and its change entry
+    await env.DB.prepare("DELETE FROM courses WHERE scope = 'u:nobody'").run();
+    await env.DB.prepare("DELETE FROM changes WHERE scope = 'u:nobody'").run();
   });
 });

@@ -224,8 +224,8 @@ describe('stored JSON', () => {
     const api = await signIn('corrupt-json');
     await api('/api/quotes/q1', { method: 'PUT', body: quote() });
     // The columns are CHECKed now, but a change-feed payload keeps whatever was written.
-    await env.DB.prepare(`INSERT INTO changes (user_id, kind, row_id, payload, deleted_at) VALUES (?1, 'courses', 'bad', json_object(
-      'user_id', ?1, 'id', 'bad', 'code', 'BAD', 'name', 'Bad', 'color', '#E4749B', 'instructor', '', 'term', '', 'archived', 0,
+    await env.DB.prepare(`INSERT INTO changes (scope, kind, row_id, payload, deleted_at) VALUES ('u:' || ?1, 'courses', 'bad', json_object(
+      'scope', 'u:' || ?1, 'id', 'bad', 'code', 'BAD', 'name', 'Bad', 'color', '#E4749B', 'instructor', '', 'term', '', 'archived', 0,
       'meetings', '[{"id":', 'created_at', 1, 'updated_at', 1, 'deleted_at', NULL, 'revision', 1), NULL)`).bind('u-corrupt-json').run();
     const res = await api('/api/sync?v=2&cursor=0');
     expect(res.status).toBe(200);

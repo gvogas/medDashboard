@@ -47,7 +47,7 @@ describe('custom item types: storage', () => {
     const saved = await upsertRow(env.DB, 'items', id, 'q', normalizeItem({ id: 'q', title: 'Quiz 1', type: 'c-quiz1' }));
     expect(saved.type).toBe('c-quiz1');
     for (const type of ['c-', 'c-Quiz', 'c-quiz-1', 'c-abcdefghijklm']) {
-      await expect(env.DB.prepare('UPDATE items SET type = ? WHERE user_id = ?').bind(type, id).run()).rejects.toThrow(/CHECK constraint failed/);
+      await expect(env.DB.prepare("UPDATE items SET type = ? WHERE scope = 'u:' || ?").bind(type, id).run()).rejects.toThrow(/CHECK constraint failed/);
     }
   });
 

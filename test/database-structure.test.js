@@ -7,18 +7,18 @@ import { normalizeItem } from '../src/core/model.ts';
 const course = { code: 'BIO', name: 'Biology', color: '#17B3AE', instructor: '', term: '', archived: false, meetings: [] };
 
 describe('database relationships and inspection views', () => {
-  it('rejects direct course deletion without attempting to null the item owner', async () => {
+  it('rejects direct course deletion without attempting to null the item scope', async () => {
     const id = await createUser('schema-owner');
     const parent = await upsertRow(env.DB, 'courses', id, 'c', course);
     await upsertRow(env.DB, 'items', id, 'i', normalizeItem({ id: 'i', title: 'Study', courseId: 'c' }));
-    await expect(env.DB.prepare('DELETE FROM courses WHERE user_id = ? AND id = ?').bind(id, 'c').run())
+    await expect(env.DB.prepare("DELETE FROM courses WHERE scope = 'u:' || ? AND id = ?").bind(id, 'c').run())
       .rejects.toThrow(/FOREIGN KEY constraint failed/);
-    expect(await env.DB.prepare('SELECT user_id, course_id FROM items WHERE user_id = ?').bind(id).first())
-      .toEqual({ user_id: id, course_id: 'c' });
+    expect(await env.DB.prepare("SELECT scope, course_id FROM items WHERE scope = 'u:' || ?").bind(id).first())
+      .toEqual({ scope: 'u:' + id, course_id: 'c' });
     await deleteRow(env.DB, 'courses', id, 'c', Date.now(), parent.revision);
-    await env.DB.prepare('DELETE FROM courses WHERE user_id = ? AND id = ?').bind(id, 'c').run();
-    expect(await env.DB.prepare('SELECT user_id, course_id FROM items WHERE user_id = ?').bind(id).first())
-      .toEqual({ user_id: id, course_id: null });
+    await env.DB.prepare("DELETE FROM courses WHERE scope = 'u:' || ? AND id = ?").bind(id, 'c').run();
+    expect(await env.DB.prepare("SELECT scope, course_id FROM items WHERE scope = 'u:' || ?").bind(id).first())
+      .toEqual({ scope: 'u:' + id, course_id: null });
   });
 
   it('stores project items and a background per user', async () => {
@@ -29,14 +29,14 @@ describe('database relationships and inspection views', () => {
     await env.DB.prepare("UPDATE users SET bg = 'law' WHERE id = ?").bind(id).run();
     expect(await env.DB.prepare('SELECT bg FROM users WHERE id = ?').bind(id).first()).toEqual({ bg: 'law' });
     await expect(env.DB.prepare("UPDATE users SET bg = 'foo' WHERE id = ?").bind(id).run()).rejects.toThrow(/CHECK constraint failed/);
-    await expect(env.DB.prepare("UPDATE items SET type = 'essay' WHERE user_id = ?").bind(id).run()).rejects.toThrow(/CHECK constraint failed/);
+    await expect(env.DB.prepare("UPDATE items SET type = 'essay' WHERE scope = 'u:' || ?").bind(id).run()).rejects.toThrow(/CHECK constraint failed/);
   });
 
   it('rejects invalid item revisions at the database boundary', async () => {
     const id = await createUser('schema-revision');
     await upsertRow(env.DB, 'items', id, 'i', normalizeItem({ id: 'i', title: 'Study' }));
     for (const revision of [0, -1, 1.5, 'invalid']) {
-      await expect(env.DB.prepare('UPDATE items SET revision = ? WHERE user_id = ?').bind(revision, id).run())
+      await expect(env.DB.prepare("UPDATE items SET revision = ? WHERE scope = 'u:' || ?").bind(revision, id).run())
         .rejects.toThrow(/CHECK constraint failed/);
     }
   });
@@ -57,7 +57,7 @@ describe('database relationships and inspection views', () => {
   });
 
   it.each([
-    ["SELECT id FROM items WHERE user_id = 'u' AND course_id = 'c'", 'items_user_course'],
+    ["SELECT id FROM items WHERE scope = 'u:u' AND course_id = 'c'", 'items_scope_course'],
     ['DELETE FROM login_throttle WHERE updated_at < 100 AND locked_until < 100', 'login_throttle_updated'],
     ['DELETE FROM spotify_oauth_states WHERE expires_at <= 100', 'spotify_oauth_states_expires'],
     ['DELETE FROM spotify_refresh_locks WHERE expires_at <= 100', 'spotify_refresh_locks_expires'],

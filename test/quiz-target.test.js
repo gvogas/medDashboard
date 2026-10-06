@@ -70,8 +70,8 @@ describe('a course\'s grade target', () => {
   it('is refused by the database outside 1-100', async () => {
     const id = await createUser('target-db');
     await upsertRow(env.DB, 'courses', id, 'c', validateCourse(course));
-    await expect(env.DB.prepare('UPDATE courses SET target = 0 WHERE user_id = ?').bind(id).run()).rejects.toThrow(/CHECK constraint failed/);
-    await expect(env.DB.prepare('UPDATE courses SET target = 70.5 WHERE user_id = ?').bind(id).run()).rejects.toThrow(/CHECK constraint failed/);
+    await expect(env.DB.prepare("UPDATE courses SET target = 0 WHERE scope = 'u:' || ?").bind(id).run()).rejects.toThrow(/CHECK constraint failed/);
+    await expect(env.DB.prepare("UPDATE courses SET target = 70.5 WHERE scope = 'u:' || ?").bind(id).run()).rejects.toThrow(/CHECK constraint failed/);
   });
 
   it('joins 50, 60 and 70 in the list of targets', () => {
