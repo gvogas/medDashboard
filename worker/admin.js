@@ -207,11 +207,15 @@ export const adminRoutes = [
       const { n } = await db.prepare('SELECT count(*) AS n FROM users WHERE is_admin = 1').first();
       if (n <= 1) throw new HttpError(409, { error: 'last_admin' });
     }
+    /* Stage 5 hands an owner's spaces on before deleting the account; until then it is refused. */
+    const owns = await db.prepare(`SELECT 1 AS x FROM members AS m JOIN spaces AS s ON s.id = m.space_id
+      WHERE m.user_id = ? AND m.role = 'owner' AND m.deleted_at IS NULL AND s.deleted_at IS NULL LIMIT 1`).bind(id).first();
+    if (owns) throw new HttpError(409, { error: 'owns_space' });
     await db.batch([
       ...ACCOUNT_TABLES.map(([table, owner]) => db.prepare(`DELETE FROM ${table} WHERE ${owner}`).bind(id)),
       db.prepare('DELETE FROM users WHERE id = ?').bind(id),
       throttleRows(db, user.username),
-      db.prepare("DELETE FROM request_limits WHERE key IN ('api:' || ?1, 'spotify:' || ?1, 'outline:' || ?1)").bind(id),
+      db.prepare("DELETE FROM request_limits WHERE key IN ('api:' || ?1, 'spotify:' || ?1, 'outline:' || ?1, 'invite:' || ?1, 'join:' || ?1)").bind(id),
       audit(db, admin, 'delete', user.username),
     ]);
     return done();

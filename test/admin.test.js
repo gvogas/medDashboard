@@ -108,6 +108,37 @@ describe('accounts', () => {
     expect((await admin('/api/admin/accounts/u-gone1', { method: 'DELETE', body: { confirm: 'gone1' } })).status).toBe(404);
   });
 
+  it('will not delete an account that owns a shared class; its memberships and limits go with it otherwise', async () => {
+    const admin = await signInAdmin('boss-own');
+    const id = await createUser('owner9');
+    await env.DB.batch([
+      env.DB.prepare("INSERT INTO spaces (id, kind, created_at, updated_at) VALUES ('ownsclass001', 'class', 1, 1)"),
+      env.DB.prepare("INSERT INTO members (space_id, user_id, role, joined_at, updated_at) VALUES ('ownsclass001', ?, 'owner', 1, 1)").bind(id),
+      env.DB.prepare("INSERT INTO request_limits (key, hits, reset_at) VALUES ('invite:' || ?1, 1, 9e15), ('join:' || ?1, 1, 9e15)").bind(id),
+    ]);
+    const res = await admin('/api/admin/accounts/u-owner9', { method: 'DELETE', body: { confirm: 'owner9' } });
+    expect(res.status).toBe(409);
+    expect(await res.json()).toEqual({ error: 'owns_space' });
+    await env.DB.prepare("UPDATE members SET role = 'editor' WHERE space_id = 'ownsclass001'").run();
+    expect((await admin('/api/admin/accounts/u-owner9', { method: 'DELETE', body: { confirm: 'owner9' } })).status).toBe(204);
+    expect(await env.DB.prepare('SELECT count(*) AS n FROM members WHERE user_id = ?').bind(id).first()).toEqual({ n: 0 });
+    expect(await env.DB.prepare("SELECT count(*) AS n FROM request_limits WHERE key IN ('invite:' || ?1, 'join:' || ?1)").bind(id).first()).toEqual({ n: 0 });
+  });
+
+  it("shows an invite from a deleted account as from 'A former member'", async () => {
+    const admin = await signInAdmin('boss-former');
+    const sender = await createUser('sender10');
+    const guest = await signInAdmin('guest10');
+    await env.DB.batch([
+      env.DB.prepare("INSERT INTO spaces (id, kind, created_at, updated_at) VALUES ('formerinv001', 'class', 1, 1)"),
+      env.DB.prepare("INSERT INTO invites (space_id, user_id, invited_by, role, status, created_at, expires_at) VALUES ('formerinv001', ?, ?, 'member', 'pending', 1, 9e15)").bind(guest.id, sender),
+    ]);
+    expect((await admin('/api/admin/accounts/u-sender10', { method: 'DELETE', body: { confirm: 'sender10' } })).status).toBe(204);
+    expect(await env.DB.prepare("SELECT invited_by FROM invites WHERE space_id = 'formerinv001'").first()).toEqual({ invited_by: null });
+    const mine = await (await guest('/api/invites')).json();
+    expect(mine.invites).toEqual([expect.objectContaining({ spaceId: 'formerinv001', from: 'A former member' })]);
+  });
+
   it('will not let an admin delete or demote themselves', async () => {
     const admin = await signInAdmin('boss7');
     expect((await admin('/api/admin/accounts/u-boss7', { method: 'DELETE', body: { confirm: 'boss7' } })).status).toBe(400);
