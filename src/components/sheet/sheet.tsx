@@ -24,6 +24,8 @@ const AiSheet = lazyNamed(() => import("./ai-sheet"), "AiSheet")
 const SchoolSheet = lazyNamed(() => import("./school-sheet"), "SchoolSheet")
 const SessionSheet = lazyNamed(() => import("./session-sheet"), "SessionSheet")
 const AchievementSheet = lazyNamed(() => import("./achievement-sheet"), "AchievementSheet")
+/* the class sheets: admins only until Stage 6, so nobody else downloads them (lib/lazy.ts) */
+const ClassSheet = lazyNamed(() => import("./class-sheet"), "ClassSheet", { idle: false })
 
 /** What the dialog is called: the item's type, "New assignment", "Course". */
 export function sheetLabel(s: Exclude<SheetState, null>): string {
@@ -99,6 +101,7 @@ export function Sheet() {
                 {shown?.kind === "school" && <SchoolSheet draft={shown.draft} />}
                 {shown?.kind === "session" && <SessionSheet key={shown.draft.id} draft={shown.draft} />}
                 {shown?.kind === "achievement" && <AchievementSheet key={shown.draft.id} draft={shown.draft} />}
+                {shown?.kind === "class" && <ClassSheet key={shown.spaceId} spaceId={shown.spaceId} tab={shown.tab} />}
             </Suspense>
         </div>
     )
