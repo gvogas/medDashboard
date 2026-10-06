@@ -5,6 +5,7 @@ import * as sync from '../src/core/sync.ts';
 vi.mock('../src/core/store.ts', () => ({
  data: { profile: { id: 'u1' } }, conflicts: [], pending: vi.fn(), pendingCount: vi.fn(() => 0),
  settleOperation: vi.fn(), rejectOperation: vi.fn(), applyPage: vi.fn(), applyServerProfile: vi.fn(),
+ applyRevoked: vi.fn(), spaceRevision: vi.fn(() => 0),
  meta: { get: vi.fn(() => 1) }, withSyncLock: vi.fn((fn) => fn()), subscribe: vi.fn(),
 }));
 const op = { key: 'items:i1', body: { id: 'i1', title: 'Study' }, revision: 1, op: 'put', token: 'a' };
@@ -17,12 +18,12 @@ beforeEach(() => {
  store.pending.mockResolvedValue([op]);
  store.withSyncLock.mockImplementation((fn) => fn());
  vi.spyOn(api, 'put').mockResolvedValue({ ...op.body, revision: 2 });
- vi.spyOn(api, 'sync').mockResolvedValue({ changes: [], cursor: 1, more: false });
+ vi.spyOn(api, 'syncV3').mockResolvedValue({ changes: [], cursors: { 'u:u1': 1 }, scopes: [], more: false, reset: [], revoked: [] });
  vi.spyOn(api, 'me').mockResolvedValue({ id: 'u1', revision: 1 });
 });
 afterEach(() => { sync.stop(); vi.restoreAllMocks(); vi.clearAllMocks(); vi.unstubAllGlobals(); vi.useRealTimers(); });
 describe('persisted operation synchronization', () => {
- it.each([403, 408, 429, 500, 502, 503])('retains edits on HTTP %s', async (code) => {
+ it.each([408, 429, 500, 502, 503])('retains edits on HTTP %s', async (code) => {
    api.put.mockRejectedValue(new ApiError(code, { error: 'unavailable' }));
    expect(await sync.syncNow()).toBe(false);
    expect(store.settleOperation).not.toHaveBeenCalled();
@@ -46,11 +47,51 @@ describe('persisted operation synchronization', () => {
    await sync.syncNow();
    expect(store.settleOperation).toHaveBeenCalledWith(op, expect.objectContaining({ revision: 2 }));
  });
- it('reconciles an expired cursor and follows every page', async () => {
-   api.sync.mockResolvedValueOnce({ reset: true }).mockResolvedValueOnce({ changes: [], cursor: 10, more: true }).mockResolvedValueOnce({ changes: [], cursor: 12, more: false });
+ it('follows every page with a cursor per scope, wipes a reset scope as its rows arrive, and revokes after the last page', async () => {
+   store.meta.get.mockImplementation(async (key) => (key === 'cursors' ? { 'u:u1': 7, 'c:abcdefghij12': 3 } : undefined));
+   const page = (over) => ({ changes: [], scopes: [], more: false, reset: [], revoked: ['c:zzzzzzzzzzzz'], ...over });
+   api.syncV3.mockResolvedValueOnce(page({ cursors: { 'u:u1': 9, 'c:abcdefghij12': 0 }, more: true, reset: ['c:abcdefghij12'] }))
+     .mockResolvedValueOnce(page({ cursors: { 'u:u1': 12, 'c:abcdefghij12': 10 }, more: true }))
+     .mockResolvedValueOnce(page({ cursors: { 'u:u1': 12, 'c:abcdefghij12': 12 } }));
    await sync.syncNow();
-   expect(api.sync.mock.calls.map(([cursor]) => cursor)).toEqual([1, 0, 10]);
-   expect(store.applyPage).toHaveBeenNthCalledWith(1, { changes: [], cursor: 10, more: true }, true);
+   expect(api.syncV3.mock.calls.map(([cursors]) => cursors)).toEqual([
+     { 'u:u1': 7, 'c:abcdefghij12': 3 }, { 'u:u1': 9, 'c:abcdefghij12': 0 }, { 'u:u1': 12, 'c:abcdefghij12': 10 }]);
+   expect(store.applyPage.mock.calls.map(([, wipe]) => wipe)).toEqual([[], ['c:abcdefghij12'], []]);
+   expect(store.applyRevoked).toHaveBeenCalledTimes(1);
+   expect(store.applyRevoked).toHaveBeenCalledWith(['c:zzzzzzzzzzzz']);
+   store.meta.get.mockImplementation(() => 1);
+ });
+ it("sends sv 0 on an account's first sync after the app opens, then the highest space revision held", async () => {
+   store.data.profile = { id: 'u9' };
+   store.spaceRevision.mockReturnValue(42);
+   await sync.syncNow();
+   await sync.syncNow();
+   expect(api.syncV3.mock.calls.map(([, sv]) => sv)).toEqual([0, 42]);
+   store.spaceRevision.mockReturnValue(0);
+ });
+ it('uploads a shared edit with the fields it changed since it was queued', async () => {
+   const shared = { key: 'shared_items:c:abcdefghij12:x', op: 'put', body: { id: 'x', scope: 'c:abcdefghij12', title: 'New', date: '2026-10-18', revision: 4 }, base: { id: 'x', title: 'Old', date: '2026-10-18', revision: 4 }, revision: 4, token: 's' };
+   store.pending.mockResolvedValue([shared]);
+   vi.spyOn(api.shared, 'put').mockResolvedValue({ ...shared.body, revision: 5 });
+   await sync.syncNow();
+   expect(api.shared.put).toHaveBeenCalledWith('c:abcdefghij12', 'items', 'x', { ...shared.body, revision: 4 }, { title: 'Old' });
+   expect(store.settleOperation).toHaveBeenCalledWith(shared, expect.objectContaining({ revision: 5 }));
+ });
+ it('sets a refused shared edit aside at once on 403, saying why', async () => {
+   const shared = { key: 'shared_items:c:abcdefghij12:x', op: 'put', body: { id: 'x', title: 'New', revision: 4 }, base: { id: 'x', title: 'Old', revision: 4 }, revision: 4, token: 's' };
+   store.pending.mockResolvedValue([shared]);
+   vi.spyOn(api.shared, 'put').mockRejectedValue(new ApiError(403, { error: 'forbidden' }));
+   vi.spyOn(api.shared, 'get').mockResolvedValue({ id: 'x', title: 'Old', revision: 4 });
+   await sync.syncNow();
+   expect(store.rejectOperation).toHaveBeenCalledWith(shared, { id: 'x', title: 'Old', revision: 4 }, 'You no longer have permission to change this.');
+ });
+ it('keeps a shared delete that answers 404 for review, since it may mean lost access', async () => {
+   const gone = { key: 'shared_items:c:abcdefghij12:x', op: 'delete', body: { id: 'x' }, base: { id: 'x' }, revision: 4, token: 'd' };
+   store.pending.mockResolvedValue([gone]);
+   vi.spyOn(api.shared, 'del').mockRejectedValue(new ApiError(404, { error: 'not_found' }));
+   vi.spyOn(api.shared, 'get').mockRejectedValue(new ApiError(404, { error: 'not_found' }));
+   await sync.syncNow();
+   expect(store.rejectOperation).toHaveBeenCalledWith(gone, null, 'The server could not accept this edit.');
  });
  it('does not sync a closed store', async () => {
    store.data.profile = null;
@@ -68,13 +109,13 @@ describe('persisted operation synchronization', () => {
    finish({ ...op.body, revision: 2 });
    expect(await running).toBe(false);
    expect(store.settleOperation).not.toHaveBeenCalled();
-   expect(api.sync).not.toHaveBeenCalled();
+   expect(api.syncV3).not.toHaveBeenCalled();
    api.put.mockResolvedValue({ ...op.body, revision: 2 });
    expect(await sync.syncNow()).toBe(true);
  });
  it('does not apply a delayed change page after stop', async () => {
    let finish;
-   api.sync.mockImplementation(() => new Promise((resolve) => { finish = resolve; }));
+   api.syncV3.mockImplementation(() => new Promise((resolve) => { finish = resolve; }));
    const pulled = vi.fn(); sync.onPulled(pulled);
    const running = sync.syncNow();
    await vi.waitFor(() => expect(finish).toBeTypeOf('function'));
@@ -120,7 +161,7 @@ describe('persisted operation synchronization', () => {
    });
    expect(await sync.syncNow()).toBe(false);
    expect(store.settleOperation).toHaveBeenCalledWith(other, expect.objectContaining({ revision: 2 }));
-   expect(api.sync).toHaveBeenCalled();
+   expect(api.syncV3).toHaveBeenCalled();
    expect(sync.status.state).toBe('error');
    expect(store.rejectOperation).not.toHaveBeenCalled();
  });
@@ -138,7 +179,7 @@ describe('persisted operation synchronization', () => {
    const stuck = { ...op, token: 'stuck-2' };
    store.pending.mockResolvedValue([stuck]);
    api.put.mockRejectedValue(new ApiError(500, { error: 'internal' }));
-   api.sync.mockRejectedValue(new ApiError(500, { error: 'internal' }));
+   api.syncV3.mockRejectedValue(new ApiError(500, { error: 'internal' }));
    for (let i = 0; i < 4; i++) await sync.syncNow();
    expect(store.rejectOperation).not.toHaveBeenCalled();
  });
@@ -149,7 +190,7 @@ describe('persisted operation synchronization', () => {
    await sync.syncNow();
    expect(api.put).toHaveBeenCalledTimes(1);
    expect(api.put).toHaveBeenCalledWith('courses', 'c1', expect.anything());
-   expect(api.sync).toHaveBeenCalled();
+   expect(api.syncV3).toHaveBeenCalled();
  });
  it('lets an untouched review step give way to the copy another device made', async () => {
    const review = { key: 'items:rv0000abc1', op: 'put', revision: 0, token: 'r',
@@ -170,11 +211,11 @@ describe('persisted operation synchronization', () => {
  });
  it('keeps a bounded, incomplete pull pending and schedules the next page', async () => {
    let cursor = 1;
-   api.sync.mockImplementation(async () => ({ changes: [], cursor: ++cursor, more: true }));
+   api.syncV3.mockImplementation(async () => ({ changes: [], cursor: ++cursor, more: true }));
    expect(await sync.syncNow()).toBe(true);
-   expect(api.sync).toHaveBeenCalledTimes(20);
+   expect(api.syncV3).toHaveBeenCalledTimes(20);
    expect(sync.status.state).toBe('pending');
-   api.sync.mockResolvedValue({ changes: [], cursor: ++cursor, more: false });
+   api.syncV3.mockResolvedValue({ changes: [], cursor: ++cursor, more: false });
    await vi.advanceTimersByTimeAsync(1000);
    expect(sync.status.state).toBe('idle');
  });

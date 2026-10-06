@@ -2,6 +2,7 @@
 import { api, ApiError, retryDelayMs } from './api.ts';
 import * as store from './store.ts';
 import { untouchedReview } from './reviews.ts';
+import { changedFields, parseKey } from './shared.ts';
 import type { PendingOp, Row } from './db.ts';
 import type { ServerProfile } from './store.ts';
 import type { SyncState, SyncStatus } from './types.ts';
@@ -50,11 +51,25 @@ const STOPS = [401, 408, 428, 429, 503];
    up), is set aside with the saved copies. */
 const MAX_TRIES = 3;
 const tries = new Map<string, number>();   /* op token → cycles it failed in */
+/* Answers no retry can change: the edit goes to the saved copies at once. A lost
+   permission (403) does not come back by retrying (spec §6). */
+const REFUSED = [400, 403, 404, 409, 413, 422];
+/* 'shared_items' → 'items', for the shared routes. */
+const sharedKind = (store: string) => store.slice('shared_'.length);
+/* Why an edit was set aside, as Settings shows it. */
+function reasonFor(e: ApiError): string {
+  const body = e.body || {};
+  if (body.error === 'legacy_edit') return 'This edit was saved before conflict protection. Review it before restoring.';
+  if (body.error === 'conflict') return Array.isArray(body.fields) ? `Someone else changed ${(body.fields as string[]).join(', ')}.` : 'A newer version was saved on another device.';
+  if (body.error === 'archived') return 'This class is archived, so it is read-only.';
+  if (e.status === 403) return 'You no longer have permission to change this.';
+  return 'The server could not accept this edit.';
+}
 async function serverCopy(op: PendingOp, e?: { body?: ApiError['body'] }): Promise<Row | null | undefined> {
   if (e?.body?.current !== undefined) return e.body.current;
   try {
-    const [kind, id] = op.key.split(/:(.*)/s);
-    return op.key === 'profile' ? await api.me() : await api.get(kind, id);
+    const k = parseKey(op.key);
+    return op.key === 'profile' ? await api.me() : k.scope ? await api.shared.get(k.scope, sharedKind(k.store), k.id) : await api.get(k.store, k.id);
   } catch (readError) {
     if (!(readError instanceof ApiError && readError.status === 404)) throw readError;
     return null;
@@ -71,27 +86,31 @@ async function pushAll(cycle: Cycle): Promise<boolean> {
       let saved: Row | undefined;
       if (op.key === 'profile') saved = await api.saveMe({ ...op.body, revision: op.revision });
       else {
-        const [kind, id] = op.key.split(/:(.*)/s);
-        if (op.op === 'delete') {
-          try { await api.del(kind, id, op.revision); }
+        const k = parseKey(op.key);
+        if (k.scope) {
+          /* a shared row: a 404 may mean lost access, so a delete is not taken as done */
+          if (op.op === 'delete') await api.shared.del(k.scope, sharedKind(k.store), k.id, op.revision);
+          else saved = await api.shared.put(k.scope, sharedKind(k.store), k.id, { ...op.body, revision: op.revision }, changedFields(k.store, k.scope, op.body || {}, op.base));
+        } else if (op.op === 'delete') {
+          try { await api.del(k.store, k.id, op.revision); }
           catch (e) { if (!(e instanceof ApiError && e.status === 404)) throw e; }
-        } else saved = await api.put(kind, id, { ...op.body, revision: op.revision });
+        } else saved = await api.put(k.store, k.id, { ...op.body, revision: op.revision });
       }
       if (!active(cycle)) return false;
       await store.settleOperation(op, saved);
       tries.delete(op.token);   /* it got through after all */
     } catch (e) {
       if (!active(cycle)) return false;
-      if (e instanceof ApiError && [400, 404, 409, 413, 422].includes(e.status)) {
+      if (e instanceof ApiError && REFUSED.includes(e.status)) {
         const current = await serverCopy(op, e);
         if (!active(cycle)) return false;
         // A review step another device made first, or already deleted: its copy stands.
         if (e.status === 409 && untouchedReview(op)) { await store.rejectOperation(op, current, '', { quiet: true }); continue; }
-        await store.rejectOperation(op, current, e.body?.error === 'legacy_edit' ? 'This edit was saved before conflict protection. Review it before restoring.' : e.body?.error === 'conflict' ? 'A newer version was saved on another device.' : 'The server could not accept this edit.');
+        await store.rejectOperation(op, current, reasonFor(e));
       } else if (e instanceof ApiError && !STOPS.includes(e.status)) {
         cycle.failed.push(op);
         // Items after a new course may belong to it: they wait for it.
-        if (op.key.startsWith('courses:') && op.op === 'put') break;
+        if (/^(shared_)?courses:/.test(op.key) && op.op === 'put') break;
       } else throw e;
     }
   }
@@ -108,21 +127,32 @@ async function holdBack(cycle: Cycle): Promise<void> {
     await store.rejectOperation(op, current, 'The server kept failing to save this edit.');
   }
 }
-function rank(op: PendingOp): number { return op.key.startsWith('courses:') ? (op.op === 'put' ? 0 : 3) : 1; }
+function rank(op: PendingOp): number { return /^(shared_)?courses:/.test(op.key) ? (op.op === 'put' ? 0 : 3) : 1; }
+/* The account whose member lists this tab holds: until its first complete pull after the
+   app opens, `sv` is 0, so every list comes again (a renamed member shows on next open). */
+let listsFor: string | null = null;
 async function pullAll(cycle: Cycle): Promise<boolean> {
-  let cursor = (await store.meta.get('syncCursor') as number | undefined) || 0;
-  let reset = cursor === 0;
-  let complete = false;
+  const stored = await store.meta.get('cursors');
+  let cursors: Record<string, number> = stored && typeof stored === 'object' ? { ...(stored as Record<string, number>) } : {};
+  const sv = listsFor === cycle.account ? store.spaceRevision() : 0;
+  let wipe: string[] = [], revoked: string[] = [], complete = false;
   // Bound resets as well as ordinary pages, then yield the account's sync lock.
   for (let pages = 0; pages < 20 && active(cycle); pages++) {
-    const page = await api.sync(cursor);
+    const page = await api.syncV3(cursors, sv);
     if (!active(cycle)) return false;
-    if (page.reset) { cursor = 0; reset = true; continue; }
-    await store.applyPage(page, reset);
-    reset = false; cursor = page.cursor!;
+    /* a scope that reset is wiped as its rows from 0 arrive: on the next page, as v2 did */
+    await store.applyPage(page, wipe);
+    wipe = page.reset || []; revoked = page.revoked || [];
+    cursors = { ...cursors, ...page.cursors };
     if (!page.more) { complete = true; break; }
   }
   if (!active(cycle)) return false;
+  /* after the last page, so a copy paged into your own scope is already here (spec §6 Revocation) */
+  if (complete) {
+    await store.applyRevoked(revoked);
+    if (!active(cycle)) return false;
+    listsFor = cycle.account;
+  }
   const profile = await api.me();
   if (!active(cycle)) return false;
   await store.applyServerProfile(profile);
