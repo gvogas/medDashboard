@@ -3048,7 +3048,7 @@ Claude-Session: https://claude.ai/code/session_01JpUR1JXMY3ehtkiJwuij95"
 
 ### Task 13: Apply the migration remotely, then merge and push
 
-**Only with George's yes** (rule 6). The order matters: the new client calls `?v=3`, which reads `spaces` and `members`; the Cloudflare Git build does **not** apply migrations, so the remote database must have `0002_spaces.sql` **before** `main` moves.
+**Only with George's yes** (rule 6). **The deploy is roll-forward only:** once any tab upgrades IndexedDB to version 5, v4 code cannot open that database, so rolling the client back to the old build would leave those devices unable to open their local data. A fix after deploy ships as a new build. The order matters: the new client calls `?v=3`, which reads `spaces` and `members`; the Cloudflare Git build does **not** apply migrations, so the remote database must have `0002_spaces.sql` **before** `main` moves.
 
 - [ ] **Step 1: Apply the migration to the live database**
 
@@ -3077,7 +3077,7 @@ Expected: `npm run check` green on `main`; the push starts the Cloudflare Git bu
 
 - [ ] **Step 4: Check the live site**
 
-Once the build is live, open the site (hard reload), sign in, and check as in Task 12 Step 4: views unchanged, `GET /api/sync?v=3…` answers 200, an edit syncs, IndexedDB is version 5. A tab left open on the old client keeps working on `?v=2` until it reloads (the version-5 upgrade closes it through `versionchange`). If the live site answers 500 on sync, check first that the remote migration was applied (`npx wrangler d1 migrations list DB --remote`).
+Once the build is live, open the site (hard reload), sign in, and check as in Task 12 Step 4: views unchanged, `GET /api/sync?v=3…` answers 200, an edit syncs, IndexedDB is version 5. A tab left open on the old client does not keep working on `?v=2`: as soon as another tab opens IndexedDB 5, the old tab's connection is closed through `versionchange` and the tab is reloaded onto the new client. If the live site answers 500 on sync, check first that the remote migration was applied (`npx wrangler d1 migrations list DB --remote`).
 
 ---
 
