@@ -8,8 +8,8 @@ import { readSchool } from './school.js';
 import { readSchedule } from './schedule.js';
 import { listParam, cleanTerm, TIMEOUT_MS } from './ai.js';
 import { validateProfile, validateCourse, validateItem, validateQuote, validateStudySession, validateAchievement, validateId, validateSharedCourse, validateSharedItem, validateChanged } from './validate.js';
-import { getUserForLogin, getProfile, updateProfile, getRow, upsertRow, deleteRow, syncPage, bumpPasswordGen, saveSpotifyTokens, deleteSpotifyTokens, getShared, upsertShared, deleteShared, memberTaskWrite } from './db.js';
-import { roleOf, scopeOf } from './access.js';
+import { getUserForLogin, getProfile, updateProfile, getRow, upsertRow, deleteRow, syncPage, syncPageV3, bumpPasswordGen, saveSpotifyTokens, deleteSpotifyTokens, getShared, upsertShared, deleteShared, memberTaskWrite } from './db.js';
+import { parseScope, roleOf, scopeOf } from './access.js';
 import * as spotify from './spotify.js';
 import { feedState, renewFeed, stopFeed, serveFeed } from './calendar.js';
 import { leaderboard, setJoined } from './leaderboard.js';
@@ -21,6 +21,28 @@ function revisionOf(request) {
   if (raw === null) throw new HttpError(428, { error: 'reload_required' });
   if (!/^"\d{1,16}"$/.test(raw) || !Number.isSafeInteger(Number(raw.slice(1, -1)))) throw new HttpError(400, { error: 'invalid', field: 'revision' });
   return Number(raw.slice(1, -1));
+}
+
+/** `cursors=u:<me>:812,c:<space id>:640`: each entry split at its last ':'. At most 25; anything malformed is a 400. */
+export function cursorsParam(raw) {
+  if (!raw) return [];
+  const bad = () => new HttpError(400, { error: 'invalid', field: 'cursors' });
+  const parts = raw.split(',');
+  if (parts.length > 25) throw bad();
+  const seen = new Set();
+  return parts.map((part) => {
+    const at = part.lastIndexOf(':'), scope = part.slice(0, at), seq = part.slice(at + 1);
+    if (at < 0 || !parseScope(scope) || seen.has(scope) || !/^\d{1,16}$/.test(seq) || !Number.isSafeInteger(Number(seq))) throw bad();
+    seen.add(scope);
+    return [scope, Number(seq)];
+  });
+}
+
+/** `sv`: the highest space revision the client holds; 0 when absent. */
+function svParam(raw) {
+  if (raw === null || raw === '') return 0;
+  if (!/^\d{1,16}$/.test(raw) || !Number.isSafeInteger(Number(raw))) throw new HttpError(400, { error: 'invalid', field: 'sv' });
+  return Number(raw);
 }
 
 const VALIDATORS = { courses: validateCourse, items: validateItem, quotes: validateQuote, study_sessions: validateStudySession, achievements: validateAchievement };
@@ -261,7 +283,9 @@ const routes = [
 
   ['GET', /^\/api\/sync$/, async ({ request, env, url }) => {
     const userId = await requireUser(request, env);
-    // The client still sends v=2; the timestamp feed it replaced is gone.
+    const q = url.searchParams;
+    if (q.get('v') === '3') return json(await syncPageV3(env.DB, userId, cursorsParam(q.get('cursors')), svParam(q.get('sv'))));
+    // v=2, for tabs still on the old client: the person's own scope, one cursor (spec §16).
     const cursor = url.searchParams.get('cursor') || '0';
     if (!/^\d{1,16}$/.test(cursor) || !Number.isSafeInteger(Number(cursor))) throw new HttpError(400, { error: 'invalid', field: 'cursor' });
     return json(await syncPage(env.DB, userId, Number(cursor)));

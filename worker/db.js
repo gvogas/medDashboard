@@ -2,7 +2,7 @@
 // Courses and items belong to a scope, a person's own being 'u:<user id>'; the other
 // tables belong to the user directly.
 import { HttpError } from './http.js';
-import { assertAllowed, editorGuard, memberGuard, parseScope, writerGuard } from './access.js';
+import { assertAllowed, editorGuard, memberGuard, parseScope, scopeOf, writerGuard } from './access.js';
 import { stable } from '../src/core/shared.ts';
 
 const PROFILE_COLS =
@@ -439,6 +439,89 @@ export async function deleteShared(db, table, scope, userId, id, now = Date.now(
   if (!current) return false;
   if (current.deletedAt) return true;
   throw new HttpError(409, { error: 'conflict', current, by: current.updatedBy });
+}
+
+// ── sync v3: a cursor per scope (spec §6 Pull) ──────────────────────────────
+
+/* The most spaces a person holds (spec §3 Limits). */
+const SPACE_LIMIT = 20;
+
+/**
+ * The person's live spaces (at most 20) as sync describes them, each with its member list
+ * when its revision is above `sv` (all of them when sv is 0). A class is named by its
+ * course, a project by its 'project' item.
+ */
+export async function readMemberships(db, userId, sv) {
+  const [spaces, members] = await db.batch([
+    db.prepare(`SELECT s.id, s.kind, s.archived, s.parent_space, s.parent_item, s.revision, m.role,
+        CASE s.kind WHEN 'class' THEN (SELECT name FROM courses WHERE scope = 'c:' || s.id AND deleted_at IS NULL LIMIT 1)
+          ELSE (SELECT title FROM items WHERE scope = 'p:' || s.id AND id = 'project') END AS name
+      FROM members AS m JOIN spaces AS s ON s.id = m.space_id
+      WHERE m.user_id = ? AND m.deleted_at IS NULL AND s.deleted_at IS NULL ORDER BY s.id LIMIT ?`).bind(userId, SPACE_LIMIT),
+    db.prepare(`SELECT o.space_id, o.user_id, o.role, COALESCE(NULLIF(u.display_name, ''), u.username) AS name
+      FROM members AS m JOIN spaces AS s ON s.id = m.space_id
+      JOIN members AS o ON o.space_id = s.id AND o.deleted_at IS NULL JOIN users AS u ON u.id = o.user_id
+      WHERE m.user_id = ? AND m.deleted_at IS NULL AND s.deleted_at IS NULL AND s.revision > ?
+      ORDER BY o.space_id, o.joined_at, o.user_id`).bind(userId, sv),
+  ]);
+  const lists = new Map();
+  for (const m of members.results) lists.set(m.space_id, [...(lists.get(m.space_id) || []), { userId: m.user_id, name: m.name, role: m.role }]);
+  return spaces.results.map((s) => ({
+    id: s.id, scope: scopeOf(s.kind, s.id), kind: s.kind, role: s.role, archived: s.archived === 1, name: s.name ?? '',
+    parent: s.parent_space ? { space: s.parent_space, item: s.parent_item } : null, revision: s.revision,
+    ...(s.revision > sv ? { members: lists.get(s.id) || [] } : {}),
+  }));
+}
+
+/**
+ * The changes after each [scope, cursor] of `wanted`, read in one batch with the feed's
+ * floor and head: a statement per scope, each capped at limit + 1 and, for a space, guarded
+ * by live membership inside the statement, so a removal since readMemberships pages
+ * nothing. D1 refuses a compound SELECT of more than five terms, so this is a batch rather
+ * than one UNION ALL. Rows come back in sequence order, not yet cut.
+ */
+export async function readPage(db, userId, wanted, limit = 100) {
+  const [state, ...pages] = await db.batch([
+    db.prepare("SELECT floor, COALESCE((SELECT seq FROM sqlite_sequence WHERE name = 'changes'), 0) AS head FROM sync_state WHERE id = 1"),
+    ...wanted.map(([scope, cursor]) => {
+      const p = parseScope(scope);
+      const g = p.kind === 'user' ? { sql: p.userId === userId ? '1' : '0', binds: [] } : memberGuard(p.spaceId, userId);
+      return db.prepare(`SELECT seq, scope, kind, payload FROM changes WHERE scope = ? AND seq > ? AND ${g.sql} ORDER BY seq LIMIT ?`)
+        .bind(scope, cursor, ...g.binds, limit + 1);
+    }),
+  ]);
+  return { ...state.results[0], rows: pages.flatMap((p) => p.results).sort((a, b) => a.seq - b.seq) };
+}
+
+/**
+ * One v3 page. `cursors` is [[scope, seq]] as the client sent them; `sv` the highest space
+ * revision it holds (0 on its first sync after opening). The Worker pages the scopes it
+ * builds itself, the person's own and their spaces': a scope sent that is not among them
+ * comes back in `revoked`, and one not sent starts at 0. A non-zero cursor below the floor
+ * (or above the head) comes back in `reset` at 0, its rows left out, with `more` set. Each
+ * cursor moves to the last sequence delivered (the head on the last page), never back.
+ */
+export async function syncPageV3(db, userId, cursors, sv, limit = 100) {
+  const spaces = await readMemberships(db, userId, sv);
+  const sent = new Map(cursors);
+  const scopes = [personal(userId), ...spaces.map((s) => s.scope)];
+  const revoked = [...sent.keys()].filter((s) => !scopes.includes(s));
+  const { floor, head, rows: all } = await readPage(db, userId, scopes.map((s) => [s, sent.get(s) || 0]), limit);
+  const reset = scopes.filter((s) => { const c = sent.get(s) || 0; return c > 0 && (c < floor || c > head); });
+  const rows = all.filter((r) => !reset.includes(r.scope));
+  const full = rows.length > limit, page = rows.slice(0, limit);
+  const end = full ? page.at(-1).seq : head;
+  return {
+    scopes: spaces,
+    cursors: Object.fromEntries(scopes.map((s) => [s, reset.includes(s) ? 0 : Math.max(sent.get(s) || 0, end)])),
+    changes: page.map((r) => {
+      const raw = JSON.parse(r.payload);
+      return { scope: r.scope, kind: r.kind, row: r.scope.startsWith('u:') ? rowToApi(r.kind, raw) : sharedToApi(r.kind, raw) };
+    }),
+    more: full || reset.length > 0,
+    reset,
+    revoked,
+  };
 }
 
 // ── Spotify ─────────────────────────────────────────────────────────────────
