@@ -25,6 +25,12 @@ Desktop.ini
 # The Vite build. It also holds a copy of .dev.vars, made for `vite preview`.
 dist/
 
-# Brainstorming mockups, and Claude Code's local files (settings, worktrees)
+# Brainstorming mockups, and anything of Claude's (Claude Code settings, worktrees,
+# CLAUDE.md notes, MCP config)
 .superpowers/
 .claude/
+.claude*
+*claude*
+*CLAUDE*
+*Claude*
+.mcp.json
