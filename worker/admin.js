@@ -1,5 +1,5 @@
 // The Admin page's API, /api/admin/*: accounts, sign-in locks, the error and audit
-// logs, traffic, health and the announcement. Every route checks users.is_admin on
+// logs, traffic, health, the announcement and maintenance mode. Every route checks users.is_admin on
 // the server; the sidebar hiding the page is only a convenience.
 //
 // Guards: an admin cannot delete or demote their own account, and the last admin
@@ -12,6 +12,7 @@ import { errorGroups, recentErrors } from './errors.js';
 import { cachedTrafficReport, configured as analyticsConfigured } from './analytics.js';
 import { configured as spotifyConfigured } from './spotify.js';
 import { ACCOUNT_TABLES } from './accounts.js';
+import { readMaintenance, validateMaintenance } from './maintenance.js';
 
 /* The newest file in migrations/; a test keeps it in step. */
 export const LATEST_MIGRATION = '0002_spaces.sql';
@@ -266,6 +267,21 @@ export const adminRoutes = [
       audit(env.DB, admin, 'announce', '', text, now),
     ]);
     return json({ announcement });
+  }],
+
+  /* maintenance mode (worker/maintenance.js): which features are switched off, and why */
+  ['GET', /^\/api\/admin\/maintenance$/, async ({ request, env }) => {
+    await requireAdmin(request, env);
+    return json({ maintenance: await readMaintenance(env.DB) });
+  }],
+
+  ['PUT', /^\/api\/admin\/maintenance$/, async ({ request, env }) => {
+    const admin = await requireAdmin(request, env);
+    const maintenance = validateMaintenance(await readJson(request), admin.username);
+    /* not in admin_log, whose CHECK lists its actions (a migration); the value says who */
+    await env.DB.prepare("INSERT INTO app_meta (key, value, updated_at) VALUES ('maintenance', ?1, ?2) ON CONFLICT (key) DO UPDATE SET value = ?1, updated_at = ?2")
+      .bind(JSON.stringify(maintenance), maintenance.updatedAt).run();
+    return json({ maintenance });
   }],
 
   ['DELETE', /^\/api\/admin\/announcement$/, async ({ request, env }) => {

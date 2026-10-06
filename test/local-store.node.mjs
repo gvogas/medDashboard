@@ -255,3 +255,18 @@ test('a page that only moves a space is reported as a change', async () => {
  assert.equal(await first.applyPage({ cursors: {}, changes: [], scopes: [webSpace()] }), true);
  assert.equal(await first.applyPage({ cursors: {}, changes: [] }), false);
 });
+test('the profile keeps maintenance only as the server can mean it, and an acknowledged edit keeps it', async () => {
+ const user = { ...p(), maintenance: { features: ['week', 'bogus'], message: 'Soon', updatedAt: 1 }, announcement: { id: 1, text: 'Hi', until: 9e15 } };
+ await first.open(user); await first.reload();
+ assert.deepEqual(first.data.profile.maintenance, { features: ['week'], message: 'Soon', updatedAt: 1 });
+ await first.applyServerProfile({ ...user, revision: 1, maintenance: 'everything' });
+ assert.equal(first.data.profile.maintenance, null);
+ await first.applyServerProfile({ ...user, revision: 1 });
+ await first.saveProfile({ displayName: 'New' });
+ const [sent] = await first.pending();
+ /* PUT /api/me answers the profile alone: the switches stay until the pull after it */
+ await first.settleOperation(sent, { id: user.id, username: 'tester', displayName: 'New', revision: 2, coat: {} });
+ assert.deepEqual(first.data.profile.maintenance, { features: ['week'], message: 'Soon', updatedAt: 1 });
+ assert.equal(first.data.profile.announcement.text, 'Hi');
+ assert.equal(first.data.profile.displayName, 'New');
+});

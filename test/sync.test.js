@@ -125,6 +125,23 @@ describe('persisted operation synchronization', () => {
    await sync.syncNow();
    expect(store.rejectOperation).toHaveBeenCalledWith(shared, { id: 'x', title: 'Old', revision: 4 }, 'You no longer have permission to change this.');
  });
+ it('keeps a shared edit pending while classes are in maintenance, and still uploads and downloads the rest', async () => {
+   const shared = { key: 'shared_items:c:abcdefghij12:x', op: 'put', body: { id: 'x', title: 'New', revision: 4 }, base: { id: 'x', title: 'Old', revision: 4 }, revision: 4, token: 'm' };
+   store.pending.mockResolvedValue([shared, op]);
+   vi.spyOn(api.shared, 'put').mockRejectedValue(new ApiError(503, { error: 'maintenance', feature: 'classes' }));
+   for (let cycle = 0; cycle < 4; cycle++) expect(await sync.syncNow()).toBe(true);
+   expect(store.settleOperation).toHaveBeenCalledWith(op, expect.objectContaining({ revision: 2 }));
+   expect(store.settleOperation).not.toHaveBeenCalledWith(shared, expect.anything());
+   expect(store.rejectOperation).not.toHaveBeenCalled();
+   expect(api.syncV3).toHaveBeenCalledTimes(4);
+   expect(sync.status.message).toContain('being worked on');
+   /* asked about again in a minute, not straight away */
+   api.syncV3.mockClear();
+   await vi.advanceTimersByTimeAsync(30000);
+   expect(api.syncV3).not.toHaveBeenCalled();
+   await vi.advanceTimersByTimeAsync(31000);
+   expect(api.syncV3).toHaveBeenCalled();
+ });
  it('keeps a shared delete that answers 404 for review, since it may mean lost access', async () => {
    const gone = { key: 'shared_items:c:abcdefghij12:x', op: 'delete', body: { id: 'x' }, base: { id: 'x' }, revision: 4, token: 'd' };
    store.pending.mockResolvedValue([gone]);

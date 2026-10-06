@@ -7,8 +7,9 @@ import type { PendingOp, Row } from './db.ts';
 import type { Cursor, ServerProfile } from './store.ts';
 import type { SyncState, SyncStatus } from './types.ts';
 
-/** One sync cycle: its cancel signal, the account it is for, and the edits it held back. */
-interface Cycle { signal: AbortSignal; account: string; failed: PendingOp[] }
+/** One sync cycle: its cancel signal, the account it is for, the edits it held back, and
+    whether any waits on a feature in maintenance. */
+interface Cycle { signal: AbortSignal; account: string; failed: PendingOp[]; waiting: boolean }
 export const status: SyncStatus & { lastPull: number | null } = { state: 'idle', pending: 0, lastPull: null, message: '' };
 const listeners = new Set<(s: typeof status) => void>();
 let initialized = false, paused = false, running: Promise<boolean> | null = null, controller: AbortController | null = null, timer: ReturnType<typeof setTimeout> | undefined;
@@ -104,6 +105,9 @@ async function pushAll(cycle: Cycle): Promise<boolean> {
       tries.delete(op.token);   /* it got through after all */
     } catch (e) {
       if (!active(cycle)) return false;
+      /* a feature the admins are working on (shared classes): the edit stays pending as it
+         is, with no try counted, and the rest still upload */
+      if (e instanceof ApiError && e.status === 503 && e.body?.error === 'maintenance') { cycle.waiting = true; continue; }
       if (e instanceof ApiError && refused(op, e)) {
         const current = await serverCopy(op, e);
         if (!active(cycle)) return false;
@@ -173,7 +177,7 @@ export async function syncNow(): Promise<boolean> {
   if (running) return running;
   clearTimeout(timer);
   controller = new AbortController();
-  const cycle: Cycle = { signal: controller.signal, account: store.data.profile.id, failed: [] };
+  const cycle: Cycle = { signal: controller.signal, account: store.data.profile.id, failed: [], waiting: false };
   running = (async () => {
     try {
       return await store.withSyncLock(async () => {
@@ -190,8 +194,11 @@ export async function syncNow(): Promise<boolean> {
           return false;
         }
         state(store.conflicts.length ? 'error' : store.pendingCount() || !complete ? 'pending' : 'idle',
-          store.conflicts.length ? 'Saved copies need review in Settings.' : !complete ? 'Downloading remaining changes.' : '');
+          store.conflicts.length ? 'Saved copies need review in Settings.' : !complete ? 'Downloading remaining changes.'
+            : cycle.waiting ? 'Shared edits are waiting: classes and projects are being worked on.' : '');
         if (!complete) schedule(1000);
+        /* edits held back by maintenance are asked about again in a minute, not at once */
+        else if (cycle.waiting) schedule(60000);
         else if (store.pendingCount()) schedule();
         return true;
       }, { signal: cycle.signal });

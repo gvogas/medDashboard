@@ -10,6 +10,7 @@ import { pdfText } from "@/core/pdftext"
 import { notify } from "@/bridge"
 import { cacheKey, cached, remember } from "./ai-cache"
 import { cover } from "./overlay"
+import { maintenanceMessage } from "./maintenance"
 import { ui } from "./ui"
 import type { Note, Ui } from "./types"
 
@@ -53,6 +54,8 @@ const AI_ERRORS: Record<string, string> = {
     too_large: "That file is over 5 MB.",
     ai_timeout: "The AI took too long to answer. Try again in a minute.",
     image_unsupported: "That is a picture. Outlines and calendars need a PDF, Word or text file; a timetable screenshot goes under Class schedule.",
+    /* the admins switched Import with AI off (worker/maintenance.js): their words */
+    get maintenance() { return maintenanceMessage() },
 }
 
 type Flag = "outlineBusy" | "schoolBusy" | "scheduleBusy"

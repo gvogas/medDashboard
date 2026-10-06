@@ -241,6 +241,8 @@ export const api = {
     announcement: () => request('GET', '/api/admin/announcement'),
     announce: (text: string, until: number) => request('PUT', '/api/admin/announcement', { text, until }),
     unannounce: () => empty(request('DELETE', '/api/admin/announcement')),
+    maintenance: () => request('GET', '/api/admin/maintenance'),
+    setMaintenance: (features: string[], message: string) => request('PUT', '/api/admin/maintenance', { features, message }),
   },
   spotifyPlayer: () => request('GET', '/api/spotify/player'),
   spotifyStatus: () => request('GET', '/api/spotify/status'),
