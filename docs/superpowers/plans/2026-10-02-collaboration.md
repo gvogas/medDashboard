@@ -1201,7 +1201,15 @@ Stop the dev server (and free 8787/8790 if `vite.js` stays). `git checkout wrang
 **Files:**
 - Modify: `wrangler.jsonc`
 
-- [ ] **Step 1: Ask George** whether to move live now. Wait for a yes.
+- [ ] **Step 1: Ask George** whether to move live now. Wait for a yes. From here until Step 6, push nothing to `main`: a Git build of `main` would deploy the old code bound to rounds-v6 and send live writes back there. Do Step 6 right after Step 5.
+
+Pre-flight: every user id fits a scope (`length(scope) <= 40`):
+
+```bash
+npx wrangler d1 execute rounds-v6 --remote --command "SELECT id FROM users WHERE length(id) > 38"
+```
+
+Expected: no rows. Any row: stop and tell George; the move would fail on that account.
 
 - [ ] **Step 2: Create the database**
 
@@ -1234,11 +1242,12 @@ npx wrangler d1 migrations apply DB --remote
 - [ ] **Step 4: Copy, then deploy at once** (so no live edit falls between them)
 
 ```bash
-node scripts/move-db.mjs --from rounds-v6 --to rounds-v7 --remote
-npx wrangler deploy
+node scripts/move-db.mjs --from rounds-v6 --to rounds-v7 --remote && npx wrangler deploy
 ```
 
-Expected: "Done: rounds-v7 matches rounds-v6"; deploy succeeds.
+Expected: "Done: rounds-v7 matches rounds-v6"; deploy succeeds. The `&&` matters: if the copy fails, the site must stay on rounds-v6, because devices syncing against a partial rounds-v7 would reset to it.
+
+If the copy fails: do not deploy. The live site is still on rounds-v6 and nothing was lost. `npx wrangler d1 delete rounds-v7`, then repeat Steps 2–4 once the cause is fixed (a rerun into the partly filled database is refused anyway).
 
 - [ ] **Step 5: Check**
 

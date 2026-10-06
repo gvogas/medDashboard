@@ -91,3 +91,8 @@ it('names every source column the copy would leave behind, so a move stops befor
   /* and a column added later is caught, not dropped */
   expect(uncopied([...await columns(env.DB), { tbl: 'users', col: 'shoe_size' }])).toEqual(['users.shoe_size']);
 });
+
+it('reads only the columns rounds-v7 added as defaults, and stops on any other gap', async () => {
+  const source = await columns(env.MIGRATION_DB);
+  expect(() => readQueries(source.filter(({ tbl, col }) => !(tbl === 'users' && col === 'username')))).toThrow('users.username is not in the source database');
+});

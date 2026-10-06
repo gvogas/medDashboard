@@ -3,7 +3,8 @@
 
 /* What moves, in an order the foreign keys accept, in the shape of today's schema.
    Throttles, request windows, OAuth attempts and refresh leases are short-lived, so they
-   start empty. */
+   start empty. users comes first: scripts/move-db.mjs refuses a target that holds any
+   user, so a run that failed partway is never continued on top of itself. */
 export const TABLES = {
   users: ['id', 'username', 'password_hash', 'pw_gen', 'display_name', 'coat_name', 'coat_role', 'coat_color', 'theme', 'bg', 'term_start', 'types', 'study_flow', 'feed_gen', 'study_prefs', 'school_calendar', 'leaderboard', 'is_admin', 'last_seen_day', 'hidden_sources', 'created_at', 'updated_at', 'revision'],
   courses: ['scope', 'id', 'code', 'name', 'color', 'instructor', 'term', 'archived', 'meetings', 'target', 'updated_by', 'created_at', 'updated_at', 'deleted_at', 'revision'],
@@ -25,6 +26,7 @@ const SCOPE_FROM_USER = `'u:' || "user_id" AS "scope"`;
 const PAYLOAD_FROM_USER = `CASE WHEN kind IN ('courses', 'items') AND json_valid(payload) AND json_type(payload, '$.user_id') = 'text'
   THEN json_set(json_remove(payload, '$.user_id'), '$.scope', 'u:' || json_extract(payload, '$.user_id')) ELSE payload END AS "payload"`;
 const DEFAULTS = { assignees: "'[]'", hidden_sources: "'[]'" };
+const ADDED_IN_V7 = new Set(['hidden_sources', 'updated_by', 'class_id', 'assignees', 'completed_by', 'space_id']);
 /* Short-lived, or filled by the fresh schema itself. The error log, the announcement and
    the cron's last run start fresh too. */
 const LEFT_BEHIND = ['error_log', 'app_meta', 'login_throttle', 'request_limits', 'spotify_oauth_states', 'spotify_refresh_locks', 'sync_state', 'd1_migrations'];
@@ -53,6 +55,9 @@ export function readQueries(columns) {
   const pick = (table, col) => {
     if (has.has(`${table}.${col}`)) return `"${col}"`;
     if (col === 'scope' && has.has(`${table}.user_id`)) return SCOPE_FROM_USER;
+    /* Only the columns rounds-v7 added may be missing from the source; any other gap is a
+       mismatch between TABLES and the source, and reading it as NULL would hide it. */
+    if (!ADDED_IN_V7.has(col)) throw new Error(`${table}.${col} is not in the source database`);
     return `${DEFAULTS[col] ?? 'NULL'} AS "${col}"`;
   };
   const out = Object.entries(TABLES).map(([table, cols]) => {
