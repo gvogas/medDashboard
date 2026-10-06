@@ -4,7 +4,7 @@
 import { HttpError } from './http.js';
 import { assertAllowed, editorGuard, memberGuard, parseScope, scopeOf, writerGuard } from './access.js';
 import { SPACE_LIMIT } from './spaces.js';
-import { stable } from '../src/core/shared.ts';
+import { MARK_DEFAULTS, stable } from '../src/core/shared.ts';
 
 const PROFILE_COLS =
   'id, username, display_name, coat_name, coat_role, coat_color, theme, bg, types, study_flow, study_prefs, school_calendar, hidden_sources, term_start, is_admin, created_at, updated_at, revision';
@@ -111,6 +111,16 @@ const TABLES = {
     toRow: (a) => a,
     fromRow: () => ({}),
   },
+  marks: {
+    cols: { spaceId: 'space_id', itemId: 'item_id', status: 'status', grade: 'grade', weight: 'weight', notes: 'notes', checklist: 'checklist', completedAt: 'completed_at', hidden: 'hidden' },
+    toRow: (m) => ({ ...m, checklist: jsonIn(m.checklist), hidden: m.hidden ? 1 : 0 }),
+    fromRow: (r) => ({ checklist: jsonOut(r.checklist), hidden: r.hidden === 1 }),
+  },
+  space_prefs: {
+    cols: { spaceId: 'space_id', color: 'color', target: 'target', term: 'term', archived: 'archived' },
+    toRow: (p) => ({ ...p, archived: p.archived ? 1 : 0 }),
+    fromRow: (r) => ({ archived: r.archived === 1, target: r.target ?? null }),
+  },
 };
 
 /* Live achievements an account may hold; each carries its sticker picture. */
@@ -147,7 +157,7 @@ export async function getRow(db, table, userId, id) {
 }
 
 /** Insert or update. createdAt is kept on update; a deleted row is revived. */
-function upsertStmt(db, table, userId, id, fields, now, revision) {
+function upsertStmt(db, table, userId, id, fields, now, revision, guard = null) {
   const t = TABLES[table];
   const row = t.toRow(fields);
   /* An old client giving a filed item a course of yours unfiles it (the u: CHECK allows one or the other). */
@@ -168,13 +178,15 @@ function upsertStmt(db, table, userId, id, fields, now, revision) {
   /* a new or revived achievement must fit under the limit; an edit to a live one always does */
   const capGuard = table === 'achievements' ? ' AND (SELECT count(*) FROM achievements WHERE user_id = ? AND id != ? AND deleted_at IS NULL) < ?' : '';
   const capBindings = table === 'achievements' ? [userId, id, ACHIEVEMENT_LIMIT] : [];
+  /* a row of your layer goes only where you may keep one (layer.js): the guard runs inside the write */
+  const extra = guard ? ` AND ${guard.sql}` : '';
   return db
     .prepare(
-      `INSERT INTO ${table} (${names.join(', ')}, revision) SELECT ${names.map(() => '?').join(', ')}, COALESCE((SELECT seq FROM sqlite_sequence WHERE name = 'changes'), 0) + 1 WHERE (? = 0 OR EXISTS (SELECT 1 FROM ${table} WHERE ${owner} = ? AND id = ?))${courseGuard}${capGuard}
+      `INSERT INTO ${table} (${names.join(', ')}, revision) SELECT ${names.map(() => '?').join(', ')}, COALESCE((SELECT seq FROM sqlite_sequence WHERE name = 'changes'), 0) + 1 WHERE (? = 0 OR EXISTS (SELECT 1 FROM ${table} WHERE ${owner} = ? AND id = ?))${courseGuard}${capGuard}${extra}
        ON CONFLICT (${owner}, id) DO UPDATE SET ${updates.join(', ')} WHERE revision = ?
        RETURNING ${selectCols(table)}`,
     )
-    .bind(...values, revision, who, id, ...courseBindings, ...capBindings, revision);
+    .bind(...values, revision, who, id, ...courseBindings, ...capBindings, ...(guard ? guard.binds : []), revision);
 }
 
 /**
@@ -182,9 +194,10 @@ function upsertStmt(db, table, userId, id, fields, now, revision) {
  * checked by the statement's own guard; only a miss looks further, to tell a course
  * that is not the user's (400) from a stale revision (409).
  */
-export async function upsertRow(db, table, userId, id, fields, now = Date.now(), revision = 0) {
-  const saved = await upsertStmt(db, table, userId, id, fields, now, revision).first();
+export async function upsertRow(db, table, userId, id, fields, now = Date.now(), revision = 0, guard = null) {
+  const saved = await upsertStmt(db, table, userId, id, fields, now, revision, guard).first();
   if (saved) return rowToApi(table, saved);
+  if (guard && !(await passes(db, guard))) throw new HttpError(404, { error: 'not_found' });
   const [current, course, live] = await db.batch([
     db.prepare(`SELECT ${selectCols(table)} FROM ${table} WHERE ${ownerCol(table)} = ? AND id = ?`).bind(ownerOf(table, userId), id),
     table === 'items' && fields.courseId ? courseStmt(db, userId, fields.courseId) : db.prepare('SELECT 1 AS x'),
@@ -242,6 +255,9 @@ export async function deleteRow(db, table, userId, id, now = Date.now(), revisio
 
 const courseStmt = (db, userId, id) =>
   db.prepare('SELECT 1 AS x FROM courses WHERE scope = ? AND id = ? AND deleted_at IS NULL').bind(personal(userId), id);
+
+/* Whether a guard holds now: a write it refused was refused for access, not a revision. */
+const passes = async (db, guard) => (await db.prepare(`SELECT ${guard.sql} AS ok`).bind(...guard.binds).first()).ok === 1;
 
 /** A bounded page, ordered by commit sequence rather than wall-clock timestamps.
  * The metadata and page share a D1 batch transaction, including during pruning.
@@ -577,6 +593,56 @@ export async function syncPageV3(db, userId, cursors, sv, limit = 100) {
     reset,
     revoked,
   };
+}
+
+// ── your layer: marks and space prefs (spec §4) ────────────────────────────
+// Your own rows, read and written with your user id. A mark goes only on a live item of a
+// space you are a live member of (archived or not: your layer still saves), and merges field
+// by field like a shared row, since two of your devices may both make it. Prefs need a live
+// membership and are whole-row If-Match, like your other rows.
+
+/* A live member of the space, on a live item of it; the binds are the space, you, the space twice, the item. */
+function markGuard(spaceId, itemId, userId) {
+  const g = memberGuard(spaceId, userId);
+  return {
+    sql: `${g.sql} AND EXISTS (SELECT 1 FROM items WHERE scope IN ('c:' || ?, 'p:' || ?) AND id = ? AND deleted_at IS NULL)`,
+    binds: [...g.binds, spaceId, spaceId, itemId],
+  };
+}
+
+/**
+ * Your mark on `itemId` of `spaceId` (spec §6 Push): the whole mark at its revision; else the
+ * fields named in `changed` merged onto the current one when each still holds its old or its
+ * new value (a first write merges against MARK_DEFAULTS), with one retry on a lost race; else
+ * 409 {current, fields}. 404 when you may not keep a mark there.
+ */
+export async function upsertMark(db, userId, spaceId, itemId, fields, { revision = 0, changed, now = Date.now() } = {}) {
+  const id = spaceId + ':' + itemId, row = { ...fields, spaceId, itemId }, guard = markGuard(spaceId, itemId, userId);
+  const saved = await upsertStmt(db, 'marks', userId, id, row, now, revision, guard).first();
+  if (saved) return rowToApi('marks', saved);
+  const t = TABLES.marks;
+  for (let attempt = 0; ; attempt++) {
+    if (!(await passes(db, guard))) throw new HttpError(404, { error: 'not_found' });
+    const current = await getRow(db, 'marks', userId, id);
+    if (!current || current.deletedAt || !changed) throw conflict(current, changed && Object.keys(changed));
+    const keys = Object.keys(changed);
+    const old = (f) => (revision === 0 ? MARK_DEFAULTS[f] : changed[f]);
+    const unsafe = keys.filter((f) => stable(current[f]) !== stable(old(f)) && stable(current[f]) !== stable(row[f]));
+    if (unsafe.length) throw conflict(current, unsafe);
+    const write = keys.filter((f) => stable(current[f]) !== stable(row[f]));
+    if (!write.length) return current;
+    const values = t.toRow(row);
+    const merged = await db.prepare(`UPDATE marks SET ${write.map((f) => `${t.cols[f]} = ?`).join(', ')}, updated_at = ?, revision = revision + 1
+      WHERE user_id = ? AND id = ? AND revision = ? AND deleted_at IS NULL AND ${guard.sql} RETURNING ${selectCols('marks')}`)
+      .bind(...write.map((f) => values[f] ?? null), now, userId, id, current.revision, ...guard.binds).first();
+    if (merged) return rowToApi('marks', merged);
+    if (attempt) throw conflict(await getRow(db, 'marks', userId, id), keys);
+  }
+}
+
+/** Your prefs for a space you are in, written whole at `revision`; 404 outside it. */
+export function upsertPref(db, userId, spaceId, fields, now = Date.now(), revision = 0) {
+  return upsertRow(db, 'space_prefs', userId, spaceId, { ...fields, spaceId }, now, revision, memberGuard(spaceId, userId));
 }
 
 // ── Spotify ─────────────────────────────────────────────────────────────────

@@ -7,6 +7,8 @@ export const SHARED_FIELDS = {
   courses: ['code', 'name', 'color', 'instructor', 'term', 'meetings'],
   class: ['type', 'title', 'courseId', 'date', 'start', 'end', 'where', 'weight', 'notes', 'links', 'recur', 'weekday', 'recurUntil', 'dept'],
   project: ['type', 'title', 'date', 'start', 'end', 'where', 'status', 'notes', 'checklist', 'links', 'recur', 'weekday', 'recurUntil', 'dept', 'completedAt', 'assignees'],
+  /* your mark: written with a field-level merge too, since two of your devices can both make it (spec §6) */
+  marks: ['status', 'grade', 'weight', 'notes', 'checklist', 'completedAt', 'hidden'],
 } as const satisfies Record<string, readonly string[]>
 export type FieldSet = keyof typeof SHARED_FIELDS
 
@@ -19,6 +21,9 @@ export function stable(v: unknown): string {
   }
   return JSON.stringify(v ?? null)
 }
+
+/** What each field of a mark holds before you touch the item: what a first write merges against. */
+export const MARK_DEFAULTS: Record<string, unknown> = { status: 'todo', grade: null, weight: null, notes: '', checklist: [], completedAt: null, hidden: false }
 
 export type SharedStore = 'shared_courses' | 'shared_items'
 export const SHARED_STORES: SharedStore[] = ['shared_courses', 'shared_items']
@@ -41,9 +46,9 @@ export function parseKey(key: string): { store: string; scope: string | null; id
   return { store, scope: null, id: rest }
 }
 
-/** The field set of a shared row: its course's, a class item's or a project item's. */
+/** The field set of a shared row (its course's, a class item's or a project item's), or of a mark. */
 export const fieldSetOf = (store: string, scope: string): FieldSet =>
-  store === 'shared_courses' || store === 'courses' ? 'courses' : scope.startsWith('p:') ? 'project' : 'class'
+  store === 'marks' ? 'marks' : store === 'shared_courses' || store === 'courses' ? 'courses' : scope.startsWith('p:') ? 'project' : 'class'
 
 /**
  * What a shared edit changed since it was queued, as `changed: {field: value before}`.

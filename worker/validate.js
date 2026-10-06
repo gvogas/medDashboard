@@ -4,7 +4,7 @@
 
 import { HttpError } from './http.js';
 import { SCHOOL_KINDS, SCHOOL_LIMITS, validDate } from '../src/core/school.ts';
-import { SHARED_FIELDS } from '../src/core/shared.ts';
+import { MARK_DEFAULTS, SHARED_FIELDS, stable } from '../src/core/shared.ts';
 
 const COLOURS = ['#E4749B', '#8B5CC7', '#17B3AE', '#79B6EA', '#BCA6E6'];   /* the coat's */
 export const COURSE_COLOURS = [...COLOURS, '#F08A6C', '#E8B33A', '#4FBF8B', '#8FAE86', '#4F74D9', '#B8457E', '#7D8A99'];
@@ -386,4 +386,36 @@ export function validateChanged(body, set) {
   const changed = obj(body.changed, 'changed');
   for (const f of Object.keys(changed)) if (!SHARED_FIELDS[set].includes(f)) fail('changed');
   return changed;
+}
+
+/**
+ * Your mark on a shared item (spec §3, §4). On a project's item the status and checklist are
+ * the team's, and it carries no grade or weight: only your notes and hidden may be set.
+ */
+export function validateMark(body, kind) {
+  obj(body, 'body');
+  const out = {
+    status: oneOf(body.status ?? 'todo', 'status', STATUSES),
+    grade: optNum(body.grade, 'grade', 0, 100),
+    weight: optNum(body.weight, 'weight', 0, 100),
+    notes: str(body.notes ?? '', 'notes', 5000),
+    checklist: list(body.checklist ?? [], 'checklist', 50, checklistEntry),
+    completedAt: optInt(body.completedAt, 'completedAt'),
+    hidden: bool(body.hidden ?? false, 'hidden'),
+  };
+  if (kind === 'project') {
+    for (const f of ['status', 'grade', 'weight', 'checklist', 'completedAt']) if (stable(out[f]) !== stable(MARK_DEFAULTS[f])) fail(f);
+  }
+  return out;
+}
+
+/** Your prefs for a space: a colour of the twelve, a target, your semester, archived in your sidebar. */
+export function validatePref(body) {
+  obj(body, 'body');
+  return {
+    color: oneOf(body.color, 'color', COURSE_COLOURS),
+    target: body.target === null || body.target === undefined ? null : int(body.target, 'target', 1, 100),
+    term: str(body.term ?? '', 'term', 40),
+    archived: bool(body.archived ?? false, 'archived'),
+  };
 }
