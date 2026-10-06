@@ -51,6 +51,7 @@ Each stage branches off `main` after the previous stage is merged and deployed. 
 - `/api/spaces/:sid/{courses,items}/:id` routes (guarded), unused by the UI yet; tests create spaces directly in D1.
 - Field-level merge applies to shared rows (and, from Stage 4, `marks`) only; personal rows, `space_prefs` and the profile keep whole-row `If-Match`. A member's task write applies only allowed fields named in `changed`; `updated_by`/`completed_by` come from the session.
 - Client: `src/core/db.ts` version 5 (stores `shared_courses`, `shared_items` keyed `[scope, id]`, `spaces`, `meta.cursors` migrated from `syncCursor`); pending keys `shared_items:<scope>:<id>` / `shared_courses:<scope>:<id>`; `src/core/sync.ts` pulls v3 (sending `sv`, 0 on the first sync after opening), applies `revoked` after the last page, adds 403 to the statuses rejected at once (today `[400, 404, 409, 413, 422]`), pushes shared ops with `base`/`changed`; `src/data` `effectiveItems()`/`effectiveCourses()` used by every view, keyed by `scope/id` (returns today's items while there are no spaces).
+- Spike for Stage 7, first thing in this stage: a throwaway Workers test that creates a trigger whose body runs `INSERT … SELECT … WHERE true ON CONFLICT … DO UPDATE` on local D1 and checks the row. Record the answer in the Stage 7 outline below, so the activity design is settled before the shared write routes are built. Delete the test after.
 - Tests: v3 paging across scopes in global order, a new scope from 0, a removal between the two queries, member lists only above `sv`, `revoked` purge after the last page, field-merge cases (incl. a deleted current row always conflicting), IndexedDB upgrade keeps pending ops.
 
 **Stage 3 — Classes** (spec §5, §11, §13 convert, §14, §15).
@@ -60,7 +61,7 @@ Each stage branches off `main` after the previous stage is merged and deployed. 
 - UI behind `profile.isAdmin`, **and** the create/accept/join routes refuse non-admins (`403`) until Stage 6: the + menu, course sheet Members tab, inbox stub listing pending invites, `/#join=` handling in `src/data/session.ts`.
 
 **Stage 4 — The personal layer** (spec §4, §7, §8, §9, §15).
-- `0004_marks.sql`: `marks`, `space_prefs` (single text `id`), their triggers writing `'u:' || user_id`; profile `hiddenSources` (`course:<id>`, `space:<sid>`, `personal`) in `worker/validate.js` and `PUT /api/me`, whole-row as today, kept when absent like `types`.
+- `0004_marks.sql`: `marks`, `space_prefs` (single text `id`), their triggers writing `'u:' || user_id`; a backfill inserting a `space_prefs` row (the class course's colour, else the first of the twelve the person does not use; the class's `term`) for every live membership made during Stage 3, which had no table to write to; profile `hiddenSources` (`course:<id>`, `space:<sid>`, `personal`) in `worker/validate.js` and `PUT /api/me`, whole-row as today, kept when absent like `types`.
 - Old-client safety: `sync?v=2` pages only `courses`, `items`, `quotes`, `study_sessions`, `achievements`; personal `PUT`s without `classId`/`spaceId` keep the stored values.
 - `effectiveItems()` merges marks; grades, stats, achievements, exam prep, reviews (chain steps inherit `class_id`) and pickers read it; the item card's Class/Yours sections; eye toggles; markers; the merge sheet + absorb route (custom-typed items never paired).
 
@@ -1158,6 +1159,7 @@ Follows the clean-db procedure (memory: `clean-db-procedure`), locally first.
 ```bash
 git stash -u   # only if anything is uncommitted
 git switch main && npx wrangler d1 migrations apply DB --local && git switch collab-1-scope
+git stash pop  # only if you stashed above
 ```
 
 Expected: "No migrations to apply" or the one schema applied.
@@ -1246,6 +1248,14 @@ npx wrangler d1 execute rounds-v6 --remote --command "SELECT seq FROM sqlite_seq
 ```
 
 Expected: every check 0 issues; rounds-v6's head equals the head the move printed (no write reached v6 after the copy). Open the live site, confirm data and one edit.
+
+If rounds-v6's head is higher, a live write reached v6 between the copy and the deploy. List what it was:
+
+```bash
+npx wrangler d1 execute rounds-v6 --remote --command "SELECT seq, user_id, kind, row_id FROM changes WHERE seq > <printed head> ORDER BY seq"
+```
+
+Tell George which rows they are (normally one or two, from one person). Then either have that person redo the edit on the live site (it now writes to v7), or, for more than a few rows, deploy rounds-v6 back (`git stash` the `wrangler.jsonc` change, `npm run build`, `npx wrangler deploy`), delete and recreate rounds-v7, and repeat Steps 3–5 at a quiet time. Never write to rounds-v6 by hand. Running Steps 4–5 when nobody is using the site avoids this.
 
 - [ ] **Step 6: Commit and merge**
 
