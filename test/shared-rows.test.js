@@ -114,6 +114,29 @@ describe('shared rows', () => {
     expect(raced).toBe(true);
     expect(saved).toMatchObject({ date: '2026-10-18', weight: 25, notes: 'Teams of 3' });
   });
+
+  it('answer 404 or 403, not a conflict, when access goes between checking it and merging', async () => {
+    const s = await space('sr-lost');
+    const v1 = await upsertShared(env.DB, 'items', s.scope, s.owner, 'x', classItem());
+    await upsertShared(env.DB, 'items', s.scope, s.owner, 'x', classItem({ date: '2026-10-18' }), { revision: v1.revision, changed: { date: '2026-10-15' } });
+    /* `change` runs once, just before the first read of the current row */
+    const losing = (change) => ({
+      prepare(sql) {
+        const stmt = env.DB.prepare(sql);
+        if (!change || !/^SELECT .* FROM items WHERE scope = \? AND id = \?/s.test(sql)) return stmt;
+        const run = change; change = null;
+        return { bind: (...args) => ({ first: async () => { await run(); return stmt.bind(...args).first(); } }) };
+      },
+      batch: (list) => env.DB.batch(list),
+    });
+    const write = (db) => upsertShared(db, 'items', s.scope, s.editor, 'x', classItem({ notes: 'Teams of 3' }), { revision: v1.revision, changed: { notes: '' } });
+    const role = (r) => env.DB.prepare('UPDATE members SET role = ?, deleted_at = ? WHERE space_id = ? AND user_id = ?').bind(r ?? 'editor', r ? null : 2, s.id, s.editor).run();
+    await expect(write(losing(() => role(null)))).rejects.toMatchObject({ status: 404, body: { error: 'not_found' } });
+    await role('editor');
+    await expect(write(losing(() => role('member')))).rejects.toMatchObject({ status: 403, body: { error: 'forbidden' } });
+    await role('editor');
+    await expect(write(losing(() => env.DB.prepare('UPDATE spaces SET archived = 1 WHERE id = ?').bind(s.id).run()))).rejects.toMatchObject({ status: 403, body: { error: 'archived' } });
+  });
 });
 
 describe('a project member writing a task', () => {

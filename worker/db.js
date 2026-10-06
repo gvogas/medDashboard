@@ -361,9 +361,14 @@ export async function upsertShared(db, table, scope, userId, id, fields, { revis
   const saved = await sharedUpsertStmt(db, table, scope, userId, id, fields, now, revision, guard).first();
   if (saved) return sharedToApi(table, saved);
   await assertWritable(db, table, scope, userId, fields, 'editor');
+  /* access lost since assertWritable answers as the routes do (404, 403), never as a conflict */
+  const refused = async (current, fields) => {
+    await assertAllowed(db, userId, parseScope(scope).spaceId, 'editor');
+    return conflict(current, fields);
+  };
   for (let attempt = 0; ; attempt++) {
     const current = await getShared(db, table, scope, userId, id);
-    if (!current) throw conflict(null);
+    if (!current) throw await refused(null);
     if (current.deletedAt || !changed) throw conflict(current, changed && Object.keys(changed));
     const keys = Object.keys(changed);
     const old = (f) => (revision === 0 ? DEFAULTS[table][f] : changed[f]);
@@ -373,7 +378,7 @@ export async function upsertShared(db, table, scope, userId, id, fields, { revis
     if (!write.length) return current;
     const merged = await sharedFieldsStmt(db, table, scope, userId, id, fields, write, now, current.revision, guard).first();
     if (merged) return sharedToApi(table, merged);
-    if (attempt) throw conflict(await getShared(db, table, scope, userId, id), keys);
+    if (attempt) throw await refused(await getShared(db, table, scope, userId, id), keys);
   }
 }
 
