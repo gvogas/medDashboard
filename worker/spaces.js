@@ -318,12 +318,15 @@ export async function absorb(db, userId, spaceId, { courseId, pairs, fromCourse 
       WHERE (i.status != 'todo' OR i.grade IS NOT NULL OR i.notes != '' OR i.checklist != '[]' OR i.completed_at IS NOT NULL OR (i.weight IS NOT NULL AND i.weight IS NOT s.weight))
         AND ${g.sql} AND ${LIVE}
       ON CONFLICT (user_id, id) DO UPDATE SET
-        status = CASE WHEN marks.status = 'todo' THEN excluded.status ELSE marks.status END,
-        grade = COALESCE(marks.grade, excluded.grade), weight = COALESCE(marks.weight, excluded.weight),
-        notes = CASE WHEN marks.notes = '' THEN excluded.notes ELSE marks.notes END,
-        checklist = CASE WHEN marks.checklist = '[]' THEN excluded.checklist ELSE marks.checklist END,
-        completed_at = COALESCE(marks.completed_at, excluded.completed_at),
-        hidden = 0, deleted_at = NULL, updated_at = excluded.updated_at, revision = marks.revision + 1`)
+        /* a deleted mark's fields are stale: the incoming values replace them; a live mark wins field by field */
+        status = CASE WHEN marks.deleted_at IS NOT NULL OR marks.status = 'todo' THEN excluded.status ELSE marks.status END,
+        grade = CASE WHEN marks.deleted_at IS NOT NULL THEN excluded.grade ELSE COALESCE(marks.grade, excluded.grade) END,
+        weight = CASE WHEN marks.deleted_at IS NOT NULL THEN excluded.weight ELSE COALESCE(marks.weight, excluded.weight) END,
+        notes = CASE WHEN marks.deleted_at IS NOT NULL OR marks.notes = '' THEN excluded.notes ELSE marks.notes END,
+        checklist = CASE WHEN marks.deleted_at IS NOT NULL OR marks.checklist = '[]' THEN excluded.checklist ELSE marks.checklist END,
+        completed_at = CASE WHEN marks.deleted_at IS NOT NULL THEN excluded.completed_at ELSE COALESCE(marks.completed_at, excluded.completed_at) END,
+        hidden = CASE WHEN marks.deleted_at IS NOT NULL THEN excluded.hidden ELSE marks.hidden END,
+        deleted_at = NULL, updated_at = excluded.updated_at, revision = marks.revision + 1`)
       .bind(userId, spaceId, spaceId, now, now, J, mine, courseId, scope, ...g.binds, mine, courseId),
     db.prepare(`UPDATE study_sessions SET space_id = ?, course_id = ${CLASS_COURSE},
         item_id = (SELECT p.shared FROM ${P} AS p WHERE p.mine = study_sessions.item_id), updated_at = ?, revision = revision + 1
@@ -345,10 +348,12 @@ export async function absorb(db, userId, spaceId, { courseId, pairs, fromCourse 
       .bind(spaceId, scope, J, now, userId, courseId, J, ...g.binds, mine, courseId),
     db.prepare(`INSERT INTO space_prefs (user_id, id, space_id, color, target, term, archived, created_at, updated_at, revision)
       SELECT ?, ?, ?, color, target, term, archived, ?, ?, ${NEXT_ROW_REVISION} FROM courses WHERE scope = ? AND id = ? AND deleted_at IS NULL AND ${g.sql}
-      ON CONFLICT (user_id, id) DO UPDATE SET target = COALESCE(space_prefs.target, excluded.target),
-        color = CASE WHEN ? THEN excluded.color ELSE space_prefs.color END,
-        term = CASE WHEN ? THEN excluded.term ELSE space_prefs.term END,
-        archived = CASE WHEN ? THEN excluded.archived ELSE space_prefs.archived END,
+      ON CONFLICT (user_id, id) DO UPDATE SET
+        /* a deleted prefs row's values are stale: the course's values replace them */
+        target = CASE WHEN space_prefs.deleted_at IS NOT NULL THEN excluded.target ELSE COALESCE(space_prefs.target, excluded.target) END,
+        color = CASE WHEN ? OR space_prefs.deleted_at IS NOT NULL THEN excluded.color ELSE space_prefs.color END,
+        term = CASE WHEN ? OR space_prefs.deleted_at IS NOT NULL THEN excluded.term ELSE space_prefs.term END,
+        archived = CASE WHEN ? OR space_prefs.deleted_at IS NOT NULL THEN excluded.archived ELSE space_prefs.archived END,
         deleted_at = NULL, updated_at = excluded.updated_at, revision = space_prefs.revision + 1`)
       .bind(userId, spaceId, spaceId, now, now, mine, courseId, ...g.binds, f, f, f),
     db.prepare(`UPDATE items SET deleted_at = ?, updated_at = ?, revision = revision + 1

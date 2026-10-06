@@ -80,4 +80,29 @@ describe('absorb', () => {
     expect(await env.DB.prepare('SELECT color, target FROM space_prefs WHERE user_id = ? AND id = ?').bind(ana.id, s.id).first())
       .toEqual({ color: '#B8457E', target: 80 });
   });
+
+  it("brings back a mark you deleted with the course's values, not its old ones", async () => {
+    await sharedItem(s.scope, 'd1', { course_id: 'web', type: 'quiz', title: 'Quiz 2' });
+    const mark = (item, body, rev = 0) => ana(`/api/marks/${s.id}/${item}`, { method: 'PUT', body, headers: { 'if-match': `"${rev}"` } });
+    const blank = { status: 'todo', grade: null, weight: null, notes: '', checklist: [], completedAt: null, hidden: false };
+    const old = await (await mark('d1', { ...blank, status: 'graded', grade: 40, notes: 'stale' })).json();
+    expect((await ana(`/api/marks/${s.id}/d1`, { method: 'DELETE', headers: { 'if-match': `"${old.revision}"` } })).status).toBe(204);
+    await put(ana, '/api/courses/c3', { code: 'C3', name: 'Third copy', color: '#E8B33A', meetings: [] });
+    await put(ana, '/api/items/z1', { type: 'quiz', title: 'Quiz 2', courseId: 'c3', date: '2026-10-15', status: 'graded', grade: 91 });
+    expect(await (await absorb(ana, { courseId: 'c3', pairs: [['z1', 'd1']] })).json()).toEqual({ paired: 1, filed: 0 });
+    expect(await env.DB.prepare('SELECT status, grade, notes, hidden, deleted_at AS deletedAt FROM marks WHERE user_id = ? AND id = ?').bind(ana.id, s.id + ':d1').first())
+      .toEqual({ status: 'graded', grade: 91, notes: '', hidden: 0, deletedAt: null });
+  });
+
+
+  it('keeps an item you hid hidden', async () => {
+    await sharedItem(s.scope, 'h1', { course_id: 'web', type: 'quiz', title: 'Quiz 3' });
+    const blank = { status: 'todo', grade: null, weight: null, notes: '', checklist: [], completedAt: null, hidden: false };
+    expect((await ana(`/api/marks/${s.id}/h1`, { method: 'PUT', body: { ...blank, hidden: true, notes: 'mine' }, headers: { 'if-match': '"0"' } })).status).toBe(200);
+    await put(ana, '/api/courses/c4', { code: 'C4', name: 'Fourth copy', color: '#E8B33A', meetings: [] });
+    await put(ana, '/api/items/w1', { type: 'quiz', title: 'Quiz 3', courseId: 'c4', date: '2026-10-15', status: 'graded', grade: 75 });
+    expect(await (await absorb(ana, { courseId: 'c4', pairs: [['w1', 'h1']] })).json()).toEqual({ paired: 1, filed: 0 });
+    expect(await env.DB.prepare('SELECT status, grade, notes, hidden FROM marks WHERE user_id = ? AND id = ?').bind(ana.id, s.id + ':h1').first())
+      .toEqual({ status: 'graded', grade: 75, notes: 'mine', hidden: 1 });
+  });
 });
