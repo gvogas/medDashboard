@@ -128,7 +128,10 @@ describe('browser API response contracts', () => {
     await expect(client.api.syncV3({ [own]: 'r5.40' }, 0)).rejects.toMatchObject({ status: 502 });
     respond({ ...next, cursors: { [own]: 'r6' } });
     await expect(client.api.syncV3({ [own]: 0 }, 0)).rejects.toMatchObject({ status: 502 });
-    respond({ ...next, changes: [{ scope: own, kind: 'marks', row: saved }] });
+    respond({ ...next, changes: [{ scope: own, kind: 'notes', row: saved }] });
+    await expect(client.api.syncV3({}, 0)).rejects.toMatchObject({ status: 502 });
+    /* your marks and prefs come only in your own scope */
+    respond({ ...next, changes: [{ scope: web.scope, kind: 'marks', row: saved }] });
     await expect(client.api.syncV3({}, 0)).rejects.toMatchObject({ status: 502 });
   });
 
@@ -208,5 +211,20 @@ describe('the class routes, as the client reads them', () => {
     expect(await client.api.join('7KQ2M9XD')).toEqual(space);
     respond(null, 204);
     expect(await client.api.invites.decline('abcdefghij12')).toBeNull();
+  });
+});
+
+describe('your layer, as the client sends it', () => {
+  it('puts a mark at /api/marks/<space>/<item> with the fields it changed, and prefs at their space', async () => {
+    const mark = { id: 'abcdefghij12:a/1', notes: 'x', revision: 2 };
+    respond(mark);
+    expect(await client.api.put('marks', 'abcdefghij12:a/1', { ...mark, revision: 1 }, { notes: '' })).toEqual(mark);
+    const [path, init] = fetch.mock.calls[0];
+    expect(path).toBe('/api/marks/abcdefghij12/a%2F1');
+    expect(JSON.parse(init.body)).toMatchObject({ notes: 'x', changed: { notes: '' } });
+    expect(init.headers['if-match']).toBe('"1"');
+    respond({ id: 'abcdefghij12', color: '#17B3AE', revision: 3 });
+    await client.api.put('space_prefs', 'abcdefghij12', { revision: 2, color: '#17B3AE' });
+    expect(fetch.mock.calls[0][0]).toBe('/api/space_prefs/abcdefghij12');
   });
 });

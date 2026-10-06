@@ -270,3 +270,49 @@ test('the profile keeps maintenance only as the server can mean it, and an ackno
  assert.equal(first.data.profile.announcement.text, 'Hi');
  assert.equal(first.data.profile.displayName, 'New');
 });
+
+test('version 5 upgrade adds your marks and space prefs, and keeps pending edits', async () => {
+ const user = p(), name = `rounds:${user.id}`;
+ await new Promise((resolve, reject) => {
+  const request = indexedDB.open(name, 5);
+  request.onupgradeneeded = () => {
+   for (const s of ['courses', 'items', 'quotes', 'study_sessions', 'achievements', 'shared_courses', 'shared_items', 'spaces', 'meta', 'pending', 'conflicts']) {
+    request.result.createObjectStore(s, { keyPath: ['meta', 'pending'].includes(s) ? 'key' : s.startsWith('shared_') ? ['scope', 'id'] : 'id' });
+   }
+  };
+  request.onerror = () => reject(request.error);
+  request.onsuccess = () => {
+   const db = request.result, tx = db.transaction(['items', 'pending'], 'readwrite');
+   tx.objectStore('items').put({ id: 'a', title: 'Unsent', revision: 3 });
+   tx.objectStore('pending').put({ key: 'items:a', op: 'put', body: { id: 'a', title: 'Unsent', revision: 3 }, revision: 3, reviewRequired: false, token: 't', owner: 'old-tab' });
+   tx.oncomplete = () => { db.close(); resolve(); };
+  };
+ });
+ await first.open(user);
+ assert.deepEqual((await first.pending()).map((op) => op.key), ['items:a']);
+ assert.deepEqual([first.data.marks, first.data.space_prefs], [[], []]);
+});
+
+test('pages bring your marks and prefs; a mark queues with the mark it started from, prefs whole', async () => {
+ const user = p(); await first.open(user);
+ const own = `u:${user.id}`, id = 'abcdefghij12:a1';
+ await first.applyPage({ cursors: { [own]: 4 }, changes: [
+  { scope: own, kind: 'marks', row: { id, spaceId: 'abcdefghij12', itemId: 'a1', status: 'todo', notes: 'old', revision: 3 } },
+  { scope: own, kind: 'space_prefs', row: { id: 'abcdefghij12', spaceId: 'abcdefghij12', color: '#4F74D9', term: 'Fall', revision: 4 } },
+ ] });
+ assert.deepEqual(first.data.marks.map((m) => [m.id, m.notes, m.hidden, m.checklist]), [[id, 'old', false, []]]);
+ assert.deepEqual(first.data.space_prefs.map((x) => [x.id, x.color, x.archived]), [['abcdefghij12', '#4F74D9', false]]);
+ await first.saveMark({ ...first.data.marks[0], notes: 'new' });
+ await first.saveMark({ ...first.data.marks[0], status: 'done' });
+ const [op] = await first.pending();
+ assert.equal(op.key, `marks:${id}`);
+ assert.equal(op.base.notes, 'old'); assert.equal(op.body.notes, 'new'); assert.equal(op.body.status, 'done'); assert.equal(op.revision, 3);
+ await first.saveSpacePref({ ...first.data.space_prefs[0], archived: true });
+ const pref = (await first.pending()).find((o) => o.key === 'space_prefs:abcdefghij12');
+ assert.equal(pref.body.archived, true); assert.equal(pref.base, undefined);
+ /* items keep their class label; the profile its hidden sources */
+ await first.saveItem({ id: 'f1', title: 'Extra quiz', classId: 'abcdefghij12' });
+ assert.equal(first.item('f1').classId, 'abcdefghij12');
+ await first.saveProfile({ hiddenSources: ['personal'] });
+ assert.deepEqual(first.data.profile.hiddenSources, ['personal']);
+});

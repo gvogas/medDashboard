@@ -1,5 +1,5 @@
 // Atomic IndexedDB transactions shared by every tab of this account.
-import type { Achievement, Course, Item, Quote, SharedCourse, SharedItem, Space, StudySession } from './types.ts';
+import type { Achievement, Course, Item, Mark, Quote, SharedCourse, SharedItem, Space, SpacePref, StudySession } from './types.ts';
 
 /** A row as the server and the queue know it: an id and whatever fields its kind has. */
 export interface Row { id: string; revision?: number; updatedAt?: number | null; deletedAt?: number | null; [field: string]: unknown }
@@ -30,6 +30,8 @@ export interface Rows {
   shared_courses: SharedCourse;
   shared_items: SharedItem;
   spaces: Space;
+  marks: Mark;
+  space_prefs: SpacePref;
   meta: { key: string; value: unknown };
   pending: PendingOp;
   conflicts: Conflict;
@@ -54,7 +56,7 @@ export interface Db {
   close(): void;
 }
 
-export const STORES: StoreName[] = ['courses', 'items', 'quotes', 'study_sessions', 'achievements', 'shared_courses', 'shared_items', 'spaces', 'meta', 'pending', 'conflicts'];
+export const STORES: StoreName[] = ['courses', 'items', 'quotes', 'study_sessions', 'achievements', 'shared_courses', 'shared_items', 'spaces', 'marks', 'space_prefs', 'meta', 'pending', 'conflicts'];
 /* Shared rows are keyed [scope, id], so a class's id can never shadow a personal row (spec §7). */
 const keyPathOf = (s: StoreName): string | string[] =>
   s === 'meta' || s === 'pending' ? 'key' : s === 'shared_courses' || s === 'shared_items' ? ['scope', 'id'] : 'id';
@@ -63,10 +65,12 @@ const result = <T>(request: IDBRequest<T>) => new Promise<T>((resolve, reject) =
   request.onerror = () => reject(request.error);
 });
 
-/** Version 5 (spec §7): shared rows, spaces, and a sync cursor per scope. `account` names whose cursor version 4 kept. */
+/** Version 6: version 5's shared rows, spaces and cursor per scope (spec §7), and your marks
+    and space prefs (Stage 4). Roll-forward only: a version 5 client cannot open it.
+    `account` names whose cursor version 4 kept. */
 export function openDb(name: string, onVersionChange: () => void = () => {}, account: string | null = null): Promise<Db> {
   return new Promise((resolve, reject) => {
-    const req = indexedDB.open(name, 5);
+    const req = indexedDB.open(name, 6);
     let blocked = false;
     req.onupgradeneeded = (event) => {
       const db = req.result, tx = req.transaction!;

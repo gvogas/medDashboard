@@ -98,6 +98,9 @@ async function pushAll(cycle: Cycle): Promise<boolean> {
         } else if (op.op === 'delete') {
           try { await api.del(k.store, k.id, op.revision); }
           catch (e) { if (!(e instanceof ApiError && e.status === 404)) throw e; }
+        } else if (k.store === 'marks') {
+          /* your mark merges field by field: two of your devices may both have made it (spec §6) */
+          saved = await api.put(k.store, k.id, { ...op.body, revision: op.revision }, changedFields('marks', '', op.body || {}, op.base));
         } else saved = await api.put(k.store, k.id, { ...op.body, revision: op.revision });
       }
       if (!active(cycle)) return false;
@@ -134,7 +137,12 @@ async function holdBack(cycle: Cycle): Promise<void> {
     await store.rejectOperation(op, current, 'The server kept failing to save this edit.');
   }
 }
-function rank(op: PendingOp): number { return /^(shared_)?courses:/.test(op.key) ? (op.op === 'put' ? 0 : 3) : 1; }
+/* Upload order (spec §6): course puts, then items, then your marks and prefs (a mark on an item
+   made offline needs the item first), then course deletes. */
+function rank(op: PendingOp): number {
+  if (/^(shared_)?courses:/.test(op.key)) return op.op === 'put' ? 0 : 3;
+  return /^(marks|space_prefs):/.test(op.key) ? 2 : 1;
+}
 /* The account whose member lists this tab holds: until its first complete pull after the
    app opens, `sv` is 0, so every list comes again (a renamed member shows on next open). */
 let listsFor: string | null = null;

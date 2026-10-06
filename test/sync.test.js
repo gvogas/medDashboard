@@ -276,6 +276,23 @@ describe('persisted operation synchronization', () => {
    await vi.advanceTimersByTimeAsync(1000);
    expect(sync.status.state).toBe('idle');
  });
+ it('pushes a mark to its own route with the fields it changed', async () => {
+   const mark = { key: 'marks:abcdefghij12:a1', op: 'put', revision: 3, token: 'm', owner: 'x',
+     body: { id: 'abcdefghij12:a1', notes: 'new', status: 'todo', revision: 3 }, base: { id: 'abcdefghij12:a1', notes: 'old', status: 'todo', revision: 3 } };
+   store.pending.mockResolvedValue([mark]);
+   api.put.mockResolvedValue({ ...mark.body, revision: 4 });
+   await sync.syncNow();
+   expect(api.put).toHaveBeenCalledWith('marks', 'abcdefghij12:a1', { ...mark.body, revision: 3 }, { notes: 'old' });
+ });
+ it('uploads course puts, then items, then marks and prefs, then course deletes', async () => {
+   const at = (key, op = 'put') => ({ key, op, revision: 1, token: key, owner: 'x', body: { id: key.split(/:(.*)/s)[1], revision: 1 } });
+   store.pending.mockResolvedValue([at('marks:abcdefghij12:a1'), at('courses:c1', 'delete'), at('space_prefs:abcdefghij12'), at('items:i1'), at('courses:c2')]);
+   const order = [];
+   api.put.mockImplementation(async (kind, id) => { order.push(kind + ':' + id); return { id, revision: 2 }; });
+   vi.spyOn(api, 'del').mockImplementation(async (kind, id) => { order.push('del ' + kind + ':' + id); return null; });
+   await sync.syncNow();
+   expect(order).toEqual(['courses:c2', 'items:i1', 'marks:abcdefghij12:a1', 'space_prefs:abcdefghij12', 'del courses:c1']);
+ });
 });
 describe('opening the app', () => {
  const remembered = { id: 'u1', username: 'george' };

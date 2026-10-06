@@ -1,16 +1,16 @@
 // The database is authoritative; memory is a render cache, never the shared queue.
 import { openDb, deleteDb, STORES as stores } from './db.ts';
-import { normalizeItem, normalizeCourse, normalizeQuote, normalizeStudySession, normalizeAchievement, normalizeFlow, normalizePrefs, DEFAULT_COAT } from './model.ts';
+import { normalizeItem, normalizeCourse, normalizeQuote, normalizeStudySession, normalizeAchievement, normalizeMark, normalizeSpacePref, normalizeFlow, normalizePrefs, DEFAULT_COAT } from './model.ts';
 import { parseKey, sharedKey, SHARED_STORES, type SharedStore } from './shared.ts';
 import { parseMaintenance } from './maintenance.ts';
 import type { Access, Accessor, Conflict, Db, PendingOp, Row, Rows } from './db.ts';
 import type { Raw, RawCourse, RawItem } from './model.ts';
-import type { Achievement, Coat, Course, Item, Profile, Quote, SharedCourse, SharedItem, Space, StudySession } from './types.ts';
+import type { Achievement, Coat, Course, Item, Mark, Profile, Quote, SharedCourse, SharedItem, Space, SpacePref, StudySession } from './types.ts';
 
 /** The kinds of row the store keeps, each in its own object store. */
-export type Kind = 'items' | 'courses' | 'quotes' | 'study_sessions' | 'achievements';
+export type Kind = 'items' | 'courses' | 'quotes' | 'study_sessions' | 'achievements' | 'marks' | 'space_prefs';
 /** What each kind's normalizer takes. */
-interface RawOf { items: RawItem; courses: RawCourse; quotes: Raw<Quote>; study_sessions: Raw<StudySession>; achievements: Raw<Achievement> }
+interface RawOf { items: RawItem; courses: RawCourse; quotes: Raw<Quote>; study_sessions: Raw<StudySession>; achievements: Raw<Achievement>; marks: Raw<Mark>; space_prefs: Raw<SpacePref> }
 /** A row to save, with its kind. */
 export type SaveRow = { [K in Kind]: { kind: K; row: RawOf[K] } }[Kind];
 /** What the store says happened: a change here, in another tab, from a sync, and so on. */
@@ -34,15 +34,18 @@ export const data: {
   quotes: Quote[];
   study_sessions: StudySession[];
   achievements: Achievement[];
+  /* your layer on your spaces: marks on their items, prefs for each (spec §4) */
+  marks: Mark[];
+  space_prefs: SpacePref[];
   /* a class's or a project's rows, and the spaces themselves (spec §7) */
   shared_courses: SharedCourse[];
   shared_items: SharedItem[];
   spaces: Space[];
-} = { profile: null, courses: [], items: [], quotes: [], study_sessions: [], achievements: [], shared_courses: [], shared_items: [], spaces: [] };
+} = { profile: null, courses: [], items: [], quotes: [], study_sessions: [], achievements: [], marks: [], space_prefs: [], shared_courses: [], shared_items: [], spaces: [] };
 const dirty: Record<string, string> = {};
 export const conflicts: Conflict[] = [];
 const listeners = new Set<(evt: StoreEvent) => void>();
-const normal: { [K in Kind]: (raw: RawOf[K]) => Rows[K] } = { items: normalizeItem, courses: normalizeCourse, quotes: normalizeQuote, study_sessions: normalizeStudySession, achievements: normalizeAchievement };
+const normal: { [K in Kind]: (raw: RawOf[K]) => Rows[K] } = { items: normalizeItem, courses: normalizeCourse, quotes: normalizeQuote, study_sessions: normalizeStudySession, achievements: normalizeAchievement, marks: normalizeMark, space_prefs: normalizeSpacePref };
 const kinds = Object.keys(normal) as Kind[];
 /* A stored or downloaded row may hold anything; each normalizer takes whatever it is given. */
 const normalizer = (kind: Kind) => normal[kind] as (raw: unknown, index?: number) => Rows[Kind];
@@ -76,7 +79,11 @@ let byId = { courses: new Map<string, Course>(), items: new Map<string, Item>() 
 export const course = (id: string | null | undefined): Course | null => byId.courses.get(id!) || null;
 export const item = (id: string | null | undefined): Item | null => byId.items.get(id!) || null;
 const index = () => { byId = { courses: new Map(data.courses.map((r) => [r.id, r])), items: new Map(data.items.map((r) => [r.id, r])) }; };
-const profile = (p: ServerProfile): Profile => ({ ...p, maintenance: parseMaintenance(p.maintenance), types: Array.isArray(p.types) ? p.types : [], studyFlow: normalizeFlow(p.studyFlow), studyPrefs: normalizePrefs(p.studyPrefs), coat: { name: '', role: '', color: DEFAULT_COAT, ...p.coat }, revision: p.revision || 0 });
+const profile = (p: ServerProfile): Profile => ({
+  ...p, maintenance: parseMaintenance(p.maintenance), types: Array.isArray(p.types) ? p.types : [],
+  hiddenSources: Array.isArray(p.hiddenSources) ? p.hiddenSources.filter((s): s is string => typeof s === 'string') : [],
+  studyFlow: normalizeFlow(p.studyFlow), studyPrefs: normalizePrefs(p.studyPrefs), coat: { name: '', role: '', color: DEFAULT_COAT, ...p.coat }, revision: p.revision || 0,
+});
 /* A pending key's store, and the row's key in it: [scope, id] for a shared row (src/core/shared.ts). */
 const rowStore = (key: string) => parseKey(key).store as Kind | SharedStore | 'meta';
 const rowId = (key: string): IDBValidKey => { const k = parseKey(key); return k.scope ? [k.scope, k.id] : k.id; };
@@ -97,6 +104,7 @@ export async function reload(): Promise<void> {
   if (!handle) return;
   const snapshot = await handle.transaction(stores, 'readonly', async (a) => ({
     courses: await a('courses').all(), items: await a('items').all(), quotes: await a('quotes').all(), study_sessions: await a('study_sessions').all(), achievements: await a('achievements').all(),
+    marks: await a('marks').all(), space_prefs: await a('space_prefs').all(),
     shared_courses: await a('shared_courses').all(), shared_items: await a('shared_items').all(), spaces: await a('spaces').all(),
     profile: (await a('meta').get('profile'))?.value as Profile | undefined,
     pending: await a('pending').all(), conflicts: await a('conflicts').all(),
@@ -220,6 +228,18 @@ export const saveQuote = (row: Raw<Quote>) => saveRow('quotes', row);
 export const saveStudySession = (row: Raw<StudySession>) => saveRow('study_sessions', row);
 export const deleteStudySession = (id: string) => deleteRow('study_sessions', id);
 export const saveAchievement = (row: Raw<Achievement>) => saveRow('achievements', row);
+/** Your prefs for a space: whole-row, like your other rows. */
+export const saveSpacePref = (row: Raw<SpacePref>) => saveRow('space_prefs', row);
+/** Your mark on a shared item: it uploads with the mark it started from, since marks merge field by field (spec §6). */
+export function saveMark(row: Raw<Mark>): Promise<Mark> {
+  const clean = normalizeMark(structuredClone(row));
+  return mutate(async (a) => {
+    const before = await a('marks').get(clean.id);
+    await a('marks').put(clean);
+    await queue(a, `marks:${clean.id}`, 'put', clean as unknown as Row, (before as unknown as Row | undefined) ?? null);
+    return clean;
+  });
+}
 /** Save a class's or a project's course or item; it uploads with the row it started from (spec §6 Push). The UI calls this from Stage 4. */
 export function saveShared(store: SharedStore, row: Row & { scope: string }): Promise<SharedCourse | SharedItem> {
   const clean = normalShared[store](structuredClone(row));
@@ -271,7 +291,7 @@ export function saveProfile(patch: ProfilePatch): Promise<void> {
   return mutate(async (a) => {
     const p = (await a('meta').get('profile'))!.value as Profile;
     if (copy.coat) Object.assign(p.coat, copy.coat);
-    for (const key of ['displayName', 'theme', 'bg', 'termStart', 'types', 'studyFlow', 'studyPrefs', 'schoolCalendar'] as const) if (key in copy) (p as unknown as Record<string, unknown>)[key] = copy[key];
+    for (const key of ['displayName', 'theme', 'bg', 'termStart', 'types', 'studyFlow', 'studyPrefs', 'schoolCalendar', 'hiddenSources'] as const) if (key in copy) (p as unknown as Record<string, unknown>)[key] = copy[key];
     await a('meta').put(wrap('profile', p));
     await queue(a, 'profile', 'put', p as unknown as Row);
   });
@@ -414,7 +434,8 @@ export function resolveConflict(id: string, restore: boolean): Promise<void> {
       const existing = await a('pending').get(conflict.key);
       if (existing) throw new Error('Wait for the pending edit to sync before restoring this copy.');
       /* a shared copy restored merges against the server's row as it now is */
-      await queue(a, conflict.key, conflict.op, body, parseKey(conflict.key).scope ? (current as Row | undefined) ?? null : undefined);
+      const merges = !!parseKey(conflict.key).scope || conflict.key.startsWith('marks:');
+      await queue(a, conflict.key, conflict.op, body, merges ? (current as Row | undefined) ?? null : undefined);
       if (conflict.op === 'put') await a(rowStore(conflict.key)).put(wrap(conflict.key, body));
       else await a(rowStore(conflict.key)).del(rowId(conflict.key));
     }

@@ -35,6 +35,8 @@ export interface Item extends Synced {
     recurUntil: string | null
     dept: string
     completedAt: number | null
+    /** A personal item filed under a class: the class's space id (spec §5). A label, opening nothing. */
+    classId?: string | null
 }
 
 export interface Meeting { id: string; kind: string; weekday: number; start: string; end: string; room: string }
@@ -71,6 +73,8 @@ export interface Profile {
     announcement?: Announcement | null
     /** The features the admins have switched off while they work on them (core/maintenance.ts). */
     maintenance?: Maintenance | null
+    /** What you hid from your Week and Month: 'course:<id>', 'space:<sid>', 'personal' (spec §9). */
+    hiddenSources?: string[]
     revision?: number
 }
 
@@ -102,6 +106,8 @@ export interface StudySession extends Synced {
     roundsDone: number
     note: string
     manual: boolean
+    /** The space `courseId`/`itemId` belong to, when they are a class's or a project's (spec §7). */
+    spaceId?: string | null
 }
 
 /** An achievement of your own: a sticker, earned by hours on a course or a grade on an exam. */
@@ -113,6 +119,8 @@ export interface Achievement extends Synced {
     courseId: string | null
     itemId: string | null
     target: number
+    /** The space `courseId`/`itemId` belong to, when they are a class's or a project's (spec §7). */
+    spaceId?: string | null
 }
 
 /** What a step of a study flow is: study time or a break. */
@@ -188,3 +196,22 @@ export interface Invite {
     spaceId: string; kind: "class" | "project"; name: string; role: "editor" | "member"; from: string
     createdAt: number; expiresAt: number; expired: boolean
 }
+
+/** Your layer on a shared item (spec §4): yours alone. Its id is '<space id>:<item id>'. */
+export interface Mark extends Synced {
+    id: string
+    spaceId: string
+    itemId: string
+    status: ItemStatus
+    grade: number | null
+    /** your weight for it, when it differs from the class's; null uses the class's */
+    weight: number | null
+    notes: string
+    checklist: ChecklistEntry[]
+    completedAt: number | null
+    /** "not mine": left out of your views, grades and stats */
+    hidden: boolean
+}
+
+/** Your settings for a space: your colour, grade target, semester and sidebar archive for it. Its id is the space id. */
+export interface SpacePref extends Synced { id: string; spaceId: string; color: string; target: number | null; term: string; archived: boolean }

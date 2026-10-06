@@ -166,7 +166,8 @@ async function changes(cursor: number): Promise<Page & { reset: boolean; more: b
 /** A v3 page (spec §6): changes across your own scope and your spaces', a cursor per scope. */
 export interface PageV3 extends Page { cursors: Record<string, Cursor>; scopes: Space[]; more: boolean; reset: string[]; revoked: string[] }
 const SCOPE = /^(u:[^,]+|[cp]:[a-z0-9]{12})$/;
-const KINDS = ['courses', 'items', 'quotes', 'study_sessions', 'achievements'];
+/* a v3 page's kinds; marks and space prefs only ever in your own scope (checked below) */
+const KINDS = ['courses', 'items', 'quotes', 'study_sessions', 'achievements', 'marks', 'space_prefs'];
 const scopeList = (v: unknown): v is string[] => Array.isArray(v) && v.every((s) => typeof s === 'string' && SCOPE.test(s));
 /* A cursor's sequence: a plain one, or a resync's `r<seq>.<floor>`; NaN when malformed. */
 const RESYNC = /^r(\d{1,16})\.\d{1,16}$/;
@@ -193,6 +194,12 @@ async function changesV3(cursors: Record<string, Cursor>, sv: number): Promise<P
 }
 /* A shared row's URL: the space id is the scope without its 'c:' or 'p:'. */
 const sharedPath = (scope: string, kind: string, id: string) => `/api/spaces/${scope.slice(2)}/${kind}/${encodeURIComponent(id)}`;
+/* A personal row's URL. A mark's id is '<space id>:<item id>', and its route /api/marks/<space>/<item> (spec §14). */
+function rowPath(kind: string, id: string): string {
+  if (kind !== 'marks') return `/api/${kind}/${encodeURIComponent(id)}`;
+  const at = id.indexOf(':');
+  return `/api/marks/${id.slice(0, at)}/${encodeURIComponent(id.slice(at + 1))}`;
+}
 
 /* The class routes answer a space as {space}: its id is the Worker's and its scope matches its kind. */
 async function spaceOf(response: Promise<unknown>): Promise<SpaceSummary> {
@@ -236,10 +243,12 @@ export const api = {
     decline: (sid: string) => empty(request('POST', `/api/invites/${sid}/decline`)),
   },
   join: (code: string) => spaceOf(request('POST', '/api/join', { code })),
-  get: (kind: string, id: string) => record(request('GET', `/api/${kind}/${encodeURIComponent(id)}`), id),
-  put: (kind: string, id: string, row: { revision?: number; [field: string]: unknown }) => record(request('PUT', `/api/${kind}/${encodeURIComponent(id)}`, row, match(row.revision)), id, row.revision),
+  get: (kind: string, id: string) => record(request('GET', rowPath(kind, id)), id),
+  /* `changed` for a mark only: {field: value before}, merged field by field (spec §6 Push) */
+  put: (kind: string, id: string, row: { revision?: number; [field: string]: unknown }, changed?: Record<string, unknown>) =>
+    record(request('PUT', rowPath(kind, id), changed ? { ...row, changed } : row, match(row.revision)), id, row.revision),
   revokeAll: () => empty(request('POST', '/api/session/revoke-all')),
-  del: (kind: string, id: string, revision = 0) => empty(request('DELETE', `/api/${kind}/${encodeURIComponent(id)}`, undefined, match(revision))),
+  del: (kind: string, id: string, revision = 0) => empty(request('DELETE', rowPath(kind, id), undefined, match(revision))),
   calendarFeed: () => request('GET', '/api/calendar'),
   calendarRenew: () => request('POST', '/api/calendar'),
   calendarStop: () => empty(request('DELETE', '/api/calendar')),
