@@ -7,8 +7,9 @@ import { readOutline, cleanCode, MAX_BYTES } from './outline.js';
 import { readSchool } from './school.js';
 import { readSchedule } from './schedule.js';
 import { listParam, cleanTerm, TIMEOUT_MS } from './ai.js';
-import { validateProfile, validateCourse, validateItem, validateQuote, validateStudySession, validateAchievement, validateId } from './validate.js';
-import { getUserForLogin, getProfile, updateProfile, getRow, upsertRow, deleteRow, syncPage, bumpPasswordGen, saveSpotifyTokens, deleteSpotifyTokens } from './db.js';
+import { validateProfile, validateCourse, validateItem, validateQuote, validateStudySession, validateAchievement, validateId, validateSharedCourse, validateSharedItem, validateChanged } from './validate.js';
+import { getUserForLogin, getProfile, updateProfile, getRow, upsertRow, deleteRow, syncPage, bumpPasswordGen, saveSpotifyTokens, deleteSpotifyTokens, getShared, upsertShared, deleteShared, memberTaskWrite } from './db.js';
+import { roleOf, scopeOf } from './access.js';
 import * as spotify from './spotify.js';
 import { feedState, renewFeed, stopFeed, serveFeed } from './calendar.js';
 import { leaderboard, setJoined } from './leaderboard.js';
@@ -48,6 +49,54 @@ async function removeRow({ request, env, params: [table, id] }) {
 }
 
 const ROW = /^\/api\/(courses|items|quotes|study_sessions|achievements)\/([^/]+)$/;
+
+// ── a space's shared rows ───────────────────────────────────────────────────
+// Someone outside the space gets 404 for everything here (spec §5); the guard inside each
+// statement is the boundary, and these checks only pick the answer and the write.
+
+const SHARED_ROW = /^\/api\/spaces\/([a-z0-9]{12})\/(courses|items)\/([^/]+)$/;
+
+async function sharedRoute(request, env, spaceId, table, id) {
+  const userId = await requireUser(request, env);
+  validateId(id);
+  const space = await roleOf(env.DB, userId, spaceId);
+  if (!space || (table === 'courses' && space.kind !== 'class')) throw new HttpError(404, { error: 'not_found' });
+  return { userId, space, scope: scopeOf(space.kind, spaceId) };
+}
+/* The class's one course and the project's 'project' item are made with the space and live as long as it does. */
+const madeWithSpace = (table, id) => table === 'courses' || id === 'project';
+
+async function readShared({ request, env, params: [spaceId, table, id] }) {
+  const { userId, scope } = await sharedRoute(request, env, spaceId, table, id);
+  const row = await getShared(env.DB, table, scope, userId, id);
+  if (!row || row.deletedAt) throw new HttpError(404, { error: 'not_found' });
+  return json(row);
+}
+
+async function putShared({ request, env, params: [spaceId, table, id] }) {
+  const { userId, space, scope } = await sharedRoute(request, env, spaceId, table, id);
+  const body = await readJson(request);
+  const fields = table === 'courses' ? validateSharedCourse(body) : validateSharedItem(body, space.kind, id);
+  const changed = validateChanged(body, table === 'courses' ? 'courses' : space.kind);
+  const revision = revisionOf(request);
+  if (space.archived) throw new HttpError(403, { error: 'archived' });
+  if (space.role === 'member') {
+    if (space.kind !== 'project' || table !== 'items') throw new HttpError(403, { error: 'forbidden' });
+    return json(await memberTaskWrite(env.DB, scope, userId, id, fields, { changed }));
+  }
+  if (revision === 0 && madeWithSpace(table, id)) throw new HttpError(403, { error: 'forbidden' });
+  return json(await upsertShared(env.DB, table, scope, userId, id, fields, { revision, changed }));
+}
+
+async function removeShared({ request, env, params: [spaceId, table, id] }) {
+  const { userId, space, scope } = await sharedRoute(request, env, spaceId, table, id);
+  const revision = revisionOf(request);
+  if (space.archived) throw new HttpError(403, { error: 'archived' });
+  if (space.role === 'member' || madeWithSpace(table, id)) throw new HttpError(403, { error: 'forbidden' });
+  if (!(await deleteShared(env.DB, table, scope, userId, id, Date.now(), revision))) throw new HttpError(404, { error: 'not_found' });
+  return new Response(null, { status: 204 });
+}
+
 
 // ── Spotify ─────────────────────────────────────────────────────────────────
 // The consent round trip is two browser navigations, so its failures are
@@ -239,6 +288,9 @@ const routes = [
   ['GET', ROW, readRow],
   ['PUT', ROW, putRow],
   ['DELETE', ROW, removeRow],
+  ['GET', SHARED_ROW, readShared],
+  ['PUT', SHARED_ROW, putShared],
+  ['DELETE', SHARED_ROW, removeShared],
 
   ['GET', /^\/api\/spotify\/connect$/, spotifyConnect],
   ['GET', /^\/api\/spotify\/callback$/, spotifyCallback],

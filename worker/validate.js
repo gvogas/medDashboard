@@ -4,6 +4,7 @@
 
 import { HttpError } from './http.js';
 import { SCHOOL_KINDS, SCHOOL_LIMITS, validDate } from '../src/core/school.ts';
+import { SHARED_FIELDS } from '../src/core/shared.ts';
 
 const COLOURS = ['#E4749B', '#8B5CC7', '#17B3AE', '#79B6EA', '#BCA6E6'];   /* the coat's */
 const COURSE_COLOURS = [...COLOURS, '#F08A6C', '#E8B33A', '#4FBF8B', '#8FAE86', '#4F74D9', '#B8457E', '#7D8A99'];
@@ -317,4 +318,46 @@ export function validateAchievement(body) {
     itemId: rule === 'grade' ? str(body.itemId, 'itemId', 24, 1) : null,
     target: int(body.target, 'target', 1, rule === 'grade' ? 100 : 1000),
   };
+}
+
+/* A class's course: the class's facts. Each member's target and "archived in my sidebar"
+   are theirs (space_prefs, Stage 4), never on the shared row (the schema's CHECK). */
+export function validateSharedCourse(body) {
+  return { ...validateCourse(body), target: null, archived: false };
+}
+
+/* A task's assignees: user ids, or ["*"] for everyone. Membership is checked in the write. */
+function assigneeList(v) {
+  if (!Array.isArray(v) || v.length > 30) fail('assignees');
+  v.forEach((u, i) => str(u, `assignees[${i}]`, 64, 1));
+  if (new Set(v).size !== v.length || (v.includes('*') && v.length > 1)) fail('assignees');
+  return v;
+}
+
+/**
+ * A class's or a project's item, in the shape its scope allows. A class row holds the
+ * class's facts: status, grade, checklist and completion are each member's own (marks,
+ * Stage 4), so they are stored empty. A project row carries no grade, weight or course;
+ * its type is task, or project for the space's one 'project' item.
+ */
+export function validateSharedItem(body, kind, id) {
+  const out = validateItem(body);
+  if (kind === 'class') {
+    if (CUSTOM_TYPE.test(out.type)) fail('type');
+    if (!out.courseId) fail('courseId');
+    return { ...out, status: 'todo', grade: null, checklist: [], completedAt: null, assignees: [] };
+  }
+  if (!['task', 'project'].includes(out.type) || (out.type === 'project') !== (id === 'project')) fail('type');
+  if (out.courseId !== null) fail('courseId');
+  if (out.grade !== null) fail('grade');
+  if (out.weight !== null) fail('weight');
+  return { ...out, assignees: assigneeList(body.assignees ?? []) };
+}
+
+/** `changed`: {field: value before}, naming only the shared fields of `set` ('courses', 'class' or 'project'); absent for a whole-row write. */
+export function validateChanged(body, set) {
+  if (body.changed === undefined || body.changed === null) return undefined;
+  const changed = obj(body.changed, 'changed');
+  for (const f of Object.keys(changed)) if (!SHARED_FIELDS[set].includes(f)) fail('changed');
+  return changed;
 }
