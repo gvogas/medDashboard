@@ -5,7 +5,7 @@ import { json, readJson, HttpError } from './http.js';
 import { requireUser } from './auth.js';
 import { requireAdmin } from './admin.js';
 import { validateSharedCourse } from './validate.js';
-import { ADMINS_ONLY, checkConvert, createClass } from './spaces.js';
+import { ADMINS_ONLY, checkConvert, createClass, setRole, spaceDetails, transfer } from './spaces.js';
 
 const SID = '([a-z0-9]{12})';
 const UID = '([^/]{1,64})';
@@ -41,5 +41,17 @@ export const classRoutes = [
     if (body.convertCourseId) await checkConvert(env.DB, userId, body.convertCourseId, body.items);
     const { created, space } = await createClass(env.DB, userId, body);
     return json({ space }, created ? 201 : 200);
+  }],
+  ['GET', route(`spaces/${SID}`), async ({ request, env, params: [sid] }) => json(await spaceDetails(env.DB, await requireUser(request, env), sid))],
+  ['PUT', route(`spaces/${SID}/members/${UID}`), async ({ request, env, params: [sid, uid] }) => {
+    const userId = await requireUser(request, env);
+    const { role } = await readJson(request);
+    if (role !== 'editor' && role !== 'member') throw bad('role');
+    return json(await setRole(env.DB, userId, sid, uid, role));
+  }],
+  ['POST', route(`spaces/${SID}/transfer`), async ({ request, env, params: [sid] }) => {
+    const userId = await requireUser(request, env);
+    await transfer(env.DB, userId, sid, idOf((await readJson(request)).userId, 'userId', 64));
+    return done();
   }],
 ];

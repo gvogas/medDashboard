@@ -2,7 +2,7 @@
 // Worker-made ids, the space revision and a space's summary. Making a class, its details,
 // roles and transfer follow below; invites and join codes are in worker/invites.js.
 import { HttpError } from './http.js';
-import { scopeOf } from './access.js';
+import { assertAllowed, assertOwner, memberGuard, ownerGuard, scopeOf } from './access.js';
 import { REVIEW_ID } from '../src/core/shared.ts';
 
 /* Classes are open to admins only until Stage 6 (spec §22): the routes that make or join a
@@ -122,4 +122,77 @@ export async function createClass(db, userId, { course, convertCourseId = null, 
   const { n } = await db.prepare(`SELECT ${MY_SPACES} AS n`).bind(userId).first();
   if (n >= SPACE_LIMIT) throw new HttpError(409, { error: 'limit' });
   throw new HttpError(400, { error: 'invalid', field: 'convertCourseId' });
+}
+
+const NAME = "COALESCE(NULLIF(u.display_name, ''), u.username)";
+
+/**
+ * A space for its Members tab (spec §11, §15): its members for everyone in it; its invites
+ * not yet accepted for the owner and editors (a pending one past its expiry reads
+ * 'expired'); and its join code's expiry and uses left for the owner. The code itself is
+ * kept only as its hash. 404 outside the space.
+ */
+export async function spaceDetails(db, userId, spaceId, now = Date.now()) {
+  const me = await assertAllowed(db, userId, spaceId, 'read');
+  const g = memberGuard(spaceId, userId);
+  const [members, invites, code] = await db.batch([
+    db.prepare(`SELECT m.user_id, m.role, m.joined_at, u.username, ${NAME} AS name FROM members AS m JOIN users AS u ON u.id = m.user_id
+      WHERE m.space_id = ? AND m.deleted_at IS NULL AND ${g.sql} ORDER BY m.joined_at, m.user_id`).bind(spaceId, ...g.binds),
+    db.prepare(`SELECT i.user_id, i.role, i.status, i.created_at, i.expires_at, i.invited_by, u.username, ${NAME} AS name
+      FROM invites AS i JOIN users AS u ON u.id = i.user_id
+      WHERE i.space_id = ? AND i.status != 'accepted' AND ${g.sql} ORDER BY i.created_at DESC, i.user_id`).bind(spaceId, ...g.binds),
+    db.prepare(`SELECT code_expires, code_uses_left FROM spaces WHERE id = ? AND code_hash IS NOT NULL AND ${g.sql}`).bind(spaceId, ...g.binds),
+  ]);
+  const c = code.results[0];
+  return {
+    id: spaceId, scope: scopeOf(me.kind, spaceId), kind: me.kind, role: me.role, archived: me.archived,
+    members: members.results.map((m) => ({ userId: m.user_id, username: m.username, name: m.name, role: m.role, joinedAt: m.joined_at })),
+    invites: me.role === 'member' ? [] : invites.results.map((i) => ({
+      userId: i.user_id, username: i.username, name: i.name, role: i.role,
+      status: i.status === 'pending' && i.expires_at <= now ? 'expired' : i.status,
+      createdAt: i.created_at, expiresAt: i.expires_at, invitedBy: i.invited_by,
+    })),
+    code: me.role === 'owner' && c && c.code_expires > now && c.code_uses_left > 0 ? { expires: c.code_expires, usesLeft: c.code_uses_left } : null,
+  };
+}
+
+/**
+ * The owner makes a member an editor or a member (spec §5): never themselves, never the
+ * owner (a transfer does that). Answers {userId, role}; 404 when they are not a live member.
+ */
+export async function setRole(db, userId, spaceId, targetId, role, now = Date.now()) {
+  await assertOwner(db, userId, spaceId);
+  if (targetId === userId) throw new HttpError(403, { error: 'forbidden' });
+  const g = ownerGuard(spaceId, userId);
+  await db.batch([
+    db.prepare(`UPDATE members SET role = ?, updated_at = ?, revision = revision + 1
+      WHERE space_id = ? AND user_id = ? AND deleted_at IS NULL AND role NOT IN ('owner', ?) AND ${g.sql}`)
+      .bind(role, now, spaceId, targetId, role, ...g.binds),
+    touchSpace(db, spaceId, now, { ifChanged: true }),
+  ]);
+  const row = await db.prepare('SELECT role FROM members WHERE space_id = ? AND user_id = ? AND deleted_at IS NULL').bind(spaceId, targetId).first();
+  if (!row) throw new HttpError(404, { error: 'not_found' });
+  if (row.role === 'owner') throw new HttpError(403, { error: 'forbidden' });
+  return { userId: targetId, role: row.role };
+}
+
+/**
+ * The owner hands the space to another live member (spec §13): the owner becomes an editor
+ * before the other becomes the owner, since the one-owner index is checked statement by
+ * statement; both in one batch. 404 when the other is not a live member.
+ */
+export async function transfer(db, userId, spaceId, targetId, now = Date.now()) {
+  await assertOwner(db, userId, spaceId);
+  if (targetId === userId) throw new HttpError(400, { error: 'invalid', field: 'userId' });
+  const g = ownerGuard(spaceId, userId);
+  const [demoted] = await db.batch([
+    db.prepare(`UPDATE members SET role = 'editor', updated_at = ?, revision = revision + 1
+      WHERE space_id = ? AND user_id = ? AND role = 'owner' AND deleted_at IS NULL AND ${g.sql}
+        AND EXISTS (SELECT 1 FROM members AS t WHERE t.space_id = ? AND t.user_id = ? AND t.deleted_at IS NULL)`)
+      .bind(now, spaceId, userId, ...g.binds, spaceId, targetId),
+    db.prepare(`UPDATE members SET role = 'owner', updated_at = ?, revision = revision + 1
+      WHERE space_id = ? AND user_id = ? AND deleted_at IS NULL AND changes() > 0`).bind(now, spaceId, targetId),
+    touchSpace(db, spaceId, now, { ifChanged: true }),
+  ]);
+  if (!demoted.meta.changes) throw new HttpError(404, { error: 'not_found' });
 }
