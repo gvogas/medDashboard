@@ -1,4 +1,6 @@
-// Every query here takes a userId and scopes to it. No exceptions.
+// Every query here takes a userId and keeps to that person's rows. No exceptions.
+// Courses and items belong to a scope, a person's own being 'u:<user id>'; the other
+// tables belong to the user directly.
 import { HttpError } from './http.js';
 
 const PROFILE_COLS =
@@ -109,6 +111,13 @@ const TABLES = {
 /* Live achievements an account may hold; each carries its sticker picture. */
 const ACHIEVEMENT_LIMIT = 30;
 
+/** The scope of a person's own courses and items. */
+export const personal = (userId) => 'u:' + userId;
+/* The column that names a row's owner, and its value for this person. */
+const SCOPED = new Set(['courses', 'items']);
+const ownerCol = (table) => (SCOPED.has(table) ? 'scope' : 'user_id');
+const ownerOf = (table, userId) => (SCOPED.has(table) ? personal(userId) : userId);
+
 function rowToApi(table, r) {
   const t = TABLES[table];
   const out = { id: r.id };
@@ -126,7 +135,7 @@ function selectCols(table) {
 }
 
 export async function getRow(db, table, userId, id) {
-  const r = await db.prepare(`SELECT ${selectCols(table)} FROM ${table} WHERE user_id = ? AND id = ?`).bind(userId, id).first();
+  const r = await db.prepare(`SELECT ${selectCols(table)} FROM ${table} WHERE ${ownerCol(table)} = ? AND id = ?`).bind(ownerOf(table, userId), id).first();
   return r ? rowToApi(table, r) : null;
 }
 
@@ -135,21 +144,22 @@ function upsertStmt(db, table, userId, id, fields, now, revision) {
   const t = TABLES[table];
   const row = t.toRow(fields);
   const cols = Object.entries(t.cols);
-  const names = ['user_id', 'id', ...cols.map(([, col]) => col), 'created_at', 'updated_at', 'deleted_at'];
-  const values = [userId, id, ...cols.map(([field]) => row[field] ?? null), now, now, null];
+  const owner = ownerCol(table), who = ownerOf(table, userId);
+  const names = [owner, 'id', ...cols.map(([, col]) => col), 'created_at', 'updated_at', 'deleted_at'];
+  const values = [who, id, ...cols.map(([field]) => row[field] ?? null), now, now, null];
   const updates = [...cols.map(([, col]) => `${col} = excluded.${col}`), 'updated_at = excluded.updated_at', 'deleted_at = NULL', 'revision = revision + 1'];
-  const courseGuard = table === 'items' ? ' AND (? IS NULL OR EXISTS (SELECT 1 FROM courses WHERE user_id = ? AND id = ? AND deleted_at IS NULL))' : '';
-  const courseBindings = table === 'items' ? [fields.courseId ?? null, userId, fields.courseId ?? null] : [];
+  const courseGuard = table === 'items' ? ' AND (? IS NULL OR EXISTS (SELECT 1 FROM courses WHERE scope = ? AND id = ? AND deleted_at IS NULL))' : '';
+  const courseBindings = table === 'items' ? [fields.courseId ?? null, who, fields.courseId ?? null] : [];
   /* a new or revived achievement must fit under the limit; an edit to a live one always does */
   const capGuard = table === 'achievements' ? ' AND (SELECT count(*) FROM achievements WHERE user_id = ? AND id != ? AND deleted_at IS NULL) < ?' : '';
   const capBindings = table === 'achievements' ? [userId, id, ACHIEVEMENT_LIMIT] : [];
   return db
     .prepare(
-      `INSERT INTO ${table} (${names.join(', ')}, revision) SELECT ${names.map(() => '?').join(', ')}, COALESCE((SELECT seq FROM sqlite_sequence WHERE name = 'changes'), 0) + 1 WHERE (? = 0 OR EXISTS (SELECT 1 FROM ${table} WHERE user_id = ? AND id = ?))${courseGuard}${capGuard}
-       ON CONFLICT (user_id, id) DO UPDATE SET ${updates.join(', ')} WHERE revision = ?
+      `INSERT INTO ${table} (${names.join(', ')}, revision) SELECT ${names.map(() => '?').join(', ')}, COALESCE((SELECT seq FROM sqlite_sequence WHERE name = 'changes'), 0) + 1 WHERE (? = 0 OR EXISTS (SELECT 1 FROM ${table} WHERE ${owner} = ? AND id = ?))${courseGuard}${capGuard}
+       ON CONFLICT (${owner}, id) DO UPDATE SET ${updates.join(', ')} WHERE revision = ?
        RETURNING ${selectCols(table)}`,
     )
-    .bind(...values, revision, userId, id, ...courseBindings, ...capBindings, revision);
+    .bind(...values, revision, who, id, ...courseBindings, ...capBindings, revision);
 }
 
 /**
@@ -161,7 +171,7 @@ export async function upsertRow(db, table, userId, id, fields, now = Date.now(),
   const saved = await upsertStmt(db, table, userId, id, fields, now, revision).first();
   if (saved) return rowToApi(table, saved);
   const [current, course, live] = await db.batch([
-    db.prepare(`SELECT ${selectCols(table)} FROM ${table} WHERE user_id = ? AND id = ?`).bind(userId, id),
+    db.prepare(`SELECT ${selectCols(table)} FROM ${table} WHERE ${ownerCol(table)} = ? AND id = ?`).bind(ownerOf(table, userId), id),
     table === 'items' && fields.courseId ? courseStmt(db, userId, fields.courseId) : db.prepare('SELECT 1 AS x'),
     table === 'achievements' ? db.prepare('SELECT count(*) AS n FROM achievements WHERE user_id = ? AND deleted_at IS NULL').bind(userId) : db.prepare('SELECT 0 AS n'),
   ]);
@@ -187,12 +197,13 @@ export async function purgeTombstones(db, before) {
 
 /** Soft delete. Returns false if the row does not exist for this user. */
 export async function deleteRow(db, table, userId, id, now = Date.now(), revision = 0) {
+  const owner = ownerCol(table), who = ownerOf(table, userId);
   const stmts = [
-    db.prepare(`UPDATE ${table} SET deleted_at = ?, updated_at = ?, revision = revision + 1 WHERE user_id = ? AND id = ? AND deleted_at IS NULL AND revision = ? RETURNING id`).bind(now, now, userId, id, revision),
+    db.prepare(`UPDATE ${table} SET deleted_at = ?, updated_at = ?, revision = revision + 1 WHERE ${owner} = ? AND id = ? AND deleted_at IS NULL AND revision = ? RETURNING id`).bind(now, now, who, id, revision),
   ];
   if (table === 'courses') {
     stmts.push(
-      db.prepare('UPDATE items SET course_id = NULL, updated_at = ?, revision = revision + 1 WHERE user_id = ? AND course_id = ? AND changes() > 0').bind(now, userId, id),
+      db.prepare('UPDATE items SET course_id = NULL, updated_at = ?, revision = revision + 1 WHERE scope = ? AND course_id = ? AND changes() > 0').bind(now, who, id),
     );
   }
   // Study sessions outlive their course and item; only the link goes. The guard is the
@@ -201,7 +212,7 @@ export async function deleteRow(db, table, userId, id, now = Date.now(), revisio
   if (unlink) {
     stmts.push(
       db.prepare(`UPDATE study_sessions SET ${unlink} = NULL, updated_at = ?, revision = revision + 1 WHERE user_id = ? AND ${unlink} = ? AND deleted_at IS NULL
-        AND EXISTS (SELECT 1 FROM ${table} WHERE user_id = ? AND id = ? AND deleted_at = ?)`).bind(now, userId, id, userId, id, now),
+        AND EXISTS (SELECT 1 FROM ${table} WHERE ${owner} = ? AND id = ? AND deleted_at = ?)`).bind(now, userId, id, who, id, now),
     );
   }
   const results = await db.batch(stmts);
@@ -214,7 +225,7 @@ export async function deleteRow(db, table, userId, id, now = Date.now(), revisio
 }
 
 const courseStmt = (db, userId, id) =>
-  db.prepare('SELECT 1 AS x FROM courses WHERE user_id = ? AND id = ? AND deleted_at IS NULL').bind(userId, id);
+  db.prepare('SELECT 1 AS x FROM courses WHERE scope = ? AND id = ? AND deleted_at IS NULL').bind(personal(userId), id);
 
 /** A bounded page, ordered by commit sequence rather than wall-clock timestamps.
  * The metadata and page share a D1 batch transaction, including during pruning.
@@ -223,7 +234,7 @@ const courseStmt = (db, userId, id) =>
 export async function syncPage(db, userId, cursor, limit = 100) {
   const [state, page] = await db.batch([
     db.prepare("SELECT floor, COALESCE((SELECT seq FROM sqlite_sequence WHERE name = 'changes'), 0) AS head FROM sync_state WHERE id = 1"),
-    db.prepare('SELECT seq, kind, payload FROM changes WHERE user_id = ? AND seq > ? ORDER BY seq LIMIT ?').bind(userId, cursor, limit + 1),
+    db.prepare('SELECT seq, kind, payload FROM changes WHERE scope = ? AND seq > ? ORDER BY seq LIMIT ?').bind(personal(userId), cursor, limit + 1),
   ]);
   const { floor, head } = state.results[0];
   if (cursor && (cursor < floor || cursor > head)) return { reset: true, cursor: 0, changes: [], more: false };
