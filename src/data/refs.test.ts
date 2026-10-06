@@ -26,6 +26,8 @@ describe("keys", () => {
         expect([courseRefKey(session({})), itemRefKey(session({ itemId: "x" }))]).toEqual(["bio", "x"])
         expect(refOf(WEB + "/web", WEB + "/a1")).toEqual({ courseId: "web", itemId: "a1", spaceId: "abcdefghij12" })
         expect(refOf("bio", null)).toEqual({ courseId: "bio", itemId: null, spaceId: null })
+        // an item of yours filed under the class, picked with the class course: the item wins
+        expect(refOf(WEB + "/web", "rv1")).toEqual({ courseId: null, itemId: "rv1", spaceId: null })
     })
 
     it("file an item of yours under a class when a class course is picked", () => {

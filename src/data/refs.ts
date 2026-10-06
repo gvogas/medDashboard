@@ -25,9 +25,12 @@ const refKey = (spaceId: string | null | undefined, id: string | null): string |
 export const courseRefKey = (r: { courseId: string | null; spaceId?: string | null }): string | null => refKey(r.spaceId, r.courseId)
 /** The key of the item a session or an achievement is on. */
 export const itemRefKey = (r: { itemId: string | null; spaceId?: string | null }): string | null => refKey(r.spaceId, r.itemId)
-/** What a session or an achievement stores for the keys picked: the ids, and the space they are in. */
+/** What a session or an achievement stores for the keys picked: the ids, and the space they are in.
+ *  An item of yours wins over a class course picked with it (one filed under the class): the row
+ *  keeps the item and drops the course link, since one space can't hold a personal item. */
 export function refOf(courseKey: string | null, itemKey: string | null): { courseId: string | null; itemId: string | null; spaceId: string | null } {
     const c = courseKey ? splitKey(courseKey) : null, i = itemKey ? splitKey(itemKey) : null
+    if (i && !i.spaceId && c?.spaceId) return { courseId: null, itemId: i.id, spaceId: null }
     return { courseId: c?.id ?? null, itemId: i?.id ?? null, spaceId: c?.spaceId ?? i?.spaceId ?? null }
 }
 
