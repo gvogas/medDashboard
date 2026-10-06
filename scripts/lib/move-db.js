@@ -9,6 +9,7 @@ export const TABLES = {
   users: ['id', 'username', 'password_hash', 'pw_gen', 'display_name', 'coat_name', 'coat_role', 'coat_color', 'theme', 'bg', 'term_start', 'types', 'study_flow', 'feed_gen', 'study_prefs', 'school_calendar', 'leaderboard', 'is_admin', 'last_seen_day', 'hidden_sources', 'created_at', 'updated_at', 'revision'],
   spaces: ['id', 'kind', 'archived', 'school_calendar', 'parent_space', 'parent_item', 'code_hash', 'code_expires', 'code_uses_left', 'created_at', 'updated_at', 'deleted_at', 'revision'],
   members: ['space_id', 'user_id', 'role', 'joined_at', 'updated_at', 'deleted_at', 'revision'],
+  invites: ['space_id', 'user_id', 'invited_by', 'role', 'status', 'created_at', 'expires_at'],
   courses: ['scope', 'id', 'code', 'name', 'color', 'instructor', 'term', 'archived', 'meetings', 'target', 'updated_by', 'created_at', 'updated_at', 'deleted_at', 'revision'],
   items: ['scope', 'id', 'type', 'title', 'course_id', 'date', 'start', 'end', 'location', 'status', 'grade', 'weight', 'notes', 'checklist', 'links', 'recur', 'weekday', 'recur_until', 'dept', 'completed_at', 'updated_by', 'class_id', 'assignees', 'completed_by', 'created_at', 'updated_at', 'deleted_at', 'revision'],
   quotes: ['user_id', 'id', 'text', 'source', 'created_at', 'updated_at', 'deleted_at', 'revision'],
@@ -19,9 +20,10 @@ export const TABLES = {
   admin_log: ['id', 'at', 'admin', 'action', 'target', 'detail'],
 };
 
-/* Tables migrations/0002_spaces.sql added: a database made before it has none of their rows. */
-const ADDED_TABLES = new Set(['spaces', 'members']);
-const ORDER_BY ={ users: 'id', spaces: 'id', members: 'space_id, user_id', courses: 'scope, id', items: 'scope, id', changes: 'seq', spotify_tokens: 'user_id', admin_log: 'id' };
+/* Tables added after rounds-v7's first schema (0002_spaces.sql, 0003_invites.sql): a database
+   made before them has none of their rows. */
+const ADDED_TABLES = new Set(['spaces', 'members', 'invites']);
+const ORDER_BY = { users: 'id', spaces: 'id', members: 'space_id, user_id', invites: 'space_id, user_id', courses: 'scope, id', items: 'scope, id', changes: 'seq', spotify_tokens: 'user_id', admin_log: 'id' };
 
 /* Reading rounds-v6 or older, whose courses, items and change feed name a user: the owner
    becomes the scope of that person's own rows, a course's or item's change names the

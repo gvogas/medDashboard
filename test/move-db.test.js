@@ -108,3 +108,15 @@ it('reads spaces and members as empty from a database made before them, and copi
   });
   expect(sql.slice(0, 3).map((s) => s.split(' ').slice(0, 3).join(' '))).toEqual(['INSERT INTO users', 'INSERT INTO spaces', 'INSERT INTO members']);
 });
+
+it('reads invites as empty from a database made before them, and copies them after members', async () => {
+  const queries = new Map(readQueries(await columns(env.MIGRATION_DB)));
+  expect((await env.MIGRATION_DB.prepare(queries.get('invites')).all()).results).toEqual([]);
+  const sql = copyStatements({
+    users: [{ id: 'ana', username: 'ana' }],
+    spaces: [{ id: 'abcdefghij12', kind: 'class', archived: 0, created_at: 1, updated_at: 1, revision: 4 }],
+    members: [{ space_id: 'abcdefghij12', user_id: 'ana', role: 'owner', joined_at: 1, updated_at: 1, revision: 4 }],
+    invites: [{ space_id: 'abcdefghij12', user_id: 'ana', invited_by: null, role: 'member', status: 'pending', created_at: 1, expires_at: 2 }],
+  });
+  expect(sql.slice(0, 4).map((s) => s.split(' ').slice(0, 3).join(' '))).toEqual(['INSERT INTO users', 'INSERT INTO spaces', 'INSERT INTO members', 'INSERT INTO invites']);
+});
