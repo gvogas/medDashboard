@@ -170,7 +170,7 @@ function ClassItemCard({ itemKey, bar }: { itemKey: string; bar: boolean }) {
                             <Button variant="ghost" onClick={() => void editMark(itemKey, { weight: null })}>Use class weight</Button>
                         </div>
                     )}
-                    <Checklist item={view} fill={test && lectures ? fill : null} fillNote={fillNote}
+                    <Checklist item={view} fill={test && lectures ? fill : null} fillNote={fillNote} onLeave={() => void flushTyping()}
                         onChange={(list, typing) => { if (typing) typeMark(itemKey, { checklist: list }); else void editMark(itemKey, { checklist: list }) }} />
                     <TextArea aria-label="My notes" value={view.notes} maxLength={5000} placeholder="Only you see these."
                         onChange={(e) => typeMark(itemKey, { notes: e.target.value })} onBlur={() => void flushTyping()} />

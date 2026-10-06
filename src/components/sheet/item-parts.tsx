@@ -11,8 +11,8 @@ import { Button, Meter, Note, RemoveButton, Section, CONTROL } from "./fields"
 
 const MAX_STEPS = 50, MAX_LINKS = 20
 
-export function Checklist({ item, onChange, fill, fillNote, autoFocus = false }: {
-    item: Item; onChange: (list: ChecklistEntry[], typing: boolean) => void; fill: (() => void) | null; fillNote: string; autoFocus?: boolean
+export function Checklist({ item, onChange, fill, fillNote, autoFocus = false, onLeave = () => void flush() }: {
+    item: Item; onChange: (list: ChecklistEntry[], typing: boolean) => void; fill: (() => void) | null; fillNote: string; autoFocus?: boolean; onLeave?: () => void
 }) {
     const list = item.checklist || []
     const done = list.filter((s) => s.done).length
@@ -45,7 +45,7 @@ export function Checklist({ item, onChange, fill, fillNote, autoFocus = false }:
                                 maxLength={140}
                                 aria-label="Step"
                                 onChange={(e) => onChange(replace(s.id, { text: e.target.value }), true)}
-                                onBlur={() => void flush()}
+                                onBlur={onLeave}
                                 className={cn("min-w-0 flex-1 border-0 bg-transparent p-px font-[inherit] text-[12.5px] outline-none", s.done ? "text-[var(--done-ink)] line-through" : "text-foreground")}
                             />
                             <RemoveButton aria-label="Remove step" className="opacity-0 group-focus-within:opacity-100 group-hover:opacity-100 focus-visible:opacity-100 [@media(hover:none)]:opacity-100"
