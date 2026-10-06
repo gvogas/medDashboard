@@ -12,6 +12,7 @@ vi.mock("@/data/toast", () => ({ toast }))
 const admin = vi.hoisted(() => ({
     accounts: vi.fn(), create: vi.fn(), resetPassword: vi.fn(), revoke: vi.fn(), setAdmin: vi.fn(), remove: vi.fn(), unlock: vi.fn(),
     errors: vi.fn(), audit: vi.fn(), traffic: vi.fn(), health: vi.fn(), announcement: vi.fn(), announce: vi.fn(), unannounce: vi.fn(),
+    maintenance: vi.fn(), setMaintenance: vi.fn(),
 }))
 vi.mock("@/core/api", async (orig) => ({ ...(await orig<typeof import("@/core/api")>()), api: { admin } }))
 
@@ -104,6 +105,38 @@ describe("the Admin page", () => {
         expect(go.disabled).toBe(false)
         fireEvent.click(go)
         await waitFor(() => expect(admin.remove).toHaveBeenCalledWith("u-sam", "sam"))
+    })
+
+    it("switches features into maintenance with a message, and says which are on", async () => {
+        admin.maintenance.mockResolvedValue({ maintenance: { features: ["week"], message: "", updatedAt: Date.now() - 60_000, updatedBy: "george" } })
+        render(<AdminPage />)
+        fireEvent.click(screen.getByRole("tab", { name: "Maintenance" }))
+        expect(await screen.findByText(/On now: Week/)).toBeTruthy()
+        expect((screen.getByRole("switch", { name: "Week" }) as HTMLInputElement).checked).toBe(true)
+        expect((screen.getByRole("switch", { name: "Month" }) as HTMLInputElement).checked).toBe(false)
+        const labels = screen.getAllByRole("switch").map((s) => s.getAttribute("aria-label") || (s as HTMLInputElement).labels?.[0]?.textContent)
+        expect(labels).toEqual(["Whole app", "Week", "Month", "All items", "Study", "Music", "Import with AI", "Shared classes & projects"])
+        fireEvent.click(screen.getByRole("switch", { name: "Music" }))
+        fireEvent.click(screen.getByRole("switch", { name: "Week" }))
+        fireEvent.change(screen.getByLabelText("Message"), { target: { value: "Back by 9 pm." } })
+        admin.setMaintenance.mockResolvedValueOnce({ maintenance: { features: ["spotify"], message: "Back by 9 pm.", updatedAt: Date.now(), updatedBy: "george" } })
+        admin.maintenance.mockResolvedValue({ maintenance: { features: ["spotify"], message: "Back by 9 pm.", updatedAt: Date.now(), updatedBy: "george" } })
+        fireEvent.click(screen.getByRole("button", { name: "Save" }))
+        await waitFor(() => expect(admin.setMaintenance).toHaveBeenCalledWith(["spotify"], "Back by 9 pm."))
+        expect(await screen.findByText(/On now: Music/)).toBeTruthy()
+        expect(toast).toHaveBeenCalledWith(expect.stringMatching(/next sync/))
+    })
+
+    it("says when nothing is in maintenance, and why a save was refused", async () => {
+        admin.maintenance.mockResolvedValue({ maintenance: { features: [], message: "", updatedAt: null, updatedBy: "" } })
+        admin.setMaintenance.mockRejectedValueOnce(new ApiError(400, { error: "invalid", field: "message" }))
+        render(<AdminPage />)
+        fireEvent.click(screen.getByRole("tab", { name: "Maintenance" }))
+        expect(await screen.findByText("Nothing is in maintenance.")).toBeTruthy()
+        fireEvent.click(screen.getByRole("switch", { name: "Whole app" }))
+        fireEvent.click(screen.getByRole("button", { name: "Save" }))
+        expect(await screen.findByRole("alert")).toBeTruthy()
+        expect(screen.getByRole("alert").textContent).toMatch(/280 characters/)
     })
 })
 

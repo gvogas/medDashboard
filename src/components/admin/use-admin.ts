@@ -45,6 +45,8 @@ const FIELDS: Record<string, string> = {
     confirm: "Type the username exactly to confirm.",
     text: "Write a message of up to 280 characters.",
     until: "Pick an end within the next 30 days.",
+    message: "Write a message of up to 280 characters.",
+    features: "Reload the page: this app doesn't know one of those features.",
 }
 
 /** A sentence for a failed admin call. */

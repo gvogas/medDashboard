@@ -383,7 +383,7 @@ All routes are under `/api`, speak JSON, and require the session cookie except
 | `POST /api/login` | `{username, password}` → `{profile}` and `Set-Cookie`. `401 bad_login` for a wrong password or an unknown user alike. |
 | `DELETE /api/session` | → clears the cookie. |
 | `POST /api/session/revoke-all` | → `204`, clears the cookie and invalidates every other session of this user. |
-| `GET /api/me` | → `{profile}` |
+| `GET /api/me` | → `{profile}`, with `announcement` and `maintenance` (see Maintenance mode) |
 | `PUT /api/me` | `{coat, theme, bg, termStart, displayName, studyFlow, studyPrefs, schoolCalendar}` (`bg` optional, default `med`; `studyFlow`, `studyPrefs` and `schoolCalendar` optional, kept when left out; `schoolCalendar: {}` removes it) → `{profile}` |
 | `POST /api/outline` · `POST /api/school-calendar` | the file (or a PDF's text) as the body, `?name=&today=` → what Workers AI read: an outline, or `{name, terms, days, truncated}`. Nothing is saved. Ten reads a day between them (`429 outline_limit`). |
 | `GET /api/sync?v=2&cursor=<seq>` | → `{changes: [{kind, row}], cursor, more, reset}` — at most 100 changes after `cursor`, deleted rows included with `deletedAt` set. `cursor=0` is a full load. See the sync protocol below. |
@@ -399,6 +399,28 @@ All routes are under `/api`, speak JSON, and require the session cookie except
 
 Errors are `{error, field?}`: `400` bad shape (with the field), `401` no session,
 `404` a row that isn't yours, `413` body over 1 MB.
+
+### Maintenance mode
+
+The Admin page's Maintenance tab switches features off while an admin works on
+them. `app_meta` key `maintenance` holds `{features, message, updatedAt, updatedBy}`
+(no table of its own, no migration); `features` ⊆ `app` (the whole app), `week`,
+`month`, `table` (All items), `study`, `spotify` (Music), `import` (Import with AI),
+`classes` (shared classes & projects), and `message` is at most 280 characters
+(empty: the app's default copy). `GET/PUT /api/admin/maintenance` read and set it
+(admins only, `400 invalid` for an unknown feature). Changes are not in `admin_log`,
+whose `action` CHECK would need a migration; the value records who changed it.
+
+`GET /api/me` carries `maintenance: {features, message, updatedAt}` while any is on,
+else `null`, so a switch reaches everyone within a sync (a focus, five minutes, a
+reload). The app shows non-admins the maintenance page in place of a page that is
+off, and the message in the Import with AI sheet; admins keep the feature under a
+bar. The Worker enforces what is a feature of its own: for non-admins, with
+`import` or `app` on, `/api/outline`, `/api/school-calendar` and `/api/ai/*` answer
+`503 {error: 'maintenance', feature}`; with `classes` or `app` on, so does every
+`/api/spaces…` route (and `/api/invites…`, `/api/join…` once they exist). Personal
+rows, `/api/me` and `/api/sync` are never stopped. A shared edit refused this way
+stays pending on the device, with no try counted, and uploads once it is back.
 
 ### Session
 

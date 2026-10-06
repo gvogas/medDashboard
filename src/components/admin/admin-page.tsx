@@ -1,7 +1,7 @@
-// The Admin page, in #views, for accounts with users.is_admin: five tabs. Overview is
+// The Admin page, in #views, for accounts with users.is_admin: six tabs. Overview is
 // the free-tier meters, traffic and health; Accounts creates and manages accounts and
 // lifts sign-in locks; Errors and Audit log read the Worker's logs; Announcement puts a
-// banner in front of everyone. Only the open tab is drawn, and it loads when it opens.
+// banner in front of everyone; Maintenance switches features off while you fix them. Only the open tab is drawn, and it loads when it opens.
 // The Worker refuses every call to anyone else, whatever this page shows.
 
 import { useState } from "react"
@@ -14,9 +14,10 @@ import { Accounts } from "./accounts"
 import { Errors } from "./errors"
 import { AuditLog } from "./audit"
 import { AnnouncementTab } from "./announcement"
+import { MaintenanceTab } from "./maintenance"
 
-type Tab = "overview" | "accounts" | "errors" | "audit" | "announcement"
-const TABS: readonly [Tab, string][] = [["overview", "Overview"], ["accounts", "Accounts"], ["errors", "Errors"], ["audit", "Audit log"], ["announcement", "Announcement"]]
+type Tab = "overview" | "accounts" | "errors" | "audit" | "announcement" | "maintenance"
+const TABS: readonly [Tab, string][] = [["overview", "Overview"], ["accounts", "Accounts"], ["errors", "Errors"], ["audit", "Audit log"], ["announcement", "Announcement"], ["maintenance", "Maintenance"]]
 const KEY = "rounds.adminTab"
 
 function savedTab(): Tab {
@@ -64,6 +65,7 @@ export function AdminPage() {
                 {open === "errors" && <Errors />}
                 {open === "audit" && <AuditLog />}
                 {open === "announcement" && <AnnouncementTab />}
+                {open === "maintenance" && <MaintenanceTab />}
             </div>
         </div>
     )
