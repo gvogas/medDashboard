@@ -4,8 +4,10 @@
 -- database built from this file (scripts/move-db.mjs), so no table carries the
 -- patches of earlier versions. Change the schema with a new numbered file.
 --
--- Every user-owned table is keyed by (user_id, id): ownership is part of the key,
--- not a filter a handler might forget. Shape is enforced here with CHECK constraints
+-- Every table is keyed by its owner and an id: ownership is part of the key, not a
+-- filter a handler might forget. Courses and items belong to a scope: 'u:<user id>' for a
+-- person's own rows, 'c:<space id>' for a shared class's, 'p:<space id>' for a team
+-- project's. The other tables belong to a user. Shape is enforced here with CHECK constraints
 -- so a client bug cannot write an unknown type, a malformed date or a huge note.
 -- Timestamps are integer milliseconds since the epoch, the unit of Date.now().
 -- Deletes are soft (deleted_at); a nightly cron purges tombstones after 30 days.
@@ -62,15 +64,21 @@ CREATE TABLE users (
   -- most once a day, so it costs one write per person per day.
   last_seen_day  TEXT CHECK (last_seen_day IS NULL
                              OR last_seen_day GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]'),
-  created_at     INTEGER NOT NULL,
+  -- What the person has hidden from their calendar: 'course:<id>', 'space:<id>' and
+  -- 'personal'. The calendar feed honours it too.
+  hidden_sources TEXT NOT NULL DEFAULT '[]'
+                 CHECK (json_valid(hidden_sources) AND json_type(hidden_sources) = 'array'
+                        AND json_array_length(hidden_sources) <= 40),
+  created_at    INTEGER NOT NULL,
   updated_at     INTEGER NOT NULL,
   revision       INTEGER NOT NULL DEFAULT 1 CHECK (typeof(revision) = 'integer' AND revision > 0)
 );
 
 CREATE TABLE courses (
-  user_id     TEXT NOT NULL REFERENCES users(id),
+  -- 'u:<user id>' for a person's own course, 'c:<space id>' for a shared class's one course.
+  scope       TEXT NOT NULL CHECK ((scope GLOB 'u:?*' OR scope GLOB 'c:?*') AND length(scope) <= 40),
   id          TEXT NOT NULL CHECK (length(id) BETWEEN 1 AND 24),
-  code        TEXT NOT NULL CHECK (length(code) BETWEEN 1 AND 8),
+  code       TEXT NOT NULL CHECK (length(code) BETWEEN 1 AND 8),
   name        TEXT NOT NULL CHECK (length(name) BETWEEN 1 AND 80),
   -- The twelve course colours; the first five are also the coat colours.
   color       TEXT NOT NULL CHECK (color IN ('#E4749B', '#8B5CC7', '#17B3AE', '#79B6EA', '#BCA6E6',
@@ -85,15 +93,21 @@ CREATE TABLE courses (
                      AND json_array_length(meetings) <= 12),
   -- The final grade the person is aiming for, or none.
   target      INTEGER CHECK (target IS NULL OR (typeof(target) = 'integer' AND target BETWEEN 1 AND 100)),
+  -- The member who last wrote a shared class's course; NULL on a person's own.
+  updated_by  TEXT,
   created_at  INTEGER NOT NULL,
   updated_at  INTEGER NOT NULL,
   deleted_at  INTEGER,
   revision    INTEGER NOT NULL DEFAULT 1 CHECK (typeof(revision) = 'integer' AND revision > 0),
-  PRIMARY KEY (user_id, id)
+  PRIMARY KEY (scope, id),
+  -- A class's course holds the class's facts only: each member's target and "archived in
+  -- my sidebar" live in their space_prefs. Its colour and term are the class's defaults.
+  CHECK (scope GLOB 'u:*' OR (target IS NULL AND archived = 0))
 );
 
 CREATE TABLE items (
-  user_id       TEXT NOT NULL REFERENCES users(id),
+  -- 'u:<user id>', 'c:<space id>' (a class's item) or 'p:<space id>' (a project item or task).
+  scope         TEXT NOT NULL CHECK ((scope GLOB 'u:?*' OR scope GLOB 'c:?*' OR scope GLOB 'p:?*') AND length(scope) <= 40),
   id            TEXT NOT NULL CHECK (length(id) BETWEEN 1 AND 24),
   -- A built-in type, or one of the person's own ('c-' ids, see users.types).
   type          TEXT NOT NULL CHECK (type IN ('exam', 'quiz', 'assignment', 'lab', 'tutoring', 'office', 'task', 'project')
@@ -122,18 +136,39 @@ CREATE TABLE items (
                             OR recur_until GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]'),
   dept          TEXT NOT NULL DEFAULT '' CHECK (length(dept) <= 40),
   completed_at  INTEGER,
+  -- The member who last wrote a shared row; NULL on a person's own.
+  updated_by    TEXT,
+  -- A personal item kept under a shared class (the class's space id): an extra quiz, a
+  -- lecture review. No foreign key, since it crosses scopes. A label on the person's own
+  -- row: it is shape-checked only and never grants access.
+  class_id      TEXT CHECK (class_id IS NULL OR length(class_id) BETWEEN 1 AND 24),
+  -- A task's assignees: user ids, or ["*"] for everyone. Project rows only.
+  assignees     TEXT NOT NULL DEFAULT '[]'
+                CHECK (json_valid(assignees) AND json_type(assignees) = 'array'
+                       AND json_array_length(assignees) <= 30),
+  -- Who finished a project task. Project rows only.
+  completed_by  TEXT,
   created_at    INTEGER NOT NULL,
   updated_at    INTEGER NOT NULL,
   deleted_at    INTEGER,
   revision      INTEGER NOT NULL DEFAULT 1 CHECK (typeof(revision) = 'integer' AND revision > 0),
-  PRIMARY KEY (user_id, id),
-  -- A course reference can only point at the same user's course. SET NULL would
-  -- also null the owner, so a hard delete is refused while references remain: the
-  -- API soft-deletes a course and detaches its items together, and the nightly
-  -- purge comes after.
-  FOREIGN KEY (user_id, course_id) REFERENCES courses(user_id, id) ON DELETE RESTRICT,
+  PRIMARY KEY (scope, id),
+  -- A course reference can only point at a course in the same scope. SET NULL would
+  -- also null the scope, so a hard delete is refused while references remain: the API
+  -- soft-deletes a course and detaches its items together, and the nightly purge comes after.
+  FOREIGN KEY (scope, course_id) REFERENCES courses(scope, id) ON DELETE RESTRICT,
   -- A weekly slot needs a weekday.
-  CHECK (recur IS NULL OR weekday IS NOT NULL)
+  CHECK (recur IS NULL OR weekday IS NOT NULL),
+  -- What each kind of scope may hold. A class row hangs off the class's one course and is
+  -- the class's facts only: everyone's
+  -- status, grade and checklist live in their own marks. A project row's status,
+  -- completion and checklist (subtasks) are the team's; it never carries a grade or weight.
+  CHECK (CASE substr(scope, 1, 2)
+    WHEN 'u:' THEN assignees = '[]' AND completed_by IS NULL AND (class_id IS NULL OR course_id IS NULL)
+    WHEN 'c:' THEN course_id IS NOT NULL AND grade IS NULL AND checklist = '[]' AND status = 'todo' AND completed_at IS NULL
+                   AND completed_by IS NULL AND assignees = '[]' AND class_id IS NULL AND type NOT GLOB 'c-*'
+    ELSE grade IS NULL AND weight IS NULL AND course_id IS NULL AND class_id IS NULL AND type IN ('project', 'task')
+  END)
 );
 
 CREATE TABLE quotes (
@@ -155,6 +190,8 @@ CREATE TABLE study_sessions (
   id             TEXT NOT NULL CHECK (length(id) BETWEEN 1 AND 24),
   course_id      TEXT CHECK (course_id IS NULL OR length(course_id) BETWEEN 1 AND 40),
   item_id        TEXT CHECK (item_id IS NULL OR length(item_id) BETWEEN 1 AND 24),
+  -- The shared space course_id or item_id belongs to, when it is a class's or a project's.
+  space_id       TEXT CHECK (space_id IS NULL OR length(space_id) BETWEEN 1 AND 24),
   started_at     INTEGER NOT NULL CHECK (typeof(started_at) = 'integer' AND started_at > 0),
   study_minutes  INTEGER NOT NULL CHECK (typeof(study_minutes) = 'integer' AND study_minutes BETWEEN 1 AND 1440),
   rounds_done    INTEGER NOT NULL DEFAULT 0 CHECK (typeof(rounds_done) = 'integer' AND rounds_done BETWEEN 0 AND 12),
@@ -186,7 +223,9 @@ CREATE TABLE achievements (
   rule        TEXT NOT NULL CHECK (rule IN ('hours', 'grade')),
   course_id   TEXT CHECK (course_id IS NULL OR length(course_id) BETWEEN 1 AND 40),
   item_id     TEXT CHECK (item_id IS NULL OR length(item_id) BETWEEN 1 AND 24),
-  target      INTEGER NOT NULL CHECK (typeof(target) = 'integer' AND target BETWEEN 1 AND 1000),
+  -- The shared space course_id or item_id belongs to, when it is a class's or a project's.
+  space_id       TEXT CHECK (space_id IS NULL OR length(space_id) BETWEEN 1 AND 24),
+  target     INTEGER NOT NULL CHECK (typeof(target) = 'integer' AND target BETWEEN 1 AND 1000),
   created_at  INTEGER NOT NULL,
   updated_at  INTEGER NOT NULL,
   deleted_at  INTEGER,
@@ -198,8 +237,8 @@ CREATE TABLE achievements (
 CREATE INDEX achievements_deleted ON achievements (deleted_at) WHERE deleted_at IS NOT NULL;
 
 -- A term's items, and a course's.
-CREATE INDEX items_user_date   ON items (user_id, date);
-CREATE INDEX items_user_course ON items (user_id, course_id);
+CREATE INDEX items_scope_date   ON items (scope, date);
+CREATE INDEX items_scope_course ON items (scope, course_id);
 
 -- The nightly tombstone purge.
 CREATE INDEX courses_deleted ON courses (deleted_at) WHERE deleted_at IS NOT NULL;
@@ -211,72 +250,74 @@ CREATE INDEX quotes_deleted  ON quotes  (deleted_at) WHERE deleted_at IS NOT NUL
 -- a cursor below the floor or past the head starts a full resync.
 CREATE TABLE changes (
   seq         INTEGER PRIMARY KEY AUTOINCREMENT,
-  user_id     TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  -- Whose feed: 'u:<user id>', 'c:<space id>' or 'p:<space id>'. No foreign key, so
+  -- deleting an account deletes its 'u:' rows explicitly (worker/accounts.js).
+  scope       TEXT NOT NULL,
   kind        TEXT NOT NULL,
   row_id      TEXT NOT NULL,
   payload     TEXT NOT NULL,
   deleted_at  INTEGER,
-  UNIQUE (user_id, kind, row_id)
+  UNIQUE (scope, kind, row_id)
 );
-CREATE INDEX changes_user_seq ON changes (user_id, seq);
+CREATE INDEX changes_scope_seq ON changes (scope, seq);
 CREATE INDEX changes_deleted  ON changes (deleted_at) WHERE deleted_at IS NOT NULL;
 
 CREATE TABLE sync_state (id INTEGER PRIMARY KEY CHECK (id = 1), floor INTEGER NOT NULL DEFAULT 0);
 INSERT INTO sync_state (id) VALUES (1);
 
 CREATE TRIGGER courses_change_insert AFTER INSERT ON courses BEGIN
- DELETE FROM changes WHERE user_id = NEW.user_id AND kind = 'courses' AND row_id = NEW.id;
- INSERT INTO changes(user_id, kind, row_id, payload, deleted_at)
- VALUES(NEW.user_id, 'courses', NEW.id, json_object('user_id', NEW.user_id, 'id', NEW.id, 'code', NEW.code, 'name', NEW.name, 'color', NEW.color, 'instructor', NEW.instructor, 'term', NEW.term, 'archived', NEW.archived, 'meetings', NEW.meetings, 'target', NEW.target, 'created_at', NEW.created_at, 'updated_at', NEW.updated_at, 'deleted_at', NEW.deleted_at, 'revision', NEW.revision), NEW.deleted_at);
+ DELETE FROM changes WHERE scope = NEW.scope AND kind = 'courses' AND row_id = NEW.id;
+ INSERT INTO changes(scope, kind, row_id, payload, deleted_at)
+ VALUES(NEW.scope, 'courses', NEW.id, json_object('scope', NEW.scope, 'id', NEW.id, 'code', NEW.code, 'name', NEW.name, 'color', NEW.color, 'instructor', NEW.instructor, 'term', NEW.term, 'archived', NEW.archived, 'meetings', NEW.meetings, 'target', NEW.target, 'updated_by', NEW.updated_by, 'created_at', NEW.created_at, 'updated_at', NEW.updated_at, 'deleted_at', NEW.deleted_at, 'revision', NEW.revision), NEW.deleted_at);
 END;
 CREATE TRIGGER courses_change_update AFTER UPDATE ON courses BEGIN
- DELETE FROM changes WHERE user_id = NEW.user_id AND kind = 'courses' AND row_id = NEW.id;
- INSERT INTO changes(user_id, kind, row_id, payload, deleted_at)
- VALUES(NEW.user_id, 'courses', NEW.id, json_object('user_id', NEW.user_id, 'id', NEW.id, 'code', NEW.code, 'name', NEW.name, 'color', NEW.color, 'instructor', NEW.instructor, 'term', NEW.term, 'archived', NEW.archived, 'meetings', NEW.meetings, 'target', NEW.target, 'created_at', NEW.created_at, 'updated_at', NEW.updated_at, 'deleted_at', NEW.deleted_at, 'revision', NEW.revision), NEW.deleted_at);
+ DELETE FROM changes WHERE scope = NEW.scope AND kind = 'courses' AND row_id = NEW.id;
+ INSERT INTO changes(scope, kind, row_id, payload, deleted_at)
+ VALUES(NEW.scope, 'courses', NEW.id, json_object('scope', NEW.scope, 'id', NEW.id, 'code', NEW.code, 'name', NEW.name, 'color', NEW.color, 'instructor', NEW.instructor, 'term', NEW.term, 'archived', NEW.archived, 'meetings', NEW.meetings, 'target', NEW.target, 'updated_by', NEW.updated_by, 'created_at', NEW.created_at, 'updated_at', NEW.updated_at, 'deleted_at', NEW.deleted_at, 'revision', NEW.revision), NEW.deleted_at);
 END;
 
 CREATE TRIGGER items_change_insert AFTER INSERT ON items BEGIN
- DELETE FROM changes WHERE user_id = NEW.user_id AND kind = 'items' AND row_id = NEW.id;
- INSERT INTO changes(user_id, kind, row_id, payload, deleted_at)
- VALUES(NEW.user_id, 'items', NEW.id, json_object('user_id', NEW.user_id, 'id', NEW.id, 'type', NEW.type, 'title', NEW.title, 'course_id', NEW.course_id, 'date', NEW.date, 'start', NEW.start, 'end', NEW.end, 'location', NEW.location, 'status', NEW.status, 'grade', NEW.grade, 'weight', NEW.weight, 'notes', NEW.notes, 'checklist', NEW.checklist, 'links', NEW.links, 'recur', NEW.recur, 'weekday', NEW.weekday, 'recur_until', NEW.recur_until, 'dept', NEW.dept, 'completed_at', NEW.completed_at, 'created_at', NEW.created_at, 'updated_at', NEW.updated_at, 'deleted_at', NEW.deleted_at, 'revision', NEW.revision), NEW.deleted_at);
+ DELETE FROM changes WHERE scope = NEW.scope AND kind = 'items' AND row_id = NEW.id;
+ INSERT INTO changes(scope, kind, row_id, payload, deleted_at)
+ VALUES(NEW.scope, 'items', NEW.id, json_object('scope', NEW.scope, 'id', NEW.id, 'type', NEW.type, 'title', NEW.title, 'course_id', NEW.course_id, 'date', NEW.date, 'start', NEW.start, 'end', NEW.end, 'location', NEW.location, 'status', NEW.status, 'grade', NEW.grade, 'weight', NEW.weight, 'notes', NEW.notes, 'checklist', NEW.checklist, 'links', NEW.links, 'recur', NEW.recur, 'weekday', NEW.weekday, 'recur_until', NEW.recur_until, 'dept', NEW.dept, 'completed_at', NEW.completed_at, 'updated_by', NEW.updated_by, 'class_id', NEW.class_id, 'assignees', NEW.assignees, 'completed_by', NEW.completed_by, 'created_at', NEW.created_at, 'updated_at', NEW.updated_at, 'deleted_at', NEW.deleted_at, 'revision', NEW.revision), NEW.deleted_at);
 END;
 CREATE TRIGGER items_change_update AFTER UPDATE ON items BEGIN
- DELETE FROM changes WHERE user_id = NEW.user_id AND kind = 'items' AND row_id = NEW.id;
- INSERT INTO changes(user_id, kind, row_id, payload, deleted_at)
- VALUES(NEW.user_id, 'items', NEW.id, json_object('user_id', NEW.user_id, 'id', NEW.id, 'type', NEW.type, 'title', NEW.title, 'course_id', NEW.course_id, 'date', NEW.date, 'start', NEW.start, 'end', NEW.end, 'location', NEW.location, 'status', NEW.status, 'grade', NEW.grade, 'weight', NEW.weight, 'notes', NEW.notes, 'checklist', NEW.checklist, 'links', NEW.links, 'recur', NEW.recur, 'weekday', NEW.weekday, 'recur_until', NEW.recur_until, 'dept', NEW.dept, 'completed_at', NEW.completed_at, 'created_at', NEW.created_at, 'updated_at', NEW.updated_at, 'deleted_at', NEW.deleted_at, 'revision', NEW.revision), NEW.deleted_at);
+ DELETE FROM changes WHERE scope = NEW.scope AND kind = 'items' AND row_id = NEW.id;
+ INSERT INTO changes(scope, kind, row_id, payload, deleted_at)
+ VALUES(NEW.scope, 'items', NEW.id, json_object('scope', NEW.scope, 'id', NEW.id, 'type', NEW.type, 'title', NEW.title, 'course_id', NEW.course_id, 'date', NEW.date, 'start', NEW.start, 'end', NEW.end, 'location', NEW.location, 'status', NEW.status, 'grade', NEW.grade, 'weight', NEW.weight, 'notes', NEW.notes, 'checklist', NEW.checklist, 'links', NEW.links, 'recur', NEW.recur, 'weekday', NEW.weekday, 'recur_until', NEW.recur_until, 'dept', NEW.dept, 'completed_at', NEW.completed_at, 'updated_by', NEW.updated_by, 'class_id', NEW.class_id, 'assignees', NEW.assignees, 'completed_by', NEW.completed_by, 'created_at', NEW.created_at, 'updated_at', NEW.updated_at, 'deleted_at', NEW.deleted_at, 'revision', NEW.revision), NEW.deleted_at);
 END;
 
 CREATE TRIGGER quotes_change_insert AFTER INSERT ON quotes BEGIN
- DELETE FROM changes WHERE user_id = NEW.user_id AND kind = 'quotes' AND row_id = NEW.id;
- INSERT INTO changes(user_id, kind, row_id, payload, deleted_at)
- VALUES(NEW.user_id, 'quotes', NEW.id, json_object('user_id', NEW.user_id, 'id', NEW.id, 'text', NEW.text, 'source', NEW.source, 'created_at', NEW.created_at, 'updated_at', NEW.updated_at, 'deleted_at', NEW.deleted_at, 'revision', NEW.revision), NEW.deleted_at);
+ DELETE FROM changes WHERE scope = 'u:' || NEW.user_id AND kind = 'quotes' AND row_id = NEW.id;
+ INSERT INTO changes(scope, kind, row_id, payload, deleted_at)
+ VALUES('u:' || NEW.user_id, 'quotes', NEW.id, json_object('user_id', NEW.user_id, 'id', NEW.id, 'text', NEW.text, 'source', NEW.source, 'created_at', NEW.created_at, 'updated_at', NEW.updated_at, 'deleted_at', NEW.deleted_at, 'revision', NEW.revision), NEW.deleted_at);
 END;
 CREATE TRIGGER quotes_change_update AFTER UPDATE ON quotes BEGIN
- DELETE FROM changes WHERE user_id = NEW.user_id AND kind = 'quotes' AND row_id = NEW.id;
- INSERT INTO changes(user_id, kind, row_id, payload, deleted_at)
- VALUES(NEW.user_id, 'quotes', NEW.id, json_object('user_id', NEW.user_id, 'id', NEW.id, 'text', NEW.text, 'source', NEW.source, 'created_at', NEW.created_at, 'updated_at', NEW.updated_at, 'deleted_at', NEW.deleted_at, 'revision', NEW.revision), NEW.deleted_at);
+ DELETE FROM changes WHERE scope = 'u:' || NEW.user_id AND kind = 'quotes' AND row_id = NEW.id;
+ INSERT INTO changes(scope, kind, row_id, payload, deleted_at)
+ VALUES('u:' || NEW.user_id, 'quotes', NEW.id, json_object('user_id', NEW.user_id, 'id', NEW.id, 'text', NEW.text, 'source', NEW.source, 'created_at', NEW.created_at, 'updated_at', NEW.updated_at, 'deleted_at', NEW.deleted_at, 'revision', NEW.revision), NEW.deleted_at);
 END;
 
 CREATE TRIGGER study_sessions_change_insert AFTER INSERT ON study_sessions BEGIN
- DELETE FROM changes WHERE user_id = NEW.user_id AND kind = 'study_sessions' AND row_id = NEW.id;
- INSERT INTO changes(user_id, kind, row_id, payload, deleted_at)
- VALUES(NEW.user_id, 'study_sessions', NEW.id, json_object('user_id', NEW.user_id, 'id', NEW.id, 'course_id', NEW.course_id, 'item_id', NEW.item_id, 'started_at', NEW.started_at, 'study_minutes', NEW.study_minutes, 'rounds_done', NEW.rounds_done, 'note', NEW.note, 'manual', NEW.manual, 'created_at', NEW.created_at, 'updated_at', NEW.updated_at, 'deleted_at', NEW.deleted_at, 'revision', NEW.revision), NEW.deleted_at);
+ DELETE FROM changes WHERE scope = 'u:' || NEW.user_id AND kind = 'study_sessions' AND row_id = NEW.id;
+ INSERT INTO changes(scope, kind, row_id, payload, deleted_at)
+ VALUES('u:' || NEW.user_id, 'study_sessions', NEW.id, json_object('user_id', NEW.user_id, 'id', NEW.id, 'course_id', NEW.course_id, 'item_id', NEW.item_id, 'space_id', NEW.space_id, 'started_at', NEW.started_at, 'study_minutes', NEW.study_minutes, 'rounds_done', NEW.rounds_done, 'note', NEW.note, 'manual', NEW.manual, 'created_at', NEW.created_at, 'updated_at', NEW.updated_at, 'deleted_at', NEW.deleted_at, 'revision', NEW.revision), NEW.deleted_at);
 END;
 CREATE TRIGGER study_sessions_change_update AFTER UPDATE ON study_sessions BEGIN
- DELETE FROM changes WHERE user_id = NEW.user_id AND kind = 'study_sessions' AND row_id = NEW.id;
- INSERT INTO changes(user_id, kind, row_id, payload, deleted_at)
- VALUES(NEW.user_id, 'study_sessions', NEW.id, json_object('user_id', NEW.user_id, 'id', NEW.id, 'course_id', NEW.course_id, 'item_id', NEW.item_id, 'started_at', NEW.started_at, 'study_minutes', NEW.study_minutes, 'rounds_done', NEW.rounds_done, 'note', NEW.note, 'manual', NEW.manual, 'created_at', NEW.created_at, 'updated_at', NEW.updated_at, 'deleted_at', NEW.deleted_at, 'revision', NEW.revision), NEW.deleted_at);
+ DELETE FROM changes WHERE scope = 'u:' || NEW.user_id AND kind = 'study_sessions' AND row_id = NEW.id;
+ INSERT INTO changes(scope, kind, row_id, payload, deleted_at)
+ VALUES('u:' || NEW.user_id, 'study_sessions', NEW.id, json_object('user_id', NEW.user_id, 'id', NEW.id, 'course_id', NEW.course_id, 'item_id', NEW.item_id, 'space_id', NEW.space_id, 'started_at', NEW.started_at, 'study_minutes', NEW.study_minutes, 'rounds_done', NEW.rounds_done, 'note', NEW.note, 'manual', NEW.manual, 'created_at', NEW.created_at, 'updated_at', NEW.updated_at, 'deleted_at', NEW.deleted_at, 'revision', NEW.revision), NEW.deleted_at);
 END;
 
 CREATE TRIGGER achievements_change_insert AFTER INSERT ON achievements BEGIN
- DELETE FROM changes WHERE user_id = NEW.user_id AND kind = 'achievements' AND row_id = NEW.id;
- INSERT INTO changes(user_id, kind, row_id, payload, deleted_at)
- VALUES(NEW.user_id, 'achievements', NEW.id, json_object('user_id', NEW.user_id, 'id', NEW.id, 'name', NEW.name, 'sticker', NEW.sticker, 'rule', NEW.rule, 'course_id', NEW.course_id, 'item_id', NEW.item_id, 'target', NEW.target, 'created_at', NEW.created_at, 'updated_at', NEW.updated_at, 'deleted_at', NEW.deleted_at, 'revision', NEW.revision), NEW.deleted_at);
+ DELETE FROM changes WHERE scope = 'u:' || NEW.user_id AND kind = 'achievements' AND row_id = NEW.id;
+ INSERT INTO changes(scope, kind, row_id, payload, deleted_at)
+ VALUES('u:' || NEW.user_id, 'achievements', NEW.id, json_object('user_id', NEW.user_id, 'id', NEW.id, 'name', NEW.name, 'sticker', NEW.sticker, 'rule', NEW.rule, 'course_id', NEW.course_id, 'item_id', NEW.item_id, 'space_id', NEW.space_id, 'target', NEW.target, 'created_at', NEW.created_at, 'updated_at', NEW.updated_at, 'deleted_at', NEW.deleted_at, 'revision', NEW.revision), NEW.deleted_at);
 END;
 CREATE TRIGGER achievements_change_update AFTER UPDATE ON achievements BEGIN
- DELETE FROM changes WHERE user_id = NEW.user_id AND kind = 'achievements' AND row_id = NEW.id;
- INSERT INTO changes(user_id, kind, row_id, payload, deleted_at)
- VALUES(NEW.user_id, 'achievements', NEW.id, json_object('user_id', NEW.user_id, 'id', NEW.id, 'name', NEW.name, 'sticker', NEW.sticker, 'rule', NEW.rule, 'course_id', NEW.course_id, 'item_id', NEW.item_id, 'target', NEW.target, 'created_at', NEW.created_at, 'updated_at', NEW.updated_at, 'deleted_at', NEW.deleted_at, 'revision', NEW.revision), NEW.deleted_at);
+ DELETE FROM changes WHERE scope = 'u:' || NEW.user_id AND kind = 'achievements' AND row_id = NEW.id;
+ INSERT INTO changes(scope, kind, row_id, payload, deleted_at)
+ VALUES('u:' || NEW.user_id, 'achievements', NEW.id, json_object('user_id', NEW.user_id, 'id', NEW.id, 'name', NEW.name, 'sticker', NEW.sticker, 'rule', NEW.rule, 'course_id', NEW.course_id, 'item_id', NEW.item_id, 'space_id', NEW.space_id, 'target', NEW.target, 'created_at', NEW.created_at, 'updated_at', NEW.updated_at, 'deleted_at', NEW.deleted_at, 'revision', NEW.revision), NEW.deleted_at);
 END;
 
 -- Failed sign-in counts per username, so a password cannot be guessed by brute force.
@@ -326,17 +367,17 @@ CREATE INDEX spotify_refresh_locks_expires ON spotify_refresh_locks (expires_at)
 
 -- Read-only views for looking around with `wrangler d1 execute`.
 CREATE VIEW active_items AS
-SELECT i.user_id, i.id, i.type, i.title, i.date, i.start, i.end, i.status,
+SELECT substr(i.scope, 3) AS user_id, i.id, i.type, i.title, i.date, i.start, i.end, i.status,
        i.course_id, c.code AS course_code, c.name AS course_name, i.revision
 FROM items AS i
 LEFT JOIN courses AS c
-  ON c.user_id = i.user_id AND c.id = i.course_id AND c.deleted_at IS NULL
-WHERE i.deleted_at IS NULL;
+  ON c.scope = i.scope AND c.id = i.course_id AND c.deleted_at IS NULL
+WHERE i.deleted_at IS NULL AND i.scope GLOB 'u:*';
 
 CREATE VIEW account_summary AS
 SELECT u.id AS user_id, u.username, u.created_at,
-       (SELECT count(*) FROM courses AS c WHERE c.user_id = u.id AND c.deleted_at IS NULL) AS courses,
-       (SELECT count(*) FROM items AS i WHERE i.user_id = u.id AND i.deleted_at IS NULL) AS items,
+       (SELECT count(*) FROM courses AS c WHERE c.scope = 'u:' || u.id AND c.deleted_at IS NULL) AS courses,
+       (SELECT count(*) FROM items AS i WHERE i.scope = 'u:' || u.id AND i.deleted_at IS NULL) AS items,
        (SELECT count(*) FROM quotes AS q WHERE q.user_id = u.id AND q.deleted_at IS NULL) AS quotes,
        (SELECT count(*) FROM study_sessions AS s WHERE s.user_id = u.id AND s.deleted_at IS NULL) AS study_sessions
 FROM users AS u;
