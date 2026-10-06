@@ -10,6 +10,7 @@ import { schoolCal, typeOn } from "@/data/query"
 import { inTerm, pickedTerm } from "@/core/school"
 import { addDays, iso, parse, today } from "@/core/dates"
 import { setSide } from "./sidebar"
+import { effectiveCourses, effectiveItems, keyOf } from "./effective"
 import { openKeys } from "./keys"
 import { api } from "@/core/api"
 import { toast } from "./toast"
@@ -54,7 +55,7 @@ export function setSearch(text: string) {
 
 /* ── the filters: the sidebar's course; the All items table's type and status chips ── */
 
-export const itemTypes = (): ItemType[] => typeList(ui.bg, data.items)
+export const itemTypes = (): ItemType[] => typeList(ui.bg, effectiveItems())
 
 /**
  * Click a type. With every type showing, show only this one; if it is the only one
@@ -81,7 +82,7 @@ export function setCourse(id: string) {
 export function setSem(name: string) {
     ui.sem = name
     const cal = schoolCal(), term = pickedTerm(cal, name, today())
-    const c = ui.course === "all" ? null : (data.courses as Course[]).find((x) => x.id === ui.course)
+    const c = ui.course === "all" ? null : (effectiveCourses() as Course[]).find((x) => keyOf(x) === ui.course)
     if (c && !inTerm(cal, c.term, term)) { ui.course = "all"; ui.listFrom = null }
     notify()
 }
@@ -161,7 +162,7 @@ export const toggleTypeHidden = (id: string) => editType(id, (t) => {
 })
 
 /** Only a type of your own that no item uses. */
-export const canDeleteType = (t: ItemType) => t.custom && !data.items.some((it) => it.type === t.id)
+export const canDeleteType = (t: ItemType) => t.custom && !effectiveItems().some((it) => it.type === t.id)
 export const deleteType = (id: string) => editType(id, (t, list, i) => {
     if (!canDeleteType(t)) return false
     list.splice(i, 1)

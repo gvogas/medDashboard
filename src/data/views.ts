@@ -14,6 +14,7 @@ import { minutesByDay, streak } from "@/core/history"
 
 import { prepPace } from "@/core/prep"
 import { useCourses, useItems, useProfile, useQuotes, useStudySessions } from "./store"
+import { courseKeyOf, keyOf } from "./effective"
 import { ui } from "./ui"
 import type { Course, Item, Meeting, Quote, Schedule, Show, SortKey, StudySession } from "./types"
 
@@ -30,18 +31,19 @@ export const typeOn = (f: TableFilters, type: string) => f.types[type] !== false
 /** Open, overdue, or anything, as the table's status chips ask. */
 export const passShow = (it: Item, show: Show) => (show === "open" ? isOpen(it) : show === "overdue" ? isOverdue(it) : true)
 
-const courseMap = (courses: Course[]) => new Map(courses.map((c) => [c.id, c]))
+/* Courses by key: a class course and a personal one may share an id (effective.ts). */
+const courseMap = (courses: Course[]) => new Map(courses.map((c) => [keyOf(c), c]))
 
 export function matchSearch(it: Item, byId: Map<string, Course>, search: string): boolean {
     if (!search) return true
-    const c = it.courseId ? byId.get(it.courseId) : undefined
+    const key = courseKeyOf(it), c = key ? byId.get(key) : undefined
     const hay = (it.title + " " + (it.where || "") + " " + (it.notes || "") + " " + (c ? c.name + " " + c.code : "") + " " + tmeta(it.type).label).toLowerCase()
     return hay.includes(search.toLowerCase())
 }
 
 /** The course and the search: what the week, the month and the table share. */
 export const passFilters = (it: Item, f: Filters, byId: Map<string, Course>) =>
-    (f.course === "all" || it.courseId === f.course) && matchSearch(it, byId, f.search)
+    (f.course === "all" || courseKeyOf(it) === f.course) && matchSearch(it, byId, f.search)
 
 export interface Instance { item: Item; date: string }
 
@@ -65,7 +67,7 @@ export interface ClassSlot { course: Course; mtg: Meeting }
 export function classes(courses: Course[], f: Filters): ClassSlot[] {
     const out: ClassSlot[] = []
     for (const c of courses) {
-        if (c.archived || (f.course !== "all" && c.id !== f.course)) continue
+        if (c.archived || (f.course !== "all" && keyOf(c) !== f.course)) continue
         for (const m of c.meetings || []) {
             if (f.search) {
                 const hay = (c.name + " " + c.code + " " + (c.instructor || "") + " " + (m.room || "") + " " + (m.kind || "")).toLowerCase()
@@ -155,8 +157,8 @@ export function weekDays({ items, courses, filters, schedule, anchor, today, cal
         const d = addDays(start, i), date = iso(d)
         const wd = classWeekday(cal, date) as number | null
         const timed: { at: string; entry: Entry }[] = [
-            ...(wd === null ? [] : runningOn(slots.get(wd), cal, date)).map((slot) => ({ at: slot.mtg.start, entry: { kind: "class" as const, key: "c" + slot.course.id + slot.mtg.id, slot } })),
-            ...list.filter((x) => x.date === date).map((inst) => ({ at: timeOf(inst.item), entry: { kind: "item" as const, key: "i" + inst.item.id, inst } })),
+            ...(wd === null ? [] : runningOn(slots.get(wd), cal, date)).map((slot) => ({ at: slot.mtg.start, entry: { kind: "class" as const, key: "c" + keyOf(slot.course) + slot.mtg.id, slot } })),
+            ...list.filter((x) => x.date === date).map((inst) => ({ at: timeOf(inst.item), entry: { kind: "item" as const, key: "i" + keyOf(inst.item), inst } })),
         ]
         /* a stable sort: at the same time, classes before items */
         const entries = timed.sort((a, b) => cmp(a.at, b.at)).map((x) => x.entry)
@@ -171,7 +173,7 @@ export function weekDays({ items, courses, filters, schedule, anchor, today, cal
 export function officeHours(items: Item[], courses: Course[], f: Filters): Item[] {
     const byId = courseMap(courses)
     return items
-        .filter((it) => it.type === "office" && (f.course === "all" || it.courseId === f.course) && matchSearch(it, byId, f.search))
+        .filter((it) => it.type === "office" && (f.course === "all" || courseKeyOf(it) === f.course) && matchSearch(it, byId, f.search))
         .sort((a, b) => ((a.weekday ?? 0) + 6) % 7 - ((b.weekday ?? 0) + 6) % 7 || (a.start < b.start ? -1 : 1))
 }
 
@@ -181,7 +183,7 @@ export const TASKS_SHOWN = 9
 export function tasks(items: Item[], courses: Course[], f: Filters): { shown: Item[]; open: number; total: number } {
     const byId = courseMap(courses)
     const all = items
-        .filter((it) => it.type === "task" && (f.course === "all" || it.courseId === f.course) && matchSearch(it, byId, f.search))
+        .filter((it) => it.type === "task" && (f.course === "all" || courseKeyOf(it) === f.course) && matchSearch(it, byId, f.search))
         .sort((a, b) => (isOpen(a) ? 0 : 1) - (isOpen(b) ? 0 : 1) || (a.date < b.date ? -1 : 1))
     return { shown: all.slice(0, TASKS_SHOWN), open: all.filter(isOpen).length, total: all.length }
 }
@@ -232,8 +234,8 @@ export function monthCells({ items, courses, filters, schedule, anchor, today, c
         const due = byDate.get(date) || []
         const cls = schedule === "deadlines" || wd === null ? [] : runningOn(slots.get(wd), cal, date)
         const chips: Chip[] = [
-            ...due.map((inst) => ({ kind: "due" as const, key: "i" + inst.item.id, inst })),
-            ...cls.map((slot) => ({ kind: "class" as const, key: "c" + slot.course.id + slot.mtg.id, slot })),
+            ...due.map((inst) => ({ kind: "due" as const, key: "i" + keyOf(inst.item), inst })),
+            ...cls.map((slot) => ({ kind: "class" as const, key: "c" + keyOf(slot.course) + slot.mtg.id, slot })),
         ]
         const shown = chips.length > PER_CELL ? PER_CELL - 1 : chips.length
         const off = schedule !== "deadlines" && info && ["off", "break", "exams"].includes(info.kind) ? runningOn(slots.get(d.getDay()), cal, date).length : 0
@@ -283,7 +285,7 @@ export function tableRows(items: Item[], courses: Course[], f: TableFilters, sor
         switch (sort.key) {
             case "title": return it.title.toLowerCase()
             case "type": return it.type
-            case "course": return (it.courseId && byId.get(it.courseId)?.name) || "zz"
+            case "course": { const key = courseKeyOf(it); return (key && byId.get(key)?.name) || "zz" }
             case "status": return statusLabel(it)
             default: return it.date
         }
@@ -298,7 +300,7 @@ export function tableRows(items: Item[], courses: Course[], f: TableFilters, sor
 export function typeCounts(items: Item[], course: string): Record<string, number> {
     const n: Record<string, number> = {}
     for (const it of items) {
-        if (course !== "all" && it.courseId !== course) continue
+        if (course !== "all" && courseKeyOf(it) !== course) continue
         if (it.recur === "weekly" || isOpen(it)) n[it.type] = (n[it.type] || 0) + 1
     }
     return n

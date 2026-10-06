@@ -2,13 +2,13 @@
 // semester names (so a read's term matches one of them) and the codes of your courses (so a
 // course found is written the way yours is). See worker/ai.js, knownContext.
 
-import { data } from "@/core/store"
 import { schoolCal } from "@/data/query"
+import { effectiveCourses } from "@/data/effective"
 
 export function readContext(): { terms?: string; codes?: string } {
     const cal = schoolCal()
     /* a name with "|" in it would split in two on the way */
     const terms = cal ? cal.terms.map((t) => t.name).filter((n) => !n.includes("|")).join("|") : ""
-    const codes = data.courses.filter((c) => !c.archived && c.code).map((c) => c.code).slice(0, 30).join(",")
+    const codes = effectiveCourses().filter((c) => !c.archived && c.code).map((c) => c.code).slice(0, 30).join(",")
     return { ...(terms ? { terms } : {}), ...(codes ? { codes } : {}) }
 }
