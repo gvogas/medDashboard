@@ -97,8 +97,9 @@ export async function priorConvert(db, userId, courseId) {
  * that holds anything of yours; your prefs from the course; the space on your sessions and
  * achievements that point at the course or a moved item (a session on the course and an
  * item that stays yours loses its course link instead, as deleting a course does); the
- * ticked items and the course soft-deleted directly (the course-delete path would clear
- * their course); every other live item of the course filed under the class.
+ * ticked items (never a custom-typed one, which has no class copy) and the course
+ * soft-deleted directly (the course-delete path would clear their course); every other
+ * live item of the course filed under the class.
  */
 function moveIntoClass(db, userId, spaceId, courseId, ticked, now) {
   const mine = 'u:' + userId, made = 'EXISTS (SELECT 1 FROM spaces WHERE id = ?)';
@@ -123,7 +124,7 @@ function moveIntoClass(db, userId, spaceId, courseId, ticked, now) {
         AND ((rule = 'hours' AND course_id = ?) OR (rule = 'grade' AND item_id IN ${TICKED})) AND ${made}`)
       .bind(spaceId, now, userId, courseId, ticked, spaceId),
     db.prepare(`UPDATE items SET deleted_at = ?, updated_at = ?, revision = revision + 1
-      WHERE scope = ? AND course_id = ? AND deleted_at IS NULL AND id IN ${TICKED} AND ${made}`).bind(now, now, mine, courseId, ticked, spaceId),
+      WHERE scope = ? AND course_id = ? AND deleted_at IS NULL AND type NOT GLOB 'c-*' AND id IN ${TICKED} AND ${made}`).bind(now, now, mine, courseId, ticked, spaceId),
     db.prepare(`UPDATE items SET class_id = ?, course_id = NULL, updated_at = ?, revision = revision + 1
       WHERE scope = ? AND course_id = ? AND deleted_at IS NULL AND ${made}`).bind(spaceId, now, mine, courseId, spaceId),
     db.prepare(`UPDATE courses SET deleted_at = ?, updated_at = ?, revision = revision + 1

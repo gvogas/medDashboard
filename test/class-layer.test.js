@@ -37,3 +37,31 @@ describe('prefs written with a membership (spec §9, §11)', () => {
     expect(await prefs(ben.id, s.id)).toMatchObject({ color: '#17B3AE', gone: null });
   });
 });
+
+describe('a convert refused (Task 19 review)', () => {
+  it('at the 20-space limit leaves the course, its items, sessions and achievements as they were, and writes no marks or prefs', async () => {
+    const full = await signInAdmin('cl-full');
+    for (let i = 0; i < 20; i++) await makeSpace({ members: { [full.id]: 'member' } });
+    const put = (path, body) => full(path, { method: 'PUT', body });
+    expect((await put('/api/courses/db', { code: 'DB', name: 'Databases', color: '#B8457E', meetings: [], target: 80 })).status).toBe(200);
+    expect((await put('/api/items/i1', { type: 'quiz', title: 'Quiz 1', courseId: 'db', date: '2026-10-15', status: 'graded', grade: 90 })).status).toBe(200);
+    expect((await put('/api/items/i2', { type: 'task', title: 'Read', courseId: 'db', date: '2026-10-15', status: 'todo' })).status).toBe(200);
+    expect((await put('/api/study_sessions/s1', { courseId: 'db', itemId: 'i1', startedAt: 1_790_000_000_000, studyMinutes: 30 })).status).toBe(200);
+    expect((await put('/api/study_sessions/s2', { courseId: 'db', itemId: null, startedAt: 1_790_000_000_000, studyMinutes: 30 })).status).toBe(200);
+    expect((await put('/api/achievements/a1', { name: 'DB hours', sticker: 'data:image/png;base64,iVBORw0KGgo=', rule: 'hours', courseId: 'db', target: 5 })).status).toBe(200);
+    const snapshot = async () => (await env.DB.batch([
+      env.DB.prepare('SELECT * FROM courses WHERE scope = ? ORDER BY id').bind('u:' + full.id),
+      env.DB.prepare('SELECT * FROM items WHERE scope = ? ORDER BY id').bind('u:' + full.id),
+      env.DB.prepare('SELECT * FROM study_sessions WHERE user_id = ? ORDER BY id').bind(full.id),
+      env.DB.prepare('SELECT * FROM achievements WHERE user_id = ? ORDER BY id').bind(full.id),
+    ])).map((r) => r.results);
+    const before = await snapshot();
+    const res = await post(full, '/api/spaces', { kind: 'class', convertCourseId: 'db', items: ['i1', 'i2'] });
+    expect(res.status).toBe(409);
+    expect(await res.json()).toEqual({ error: 'limit' });
+    expect(await snapshot()).toEqual(before);
+    expect((await env.DB.prepare('SELECT count(*) AS n FROM marks WHERE user_id = ?').bind(full.id).first()).n).toBe(0);
+    expect((await env.DB.prepare('SELECT count(*) AS n FROM space_prefs WHERE user_id = ?').bind(full.id).first()).n).toBe(0);
+    expect((await env.DB.prepare('SELECT count(*) AS n FROM members WHERE user_id = ?').bind(full.id).first()).n).toBe(20);
+  });
+});
