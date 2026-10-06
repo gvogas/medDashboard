@@ -1,22 +1,21 @@
 # Running and deploying Rounds
 
-How the app fits together, how to work on it, and how to put changes live.
-
-Before the first deployment of the reliability update, follow
-[the upgrade instructions](RELIABILITY-UPGRADE.md), including the separate Spotify
-encryption secret.
+How the app fits together, how to work on it, and how to put changes live. The app is
+called Term; its internal name, used for the Worker, the database and the cookies, is
+`rounds`.
 
 ## How Rounds fits together
 
-Rounds runs entirely on Cloudflare. One command, `npm run deploy`, puts the website
-and the API online together at https://rounds.termanitor07.workers.dev.
+Rounds runs entirely on Cloudflare. The website and the API go online together at
+https://rounds.termanitor07.workers.dev, usually by pushing `main` (see
+[Deploying](#deploying)).
 
 ```mermaid
 flowchart LR
   B[Your browser] --> W[Cloudflare Worker<br/>rounds]
   W -->|/api/* requests| API[worker/<br/>API code]
   W -->|everything else| P[dist/client/<br/>HTML, CSS, JS built by Vite]
-  API --> D[(D1 database<br/>rounds)]
+  API --> D[(D1 database<br/>rounds-v7)]
 ```
 
 Pages load from the Vite build in `dist/client/`. Anything under `/api/`, such as signing in or saving an
@@ -25,12 +24,14 @@ item, runs the code in `worker/`, which reads and writes the D1 database.
 | Piece | Folder or place | What it does |
 | --- | --- | --- |
 | Front end | `index.html`, `src/`, `public/` | The pages, styles and scripts your browser runs; `npm run build` turns them into `dist/client/` |
-| API | `worker/` | Sign-in, sessions, and saving courses, items and quotes |
-| Database | Cloudflare D1, named `rounds` | Stores users and everyone's data |
+| API | `worker/` | Sign-in, sync, shared classes, Spotify, AI import and the Admin page. The endpoints are listed in [DATA-MODEL.md](DATA-MODEL.md) |
+| Database | Cloudflare D1, named `rounds-v7` (binding `DB`) | Stores users and everyone's data. `rounds-v6` is kept as a backup |
 | Schema changes | `migrations/` | Numbered SQL files that build and change the database |
-| Settings | `wrangler.jsonc` | Tells Cloudflare the app name, the database and the nightly cleanup job |
+| Settings | `wrangler.jsonc` | The app name, the static assets in `dist/client/`, the database, the Workers AI binding, public vars (`SPOTIFY_CLIENT_ID`, `CF_ACCOUNT_ID`) and the nightly cleanup job |
 | Secret | `SESSION_SECRET` | Signs login cookies. Locally it's in `.dev.vars`; live it's stored in Cloudflare |
 | Secret | `SPOTIFY_CLIENT_SECRET` | Lets the Worker talk to Spotify for the player. Same two places. The matching client id is in `wrangler.jsonc` |
+| Secret | `SPOTIFY_TOKEN_KEYS` | Encrypts stored Spotify refresh tokens (see [Spotify keys](#spotify-keys)). Required whenever the client id is set |
+| Secret | `CF_ANALYTICS_TOKEN` | Optional. A Cloudflare API token with only "Account Analytics: Read", for the Admin page's traffic chart |
 
 There are two copies of everything. **Local** is what `npm run dev` runs on your
 computer, with its own test database. **Live** (also called remote or production) is
@@ -77,52 +78,57 @@ Make and try every change locally first. Nothing you do locally affects the live
     git commit -m "Say what changed"
     git push
     ```
+   Pushing `main` puts the change live (see [Deploying](#deploying)). Work on a branch
+   until it is ready.
 
 One catch: if you edit the small inline script inside `index.html`, run
 `npm run csp:update` to update `public/_headers`. The release build stops if the hash is stale.
 
 ## Deploying
 
-To put your changes live, run `npm run deploy` from the project folder. It runs the test suites, builds versioned assets, verifies the CSP hash and required
-secret names, applies database migrations, runs the read-only database checks against
-live, then uploads the website and API. It takes under a minute. Always deploy with
-`npm run deploy`, never a bare `wrangler deploy`, which skips the migrations.
+Cloudflare's Git integration deploys the site. Every push to `main` on GitHub makes
+Cloudflare run `npm run build` and upload the result. That build does **not** run the
+tests and does **not** apply database migrations to the live database.
 
 ```mermaid
 flowchart LR
-  A[npm test<br/>all pass] --> B[git commit<br/>and push]
-  B --> C[npm run deploy]
-  C --> D[Live database<br/>migrations]
-  D --> G[Live database<br/>checks]
-  G --> E[Upload site<br/>and API]
+  A[npm run check<br/>passes] --> M{New<br/>migration?}
+  M -->|yes| D[npm run db:remote<br/>then db:check --remote]
+  M -->|no| P
+  D --> P[git push<br/>to main]
+  P --> E[Cloudflare builds<br/>and uploads]
   E --> F[Sign in on<br/>live site]
 ```
 
-**Before you deploy**
+**Before you push to `main`**
 
-- [ ] `npm test` passes
+- [ ] `npm run check` passes (types, all tests and the release build)
 - [ ] You tried the change locally with `npm run dev`, or `npm run dev:built` to try
-      the built, versioned site the deploy will upload
-- [ ] The change is committed and pushed, so GitHub matches what goes live
+      the built, versioned site that goes live
+- [ ] If the change adds a migration, you applied it to live **first** with
+      `npm run db:remote`, then ran `npm run db:check -- --remote`. New code on an old
+      database fails with 500s until the migration is applied
 
-**While it runs**
+`npm run deploy` is the manual route. It runs `npm run check`, checks the secret names,
+applies migrations to live, runs the live database checks, then runs `wrangler deploy`.
+Use it when Git deploys are unavailable; the next push to `main` deploys again anyway.
+Never run a bare `wrangler deploy` with code that needs a migration not yet applied.
 
-If there are new migrations, it lists them and asks `continue? (Y/n)`. Type Y and
-press Enter. If there are none, it says "No migrations to apply!" and carries on. If
-the migration step fails, the deploy stops, so new code never goes live on an old
-database. The same goes for the database checks: an integrity problem stops the
-deploy before any code is uploaded.
+When `db:remote` finds new migrations, it lists them and asks `continue? (Y/n)`. Type
+Y and press Enter. If there are none, it says "No migrations to apply!".
 
-If a live request does hit a missing table or column anyway, `npx wrangler tail`
-shows "D1 schema is behind the code" next to the error.
+If a live request hits a missing table or column, `npx wrangler tail` shows "D1 schema
+is behind the code" next to the error.
 
-**After it finishes**
+**After it goes live**
 
 1. Open https://rounds.termanitor07.workers.dev and sign in.
 2. Check the thing you changed.
 3. If something is wrong, see [Troubleshooting](#troubleshooting) below. To undo
    quickly, run `npx wrangler rollback` to put the previous version back. Rollback
-   restores the code only; database changes stay.
+   restores the code only; database changes stay. Don't roll back past a release that
+   raised the IndexedDB version: browsers that already upgraded can't open their
+   local data with the older code. Fix forward instead.
 
 ## Changing the database
 
@@ -132,19 +138,59 @@ runs once per database.
 
 | File | What it adds |
 | --- | --- |
-| `0001_schema.sql` | Everything, in one piece (see [DATA-MODEL.md](DATA-MODEL.md)) |
+| `0001_schema.sql` | The whole schema up to the last squash: users, courses, items, quotes, study, Spotify tokens, the change feed (see [DATA-MODEL.md](DATA-MODEL.md)) |
+| `0002_spaces.sql` | Shared spaces (classes and projects) and their `members` |
+| `0003_invites.sql` | `invites`: invitations to a space by username |
+| `0004_marks.sql` | `marks` (your status, grade and notes on a shared item) and `space_prefs` (your colour, target and term for a space) |
 
 To change the database:
 
-1. Add a new file with the next number, such as `0002_something.sql`. Never edit a
-   file that has already run.
+1. Add a new file with the next number, `0005_something.sql`. Never edit a file that
+   has already run.
 2. Apply it locally with `npm run db:local`, then test.
-3. Deploy. `npm run deploy` applies it to the live database first.
+3. Apply it to live with `npm run db:remote` **before** pushing the code that needs
+   it, then check with `npm run db:check -- --remote`.
 
 To see what the live database is missing, run
 `npx wrangler d1 migrations list DB --remote`. "No migrations to apply!" means
-it's up to date. To apply migrations to live without deploying code, use
-`npm run db:remote`.
+it's up to date.
+
+`npm run db:check` runs read-only integrity checks and prints row counts for the
+local database; add `-- --remote` for live. It never changes records.
+
+## Moving to a fresh database
+
+Now and then the migrations are folded into one `0001_schema.sql` and the live data
+is moved into a new, empty database. This keeps every row and the change-feed position,
+so devices sync on without a reset. The last move was `rounds-v6` to `rounds-v7` on
+2026-10-05.
+
+1. Fold the migrations into `migrations/0001_schema.sql`. Move the files the live
+   database was built from into `test/fixtures/legacy-migrations/`.
+2. If the old database has tables or columns the copy doesn't know, add them to
+   `TABLES` in `scripts/lib/move-db.js`. The script refuses to run while anything
+   would be dropped.
+3. Create the new database with `npx wrangler d1 create rounds-vN`, point the `DB`
+   binding in `wrangler.jsonc` at it, and apply the schema with `npm run db:remote`.
+4. Rehearse locally first, then copy live:
+    ```
+    npm run build
+    node scripts/move-db.mjs --from rounds-v7 --to rounds-vN --remote
+    ```
+   It only reads the old database, refuses a target that already holds data, and
+   compares both afterwards. Don't pipe its output, or you lose its exit code.
+5. Deploy straight away (`npx wrangler deploy`) so no live edits land in the old
+   database, then run `npm run db:check -- --remote` and push `main`.
+6. Keep the old database as a backup until you're sure the move went well.
+
+## Maintenance switches
+
+The Admin page's **Maintenance** tab turns features off while you fix them: the whole
+app, week, month, all items, study, music, import with AI, and shared classes and
+projects, with an optional message. No deploy is needed. People who aren't admins get
+a maintenance page for that feature; admins get a bar and can still use it. Sync of
+personal data keeps working. Shared-class edits made meanwhile wait in the browser and
+upload once the switch is off.
 
 ## Spotify
 
@@ -178,10 +224,10 @@ with Premium (free listeners still see what is playing).
 
    Then the key that encrypts stored refresh tokens. Locally, `npm run spotify:key`
    adds one to `.dev.vars`. Live, `npx wrangler secret put SPOTIFY_TOKEN_KEYS` with the
-   JSON keyring described in [RELIABILITY-UPGRADE.md](RELIABILITY-UPGRADE.md).
+   JSON keyring described under [Spotify keys](#spotify-keys).
    `npm run deploy` refuses to run while it is missing.
-6. Deploy: `npm run deploy`. It applies the `spotify_tokens` migration and ships the
-   Worker with the new id.
+6. Commit the new client id and push `main` (or run `npm run deploy`). The
+   `spotify_tokens` table is already in the schema.
 7. In Rounds, open Settings, find **Spotify** and click **Connect**. Spotify asks you
    to allow Rounds to see and control playback, then sends you back. The badge at the
    bottom of the sidebar shows what is playing; start something in the Spotify app
@@ -213,6 +259,26 @@ Spotify's side; the badge dims and tries again on its own. The volume slider is 
 out when the playing device does not take volume from the API, which is the case for
 phones; it works for the desktop app and web player.
 
+### Spotify keys
+
+`SPOTIFY_TOKEN_KEYS` is one JSON secret of this shape:
+
+```json
+{"current":"v1","keys":{"v1":"<random secret, at least 32 characters>"}}
+```
+
+Use a securely generated value, never the placeholder, and never commit it. Refresh
+tokens are stored as `keyId.ciphertext`, sealed under the `current` key.
+
+- **Rotating:** add a new random key under a new id, set `current` to that id, and
+  keep the old keys. Each token is resealed under the current key the next time it
+  refreshes. Remove an old key only once no stored token uses it, or have those people
+  reconnect. A token whose key id is missing fails without being deleted.
+- **Old tokens:** tokens stored without a key id predate the keyring. They are read
+  with `SPOTIFY_LEGACY_TOKEN_SECRET`, or `SESSION_SECRET` when that is unset. Before
+  rotating `SESSION_SECRET` while any remain, put the old value in
+  `SPOTIFY_LEGACY_TOKEN_SECRET`.
+
 ## Managing accounts
 
 There's no sign-up page, so you create every account yourself from the command line.
@@ -223,9 +289,16 @@ Add `--remote` to act on the live site; leave it off to act on your local databa
 | Create an account | `npm run user:add -- username --remote --name "Their Name"` |
 | Change a password | `npm run user:add -- username --reset --remote` |
 | Delete an account and all its data | `npm run user:add -- username --delete --remote` |
+| Give someone the Admin page | `npm run user:add -- username --admin --remote` (`--admin --off` takes it away) |
 
-Each command asks for the password twice and hides what you type. Delete asks you to
+Create and reset ask for the password twice and hide what you type. Delete asks you to
 type the username again to confirm, and it can't be undone.
+
+Once you are an admin, the **Admin** page does the same jobs in the browser: create
+accounts, reset passwords, give or take admin, and delete accounts. It also shows usage
+against the daily limits, the error and audit logs, an announcement banner, the
+[maintenance switches](#maintenance-switches), which secrets are set, and live traffic
+(needs `CF_ANALYTICS_TOKEN`).
 
 - **Usernames** are 3 to 32 letters, digits, dots, dashes or underscores. Capital
   letters don't matter.
@@ -251,15 +324,16 @@ the right-hand column says.
 | Sign in from the app itself, not from another site. | The request came from a different web address | Open the site directly at its own address |
 | `npm run dev` stops with `Port 8787 is already in use` | Another server already holds port 8787. It is pinned there because it's the address registered with Spotify | Close the other `npm run dev` window, or run `Get-NetTCPConnection -LocalPort 8787` in PowerShell to find the process |
 | Spotify's own page says "Too many requests" | Spotify rate-limits its sign-in page after several tries | Wait 15–30 minutes, then click Connect once |
-| Page loads but a script is blocked | The inline script changed without its security hash | Run `node scripts/csp-hash.mjs` and update `public/_headers` |
+| Page loads but a script is blocked | The inline script changed without its security hash | Run `npm run csp:update`, which rewrites the hash in `public/_headers` |
 
 To see the live server's errors as they happen, run `npx wrangler tail`, then
 reproduce the problem in the browser. Press Ctrl+C to stop.
 
-**What happened on 2026-09-21:** every live sign-in failed with "internal". The code
-had been deployed, but the live database was still missing migrations 0002 and 0003.
-Running `npm run db:remote` fixed it, and `npm run deploy` now applies migrations
-automatically so this can't recur.
+**Live 500s or "internal" errors: check migrations first.** Pushing `main` deploys
+code without applying migrations, so new code can reach a database that lacks its
+tables. This happened on 2026-09-21, when every live sign-in failed. Run
+`npx wrangler d1 migrations list DB --remote`; if anything is listed, run
+`npm run db:remote`, then `npm run db:check -- --remote`.
 
 ## Command cheat sheet
 
@@ -270,12 +344,16 @@ Run every command in PowerShell from the project folder.
 | `npm run dev` | Runs the app at http://127.0.0.1:8787 | Local |
 | `npm run dev:built` | Builds, then runs the site the deploy uploads | Local |
 | `npm test` | Runs all tests | Local |
+| `npm run check` | Type check, all tests and the release build | Local |
+| `npm run csp:update` | Rewrites the inline script's hash in `public/_headers` | Local |
 | `npm run db:local` | Applies new migrations to the local database | Local |
-| `npm run deploy` | Applies new migrations to live, checks the live database, then publishes the site and API | Live |
+| `npm run db:check` | Read-only database checks and row counts (`-- --remote` for live) | Local or live, read-only |
+| `git push` to `main` | Cloudflare builds and publishes the site and API (no migrations) | Live |
+| `npm run deploy` | Manual deploy: checks, applies migrations to live, checks the live database, then publishes | Live |
 | `npm run db:remote` | Applies new migrations to live without deploying code | Live |
 | `npx wrangler d1 migrations list DB --remote` | Shows migrations the live database is missing | Live, read-only |
 | `npx wrangler deployments list` | Shows when each version went live | Live, read-only |
 | `npx wrangler rollback` | Puts the previous code version back | Live |
 | `npx wrangler tail` | Streams live server errors | Live, read-only |
-| `npm run user:add -- name --remote` | Creates a live account (`--reset` or `--delete` to change or remove one) | Live |
+| `npm run user:add -- name --remote` | Creates a live account (`--reset`, `--delete` or `--admin` to change one) | Live |
 | `npx wrangler login` | Connects this computer to your Cloudflare account | Neither |

@@ -1,8 +1,10 @@
-# Rounds — data model
+# Term — data model
 
+Term's internal name is `rounds` (the Worker, the D1 databases, cookies and IndexedDB).
 Cloudflare D1 (SQLite), several users, every row stamped with its owner: a `scope` on
-courses and items (`u:<user id>` for a person's own; `c:`/`p:` for shared spaces, coming
-with collaboration), a `user_id` on the rest.
+courses and items (`u:<user id>` for a person's own; `c:<space id>` for a shared class,
+`p:<space id>` for a team project), a `user_id` on the rest. Shared classes are live
+(collaboration Stages 1–4) but admin-only until Stage 6.
 The browser never talks to the database. A Worker reads the session cookie, resolves
 the user, and every query it runs has `user_id = ?` (or the user's scope) in it.
 
@@ -13,10 +15,14 @@ items            exams, quizzes, assignments, labs, tutorials, office hours, tas
 quotes           the quote tile's list
 study_sessions   study time: timer runs and time logged by hand, by course and item
 achievements     your own achievements: an uploaded sticker and what earns it
+spaces, members  shared classes and team projects, and who is in each
+invites          invitations to a space by username
+marks            your layer on a shared item: status, grade, notes, hidden
+space_prefs      your colour, target, term and archive for a space
 ```
 
 The schema is [`migrations/0001_schema.sql`](../migrations/0001_schema.sql), in one
-piece. Four times in September 2026 the live data moved into a fresh database built from it
+piece. Six times between September and 5 October 2026 the live data moved into a fresh database built from it
 (`node scripts/move-db.mjs --from <old> --to <new> --remote`): first `rounds` into
 `rounds-v2`, replacing ten migrations of patches, then `rounds-v2` into `rounds-v3`,
 folding in the study timer, quizzes, grade targets and the calendar feed, then
@@ -26,16 +32,21 @@ six, then `rounds-v5` into `rounds-v6`, adding the Admin page (`users.is_admin`,
 `users.last_seen_day`, `error_log`, `admin_log`, `app_meta`), then `rounds-v6` into
 `rounds-v7`, giving courses, items and the change feed a scope. `rounds-v7` is the live
 database. The schema the last move copied from is kept as a test
-fixture in `test/fixtures/legacy-migrations/`. Later changes are new numbered files.
+fixture in `test/fixtures/legacy-migrations/`. Later changes are new numbered files:
+`0002_spaces.sql` (`spaces`, `members`), `0003_invites.sql` (`invites`) and
+`0004_marks.sql` (`marks`, `space_prefs`). The next one is `0005`.
 
 ## Structure at a glance
 
 | Area | Tables | Responsibility |
 | --- | --- | --- |
-| Account and tracker data | `users`, `courses`, `items`, `quotes`, `study_sessions` | Profiles and the records users edit |
-| Synchronization | `changes`, `sync_state` | Latest record changes, ordered cursors, and the retention floor |
+| Account and tracker data | `users`, `courses`, `items`, `quotes`, `study_sessions`, `achievements` | Profiles and the records users edit |
+| Shared classes and projects | `spaces`, `members`, `invites` | Who is in which space, join codes and invitations |
+| Your layer on shared rows | `marks`, `space_prefs` | Your status, grade and notes on a shared item; your settings for a space |
+| Synchronization | `changes`, `sync_state` | Latest record changes, ordered cursors per scope, and the retention floor |
 | Authentication and request control | `login_throttle`, `request_limits` | Temporary attempt counts and cooldowns |
 | Spotify connection | `spotify_tokens`, `spotify_oauth_states`, `spotify_refresh_locks` | Credentials, one-use consent attempts, and refresh leases |
+| Admin page | `error_log`, `admin_log`, `app_meta` | Caught failures (30 days), what admins did (90 days), app-wide values (announcement, maintenance, last cron run) |
 | Read-only inspection | `active_items`, `account_summary` | Views over existing records, with no duplicate stored data |
 
 ```mermaid
@@ -44,8 +55,18 @@ erDiagram
     users ||--o{ items : "owns (scope u:)"
     users ||--o{ quotes : owns
     users ||--o{ study_sessions : owns
+    users ||--o{ achievements : owns
     courses o|--o{ items : groups
+    spaces ||--o{ courses : "holds (scope c:)"
+    spaces ||--o{ items : "holds (scope c: or p:)"
+    spaces ||--o{ members : has
+    users ||--o{ members : joins
+    spaces ||--o{ invites : sends
+    users ||--o{ invites : receives
+    users ||--o{ marks : "marks shared items"
+    users ||--o{ space_prefs : "sets per space"
     users ||--o{ changes : "syncs (scope u:)"
+    spaces ||--o{ changes : "syncs (scope c: or p:)"
     users ||--o| spotify_tokens : connects
     users ||--o| spotify_oauth_states : authorizes
     users ||--o| spotify_refresh_locks : refreshes
@@ -96,14 +117,22 @@ Conventions used throughout:
 | `bg` | text | `med` \| `cs` \| `law` \| `pilot` \| `sports` \| `eng`, default `med` | The theme (Medicine, Computer Science, Law, Aviation, Sports, Engineering), independent of `theme` (the appearance). |
 | `term_start` | text \| null | `YYYY-MM-DD` | The week board's default start. Null means today. With a school calendar, its current semester's first day counts instead. |
 | `school_calendar` | JSON object | `{}` = none | The school's academic calendar, below. |
+| `types` | JSON array | ≤ 20 | Your item types: overrides for the built-ins (label, colour, hidden, order) and up to 12 of your own, ids `c-` plus 1–12 of `[a-z0-9]`. |
+| `study_flow` | JSON object | | The study timer's steps and rounds, below. |
+| `study_prefs` | JSON object | `{}` = defaults | Daily goal, streak rules and celebrations, below. |
+| `feed_gen` | int \| null | > 0 | The calendar feed: a number while it is on, null when off. The feed URL carries an HMAC of the user id and this number, so bumping it retires every old link. |
+| `leaderboard` | int 0/1 | default 0 | Joined the study leaderboard (opt-in; only those who joined see it or are listed). |
+| `is_admin` | int 0/1 | default 0 | May open the Admin page. The first admin is made with `npm run user:add -- <name> --admin --remote`. |
+| `last_seen_day` | text \| null | `YYYY-MM-DD` | Last UTC day the person opened the app; written by `GET /api/me` at most once a day. |
+| `hidden_sources` | JSON array | ≤ 40 | What you have hidden from your views, below. |
 | `created_at`, `updated_at` | int | | |
 | `revision` | int | starts at 1 | Optimistic concurrency for profile edits. |
 | `pw_gen` | int | starts at 0 | Password/session generation; changing it revokes existing sessions. |
-| `hidden_sources` | JSON array | | For collaboration; see `docs/superpowers/specs/2026-10-02-shared-classes-design.md`. |
 
-A row is created by `npm run user:add`, with the defaults. The API
+A row is created by `npm run user:add`, or from the Admin page, with the defaults. The API
 exposes it as the **profile**, with the coat fields nested: `{coat: {name, role,
-color}, theme, termStart, ...}`.
+color}, theme, bg, types, studyFlow, studyPrefs, schoolCalendar, hiddenSources,
+termStart, isAdmin, ...}`. `feed_gen`, `leaderboard` and `last_seen_day` are not in it.
 
 `hidden_sources`: what you have hidden from your Week and Month (and, from Stage 6, your calendar feed): `course:<id>`, `space:<sid>`, `personal`; at most 40. Sent and received as the profile's `hiddenSources`; a `PUT /api/me` without it keeps it.
 
@@ -138,8 +167,13 @@ The twelve course colours; the first five are also the coat colours:
 | `term` | text | ≤ 40 | The school calendar semester the course runs in, by name (`Winter 2027`); its classes show only between that semester's first and last day. `''`, or a name no semester has, means all year. |
 | `archived` | int 0/1 | | Hidden from the sidebar, kept for the record. |
 | `meetings` | JSON array | ≤ 12 | The class timetable. |
-| `updated_by` | text | | For collaboration; see `docs/superpowers/specs/2026-10-02-shared-classes-design.md`. |
+| `target` | int \| null | 1–100 | The final grade you are aiming for. Personal courses only; a class keeps each member's in `space_prefs`. |
+| `updated_by` | text \| null | | The member who last wrote a class's course; null on your own. |
 | `created_at`, `updated_at`, `deleted_at` | int | | |
+| `revision` | int | starts at 1 | Optimistic concurrency, as on every synced row. |
+
+A class's course (`c:` scope) holds the class's facts only: `target` is null and
+`archived` 0; its colour and term are the class defaults that members' prefs start from.
 
 ### `meetings[]` — one weekly class
 
@@ -159,7 +193,7 @@ client.
 
 ## `items`
 
-One table for all seven types. They share every column, differ only in which `status`
+One table for all eight built-in types and your own (`c-…`, see `users.types`). They share every column, differ only in which `status`
 values apply, and the week board and table need them interleaved by date.
 
 | Column | API field | Type | Rules | Notes |
@@ -173,7 +207,7 @@ values apply, and the week board and table need them interleaved by date.
 | `location` | `where` | text | ≤ 80 | Room, lab, platform. `where` is a SQL keyword, hence the rename. |
 | `status` | | text | see below | |
 | `grade` | | real \| null | 0–100 | Only meaningful when `status == 'graded'`. |
-| `weight` | | real \| null | 0–100 | Reserved for grade projection (backlog item 3). |
+| `weight` | | real \| null | 0–100 | The share of the course grade the item carries; a missed item with a weight counts as 0 (`src/core/grades.ts`). |
 | `notes` | | text | ≤ 5000 | The item's page. |
 | `checklist` | | JSON array | ≤ 50 | `{id, text ≤140, done}`. Drives the pink progress bars. |
 | `links` | | JSON array | ≤ 20 | `{label ≤60, url ≤500}`. |
@@ -182,11 +216,18 @@ values apply, and the week board and table need them interleaved by date.
 | `recur_until` | `recurUntil` | text \| null | `YYYY-MM-DD` | End of term; null means open-ended. |
 | `dept` | | text | ≤ 40 | Office hours only: the faculty's department, shown greyed. |
 | `completed_at` | `completedAt` | int \| null | | Stamped when status leaves `todo`. |
-| `updated_by` | `updatedBy` | text | | For collaboration; see `docs/superpowers/specs/2026-10-02-shared-classes-design.md`. |
-| `class_id` | `classId` | text | | For collaboration; see `docs/superpowers/specs/2026-10-02-shared-classes-design.md`. |
-| `assignees` | | JSON array | | For collaboration; see `docs/superpowers/specs/2026-10-02-shared-classes-design.md`. |
-| `completed_by` | `completedBy` | text | | For collaboration; see `docs/superpowers/specs/2026-10-02-shared-classes-design.md`. |
+| `updated_by` | `updatedBy` | text \| null | | The member who last wrote a shared row; null on your own. |
+| `class_id` | `classId` | text \| null | ≤ 24 | A personal item filed under a shared class (the class's space id): an extra quiz, a lecture review. A label only; it never grants access. Not with `course_id`. |
+| `assignees` | | JSON array | ≤ 30 | Project tasks only: user ids, or `["*"]` for everyone. |
+| `completed_by` | `completedBy` | text \| null | | Project tasks only: who finished it. |
 | `created_at`, `updated_at`, `deleted_at` | camelCase | int | | |
+| `revision` | | int | starts at 1 | Optimistic concurrency. |
+
+A `CHECK` limits what each scope may hold. A class item (`c:`) hangs off the class's
+course and carries only the class's facts: `status` stays `todo`, with no grade,
+checklist or completion; each member's live in their `marks`. A project row (`p:`) is a
+`project` or `task`, with the team's status, checklist and completion, and never a
+grade, weight or course.
 
 The Worker converts between `snake_case` columns and the camelCase the prototype
 already uses, so the front end's field names do not change.
@@ -195,13 +236,15 @@ already uses, so the front end's field names do not change.
 
 | `type` | Statuses | Counts as complete (pink row) |
 | --- | --- | --- |
-| `exam` | `todo` Upcoming · `done` Sat · `graded` Graded | `done`, `graded` |
+| `exam` | `todo` Upcoming · `done` Taken · `graded` Graded | `done`, `graded` |
+| `quiz` | `todo` Upcoming · `done` Taken · `graded` Graded | `done`, `graded` |
 | `assignment` | `todo` Open · `submitted` Submitted · `graded` Graded | `submitted`, `graded` |
 | `lab` | `todo` Scheduled · `done` Attended · `missed` Missed | `done` |
 | `tutoring` (shown as Tutorial) | `todo` Scheduled · `done` Attended · `missed` Cancelled | `done` |
 | `office` | `todo` Planned · `done` Went · `missed` Skipped | `done` |
 | `task` | `todo` To do · `done` Done | `done` |
 | `project` | `todo` In progress · `done` Shipped · `missed` Dropped; milestones are the checklist | `done` |
+| `c-…` (your own) | those of its kind: To-do as `task`, Event as `lab`, Graded as `assignment` | as that type |
 
 The schema validates `status` against the whole set (`todo`, `submitted`, `graded`,
 `done`, `missed`); the per-type restriction is the client's job, since it's a UI
@@ -250,7 +293,7 @@ progress lives in the browser's IndexedDB on that device and does not sync.
 | `rounds_done` | int | 0–12, rounds whose every step finished |
 | `note` | text | up to 200 characters: what was covered |
 | `manual` | int | 1 when logged by hand, 0 when the timer recorded it |
-| `space_id` | text | for collaboration; see `docs/superpowers/specs/2026-10-02-shared-classes-design.md` |
+| `space_id` | text, nullable | the shared space `course_id` or `item_id` belongs to, when it is a class's or a project's |
 | `created_at`, `updated_at`, `deleted_at` | int | |
 
 The flow itself is `users.study_flow`, JSON `{"steps":[["study",25],["break",5]],"rounds":4}`:
@@ -262,13 +305,13 @@ The school's academic calendar is `users.school_calendar`, JSON
 (no classes), `break` (study break, left out of week numbers), `exams`, `swap` (runs the
 `follows` weekday's timetable) or `note` (a marker). Read from a PDF by
 `POST /api/school-calendar` and checked by the person before it is saved;
-`src/legacy/js/school.js` works out each day for the views, the lecture reviews and the
+`src/core/school.ts` works out each day for the views, the lecture reviews and the
 calendar feed.
 
 The goal and streak rules are `users.study_prefs`, JSON `{"goal":120,"dayMin":15,"rest":[0],"celebrate":true}`:
 a daily goal of 0–720 minutes (0 = none), 1–240 minutes to make a day count, up to six
 rest days (0 = Sunday) that never break the streak, and fireworks on or off. Streaks,
-weeks, months and the heatmap are worked out on the device (`src/legacy/js/history.js`).
+weeks, months and the heatmap are worked out on the device (`src/core/history.ts`).
 
 ---
 
@@ -277,19 +320,19 @@ weeks, months and the heatmap are worked out on the device (`src/legacy/js/histo
 Your own achievements. The built-in ones (study hours,
 streaks, big days, tasks, exams, grades) are never stored: they are worked out on the
 device from sessions and items, as is whether one of these is earned
-(`src/legacy/js/achievements.js`). At most 30 live rows per account; `PUT` a 31st is
+(`src/core/achievements.ts`). At most 30 live rows per account; `PUT` a 31st is
 `400 too_many`.
 
 | Column | Type | Rules |
 | --- | --- | --- |
 | `user_id`, `id` | text, PK | |
 | `name` | text | 1–40 |
-| `sticker` | text | the picture itself: a `data:image/{webp,png,jpeg};base64,` URL, at most 90,000 characters. Cut to a circle and shrunk to 256px or less in the browser (`src/legacy/js/sticker.js`). Served only through the API, to its owner. |
+| `sticker` | text | the picture itself: a `data:image/{webp,png,jpeg};base64,` URL, at most 90,000 characters. Cut to a circle and shrunk to 256px or less in the browser (`src/core/sticker.ts`). Served only through the API, to its owner. |
 | `rule` | text | `hours` \| `grade` |
 | `course_id` | text | `hours` only: the course whose study time counts. A plain reference; a deleted course leaves it locked. |
 | `item_id` | text | `grade` only: the exam or quiz. A deleted one leaves it locked. |
 | `target` | int | hours 1–1000, or the least grade, 1–100 |
-| `space_id` | text | for collaboration; see `docs/superpowers/specs/2026-10-02-shared-classes-design.md` |
+| `space_id` | text | the shared space `course_id` or `item_id` belongs to, when it is a class's or a project's |
 | `created_at`, `updated_at`, `deleted_at` | int | |
 
 ---
@@ -302,7 +345,7 @@ reads it to call Spotify on the user's behalf.
 | Column | Type | Rules |
 | --- | --- | --- |
 | `user_id` | text, PK | |
-| `refresh_token` | text | Versioned AES-GCM ciphertext: `keyId.ciphertext`, encrypted using independent `SPOTIFY_TOKEN_KEYS`. Legacy unversioned tokens are migrated when refreshed; see RELIABILITY-UPGRADE.md. |
+| `refresh_token` | text | Versioned AES-GCM ciphertext: `keyId.ciphertext`, encrypted using independent `SPOTIFY_TOKEN_KEYS`. Legacy unversioned tokens are migrated when refreshed; see [DEPLOYING.md](DEPLOYING.md#spotify) for the keyring and rotation. |
 | `access_token` | text | lives an hour, kept in clear |
 | `expires_at`, `updated_at` | int | ms since the epoch |
 
@@ -318,7 +361,7 @@ A shared class (`kind = 'class'`, its rows in scope `c:<id>`) or team project (`
 
 ## `invites`
 
-`(space_id, user_id)`: an invitation to a space by username (spec §11). `invited_by` (NULL once that account is gone), `role` given on accepting (`editor` or `member`; never `owner`, which moves only by a transfer), `status` `pending` | `accepted` | `declined`, `created_at`, `expires_at` (30 days on). A repeat invite refreshes the one row; accepting makes or revives the membership and marks the row `accepted`. Deleted with its space or the invited account; Stage 5's nightly purge removes rows 90 days old.
+`(space_id, user_id)`: an invitation to a space by username (spec §11). `invited_by` (NULL once that account is gone), `role` given on accepting (`editor` or `member`; never `owner`, which moves only by a transfer), `status` `pending` | `accepted` | `declined`, `created_at`, `expires_at` (30 days on). A repeat invite refreshes the one row; accepting makes or revives the membership and marks the row `accepted`. Deleted with its space or the invited account. Nothing purges old rows yet: Stage 5 plans a nightly purge of invites 90 days old (the `invites_created` index is ready for it).
 
 ## `marks`
 
@@ -343,9 +386,16 @@ A shared class (`kind = 'class'`, its rows in scope `c:<id>`) or team project (`
 | `request_limits (reset_at)` | expired request-window cleanup |
 | `spotify_oauth_states (expires_at)` | expired consent-attempt cleanup |
 | `spotify_refresh_locks (expires_at)` | expired refresh-lease cleanup |
+| `spaces (revision)` | which spaces' member lists moved, on sync |
+| `spaces (code_hash)` | looking up a join code |
+| `members (space_id)` unique, live owners only | exactly one live owner per space |
+| `members (user_id)`, live only | my spaces, on every sync |
+| `invites (user_id)`, pending only | my invites |
+| `invites (created_at)` | the planned invite purge |
+| `error_log (at)`, `admin_log (at)` | the Admin page's lists and their nightly cleanup |
 
-Primary keys and unique constraints also provide indexes. The timestamp indexes
-support the legacy read-only sync route; current clients page through `changes`.
+Primary keys and unique constraints also provide indexes. Clients page through
+`changes`; no route reads rows by timestamp.
 Filters, search, and view switches use the browser's local data after sync.
 The added indexes cover existing relationship and maintenance queries; tests check
 their query plans. See [D1 index guidance](https://developers.cloudflare.com/d1/best-practices/use-indexes/).
@@ -373,13 +423,11 @@ npm run db:check -- --json        # machine-readable report
 npm run db:check -- --remote      # explicitly inspect production, read-only
 ```
 
-Migration 0007 copies all existing item fields into the corrected table before
-replacing the old table, then restores its indexes and sync triggers. The copy runs
-without change-feed triggers, preserving existing revisions, tombstones, history,
-and cursors. Other data tables are not rebuilt. Failed copies roll back, including
-when invalid legacy revisions are found; resolve reported data problems explicitly
-instead of deleting records to make the migration pass. Upgrade and rollback tests
-run against an isolated D1 database populated with the old schema.
+A change that would rebuild a table goes into a fresh database instead:
+`scripts/move-db.mjs` builds the new database from the squashed schema and copies the
+rows across with their revisions, tombstones and change feed, so cursors keep working.
+Resolve reported data problems explicitly instead of deleting records to make a move
+pass. The previous database is kept as a backup.
 
 Meetings, checklists, and links remain bounded JSON arrays because they are loaded
 and edited with their parent. There is no second source of truth for these lists.
@@ -398,9 +446,11 @@ All routes are under `/api`, speak JSON, and require the session cookie except
 | `DELETE /api/session` | → clears the cookie. |
 | `POST /api/session/revoke-all` | → `204`, clears the cookie and invalidates every other session of this user. |
 | `GET /api/me` | → `{profile}`, with `announcement` and `maintenance` (see Maintenance mode) |
-| `PUT /api/me` | `{coat, theme, bg, termStart, displayName, studyFlow, studyPrefs, schoolCalendar}` (`bg` optional, default `med`; `studyFlow`, `studyPrefs` and `schoolCalendar` optional, kept when left out; `schoolCalendar: {}` removes it) → `{profile}` |
-| `POST /api/outline` · `POST /api/school-calendar` | the file (or a PDF's text) as the body, `?name=&today=` → what Workers AI read: an outline, or `{name, terms, days, truncated}`. Nothing is saved. Ten reads a day between them (`429 outline_limit`). |
-| `GET /api/sync?v=2&cursor=<seq>` | → `{changes: [{kind, row}], cursor, more, reset}` — at most 100 changes after `cursor`, deleted rows included with `deletedAt` set. `cursor=0` is a full load. v=2 pages only `courses`, `items`, `quotes`, `study_sessions`, `achievements`; v=3 also pages your `marks` and `space_prefs` in your own scope. See the sync protocol below. |
+| `PUT /api/me` | `{coat, theme, bg, termStart, displayName, types, studyFlow, studyPrefs, schoolCalendar, hiddenSources}` (`bg` optional, default `med`; `types`, `studyFlow`, `studyPrefs`, `schoolCalendar` and `hiddenSources` optional, kept when left out; `schoolCalendar: {}` removes it) → `{profile}` |
+| `POST /api/outline` · `POST /api/school-calendar` · `POST /api/ai/schedule` | the file (or a PDF's text) as the body, `?name=&today=` (and `terms`, `codes`) → what Workers AI read: an outline, a school calendar `{name, terms, days, truncated}`, or a timetable. Nothing is saved. The three share ten reads a day per person (`429 outline_limit`); a failed read is `503 outline_unavailable`. |
+| `GET /api/ai/reads` | → `{left, limit}`: the AI reads left today. |
+| `GET /api/sync?v=3&cursors=<scope>:<seq>,…&sv=<n>` | the current protocol: a cursor per scope, your own rows (including `marks` and `space_prefs`) and those of your live spaces. See Sync v3 below. |
+| `GET /api/sync?v=2&cursor=<seq>` | kept only for tabs on the old client: `{changes: [{kind, row}], cursor, more, reset}`, at most 100 changes of your own `courses`, `items`, `quotes`, `study_sessions`, `achievements` after `cursor`. |
 | `GET /api/{courses,items,quotes,study_sessions,achievements}/:id` | one live row of yours, or `404`. The client uses it to undo a rejected save. |
 | `PUT /api/courses/:id` | a course (with an optional `target`, a whole-number grade goal 1–100) → the stored course, with server `updatedAt`. Upsert. |
 | `DELETE /api/courses/:id` | → `204`. Soft-deletes and nulls `courseId` on the user's items and study sessions. |
@@ -420,6 +470,10 @@ All routes are under `/api`, speak JSON, and require the session cookie except
 | `POST /api/spaces/:sid/absorb` | `{courseId, pairs:[[yourItemId, classItemId]], fromCourse?}` → `{paired, filed}`: merge a course of yours into a class you are in. Marks from your paired items, sessions and achievements moved to the class's ids, your other items filed under the class, your course soft-deleted; your target (and, with `fromCourse`, colour, term and archive) into your prefs. Writes no shared row. A custom-typed item is refused (`400 {field:'pairs'}`); a course already gone answers `{paired: 0, filed: 0}`. |
 | `GET\|PUT\|DELETE /api/marks/:sid/:itemId` | your mark on an item of a space you are in (`404` otherwise, or when the item is deleted). `PUT` merges field by field with `changed` (as shared rows), else whole at `If-Match`; on a project's item only `notes` and `hidden`. |
 | `GET\|PUT\|DELETE /api/space_prefs/:sid` | your prefs for a space you are in: `{color, target, term, archived}`, whole-row `If-Match`. |
+| `GET\|PUT\|DELETE /api/spaces/:sid/{courses,items}/:id` | a shared row of a space you are in; see Sync v3 for how a `PUT` merges. |
+| `GET /api/leaderboard?since=<ms>` · `PUT /api/leaderboard` | → `{joined, week, all}`, each list `[{name, minutes, me}]`, empty until you join; `since` is your Monday 00:00. PUT `{joined: true\|false}` → `204`. See `worker/leaderboard.js`. |
+| `/api/spotify/…` | the Music player: `connect` and `callback` (OAuth), `status`, `token` (for the Web Playback SDK), `player` and its controls, `devices`, `transfer`, `shuffle`, `repeat`, `volume`, `queue`, `play`, `search`, `recent`, `me`, `playlists`, `albums/:id/tracks`, `artists/:id/albums`; `DELETE /api/spotify` disconnects. Compact answers, never raw Spotify JSON. See `worker/api.js` and `worker/spotify/`. |
+| `/api/admin/…` | admins only (`403 forbidden` otherwise): `accounts` (list, create, `:id/password`, `:id/revoke`, `:id/admin`, delete), `locks/:key` (clear a login lockout), `errors`, `audit`, `traffic`, `health`, `announcement`, `maintenance`. See `worker/admin.js`. |
 
 Errors are `{error, field?}`: `400` bad shape (with the field), `401` no session,
 `404` a row that isn't yours, `413` body over 1 MB.
@@ -442,7 +496,7 @@ off, and the message in the Import with AI sheet; admins keep the feature under 
 bar. The Worker enforces what is a feature of its own: for non-admins, with
 `import` or `app` on, `/api/outline`, `/api/school-calendar` and `/api/ai/*` answer
 `503 {error: 'maintenance', feature}`; with `classes` or `app` on, so does every
-`/api/spaces…` route (and `/api/invites…`, `/api/join…` once they exist). Personal
+`/api/spaces…`, `/api/invites…` and `/api/join` route. Personal
 rows, `/api/me` and `/api/sync` are never stopped. A shared edit refused this way
 stays pending on the device, with no try counted, and uploads once it is back.
 
@@ -468,8 +522,9 @@ Profiles and tracker rows carry a `revision`, with
 supported incremental cursor.
 
 1. A local IndexedDB transaction saves a row and an individual `pending` operation
-   together. The UI only announces the change after commit. IndexedDB version 2
-   migrates the old dirty map without deleting unsent work.
+   together. The UI only announces the change after commit. Opening the database
+   (now version 6, `src/core/db.ts`) moves a version 1 dirty map into `pending`
+   without deleting unsent work.
 2. Web Locks permit one sync cycle per account across tabs. IndexedDB transactions
    and persisted operation tokens remain the correctness boundary if Web Locks are
    unavailable. BroadcastChannel refreshes other tabs' render caches.
@@ -477,8 +532,9 @@ supported incremental cursor.
    and increments the revision within the write statement. A stale write returns
    `409 {error: "conflict", current}`; a missing precondition returns 428 so an old
    client cannot overwrite current data. Deletes use the same precondition.
-4. `GET /api/sync?v=2&cursor=0` starts reconciliation. Pages contain at most 100
-   `{kind, row}` changes, `cursor`, `more`, and `reset`. SQLite triggers capture each
+4. `GET /api/sync?v=3` with zero cursors starts reconciliation (see Sync v3 below;
+   `v=2`, one cursor for your own rows, remains for old tabs). Pages contain at most 100
+   changes, the cursors, `more`, and `reset`. SQLite triggers capture each
    write transaction in an increasing sequence keyed by scope (`'u:' || user_id` for a
    person's own rows); repeated updates retain the latest
    change for that entity. Profile reads use `/api/me` and revisions separately.
@@ -486,7 +542,7 @@ supported incremental cursor.
    their change entries, in one transaction. An expired cursor receives `reset:true`.
    The client clears only clean local rows and rebuilds them from cursor zero;
    pending edits and saved conflict copies remain. Each page and its cursor commit
-   together. The timestamp endpoint remains read-only compatibility for old clients.
+   together.
 6. A rejected edit is preserved in the `conflicts` store with the server's version.
    Settings lets the user inspect, export, restore, or discard that copy. Restoring
    uses a revision precondition again, so another intervening edit stays protected.
@@ -500,7 +556,7 @@ supported incremental cursor.
 
 The app pulls `GET /api/sync?v=3&cursors=u:<me>:812,c:<space id>:640&sv=905`. The Worker pages the person's own scope and their live spaces (at most 20), never a scope taken from the request; each scope's changes are read by its own statement, capped at 101 rows and guarded by live membership, all in one D1 batch (D1 refuses a compound SELECT of more than five terms). The answer is `{scopes, cursors, changes:[{scope, kind, row}], more, reset, revoked}`: `scopes` describes each space (with its members only when its revision is above `sv`), `reset` lists scopes whose cursor fell below the floor (each starts again from 0), and `revoked` lists scopes sent that the person may no longer read; the app removes them after the cycle's last page. A scope resyncing from 0 that is still below the floor carries a tagged cursor `r<seq>.<floor>` instead of a number; the app stores and sends it as it came, and the Worker answers a plain number once the scope is past the floor. Shared rows are written through `/api/spaces/<space id>/{courses,items}/<id>`: at the row's revision as a whole; otherwise the fields named in `changed` merge when each still holds its old or new value, else `409 {current, fields, by}`. `?v=2` remains for tabs on the old client and pages only the person's own scope.
 
-On the device, IndexedDB version 5 holds shared rows in `shared_courses` and `shared_items` (keyed `[scope, id]`), the spaces in `spaces`, and `meta.cursors` (`{scope: seq}`, or the tagged string while a resync is under way); pending keys for shared rows are `shared_items:<scope>:<id>`.
+On the device, IndexedDB version 6 holds shared rows in `shared_courses` and `shared_items` (keyed `[scope, id]`), the spaces in `spaces`, your `marks` and `space_prefs`, and `meta.cursors` (`{scope: seq}`, or the tagged string while a resync is under way); pending keys for shared rows are `shared_items:<scope>:<id>`.
 
 ---
 
@@ -523,8 +579,34 @@ On the device, IndexedDB version 5 holds shared rows in `shared_courses` and `sh
 4. **Sessions** — `HttpOnly` keeps the cookie away from scripts, `SameSite=Lax` keeps
    other sites from posting with it, and every state-changing request must also carry
    a same-origin `Origin` / `Sec-Fetch-Site`, or none at all, else `403 cross_site`.
-   API responses are `Cache-Control: no-store`.
+   Every API response, errors and redirects included, is `Cache-Control: no-store`
+   and `X-Content-Type-Options: nosniff`. There is no CORS: unknown paths are a JSON
+   `404`, a known path with another method `405` with `Allow`.
 5. **The page** — `public/_headers` sets a Content Security Policy (scripts only from
    this origin, the Spotify SDK, and a hash of the inline theme script; no framing; no inline event
-   handlers), HSTS, `nosniff` and a same-origin referrer policy. Dynamic text is escaped through `esc()`; inline style attributes are blocked.
-   Presentation values are applied through validated CSS properties; ids and colours are validated before they reach an attribute.
+   handlers; `style-src-attr 'none'`), HSTS, `nosniff` and a same-origin referrer policy.
+   React escapes all text it renders, and nothing uses `dangerouslySetInnerHTML`.
+   Inline `style` attributes are blocked; React's `style` props are set through the
+   DOM, and ids and colours are validated before they reach an attribute.
+6. **Rate limits** — `worker/limits.js`, fixed one-minute windows in D1
+   (`request_limits`), so they hold across tabs and isolates; a refused request does
+   not extend or count toward its window, and gets `429` with `Retry-After`.
+
+   | Budget | Limit | Key |
+   | --- | --- | --- |
+   | Sign-in, per IP | 30 a minute (`too_many_attempts`) | a SHA-256 of `cf-connecting-ip`; plus the per-username lockout above |
+   | Every signed-in request | 600 a minute per account | `api:<user>`, claimed with the session check in one batch |
+   | Spotify routes | 60 a minute per account | `spotify:<user>`; `token`, `status`, `connect`, `callback` and the `GET player` poll are exempt (still under the 600) |
+   | AI reads (outline, school calendar, schedule) | 10 a day per account (`outline_limit`) | `outline:<user>`, counted before the model runs |
+   | Calendar feed | 60 fetches an hour per link | |
+   | Invites, join codes | 20 invites an hour, 10 join tries an hour | |
+
+   When Spotify answers `429`, the Worker keeps a cooldown for its `Retry-After`
+   (30 seconds when missing, at most 7 days) and refuses calls until it ends. A token
+   refresh holds a 15-second lease; other requests wait up to 12 seconds, then get a
+   retryable `503`. Playback commands are never retried. The nightly cron removes
+   expired windows, OAuth states and leases.
+7. **Caching** — the service worker (`public/sw.js`) caches only the public app shell
+   and never `/api`. Your data lives in per-account IndexedDB for offline use, deleted
+   on sign-out. Spotify lists are kept in memory only; sign-in, sign-out and disconnect
+   reload the page to drop them.

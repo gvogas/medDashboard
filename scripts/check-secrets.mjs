@@ -10,5 +10,5 @@ const required = ['SESSION_SECRET'];
 const config = readFileSync(new URL('../wrangler.jsonc', import.meta.url), 'utf8');
 if (/"SPOTIFY_CLIENT_ID"\s*:\s*"[^"]+"/.test(config)) required.push('SPOTIFY_CLIENT_SECRET', 'SPOTIFY_TOKEN_KEYS');
 const missing = required.filter((name) => !secrets.has(name));
-if (missing.length) throw new Error('Set these Worker secrets before deploying: ' + missing.join(', ') + '. See docs/RELIABILITY-UPGRADE.md.');
+if (missing.length) throw new Error('Set these Worker secrets before deploying: ' + missing.join(', ') + '. See docs/DEPLOYING.md (Spotify).');
 console.log('Required deployment secrets are present.');

@@ -1,178 +1,78 @@
-# medDashboard
+# Term
 
-A student tracker — assignments, exams, labs, tutorials, office hours and tasks —
-with courses that carry their own class timetable: day, time and room number.
+Term is a student tracker for courses, class timetables, deadlines, grades and study
+time. It is a small multi-user web app for a few people. Each account is created by
+hand; there is no sign-up page. It runs on free Cloudflare tiers: static files and a
+Worker API in front of a D1 (SQLite) database. The live site is
+https://rounds.termanitor07.workers.dev.
 
-Built as a multi-user web app on Cloudflare: static files and a small Worker API in
-front of a D1 (SQLite) database. Accounts are usernames and passwords, created by you. The look is the "Ward Board":
-clinical teal on cool paper, a white coat you pick the colour of, and a DNA and
-biomolecule layer behind the board.
-
-## State
-
-| | |
-| --- | --- |
-| Design | **Approved.** Three directions explored, one chosen and refined. |
-| Prototype | **Working**, every feature clickable, data in browser storage. |
-| Plan and schema | **Written** — see [`PLAN.md`](PLAN.md) and [`docs/DATA-MODEL.md`](docs/DATA-MODEL.md). |
-| Worker API | **Built and tested** — sessions, profile, rows, sync, nightly purge. |
-| Front end | **Ported** — local-first store, sync, sign-in screen, PWA shell. |
-| Accounts | **Built** — username and password, created with `npm run user:add`. |
-| Live | **Deployed** at https://rounds.termanitor07.workers.dev; `npm run deploy` releases a change. |
-
-## What's here
-
-```
-index.html                the page; Vite builds it and everything it loads into dist/
-src/                      the front end: React components (components/), src/legacy/ (the app
-                          before React, moving over stage by stage), bridge.ts between them
-public/                   static files copied as they are: headers, service worker, manifest, icons
-worker/                   the API: routes, auth, validation, D1 queries, rate limits, Spotify proxy
-scripts/                  add-user, build, deploy checks (secrets, database), CSP hash, Spotify key
-migrations/               the D1 schema, one file per change
-test/                     vitest, running inside the Workers runtime against a local D1
-wrangler.jsonc            Workers config: static assets, D1 binding, vars, cron
-design/                   the original prototype and the mockups it was chosen from
-PLAN.md                   decisions, phases, file layout, backlog
-docs/DATA-MODEL.md        the schema explained: tables, API, sync
-docs/DEPLOYING.md         running, deploying, accounts and troubleshooting, step by step
-docs/API-REVIEW.md        endpoint inventory, rate limits, caching and review findings
-docs/RELIABILITY-UPGRADE.md  sync revisions, local queue and Spotify token keys
-```
+The repo is called medDashboard. Inside the code the app is called `rounds` (the Worker,
+the database, cookies and IndexedDB).
 
 ## Features
 
-- **Eight item types** — exams, quizzes, assignments, labs, tutorials, office hours,
-  tasks and projects. Each opens a page with notes, a checklist and links.
-- **Courses** you add and edit, each with a colour and a list of classes (kind, day,
-  start, end, room). Courses can be archived without losing their items.
-- **Four views** — week board grouped by day, a month calendar of classes with the
-  deadlines on it (a Deadlines switch turns them off), a sortable table of everything,
-  and Spotify. On a phone the page scrolls as one, the stats swipe sideways and the
-  table becomes a list of cards.
-- **Live status** — overdue flags, a countdown to the next exam or quiz, class hours per
-  week, lab hours.
-- **Settings** — light / dark / follow-the-device, one of six themes (Medicine,
-  Computer Science, Law, Aviation, Sports, Engineering), each with its own sidebar picture,
-  colours, next-exam animation, study word and quote, your name and a goal ("Headed for …")
-  on the picture, the coat colour on Medicine, and your own quotes shown in a tile beside
-  the stats.
-- **Local-first** — the app renders from IndexedDB, works offline, and syncs to D1 on
-  load, on focus and after every edit. The pill in the top bar shows where it stands.
-- **Several people** — each has a username and password and sees only their own data.
-- **Grades** — a weight per exam, quiz, assignment, lab or project; each course shows its
-  weighted average so far and what the rest needs to finish at 50, 60, 70 or a target
-  of your own, and "What if…" scores to try out before they are real.
-- **Calendar feed** — a private link, from Settings › Study, that Google or Apple
-  Calendar subscribes to: every dated item and your weekly classes. A new link retires
-  the old one.
-- **Keyboard shortcuts** — `n` new item, `t` today, `[` `]` back and forward, `1`–`5`
-  the views, `/` search; `?` lists them.
-- **Import** — a school calendar (`.ics`), a CSV timetable, or a course outline (PDF or
-  Word, read by Workers AI) becomes courses, classes and dated items, through a
-  preview where you tick what to keep.
-- **Study** — optional spaced-review tasks after each lecture (days 1, 3, 7, 21), and
-  exam topics filled from the lectures an exam covers, with the pace needed per day.
-- **Study timer** — a flip clock that runs a flow you build: Study and Break steps of
-  any length, repeated for a number of rounds (study is pink and breaks purple on Med,
-  teal and pink on CS). Start opens a focus screen with only the clock and Spotify;
-  study time is logged against a course and an optional item.
-- **Study history** — the Study tab shows your streak, today against a daily goal and
-  the term's total; the week by day and course, with arrows back through past weeks; a
-  heatmap of the term; and every session by week or on a month calendar. Time away from
-  the timer can be logged by hand with a note, any session edited, and a delete undone.
-  Settings › Study sets the goal, when a day counts, rest days and fireworks.
-- **Spotify** — a badge on the coat shows what you are listening to, with previous,
-  play/pause and next, and a Spotify view lets you search, browse your playlists and
-  Liked Songs, see the queue and set the volume. Each person connects their own account
-  from Settings.
+- **Courses and items**: exams, quizzes, assignments, labs, tutorials, office hours,
+  tasks and projects. Courses carry their weekly classes (day, time, room).
+- **Views**: Week, Month, All items, Study and Music. Admins also get Admin.
+- **Semesters and school calendar**: terms, breaks and repeating items.
+- **Grades**: weights, the average so far, what the rest needs, and "What if" scores.
+- **Study**: a flow timer, a focus screen, streaks, history and spaced review.
+- **Achievements and a leaderboard.**
+- **Music**: each person connects their own Spotify account.
+- **Import with AI**: course outlines, school calendars and schedule screenshots,
+  read by Workers AI and shown as a preview before anything is saved.
+- **Shared classes**: invites, join codes and roles, with your own layer (status,
+  grade, notes, colour) on top. Admin-only for now; shared projects come later.
+- **Admin page**: accounts, error log, audit log, announcement banner, and maintenance
+  switches per feature.
+- **Themes**: Medicine, Computer Science, Law, Aviation, Sports and Engineering, each
+  in light or dark.
+- **Local-first**: the app reads from IndexedDB, works offline, and syncs to D1. A
+  private calendar feed works with Google or Apple Calendar.
 
-## Running it locally
+## Quick start
 
-Needs Node and Wrangler (`npm i -g wrangler`, then `wrangler login` once).
+Needs Node and Wrangler (`wrangler login` once). Copy `.dev.vars.example` to
+`.dev.vars` and set a long random `SESSION_SECRET`.
 
 ```sh
 npm install
-npm run db:local        # apply the schema to the local D1
-npm run db:check        # read-only integrity checks and table counts
-npm run dev             # http://127.0.0.1:8787 (Vite, with the Worker inside it)
-npm run dev:built       # the same, serving the production build
-npm test                # regression tests against the Worker, a local D1 and a fake Spotify
+npm run db:local                  # apply migrations to the local D1
+npm run user:add -- yourname      # add --admin for an admin account
+npm run dev                       # http://127.0.0.1:8787
+npm run check                     # typecheck, tests and build
 ```
 
-Local sessions need a `.dev.vars` file (git-ignored): copy `.dev.vars.example` and set
-any long random `SESSION_SECRET`. The two Spotify values can stay empty until you set
-the player up. Then create an account on the local database and sign in with it:
+## Deploying
 
-```sh
-npm run user:add -- yourname --name "Your Name"
-```
+Pushing `main` deploys through Cloudflare's Git build (`npm run build`). That build does
+not apply database migrations. If a change includes a new migration, run
+`npm run db:remote` before you push. Secrets, accounts, Spotify setup and
+troubleshooting are in [docs/DEPLOYING.md](docs/DEPLOYING.md).
 
-## Going live
+## Keyboard shortcuts
 
-The step-by-step guide is [`docs/DEPLOYING.md`](docs/DEPLOYING.md). In short:
+| Key | Does |
+| --- | --- |
+| `n` | New item |
+| `t` | Go to today |
+| `[` `]` | Previous / next week or month |
+| `1`–`5` | Week, Month, All items, Study, Music |
+| `/` | Search |
+| `?` | Show the list |
+| `Esc` | Close a drawer or leave the focus screen |
 
-1. **Secret.** `wrangler secret put SESSION_SECRET` with a long random string.
-   Rotating it signs everyone out.
-2. **Database and deploy.**
+## Docs
 
-```sh
-npm run deploy          # pending migrations into the production D1, then static files + Worker
-```
-
-3. **Accounts.** One command per person, on the production database. It asks for the
-   password twice and never shows it. There is no sign-up page: only accounts you
-   create this way can sign in.
-
-```sh
-npm run user:add -- yourname --remote --name "Your Name"
-```
-
-To change someone's password, the same command with `--reset`:
-
-```sh
-npm run user:add -- yourname --reset --remote
-```
-
-To remove an account together with everything it owns, `--delete`. It asks you to
-type the username to confirm:
-
-```sh
-npm run user:add -- yourname --delete --remote
-```
-
-Passwords are hashed with PBKDF2-SHA256 at 100,000 iterations and a random salt,
-the most the Workers runtime allows per call. Five wrong guesses lock a username for
-a minute, doubling per further guess up to an hour. Usernames are 3–32 characters of
-letters, digits, dot, dash or underscore, and are not case-sensitive.
-
-### Spotify
-
-The player is off until the app has a Spotify client id and secret. Setting it up is
-about ten minutes, once, and is walked through in [`docs/DEPLOYING.md`](docs/DEPLOYING.md#spotify).
-In short: create an app at developer.spotify.com with the two callback URLs and the
-Web API and Web Playback SDK ticked (the tab itself can play, as a device called Rounds), add each
-listener's Spotify email to it (five at most, a Spotify limit), put the client id in
-`wrangler.jsonc` and `.dev.vars`, and set the secret:
-
-```sh
-wrangler secret put SPOTIFY_CLIENT_SECRET
-wrangler secret put SPOTIFY_TOKEN_KEYS     # JSON keyring, see docs/RELIABILITY-UPGRADE.md
-npm run deploy
-```
-
-Then everyone connects their own account from Settings. Controls need Spotify Premium;
-free accounts still see what is playing. Tokens live in D1, the refresh token
-encrypted under `SPOTIFY_TOKEN_KEYS`, which is separate from `SESSION_SECRET`: rotating
-the session secret signs people out but leaves Spotify connected.
-
-If you ever edit the inline script in `index.html`, run `npm run csp:update` to
-write its new hash into `public/_headers`, or the page's security policy will block it.
-`npm run build` refuses to build while the hash is stale.
-
-On a phone, open the site and choose *Add to Home Screen*; it installs as an app and
-opens offline.
+- [docs/PROJECT-OVERVIEW.md](docs/PROJECT-OVERVIEW.md): start here. Architecture, repo
+  map and history.
+- [docs/DATA-MODEL.md](docs/DATA-MODEL.md): schema, API, sync and security, including
+  account and lockout rules.
+- [docs/DEPLOYING.md](docs/DEPLOYING.md): running, deploying, accounts,
+  [Spotify](docs/DEPLOYING.md#spotify), migrations and troubleshooting.
+- [docs/superpowers/](docs/superpowers/): design specs and implementation plans.
+- [docs/archive/](docs/archive/): finished plans and old reviews, kept for history.
 
 ## Licence
 
-MIT — see [`LICENSE`](LICENSE).
+MIT. See [LICENSE](LICENSE).
