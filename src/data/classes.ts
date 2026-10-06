@@ -1,18 +1,19 @@
 // Shared classes on this device (spec §11, §13, §15): opening their sheets, your invites,
 // making a class, and the words for what went wrong. Shown to admins only until classes
 // open to everyone (Stage 6); the Worker refuses anyone else too. Every call needs a
-// connection; the class itself arrives by sync like everything else, and its rows stay out
-// of the views until Stage 4 (effective.ts, SHARED_IN_VIEWS).
+// connection; the class itself arrives by sync like everything else, and its rows join an
+// admin's views with your marks on top (effective.ts).
 
 import { useSyncExternalStore } from "react"
 import { api, ApiError } from "@/core/api"
+import * as store from "@/core/store"
 import { data } from "@/core/store"
 import * as sync from "@/core/sync"
 import { HEXES } from "@/core/model"
 import { REVIEW_ID } from "@/core/shared"
 import { openSheet, type ClassTab } from "./overlay"
 import { toast } from "./toast"
-import type { Course, Invite, Item, Space, SpaceSummary } from "./types"
+import type { Course, Invite, Item, Space, SpacePref, SpaceSummary } from "./types"
 
 /* ── the sheets ── */
 
@@ -70,9 +71,9 @@ export async function joinWithCode(code: string): Promise<SpaceSummary> {
 
 /* ── a class arriving on this device ── */
 
-/** The class and its course are on this device. */
+/** The class, its course and your prefs for it are on this device (the prefs come in your own scope, in the same sync). */
 export const landed = (id: string): boolean =>
-    data.spaces.some((s) => s.id === id) && data.shared_courses.some((c) => c.scope === "c:" + id)
+    data.spaces.some((s) => s.id === id) && data.shared_courses.some((c) => c.scope === "c:" + id) && (data.space_prefs ?? []).some((p) => p.id === id)
 
 /** Sync until a class just made or joined is here, a few times at most: false if it has not
     come (offline); it then arrives with a later sync. */
@@ -99,6 +100,14 @@ export function classFrom(courseId: string, spaces: Space[], shared: { scope: st
 /** A colour none of your courses uses yet, for a new class. */
 export const freeColour = (courses: Pick<Course, "color">[]): string => HEXES.find((h) => !courses.some((c) => c.color === h)) ?? HEXES[0]
 
+/** Save a change to your prefs for a space (your colour, semester, target, archive); false while they have not arrived. */
+export async function savePref(spaceId: string, patch: Partial<SpacePref>): Promise<boolean> {
+    const held = (data.space_prefs ?? []).find((p) => p.id === spaceId)
+    if (!held) return false
+    await store.saveSpacePref({ ...held, ...patch })
+    return true
+}
+
 async function arrive(space: SpaceSummary): Promise<void> {
     await download(space.id)
     openClass(space.id, "members")
@@ -106,15 +115,15 @@ async function arrive(space: SpaceSummary): Promise<void> {
 
 /** A blank class: its course has the name and code given, and a colour you do not use yet. */
 export async function makeBlank(name: string, code: string): Promise<void> {
-    const space = await api.spaces.create({ kind: "class", course: { code, name, color: freeColour(data.courses), instructor: "", term: "", meetings: [] } })
+    const space = await api.spaces.create({ kind: "class", course: { code, name, color: freeColour([...data.courses, ...(data.space_prefs ?? [])]), instructor: "", term: "", meetings: [] } })
     await arrive(space)
 }
 
-/** A class from your course `courseId` with the items picked. Stage 3 copies: your own course stays as it is. */
+/** A class from your course `courseId` with the items picked: they move into the class with your layer on top (Stage 4 plan, Decision 6). */
 export async function convert(courseId: string, items: string[]): Promise<void> {
     const space = await api.spaces.create({ kind: "class", convertCourseId: courseId, items })
     await arrive(space)
-    toast(space.name + " is now a shared class too. Your own course stays as it is.")
+    toast(space.name + " is now a shared class. Your status, grades and notes moved with it.")
 }
 
 /* ── words ── */

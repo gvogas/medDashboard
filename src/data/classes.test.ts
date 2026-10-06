@@ -7,6 +7,7 @@ const fake = vi.hoisted(() => ({
         courses: [] as { color: string }[],
         spaces: [] as { id: string }[],
         shared_courses: [] as { scope: string; id: string }[],
+        space_prefs: [] as { id: string }[],
     },
     api: { invites: { list: vi.fn(), accept: vi.fn(), decline: vi.fn() }, spaces: { create: vi.fn() }, join: vi.fn() },
     syncNow: vi.fn(async () => true),
@@ -33,13 +34,14 @@ import {
 
 const SID = "sp0000000001"
 const summary = { id: SID, scope: "c:" + SID, kind: "class", name: "Databases", role: "owner", members: 1 }
-const arrive = () => { fake.data.spaces = [{ id: SID }]; fake.data.shared_courses = [{ scope: "c:" + SID, id: "db" }] }
+const arrive = () => { fake.data.spaces = [{ id: SID }]; fake.data.shared_courses = [{ scope: "c:" + SID, id: "db" }]; fake.data.space_prefs = [{ id: SID }] }
 
 beforeEach(() => {
     fake.data.profile = { id: "u-me", isAdmin: true }
     fake.data.courses = []
     fake.data.spaces = []
     fake.data.shared_courses = []
+    fake.data.space_prefs = []
     fake.syncNow.mockImplementation(async () => true)
 })
 afterEach(() => { vi.clearAllMocks() })
@@ -128,6 +130,6 @@ describe("a class arriving", () => {
         expect(fake.openSheet).toHaveBeenLastCalledWith({ kind: "class", spaceId: SID, tab: "members" })
         await convert("db", ["a1"])
         expect(fake.api.spaces.create).toHaveBeenLastCalledWith({ kind: "class", convertCourseId: "db", items: ["a1"] })
-        expect(fake.toast).toHaveBeenCalledWith("Databases is now a shared class too. Your own course stays as it is.")
+        expect(fake.toast).toHaveBeenCalledWith("Databases is now a shared class. Your status, grades and notes moved with it.")
     })
 })

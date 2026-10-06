@@ -15,7 +15,7 @@ import { Button, Fields, Label, Note, Select, SheetBody, SheetFoot, SheetHead, T
 type Start = "blank" | "convert"
 const OPTIONS: readonly [Start, string, string][] = [
     ["blank", "Blank", "Name it and add items as you go."],
-    ["convert", "Convert a course you have", "Copies the course and the items you tick."],
+    ["convert", "Convert a course you have", "Moves the course and the items you tick into the class."],
 ]
 
 export function NewClassSheet() {

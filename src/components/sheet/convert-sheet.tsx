@@ -1,7 +1,7 @@
 // Converting a course of yours into a shared class (spec §13), for admins until Stage 6:
 // tick the items the class takes. Tasks start unticked; lecture reviews and items of your
-// own types cannot go. Stage 3 copies the course and the ticked items into the class and
-// leaves your own course as it is (Stage 3 plan, Decision 1). While the admins have shared
+// own types cannot go. The course and the ticked items move into the class with your status,
+// grades and notes on top (your marks); the rest stay yours, filed under the class. While the admins have shared
 // classes switched off, everyone else gets the maintenance page instead.
 
 import { useState } from "react"
@@ -52,7 +52,7 @@ function Picker({ courseId, bar }: { courseId: string; bar: boolean }) {
             <SheetBody>
                 {bar && <MaintenanceBar className="mb-0" />}
                 <h2 className="m-0 text-[22px] leading-[1.22] font-[750] tracking-[-.02em]">Share {course.name}</h2>
-                <Note>Ticked items are copied into the class. Tasks start unticked.</Note>
+                <Note>Ticked items move into the class: everyone in it sees their dates, weights and class notes. Tasks start unticked.</Note>
                 {items.length === 0 ? <Note>This course has no items. The class starts empty.</Note> : (
                     <ul className="m-0 flex list-none flex-col gap-1 p-0">
                         {items.map((it) => {
@@ -75,7 +75,7 @@ function Picker({ courseId, bar }: { courseId: string; bar: boolean }) {
                     </ul>
                 )}
                 {chosen.some((it) => it.links.length > 0) && <Warning>Links on ticked items become visible to the class.</Warning>}
-                <Note>Your own course stays as it is, with your status, grades and notes. They are never shared.</Note>
+                <Note>Your status, grades and notes move with you and are never shared. Unticked items stay yours, filed under the class.</Note>
                 {err && <Note tone="bad">{err}</Note>}
             </SheetBody>
             <SheetFoot hint={chosen.length + " of " + items.length + " items"}>

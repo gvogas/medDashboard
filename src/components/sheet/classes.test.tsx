@@ -7,7 +7,7 @@ const fake = vi.hoisted(() => ({
     data: {
         profile: { id: "u-me", isAdmin: true } as Record<string, unknown> | null,
         courses: [] as unknown[], items: [] as unknown[], quotes: [] as unknown[], study_sessions: [] as unknown[], achievements: [] as unknown[],
-        spaces: [] as unknown[], shared_courses: [] as unknown[], shared_items: [] as unknown[],
+        spaces: [] as unknown[], shared_courses: [] as unknown[], shared_items: [] as unknown[], marks: [] as unknown[], space_prefs: [] as unknown[],
     },
     api: {
         spaces: { create: vi.fn(), get: vi.fn(), invite: vi.fn(), revokeInvite: vi.fn(), setRole: vi.fn(), transfer: vi.fn(), makeCode: vi.fn(), dropCode: vi.fn() },
@@ -52,9 +52,10 @@ const details = (role = "owner") => ({
     code: null,
 })
 const summary = { id: SID, scope: SCOPE, kind: "class" as const, name: "Web Services", role: "member" as const, members: 3 }
+const pref = { id: SID, spaceId: SID, color: "#17B3AE", target: null, term: "", archived: false, revision: 2 }
 
 beforeEach(() => {
-    Object.assign(fake.data, { profile: { id: "u-me", isAdmin: true }, courses: [], items: [], spaces: [], shared_courses: [], shared_items: [] })
+    Object.assign(fake.data, { profile: { id: "u-me", isAdmin: true }, courses: [], items: [], spaces: [], shared_courses: [], shared_items: [], marks: [], space_prefs: [] })
     fake.syncNow.mockImplementation(async () => true)
     fake.api.invites.list.mockResolvedValue({ invites: [] })
 })
@@ -163,7 +164,7 @@ describe("a new shared class", () => {
     it("makes a blank one with a colour you do not use, waits for it, then opens its Members", async () => {
         fake.data.courses = [{ id: "c1", name: "Anatomy", color: "#E4749B", archived: false }]
         fake.api.spaces.create.mockResolvedValue({ ...summary, role: "owner", name: "Operating Systems" })
-        fake.syncNow.mockImplementation(async () => { fake.data.spaces = [space()]; fake.data.shared_courses = [course]; return true })
+        fake.syncNow.mockImplementation(async () => { fake.data.spaces = [space()]; fake.data.shared_courses = [course]; fake.data.space_prefs = [pref]; return true })
         render(<NewClassSheet />)
         fireEvent.click(screen.getByRole("button", { name: "Continue" }))
         expect(screen.getByText("Give it a name and a code.")).toBeTruthy()
@@ -282,7 +283,7 @@ describe("joining with a code", () => {
         fake.api.join.mockResolvedValue(summary)
         let arrive = () => {}
         fake.syncNow.mockImplementation(() => new Promise<boolean>((done) => {
-            arrive = () => { fake.data.spaces = [space("member")]; fake.data.shared_courses = [course]; done(true) }
+            arrive = () => { fake.data.spaces = [space("member")]; fake.data.shared_courses = [course]; fake.data.space_prefs = [pref]; done(true) }
         }))
         render(<JoinSheet code="" space={null} />)
         const box = screen.getByRole("textbox", { name: "Join code" })
@@ -310,7 +311,7 @@ describe("joining with a code", () => {
     })
 
     it("follows a class joined from an invite straight to its download", async () => {
-        fake.syncNow.mockImplementation(async () => { fake.data.spaces = [space("member")]; fake.data.shared_courses = [course]; return true })
+        fake.syncNow.mockImplementation(async () => { fake.data.spaces = [space("member")]; fake.data.shared_courses = [course]; fake.data.space_prefs = [pref]; return true })
         render(<JoinSheet code="" space={summary} />)
         expect(await screen.findByText("You're in Web Services")).toBeTruthy()
         expect(screen.queryByText(/hasn't finished downloading/)).toBeNull()

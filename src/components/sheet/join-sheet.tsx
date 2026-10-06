@@ -1,21 +1,35 @@
 // Joining a class (spec §11, §20), for admins until Stage 6: with a code (a /#join= link
-// fills it in), or straight after accepting an invite. The class downloads onto this
-// device, then the sheet says you are in. Your semester and colour for it come with
-// Stage 4 (space_prefs), the school-calendar offer with Stage 6. While the admins have
-// shared classes switched off, everyone else gets the maintenance page instead.
+// fills it in), or straight after accepting an invite. The class downloads onto this device;
+// then you confirm your semester for it (with a school calendar) and your colour, and, when a
+// course of yours matches the class, go on to merge it. The school-calendar offer comes with
+// Stage 6. While the admins have shared classes switched off, everyone else gets the
+// maintenance page instead.
 
-import { useEffect, useState } from "react"
+import { useEffect, useId, useState } from "react"
 import { normalizeCode } from "@/core/shared"
+import { PALETTE } from "@/core/model"
+import { currentTerm, type SchoolCalendar } from "@/core/school"
+import { today } from "@/core/dates"
+import { data } from "@/core/store"
 import { closeSheet } from "@/data/overlay"
-import { download, joinWithCode, messageFor, openClass } from "@/data/classes"
+import { download, joinWithCode, messageFor, openClass, savePref } from "@/data/classes"
+import { matchFor, openMerge } from "@/data/merge"
+import { schoolCal } from "@/data/query"
+import { semesterOptions } from "@/data/course-edit"
 import { useMaintenance } from "@/data/maintenance"
 import { MaintenanceBar, MaintenancePage } from "@/components/maintenance"
 import type { SpaceSummary } from "@/data/types"
-import { Button, Note, SheetBody, SheetFoot, SheetHead, TextInput } from "./fields"
+import { Button, Fields, Label, Note, Select, SheetBody, SheetFoot, SheetHead, Swatches, TextInput } from "./fields"
 
 type Stage = { at: "code" } | { at: "loading"; space: SpaceSummary } | { at: "done"; space: SpaceSummary; here: boolean }
 const TITLE = "m-0 text-[22px] leading-[1.22] font-[750] tracking-[-.02em] text-foreground"
 const asRole = (role: string) => (role === "editor" ? "an editor" : "a " + role)
+
+/** The semester offered for a class (spec §8): its own when your calendar has a semester of that name, else the one covering today. */
+export function defaultTerm(classTerm: string, cal: SchoolCalendar | null, day = today()): string {
+    if (!cal) return classTerm
+    return cal.terms.some((t) => t.name === classTerm) ? classTerm : currentTerm(cal, day)?.name ?? ""
+}
 
 export function JoinSheet({ code, space }: { code: string; space: SpaceSummary | null }) {
     const maintenance = useMaintenance("classes")
@@ -61,24 +75,7 @@ function Join({ given, space, bar }: { given: string; space: SpaceSummary | null
             </SheetBody>
         </>
     )
-    if (stage.at === "done") {
-        const { space: s, here } = stage
-        return (
-            <>
-                <SheetHead kind="Joined" onClose={closeSheet} />
-                <SheetBody>
-                    {maintenanceBar}
-                    <h2 className={TITLE}>You're in {s.name}</h2>
-                    <Note>{s.members} {s.members === 1 ? "member" : "members"} · you joined as {asRole(s.role)}.</Note>
-                    {!here && <Note>It hasn't finished downloading. It arrives with the next sync.</Note>}
-                </SheetBody>
-                <SheetFoot hint="">
-                    <Button variant="ghost" onClick={closeSheet}>Done</Button>
-                    <Button onClick={() => openClass(s.id)}>Open the class</Button>
-                </SheetFoot>
-            </>
-        )
-    }
+    if (stage.at === "done") return <Joined space={stage.space} here={stage.here} bar={bar} />
     return (
         <>
             <SheetHead kind="Join a class" onClose={closeSheet} />
@@ -95,6 +92,52 @@ function Join({ given, space, bar }: { given: string; space: SpaceSummary | null
             <SheetFoot hint="Needs a connection">
                 <Button variant="ghost" onClick={closeSheet}>Cancel</Button>
                 <Button disabled={busy} onClick={() => void join()}>Join</Button>
+            </SheetFoot>
+        </>
+    )
+}
+
+/* In: your semester and colour for the class (your prefs, written by the Worker when you
+   joined, adjusted here), then the class, or the merge sheet for a course of yours like it. */
+function Joined({ space: s, here, bar }: { space: SpaceSummary; here: boolean; bar: boolean }) {
+    const f = useId(), cal = schoolCal()
+    const pref = (data.space_prefs ?? []).find((p) => p.id === s.id) ?? null
+    const classTerm = (data.shared_courses ?? []).find((c) => c.scope === s.scope)?.term ?? ""
+    const [color, setColor] = useState(pref?.color ?? "")
+    const [term, setTerm] = useState(() => defaultTerm(pref?.term ?? classTerm, cal))
+    const match = matchFor(s.id)
+    const go = async (next: () => void) => {
+        if (pref && (color !== pref.color || term !== pref.term)) await savePref(s.id, { color, term })
+        next()
+    }
+    const terms = cal ? semesterOptions(cal) : []
+    return (
+        <>
+            <SheetHead kind="Joined" onClose={closeSheet} />
+            <SheetBody>
+                {bar && <MaintenanceBar className="mb-0" />}
+                <h2 className={TITLE}>You're in {s.name}</h2>
+                <Note>{s.members} {s.members === 1 ? "member" : "members"} · you joined as {asRole(s.role)}.</Note>
+                {!here && <Note>It hasn't finished downloading. It arrives with the next sync.</Note>}
+                {pref && (
+                    <Fields>
+                        {cal && <>
+                            <Label htmlFor={f + "term"}>Your semester</Label>
+                            <Select id={f + "term"} value={term} onChange={(e) => setTerm(e.target.value)}>
+                                {terms.map(([v, label]) => <option key={v} value={v}>{label}</option>)}
+                            </Select>
+                        </>}
+                        <Label>Your colour</Label>
+                        <Swatches value={color} colors={PALETTE} onChange={setColor} />
+                    </Fields>
+                )}
+                {match && <Note>You have a course of your own like it, {match.name}. Merge it next, so your grades and notes sit on the class's items.</Note>}
+            </SheetBody>
+            <SheetFoot hint="Only you see your colour and semester">
+                <Button variant="ghost" onClick={() => void go(closeSheet)}>Done</Button>
+                {match
+                    ? <Button onClick={() => void go(() => openMerge(s.id, match.id, false))}>Merge my course</Button>
+                    : <Button onClick={() => void go(() => openClass(s.id))}>Open the class</Button>}
             </SheetFoot>
         </>
     )

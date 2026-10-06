@@ -236,6 +236,9 @@ export const api = {
     transfer: (sid: string, userId: string) => empty(request('POST', `/api/spaces/${sid}/transfer`, { userId })),
     makeCode: (sid: string): Promise<JoinCode> => request('POST', `/api/spaces/${sid}/code`),
     dropCode: (sid: string) => empty(request('DELETE', `/api/spaces/${sid}/code`)),
+    /* merge a course of yours into the class (spec §13): pairs are [your item's id, the class's item's id] */
+    absorb: (sid: string, body: { courseId: string; pairs: [string, string][]; fromCourse: boolean }): Promise<{ paired: number; filed: number }> =>
+      request('POST', `/api/spaces/${sid}/absorb`, body),
   },
   invites: {
     list: (): Promise<{ invites: Invite[] }> => request('GET', '/api/invites'),
