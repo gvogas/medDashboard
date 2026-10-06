@@ -6,6 +6,7 @@ import { requireUser } from './auth.js';
 import { requireAdmin } from './admin.js';
 import { validateSharedCourse } from './validate.js';
 import { ADMINS_ONLY, checkConvert, createClass, setRole, spaceDetails, transfer } from './spaces.js';
+import { acceptInvite, declineInvite, invite, myInvites, revokeInvite } from './invites.js';
 
 const SID = '([a-z0-9]{12})';
 const UID = '([^/]{1,64})';
@@ -52,6 +53,24 @@ export const classRoutes = [
   ['POST', route(`spaces/${SID}/transfer`), async ({ request, env, params: [sid] }) => {
     const userId = await requireUser(request, env);
     await transfer(env.DB, userId, sid, idOf((await readJson(request)).userId, 'userId', 64));
+    return done();
+  }],
+  ['POST', route(`spaces/${SID}/invites`), async ({ request, env, params: [sid] }) => {
+    const userId = await requireUser(request, env);
+    const body = await readJson(request);
+    if (typeof body.username !== 'string') throw bad('username');
+    if (body.role != null && body.role !== 'editor' && body.role !== 'member') throw bad('role');
+    return json(await invite(env.DB, userId, sid, { username: body.username, role: body.role ?? null }), 201);
+  }],
+  ['DELETE', route(`spaces/${SID}/invites/${UID}`), async ({ request, env, params: [sid, uid] }) => {
+    await revokeInvite(env.DB, await requireUser(request, env), sid, uid);
+    return done();
+  }],
+  ['GET', route('invites'), async ({ request, env }) => json({ invites: await myInvites(env.DB, await requireUser(request, env)) })],
+  ['POST', route(`invites/${SID}/accept`), async ({ request, env, params: [sid] }) =>
+    json({ space: await acceptInvite(env.DB, await joiner(request, env), sid) })],
+  ['POST', route(`invites/${SID}/decline`), async ({ request, env, params: [sid] }) => {
+    await declineInvite(env.DB, await requireUser(request, env), sid);
     return done();
   }],
 ];
