@@ -16,6 +16,7 @@ import { FlipClock } from "@/components/study/flip-clock"
 import { GoalRing } from "@/components/study/tiles"
 import { BackIcon, PauseIcon, PhaseLabel, PlayIcon, RoundStrip, SkipIcon, StopIcon } from "@/components/study/timer-bits"
 import { useCourses, useItems } from "@/data/store"
+import { keyedCourses, keyedItems } from "@/data/refs"
 import { useUi } from "@/data/ui"
 import { THEMES } from "@/data/themes"
 import { getSheet } from "@/data/overlay"
@@ -51,7 +52,7 @@ function FocusScreen({ run }: { run: Run }) {
     const music = useUi((u) => u.focusMusic)
     const bg = useUi((u) => u.bg)
     const today = useToday(run)
-    const courses = useCourses(), items = useItems()
+    const courses = keyedCourses(useCourses()), items = keyedItems(useItems())
     const root = useRef<HTMLDivElement>(null)
 
     /* Space, M and /, when no sheet, overlay or box has them (Esc is data/keyboard.ts's). */

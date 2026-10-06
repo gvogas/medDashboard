@@ -5,7 +5,8 @@
 import { cn } from "@/lib/utils"
 import { isComplete } from "@/core/model"
 import { hhmm, parse, DOW, MON } from "@/core/dates"
-import { course as courseOf } from "@/core/store"
+import { courseByKey, courseKeyOf, keyOf } from "@/data/effective"
+import { SourceMark } from "./source-mark"
 import { useTable } from "@/data/views"
 import { openItem, sortTable } from "@/data/actions"
 import { TableFilters } from "./table-filters"
@@ -22,7 +23,7 @@ const when = (it: Item) => {
 /** What the empty table says is hiding things: the status, the types off, the course, the search. */
 function hiddenBy(f: Filters): string {
     const off = itemTypes().filter((t) => !t.hidden && f.types[t.id] === false).length
-    const c = f.course !== "all" ? (courseOf(f.course) as Course | null) : null
+    const c = f.course !== "all" ? courseByKey(f.course) : null
     const parts = [
         f.show === "open" ? "Open" : f.show === "overdue" ? "Overdue" : "",
         off ? off + (off === 1 ? " type" : " types") + " off" : "",
@@ -77,13 +78,13 @@ export function TableView() {
                             </td></tr>
                         )}
                         {rows.map((it) => {
-                            const c = courseOf(it.courseId) as Course | null
+                            const c = courseByKey(courseKeyOf(it))
                             return (
                                 <tr
-                                    key={it.id}
+                                    key={keyOf(it)}
                                     tabIndex={0}
-                                    onClick={() => openItem(it.id)}
-                                    onKeyDown={onActivate(() => openItem(it.id))}
+                                    onClick={() => openItem(keyOf(it))}
+                                    onKeyDown={onActivate(() => openItem(keyOf(it)))}
                                     className={cn(
                                         "cursor-pointer hover:bg-muted focus-visible:bg-muted focus-visible:outline-2 focus-visible:outline-[var(--accent)]",
                                         "max-[640px]:grid max-[640px]:grid-cols-[1fr_auto] max-[640px]:gap-x-2 max-[640px]:gap-y-1 max-[640px]:rounded-lg max-[640px]:border max-[640px]:border-border max-[640px]:bg-card max-[640px]:p-2.5 max-[640px]:[&>td]:border-0 max-[640px]:[&>td]:p-0",
@@ -91,7 +92,8 @@ export function TableView() {
                                     )}
                                 >
                                     <td className={td}>
-                                        <b className={cn("font-semibold", isComplete(it) ? "text-[var(--done-ink)]" : "text-foreground")}>{it.title}</b>
+                                        <b className={cn("font-semibold", isComplete(it) ? "text-[var(--done-ink)]" : "text-foreground")}>{it.title}</b>{" "}
+                                        <SourceMark item={it} course={c} />
                                         <Steps item={it} className="mt-1" />
                                     </td>
                                     <td className={cn(td, "max-[640px]:text-right")}><TypeChip type={it.type} /></td>

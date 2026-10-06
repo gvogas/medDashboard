@@ -3,7 +3,7 @@
 // touches the DOM or storage; the type list is read through a getter boot.ts sets.
 
 import { diffDays, today, parse, addDays, iso } from './dates.ts';
-import type { Achievement, ChecklistEntry, Course, Flow, Item, ItemType, Meeting, Quote, StepKind, StudyPrefs, StudySession, TypePref } from './types.ts';
+import type { Achievement, ChecklistEntry, Course, Flow, Item, ItemType, Mark, Meeting, Quote, SpacePref, StepKind, StudyPrefs, StudySession, TypePref } from './types.ts';
 
 /** How a type looks: its name, its plural and its colour. */
 export interface TypeMeta { label: string; plural: string; color: string }
@@ -266,6 +266,7 @@ export function normalizeItem(raw: RawItem): Item {
     recurUntil: raw.recurUntil && raw.recurUntil >= date ? raw.recurUntil : null,
     dept: cut(raw.dept, 40),
     completedAt: typeof raw.completedAt === 'number' ? raw.completedAt : null,
+    classId: typeof raw.classId === 'string' && raw.classId ? raw.classId : null,
     createdAt: raw.createdAt ?? null,
     revision: raw.revision ?? 0, updatedAt: raw.updatedAt ?? null,
   };
@@ -351,6 +352,7 @@ export function normalizeStudySession(raw: Raw<StudySession>): StudySession {
     roundsDone: clampInt(raw.roundsDone, 0, 12, 0),
     note: typeof raw.note === 'string' ? raw.note.slice(0, 200) : '',
     manual: !!raw.manual,
+    spaceId: raw.spaceId || null,
     createdAt: raw.createdAt ?? null,
     revision: raw.revision ?? 0, updatedAt: raw.updatedAt ?? null,
   };
@@ -370,6 +372,46 @@ export function normalizeAchievement(raw: Raw<Achievement>): Achievement {
     courseId: rule === 'hours' ? raw.courseId || null : null,
     itemId: rule === 'grade' ? raw.itemId || null : null,
     target: clampInt(raw.target, 1, rule === 'grade' ? 100 : 1000, rule === 'grade' ? 90 : 10),
+    spaceId: raw.spaceId || null,
+    createdAt: raw.createdAt ?? null,
+    revision: raw.revision ?? 0, updatedAt: raw.updatedAt ?? null,
+  };
+}
+
+const checklistOf = (raw: unknown): ChecklistEntry[] => Array.isArray(raw)
+  ? raw.slice(0, 50).map((c: { id?: unknown; text?: unknown; done?: unknown }) => ({ id: typeof c?.id === 'string' && c.id ? c.id : uid(), text: cut(c?.text, 140), done: !!c?.done }))
+  : [];
+
+/** Your mark as stored or received: its id is '<space id>:<item id>', split at the first ':'. */
+export function normalizeMark(raw: Raw<Mark>): Mark {
+  const id = typeof raw.id === 'string' && raw.id ? raw.id : (raw.spaceId || '') + ':' + (raw.itemId || '');
+  const at = id.indexOf(':');
+  return {
+    id,
+    spaceId: raw.spaceId || id.slice(0, at),
+    itemId: raw.itemId || id.slice(at + 1),
+    status: raw.status || 'todo',
+    grade: typeof raw.grade === 'number' ? raw.grade : null,
+    weight: typeof raw.weight === 'number' ? raw.weight : null,
+    notes: cut(raw.notes, 5000),
+    checklist: checklistOf(raw.checklist),
+    completedAt: typeof raw.completedAt === 'number' ? raw.completedAt : null,
+    hidden: !!raw.hidden,
+    createdAt: raw.createdAt ?? null,
+    revision: raw.revision ?? 0, updatedAt: raw.updatedAt ?? null,
+  };
+}
+
+/** Your prefs for a space, as stored or received. */
+export function normalizeSpacePref(raw: Raw<SpacePref>): SpacePref {
+  const id = raw.id || raw.spaceId || '';
+  return {
+    id,
+    spaceId: raw.spaceId || id,
+    color: HEXES.includes(raw.color as string) ? raw.color as string : HEXES[0],
+    target: isInt(raw.target) && raw.target >= 1 && raw.target <= 100 ? raw.target : null,
+    term: cut(raw.term, 40),
+    archived: !!raw.archived,
     createdAt: raw.createdAt ?? null,
     revision: raw.revision ?? 0, updatedAt: raw.updatedAt ?? null,
   };

@@ -3,7 +3,7 @@
 // them now, Settings in 4b. The item card adds its rows (Props, Prop), its type buttons
 // (Chips) and the folded parts' buttons (AddButton).
 
-import { useLayoutEffect, useRef, type ComponentProps, type ReactNode } from "react"
+import { useLayoutEffect, useRef, useState, type ComponentProps, type ReactNode } from "react"
 import { cn } from "@/lib/utils"
 import { accent } from "@/components/views/bits"
 
@@ -161,6 +161,19 @@ export const QUIET = "bg-transparent hover:bg-muted focus-visible:bg-card"
 
 export const TextInput = ({ className, ...props }: ComponentProps<"input">) => <input type="text" {...props} className={cn(CONTROL, className)} />
 export const NumberInput = ({ className, ...props }: ComponentProps<"input">) => <input type="number" {...props} className={cn(CONTROL, className)} />
+/** A number box over a value that is saved elsewhere and lands a moment later (the store, a
+ *  class's row, your mark): it keeps what you type while it has focus, so a keystroke typed
+ *  before the save lands isn't lost, and shows the saved value again once you leave it. */
+export function KeptNumberInput({ value, onChange, onFocus, onBlur, ...props }: Omit<ComponentProps<"input">, "value"> & { value: number | string | null | undefined }) {
+    const shown = value == null ? "" : String(value)
+    const [text, setText] = useState<string | null>(null)
+    return (
+        <NumberInput {...props} value={text ?? shown}
+            onFocus={(e) => { setText(shown); onFocus?.(e) }}
+            onBlur={(e) => { setText(null); onBlur?.(e) }}
+            onChange={(e) => { setText(e.target.value); onChange?.(e) }} />
+    )
+}
 export const DateInput = ({ className, ...props }: ComponentProps<"input">) => <input type="date" {...props} className={cn(CONTROL, className)} />
 export const Select = ({ className, ...props }: ComponentProps<"select">) => <select {...props} className={cn(CONTROL, "cursor-pointer", className)} />
 export const TextArea = ({ className, ...props }: ComponentProps<"textarea">) => (

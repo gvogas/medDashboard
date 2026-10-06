@@ -48,3 +48,11 @@ export async function readJson(request) {
   if (!body || typeof body !== 'object' || Array.isArray(body)) throw new HttpError(400, { error: 'invalid', field: 'body' });
   return body;
 }
+
+/** A write's `If-Match: "<revision>"`: 428 without one (a client from before revisions), 400 when malformed. */
+export function revisionOf(request) {
+  const raw = request.headers.get('if-match');
+  if (raw === null) throw new HttpError(428, { error: 'reload_required' });
+  if (!/^"\d{1,16}"$/.test(raw) || !Number.isSafeInteger(Number(raw.slice(1, -1)))) throw new HttpError(400, { error: 'invalid', field: 'revision' });
+  return Number(raw.slice(1, -1));
+}

@@ -1,7 +1,7 @@
 // Read-only checks shared by the CLI and D1 tests. Results contain counts only.
 // Per-table counts are added as scalar subqueries: D1 refuses a compound SELECT of
 // more than five terms, and there are more tables than that.
-const trackerTables = ['courses', 'items', 'quotes', 'study_sessions', 'achievements'];
+const trackerTables = ['courses', 'items', 'quotes', 'study_sessions', 'achievements', 'marks', 'space_prefs'];
 /* Courses and items carry their scope; the other tables a user, whose feed is 'u:' || user_id. */
 const scoped = (table) => table === 'courses' || table === 'items';
 const feedOf = (table, r) => (scoped(table) ? `${r}.scope` : `'u:' || ${r}.user_id`);

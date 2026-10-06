@@ -6,7 +6,7 @@
 
 import { useEffect, useId, useState } from "react"
 import { cn } from "@/lib/utils"
-import { baseOf, httpUrl, isComplete, isOpen, isTest, normalizeItem, statusesFor, tmeta, typeList, uid } from "@/core/model"
+import { baseOf, isComplete, isOpen, isTest, normalizeItem, statusesFor, tmeta, typeList } from "@/core/model"
 import { shortDate, today, DOW } from "@/core/dates"
 import * as store from "@/core/store"
 import { repeatEnds } from "@/core/school"
@@ -18,23 +18,28 @@ import { useCourses, useItems, useStudySessions } from "@/data/store"
 import { studiedFor } from "@/data/study"
 import { useUi } from "@/data/ui"
 import { beforeSheetClose, closeSheet, updateDraft } from "@/data/overlay"
-import { busyDays, celebrate, chainReview, countdown, deriveEdit, editNow, flush, linkUrl, REPEAT_CHOICES, REPEATS, typeInto, untilLabel, useItemView, type ItemField } from "@/data/item-edit"
+import { busyDays, celebrate, chainReview, countdown, deriveEdit, editNow, flush, REPEAT_CHOICES, REPEATS, typeInto, untilLabel, useItemView, type ItemField } from "@/data/item-edit"
 import { deleteItem, openCourse } from "@/data/actions"
+import { courseByKey, keyOf } from "@/data/effective"
+import { itemCourseKey, keyedItems, placeCourse } from "@/data/refs"
+import { addToClass, canAddToClass } from "@/data/marks"
 import { accent, StatusChip } from "@/components/views/bits"
-import type { ChecklistEntry, Course, Item } from "@/data/types"
+import type { Item } from "@/data/types"
 import {
-    AddButton, Button, Chips, DateInput, IconButton, Meter, Note, NumberInput, Prop, Props, QUIET, RemoveButton, Section, Segmented, Select,
-    SheetBody, SheetFoot, SheetHead, TextArea, TextInput, TitleArea, CONTROL,
+    AddButton, Button, Checkbox, Chips, DateInput, IconButton, NumberInput, Prop, Props, QUIET, Section, Segmented, Select,
+    SheetBody, SheetFoot, SheetHead, TextArea, TextInput, TitleArea,
 } from "./fields"
 import { TimeField } from "./time-field"
 import { DatePicker } from "./date-picker"
 import { ICONS } from "./prop-icons"
+import { Checklist, Links } from "./item-parts"
 
 /** Fields saved once typing pauses; the rest save at once. */
 const TYPED: ItemField[] = ["title", "notes", "where", "dept", "checklist"]
-const MAX_STEPS = 50, MAX_LINKS = 20
 
-const courseOf = (id: string | null) => (id ? (store.course(id) as Course | null) : null)
+/* A course by its key: one of yours by its id, a class's by '<scope>/<id>'. An item of yours
+   filed under a class shows under the class's course (refs.ts itemCourseKey). */
+const courseOf = (key: string | null) => courseByKey(key)
 
 export function ItemSheet({ id, draft }: { id?: string; draft?: Item }) {
     const stored = useItemView(id ?? "")
@@ -45,6 +50,8 @@ export function ItemSheet({ id, draft }: { id?: string; draft?: Item }) {
     const sessions = useStudySessions()
     const bg = useUi((u) => u.bg)
     const [fillNote, setFillNote] = useState("")
+    /* a new item with a class picked goes into the class, for its owner or an editor, unless unticked */
+    const [shareNew, setShareNew] = useState(true)
     const f = useId()
     /* Checklist, Notes and Links start folded; one the item has opens by itself and stays
        open while the card is, even emptied. `focus` is the part a + just opened. */
@@ -66,13 +73,15 @@ export function ItemSheet({ id, draft }: { id?: string; draft?: Item }) {
     if (!it) return null
 
     const m = tmeta(it.type)
-    const c = courseOf(it.courseId)
+    const c = courseOf(itemCourseKey(it))
     const cal = schoolCal()
     const ends = repeatEnds(cal, it.date)
 
     /** An edit to a field, with what it brings along; `from` is what was pressed, for the show. */
     const set = (field: ItemField, value: unknown, from?: Element) => {
-        const patch = deriveEdit(it, field, value, courseOf, cal)
+        /* the course picker works in keys: a class's course files the item under the class */
+        let patch = deriveEdit({ ...it, courseId: itemCourseKey(it) }, field, value, courseOf, cal)
+        if (field === "courseId") patch = { ...patch, ...placeCourse(patch.courseId ?? null) }
         if (isNew) { updateDraft(normalizeItem({ ...it, ...patch }) as Item); return }
         if (TYPED.includes(field)) { typeInto(it.id, patch); return }
         const finishing = field === "status" && !isComplete(it) && isComplete({ ...it, ...patch })
@@ -85,11 +94,13 @@ export function ItemSheet({ id, draft }: { id?: string; draft?: Item }) {
 
     const save = async () => {
         if (!it.title.trim()) return
-        await store.saveItem(normalizeItem(it))
+        const row = normalizeItem(it)
+        if (shareNew && canAddToClass(row)) await addToClass(row)
+        else await store.saveItem(row)
         closeSheet()
     }
 
-    const types = typeList(bg, store.data.items).filter((t: { id: string; hidden: boolean }) => t.id === it.type || !t.hidden)
+    const types = typeList(bg, items).filter((t: { id: string; hidden: boolean }) => t.id === it.type || !t.hidden)
     const statuses = statusesFor(it.type) as [string, string][]
     const prep = !isNew && isTest(it.type) && isOpen(it) ? prepPace(it, today()) : null
     const lectures = !!c && (c.meetings || []).some((x) => x.kind === "Lecture")
@@ -135,7 +146,7 @@ export function ItemSheet({ id, draft }: { id?: string; draft?: Item }) {
                     {c && next && (
                         <div className="flex flex-wrap items-center gap-1.5 text-[12.5px] text-muted-foreground">
                             {c.name} meets {DOW[next.weekday]} {next.start} · {next.room || "room not set"}
-                            <IconButton className="px-1.5 py-px text-[11px]" onClick={() => openCourse(c.id)}>Edit course</IconButton>
+                            <IconButton className="px-1.5 py-px text-[11px]" onClick={() => openCourse(keyOf(c))}>{c.spaceId ? "Open the class" : "Edit course"}</IconButton>
                         </div>
                     )}
                 </div>
@@ -146,9 +157,11 @@ export function ItemSheet({ id, draft }: { id?: string; draft?: Item }) {
                     <Prop icon={ICONS.course} label="Course" htmlFor={f + "course"}>
                         <span style={accent(c?.color)} className="flex items-center gap-2">
                             <span aria-hidden="true" className="size-[9px] flex-none rounded-[3px] bg-[var(--c,var(--line))]" />
-                            <Select id={f + "course"} className={QUIET} value={it.courseId ?? ""} onChange={(e) => set("courseId", e.target.value)}>
+                            <Select id={f + "course"} className={QUIET} value={itemCourseKey(it) ?? ""} onChange={(e) => set("courseId", e.target.value)}>
                                 <option value="">No course</option>
-                                {courses.filter((x) => !x.archived || x.id === it.courseId).map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}
+                                {courses.filter((x) => !x.archived || keyOf(x) === itemCourseKey(it)).map((x) => (
+                                    <option key={keyOf(x)} value={keyOf(x)}>{x.name}{x.source === "class" ? " · shared class" : ""}</option>
+                                ))}
                             </Select>
                         </span>
                     </Prop>
@@ -224,6 +237,10 @@ export function ItemSheet({ id, draft }: { id?: string; draft?: Item }) {
                     )}
                 </Props>
 
+                {isNew && canAddToClass(it) && (
+                    <Checkbox id={f + "share"} checked={shareNew} onChange={setShareNew}>Add it to the class for everyone (unticked, it stays yours, filed under the class)</Checkbox>
+                )}
+
                 {show.steps && (
                     <Checklist
                         item={it}
@@ -231,7 +248,7 @@ export function ItemSheet({ id, draft }: { id?: string; draft?: Item }) {
                         /* a step typed waits for the pause like other text; a tick, an add or a remove saves at once */
                         onChange={(list, typing) => { if (typing || isNew) set("checklist", list); else void editNow(it.id, { checklist: list }) }}
                         fill={!isNew && test && lectures ? () => {
-                            const r = fillTopics(it, c, store.data.items, termStart(), schoolCal())
+                            const r = fillTopics({ ...it, courseId: itemCourseKey(it) }, c, keyedItems(items), termStart(), schoolCal())
                             if (r.added) void editNow(it.id, { checklist: r.checklist })
                             setFillNote(r.added
                                 ? "Added " + r.added + " lecture" + (r.added === 1 ? "" : "s") + "." + (r.left ? " " + r.left + " more did not fit under the 50-step limit." : "")
@@ -271,106 +288,5 @@ export function ItemSheet({ id, draft }: { id?: string; draft?: Item }) {
                 </SheetFoot>
             )}
         </>
-    )
-}
-
-function Checklist({ item, onChange, fill, fillNote, autoFocus = false }: {
-    item: Item; onChange: (list: ChecklistEntry[], typing: boolean) => void; fill: (() => void) | null; fillNote: string; autoFocus?: boolean
-}) {
-    const list = item.checklist || []
-    const done = list.filter((s) => s.done).length
-    const [adding, setAdding] = useState("")
-    const replace = (id: string, change: Partial<ChecklistEntry>) => list.map((s) => (s.id === id ? { ...s, ...change } : s))
-
-    return (
-        <Section title={isTest(item.type) ? "Topics" : "Checklist"} note={list.length ? done + " of " + list.length + " done" : undefined}>
-            {fill && <Button variant="ghost" className="self-start" onClick={fill}>Fill topics from lectures</Button>}
-            {fillNote && <Note>{fillNote}</Note>}
-            {list.length > 0 && <Meter part={done / list.length} pink full={done === list.length} />}
-            {list.length > 0 && (
-                <ul className="m-0 flex list-none flex-col gap-0.5 p-0">
-                    {list.map((s) => (
-                        <li key={s.id} className="group flex items-start gap-2 rounded-md px-0.5 py-[3px] hover:bg-muted">
-                            <button
-                                type="button"
-                                aria-pressed={s.done}
-                                aria-label={"Done: " + (s.text || "step")}
-                                onClick={() => onChange(replace(s.id, { done: !s.done }), false)}
-                                className={cn(
-                                    "mt-0.5 grid size-3.5 flex-none cursor-pointer place-items-center rounded border-[1.5px] p-0",
-                                    s.done ? "border-[#D2748F] bg-[#D2748F] text-white" : "border-[var(--box-line)] bg-transparent text-transparent",
-                                )}
-                            >
-                                <svg viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" className="size-[9px]"><path d="M2 6.5l2.6 2.6L10 3.5" /></svg>
-                            </button>
-                            <input
-                                value={s.text}
-                                maxLength={140}
-                                aria-label="Step"
-                                onChange={(e) => onChange(replace(s.id, { text: e.target.value }), true)}
-                                onBlur={() => void flush()}
-                                className={cn("min-w-0 flex-1 border-0 bg-transparent p-px font-[inherit] text-[12.5px] outline-none", s.done ? "text-[var(--done-ink)] line-through" : "text-foreground")}
-                            />
-                            <RemoveButton aria-label="Remove step" className="opacity-0 group-focus-within:opacity-100 group-hover:opacity-100 focus-visible:opacity-100 [@media(hover:none)]:opacity-100"
-                                onClick={() => onChange(list.filter((x) => x.id !== s.id), false)} />
-                        </li>
-                    ))}
-                </ul>
-            )}
-            {list.length < MAX_STEPS && (
-                <input
-                    type="text"
-                    value={adding}
-                    maxLength={140}
-                    aria-label="Add a step"
-                    autoFocus={autoFocus}
-                    placeholder="Add a step, press Enter"
-                    onChange={(e) => setAdding(e.target.value)}
-                    onKeyDown={(e) => {
-                        if (e.key !== "Enter" || !adding.trim()) return
-                        e.preventDefault()
-                        onChange([...list, { id: uid(), text: adding.trim(), done: false }], false)
-                        setAdding("")
-                    }}
-                    className={cn(CONTROL, "border-border")}
-                />
-            )}
-        </Section>
-    )
-}
-
-function Links({ item, onChange, autoFocus = false }: { item: Item; onChange: (links: Item["links"]) => void; autoFocus?: boolean }) {
-    const links = item.links || []
-    const [label, setLabel] = useState("")
-    const [url, setUrl] = useState("")
-    const [bad, setBad] = useState(false)
-    const add = () => {
-        const full = linkUrl(url, httpUrl)
-        if (!full) { setBad(!!url.trim()); return }
-        onChange([...links, { label: (label.trim() || full.replace(/^https?:\/\//i, "")).slice(0, 60), url: full }])
-        setLabel(""); setUrl(""); setBad(false)
-    }
-    const onEnter = (e: React.KeyboardEvent) => { if (e.key === "Enter") { e.preventDefault(); add() } }
-
-    return (
-        <Section title="Links">
-            {links.map((l, i) => (
-                <div key={i} className="flex items-center gap-1.5 text-[12.5px]">
-                    <span aria-hidden="true" className="text-muted-foreground">↗</span>
-                    {/* only a web link becomes a link: never a javascript: or data: URL, however it got here */}
-                    {httpUrl(l.url)
-                        ? <a href={l.url} target="_blank" rel="noopener noreferrer" className="[overflow-wrap:anywhere] text-[var(--accent)] no-underline hover:underline">{l.label || l.url}</a>
-                        : <span>{l.label || l.url}</span>}
-                    <RemoveButton aria-label="Remove link" className="ml-auto" onClick={() => onChange(links.filter((_, j) => j !== i))} />
-                </div>
-            ))}
-            {links.length < MAX_LINKS && (
-                <div className="flex gap-1.5">
-                    <input type="text" value={label} maxLength={60} placeholder="Label" aria-label="Link label" autoFocus={autoFocus} onChange={(e) => setLabel(e.target.value)} onKeyDown={onEnter} className={cn(CONTROL, "flex-[0_0_96px] border-border")} />
-                    <input type="url" value={url} maxLength={500} placeholder="https://…" aria-label="Link URL" aria-invalid={bad || undefined}
-                        onChange={(e) => { setUrl(e.target.value); setBad(false) }} onKeyDown={onEnter} className={cn(CONTROL, "flex-1 border-border")} />
-                </div>
-            )}
-        </Section>
     )
 }

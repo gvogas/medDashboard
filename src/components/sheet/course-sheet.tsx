@@ -1,32 +1,43 @@
 // A course in the sheet: its name and code, teacher, term, colour, its weekly classes,
 // and for a course with weighted items, the grades so far and what the rest needs. It is
 // a draft until Save; leaving with changes asks first.
+// Opened with a class's key (from the class sheet's Edit class details), it edits the
+// class's shared facts for everyone: no grades, archive or delete, which are each member's.
 
 import { useEffect, useId, useMemo, useRef, useState } from "react"
 import { cn } from "@/lib/utils"
 import { colourName, KINDS, PALETTE } from "@/core/model"
 import { dur, DOW } from "@/core/dates"
 import * as store from "@/core/store"
-import { courseGrade, neededLabel, targetsFor, ungraded } from "@/core/grades"
-import { useCourses, useItems } from "@/data/store"
+import { useCourses, useItems, useProfile, useSharedCourses } from "@/data/store"
+import { courseKeyOf, type EffectiveCourse } from "@/data/effective"
+import { isSharedKey, splitKey } from "@/data/refs"
+import type { Row } from "@/core/db"
 import { closeSheet, onRequestClose } from "@/data/overlay"
 import { courseChanged, forSaving, MAX_CLASSES, newClass, newCourse, semesterNote, semesterOptions, semesterPicked } from "@/data/course-edit"
 import { schoolCal } from "@/data/query"
 import { deleteCourse } from "@/data/actions"
 import { accent } from "@/components/views/bits"
-import type { Course, Item, Meeting } from "@/data/types"
+import type { Course, Meeting } from "@/data/types"
 import {
-    Button, Checkbox, Fields, Label, Meter, Note, NumberInput, RemoveButton, Section, Segmented, SheetBody, SheetFoot, SheetHead, Swatches,
+    Button, Checkbox, Fields, Label, Note, RemoveButton, Section, Segmented, SheetBody, SheetFoot, SheetHead, Swatches,
     TextInput, TitleArea, Warning, CONTROL,
 } from "./fields"
 import { TimeField } from "./time-field"
+import { Grades } from "./grades"
+import { ShareCourse } from "./share-course"
 
 const WEEK = [1, 2, 3, 4, 5, 6, 0]
 
 export function CourseSheet({ id }: { id: string | null }) {
-    const courses = useCourses()
+    const courses = useCourses() as EffectiveCourse[]
+    const sharedRows = useSharedCourses()
     const items = useItems()
-    const stored = id ? courses.find((c) => c.id === id) ?? null : null
+    /* a class's course by its key: the class's own row, saved for everyone */
+    const shared = id && isSharedKey(id) ? splitKey(id) : null
+    const stored = shared
+        ? sharedRows.find((c) => c.scope === shared.scope && c.id === shared.id) ?? null
+        : id ? courses.find((c) => !c.source && c.id === id) ?? null : null
     const [draft, setDraft] = useState<Course>(() => (stored ? structuredClone(stored) : newCourse(courses.length)))
     const [asking, setAsking] = useState(false)
     /* what-if scores: never saved, gone when the sheet closes */
@@ -36,6 +47,7 @@ export function CourseSheet({ id }: { id: string | null }) {
     const isNew = !stored
     const changed = courseChanged(draft, stored)
     const cal = schoolCal()
+    const admin = !!useProfile()?.isAdmin
 
     /* ✕, Escape and the scrim ask before throwing changes away; asked, they discard */
     useEffect(() => {
@@ -50,16 +62,26 @@ export function CourseSheet({ id }: { id: string | null }) {
     const editClass = (mid: string, change: Partial<Meeting>) => edit({ meetings: draft.meetings.map((m) => (m.id === mid ? { ...m, ...change } : m)) })
     const save = async () => {
         if (!draft.name.trim()) return
-        await store.saveCourse(forSaving(draft))
+        if (shared) await store.saveShared("shared_courses", { ...forSaving(draft), scope: shared.scope, target: null, archived: false } as unknown as Row & { scope: string })
+        else await store.saveCourse(forSaving(draft))
         closeSheet()
     }
 
-    const mine = useMemo(() => items.filter((it) => it.courseId === draft.id), [items, draft.id])
+    /* by key: a class's items, whose course may have this id too, are not this course's */
+    const mine = useMemo(() => items.filter((it) => courseKeyOf(it) === draft.id), [items, draft.id])
     const hours = Math.round((draft.meetings || []).reduce((s, m) => s + dur(m.start, m.end), 0) * 10) / 10
+
+    if (shared && !stored) return (
+        <>
+            <SheetHead kind="Class details" onClose={closeSheet} />
+            <SheetBody><Note>This class isn't on this device yet. It arrives with the next sync.</Note></SheetBody>
+            <SheetFoot hint=""><Button onClick={closeSheet}>Done</Button></SheetFoot>
+        </>
+    )
 
     return (
         <>
-            <SheetHead color={draft.color} kind={isNew ? "New course" : "Course"} onClose={() => { if (changed && !asking) setAsking(true); else closeSheet() }}>
+            <SheetHead color={draft.color} kind={shared ? "Class details" : isNew ? "New course" : "Course"} onClose={() => { if (changed && !asking) setAsking(true); else closeSheet() }}>
                 <span style={accent(draft.color)} className="rounded-full bg-[color-mix(in_srgb,var(--c)_14%,var(--panel))] px-2 py-px text-[10.5px] font-semibold tracking-[.06em] text-[color-mix(in_srgb,var(--c)_80%,var(--ink))] uppercase">
                     {draft.code || "code"}
                 </span>
@@ -92,11 +114,12 @@ export function CourseSheet({ id }: { id: string | null }) {
                     <Label>Colour</Label>
                     <Swatches value={draft.color} colors={PALETTE} onChange={(color) => edit({ color })} />
                     <span className="col-start-2 text-[11px] text-muted-foreground">{colourName(draft.color)}</span>
-                    {!isNew && <>
+                    {!isNew && !shared && <>
                         <Label htmlFor={f + "arch"}>Archived</Label>
                         <Checkbox id={f + "arch"} checked={draft.archived} onChange={(archived) => edit({ archived })}>hidden from the sidebar, items kept</Checkbox>
                     </>}
                 </Fields>
+                {shared && <Note>Everyone in the class sees these; each member's colour and semester start from them. Yours are in the class's Yours.</Note>}
 
                 <Section title="Classes" note="time · room">
                     {draft.meetings.length === 0 && <Note>No classes yet — add the first one below.</Note>}
@@ -122,8 +145,9 @@ export function CourseSheet({ id }: { id: string | null }) {
                         : <Note>Twelve classes is the most a course can hold.</Note>}
                 </Section>
 
-                {!isNew && <Grades course={draft} items={mine} whatIf={whatIf} setWhatIf={setWhatIf} onTarget={(target) => edit({ target })} />}
-                {!isNew && mine.length > 0 && (
+                {!isNew && !shared && <Grades course={draft} items={mine} whatIf={whatIf} setWhatIf={setWhatIf} onTarget={(target) => edit({ target })} />}
+                {!isNew && !shared && admin && <ShareCourse courseId={draft.id} dirty={changed} />}
+                {!isNew && !shared && mine.length > 0 && (
                     <Warning>{mine.length} item{mine.length === 1 ? "" : "s"} {mine.length === 1 ? "is" : "are"} filed under this course. Deleting it leaves them without a course.</Warning>
                 )}
             </SheetBody>
@@ -135,93 +159,11 @@ export function CourseSheet({ id }: { id: string | null }) {
                 </SheetFoot>
             ) : (
                 <SheetFoot hint={draft.name.trim() ? (isNew ? "Ready to save" : changed ? "Unsaved changes" : "No changes yet") : "Give it a name to save"}>
-                    {!isNew && <Button variant="ghost" onClick={() => void deleteCourse(draft.id)}>Delete</Button>}
+                    {!isNew && !shared && <Button variant="ghost" onClick={() => void deleteCourse(draft.id)}>Delete</Button>}
                     <Button variant="ghost" onClick={closeSheet}>Cancel</Button>
                     <Button disabled={!draft.name.trim()} onClick={() => void save()}>Save course</Button>
                 </SheetFoot>
             )}
         </>
-    )
-}
-
-/* Weighted grade so far, how much of the course it covers, what the rest needs to reach
-   50, 60, 70 or the course's own target, and what-if scores for what is still to come. */
-function Grades({ course, items, whatIf, setWhatIf, onTarget }: {
-    course: Course; items: Item[]; whatIf: Record<string, number>; setWhatIf: (w: Record<string, number>) => void; onTarget: (t: number | null) => void
-}) {
-    const f = useId()
-    const real = courseGrade(items)
-    if (!real.total) return null
-    const open = ungraded(items).sort((a: Item, b: Item) => a.date.localeCompare(b.date)) as Item[]
-    const guessed = open.some((it) => typeof whatIf[it.id] === "number")
-    const g = guessed ? courseGrade(items, whatIf) : real
-    const targets: number[] = targetsFor(course.target)
-
-    return (
-        <Section title="Grades" note={real.graded + " of " + real.total + "% graded"}>
-            <div className="flex items-baseline gap-2">
-                <b className="text-[22px] font-semibold tabular-nums text-foreground">{real.current === null ? "—" : real.current + "%"}</b>
-                <span className="text-[11.5px] text-muted-foreground">current weighted average</span>
-            </div>
-            {guessed && (
-                <div className="flex items-baseline gap-2">
-                    <b className="text-[17px] font-semibold tabular-nums text-[var(--accent)]">{g.current}%</b>
-                    <span className="text-[11.5px] text-muted-foreground">{g.remaining <= 0 ? "your final grade with these scores" : "with your what-if scores"}</span>
-                </div>
-            )}
-            <Meter part={real.graded / Math.max(100, real.total)} />
-            {g.remaining > 0 ? <>
-                <div className="grid grid-cols-[repeat(auto-fit,minmax(64px,1fr))] gap-1.5">
-                    {targets.map((t) => {
-                        const label = neededLabel(g.needed(t))
-                        const mine = t === course.target
-                        return (
-                            <span key={t} className={cn(
-                                "flex flex-col gap-px rounded-lg bg-muted px-2 py-1.5 text-[12px] tabular-nums",
-                                label === "secured" && "text-[var(--good)]", label === "out of reach" && "text-destructive",
-                                mine && "shadow-[inset_0_0_0_1.5px_var(--accent)]",
-                            )}>
-                                <em className={cn("text-[10px] tracking-[.1em] not-italic", mine ? "font-bold text-[var(--accent)]" : "text-muted-foreground")}>{mine ? "Target " + t : t}</em>
-                                {label}
-                            </span>
-                        )
-                    })}
-                </div>
-                <Note>What you need on the {guessed ? "other " : "remaining "}{g.remaining}% to finish at {targets.slice(0, -1).join(", ")} or {targets.at(-1)}.</Note>
-            </> : course.target && g.current !== null && (
-                <Note tone={g.current >= course.target ? "ok" : "bad"}>{g.current >= course.target ? "At or above" : "Below"} your target of {course.target}%.</Note>
-            )}
-            <div className="flex items-center gap-2 text-[12px] text-muted-foreground">
-                <label htmlFor={f + "target"}>Your target</label>
-                <NumberInput id={f + "target"} inputMode="numeric" min={1} max={100} step={1} placeholder="e.g. 75" className="w-20"
-                    value={course.target ?? ""}
-                    onChange={(e) => { const n = Math.round(+e.target.value); onTarget(e.target.value.trim() !== "" && n >= 1 && n <= 100 ? n : null) }} />
-                <span>% final grade</span>
-            </div>
-            {open.length > 0 && (
-                <details open={guessed || undefined} className="text-[12.5px]">
-                    <summary className="cursor-pointer font-semibold text-ink-2">What if…</summary>
-                    <div className="mt-2 flex flex-col gap-1.5">
-                        {open.map((it) => (
-                            <label key={it.id} className="flex items-center gap-2">
-                                <span className="min-w-0 flex-1 truncate">{it.title}</span>
-                                <em className="text-[11px] text-muted-foreground not-italic">{it.weight}%</em>
-                                <NumberInput inputMode="decimal" min={0} max={100} step="any" placeholder="score" className="w-20"
-                                    aria-label={"If I get this score on " + it.title}
-                                    defaultValue={whatIf[it.id] ?? ""}
-                                    onChange={(e) => {
-                                        const v = e.target.value.trim() === "" ? NaN : +e.target.value
-                                        const next = { ...whatIf }
-                                        if (Number.isFinite(v) && v >= 0 && v <= 100) next[it.id] = v; else delete next[it.id]
-                                        setWhatIf(next)
-                                    }} />
-                            </label>
-                        ))}
-                    </div>
-                    <Note>Scores you might get. Not saved; they clear when you close the course.</Note>
-                </details>
-            )}
-            {real.total !== 100 && <Warning>Weights add up to {real.total}%, not 100.</Warning>}
-        </Section>
     )
 }

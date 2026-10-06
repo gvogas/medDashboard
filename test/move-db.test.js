@@ -108,3 +108,27 @@ it('reads spaces and members as empty from a database made before them, and copi
   });
   expect(sql.slice(0, 3).map((s) => s.split(' ').slice(0, 3).join(' '))).toEqual(['INSERT INTO users', 'INSERT INTO spaces', 'INSERT INTO members']);
 });
+
+it('reads invites as empty from a database made before them, and copies them after members', async () => {
+  const queries = new Map(readQueries(await columns(env.MIGRATION_DB)));
+  expect((await env.MIGRATION_DB.prepare(queries.get('invites')).all()).results).toEqual([]);
+  const sql = copyStatements({
+    users: [{ id: 'ana', username: 'ana' }],
+    spaces: [{ id: 'abcdefghij12', kind: 'class', archived: 0, created_at: 1, updated_at: 1, revision: 4 }],
+    members: [{ space_id: 'abcdefghij12', user_id: 'ana', role: 'owner', joined_at: 1, updated_at: 1, revision: 4 }],
+    invites: [{ space_id: 'abcdefghij12', user_id: 'ana', invited_by: null, role: 'member', status: 'pending', created_at: 1, expires_at: 2 }],
+  });
+  expect(sql.slice(0, 4).map((s) => s.split(' ').slice(0, 3).join(' '))).toEqual(['INSERT INTO users', 'INSERT INTO spaces', 'INSERT INTO members', 'INSERT INTO invites']);
+});
+
+it('reads marks and space prefs as empty from a database made before them, and copies them after users', async () => {
+  const queries = new Map(readQueries(await columns(env.MIGRATION_DB)));
+  expect((await env.MIGRATION_DB.prepare(queries.get('marks')).all()).results).toEqual([]);
+  expect((await env.MIGRATION_DB.prepare(queries.get('space_prefs')).all()).results).toEqual([]);
+  const sql = copyStatements({
+    users: [{ id: 'ana', username: 'ana' }],
+    marks: [{ user_id: 'ana', id: 'abcdefghij12:a1', space_id: 'abcdefghij12', item_id: 'a1', status: 'done', grade: null, weight: null, notes: '', checklist: '[]', completed_at: 5, hidden: 0, created_at: 1, updated_at: 1, deleted_at: null, revision: 3 }],
+    space_prefs: [{ user_id: 'ana', id: 'abcdefghij12', space_id: 'abcdefghij12', color: '#17B3AE', target: null, term: '', archived: 0, created_at: 1, updated_at: 1, deleted_at: null, revision: 4 }],
+  });
+  expect(sql.filter((s) => s.startsWith('INSERT INTO ')).map((s) => s.split(' ')[2]).slice(0, 3)).toEqual(['users', 'marks', 'space_prefs']);
+});

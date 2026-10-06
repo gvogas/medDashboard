@@ -4,12 +4,12 @@
 
 import { useSyncExternalStore } from "react"
 import * as store from "@/core/store"
-import { data } from "@/core/store"
 import { classRoom, isOpen, normalizeItem, shiftEnd, statusesFor } from "@/core/model"
 import { dayMonth, diffDays, parse, today, DOW } from "@/core/dates"
 import { repeatEnds, type SchoolCalendar, type Term } from "@/core/school"
 import { nextReview } from "@/core/reviews"
 import { launch as fireworks } from "@/lib/fireworks"
+import { effectiveItems } from "./effective"
 import { useItems } from "./store"
 import type { Course, Item } from "./types"
 
@@ -200,6 +200,6 @@ export function setStatus(it: Item, status: string) {
 /** A review step just finished: book the next one. */
 export async function chainReview(it: Item) {
     if (it.status !== "done") return
-    const next = nextReview(it, today(), data.items)
+    const next = nextReview(it, today(), effectiveItems())
     if (next) await store.saveItem(normalizeItem(next))
 }

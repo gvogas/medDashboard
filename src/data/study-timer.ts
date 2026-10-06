@@ -17,6 +17,8 @@ import { getSheet } from "./overlay"
 import { useCourses, useItems, useProfile, useStudySessions } from "./store"
 import { shownSessions } from "./study"
 import { ui, useUi } from "./ui"
+import { effectiveCourses, effectiveItems } from "./effective"
+import { keyedCourses, keyedItems } from "./refs"
 import { THEMES, type Bg } from "./themes"
 import type { Course, Flow, Item, StepKind, StudySession } from "./types"
 
@@ -130,7 +132,8 @@ export function pickFor(courses: Course[], items: Item[], study: { courseId: str
 /** What the Ready card offers: the live courses, the picked course's open items (soonest
     first), and what the next run is logged against. */
 export function useStudyPick() {
-    const courses = useCourses(), items = useItems()
+    /* the pickers work in keys: a class's course and items sit beside yours (refs.ts) */
+    const courses = keyedCourses(useCourses()), items = keyedItems(useItems())
     const study = useUi((u) => u.study)
     return useMemo(() => {
         const pick = pickFor(courses, items, study)
@@ -160,12 +163,12 @@ export function pickItem(id: string | null) {
 /** Start a run on the saved flow. Call it inside the click, so full screen and sound are allowed. */
 export async function startRun(): Promise<boolean> {
     if (focus.active()) return false
-    if (!pickFor(data.courses, data.items, ui.study).courseId) return false
+    if (!pickFor(keyedCourses(effectiveCourses()), keyedItems(effectiveItems()), ui.study).courseId) return false
     focus.prime()      /* inside the click: a wait below could lose the browser's permission */
     /* a step's minutes typed and then Start clicked: the box saves as it loses focus, just before */
     await flowSaving
     if (focus.active()) return false
-    const { courseId, itemId } = pickFor(data.courses, data.items, ui.study)
+    const { courseId, itemId } = pickFor(keyedCourses(effectiveCourses()), keyedItems(effectiveItems()), ui.study)
     ui.study.courseId = courseId
     ui.study.itemId = itemId
     if (!courseId) return false

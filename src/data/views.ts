@@ -14,7 +14,7 @@ import { minutesByDay, streak } from "@/core/history"
 
 import { prepPace } from "@/core/prep"
 import { useCourses, useItems, useProfile, useQuotes, useStudySessions } from "./store"
-import { courseKeyOf, keyOf } from "./effective"
+import { courseKeyOf, keyOf, onCalendar, sharedShown } from "./effective"
 import { ui } from "./ui"
 import type { Course, Item, Meeting, Quote, Schedule, Show, SortKey, StudySession } from "./types"
 
@@ -139,6 +139,8 @@ export interface ViewInput {
     anchor: string
     today: string
     cal: SchoolCal
+    /** every item before the calendar filter: hiding each source is not a first run */
+    total?: number
 }
 
 export interface Week { days: Day[]; count: number; any: boolean }
@@ -364,31 +366,36 @@ export const tableFiltersOf = (): TableFilters => {
 /**
  * The live input for the views. The `ui` object is changed in place, so the version the
  * bridge bumps on every redraw is part of the key; the collections are new arrays when
- * the store reloads.
+ * the store reloads. The Week and the Month (`calendar`) leave out what you hid with an eye
+ * toggle (spec §9); All items does not.
  */
-function useViewInput(): ViewInput {
+function useViewInput(calendar = false): ViewInput {
     const items = useItems(), courses = useCourses(), profile = useProfile()
     const version = useSyncExternalStore(subscribe, getVersion)
     return useMemo(
-        () => ({ items, courses, filters: filtersOf(), schedule: ui.schedule, anchor: ui.anchor, today: todayIso(), cal: schoolCal() }),
+        () => {
+            const hidden = sharedShown() ? profile?.hiddenSources ?? [] : []
+            const shown = calendar ? onCalendar(items, courses, hidden) : { items, courses }
+            return { items: shown.items, courses: shown.courses, total: items.length, filters: filtersOf(), schedule: ui.schedule, anchor: ui.anchor, today: todayIso(), cal: schoolCal() }
+        },
         // eslint-disable-next-line react-hooks/exhaustive-deps -- `version` stands for the ui
-        [items, courses, profile, version],
+        [items, courses, profile, version, calendar],
     )
 }
 
 export const useWeek = () => {
-    const input = useViewInput()
+    const input = useViewInput(true)
     return useMemo(() => ({
         week: weekDays(input),
         officeHours: officeHours(input.items, input.courses, input.filters),
         tasks: tasks(input.items, input.courses, input.filters),
-        empty: input.items.length === 0,
+        empty: (input.total ?? input.items.length) === 0,
         schedule: input.schedule,
     }), [input])
 }
 
 export const useMonth = () => {
-    const input = useViewInput()
+    const input = useViewInput(true)
     return useMemo(() => ({ month: monthCells(input), timetable: timetable(input.courses, input.filters, input.cal, input.anchor),schedule: input.schedule }), [input])
 }
 

@@ -8,6 +8,7 @@ import { cn } from "@/lib/utils"
 import { isTest } from "@/core/model"
 import { dragCrop, drawSticker, readPicture, stickerData } from "@/core/sticker"
 import { useCourses, useItems, useStudySessions } from "@/data/store"
+import { keyedCourses, keyedItems, keyedSessions } from "@/data/refs"
 import { closeSheet, replaceSheet } from "@/data/overlay"
 import { footHint, NAME_MAX, saveAchievementDraft, standing, switchRule, TOP, validAchievement, type AchievementDraft, type Rule } from "@/data/achievement-edit"
 import { deleteAchievement } from "@/data/actions"
@@ -21,9 +22,10 @@ const ARROWS: Record<string, [number, number]> = { ArrowLeft: [-STEP, 0], ArrowR
 interface Crop { x: number; y: number; zoom: number }
 
 export function AchievementSheet({ draft: d }: { draft: AchievementDraft }) {
-    const courses = useCourses()
-    const items = useItems()
-    const sessions = useStudySessions()
+    /* the draft holds keys (refs.ts) */
+    const courses = keyedCourses(useCourses())
+    const items = keyedItems(useItems())
+    const sessions = keyedSessions(useStudySessions())
     const f = useId()
     const edit = (change: Partial<AchievementDraft>) => replaceSheet({ kind: "achievement", draft: { ...d, ...change } })
 

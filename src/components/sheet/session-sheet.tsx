@@ -8,6 +8,7 @@ import { isOpen, normalizePrefs } from "@/core/model"
 import { today } from "@/core/dates"
 import { duration } from "@/lib/time"
 import { useCourses, useItems, useProfile, useStudySessions } from "@/data/store"
+import { keyedCourses, keyedItems } from "@/data/refs"
 import { closeSheet, replaceSheet } from "@/data/overlay"
 import { impact, MAX_MINUTES, QUICK, saveSession, validSession, type SessionDraft } from "@/data/session-edit"
 import { deleteSession } from "@/data/actions"
@@ -16,8 +17,9 @@ import { Button, DateInput, Fields, Label, NumberInput, Section, Select, SheetBo
 import { TimeField } from "./time-field"
 
 export function SessionSheet({ draft: d }: { draft: SessionDraft }) {
-    const courses = useCourses()
-    const items = useItems()
+    /* the draft holds keys (refs.ts): a class's course and items sit beside yours */
+    const courses = keyedCourses(useCourses())
+    const items = keyedItems(useItems())
     const sessions = useStudySessions()
     const profile = useProfile()
     const f = useId()

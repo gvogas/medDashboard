@@ -1,4 +1,4 @@
-import { json, readJson, readBytes, HttpError } from './http.js';
+import { json, readJson, readBytes, revisionOf, HttpError } from './http.js';
 import { requireUser, requireSession, signSession, sessionCookie, clearCookie, deviceCookie, trustedDevice, parseCookies, secureFlag, sameString, hex, RENEW_WITHIN_MS } from './auth.js';
 import { verifyPassword, normalizeUsername } from './password.js';
 import { claimAttempt, recordSuccess } from './throttle.js';
@@ -14,15 +14,10 @@ import * as spotify from './spotify.js';
 import { feedState, renewFeed, stopFeed, serveFeed } from './calendar.js';
 import { leaderboard, setJoined } from './leaderboard.js';
 import { adminRoutes, markSeen, readAnnouncement } from './admin.js';
+import { classRoutes } from './classes.js';
+import { layerRoutes } from './layer.js';
 import { logError, messageOf } from './errors.js';
 import { guardMaintenance, publicMaintenance } from './maintenance.js';
-
-function revisionOf(request) {
-  const raw = request.headers.get('if-match');
-  if (raw === null) throw new HttpError(428, { error: 'reload_required' });
-  if (!/^"\d{1,16}"$/.test(raw) || !Number.isSafeInteger(Number(raw.slice(1, -1)))) throw new HttpError(400, { error: 'invalid', field: 'revision' });
-  return Number(raw.slice(1, -1));
-}
 
 /** `cursors=u:<me>:812,c:<space id>:r640.700`: each entry split at its last ':', a sequence or a
     resync's tagged cursor (db.js parseCursor). At most 25; anything malformed is a 400. */
@@ -440,6 +435,8 @@ const routes = [
     return new Response(null, { status: 204 });
   }],
 
+  ...classRoutes,
+  ...layerRoutes,
   ...adminRoutes,
 ];
 

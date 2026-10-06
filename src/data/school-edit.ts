@@ -90,8 +90,13 @@ export async function saveSchool(s: SchoolDraft) {
         const name = renamed.get(courseTerm(before, c.term)?.name ?? "")
         return name ? [{ kind: "courses" as const, row: { ...c, term: name } }] : []
     })
+    /* your semester for a class lives in its prefs, and follows a renamed semester the same way */
+    const prefs = (store.data.space_prefs ?? []).flatMap((p) => {
+        const name = renamed.get(courseTerm(before, p.term)?.name ?? "")
+        return name ? [{ kind: "space_prefs" as const, row: { ...p, term: name } }] : []
+    })
     await store.saveProfile({ schoolCalendar: saved })
-    if (moved.length) await store.saveRows(moved)
+    if (moved.length || prefs.length) await store.saveRows([...moved, ...prefs])
     closeSheet()
     notify()
     toast("School calendar saved")

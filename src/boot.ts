@@ -9,6 +9,7 @@ import { useTypePrefs } from "@/core/model"
 import { notify } from "@/bridge"
 import { setSide, sideOpen, watchSidebar } from "@/data/sidebar"
 import { flush as flushTyping } from "@/data/item-edit"
+import { flushTyping as flushMarks } from "@/data/marks"
 import * as spotify from "@/data/spotify/player"
 import * as web from "@/data/spotify/web-player"
 import { followSystem } from "@/data/theme"
@@ -35,8 +36,8 @@ export function boot() {
     booted = true
 
     /* what is typed in the item sheet is saved before the page goes */
-    window.addEventListener("pagehide", () => { flushTyping() })
-    document.addEventListener("visibilitychange", () => { if (document.visibilityState === "hidden") { flushTyping(); commitUndo(); finishDelete().catch(() => {}) } })
+    window.addEventListener("pagehide", () => { flushTyping(); void flushMarks() })
+    document.addEventListener("visibilitychange", () => { if (document.visibilityState === "hidden") { flushTyping(); void flushMarks(); commitUndo(); finishDelete().catch(() => {}) } })
 
     /* ═════════ theme ═════════ */
     useTypePrefs(() => data.profile?.types || [])

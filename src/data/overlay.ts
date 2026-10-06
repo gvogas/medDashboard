@@ -6,12 +6,15 @@
 // useSheet() and useCovered().
 
 import { useSyncExternalStore } from "react"
-import type { Item } from "./types"
+import type { Item, SpaceSummary } from "./types"
 import type { SettingsTab } from "./settings"
 import type { ImportPlan } from "./import-edit"
 import type { SchoolDraft } from "./school-edit"
 import type { SessionDraft } from "./session-edit"
 import type { AchievementDraft } from "./achievement-edit"
+
+/** The class sheet's tabs. */
+export type ClassTab = "details" | "members"
 
 export type SheetState =
     | { kind: "item"; id: string }
@@ -24,6 +27,12 @@ export type SheetState =
     | { kind: "school"; draft: SchoolDraft }
     | { kind: "session"; draft: SessionDraft }
     | { kind: "achievement"; draft: AchievementDraft }
+    | { kind: "class"; spaceId: string; tab: ClassTab }
+    | { kind: "new-class" }
+    | { kind: "convert"; courseId: string }
+    | { kind: "join"; code: string; space: SpaceSummary | null }
+    | { kind: "invites" }
+    | { kind: "merge"; spaceId: string; courseId: string; fromCourse: boolean }
     | null
 
 let sheet: SheetState = null

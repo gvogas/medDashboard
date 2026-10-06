@@ -105,6 +105,8 @@ A row is created by `npm run user:add`, with the defaults. The API
 exposes it as the **profile**, with the coat fields nested: `{coat: {name, role,
 color}, theme, termStart, ...}`.
 
+`hidden_sources`: what you have hidden from your Week and Month (and, from Stage 6, your calendar feed): `course:<id>`, `space:<sid>`, `personal`; at most 40. Sent and received as the profile's `hiddenSources`; a `PUT /api/me` without it keeps it.
+
 The twelve course colours; the first five are also the coat colours:
 
 | Name | Hex |
@@ -314,6 +316,18 @@ A shared class (`kind = 'class'`, its rows in scope `c:<id>`) or team project (`
 
 `(space_id, user_id)`, `role` `owner`|`editor`|`member`, `joined_at`, `deleted_at` (left or removed; a rejoin revives the row). A partial unique index keeps exactly one live owner per space. Every shared read and write checks live membership of a live space inside its own statement (`worker/access.js`).
 
+## `invites`
+
+`(space_id, user_id)`: an invitation to a space by username (spec §11). `invited_by` (NULL once that account is gone), `role` given on accepting (`editor` or `member`; never `owner`, which moves only by a transfer), `status` `pending` | `accepted` | `declined`, `created_at`, `expires_at` (30 days on). A repeat invite refreshes the one row; accepting makes or revives the membership and marks the row `accepted`. Deleted with its space or the invited account; Stage 5's nightly purge removes rows 90 days old.
+
+## `marks`
+
+`(user_id, id)`, `id = '<space id>:<item id>'`, unique `(user_id, space_id, item_id)`: your layer on one shared item (spec §4). `status`, `grade`, `weight` (an override; NULL uses the class's), `notes`, `checklist` (exam prep's topics), `completed_at`, `hidden` ("not mine": out of your views, grades and stats), timestamps, `deleted_at`, `revision`. Same `CHECK`s as the matching `items` columns. On a project's item only `notes` and `hidden` are used. Its changes go into your own feed (`'u:' || user_id`). Written through `/api/marks/:sid/:itemId` with a field-level merge, and by the convert and absorb batches. Deleted with the account.
+
+## `space_prefs`
+
+`(user_id, id)`, `id = space_id`: your settings for one space: `color` (one of the twelve), `target`, `term` (your semester for a class; `''` is every semester), `archived` (in your sidebar), timestamps, `deleted_at`, `revision`. Written by the Worker when you make, convert, accept or join (the class's colour unless you use it, else the first free; its term), then through `/api/space_prefs/:sid` with whole-row `If-Match`. Its changes go into your own feed. Deleted with the account.
+
 ## Indexes
 
 | Index | Serves |
@@ -386,16 +400,26 @@ All routes are under `/api`, speak JSON, and require the session cookie except
 | `GET /api/me` | → `{profile}`, with `announcement` and `maintenance` (see Maintenance mode) |
 | `PUT /api/me` | `{coat, theme, bg, termStart, displayName, studyFlow, studyPrefs, schoolCalendar}` (`bg` optional, default `med`; `studyFlow`, `studyPrefs` and `schoolCalendar` optional, kept when left out; `schoolCalendar: {}` removes it) → `{profile}` |
 | `POST /api/outline` · `POST /api/school-calendar` | the file (or a PDF's text) as the body, `?name=&today=` → what Workers AI read: an outline, or `{name, terms, days, truncated}`. Nothing is saved. Ten reads a day between them (`429 outline_limit`). |
-| `GET /api/sync?v=2&cursor=<seq>` | → `{changes: [{kind, row}], cursor, more, reset}` — at most 100 changes after `cursor`, deleted rows included with `deletedAt` set. `cursor=0` is a full load. See the sync protocol below. |
+| `GET /api/sync?v=2&cursor=<seq>` | → `{changes: [{kind, row}], cursor, more, reset}` — at most 100 changes after `cursor`, deleted rows included with `deletedAt` set. `cursor=0` is a full load. v=2 pages only `courses`, `items`, `quotes`, `study_sessions`, `achievements`; v=3 also pages your `marks` and `space_prefs` in your own scope. See the sync protocol below. |
 | `GET /api/{courses,items,quotes,study_sessions,achievements}/:id` | one live row of yours, or `404`. The client uses it to undo a rejected save. |
 | `PUT /api/courses/:id` | a course (with an optional `target`, a whole-number grade goal 1–100) → the stored course, with server `updatedAt`. Upsert. |
 | `DELETE /api/courses/:id` | → `204`. Soft-deletes and nulls `courseId` on the user's items and study sessions. |
 | `PUT /api/items/:id` · `DELETE /api/items/:id` | as above; deleting nulls `itemId` on the user's study sessions |
 | `PUT /api/quotes/:id` · `DELETE /api/quotes/:id` | as above |
 | `PUT /api/study_sessions/:id` · `DELETE /api/study_sessions/:id` | `{courseId, itemId, startedAt, studyMinutes, roundsDone, note, manual}`, as above |
-| `PUT /api/achievements/:id` · `DELETE /api/achievements/:id` | `{name, sticker, rule, courseId, itemId, target}`, as above; `400 too_many` past 30 |
+| `PUT /api/achievements/:id` · `DELETE /api/achievements/:id` | `{name, sticker, rule, courseId, itemId, target}`, as above; `400 too_many` past 30. `classId` (items), `spaceId` (sessions, achievements) and `hiddenSources` (profile) left out of a body keep their stored values. |
 | `GET /api/calendar` · `POST /api/calendar` · `DELETE /api/calendar` | the calendar feed: → `{on, url}`; POST turns it on or makes a new link (the old one stops working); DELETE turns it off. See `worker/calendar.js`. |
 | `GET /api/calendar/:userId/:token.ics?tz=` | no session: the feed itself, `text/calendar`. The token is an HMAC of the user id and `users.feed_gen`; a wrong one is `404`. At most 60 fetches an hour per link. |
+| `POST /api/spaces` | `{kind:'class', course}` (blank) or `{kind:'class', convertCourseId, items:[id]}` → `201 {space}`; you become the owner, with prefs from the course. Admins only until Stage 6 (`403`). A convert **moves** your course and the items named into the class in class shape: your status, grade, checklist, notes and completion into marks, your colour, target, term and archive into prefs; your course and those items are soft-deleted, the course's other items filed under the class (`classId`), your sessions and achievements on them labelled with the space. Converting the same course again answers the class it made (`200`). `409 limit` past 20 spaces. |
+| `GET /api/spaces/:sid` | → `{id, scope, kind, role, archived, members, invites, code}`: the members for everyone in the space, its invites for the owner and editors, the join code's expiry and uses left for the owner. `404` outside it. |
+| `POST /api/spaces/:sid/invites` · `DELETE /api/spaces/:sid/invites/:userId` | `{username, role?}` → `201` the invite (30 days; a repeat refreshes it). The owner or an editor; only the owner gives a role other than the default. `404 no_user`, `409 member`, `409 not_admin` (until Stage 6); 20 an hour. DELETE withdraws it: whoever sent it, or the owner. |
+| `GET /api/invites` · `POST /api/invites/:sid/accept` · `POST /api/invites/:sid/decline` | your invites, expired ones marked; accept → `{space}` (admins only until Stage 6; `404` once withdrawn, `410 expired`, `409 limit`/`full`); decline → `204`. |
+| `POST /api/spaces/:sid/code` · `DELETE /api/spaces/:sid/code` | the owner: a new 8-character code → `201 {code, expires, usesLeft}` (7 days, 10 uses; only its SHA-256 is kept; a new one retires the old) · turn it off. |
+| `POST /api/join` | `{code}` → `{space}`. Admins only until Stage 6; 10 tries an hour; `404` unknown, `410 expired`, `409 limit`/`full`. A pending invite to that class is accepted with it, with its role. |
+| `PUT /api/spaces/:sid/members/:userId` · `POST /api/spaces/:sid/transfer` | the owner: `{role: 'editor'\|'member'}` → `{userId, role}`; `{userId}` makes that member the owner and you an editor → `204`. |
+| `POST /api/spaces/:sid/absorb` | `{courseId, pairs:[[yourItemId, classItemId]], fromCourse?}` → `{paired, filed}`: merge a course of yours into a class you are in. Marks from your paired items, sessions and achievements moved to the class's ids, your other items filed under the class, your course soft-deleted; your target (and, with `fromCourse`, colour, term and archive) into your prefs. Writes no shared row. A custom-typed item is refused (`400 {field:'pairs'}`); a course already gone answers `{paired: 0, filed: 0}`. |
+| `GET\|PUT\|DELETE /api/marks/:sid/:itemId` | your mark on an item of a space you are in (`404` otherwise, or when the item is deleted). `PUT` merges field by field with `changed` (as shared rows), else whole at `If-Match`; on a project's item only `notes` and `hidden`. |
+| `GET\|PUT\|DELETE /api/space_prefs/:sid` | your prefs for a space you are in: `{color, target, term, archived}`, whole-row `If-Match`. |
 
 Errors are `{error, field?}`: `400` bad shape (with the field), `401` no session,
 `404` a row that isn't yours, `413` body over 1 MB.

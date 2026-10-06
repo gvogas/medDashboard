@@ -12,6 +12,8 @@ import { refind } from "@/lib/dom"
 import { requestCloseSheet, takeOpener, useSheet, type SheetState } from "@/data/overlay"
 import { lazyNamed } from "@/lib/lazy"
 import * as store from "@/core/store"
+import { itemByKey } from "@/data/effective"
+import { isSharedKey } from "@/data/refs"
 import type { Item } from "@/data/types"
 
 /* Each sheet loads on first use (lib/lazy.ts), and all of them once the browser is idle. */
@@ -24,10 +26,19 @@ const AiSheet = lazyNamed(() => import("./ai-sheet"), "AiSheet")
 const SchoolSheet = lazyNamed(() => import("./school-sheet"), "SchoolSheet")
 const SessionSheet = lazyNamed(() => import("./session-sheet"), "SessionSheet")
 const AchievementSheet = lazyNamed(() => import("./achievement-sheet"), "AchievementSheet")
+/* the class sheets: admins only until Stage 6, so nobody else downloads them (lib/lazy.ts) */
+const ClassSheet = lazyNamed(() => import("./class-sheet"), "ClassSheet", { idle: false })
+const NewClassSheet = lazyNamed(() => import("./new-class-sheet"), "NewClassSheet", { idle: false })
+const ConvertSheet = lazyNamed(() => import("./convert-sheet"), "ConvertSheet", { idle: false })
+const JoinSheet = lazyNamed(() => import("./join-sheet"), "JoinSheet", { idle: false })
+const InvitesSheet = lazyNamed(() => import("./invites-sheet"), "InvitesSheet", { idle: false })
+const MergeSheet = lazyNamed(() => import("./merge-sheet"), "MergeSheet", { idle: false })
+/* a class's item, opened by its key: admins only until Stage 6, so nobody else downloads it */
+const ClassItemSheet = lazyNamed(() => import("./class-item-sheet"), "ClassItemSheet", { idle: false })
 
 /** What the dialog is called: the item's type, "New assignment", "Course". */
 export function sheetLabel(s: Exclude<SheetState, null>): string {
-    if (s.kind === "course") return s.id ? "Course" : "New course"
+    if (s.kind === "course") return s.id ? (isSharedKey(s.id) ? "Class details" : "Course") : "New course"
     if (s.kind === "new-item") return "New " + tmeta(s.draft.type).label.toLowerCase()
     if (s.kind === "settings") return "Settings"
     if (s.kind === "import") return "Import"
@@ -36,7 +47,13 @@ export function sheetLabel(s: Exclude<SheetState, null>): string {
     if (s.kind === "school") return "School calendar"
     if (s.kind === "session") return s.draft.isNew ? "Log study" : "Edit session"
     if (s.kind === "achievement") return s.draft.isNew ? "New achievement" : "Edit achievement"
-    const it = store.item(s.id) as Item | null
+    if (s.kind === "class") return "Class"
+    if (s.kind === "new-class") return "New shared class"
+    if (s.kind === "convert") return "Convert to shared class"
+    if (s.kind === "join") return "Join a class"
+    if (s.kind === "invites") return "Invites"
+    if (s.kind === "merge") return "Merge into the class"
+    const it = (itemByKey(s.id) ?? store.item(s.id)) as Item | null
     return it ? tmeta(it.type).label : "Item"
 }
 
@@ -84,7 +101,9 @@ export function Sheet() {
             )}
         >
             <Suspense fallback={null}>
-                {shown?.kind === "item" && <ItemSheet key={shown.id} id={shown.id} />}
+                {shown?.kind === "item" && (isSharedKey(shown.id)
+                    ? <ClassItemSheet key={shown.id} itemKey={shown.id} />
+                    : <ItemSheet key={shown.id} id={shown.id} />)}
                 {shown?.kind === "new-item" && <ItemSheet key={shown.draft.id} draft={shown.draft} />}
                 {shown?.kind === "course" && <CourseSheet key={shown.id ?? "new"} id={shown.id} />}
                 {shown?.kind === "settings" && <SettingsSheet tab={shown.tab} focus={shown.focus} />}
@@ -94,6 +113,12 @@ export function Sheet() {
                 {shown?.kind === "school" && <SchoolSheet draft={shown.draft} />}
                 {shown?.kind === "session" && <SessionSheet key={shown.draft.id} draft={shown.draft} />}
                 {shown?.kind === "achievement" && <AchievementSheet key={shown.draft.id} draft={shown.draft} />}
+                {shown?.kind === "class" && <ClassSheet key={shown.spaceId} spaceId={shown.spaceId} tab={shown.tab} />}
+                {shown?.kind === "new-class" && <NewClassSheet />}
+                {shown?.kind === "convert" && <ConvertSheet key={shown.courseId} courseId={shown.courseId} />}
+                {shown?.kind === "join" && <JoinSheet key={shown.space?.id ?? "code:" + shown.code} code={shown.code} space={shown.space} />}
+                {shown?.kind === "invites" && <InvitesSheet />}
+                {shown?.kind === "merge" && <MergeSheet key={shown.spaceId + shown.courseId} spaceId={shown.spaceId} courseId={shown.courseId} fromCourse={shown.fromCourse} />}
             </Suspense>
         </div>
     )

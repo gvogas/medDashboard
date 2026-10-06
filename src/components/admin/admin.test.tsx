@@ -112,7 +112,8 @@ describe("the Admin page", () => {
         render(<AdminPage />)
         fireEvent.click(screen.getByRole("tab", { name: "Maintenance" }))
         expect(await screen.findByText(/On now: Week/)).toBeTruthy()
-        expect((screen.getByRole("switch", { name: "Week" }) as HTMLInputElement).checked).toBe(true)
+        /* the switches take the saved state in an effect after that text renders: wait for it */
+        await waitFor(() => expect((screen.getByRole("switch", { name: "Week" }) as HTMLInputElement).checked).toBe(true))
         expect((screen.getByRole("switch", { name: "Month" }) as HTMLInputElement).checked).toBe(false)
         const labels = screen.getAllByRole("switch").map((s) => s.getAttribute("aria-label") || (s as HTMLInputElement).labels?.[0]?.textContent)
         expect(labels).toEqual(["Whole app", "Week", "Month", "All items", "Study", "Music", "Import with AI", "Shared classes & projects"])

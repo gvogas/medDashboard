@@ -7,6 +7,8 @@ export const SHARED_FIELDS = {
   courses: ['code', 'name', 'color', 'instructor', 'term', 'meetings'],
   class: ['type', 'title', 'courseId', 'date', 'start', 'end', 'where', 'weight', 'notes', 'links', 'recur', 'weekday', 'recurUntil', 'dept'],
   project: ['type', 'title', 'date', 'start', 'end', 'where', 'status', 'notes', 'checklist', 'links', 'recur', 'weekday', 'recurUntil', 'dept', 'completedAt', 'assignees'],
+  /* your mark: written with a field-level merge too, since two of your devices can both make it (spec §6) */
+  marks: ['status', 'grade', 'weight', 'notes', 'checklist', 'completedAt', 'hidden'],
 } as const satisfies Record<string, readonly string[]>
 export type FieldSet = keyof typeof SHARED_FIELDS
 
@@ -19,6 +21,9 @@ export function stable(v: unknown): string {
   }
   return JSON.stringify(v ?? null)
 }
+
+/** What each field of a mark holds before you touch the item: what a first write merges against. */
+export const MARK_DEFAULTS: Record<string, unknown> = { status: 'todo', grade: null, weight: null, notes: '', checklist: [], completedAt: null, hidden: false }
 
 export type SharedStore = 'shared_courses' | 'shared_items'
 export const SHARED_STORES: SharedStore[] = ['shared_courses', 'shared_items']
@@ -41,9 +46,9 @@ export function parseKey(key: string): { store: string; scope: string | null; id
   return { store, scope: null, id: rest }
 }
 
-/** The field set of a shared row: its course's, a class item's or a project item's. */
+/** The field set of a shared row (its course's, a class item's or a project item's), or of a mark. */
 export const fieldSetOf = (store: string, scope: string): FieldSet =>
-  store === 'shared_courses' || store === 'courses' ? 'courses' : scope.startsWith('p:') ? 'project' : 'class'
+  store === 'marks' ? 'marks' : store === 'shared_courses' || store === 'courses' ? 'courses' : scope.startsWith('p:') ? 'project' : 'class'
 
 /**
  * What a shared edit changed since it was queued, as `changed: {field: value before}`.
@@ -57,4 +62,17 @@ export function changedFields(store: string, scope: string, body: Record<string,
     else if (stable(body[f]) !== stable(base[f])) out[f] = base[f] ?? null
   }
   return out
+}
+
+/** A generated lecture review's id (core/reviews.ts): 'rv', seven characters, its step. A review is yours alone and never goes into a class (spec §13). */
+export const REVIEW_ID = /^rv[0-9a-z]{7}([1-4])$/
+
+/**
+ * A join code as typed: Crockford base32 read the forgiving way (any case, O as 0, I and L
+ * as 1, spaces and hyphens dropped). The eight characters, or null (spec §11).
+ */
+export function normalizeCode(raw: unknown): string | null {
+  if (typeof raw !== 'string') return null
+  const code = raw.toUpperCase().replace(/[\s-]/g, '').replace(/O/g, '0').replace(/[IL]/g, '1')
+  return /^[0-9A-HJKMNP-TV-Z]{8}$/.test(code) ? code : null
 }

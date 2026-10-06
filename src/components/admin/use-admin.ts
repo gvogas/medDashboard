@@ -36,6 +36,7 @@ const WORDS: Record<string, string> = {
     taken: "That username is taken.",
     self: "You can't do that to your own account.",
     last_admin: "There has to be at least one admin.",
+    owns_space: "This account owns a shared class. Make someone else its owner first.",
     not_found: "That account no longer exists. Refresh the list.",
     rate_limited: "Too many requests. Wait a moment.",
 }
