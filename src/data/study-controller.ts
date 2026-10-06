@@ -15,6 +15,8 @@ import * as run from "./run"
 import { openFocus } from "./study-timer"
 import { toast } from "./toast"
 import { ui, rememberUi } from "./ui"
+import { effectiveCourses, effectiveItems } from "./effective"
+import { keyedAchievements, keyedCourses, keyedItems, keyedSessions } from "./refs"
 import type { StudyPrefs, View } from "./types"
 
 /** Show a view: the side nav and the 1–5 keys. Study while a run is going opens its focus screen. */
@@ -98,8 +100,10 @@ export function celebrateStudy() {
    The first look, and anything synced from elsewhere, only records what is earned. */
 let earned: Set<string> | null = null
 export function celebrateAchievements({ quiet = false }: { quiet?: boolean } = {}) {
-    const list = [...achievements(data.study_sessions, data.items, studyPrefs(), today()),
-        ...ownAchievements(data.achievements, data.study_sessions, data.items, data.courses)]
+    /* class items count by your mark (spec §8), in key space like the Study page */
+    const sessions = keyedSessions(data.study_sessions), items = keyedItems(effectiveItems())
+    const list = [...achievements(sessions, items, studyPrefs(), today()),
+        ...ownAchievements(keyedAchievements(data.achievements), sessions, items, keyedCourses(effectiveCourses()))]
     const was = earned
     earned = new Set(list.filter((b) => b.earned).map((b) => b.id))
     if (!was || quiet) return

@@ -14,6 +14,7 @@ import { addDays, dayMonth, iso, parse, shortDate, today as todayIso, DOW, MON }
 import { duration } from "@/lib/time"
 import { useAchievements, useCourses, useItems, useProfile, useStudySessions } from "./store"
 import { rememberUi, ui } from "./ui"
+import { keyedAchievements, keyedCourses, keyedItems, keyedSessions } from "./refs"
 import type { Achievement, Badge, Course, HistTab, Item, SessionUndo, StudyPrefs, StudySession, StudyTab } from "./types"
 
 /* A course split is [courseId, minutes] pairs, most first, with "" for no course. */
@@ -286,7 +287,8 @@ function useStudyInput() {
     const sessions = useStudySessions(), profile = useProfile()
     const version = useSyncExternalStore(subscribe, getVersion)
     return useMemo(() => ({
-        sessions: shownSessions(sessions, ui.hist.undo),
+        /* in key space (refs.ts): a session on a class's course is told apart from one on yours */
+        sessions: keyedSessions(shownSessions(sessions, ui.hist.undo)),
         prefs: normalizePrefs(profile?.studyPrefs) as StudyPrefs,
         termStart: currentTermStart() as string | null,
         today: todayIso(),
@@ -319,13 +321,13 @@ export const useHistory = () => {
 
 export const useBadges = () => {
     const input = useStudyInput(), items = useItems(), own = useAchievements(), courses = useCourses()
-    return useMemo(() => badges(input.sessions, items, input.prefs, input.today, own, courses), [input, items, own, courses])
+    return useMemo(() => badges(input.sessions, keyedItems(items), input.prefs, input.today, keyedAchievements(own), keyedCourses(courses)), [input, items, own, courses])
 }
 
 /** The Timer tab's Today card. */
 export const useTodayStudy = () => {
     const input = useStudyInput(), items = useItems(), courses = useCourses()
-    return useMemo(() => todayOf(input.sessions, items, courses, input.prefs.goal, input.today), [input, items, courses])
+    return useMemo(() => todayOf(input.sessions, keyedItems(items), keyedCourses(courses), input.prefs.goal, input.today), [input, items, courses])
 }
 
 /* ── the History card's actions: each changes the ui and redraws ── */

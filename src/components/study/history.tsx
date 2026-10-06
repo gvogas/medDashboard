@@ -9,7 +9,8 @@ import { cn } from "@/lib/utils"
 import { duration } from "@/lib/time"
 import { dayOf } from "@/core/history"
 import { shortDate, DOW } from "@/core/dates"
-import { course as courseOf, item as itemOf } from "@/core/store"
+/* History's sessions are in key space (study.ts): their course and item are found by key */
+import { courseByKey as courseOf, itemByKey as itemOf } from "@/data/effective"
 import { accent, Panel } from "@/components/views/bits"
 import { Segmented } from "@/components/sheet/fields"
 import {

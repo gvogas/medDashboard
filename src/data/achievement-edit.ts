@@ -8,6 +8,7 @@ import { dayMonth } from "@/core/dates"
 import { ownAchievements } from "@/core/achievements"
 import { notify } from "@/bridge"
 import { closeSheet } from "./overlay"
+import { courseRefKey, itemRefKey, refOf } from "./refs"
 import type { Achievement, Course, Item, StudySession } from "./types"
 
 export type Rule = Achievement["rule"]
@@ -35,7 +36,7 @@ export function newAchievement(courses: Course[]): AchievementDraft {
 }
 
 export function achievementDraft(a: Achievement): AchievementDraft {
-    return { isNew: false, base: structuredClone(a), id: a.id, name: a.name, sticker: a.sticker, rule: a.rule, courseId: a.courseId, itemId: a.itemId, target: a.target }
+    return { isNew: false, base: structuredClone(a), id: a.id, name: a.name, sticker: a.sticker, rule: a.rule, courseId: courseRefKey(a), itemId: itemRefKey(a), target: a.target }
 }
 
 /** A name, a sticker, a target in range and what it is on; never while a crop is in progress. */
@@ -65,9 +66,11 @@ export function standing(d: AchievementDraft, sessions: StudySession[], items: I
 /** Save it, keeping what the stored one had besides, and close the sheet. */
 export async function saveAchievementDraft(d: AchievementDraft) {
     if (!validAchievement(d)) return
+    /* the draft holds keys; the row stores the ids and the space they are in */
+    const ref = refOf(d.rule === "hours" ? d.courseId : null, d.rule === "grade" ? d.itemId : null)
     await store.saveAchievement({
         ...(d.base || {}), id: d.id, name: d.name.trim(), sticker: d.sticker, rule: d.rule,
-        courseId: d.rule === "hours" ? d.courseId : null, itemId: d.rule === "grade" ? d.itemId : null, target: d.target,
+        courseId: ref.courseId, itemId: ref.itemId, spaceId: ref.spaceId, target: d.target,
     })
     closeSheet()
     notify()

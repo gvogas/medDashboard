@@ -8,9 +8,9 @@ import { DOW, shortDate } from "@/core/dates"
 import { schoolCal, termStart } from "@/data/query"
 import { semesterOptions, semesterPicked } from "@/data/course-edit"
 import { planSummary, setWeek1 } from "@/core/importers/plan"
-import { data } from "@/core/store"
 import { notify } from "@/bridge"
 import { useUi } from "@/data/ui"
+import { effectiveItems } from "@/data/effective"
 import { commitImport, importCount, type ImportPlan, type PlanItem } from "@/data/import-edit"
 import { closeSheet, openSheet } from "@/data/overlay"
 import { toast } from "@/data/toast"
@@ -24,7 +24,7 @@ export function ImportSheet({ plan: initial, name }: { plan: ImportPlan; name: s
     const redraw = () => setV((n) => n + 1)
     const [busy, setBusy] = useState(false)
     const bg = useUi((u) => u.bg)
-    const types = typeList(bg, data.items) as { id: string; label: string; hidden: boolean }[]
+    const types = typeList(bg, effectiveItems()) as { id: string; label: string; hidden: boolean }[]
     const n = importCount(plan)
     /* an outline's course gets a semester picker beside it, when there is a school calendar */
     const cal = plan.kind === "outline" ? schoolCal() : null

@@ -16,11 +16,13 @@ import { REVIEW_ID as ID } from './shared.ts';
 export interface ReviewSetting { on: boolean; through: string | null }
 
 /** A review step as generated, before normalizeItem fills the rest. */
-export interface ReviewRow { id: string; type: 'task'; title: string; courseId: string | null; date: string; status: 'todo' }
+export interface ReviewRow { id: string; type: 'task'; title: string; courseId: string | null; classId: string | null; date: string; status: 'todo' }
 
 /** A queued operation, as far as untouchedReview reads it. */
 /** What reviews read of a course. */
-type Timetabled = Pick<Course, 'id' | 'code' | 'archived' | 'meetings'> & { term?: string };
+/* A class's course carries its space id: its reviews are yours, filed under the class (a
+   personal row cannot point at a class's course), and the chain keeps them there (spec §8). */
+type Timetabled = Pick<Course, 'id' | 'code' | 'archived' | 'meetings'> & { term?: string; spaceId?: string };
 
 interface Op { op: string; key: string; body: Record<string, unknown> | null }
 
@@ -87,8 +89,8 @@ export function reviewStep(it: { id?: unknown; title?: unknown } | null | undefi
 }
 
 
-function row(id: string, step: number, title: string, courseId: string | null, date: string): ReviewRow {
-  return { id, type: 'task', title: 'Review ' + step + '/' + STEPS + ' · ' + title, courseId, date, status: 'todo' };
+function row(id: string, step: number, title: string, courseId: string | null, date: string, classId: string | null = null): ReviewRow {
+  return { id, type: 'task', title: 'Review ' + step + '/' + STEPS + ' · ' + title, courseId, classId, date, status: 'todo' };
 }
 
 /** Step 1 for every lecture in [from, to] that does not exist yet. */
@@ -100,19 +102,19 @@ export function firstReviews(courses: Timetabled[], items: Pick<Item, 'id'>[], f
     const id = reviewId(course.id, meeting.id, date, 1);
     if (have.has(id)) continue;
     have.add(id);
-    out.push(row(id, 1, course.code + ' Lecture ' + shortDate(date), course.id, iso(addDays(parse(date), 1))));
+    out.push(row(id, 1, course.code + ' Lecture ' + shortDate(date), course.spaceId ? null : course.id, iso(addDays(parse(date), 1)), course.spaceId ?? null));
   }
   return out;
 }
 
 /** The step after a finished review, dated from `today`; null after the last step. */
-export function nextReview(it: Pick<Item, 'id' | 'title' | 'courseId'>, today: string, items: Pick<Item, 'id'>[] = []): ReviewRow | null {
+export function nextReview(it: Pick<Item, 'id' | 'title' | 'courseId' | 'classId'>, today: string, items: Pick<Item, 'id'>[] = []): ReviewRow | null {
   const step = reviewStep(it);
   if (!step || step >= STEPS) return null;
   const id = it.id.slice(0, -1) + (step + 1);
   if (items.some((x) => x.id === id)) return null;
   const what = it.title.replace(/^Review \d\/\d · /, '');
-  return row(id, step + 1, what, it.courseId, iso(addDays(parse(today), GAP[step])));
+  return row(id, step + 1, what, it.courseId, iso(addDays(parse(today), GAP[step])), it.classId ?? null);
 }
 
 /**

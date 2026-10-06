@@ -8,6 +8,7 @@ import { today } from "@/core/dates"
 import { readSetting, writeSetting, dueReviews } from "@/core/reviews"
 import { isTyping } from "@/lib/dom"
 import { notify } from "@/bridge"
+import { effectiveCourses, effectiveItems } from "./effective"
 import { schoolCal } from "./query"
 
 /* A redraw replaces every field, so one arriving from a sync while someone types would
@@ -33,7 +34,7 @@ export async function runReviews() {
     reviewing = true
     try {
         const account = data.profile.id, setting = readSetting(account)
-        const { rows, through } = dueReviews(setting, data.courses, data.items, today(), schoolCal())
+        const { rows, through } = dueReviews(setting, effectiveCourses(), effectiveItems(), today(), schoolCal())
         if (rows.length) await store.saveRows(rows.map((row) => ({ kind: "items" as const, row: normalizeItem(row) })))
         if (through !== setting.through) writeSetting(account, { ...setting, through })
     } finally { reviewing = false }

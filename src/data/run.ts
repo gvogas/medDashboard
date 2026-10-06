@@ -5,6 +5,7 @@
 import * as store from "@/core/store"
 import * as timer from "@/core/timer"
 import { uid } from "@/core/model"
+import { refOf } from "./refs"
 import type { Flow, StepKind } from "./types"
 
 /** timer.start() plus what the run is logged against. */
@@ -110,7 +111,8 @@ async function finish() {
             /* the session first: if it fails, the kept run is still there on the next load */
             if (minutes >= 1) {
                 await store.saveStudySession({
-                    id: ended.id, courseId: ended.courseId, itemId: ended.itemId,
+                    /* the run holds keys; the session stores the ids and the space they are in */
+                    id: ended.id, ...refOf(ended.courseId, ended.itemId),
                     startedAt: ended.startedAt, studyMinutes: minutes, roundsDone: s.roundsDone,
                 })
             }

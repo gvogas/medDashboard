@@ -3,14 +3,15 @@
 // the goal. The draft lives in the sheet's state (overlay.ts) until it is saved.
 
 import * as store from "@/core/store"
-import { data } from "@/core/store"
 import { uid } from "@/core/model"
 import { iso, shortDate, today } from "@/core/dates"
 import { minutesByDay, streak } from "@/core/history"
 import { duration } from "@/lib/time"
 import { notify } from "@/bridge"
 import { parseTime } from "@/lib/time"
+import { effectiveCourses } from "./effective"
 import { closeSheet } from "./overlay"
+import { courseRefKey, itemRefKey, keyedCourses, refOf } from "./refs"
 import { ui } from "./ui"
 import type { StudyPrefs, StudySession } from "./types"
 
@@ -37,7 +38,7 @@ const clock = (d: Date) => pad(d.getHours()) + ":" + pad(d.getMinutes())
 /** A new session for the last half hour, on `courseId`, else the timer's course, else the first live one. */
 export function newSession(courseId?: string | null, now = new Date()): SessionDraft {
     const start = new Date(now.getTime() - 30 * 60_000)
-    const live = data.courses.find((c) => !c.archived)
+    const live = keyedCourses(effectiveCourses()).find((c) => !c.archived)
     return {
         isNew: true, base: null, id: uid(), date: iso(start), time: clock(start), minutes: 30,
         courseId: courseId || ui.study?.courseId || live?.id || null, itemId: null, note: "",
@@ -48,7 +49,7 @@ export function sessionDraft(s: StudySession): SessionDraft {
     const start = new Date(s.startedAt)
     return {
         isNew: false, base: structuredClone(s), id: s.id, date: iso(start), time: clock(start), minutes: s.studyMinutes,
-        courseId: s.courseId, itemId: s.itemId, note: s.note || "",
+        courseId: courseRefKey(s), itemId: itemRefKey(s), note: s.note || "",
     }
 }
 
@@ -85,7 +86,7 @@ export async function saveSession(d: SessionDraft) {
     if (!validSession(d)) return
     await store.saveStudySession({
         ...(d.base || { roundsDone: 0, manual: true }),
-        id: d.id, courseId: d.courseId, itemId: d.itemId, note: d.note.trim(),
+        id: d.id, ...refOf(d.courseId, d.itemId), note: d.note.trim(),
         startedAt: startedAtOf(d), studyMinutes: d.minutes,
     })
     closeSheet()
