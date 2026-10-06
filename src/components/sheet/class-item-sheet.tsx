@@ -28,7 +28,7 @@ import { StatusChip } from "@/components/views/bits"
 import { SharedGlyph } from "@/components/shared-glyph"
 import { MaintenanceBar, MaintenancePage } from "@/components/maintenance"
 import type { Course, Item, Mark } from "@/data/types"
-import { Button, Chips, DateInput, Note, NumberInput, Prop, Props, QUIET, Section, Segmented, Select, SheetBody, SheetFoot, SheetHead, TextArea, TextInput, TitleArea } from "./fields"
+import { Button, Chips, DateInput, KeptNumberInput, Note, Prop, Props, QUIET, Section, Segmented, Select, SheetBody, SheetFoot, SheetHead, TextArea, TextInput, TitleArea } from "./fields"
 import { TimeField } from "./time-field"
 import { DatePicker } from "./date-picker"
 import { ICONS } from "./prop-icons"
@@ -127,7 +127,7 @@ function ClassItemCard({ itemKey, bar }: { itemKey: string; bar: boolean }) {
             <SheetBody className="gap-[22px] px-6 pt-2 pb-7 max-[700px]:px-4">
                 {bar && <MaintenanceBar className="mb-0" />}
                 {editor
-                    ? <TitleArea value={it.title} maxLength={140} aria-label="Title" placeholder="Untitled item" className={TITLE}
+                    ? <TitleArea value={it.title} maxLength={140} aria-label="Title" placeholder="Untitled item" className={cn("shrink-0", TITLE)}
                         onChange={(e) => typeRow(itemKey, { title: e.target.value })} onBlur={() => void flushTyping()} />
                     : <h2 className={cn("m-0", TITLE)}>{it.title}</h2>}
 
@@ -145,7 +145,7 @@ function ClassItemCard({ itemKey, bar }: { itemKey: string; bar: boolean }) {
                         {view.status === "graded" && (
                             <Prop icon={ICONS.grade} label="Grade" htmlFor={f + "grade"}>
                                 <span className="flex items-center gap-1">
-                                    <NumberInput id={f + "grade"} className={cn(QUIET, "w-16")} min={0} max={100} placeholder="—" value={view.grade ?? ""}
+                                    <KeptNumberInput id={f + "grade"} className={cn(QUIET, "w-16")} min={0} max={100} placeholder="—" value={view.grade ?? ""}
                                         onChange={(e) => void editMark(itemKey, { grade: e.target.value === "" ? null : Math.max(0, Math.min(100, Number(e.target.value))) })} />
                                     <span className="text-muted-foreground">%</span>
                                 </span>
@@ -154,7 +154,7 @@ function ClassItemCard({ itemKey, bar }: { itemKey: string; bar: boolean }) {
                         {GRADABLE.includes(baseOf(it.type)) && (
                             <Prop icon={ICONS.weight} label="Your weight" htmlFor={f + "mine"}>
                                 <span className="flex items-center gap-1">
-                                    <NumberInput id={f + "mine"} className={cn(QUIET, "w-16")} min={0} max={100} step="any" placeholder={it.weight == null ? "—" : String(it.weight)} value={mark.weight ?? ""}
+                                    <KeptNumberInput id={f + "mine"} className={cn(QUIET, "w-16")} min={0} max={100} step="any" placeholder={it.weight == null ? "—" : String(it.weight)} value={mark.weight ?? ""}
                                         onChange={(e) => { const n = Number(e.target.value); void editMark(itemKey, { weight: e.target.value === "" || !(n >= 0) ? null : Math.min(100, n) }) }} />
                                     <span className="text-muted-foreground">% · empty uses the class's</span>
                                 </span>
@@ -228,7 +228,7 @@ function ClassFields({ itemKey, it, f, bg, items, course }: { itemKey: string; i
                 {GRADABLE.includes(baseOf(it.type)) && (
                     <Prop icon={ICONS.weight} label="Weight" htmlFor={f + "weight"}>
                         <span className="flex items-center gap-1">
-                            <NumberInput id={f + "weight"} className={cn(QUIET, "w-16")} min={0} max={100} step="any" placeholder="—" value={it.weight ?? ""} onChange={(e) => set("weight", e.target.value)} />
+                            <KeptNumberInput id={f + "weight"} className={cn(QUIET, "w-16")} min={0} max={100} step="any" placeholder="—" value={it.weight ?? ""} onChange={(e) => set("weight", e.target.value)} />
                             <span className="text-muted-foreground">% of the course grade</span>
                         </span>
                     </Prop>
