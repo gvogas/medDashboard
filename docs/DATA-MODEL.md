@@ -450,6 +450,12 @@ supported incremental cursor.
    cleanup marker prevents reopening data when cleanup was blocked. Account-bound
    request headers prevent an old tab uploading data under a newly changed cookie.
 
+### Sync v3 (a cursor per scope)
+
+The app pulls `GET /api/sync?v=3&cursors=u:<me>:812,c:<space id>:640&sv=905`. The Worker pages the person's own scope and their live spaces (at most 20), never a scope taken from the request; each scope's changes are read by its own statement, capped at 101 rows and guarded by live membership, all in one D1 batch (D1 refuses a compound SELECT of more than five terms). The answer is `{scopes, cursors, changes:[{scope, kind, row}], more, reset, revoked}`: `scopes` describes each space (with its members only when its revision is above `sv`), `reset` lists scopes whose cursor fell below the floor (each starts again from 0), and `revoked` lists scopes sent that the person may no longer read; the app removes them after the cycle's last page. A scope resyncing from 0 that is still below the floor carries a tagged cursor `r<seq>.<floor>` instead of a number; the app stores and sends it as it came, and the Worker answers a plain number once the scope is past the floor. Shared rows are written through `/api/spaces/<space id>/{courses,items}/<id>`: at the row's revision as a whole; otherwise the fields named in `changed` merge when each still holds its old or new value, else `409 {current, fields, by}`. `?v=2` remains for tabs on the old client and pages only the person's own scope.
+
+On the device, IndexedDB version 5 holds shared rows in `shared_courses` and `shared_items` (keyed `[scope, id]`), the spaces in `spaces`, and `meta.cursors` (`{scope: seq}`, or the tagged string while a resync is under way); pending keys for shared rows are `shared_items:<scope>:<id>`.
+
 ---
 
 ## Security model

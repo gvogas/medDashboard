@@ -29,7 +29,7 @@
 | # | Stage | Branch | Database | Detailed plan |
 |---|---|---|---|---|
 | 1 | Scope: `scope` on courses, items and the change feed; new columns on existing tables; move to rounds-v7. Invisible | `collab-1-scope` | clean db → `rounds-v7` | **below** |
-| 2 | Spaces and sync v3: `spaces`, `members`, `access.js`, `/api/sync?v=3` with cursors per scope and `revoked`, IndexedDB v5 (shared stores, cursors), `effectiveItems()`, field-level merge, 403 in the sync loop. Invisible (no way to create a space yet) | `collab-2-sync` | migration `0002_spaces.sql` | written when Stage 1 is merged |
+| 2 | Spaces and sync v3: `spaces`, `members`, `access.js`, `/api/sync?v=3` with cursors per scope and `revoked`, IndexedDB v5 (shared stores, cursors), `effectiveItems()`, field-level merge, 403 in the sync loop. Invisible (no way to create a space yet) | `collab-2-sync` | migration `0002_spaces.sql` | `docs/superpowers/plans/2026-10-05-collab-stage-2-sync.md` |
 | 3 | Classes: create (blank, convert), invites, codes, join, members, roles; admin-only | `collab-3-classes` | `0003_invites.sql` | written when Stage 2 is merged |
 | 4 | Personal layer: `marks`, `space_prefs`, the split item card, source markers, eye filter, merge sheet; admin-only | `collab-4-layer` | `0004_marks.sql` | written when Stage 3 is merged |
 | 5 | Leaving and removal: detach, leave, remove, archive, transfer, Keep/Dismiss, account deletion, the extended nightly purge | `collab-5-leave` | none expected | written when Stage 4 is merged |
