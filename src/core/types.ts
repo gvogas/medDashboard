@@ -2,6 +2,8 @@
 // adds its own bookkeeping to every row (revision, updatedAt, deletedAt); only what the
 // app reads is typed, and a row may carry more.
 
+import type { Maintenance } from "./maintenance"
+
 export type ItemStatus = "todo" | "submitted" | "graded" | "done" | "missed" | (string & {})
 
 /** What every synced row carries besides its own fields. A draft not yet saved may lack them. */
@@ -67,6 +69,8 @@ export interface Profile {
     isAdmin?: boolean
     /** The admins' message to everyone, from GET /api/me while it lasts. */
     announcement?: Announcement | null
+    /** The features the admins have switched off while they work on them (core/maintenance.ts). */
+    maintenance?: Maintenance | null
     revision?: number
 }
 

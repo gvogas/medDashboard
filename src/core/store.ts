@@ -2,6 +2,7 @@
 import { openDb, deleteDb, STORES as stores } from './db.ts';
 import { normalizeItem, normalizeCourse, normalizeQuote, normalizeStudySession, normalizeAchievement, normalizeFlow, normalizePrefs, DEFAULT_COAT } from './model.ts';
 import { parseKey, sharedKey, SHARED_STORES, type SharedStore } from './shared.ts';
+import { parseMaintenance } from './maintenance.ts';
 import type { Access, Accessor, Conflict, Db, PendingOp, Row, Rows } from './db.ts';
 import type { Raw, RawCourse, RawItem } from './model.ts';
 import type { Achievement, Coat, Course, Item, Profile, Quote, SharedCourse, SharedItem, Space, StudySession } from './types.ts';
@@ -75,7 +76,7 @@ let byId = { courses: new Map<string, Course>(), items: new Map<string, Item>() 
 export const course = (id: string | null | undefined): Course | null => byId.courses.get(id!) || null;
 export const item = (id: string | null | undefined): Item | null => byId.items.get(id!) || null;
 const index = () => { byId = { courses: new Map(data.courses.map((r) => [r.id, r])), items: new Map(data.items.map((r) => [r.id, r])) }; };
-const profile = (p: ServerProfile): Profile => ({ ...p, types: Array.isArray(p.types) ? p.types : [], studyFlow: normalizeFlow(p.studyFlow), studyPrefs: normalizePrefs(p.studyPrefs), coat: { name: '', role: '', color: DEFAULT_COAT, ...p.coat }, revision: p.revision || 0 });
+const profile = (p: ServerProfile): Profile => ({ ...p, maintenance: parseMaintenance(p.maintenance), types: Array.isArray(p.types) ? p.types : [], studyFlow: normalizeFlow(p.studyFlow), studyPrefs: normalizePrefs(p.studyPrefs), coat: { name: '', role: '', color: DEFAULT_COAT, ...p.coat }, revision: p.revision || 0 });
 /* A pending key's store, and the row's key in it: [scope, id] for a shared row (src/core/shared.ts). */
 const rowStore = (key: string) => parseKey(key).store as Kind | SharedStore | 'meta';
 const rowId = (key: string): IDBValidKey => { const k = parseKey(key); return k.scope ? [k.scope, k.id] : k.id; };
@@ -302,7 +303,12 @@ export function settleOperation(op: PendingOp, saved: Row | null | undefined): P
       return !!saved;
     }
     await a('pending').del(op.key);
-    if (saved) await a(rowStore(op.key)).put(wrap(op.key, saved));
+    if (saved && op.key === 'profile') {
+      /* PUT /api/me answers the profile alone: the announcement and maintenance it held stay
+         until the pull that follows brings them again */
+      const local = (await a('meta').get('profile'))?.value as Profile | undefined;
+      await a('meta').put(wrap('profile', { ...saved, announcement: local?.announcement ?? null, maintenance: local?.maintenance ?? null }));
+    } else if (saved) await a(rowStore(op.key)).put(wrap(op.key, saved));
     return true;
   }, 'synced');
 }
