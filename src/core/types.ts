@@ -168,3 +168,23 @@ export interface Space {
 export type SharedCourse = Course & { scope: string; updatedBy: string | null }
 /** A class's item (its facts), or a project's item or task (the team's). */
 export type SharedItem = Item & { scope: string; updatedBy: string | null; assignees: string[]; completedBy: string | null }
+
+/** A space as the class routes answer it: enough to download and open it. */
+export interface SpaceSummary { id: string; scope: string; kind: "class" | "project"; name: string; role: "owner" | "editor" | "member"; members: number }
+export interface SpaceMember { userId: string; username: string; name: string; role: "owner" | "editor" | "member"; joinedAt: number }
+export interface SpaceInvite {
+    userId: string; username: string; name: string; role: "editor" | "member"
+    status: "pending" | "declined" | "expired"; createdAt: number; expiresAt: number; invitedBy: string | null
+}
+/** A space for its Members tab (GET /api/spaces/:sid): invites for owner and editors, the code's status for the owner. */
+export interface SpaceDetails {
+    id: string; scope: string; kind: "class" | "project"; role: "owner" | "editor" | "member"; archived: boolean
+    members: SpaceMember[]; invites: SpaceInvite[]; code: { expires: number; usesLeft: number } | null
+}
+/** A join code just made: shown now and never again (only its hash is kept). */
+export interface JoinCode { code: string; expires: number; usesLeft: number }
+/** An invite to you (GET /api/invites). */
+export interface Invite {
+    spaceId: string; kind: "class" | "project"; name: string; role: "editor" | "member"; from: string
+    createdAt: number; expiresAt: number; expired: boolean
+}

@@ -196,3 +196,17 @@ describe('browser API cancellation', () => {
     expect(await result).toMatchObject({ name: 'AbortError' });
   });
 });
+
+describe('the class routes, as the client reads them', () => {
+  it('checks the space they answer with', async () => {
+    respond({ space: { id: 'short', scope: 'c:short' } });
+    await expect(client.api.join('7KQ2M9XD')).rejects.toMatchObject({ status: 502 });
+    respond({ space: { id: 'abcdefghij12', scope: 'p:abcdefghij12', kind: 'class' } });
+    await expect(client.api.invites.accept('abcdefghij12')).rejects.toMatchObject({ status: 502 });
+    const space = { id: 'abcdefghij12', scope: 'c:abcdefghij12', kind: 'class', name: 'Web', role: 'member', members: 2 };
+    respond({ space });
+    expect(await client.api.join('7KQ2M9XD')).toEqual(space);
+    respond(null, 204);
+    expect(await client.api.invites.decline('abcdefghij12')).toBeNull();
+  });
+});

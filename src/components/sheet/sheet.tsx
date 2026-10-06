@@ -36,6 +36,11 @@ export function sheetLabel(s: Exclude<SheetState, null>): string {
     if (s.kind === "school") return "School calendar"
     if (s.kind === "session") return s.draft.isNew ? "Log study" : "Edit session"
     if (s.kind === "achievement") return s.draft.isNew ? "New achievement" : "Edit achievement"
+    if (s.kind === "class") return "Class"
+    if (s.kind === "new-class") return "New shared class"
+    if (s.kind === "convert") return "Convert to shared class"
+    if (s.kind === "join") return "Join a class"
+    if (s.kind === "invites") return "Invites"
     const it = store.item(s.id) as Item | null
     return it ? tmeta(it.type).label : "Item"
 }

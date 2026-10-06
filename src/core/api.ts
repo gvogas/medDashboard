@@ -2,7 +2,7 @@
 
 import type { Row } from './db.ts';
 import type { Cursor, Page, ServerProfile } from './store.ts';
-import type { Space } from './types.ts';
+import type { Invite, JoinCode, Space, SpaceDetails, SpaceInvite, SpaceSummary } from './types.ts';
 
 /** An error's body as the Worker sends it: its code, and for some the server's copy or a wait. */
 export interface ErrorBody { error?: string; retryAfter?: unknown; current?: Row | null; [field: string]: unknown }
@@ -194,6 +194,13 @@ async function changesV3(cursors: Record<string, Cursor>, sv: number): Promise<P
 /* A shared row's URL: the space id is the scope without its 'c:' or 'p:'. */
 const sharedPath = (scope: string, kind: string, id: string) => `/api/spaces/${scope.slice(2)}/${kind}/${encodeURIComponent(id)}`;
 
+/* The class routes answer a space as {space}: its id is the Worker's and its scope matches its kind. */
+async function spaceOf(response: Promise<unknown>): Promise<SpaceSummary> {
+  const space = (await response as { space?: SpaceSummary } | null)?.space;
+  if (!space || typeof space.id !== 'string' || !/^[a-z0-9]{12}$/.test(space.id) || space.scope !== `${space.kind === 'project' ? 'p' : 'c'}:${space.id}`) throw invalidResponse();
+  return space;
+}
+
 /* A read's query: only the values given, in the order given. */
 const query = (o: Record<string, string | undefined>) => new URLSearchParams(Object.entries(o).filter((e): e is [string, string] => !!e[1])).toString()
 type ReadQuery = { name: string; today: string; termStart?: string; terms?: string; codes?: string }
@@ -212,6 +219,23 @@ export const api = {
       record(request('PUT', sharedPath(scope, kind, id), changed ? { ...row, changed } : row, match(row.revision)), id, row.revision),
     del: (scope: string, kind: string, id: string, revision = 0) => empty(request('DELETE', sharedPath(scope, kind, id), undefined, match(revision))),
   },
+  /* shared classes (admins only until Stage 6); `sid` is a space id */
+  spaces: {
+    create: (body: { kind: 'class'; course?: Record<string, unknown>; convertCourseId?: string; items?: string[] }) => spaceOf(request('POST', '/api/spaces', body)),
+    get: (sid: string): Promise<SpaceDetails> => request('GET', `/api/spaces/${sid}`),
+    invite: (sid: string, username: string, role?: string): Promise<SpaceInvite> => request('POST', `/api/spaces/${sid}/invites`, role ? { username, role } : { username }),
+    revokeInvite: (sid: string, userId: string) => empty(request('DELETE', `/api/spaces/${sid}/invites/${encodeURIComponent(userId)}`)),
+    setRole: (sid: string, userId: string, role: string) => request('PUT', `/api/spaces/${sid}/members/${encodeURIComponent(userId)}`, { role }),
+    transfer: (sid: string, userId: string) => empty(request('POST', `/api/spaces/${sid}/transfer`, { userId })),
+    makeCode: (sid: string): Promise<JoinCode> => request('POST', `/api/spaces/${sid}/code`),
+    dropCode: (sid: string) => empty(request('DELETE', `/api/spaces/${sid}/code`)),
+  },
+  invites: {
+    list: (): Promise<{ invites: Invite[] }> => request('GET', '/api/invites'),
+    accept: (sid: string) => spaceOf(request('POST', `/api/invites/${sid}/accept`)),
+    decline: (sid: string) => empty(request('POST', `/api/invites/${sid}/decline`)),
+  },
+  join: (code: string) => spaceOf(request('POST', '/api/join', { code })),
   get: (kind: string, id: string) => record(request('GET', `/api/${kind}/${encodeURIComponent(id)}`), id),
   put: (kind: string, id: string, row: { revision?: number; [field: string]: unknown }) => record(request('PUT', `/api/${kind}/${encodeURIComponent(id)}`, row, match(row.revision)), id, row.revision),
   revokeAll: () => empty(request('POST', '/api/session/revoke-all')),
