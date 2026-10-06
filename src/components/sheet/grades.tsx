@@ -3,7 +3,7 @@
 // course sheet shows it for a course of yours; the class sheet, as "Your grade so far", over
 // the class's items with your marks on top (spec §8).
 
-import { useId } from "react"
+import { useEffect, useId, useRef, useState } from "react"
 import { cn } from "@/lib/utils"
 import { courseGrade, neededLabel, targetsFor, ungraded } from "@/core/grades"
 import type { Course, Item } from "@/data/types"
@@ -56,9 +56,7 @@ export function Grades({ title = "Grades", course, items, whatIf, setWhatIf, onT
             )}
             <div className="flex items-center gap-2 text-[12px] text-muted-foreground">
                 <label htmlFor={f + "target"}>Your target</label>
-                <NumberInput id={f + "target"} inputMode="numeric" min={1} max={100} step={1} placeholder="e.g. 75" className="w-20"
-                    value={course.target ?? ""}
-                    onChange={(e) => { const n = Math.round(+e.target.value); onTarget(e.target.value.trim() !== "" && n >= 1 && n <= 100 ? n : null) }} />
+                <TargetInput id={f + "target"} target={course.target ?? null} onTarget={onTarget} />
                 <span>% final grade</span>
             </div>
             {open.length > 0 && (
@@ -86,5 +84,23 @@ export function Grades({ title = "Grades", course, items, whatIf, setWhatIf, onT
             )}
             {real.total !== 100 && <Warning>Weights add up to {real.total}%, not 100.</Warning>}
         </Section>
+    )
+}
+
+const asTarget = (text: string): number | null => { const n = Math.round(+text); return text.trim() !== "" && n >= 1 && n <= 100 ? n : null }
+
+/* The box keeps what you type: a target saved to the store (the class sheet's prefs) lands a
+   moment later, and a box driven by it would lose a keystroke typed in between. A target that
+   changes from elsewhere shows once you leave the box. */
+function TargetInput({ id, target, onTarget }: { id: string; target: number | null; onTarget: (t: number | null) => void }) {
+    const [text, setText] = useState(target == null ? "" : String(target))
+    const typing = useRef(false)
+    useEffect(() => { if (!typing.current) setText(target == null ? "" : String(target)) }, [target])
+    return (
+        <NumberInput id={id} inputMode="numeric" min={1} max={100} step={1} placeholder="e.g. 75" className="w-20"
+            value={text}
+            onFocus={() => { typing.current = true }}
+            onBlur={() => { typing.current = false; setText(target == null ? "" : String(target)) }}
+            onChange={(e) => { setText(e.target.value); onTarget(asTarget(e.target.value)) }} />
     )
 }
