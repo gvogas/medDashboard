@@ -192,7 +192,8 @@ export async function purgeTombstones(db, before) {
   await db.batch(
     [db.prepare('UPDATE sync_state SET floor = MAX(floor, COALESCE((SELECT MAX(seq) FROM changes WHERE deleted_at < ?), 0)) WHERE id = 1').bind(before),
     db.prepare('DELETE FROM changes WHERE deleted_at < ?').bind(before),
-    ...['achievements', 'study_sessions', 'items', 'quotes', 'courses'].map((table) =>
+    /* marks and prefs here are only tombstones; Stage 5 detaches meaningful marks first (spec §13) */
+    ...['marks', 'space_prefs', 'achievements', 'study_sessions', 'items', 'quotes', 'courses'].map((table) =>
       db.prepare(`DELETE FROM ${table} WHERE deleted_at IS NOT NULL AND deleted_at < ?`).bind(before),
     )],
   );

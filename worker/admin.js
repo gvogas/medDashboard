@@ -15,7 +15,7 @@ import { ACCOUNT_TABLES } from './accounts.js';
 import { readMaintenance, validateMaintenance } from './maintenance.js';
 
 /* The newest file in migrations/; a test keeps it in step. */
-export const LATEST_MIGRATION = '0003_invites.sql';
+export const LATEST_MIGRATION = '0004_marks.sql';
 const AUDIT_KEEP_MS = 90 * 24 * 60 * 60 * 1000;
 const DAY_MS = 24 * 60 * 60 * 1000;
 export const MIN_PASSWORD = 8;

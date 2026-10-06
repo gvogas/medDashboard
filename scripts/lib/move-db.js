@@ -15,14 +15,16 @@ export const TABLES = {
   quotes: ['user_id', 'id', 'text', 'source', 'created_at', 'updated_at', 'deleted_at', 'revision'],
   study_sessions: ['user_id', 'id', 'course_id', 'item_id', 'space_id', 'started_at', 'study_minutes', 'rounds_done', 'note', 'manual', 'created_at', 'updated_at', 'deleted_at', 'revision'],
   achievements: ['user_id', 'id', 'name', 'sticker', 'rule', 'course_id', 'item_id', 'space_id', 'target', 'created_at', 'updated_at', 'deleted_at', 'revision'],
+  marks: ['user_id', 'id', 'space_id', 'item_id', 'status', 'grade', 'weight', 'notes', 'checklist', 'completed_at', 'hidden', 'created_at', 'updated_at', 'deleted_at', 'revision'],
+  space_prefs: ['user_id', 'id', 'space_id', 'color', 'target', 'term', 'archived', 'created_at', 'updated_at', 'deleted_at', 'revision'],
   spotify_tokens: ['user_id', 'refresh_token', 'access_token', 'expires_at', 'updated_at'],
   changes: ['seq', 'scope', 'kind', 'row_id', 'payload', 'deleted_at'],
   admin_log: ['id', 'at', 'admin', 'action', 'target', 'detail'],
 };
 
-/* Tables added after rounds-v7's first schema (0002_spaces.sql, 0003_invites.sql): a database
-   made before them has none of their rows. */
-const ADDED_TABLES = new Set(['spaces', 'members', 'invites']);
+/* Tables added after rounds-v7's first schema (0002_spaces.sql, 0003_invites.sql,
+   0004_marks.sql): a database made before them has none of their rows. */
+const ADDED_TABLES = new Set(['spaces', 'members', 'invites', 'marks', 'space_prefs']);
 const ORDER_BY = { users: 'id', spaces: 'id', members: 'space_id, user_id', invites: 'space_id, user_id', courses: 'scope, id', items: 'scope, id', changes: 'seq', spotify_tokens: 'user_id', admin_log: 'id' };
 
 /* Reading rounds-v6 or older, whose courses, items and change feed name a user: the owner

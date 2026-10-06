@@ -105,6 +105,8 @@ A row is created by `npm run user:add`, with the defaults. The API
 exposes it as the **profile**, with the coat fields nested: `{coat: {name, role,
 color}, theme, termStart, ...}`.
 
+`hidden_sources`: what you have hidden from your Week and Month (and, from Stage 6, your calendar feed): `course:<id>`, `space:<sid>`, `personal`; at most 40. Sent and received as the profile's `hiddenSources`; a `PUT /api/me` without it keeps it.
+
 The twelve course colours; the first five are also the coat colours:
 
 | Name | Hex |
@@ -317,6 +319,14 @@ A shared class (`kind = 'class'`, its rows in scope `c:<id>`) or team project (`
 ## `invites`
 
 `(space_id, user_id)`: an invitation to a space by username (spec §11). `invited_by` (NULL once that account is gone), `role` given on accepting (`editor` or `member`; never `owner`, which moves only by a transfer), `status` `pending` | `accepted` | `declined`, `created_at`, `expires_at` (30 days on). A repeat invite refreshes the one row; accepting makes or revives the membership and marks the row `accepted`. Deleted with its space or the invited account; Stage 5's nightly purge removes rows 90 days old.
+
+## `marks`
+
+`(user_id, id)`, `id = '<space id>:<item id>'`, unique `(user_id, space_id, item_id)`: your layer on one shared item (spec §4). `status`, `grade`, `weight` (an override; NULL uses the class's), `notes`, `checklist` (exam prep's topics), `completed_at`, `hidden` ("not mine": out of your views, grades and stats), timestamps, `deleted_at`, `revision`. Same `CHECK`s as the matching `items` columns. On a project's item only `notes` and `hidden` are used. Its changes go into your own feed (`'u:' || user_id`). Written through `/api/marks/:sid/:itemId` with a field-level merge, and by the convert and absorb batches. Deleted with the account.
+
+## `space_prefs`
+
+`(user_id, id)`, `id = space_id`: your settings for one space: `color` (one of the twelve), `target`, `term` (your semester for a class; `''` is every semester), `archived` (in your sidebar), timestamps, `deleted_at`, `revision`. Written by the Worker when you make, convert, accept or join (the class's colour unless you use it, else the first free; its term), then through `/api/space_prefs/:sid` with whole-row `If-Match`. Its changes go into your own feed. Deleted with the account.
 
 ## Indexes
 
