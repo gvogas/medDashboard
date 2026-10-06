@@ -147,3 +147,20 @@ export interface SyncStatus { state: SyncState; pending: number; message: string
 
 /** An edit the server turned down, kept so it can be restored or discarded. */
 export interface SavedCopy { id: string; key: string; op: string; reason: string; body: Record<string, unknown> | null }
+
+/** A shared space as sync describes it (spec §6): your role in it, and its members when they last moved. */
+export interface Space {
+    id: string
+    scope: string
+    kind: "class" | "project"
+    role: "owner" | "editor" | "member"
+    archived: boolean
+    name: string
+    parent: { space: string; item: string } | null
+    revision: number
+    members: { userId: string; name: string; role: string }[]
+}
+/** A class's one course, as the class keeps it. */
+export type SharedCourse = Course & { scope: string; updatedBy: string | null }
+/** A class's item (its facts), or a project's item or task (the team's). */
+export type SharedItem = Item & { scope: string; updatedBy: string | null; assignees: string[]; completedBy: string | null }

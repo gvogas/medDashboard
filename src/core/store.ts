@@ -92,7 +92,7 @@ export async function open(p: ServerProfile): Promise<void> {
     localStorage.removeItem(`rounds.wipe:${p.id}`);
   }
   userId = p.id;
-  db = await openDb(dbName(p.id), () => { close().finally(() => notify({ type: 'signed-out' })); });
+  db = await openDb(dbName(p.id), () => { close().finally(() => notify({ type: 'signed-out' })); }, p.id);
   await db.transaction(['meta', 'pending'], 'readwrite', async (a) => {
     const cached = (await a('meta').get('profile'))?.value;
     if (!cached || (!(await a('pending').get('profile')) && p.revision)) await a('meta').put(wrap('profile', profile(p)));

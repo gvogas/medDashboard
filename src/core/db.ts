@@ -1,5 +1,5 @@
 // Atomic IndexedDB transactions shared by every tab of this account.
-import type { Achievement, Course, Item, Quote, StudySession } from './types.ts';
+import type { Achievement, Course, Item, Quote, SharedCourse, SharedItem, Space, StudySession } from './types.ts';
 
 /** A row as the server and the queue know it: an id and whatever fields its kind has. */
 export interface Row { id: string; revision?: number; updatedAt?: number | null; deletedAt?: number | null; [field: string]: unknown }
@@ -13,6 +13,8 @@ export interface PendingOp {
   reviewRequired: boolean;
   token: string;
   owner: string;
+  /** A shared row's edit: the row as it was when first queued, from which sync works out `changed`. */
+  base?: Row | null;
 }
 
 /** An edit the server turned down (or another tab overwrote), kept for review. */
@@ -25,6 +27,9 @@ export interface Rows {
   quotes: Quote;
   study_sessions: StudySession;
   achievements: Achievement;
+  shared_courses: SharedCourse;
+  shared_items: SharedItem;
+  spaces: Space;
   meta: { key: string; value: unknown };
   pending: PendingOp;
   conflicts: Conflict;
@@ -49,19 +54,31 @@ export interface Db {
   close(): void;
 }
 
-export const STORES: StoreName[] = ['courses', 'items', 'quotes', 'study_sessions', 'achievements', 'meta', 'pending', 'conflicts'];
+export const STORES: StoreName[] = ['courses', 'items', 'quotes', 'study_sessions', 'achievements', 'shared_courses', 'shared_items', 'spaces', 'meta', 'pending', 'conflicts'];
+/* Shared rows are keyed [scope, id], so a class's id can never shadow a personal row (spec §7). */
+const keyPathOf = (s: StoreName): string | string[] =>
+  s === 'meta' || s === 'pending' ? 'key' : s === 'shared_courses' || s === 'shared_items' ? ['scope', 'id'] : 'id';
 const result = <T>(request: IDBRequest<T>) => new Promise<T>((resolve, reject) => {
   request.onsuccess = () => resolve(request.result);
   request.onerror = () => reject(request.error);
 });
 
-export function openDb(name: string, onVersionChange: () => void = () => {}): Promise<Db> {
+/** Version 5 (spec §7): shared rows, spaces, and a sync cursor per scope. `account` names whose cursor version 4 kept. */
+export function openDb(name: string, onVersionChange: () => void = () => {}, account: string | null = null): Promise<Db> {
   return new Promise((resolve, reject) => {
-    const req = indexedDB.open(name, 4);
+    const req = indexedDB.open(name, 5);
     let blocked = false;
-    req.onupgradeneeded = () => {
+    req.onupgradeneeded = (event) => {
       const db = req.result, tx = req.transaction!;
-      for (const s of STORES) if (!db.objectStoreNames.contains(s)) db.createObjectStore(s, { keyPath: ['meta', 'pending'].includes(s) ? 'key' : 'id' });
+      for (const s of STORES) if (!db.objectStoreNames.contains(s)) db.createObjectStore(s, { keyPath: keyPathOf(s) });
+      // Version 4 kept one cursor, for the person's own rows: it becomes theirs in the map.
+      if (event.oldVersion >= 1 && event.oldVersion < 5 && account) {
+        const meta = tx.objectStore('meta'), old: IDBRequest<{ value?: number } | undefined> = meta.get('syncCursor');
+        old.onsuccess = () => {
+          if (old.result?.value) meta.put({ key: 'cursors', value: { ['u:' + account]: old.result.value } });
+          meta.delete('syncCursor');
+        };
+      }
       // Version 1 stored one dirty map. Move it without discarding unsent edits.
       const old: IDBRequest<{ value?: Record<string, string> } | undefined> = tx.objectStore('meta').get('dirty');
       old.onsuccess = () => {

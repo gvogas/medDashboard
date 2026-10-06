@@ -168,3 +168,23 @@ test('a reloaded tab editing its own unsynced record saves no conflict copy', as
  assert.equal(after.conflicts.length, 0);
  await after.close();
 });
+test('version 4 upgrade keeps pending edits and moves the cursor to the person\'s own scope', async () => {
+ const user = p(), name = `rounds:${user.id}`;
+ await new Promise((resolve, reject) => {
+  const request = indexedDB.open(name, 4);
+  request.onupgradeneeded = () => { for (const s of ['courses', 'items', 'quotes', 'study_sessions', 'achievements', 'meta', 'pending', 'conflicts']) request.result.createObjectStore(s, { keyPath: ['meta', 'pending'].includes(s) ? 'key' : 'id' }); };
+  request.onerror = () => reject(request.error);
+  request.onsuccess = () => {
+   const db = request.result, tx = db.transaction(['items', 'meta', 'pending'], 'readwrite');
+   tx.objectStore('items').put({ id: 'a', title: 'Unsent', revision: 3 });
+   tx.objectStore('pending').put({ key: 'items:a', op: 'put', body: { id: 'a', title: 'Unsent', revision: 3 }, revision: 3, reviewRequired: false, token: 't', owner: 'old-tab' });
+   tx.objectStore('meta').put({ key: 'syncCursor', value: 812 });
+   tx.oncomplete = () => { db.close(); resolve(); };
+  };
+ });
+ await first.open(user);
+ assert.deepEqual((await first.pending()).map((op) => op.key), ['items:a']);
+ assert.deepEqual(await first.meta.get('cursors'), { [`u:${user.id}`]: 812 });
+ assert.equal(await first.meta.get('syncCursor'), undefined);
+ assert.equal(first.item('a').title, 'Unsent');
+});
