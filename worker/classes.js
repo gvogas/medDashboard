@@ -6,7 +6,7 @@ import { requireUser } from './auth.js';
 import { requireAdmin } from './admin.js';
 import { validateSharedCourse } from './validate.js';
 import { ADMINS_ONLY, checkConvert, createClass, setRole, spaceDetails, transfer } from './spaces.js';
-import { acceptInvite, declineInvite, invite, myInvites, revokeInvite } from './invites.js';
+import { acceptInvite, declineInvite, dropCode, invite, joinByCode, makeCode, myInvites, revokeInvite } from './invites.js';
 
 const SID = '([a-z0-9]{12})';
 const UID = '([^/]{1,64})';
@@ -72,5 +72,14 @@ export const classRoutes = [
   ['POST', route(`invites/${SID}/decline`), async ({ request, env, params: [sid] }) => {
     await declineInvite(env.DB, await requireUser(request, env), sid);
     return done();
+  }],
+  ['POST', route(`spaces/${SID}/code`), async ({ request, env, params: [sid] }) => json(await makeCode(env.DB, await requireUser(request, env), sid), 201)],
+  ['DELETE', route(`spaces/${SID}/code`), async ({ request, env, params: [sid] }) => {
+    await dropCode(env.DB, await requireUser(request, env), sid);
+    return done();
+  }],
+  ['POST', route('join'), async ({ request, env }) => {
+    const userId = await joiner(request, env);
+    return json({ space: await joinByCode(env.DB, userId, (await readJson(request)).code) });
   }],
 ];

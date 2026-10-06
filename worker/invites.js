@@ -4,8 +4,10 @@
 import { HttpError } from './http.js';
 import { claimLimit, rateLimited } from './limits.js';
 import { normalizeUsername } from './password.js';
-import { assertAllowed, editorGuard, ownerGuard } from './access.js';
-import { ADMINS_ONLY, LIVE_MEMBERS, MEMBER_LIMIT, MY_SPACES, SPACE_LIMIT, spaceSummary, touchSpace } from './spaces.js';
+import { hex } from './auth.js';
+import { assertAllowed, assertOwner, editorGuard, ownerGuard } from './access.js';
+import { ADMINS_ONLY, LIVE_MEMBERS, MEMBER_LIMIT, MY_SPACES, NEXT_SPACE_REVISION, SPACE_LIMIT, spaceSummary, touchSpace } from './spaces.js';
+import { normalizeCode } from '../src/core/shared.ts';
 
 const HOUR_MS = 60 * 60 * 1000;
 const DAY_MS = 24 * HOUR_MS;
@@ -116,4 +118,77 @@ export async function acceptInvite(db, userId, spaceId, now = Date.now()) {
   if (why.mine >= SPACE_LIMIT) throw new HttpError(409, { error: 'limit' });
   if (why.n >= MEMBER_LIMIT) throw new HttpError(409, { error: 'full' });
   throw new HttpError(409, { error: 'conflict' });
+}
+
+// ── join codes ──────────────────────────────────────────────────────────────
+
+/** Join attempts one person may make in an hour; a code's life and its uses (spec §11). */
+export const JOIN_LIMIT = 10;
+export const CODE_TTL_MS = 7 * DAY_MS;
+export const CODE_USES = 10;
+const CROCKFORD = '0123456789ABCDEFGHJKMNPQRSTVWXYZ';
+
+/** A new code: 8 Crockford base32 characters from 5 random bytes (40 bits). */
+export function newCode() {
+  let n = 0;
+  for (const b of crypto.getRandomValues(new Uint8Array(5))) n = n * 256 + b;
+  let out = '';
+  for (let i = 0; i < 8; i++) { out = CROCKFORD[n % 32] + out; n = Math.floor(n / 32); }
+  return out;
+}
+
+/** What is stored of a code: its SHA-256, in hex. */
+export const hashCode = async (code) => hex(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(code)));
+
+/** The owner makes a join code, retiring the one before: {code, expires, usesLeft}. Only its hash is kept, so the code is shown now and never again. */
+export async function makeCode(db, userId, spaceId, now = Date.now()) {
+  await assertOwner(db, userId, spaceId);
+  const code = newCode(), expires = now + CODE_TTL_MS, g = ownerGuard(spaceId, userId);
+  const r = await db.prepare(`UPDATE spaces SET code_hash = ?, code_expires = ?, code_uses_left = ?, updated_at = ?, revision = ${NEXT_SPACE_REVISION}
+    WHERE id = ? AND ${g.sql} RETURNING id`).bind(await hashCode(code), expires, CODE_USES, now, spaceId, ...g.binds).first();
+  if (!r) throw new HttpError(404, { error: 'not_found' });
+  return { code, expires, usesLeft: CODE_USES };
+}
+
+/** The owner turns the join code off. */
+export async function dropCode(db, userId, spaceId, now = Date.now()) {
+  await assertOwner(db, userId, spaceId);
+  const g = ownerGuard(spaceId, userId);
+  await db.prepare(`UPDATE spaces SET code_hash = NULL, code_expires = NULL, code_uses_left = NULL, updated_at = ?, revision = ${NEXT_SPACE_REVISION}
+    WHERE id = ? AND ${g.sql}`).bind(now, spaceId, ...g.binds).run();
+}
+
+/**
+ * Join with a code (spec §11), in one batch: the membership (with a pending invite's role,
+ * else the space's default), one use fewer and the space's revision moved on, the invite
+ * marked accepted. A space you are in already answers at once and uses nothing. Ten tries
+ * an hour, counted first; 400 malformed, 404 unknown, 410 expired or used up, 409 limit or full.
+ */
+export async function joinByCode(db, userId, raw, now = Date.now()) {
+  const wait = await claimLimit(db, `join:${userId}`, JOIN_LIMIT, now, HOUR_MS);
+  if (wait) throw rateLimited(wait);
+  const code = normalizeCode(raw);
+  if (!code) throw new HttpError(400, { error: 'invalid', field: 'code' });
+  const hash = await hashCode(code);
+  const space = await db.prepare('SELECT id, kind, code_expires, code_uses_left FROM spaces WHERE code_hash = ? AND deleted_at IS NULL').bind(hash).first();
+  if (!space) throw new HttpError(404, { error: 'not_found' });
+  const held = await spaceSummary(db, userId, space.id);
+  if (held) return held;
+  if (space.code_expires <= now || space.code_uses_left <= 0) throw new HttpError(410, { error: 'expired' });
+  const standard = space.kind === 'class' ? 'member' : 'editor';
+  const [joined] = await db.batch([
+    db.prepare(`INSERT INTO members (space_id, user_id, role, joined_at, updated_at)
+      SELECT s.id, ?, COALESCE((SELECT i.role FROM invites AS i WHERE i.space_id = s.id AND i.user_id = ? AND i.status = 'pending' AND i.expires_at > ?), ?), ?, ?
+      FROM spaces AS s WHERE s.id = ? AND s.code_hash = ? AND s.code_expires > ? AND s.code_uses_left > 0 AND s.deleted_at IS NULL
+        AND ${MY_SPACES} < ? AND ${LIVE_MEMBERS('s.id')} < ?
+      ${REVIVE}`).bind(userId, userId, now, standard, now, now, space.id, hash, now, userId, SPACE_LIMIT, MEMBER_LIMIT),
+    db.prepare(`UPDATE spaces SET code_uses_left = code_uses_left - 1, updated_at = ?, revision = ${NEXT_SPACE_REVISION} WHERE id = ? AND changes() > 0`)
+      .bind(now, space.id),
+    acceptedStmt(db, space.id, userId),
+  ]);
+  if (joined.meta.changes) return spaceSummary(db, userId, space.id);
+  const why = await db.prepare(`SELECT ${MY_SPACES} AS mine, ${LIVE_MEMBERS('?')} AS n`).bind(userId, space.id).first();
+  if (why.mine >= SPACE_LIMIT) throw new HttpError(409, { error: 'limit' });
+  if (why.n >= MEMBER_LIMIT) throw new HttpError(409, { error: 'full' });
+  throw new HttpError(410, { error: 'expired' });
 }
