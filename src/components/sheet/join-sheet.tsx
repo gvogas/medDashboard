@@ -106,8 +106,10 @@ function Joined({ space: s, here, bar }: { space: SpaceSummary; here: boolean; b
     const [color, setColor] = useState(pref?.color ?? "")
     const [term, setTerm] = useState(() => defaultTerm(pref?.term ?? classTerm, cal))
     const match = matchFor(s.id)
+    const [err, setErr] = useState("")
     const go = async (next: () => void) => {
-        if (pref && (color !== pref.color || term !== pref.term)) await savePref(s.id, { color, term })
+        try { if (pref && (color !== pref.color || term !== pref.term)) await savePref(s.id, { color, term }) }
+        catch (e) { setErr(messageFor(e)); return }
         next()
     }
     const terms = cal ? semesterOptions(cal) : []
@@ -132,6 +134,7 @@ function Joined({ space: s, here, bar }: { space: SpaceSummary; here: boolean; b
                     </Fields>
                 )}
                 {match && <Note>You have a course of your own like it, {match.name}. Merge it next, so your grades and notes sit on the class's items.</Note>}
+                {err && <Note tone="bad">{err}</Note>}
             </SheetBody>
             <SheetFoot hint="Only you see your colour and semester">
                 <Button variant="ghost" onClick={() => void go(closeSheet)}>Done</Button>

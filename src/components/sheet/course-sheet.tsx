@@ -39,6 +39,8 @@ export function CourseSheet({ id }: { id: string | null }) {
         ? sharedRows.find((c) => c.scope === shared.scope && c.id === shared.id) ?? null
         : id ? courses.find((c) => !c.source && c.id === id) ?? null : null
     const [draft, setDraft] = useState<Course>(() => (stored ? structuredClone(stored) : newCourse(courses.length)))
+    /* a class's course that lands after the sheet opened: edit it, never a new one in its scope */
+    useEffect(() => { if (shared && stored && draft.id !== stored.id) setDraft(structuredClone(stored)) }, [shared, stored, draft.id])
     const [asking, setAsking] = useState(false)
     /* what-if scores: never saved, gone when the sheet closes */
     const [whatIf, setWhatIf] = useState<Record<string, number>>({})

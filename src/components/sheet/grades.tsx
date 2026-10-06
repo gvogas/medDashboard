@@ -81,7 +81,7 @@ export function Grades({ title = "Grades", course, items, whatIf, setWhatIf, onT
                             </label>
                         ))}
                     </div>
-                    <Note>Scores you might get. Not saved; they clear when you close the course.</Note>
+                    <Note>Scores you might get. Not saved; they clear when you close this.</Note>
                 </details>
             )}
             {real.total !== 100 && <Warning>Weights add up to {real.total}%, not 100.</Warning>}

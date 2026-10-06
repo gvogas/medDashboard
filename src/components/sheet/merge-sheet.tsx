@@ -38,7 +38,9 @@ function Merge({ spaceId, courseId, fromCourse, bar }: Props & { bar: boolean })
     const course = (useCourses() as EffectiveCourse[]).find((c) => !c.source && c.id === courseId) ?? null
     const mine = (useItems() as EffectiveItem[]).filter((it) => !it.source && it.courseId === courseId).sort((a, b) => a.date.localeCompare(b.date))
     const theirs = useSharedItems().filter((it) => it.scope === scope)
-    const [pairs, setPairs] = useState(() => pairItems(mine, theirs).pairs)
+    const [chosen, setPairs] = useState(() => pairItems(mine, theirs).pairs)
+    /* a pair whose item a sync took away while the sheet was open drops out of the count and the merge */
+    const pairs = chosen.filter(([m, s]) => mine.some((it) => it.id === m) && theirs.some((it) => it.id === s))
     const [busy, setBusy] = useState(false)
     const [err, setErr] = useState("")
 
