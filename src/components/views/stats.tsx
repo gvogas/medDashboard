@@ -11,6 +11,7 @@ import { useUi } from "@/data/ui"
 import { useStats } from "@/data/views"
 import { statsShown } from "@/components/shell"
 import { openItem, openStudy, showTileList } from "@/data/actions"
+import { keyOf } from "@/data/effective"
 import { ExamMotif } from "./exam-motif"
 
 /** "Cardiology midterm exam"; the type word only when the title doesn't already say it ("Final exam"). */
@@ -36,7 +37,7 @@ export function Stats() {
         <>
             <Box
                 label="Next exam or quiz"
-                onClick={exam ? () => openItem(exam.id) : undefined}
+                onClick={exam ? () => openItem(keyOf(exam)) : undefined}
                 title={exam ? "Open " + exam.title : undefined}
                 value={<span className="block truncate text-[21px] leading-[1.15]">{exam ? examName(exam.title, tmeta(exam.type).label) : "Nothing scheduled"}</span>}
                 foot={exam ? (

@@ -274,3 +274,35 @@ describe("the stat tiles", () => {
         expect(screen.queryByText("Overdue")).toBeNull()
     })
 })
+
+describe("an admin's classes in the views", () => {
+    const WEB = "c:abcdefghij12", store = fake.data as Record<string, unknown>
+    beforeEach(() => {
+        store.profile = { id: "u1", isAdmin: true, hiddenSources: [] }
+        store.spaces = [{ id: "abcdefghij12", scope: WEB, kind: "class", role: "member", archived: false, name: "Web Services", parent: null, revision: 1, members: [] }]
+        store.shared_courses = [{ ...normalizeCourse({ id: "web", code: "WEB", name: "Web Services", color: "#17B3AE" }), scope: WEB }]
+        store.shared_items = [{ ...item({ id: "a1", title: "REST API Project", courseId: "web" }), scope: WEB }]
+        store.marks = []
+        store.space_prefs = []
+        fake.data.items = [...fake.data.items, item({ id: "f1", type: "quiz", title: "Extra quiz", classId: "abcdefghij12" })]
+    })
+    afterEach(() => { for (const k of ["spaces", "shared_courses", "shared_items", "marks", "space_prefs"]) store[k] = [] })
+
+    it("mark a class's item and yours filed under it, and open the class's by its key", () => {
+        show(<Views />)
+        const row = screen.getByRole("button", { name: /REST API Project/ })
+        expect(within(row).getByRole("img", { name: "Shared · Web Services" })).toBeTruthy()
+        fireEvent.click(row)
+        expect(actions.openItem).toHaveBeenCalledWith(WEB + "/a1")
+        expect(within(screen.getByRole("button", { name: /Extra quiz/ })).getByRole("img", { name: "Yours, under Web Services" })).toBeTruthy()
+    })
+
+    it("leave a hidden source off the week, and keep it on All items", () => {
+        store.profile = { id: "u1", isAdmin: true, hiddenSources: ["space:abcdefghij12"] }
+        show(<Views />)
+        expect(screen.queryByRole("button", { name: /REST API Project/ })).toBeNull()
+        expect(screen.queryByRole("button", { name: /Extra quiz/ })).toBeNull()
+        set({ view: "table" })
+        expect(screen.getByRole("row", { name: /REST API Project/ })).toBeTruthy()
+    })
+})

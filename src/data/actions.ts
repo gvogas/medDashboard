@@ -11,6 +11,9 @@ import { inTerm, pickedTerm } from "@/core/school"
 import { addDays, iso, parse, today } from "@/core/dates"
 import { setSide } from "./sidebar"
 import { effectiveCourses, effectiveItems, keyOf } from "./effective"
+import { isSharedKey, keyedCourses, placeCourse, splitKey } from "./refs"
+import { openClass } from "./classes"
+import { toggleClassTask } from "./marks"
 import { openKeys } from "./keys"
 import { api } from "@/core/api"
 import { toast } from "./toast"
@@ -177,9 +180,9 @@ export async function reorderTypes(ids: string[]) {
 
 /* ── drawers, the sidebar on phones, sync ── */
 
-/** A new item in the sheet, on a day (the week shown, by default), in the course shown. */
+/** A new item in the sheet, on a day (the week shown, by default), in the course shown: filed under a class when a class is shown. */
 export function newItemOn(date: string, type = "assignment") {
-    openSheet({ kind: "new-item", draft: normalizeItem({ id: uid(), type, title: "", courseId: ui.course === "all" ? null : ui.course, date, status: "todo" }) as Item })
+    openSheet({ kind: "new-item", draft: normalizeItem({ id: uid(), type, title: "", ...placeCourse(ui.course === "all" ? null : ui.course), date, status: "todo" }) as Item })
 }
 export const newItem = () => newItemOn(ui.anchor)
 export const openItem = (id: string) => openSheet({ kind: "item", id })
@@ -191,8 +194,11 @@ export async function deleteItem(id: string) {
     closeSheet()
     await deleteLater("items", id, "“" + (it.title.trim() || "Item") + "”", () => store.deleteItem(id))
 }
-/** A course in the sheet; null for a new one. */
-export const openCourse = (id: string | null) => openSheet({ kind: "course", id })
+/** A course in the sheet, by its key; null for a new one. A class's course opens the class. */
+export function openCourse(key: string | null) {
+    if (isSharedKey(key)) { openClass(splitKey(key).spaceId!); return }
+    openSheet({ kind: "course", id: key })
+}
 
 /** Delete now, with Undo; its items lose their course. The course filter goes back to All if it was this one. */
 export async function deleteCourse(id: string) {
@@ -224,7 +230,7 @@ export function openAchievement(id: string | null) {
     const a = id ? list.find((x) => x.id === id) : null
     if (id && !a) return
     if (!a && list.length >= ACHIEVEMENT_LIMIT) { toast("You have " + ACHIEVEMENT_LIMIT + " achievements, the most there can be."); return }
-    openSheet({ kind: "achievement", draft: a ? achievementDraft(a) : newAchievement(data.courses) })
+    openSheet({ kind: "achievement", draft: a ? achievementDraft(a) : newAchievement(keyedCourses(effectiveCourses())) })
 }
 
 /** Delete now, with the toast's Undo. */
@@ -330,9 +336,10 @@ export function sortTable(key: SortKey) {
     notify()
 }
 
-/** Tick a task off or back on. Finishing one celebrates from `from` and books its next review. */
-export async function toggleTask(id: string, from?: Element) {
-    const it = store.item(id) as Item | null
+/** Tick a task off or back on, by its key: a class's task in your mark. Finishing one celebrates from `from` and books its next review. */
+export async function toggleTask(key: string, from?: Element) {
+    if (isSharedKey(key)) { await toggleClassTask(key, from); notify(); return }
+    const it = store.item(key) as Item | null
     if (!it) return
     const finishing = isOpen(it)
     if (finishing && from) celebrate(from)
@@ -346,7 +353,7 @@ export async function toggleTask(id: string, from?: Element) {
 export async function quickAddTask(title: string) {
     const text = title.trim()
     if (!text) return
-    await store.saveItem(normalizeItem({ id: uid(), type: "task", title: text, courseId: ui.course === "all" ? null : ui.course, date: today(), status: "todo" }))
+    await store.saveItem(normalizeItem({ id: uid(), type: "task", title: text, ...placeCourse(ui.course === "all" ? null : ui.course), date: today(), status: "todo" }))
     notify()
 }
 

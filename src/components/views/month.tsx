@@ -6,6 +6,8 @@ import { isComplete, tmeta } from "@/core/model"
 import { hhmm } from "@/core/dates"
 import { useMonth, cellLabel, tintOf, type Cell, type Chip, type TimetableDay } from "@/data/views"
 import { goToDay, openCourse } from "@/data/actions"
+import { courseByKey, courseKeyOf, keyOf } from "@/data/effective"
+import { SourceMark } from "./source-mark"
 import { accent, classTitle, ClassText, HeadNote, Panel, ScheduleTabs, SchoolTags, TINT } from "./bits"
 
 const HEADS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
@@ -82,6 +84,7 @@ function MonthChip({ chip }: { chip: Chip }) {
             className={cn(CHIP, done ? "bg-[var(--done)] text-[var(--done-ink)]" : "bg-card text-foreground shadow-[inset_0_0_0_1px_var(--line)]")}>
             <i aria-hidden="true" className={cn("size-1.5 flex-none rounded-[1.5px]", done ? "bg-[var(--done-ink)]" : "bg-[var(--c)]")} />
             <span className="truncate">{it.start && <b className="font-mono font-medium">{hhmm(it.start)} </b>}{it.title}</span>
+            <SourceMark item={it} course={courseByKey(courseKeyOf(it))} />
         </span>
     )
 }
@@ -98,9 +101,9 @@ function Timetable({ days }: { days: TimetableDay[] }) {
                         {d.slots.length === 0 && <div className="rounded-lg border border-dashed border-line-2 px-2 py-2 text-[11.5px] text-muted-foreground">No classes</div>}
                         {d.slots.map((x) => (
                             <button
-                                key={x.course.id + x.mtg.id}
+                                key={keyOf(x.course) + x.mtg.id}
                                 type="button"
-                                onClick={() => openCourse(x.course.id)}
+                                onClick={() => openCourse(keyOf(x.course))}
                                 style={accent(x.course.color)}
                                 className="flex cursor-pointer flex-col gap-px rounded-lg border border-border border-l-[3px] border-l-[var(--c)] bg-card px-2.5 py-1.5 text-left font-[inherit] hover:border-[color-mix(in_srgb,var(--c)_50%,var(--line))] hover:border-l-[var(--c)]"
                             >

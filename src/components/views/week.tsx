@@ -5,7 +5,8 @@ import { useState } from "react"
 import { cn } from "@/lib/utils"
 import { isOpen, isOverdue, isTest, tmeta } from "@/core/model"
 import { hhmm, parse, DOW } from "@/core/dates"
-import { course as courseOf } from "@/core/store"
+import { courseByKey, courseKeyOf, keyOf } from "@/data/effective"
+import { SourceMark } from "./source-mark"
 import { useWeek, tintOf, type Day, type Entry } from "@/data/views"
 import { newItemOn, openItem, quickAddTask, toggleTask } from "@/data/actions"
 import type { Course, Item } from "@/data/types"
@@ -100,13 +101,13 @@ function EntryRow({ entry }: { entry: Entry }) {
             </div>
         )
     }
-    const it = entry.inst.item, c = courseOf(it.courseId) as Course | null
+    const it = entry.inst.item, c = courseByKey(courseKeyOf(it))
     const st = statusText(it, entry.inst.date), done = st.tone === "done"
     const key = !done && isTest(it.type)
     return (
         <button
             type="button"
-            onClick={() => openItem(it.id)}
+            onClick={() => openItem(keyOf(it))}
             data-done={done || undefined}
             title={rowTitle(it)}
             style={accent(tmeta(it.type).color)}
@@ -117,6 +118,7 @@ function EntryRow({ entry }: { entry: Entry }) {
             <span className={cn("flex min-w-0 items-center gap-2.5 overflow-hidden", key && "font-semibold")}>
                 <i aria-hidden="true" className={cn("size-2 flex-none rounded-[2px]", done ? "bg-[var(--done-ink)]" : "bg-[var(--c)]")} />
                 <span className="truncate">{it.title}</span>
+                <SourceMark item={it} course={c} />
                 {!done && <Steps item={it} />}
             </span>
             <span className={cn("text-[12.5px] max-[720px]:hidden", done ? "" : "text-muted-foreground")}>{tmeta(it.type).label}</span>
@@ -136,11 +138,11 @@ function OfficeHours({ rows }: { rows: Item[] }) {
             {rows.length === 0 && <Empty>None yet</Empty>}
             <ul className="m-0 list-none p-0">
                 {rows.map((it, i) => {
-                    const c = courseOf(it.courseId) as Course | null
+                    const c = courseByKey(courseKeyOf(it))
                     const when = (it.recur === "weekly" ? DOW[it.weekday ?? 0] : DOW[parse(it.date).getDay()]) + " " + hhmm(it.start)
                     return (
-                        <li key={it.id}>
-                            <button type="button" onClick={() => openItem(it.id)}
+                        <li key={keyOf(it)}>
+                            <button type="button" onClick={() => openItem(keyOf(it))}
                                 className="flex w-full cursor-pointer items-start gap-2 border-0 border-b border-line-2 bg-transparent px-3.5 py-2 text-left font-[inherit] last:border-b-0 hover:bg-muted">
                                 {i === 0 && <NextMark />}
                                 <span className="min-w-0 flex-1">
@@ -169,12 +171,12 @@ function Tasks({ list, open }: { list: Item[]; open: number }) {
                 {list.map((it) => {
                     const on = !isOpen(it)
                     return (
-                        <li key={it.id} className={cn("flex items-center gap-2 rounded-[6px] px-2.5 py-1.5", on && "bg-[var(--done)] text-[var(--done-ink)]")}>
+                        <li key={keyOf(it)} className={cn("flex items-center gap-2 rounded-[6px] px-2.5 py-1.5", on && "bg-[var(--done)] text-[var(--done-ink)]")}>
                             <button
                                 type="button"
                                 aria-pressed={on}
                                 aria-label={"Done: " + it.title}
-                                onClick={(e) => { void toggleTask(it.id, e.currentTarget) }}
+                                onClick={(e) => { void toggleTask(keyOf(it), e.currentTarget) }}
                                 className={cn(
                                     "grid size-[18px] flex-none cursor-pointer place-items-center rounded-[5px] border-[1.5px] p-0",
                                     on ? "border-primary bg-primary text-primary-foreground" : "border-line-2 bg-card text-transparent hover:border-[var(--accent)]",
@@ -182,7 +184,7 @@ function Tasks({ list, open }: { list: Item[]; open: number }) {
                             >
                                 <svg viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" className="size-3"><path d="M2 6.5l2.6 2.6L10 3.5" /></svg>
                             </button>
-                            <button type="button" onClick={() => openItem(it.id)}
+                            <button type="button" onClick={() => openItem(keyOf(it))}
                                 className={cn("min-w-0 flex-1 cursor-pointer truncate border-0 bg-transparent p-0 text-left font-[inherit] text-[12.5px]", on ? "text-[var(--done-ink)]" : "text-foreground")}>
                                 {it.title}
                                 {it.date && <span className="ml-1 text-[11px] text-muted-foreground">· {isOverdue(it) ? "overdue" : DOW[parse(it.date).getDay()] + " " + parse(it.date).getDate()}</span>}
