@@ -20,6 +20,7 @@ import { celebrateStudy, celebrateAchievements, finishDelete, commitUndo } from 
 import { refreshAfterSync } from "./sync-status"
 import { ui } from "./ui"
 import { preloadIdle } from "@/lib/lazy"
+import { openJoin, watchInvites } from "./classes"
 
 function rememberedSession(): ServerProfile | null {
     try { return JSON.parse(localStorage.getItem("rounds.session") || "null") } catch { return null }
@@ -53,6 +54,12 @@ async function start(profile: ServerProfile) {
     preloadIdle()                                /* the other pages and the sheets */
     const back = spotifyReturn()
     if (back) { ui.spotifyNote = back; openSettings("spotifyGrp") }
+    /* shared classes are for admins until Stage 6: their invites, and a join link's code */
+    const join = joinReturn()
+    if (p.isAdmin) {
+        watchInvites()
+        if (join) openJoin(join)
+    }
 }
 
 /* Spotify's consent page sends the browser back to /#spotify=connected or =error. */
@@ -61,6 +68,15 @@ function spotifyReturn(): "connected" | "error" | null {
     if (!m) return null
     history.replaceState(null, "", location.pathname + location.search)
     return m[1] as "connected" | "error"
+}
+
+/* A join link, /#join=<code> (spec §11): read once and cleared, so the code stays out of the
+   history and never reaches the server. The join sheet checks it. */
+function joinReturn(): string | null {
+    const m = location.hash.match(/^#join=(.{0,32})$/)
+    if (!m) return null
+    history.replaceState(null, "", location.pathname + location.search)
+    return m[1]
 }
 
 /** What the store reports: a change, a failed save, a sign-out, another tab's edit. */

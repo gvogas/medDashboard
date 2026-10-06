@@ -7,6 +7,7 @@ const fake = vi.hoisted(() => ({
     data: { profile: null as Record<string, unknown> | null, quotes: [] as unknown[] },
     cache: { forgetReads: vi.fn(), keepReadsFor: vi.fn() },
     store: { open: vi.fn(async () => {}), close: vi.fn(async () => {}) },
+    classes: { openJoin: vi.fn(), watchInvites: vi.fn() },
 }))
 vi.mock("@/core/api", () => ({ api: {}, ApiError: class extends Error {}, resetRequests: vi.fn(), bindAccount: vi.fn() }))
 vi.mock("@/core/store", () => ({ data: fake.data, open: fake.store.open, close: fake.store.close }))
@@ -26,6 +27,7 @@ vi.mock("./study-controller", () => ({ celebrateStudy: vi.fn(), celebrateAchieve
 vi.mock("./sync-status", () => ({ refreshAfterSync: vi.fn() }))
 vi.mock("./ui", () => ({ ui: { theme: "system", bg: "med" } }))
 vi.mock("@/lib/lazy", () => ({ preloadIdle: vi.fn() }))
+vi.mock("./classes", () => fake.classes)
 
 import { boot, onStorage, onStoreEvent } from "./session"
 
@@ -56,5 +58,26 @@ describe("the AI answers kept on this device", () => {
         onStorage(new StorageEvent("storage", { key: "rounds.session", newValue: JSON.stringify({ id: "u2" }) }))
         expect(fake.cache.forgetReads).toHaveBeenCalled()
         await vi.waitFor(() => expect(fake.store.close).toHaveBeenCalled())
+    })
+})
+
+describe("a join link", () => {
+    it("is read once and cleared; an admin gets the join sheet with its code, anyone else nothing", async () => {
+        localStorage.setItem("rounds.session", JSON.stringify({ id: "u1" }))
+        history.replaceState(null, "", "/#join=7KQ2M9XD")
+        fake.store.open.mockImplementationOnce(async () => { fake.data.profile = { id: "u1", isAdmin: true } })
+        await boot()
+        expect(location.hash).toBe("")
+        expect(fake.classes.openJoin).toHaveBeenCalledWith("7KQ2M9XD")
+        expect(fake.classes.watchInvites).toHaveBeenCalled()
+
+        vi.clearAllMocks()
+        localStorage.setItem("rounds.session", JSON.stringify({ id: "u1" }))
+        history.replaceState(null, "", "/#join=7KQ2M9XD")
+        fake.store.open.mockImplementationOnce(async () => { fake.data.profile = { id: "u1" } })
+        await boot()
+        expect(location.hash).toBe("")
+        expect(fake.classes.openJoin).not.toHaveBeenCalled()
+        expect(fake.classes.watchInvites).not.toHaveBeenCalled()
     })
 })
