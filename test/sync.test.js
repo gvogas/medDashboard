@@ -47,7 +47,7 @@ describe('persisted operation synchronization', () => {
    await sync.syncNow();
    expect(store.settleOperation).toHaveBeenCalledWith(op, expect.objectContaining({ revision: 2 }));
  });
- it('follows every page with a cursor per scope, wipes a reset scope as its rows arrive, and revokes after the last page', async () => {
+ it('follows every page with a cursor per scope, wipes a reset scope on the reset page itself, and revokes after the last page', async () => {
    store.meta.get.mockImplementation(async (key) => (key === 'cursors' ? { 'u:u1': 7, 'c:abcdefghij12': 3 } : undefined));
    const page = (over) => ({ changes: [], scopes: [], more: false, reset: [], revoked: ['c:zzzzzzzzzzzz'], ...over });
    api.syncV3.mockResolvedValueOnce(page({ cursors: { 'u:u1': 9, 'c:abcdefghij12': 0 }, more: true, reset: ['c:abcdefghij12'] }))
@@ -56,7 +56,7 @@ describe('persisted operation synchronization', () => {
    await sync.syncNow();
    expect(api.syncV3.mock.calls.map(([cursors]) => cursors)).toEqual([
      { 'u:u1': 7, 'c:abcdefghij12': 3 }, { 'u:u1': 9, 'c:abcdefghij12': 0 }, { 'u:u1': 12, 'c:abcdefghij12': 10 }]);
-   expect(store.applyPage.mock.calls.map(([, wipe]) => wipe)).toEqual([[], ['c:abcdefghij12'], []]);
+   expect(store.applyPage.mock.calls.map(([, wipe]) => wipe)).toEqual([['c:abcdefghij12'], [], []]);
    expect(store.applyRevoked).toHaveBeenCalledTimes(1);
    expect(store.applyRevoked).toHaveBeenCalledWith(['c:zzzzzzzzzzzz']);
    store.meta.get.mockImplementation(() => 1);
@@ -87,6 +87,23 @@ describe('persisted operation synchronization', () => {
    await sync.syncNow();
    expect(api.shared.put).toHaveBeenCalledWith('c:abcdefghij12', 'items', 'x', { ...shared.body, revision: 4 }, { title: 'Old' });
    expect(store.settleOperation).toHaveBeenCalledWith(shared, expect.objectContaining({ revision: 5 }));
+ });
+ it('wipes a reset scope on the reset page, so a failed next request leaves nothing half done', async () => {
+   store.meta.get.mockImplementation(async (key) => (key === 'cursors' ? { 'u:u1': 7, 'c:abcdefghij12': 3 } : undefined));
+   api.syncV3.mockResolvedValueOnce({ changes: [], scopes: [], reset: ['c:abcdefghij12'], revoked: [], more: true, cursors: { 'u:u1': 9, 'c:abcdefghij12': 0 } })
+     .mockRejectedValueOnce(new ApiError(503, { error: 'unavailable' }));
+   await sync.syncNow();
+   expect(store.applyPage).toHaveBeenCalledTimes(1);
+   expect(store.applyPage.mock.calls[0][1]).toEqual(['c:abcdefghij12']);
+   store.meta.get.mockImplementation(() => 1);
+ });
+ it('wipes the personal scope when its stored cursor is 0 or missing', async () => {
+   store.meta.get.mockImplementation(async (key) => (key === 'cursors' ? { 'c:abcdefghij12': 3 } : undefined));
+   api.syncV3.mockResolvedValueOnce({ changes: [], scopes: [], reset: [], revoked: [], more: true, cursors: { 'u:u1': 4 } })
+     .mockResolvedValueOnce({ changes: [], scopes: [], reset: [], revoked: [], more: false, cursors: { 'u:u1': 5 } });
+   await sync.syncNow();
+   expect(store.applyPage.mock.calls.map(([, wipe]) => wipe)).toEqual([['u:u1'], []]);
+   store.meta.get.mockImplementation(() => 1);
  });
  it('sets a refused shared edit aside at once on 403, saying why', async () => {
    const shared = { key: 'shared_items:c:abcdefghij12:x', op: 'put', body: { id: 'x', title: 'New', revision: 4 }, base: { id: 'x', title: 'Old', revision: 4 }, revision: 4, token: 's' };

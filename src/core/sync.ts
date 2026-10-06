@@ -135,14 +135,18 @@ async function pullAll(cycle: Cycle): Promise<boolean> {
   const stored = await store.meta.get('cursors');
   let cursors: Record<string, Cursor> = stored && typeof stored === 'object' ? { ...(stored as Record<string, Cursor>) } : {};
   const sv = listsFor === cycle.account ? store.spaceRevision() : 0;
-  let wipe: string[] = [], revoked: string[] = [], complete = false;
+  /* a personal cursor of 0 or none while rows are held: wipe the clean ones and refill (as v2 did) */
+  const own = 'u:' + cycle.account;
+  let wipe: string[] = cursors[own] ? [] : [own], revoked: string[] = [], complete = false;
   // Bound resets as well as ordinary pages, then yield the account's sync lock.
   for (let pages = 0; pages < 20 && active(cycle); pages++) {
     const page = await api.syncV3(cursors, sv);
     if (!active(cycle)) return false;
-    /* a scope that reset is wiped as its rows from 0 arrive: on the next page, as v2 did */
-    await store.applyPage(page, wipe);
-    wipe = page.reset || []; revoked = page.revoked || [];
+    /* a scope that reset comes back with none of its rows, so it is wiped on this very page,
+       in the transaction that stores its cursor 0: a failed next request cannot leave the
+       cursor at 0 with the old rows still held */
+    await store.applyPage(page, [...new Set([...wipe, ...(page.reset || [])])]);
+    wipe = []; revoked = page.revoked || [];
     cursors = { ...cursors, ...page.cursors };
     if (!page.more) { complete = true; break; }
   }

@@ -322,8 +322,8 @@ export function rejectOperation(op: PendingOp, current: Row | null | undefined, 
 /**
  * Apply a page. A change in the person's own scope (or with none) goes to the personal
  * stores; a class's or a project's course or item to the shared ones, under [scope, id].
- * `reset` lists scopes whose clean rows are wiped first (true: the person's own, as v2
- * did). A row with a pending edit, or held at a newer revision, is left alone.
+ * `reset` lists scopes whose clean rows are wiped first, in the same transaction that
+ * stores their cursors (true: the person's own). A row with a pending edit, or held at a newer revision, is left alone.
  */
 export function applyPage(page: Page, reset: boolean | string[] = false): Promise<boolean> {
   return mutate(async (a) => {
