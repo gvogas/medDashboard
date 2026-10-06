@@ -103,8 +103,8 @@ describe('accounts', () => {
     expect((await admin('/api/admin/accounts/u-gone1', { method: 'DELETE', body: { confirm: 'wrong' } })).status).toBe(400);
     expect((await admin('/api/admin/accounts/u-gone1', { method: 'DELETE', body: { confirm: 'gone1' } })).status).toBe(204);
     expect(await env.DB.prepare('SELECT count(*) AS n FROM users WHERE id = ?').bind(id).first()).toEqual({ n: 0 });
-    expect(await env.DB.prepare('SELECT count(*) AS n FROM courses WHERE user_id = ?').bind(id).first()).toEqual({ n: 0 });
-    expect(await env.DB.prepare('SELECT count(*) AS n FROM changes WHERE user_id = ?').bind(id).first()).toEqual({ n: 0 });
+    expect(await env.DB.prepare("SELECT count(*) AS n FROM courses WHERE scope = 'u:' || ?").bind(id).first()).toEqual({ n: 0 });
+    expect(await env.DB.prepare("SELECT count(*) AS n FROM changes WHERE scope = 'u:' || ?").bind(id).first()).toEqual({ n: 0 });
     expect((await admin('/api/admin/accounts/u-gone1', { method: 'DELETE', body: { confirm: 'gone1' } })).status).toBe(404);
   });
 

@@ -74,8 +74,8 @@ if (admin) {
 } else if (remove) {
   const typed = await ask(`This deletes ${username} and every course, item, quote, study session and achievement it owns. Type the username to confirm: `);
   if (typed.trim().toLowerCase() !== username) { console.error('Not deleted.'); process.exit(1); }
-  const owned = `user_id IN (SELECT id FROM users WHERE username = '${username}')`;
-  sql = `${ACCOUNT_TABLES.map((t) => `DELETE FROM ${t} WHERE ${owned};`).join(' ')}
+  const who = `(SELECT id FROM users WHERE username = '${username}')`;
+  sql = `${ACCOUNT_TABLES.map(([table, owner]) => `DELETE FROM ${table} WHERE ${owner.replaceAll('?1', who)};`).join(' ')}
          DELETE FROM users WHERE username = '${username}';
          DELETE FROM login_throttle WHERE ${throttleRowsFor(username)};`;
 } else {

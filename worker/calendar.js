@@ -15,6 +15,7 @@
 import { HttpError } from './http.js';
 import { claimLimit, rateLimited } from './limits.js';
 import { sameString, hex } from './auth.js';
+import { personal } from './db.js';
 import { normalizeSchool, classWeekday, courseTerm, dayInfo, weekdayOf } from '../src/core/school.ts';
 
 const FEED_LIMIT = 60;                     /* fetches an hour per link; calendars poll a few times a day */
@@ -72,8 +73,8 @@ export async function serveFeed(env, url, userId, token) {
   if (wait) throw rateLimited(wait);
 
   const [courses, items] = await env.DB.batch([
-    env.DB.prepare('SELECT id, code, name, term, archived, meetings, created_at FROM courses WHERE user_id = ? AND deleted_at IS NULL').bind(userId),
-    env.DB.prepare('SELECT id, type, title, course_id, date, start, end, location, status, weight, notes, recur, weekday, recur_until FROM items WHERE user_id = ? AND deleted_at IS NULL ORDER BY date').bind(userId),
+    env.DB.prepare('SELECT id, code, name, term, archived, meetings, created_at FROM courses WHERE scope = ? AND deleted_at IS NULL').bind(personal(userId)),
+    env.DB.prepare('SELECT id, type, title, course_id, date, start, end, location, status, weight, notes, recur, weekday, recur_until FROM items WHERE scope = ? AND deleted_at IS NULL ORDER BY date').bind(personal(userId)),
   ]);
   const tz = url.searchParams.get('tz');
   const body = buildCalendar({

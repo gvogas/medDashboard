@@ -57,8 +57,8 @@ export async function listAccounts(db) {
   const { results } = await db.prepare(
     `SELECT u.id, u.username, u.display_name AS displayName, u.is_admin AS admin, u.last_seen_day AS lastSeen,
             u.created_at AS createdAt, u.feed_gen IS NOT NULL AS feed, u.leaderboard,
-            (SELECT count(*) FROM courses AS c WHERE c.user_id = u.id AND c.deleted_at IS NULL) AS courses,
-            (SELECT count(*) FROM items AS i WHERE i.user_id = u.id AND i.deleted_at IS NULL) AS items,
+            (SELECT count(*) FROM courses AS c WHERE c.scope = 'u:' || u.id AND c.deleted_at IS NULL) AS courses,
+            (SELECT count(*) FROM items AS i WHERE i.scope = 'u:' || u.id AND i.deleted_at IS NULL) AS items,
             (SELECT COALESCE(sum(s.study_minutes), 0) FROM study_sessions AS s WHERE s.user_id = u.id AND s.deleted_at IS NULL) AS studyMinutes,
             EXISTS (SELECT 1 FROM spotify_tokens AS t WHERE t.user_id = u.id) AS spotify
      FROM users AS u ORDER BY u.username`,
@@ -207,7 +207,7 @@ export const adminRoutes = [
       if (n <= 1) throw new HttpError(409, { error: 'last_admin' });
     }
     await db.batch([
-      ...ACCOUNT_TABLES.map((t) => db.prepare(`DELETE FROM ${t} WHERE user_id = ?`).bind(id)),
+      ...ACCOUNT_TABLES.map(([table, owner]) => db.prepare(`DELETE FROM ${table} WHERE ${owner}`).bind(id)),
       db.prepare('DELETE FROM users WHERE id = ?').bind(id),
       throttleRows(db, user.username),
       db.prepare("DELETE FROM request_limits WHERE key IN ('api:' || ?1, 'spotify:' || ?1, 'outline:' || ?1)").bind(id),
