@@ -1,0 +1,14 @@
+{
+  "_readme": "The iPhone/iPad/Mac app's settings, none of them secret. Fill these in, run `npm run ios:configure`, then `npm run ios:doctor`. Each one is explained in docs/IOS-TESTING.md. Secrets go to the server with `npm run ios:secrets`, never here.",
+  "bundleId": "net.vogas.term",
+  "teamId": "",
+  "appGroup": "group.net.vogas.term",
+  "build": 1,
+  "apiBase": "https://rounds.termanitor07.workers.dev",
+  "revenueCatIosKey": "",
+  "signInWithApple": false,
+  "appleServicesId": "",
+  "appleKeyId": "",
+  "paywall": false,
+  "sandboxPurchases": false
+}

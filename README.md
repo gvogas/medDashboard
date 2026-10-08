@@ -70,8 +70,9 @@ troubleshooting are in [docs/DEPLOYING.md](docs/DEPLOYING.md).
   account and lockout rules.
 - [docs/DEPLOYING.md](docs/DEPLOYING.md): running, deploying, accounts,
   [Spotify](docs/DEPLOYING.md#spotify), migrations and troubleshooting.
-- [docs/IOS.md](docs/IOS.md): the iPhone, iPad and Mac app (Capacitor): building, testing
-  and shipping it.
+- [docs/IOS-TESTING.md](docs/IOS-TESTING.md): setting up the iPhone, iPad and Mac app with
+  your Apple and RevenueCat keys (`app.config.json`) and testing it, step by step.
+- [docs/IOS.md](docs/IOS.md): how the app works (Capacitor), its features and shipping it.
 - [docs/MONETIZATION.md](docs/MONETIZATION.md): Term Pro, pricing and the plan for growth.
 - [docs/superpowers/](docs/superpowers/): design specs and implementation plans.
 - [docs/archive/](docs/archive/): finished plans and old reviews, kept for history.

@@ -1,5 +1,9 @@
 # Term for iPhone, iPad and Mac
 
+**To set it up and test it, follow [IOS-TESTING.md](IOS-TESTING.md)**: fill in
+`app.config.json`, run `npm run ios:configure`, `ios:secrets` and `ios:doctor`.
+This page explains how the app works.
+
 The app is the same React front end, wrapped by [Capacitor](https://capacitorjs.com).
 One Xcode project in `ios/` builds the iPhone and iPad app, and the Mac app through Mac
 Catalyst. It talks to the live Worker, so accounts, data and Pro are shared with the
@@ -89,22 +93,11 @@ and what is due in the next week). The app works out what they show
 (`src/data/widgets.ts`) after every change, on opening and at midnight, and hands it to them
 through a small plugin of its own (`native/term-widgets`), which `cap sync` installs.
 
-The widget extension is a separate Xcode target. Xcode makes targets best, so this is a
-one-time setup by hand (about five minutes):
-
-1. In Xcode: File → New → Target → **Widget Extension**. Name it `TermWidget`, untick
-   "Include Live Activity" and "Include Configuration App Intent". When asked to activate
-   the scheme, say yes.
-2. Xcode creates a `TermWidget` folder with its own Swift files. Delete those Swift files
-   (Move to Trash), then drag in `ios/App/TermWidget/TermWidget.swift` and
-   `TermWidgetData.swift` from this repo, ticked for the **TermWidget** target only.
-3. TermWidget target → General: set **Minimum Deployments** to iOS 17.0 (the widgets use
-   iOS 17's backgrounds; the app itself still runs from iOS 15).
-4. TermWidget target → Signing & Capabilities: add **App Groups** and tick
-   `group.net.vogas.term`. Under Build Settings, set Code Signing Entitlements to
-   `TermWidget/TermWidget.entitlements` (the file is in the repo).
-5. Build and run the app once, sign in, then long-press the home screen → Edit → Add
-   Widget → Term.
+The widget extension is its own Xcode target, `TermWidget`, already in the project and embedded
+in the app (it was added by `scripts/add-widget-target.rb`). It needs iOS 17; the app itself
+runs from iOS 15. Its bundle id is the app's plus `.widget`, and `npm run ios:configure` keeps
+it, the team and the App Group in step. If the `ios/` folder is ever made again, add the
+target back with `gem install xcodeproj` and `npm run ios:widget`.
 
 If the widgets say "Open Term and sign in" after signing in, the App Group is not ticked on
 both targets.

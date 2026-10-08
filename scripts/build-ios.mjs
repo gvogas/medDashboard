@@ -8,8 +8,9 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const out = fileURLToPath(new URL('../dist-ios/', import.meta.url));
-/* the Worker the app talks to: src/core/native.ts has the same default */
-const api = new URL(process.env.VITE_API_BASE || 'https://rounds.termanitor07.workers.dev').origin;
+/* the Worker the app talks to: app.config.json's apiBase, as vite.config.ts gives the app */
+const config = JSON.parse(await readFile(fileURLToPath(new URL('../app.config.json', import.meta.url)), 'utf8'));
+const api = new URL(process.env.VITE_API_BASE || config.apiBase).origin;
 
 for (const name of ['sw.js', '_headers']) await rm(path.join(out, name), { force: true });
 

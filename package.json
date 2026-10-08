@@ -19,13 +19,17 @@
     "user:add": "node scripts/add-user.mjs",
     "build": "vite build && node scripts/build.mjs",
     "csp:update": "node scripts/csp-hash.mjs --write",
-    "test:local": "node --test test/local-store.node.mjs test/syntax.node.mjs",
+    "test:local": "node --test test/local-store.node.mjs test/syntax.node.mjs test/app-config.node.mjs",
     "typecheck": "tsc --noEmit",
     "check": "npm run typecheck && npm test && npm run build",
     "spotify:key": "node scripts/spotify-key.mjs",
     "build:ios": "vite build --mode ios && node scripts/build-ios.mjs",
     "ios:sync": "npm run build:ios && cap sync ios",
-    "ios:open": "cap open ios"
+    "ios:open": "cap open ios",
+    "ios:configure": "node scripts/ios-configure.mjs",
+    "ios:secrets": "node scripts/ios-secrets.mjs",
+    "ios:doctor": "node scripts/ios-doctor.mjs",
+    "ios:widget": "ruby scripts/add-widget-target.rb"
   },
   "devDependencies": {
     "@capacitor/cli": "^8.5.3",

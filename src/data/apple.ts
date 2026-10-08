@@ -2,13 +2,14 @@
 // own sheet in the app and Apple's popup on the web; either way we get an identity token that
 // carries the nonce the Worker gave us, and the Worker checks it.
 //
-// The app signs in as its bundle id; the website as the Services ID in VITE_APPLE_WEB_CLIENT_ID.
-// Without one, the website shows no Apple button.
+// The app signs in as its bundle id, the website as its Services ID: both come from
+// app.config.json at build time (vite.config.ts) once signInWithApple is on. Without one, that
+// build shows no Apple button.
 
 import { NATIVE } from "@/core/native"
 import { api } from "@/core/api"
 
-const APP_ID = import.meta.env.VITE_APPLE_APP_ID || "net.vogas.term"
+const APP_ID = import.meta.env.VITE_APPLE_APP_ID || ""
 const WEB_ID = import.meta.env.VITE_APPLE_WEB_CLIENT_ID || ""
 
 /** The client id this build signs in as, or "" when it has none. */

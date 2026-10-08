@@ -4,6 +4,7 @@
 // dist-ios/, talking to the live API with a token (src/core/native.ts, docs/IOS.md).
 import path from 'node:path';
 import { readFileSync } from 'node:fs';
+import { viteEnv } from './scripts/lib/app-config.mjs';
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
@@ -15,6 +16,9 @@ export default defineConfig(({ mode }) => {
     process.env.VITE_NATIVE = '1';
     process.env.VITE_APP_VERSION ||= JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf8')).version;
   }
+  /* app.config.json's keys and ids (docs/IOS-TESTING.md); a variable already set wins */
+  const appConfig = JSON.parse(readFileSync(new URL('./app.config.json', import.meta.url), 'utf8'));
+  for (const [key, value] of Object.entries(viteEnv(appConfig, ios))) process.env[key] ||= value;
   return {
     plugins: [react(), tailwindcss(), ...(ios ? [] : [cloudflare()])],
     resolve: { alias: { '@': path.resolve(import.meta.dirname, 'src') } },
