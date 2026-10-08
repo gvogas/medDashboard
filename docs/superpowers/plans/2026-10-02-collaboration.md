@@ -32,12 +32,14 @@
 | 2 | Spaces and sync v3: `spaces`, `members`, `access.js`, `/api/sync?v=3` with cursors per scope and `revoked`, IndexedDB v5 (shared stores, cursors), `effectiveItems()`, field-level merge, 403 in the sync loop. Invisible (no way to create a space yet) | `collab-2-sync` | migration `0002_spaces.sql` | `docs/superpowers/plans/2026-10-05-collab-stage-2-sync.md` |
 | 3 | Classes: create (blank, convert), invites, codes, join, members, roles; admin-only | `collab-3-classes` | `0003_invites.sql` | `docs/superpowers/plans/2026-10-05-collab-stage-3-classes.md` |
 | 4 | Personal layer: `marks`, `space_prefs`, the split item card, source markers, eye filter, merge sheet; admin-only. **Ships with Stage 3**: one branch, one merge, 0003 and 0004 applied together | `collab-3-classes` | `0004_marks.sql` | `docs/superpowers/plans/2026-10-06-collab-stage-4-layer.md` |
-| 5 | Leaving and removal: detach, leave, remove, archive, transfer, Keep/Dismiss, account deletion, the extended nightly purge | `collab-5-leave` | none expected | written when Stage 4 is merged |
-| 6 | ICS feed and outline import into a class; class from an outline; school-calendar offer; **opens classes to everyone** (a converted course must not drop out of people's calendar feeds) | `collab-6-feed` | none expected | written when Stage 5 is merged |
-| 7 | Inbox and activity (triggers, coalescing, inbox, activity tab) | `collab-7-inbox` | `0005_activity.sql` | written when Stage 6 is merged |
-| 8 | Projects core: project spaces, project item, tasks, assignees, member task rules, link to an assignment | `collab-8-projects` | none (columns exist from Stage 1) | written when Stage 7 is merged |
-| 9 | Projects in the views: assigned-to-me, chip folding, project sheet, progress, workload | `collab-9-project-views` | none | written when Stage 8 is merged |
-| 10 | Project events in the inbox and the ICS feed | `collab-10-project-feed` | none | written when Stage 9 is merged |
+| 5 | Leaving and removal: detach, leave, remove, archive, transfer, Keep/Dismiss, account deletion, the extended nightly purge | `collab-5-leave` | none expected | `docs/superpowers/plans/2026-10-07-collab-stage-5-leave.md` |
+| 6 | ICS feed and outline import into a class; class from an outline; school-calendar offer; **opens classes to everyone** (a converted course must not drop out of people's calendar feeds) | `collab-6-feed` | none expected | `docs/superpowers/plans/2026-10-07-collab-stage-6-feed.md` |
+| 7 | Inbox and activity (triggers, coalescing, inbox, activity tab) | `collab-7-inbox` | `0005_activity.sql` | `docs/superpowers/plans/2026-10-07-collab-stage-7-inbox.md` |
+| 8 | Projects core: project spaces, project item, tasks, assignees, member task rules, link to an assignment; a working project sheet; admin-only, out of the views | `collab-8-projects` | none (columns exist from Stage 1) | `docs/superpowers/plans/2026-10-07-collab-stage-8-projects.md` |
+| 9 | Projects in the views: assigned-to-me, chip folding, the task card, progress, workload, Use this date | `collab-9-project-views` | none | `docs/superpowers/plans/2026-10-07-collab-stage-9-project-views.md` |
+| 10 | Project events in the inbox and the ICS feed; **opens projects to everyone** | `collab-10-project-feed` | none | `docs/superpowers/plans/2026-10-07-collab-stage-10-project-feed.md` |
+
+Plans for Stages 5–10 were all written on 2026-10-07, each against the planned code of the stages before it: build them in order, and where an earlier stage's code came out different from its plan, follow the code.
 
 Each stage branches off `main` after the previous stage is merged and deployed. A detailed plan is written per stage, because each stage changes the files the next edits (Stage 2 rewrites `src/core/sync.ts`, which Stage 3 extends; Stage 4 rebuilds the item card Stage 9 adds to).
 
