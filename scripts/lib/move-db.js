@@ -20,12 +20,13 @@ export const TABLES = {
   spotify_tokens: ['user_id', 'refresh_token', 'access_token', 'expires_at', 'updated_at'],
   changes: ['seq', 'scope', 'kind', 'row_id', 'payload', 'deleted_at'],
   admin_log: ['id', 'at', 'admin', 'action', 'target', 'detail'],
+  plans: ['user_id', 'tier', 'source', 'expires_at', 'product', 'renews', 'event_at', 'updated_at'],
 };
 
 /* Tables added after rounds-v7's first schema (0002_spaces.sql, 0003_invites.sql,
-   0004_marks.sql): a database made before them has none of their rows. */
-const ADDED_TABLES = new Set(['spaces', 'members', 'invites', 'marks', 'space_prefs']);
-const ORDER_BY = { users: 'id', spaces: 'id', members: 'space_id, user_id', invites: 'space_id, user_id', courses: 'scope, id', items: 'scope, id', changes: 'seq', spotify_tokens: 'user_id', admin_log: 'id' };
+   0004_marks.sql, 0005_plans.sql): a database made before them has none of their rows. */
+const ADDED_TABLES = new Set(['spaces', 'members', 'invites', 'marks', 'space_prefs', 'plans']);
+const ORDER_BY = { users: 'id', spaces: 'id', members: 'space_id, user_id', invites: 'space_id, user_id', courses: 'scope, id', items: 'scope, id', changes: 'seq', spotify_tokens: 'user_id', admin_log: 'id', plans: 'user_id' };
 
 /* Reading rounds-v6 or older, whose courses, items and change feed name a user: the owner
    becomes the scope of that person's own rows, a course's or item's change names the
@@ -36,8 +37,8 @@ const PAYLOAD_FROM_USER = `CASE WHEN kind IN ('courses', 'items') AND json_valid
 const DEFAULTS = { assignees: "'[]'", hidden_sources: "'[]'" };
 const ADDED_IN_V7 = new Set(['hidden_sources', 'updated_by', 'class_id', 'assignees', 'completed_by', 'space_id']);
 /* Short-lived, or filled by the fresh schema itself. The error log, the announcement and
-   the cron's last run start fresh too. */
-const LEFT_BEHIND = ['error_log', 'app_meta', 'login_throttle', 'request_limits', 'spotify_oauth_states', 'spotify_refresh_locks', 'sync_state', 'd1_migrations'];
+   the cron's last run start fresh too, and so do the webhook ids already seen. */
+const LEFT_BEHIND = ['billing_events', 'error_log', 'app_meta', 'login_throttle', 'request_limits', 'spotify_oauth_states', 'spotify_refresh_locks', 'sync_state', 'd1_migrations'];
 
 /** Every column of the database's own tables, as rows of {tbl, col}. */
 export const COLUMNS_QUERY = `SELECT m.name AS tbl, p.name AS col FROM sqlite_master AS m, pragma_table_info(m.name) AS p

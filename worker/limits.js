@@ -2,8 +2,10 @@ import { HttpError } from './http.js';
 
 export const API_LIMIT = 600;
 export const SPOTIFY_LIMIT = 60;
-// Course outlines use Workers AI's free daily allowance; a few a day each is plenty.
+// Course outlines use Workers AI's free daily allowance; a few a day each is plenty. Pro (or
+// everyone, while the paywall is off) gets OUTLINE_DAILY_LIMIT; the free plan FREE_AI_READS.
 export const OUTLINE_DAILY_LIMIT = 10;
+export const FREE_AI_READS = 3;
 const DAY_MS = 24 * 60 * 60 * 1000;
 const LOGIN_IP_LIMIT = 30;
 const WINDOW_MS = 60_000;
@@ -86,16 +88,16 @@ export async function limitUser(request, env, userId, gen, now = Date.now()) {
   return true;
 }
 
-export async function limitOutline(env, userId) {
-  const wait = await claimLimit(env.DB, `outline:${userId}`, OUTLINE_DAILY_LIMIT, Date.now(), DAY_MS);
+export async function limitOutline(env, userId, limit = OUTLINE_DAILY_LIMIT) {
+  const wait = await claimLimit(env.DB, `outline:${userId}`, limit, Date.now(), DAY_MS);
   if (wait) throw rateLimited(wait, 'outline_limit');
 }
 
 /** The AI reads (outlines, calendars, timetables) left in the person's window: { left, limit }. */
-export async function readsLeft(db, userId, now = Date.now()) {
+export async function readsLeft(db, userId, now = Date.now(), limit = OUTLINE_DAILY_LIMIT) {
   const row = await db.prepare('SELECT hits, reset_at FROM request_limits WHERE key = ?').bind(`outline:${userId}`).first();
   const used = row && row.reset_at > now ? row.hits : 0;
-  return { left: Math.max(0, OUTLINE_DAILY_LIMIT - used), limit: OUTLINE_DAILY_LIMIT };
+  return { left: Math.max(0, limit - used), limit };
 }
 
 export async function purgeLimits(db, now = Date.now()) {

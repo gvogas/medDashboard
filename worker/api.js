@@ -1,8 +1,9 @@
 import { json, readJson, readBytes, revisionOf, HttpError } from './http.js';
-import { requireUser, requireSession, signSession, sessionCookie, clearCookie, deviceCookie, trustedDevice, parseCookies, secureFlag, sameString, hex, RENEW_WITHIN_MS } from './auth.js';
+import { requireUser, requireSession, signSession, sessionCookie, clearCookie, deviceCookie, deviceMark, trustedDevice, trustedMark, parseCookies, secureFlag, sameString, hex, RENEW_WITHIN_MS } from './auth.js';
 import { verifyPassword, normalizeUsername } from './password.js';
 import { claimAttempt, recordSuccess } from './throttle.js';
-import { limitLogin, limitOutline, readsLeft } from './limits.js';
+import { limitLogin, limitOutline, readsLeft, OUTLINE_DAILY_LIMIT, FREE_AI_READS } from './limits.js';
+import { planOf, hasPro, planRoutes } from './plans.js';
 import { readOutline, cleanCode, MAX_BYTES } from './outline.js';
 import { readSchool } from './school.js';
 import { readSchedule } from './schedule.js';
@@ -13,11 +14,12 @@ import { parseScope, roleOf, scopeOf } from './access.js';
 import * as spotify from './spotify.js';
 import { feedState, renewFeed, stopFeed, serveFeed } from './calendar.js';
 import { leaderboard, setJoined } from './leaderboard.js';
-import { adminRoutes, markSeen, readAnnouncement } from './admin.js';
+import { adminRoutes, markSeen, readAnnouncement, deleteOwnAccount } from './admin.js';
 import { classRoutes } from './classes.js';
 import { layerRoutes } from './layer.js';
 import { logError, messageOf } from './errors.js';
 import { guardMaintenance, publicMaintenance } from './maintenance.js';
+import { assertAppVersion, corsHeaders, isAppOrigin, preflight, withoutCookie } from './app.js';
 
 /** `cursors=u:<me>:812,c:<space id>:r640.700`: each entry split at its last ':', a sequence or a
     resync's tagged cursor (db.js parseCursor). At most 25; anything malformed is a 400. */
@@ -206,7 +208,7 @@ const aiRead = (read, what) => async ({ request, env, url }) => {
   try {
     return json(await read(env.AI, {
       bytes, type: request.headers.get('content-type') || '', name: (url.searchParams.get('name') || what).slice(0, 120),
-      today: date('today') || new Date().toISOString().slice(0, 10), termStart: date('termStart'), claim: () => limitOutline(env, userId),
+      today: date('today') || new Date().toISOString().slice(0, 10), termStart: date('termStart'), claim: async () => limitOutline(env, userId, await aiLimit(env, userId)),
       deadline: t0 + TIMEOUT_MS,
       ...knownParams(url.searchParams),
     }));
@@ -218,24 +220,34 @@ const aiRead = (read, what) => async ({ request, env, url }) => {
   }
 };
 
+/** The person's AI reads a day: more with Pro (worker/plans.js). */
+const aiLimit = async (env, userId) => (hasPro(await planOf(env, userId)) ? OUTLINE_DAILY_LIMIT : FREE_AI_READS);
+
 const routes = [
   ['POST', /^\/api\/outline$/, aiRead(readOutline, 'outline')],
   ['POST', /^\/api\/school-calendar$/, aiRead(readSchool, 'calendar')],
   ['POST', /^\/api\/ai\/schedule$/, aiRead(readSchedule, 'schedule')],
-  ['GET', /^\/api\/ai\/reads$/, async ({ request, env }) => json(await readsLeft(env.DB, await requireUser(request, env)))],
-  // Username + password. Accounts are created with `npm run user:add`.
+  ['GET', /^\/api\/ai\/reads$/, async ({ request, env }) => {
+    const userId = await requireUser(request, env);
+    return json(await readsLeft(env.DB, userId, Date.now(), await aiLimit(env, userId)));
+  }],
+  // Username + password. Accounts are created with `npm run user:add`. The apps send
+  // `client: 'app'` and get the session as `token` in the answer instead of a cookie, and
+  // keep `device` (their device mark, see trustedDevice) to send with the next sign-in.
   ['POST', /^\/api\/login$/, async ({ request, env, url }) => {
     await limitLogin(request, env);
     const body = await readJson(request);
     if (typeof body.username !== 'string' || typeof body.password !== 'string') {
       throw new HttpError(400, { error: 'invalid', field: 'username' });
     }
+    if (body.client !== undefined && body.client !== 'app') throw new HttpError(400, { error: 'invalid', field: 'client' });
+    const app = body.client === 'app';
     const bad = () => new HttpError(401, { error: 'bad_login' });
     const username = normalizeUsername(body.username);
     if (!username) throw bad();
     // Counted before the password is checked; see worker/throttle.js. A browser that has
     // signed in as this name before counts on its own, so strangers cannot lock it out.
-    const device = await trustedDevice(request, username, env.SESSION_SECRET);
+    const device = app ? await trustedMark(body.device, username, env.SESSION_SECRET) : await trustedDevice(request, username, env.SESSION_SECRET);
     const throttleKey = device ? `${username}#${device}` : username;
     const wait = await claimAttempt(env.DB, throttleKey);
     if (wait) throw new HttpError(429, { error: 'too_many_attempts', retryAfter: wait }, { 'retry-after': String(wait) });
@@ -245,6 +257,7 @@ const routes = [
     if (!user || !ok) throw bad();
     await recordSuccess(env.DB, throttleKey);
     const token = await signSession(user.profile.id, user.pw_gen, env.SESSION_SECRET);
+    if (app) return json({ ...user.profile, token, ...(device ? {} : { device: await deviceMark(username, env.SESSION_SECRET) }) });
     const res = json(user.profile, 200, { 'set-cookie': sessionCookie(token, url) });
     if (!device) res.headers.append('set-cookie', await deviceCookie(username, env.SESSION_SECRET, url));
     return res;
@@ -262,16 +275,29 @@ const routes = [
 
   ['GET', /^\/api\/me$/, async ({ request, env, url }) => {
     const session = await requireSession(request, env);
-    const [profile, announcement, maintenance] = await Promise.all([getProfile(env.DB, session.userId), readAnnouncement(env.DB), publicMaintenance(env.DB)]);
+    const [profile, announcement, maintenance, plan] = await Promise.all([getProfile(env.DB, session.userId), readAnnouncement(env.DB), publicMaintenance(env.DB), planOf(env, session.userId)]);
     if (!profile) throw new HttpError(401, { error: 'unauthenticated' });
     await markSeen(env.DB, session.userId);
-    // Keep a regular user signed in: a cookie in its last week is re-issued.
-    const headers = {};
+    // Keep a regular user signed in: a session in its last week is re-issued, as a cookie
+    // for the browser and as `token` in the answer for an app.
+    const headers = {}, renewed = {};
     if (session.expiresAt - Date.now() < RENEW_WITHIN_MS) {
-      headers['set-cookie'] = sessionCookie(await signSession(session.userId, session.gen, env.SESSION_SECRET), url);
+      const token = await signSession(session.userId, session.gen, env.SESSION_SECRET);
+      if (session.bearer) renewed.token = token;
+      else headers['set-cookie'] = sessionCookie(token, url);
     }
-    return json({ ...profile, announcement, maintenance }, 200, headers);
+    return json({ ...profile, announcement, maintenance, plan, ...renewed }, 200, headers);
   }],
+
+  // Delete my own account (the apps must offer it): the password again, and my username typed out.
+  ['DELETE', /^\/api\/me$/, async ({ request, env, url }) => {
+    const userId = await requireUser(request, env);
+    await deleteOwnAccount(env, userId, await readJson(request));
+    return new Response(null, { status: 204, headers: { 'set-cookie': clearCookie(url) } });
+  }],
+
+  // Term Pro: what /api/me says, alone, for the app to check after a purchase.
+  ['GET', /^\/api\/plan$/, async ({ request, env }) => json(await planOf(env, await requireUser(request, env)))],
 
   ['PUT', /^\/api\/me$/, async ({ request, env }) => {
     const userId = await requireUser(request, env);
@@ -437,6 +463,7 @@ const routes = [
 
   ...classRoutes,
   ...layerRoutes,
+  ...planRoutes,
   ...adminRoutes,
 ];
 
@@ -446,18 +473,25 @@ const routes = [
  */
 function assertSameOrigin(request, url) {
   if (request.method === 'GET' || request.method === 'HEAD') return;
+  const origin = request.headers.get('origin');
+  /* The apps (worker/app.js): their requests carry no cookie by the time they get here. */
+  if (isAppOrigin(origin)) return;
   const site = request.headers.get('sec-fetch-site');
   if (site && site !== 'same-origin' && site !== 'none') throw new HttpError(403, { error: 'cross_site' });
-  const origin = request.headers.get('origin');
   if (origin && origin !== url.origin) throw new HttpError(403, { error: 'cross_site' });
 }
 
 const API_HEADERS = { 'cache-control': 'no-store', 'x-content-type-options': 'nosniff' };
 
 export async function handleApi(request, env, url) {
+  const pre = preflight(request);
+  if (pre) return pre;
+  const app = isAppOrigin(request.headers.get('origin'));
+  if (app) request = withoutCookie(request);
   let res = null;
   try {
     assertSameOrigin(request, url);
+    assertAppVersion(request, env);
     for (const [method, pattern, handler] of routes) {
       const m = url.pathname.match(pattern);
       if (m && request.method === method) {
@@ -486,5 +520,6 @@ export async function handleApi(request, env, url) {
     }
   }
   for (const [k, v] of Object.entries(API_HEADERS)) res.headers.set(k, v);
+  if (app) for (const [k, v] of Object.entries(corsHeaders(request))) res.headers.set(k, v);
   return res;
 }

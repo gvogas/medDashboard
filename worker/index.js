@@ -4,6 +4,7 @@ import { purgeThrottle } from './throttle.js';
 import { purgeLimits } from './limits.js';
 import { purgeErrors } from './errors.js';
 import { adminHousekeeping } from './admin.js';
+import { purgeBillingEvents } from './plans.js';
 
 const TOMBSTONE_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 
@@ -22,5 +23,6 @@ export default {
     ctx.waitUntil(purgeLimits(env.DB));
     ctx.waitUntil(purgeErrors(env.DB));
     ctx.waitUntil(adminHousekeeping(env.DB));
+    ctx.waitUntil(purgeBillingEvents(env.DB));
   },
 };

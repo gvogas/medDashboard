@@ -32,7 +32,17 @@
   // `wrangler secret put SPOTIFY_CLIENT_SECRET`. Both empty means the player is off.
   // CF_ACCOUNT_ID is public; the Admin page's traffic also needs CF_ANALYTICS_TOKEN, a
   // secret API token with only "Account Analytics: Read" (see worker/analytics.js).
-  "vars": { "SPOTIFY_CLIENT_ID": "e553fc57814a408c946519bda5263f5e", "CF_ACCOUNT_ID": "2c6057041650be9d99932b4013571adb" },
+  // Term Pro (worker/plans.js, docs/MONETIZATION.md): PAYWALL "on" limits the free plan; off,
+  // everyone gets Pro's features. BILLING_SANDBOX "on" lets TestFlight's sandbox purchases
+  // count. REVENUECAT_WEBHOOK_SECRET is a secret. MIN_APP_VERSION: older iPhone and Mac
+  // builds are asked to update (worker/app.js); empty asks none.
+  "vars": {
+    "SPOTIFY_CLIENT_ID": "e553fc57814a408c946519bda5263f5e",
+    "CF_ACCOUNT_ID": "2c6057041650be9d99932b4013571adb",
+    "PAYWALL": "off",
+    "BILLING_SANDBOX": "off",
+    "MIN_APP_VERSION": ""
+  },
 
   // Workers AI reads uploaded course outlines (free daily allowance; see worker/outline.js).
   // Workers AI always runs remotely, even under `wrangler dev`; saying so silences the warning.

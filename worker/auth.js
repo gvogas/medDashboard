@@ -1,5 +1,6 @@
-// Sessions: a signed cookie `userId.gen.expiresAt.signature`, HMAC-SHA256 with
-// SESSION_SECRET. `gen` is the user's password generation: a reset or "sign out
+// Sessions: a signed token `userId.gen.expiresAt.signature`, HMAC-SHA256 with
+// SESSION_SECRET. The browser carries it as a cookie; the iPhone and Mac apps send it as
+// `Authorization: Bearer` (worker/app.js). `gen` is the user's password generation: a reset or "sign out
 // everywhere" bumps it and every older cookie stops working. No sessions table;
 // rotating the secret signs everyone out.
 
@@ -62,16 +63,25 @@ const DEVICE_COOKIE = 'rounds_device';
 const DEVICE_MS = 365 * 24 * 60 * 60 * 1000;
 
 export async function deviceCookie(username, secret, url) {
+  return `${DEVICE_COOKIE}=${await deviceMark(username, secret)}; Path=/api/login; HttpOnly; SameSite=Strict; Max-Age=${DEVICE_MS / 1000}${secureFlag(url)}`;
+}
+
+/** A fresh device mark, `nonce.sig`, for an app to keep and send with its next sign-in. */
+export async function deviceMark(username, secret) {
   const nonce = hex(crypto.getRandomValues(new Uint8Array(12)));
-  const sig = await signature(`device:${username}:${nonce}`, secret);
-  return `${DEVICE_COOKIE}=${nonce}.${sig}; Path=/api/login; HttpOnly; SameSite=Strict; Max-Age=${DEVICE_MS / 1000}${secureFlag(url)}`;
+  return `${nonce}.${await signature(`device:${username}:${nonce}`, secret)}`;
+}
+
+/** The device's nonce when `mark` (the device cookie's value, or an app's `device`) is valid for this name, else null. */
+export async function trustedMark(mark, username, secret) {
+  const [nonce, sig] = (typeof mark === 'string' ? mark : '').split('.');
+  if (!/^[0-9a-f]{24}$/.test(nonce || '') || !sig) return null;
+  return sameString(await signature(`device:${username}:${nonce}`, secret), sig) ? nonce : null;
 }
 
 /** The device's nonce when the request carries a valid device cookie for this name, else null. */
 export async function trustedDevice(request, username, secret) {
-  const [nonce, sig] = (parseCookies(request.headers.get('cookie'))[DEVICE_COOKIE] || '').split('.');
-  if (!/^[0-9a-f]{24}$/.test(nonce || '') || !sig) return null;
-  return sameString(await signature(`device:${username}:${nonce}`, secret), sig) ? nonce : null;
+  return trustedMark(parseCookies(request.headers.get('cookie'))[DEVICE_COOKIE], username, secret);
 }
 
 export function parseCookies(header) {
@@ -97,14 +107,21 @@ export function clearCookie(url) {
 
 /** The session behind the request, checked against the user's current generation, or a 401. */
 export async function requireSession(request, env) {
-  const token = parseCookies(request.headers.get('cookie'))[COOKIE];
+  const bearer = bearerToken(request);
+  const token = bearer ?? parseCookies(request.headers.get('cookie'))[COOKIE];
   const session = await readSession(token, env.SESSION_SECRET);
   if (!session) throw new HttpError(401, { error: 'unauthenticated' });
   const expectedUser = request.headers.get('x-rounds-user');
   if (expectedUser && expectedUser !== session.userId) throw new HttpError(401, { error: 'account_changed' });
   // One round trip: the generation check and the rate limit share a D1 batch.
   if (!(await limitUser(request, env, session.userId, session.gen))) throw new HttpError(401, { error: 'unauthenticated' });
-  return session;
+  return { ...session, bearer: bearer !== null };
+}
+
+/** The token in `Authorization: Bearer <token>`, or null without one. */
+export function bearerToken(request) {
+  const m = /^Bearer ([^\s]{1,200})$/.exec(request.headers.get('authorization') || '');
+  return m ? m[1] : null;
 }
 
 /** The signed-in user id, or a 401. */

@@ -32,6 +32,7 @@ export default defineConfig(async () => {
                   SPOTIFY_TOKEN_KEYS: JSON.stringify({ current: 'v1', keys: { v1: 'test-spotify-encryption-key-at-least-32-characters' } }),
                   SPOTIFY_CLIENT_ID: 'test-client-id',
                   SPOTIFY_CLIENT_SECRET: 'test-client-secret',
+                  REVENUECAT_WEBHOOK_SECRET: 'test-revenuecat-secret',
                 },
                 // The only outbound calls are to Spotify, answered by the fake in
                 // test/spotify-stub.js; anything else gets a 502, so tests never touch the network.

@@ -7,7 +7,9 @@
 
 import { json, readJson, HttpError } from './http.js';
 import { requireUser } from './auth.js';
-import { hashPassword, normalizeUsername } from './password.js';
+import { hashPassword, verifyPassword, normalizeUsername } from './password.js';
+import { claimAttempt, recordSuccess } from './throttle.js';
+import { setComp } from './plans.js';
 import { errorGroups, recentErrors } from './errors.js';
 import { cachedTrafficReport, configured as analyticsConfigured } from './analytics.js';
 import { configured as spotifyConfigured } from './spotify.js';
@@ -15,7 +17,7 @@ import { ACCOUNT_TABLES } from './accounts.js';
 import { readMaintenance, validateMaintenance } from './maintenance.js';
 
 /* The newest file in migrations/; a test keeps it in step. */
-export const LATEST_MIGRATION = '0004_marks.sql';
+export const LATEST_MIGRATION = '0005_plans.sql';
 const AUDIT_KEEP_MS = 90 * 24 * 60 * 60 * 1000;
 const DAY_MS = 24 * 60 * 60 * 1000;
 export const MIN_PASSWORD = 8;
@@ -54,17 +56,63 @@ async function target(db, id) {
 const throttleRows = (db, username) =>
   db.prepare('DELETE FROM login_throttle WHERE username = ?1 OR substr(username, 1, length(?1) + 1) = ?1 || \'#\'').bind(username);
 
-export async function listAccounts(db) {
+/**
+ * Delete an account and everything it owns, with `extra` statements in the same batch.
+ * Refused (409) for the last admin, and for someone who still owns a shared space.
+ */
+async function removeAccount(db, user, extra = []) {
+  const id = user.id;
+  if (user.is_admin === 1) {
+    const { n } = await db.prepare('SELECT count(*) AS n FROM users WHERE is_admin = 1').first();
+    if (n <= 1) throw new HttpError(409, { error: 'last_admin' });
+  }
+  /* Stage 5 hands an owner's spaces on before deleting the account; until then it is refused. */
+  const owns = await db.prepare(`SELECT 1 AS x FROM members AS m JOIN spaces AS s ON s.id = m.space_id
+    WHERE m.user_id = ? AND m.role = 'owner' AND m.deleted_at IS NULL AND s.deleted_at IS NULL LIMIT 1`).bind(id).first();
+  if (owns) throw new HttpError(409, { error: 'owns_space' });
+  await db.batch([
+    ...ACCOUNT_TABLES.map(([table, owner]) => db.prepare(`DELETE FROM ${table} WHERE ${owner}`).bind(id)),
+    db.prepare('DELETE FROM users WHERE id = ?').bind(id),
+    throttleRows(db, user.username),
+    db.prepare("DELETE FROM request_limits WHERE key IN ('api:' || ?1, 'spotify:' || ?1, 'outline:' || ?1, 'invite:' || ?1, 'join:' || ?1)").bind(id),
+    ...extra,
+  ]);
+}
+
+/**
+ * DELETE /api/me: a person deletes their own account, as the App Store requires. They give
+ * their password again (counted like a sign-in, worker/throttle.js) and type their username.
+ * This does not cancel an App Store subscription; only Apple's settings can.
+ */
+export async function deleteOwnAccount(env, userId, body) {
+  const db = env.DB;
+  const user = await db.prepare('SELECT id, username, password_hash, is_admin FROM users WHERE id = ?').bind(userId).first();
+  if (!user) throw new HttpError(401, { error: 'unauthenticated' });
+  if (body.confirm !== user.username) throw new HttpError(400, { error: 'invalid', field: 'confirm' });
+  if (typeof body.password !== 'string') throw new HttpError(400, { error: 'invalid', field: 'password' });
+  const wait = await claimAttempt(db, user.username);
+  if (wait) throw new HttpError(429, { error: 'too_many_attempts', retryAfter: wait }, { 'retry-after': String(wait) });
+  if (!(await verifyPassword(body.password, user.password_hash))) throw new HttpError(403, { error: 'bad_password' });
+  await recordSuccess(db, user.username);
+  await removeAccount(db, user, [
+    db.prepare("INSERT INTO admin_log (at, admin, action, target, detail) VALUES (?, ?, 'delete', ?, 'by themselves')").bind(Date.now(), user.username, user.username),
+  ]);
+}
+
+export async function listAccounts(db, now = Date.now()) {
   const { results } = await db.prepare(
     `SELECT u.id, u.username, u.display_name AS displayName, u.is_admin AS admin, u.last_seen_day AS lastSeen,
             u.created_at AS createdAt, u.feed_gen IS NOT NULL AS feed, u.leaderboard,
             (SELECT count(*) FROM courses AS c WHERE c.scope = 'u:' || u.id AND c.deleted_at IS NULL) AS courses,
             (SELECT count(*) FROM items AS i WHERE i.scope = 'u:' || u.id AND i.deleted_at IS NULL) AS items,
             (SELECT COALESCE(sum(s.study_minutes), 0) FROM study_sessions AS s WHERE s.user_id = u.id AND s.deleted_at IS NULL) AS studyMinutes,
-            EXISTS (SELECT 1 FROM spotify_tokens AS t WHERE t.user_id = u.id) AS spotify
-     FROM users AS u ORDER BY u.username`,
-  ).all();
-  return results.map((r) => ({ ...r, admin: r.admin === 1, feed: r.feed === 1, leaderboard: r.leaderboard === 1, spotify: r.spotify === 1 }));
+            EXISTS (SELECT 1 FROM spotify_tokens AS t WHERE t.user_id = u.id) AS spotify,
+            p.source AS planSource, p.expires_at AS planUntil
+     FROM users AS u LEFT JOIN plans AS p ON p.user_id = u.id AND (p.expires_at IS NULL OR p.expires_at > ?)
+     ORDER BY u.username`,
+  ).bind(now).all();
+  return results.map(({ planSource, planUntil, ...r }) => ({ ...r, admin: r.admin === 1, feed: r.feed === 1, leaderboard: r.leaderboard === 1, spotify: r.spotify === 1,
+    plan: planSource ? { source: planSource, until: planUntil } : null }));
 }
 
 export async function listLocks(db, now = Date.now()) {
@@ -202,22 +250,19 @@ export const adminRoutes = [
     const user = await target(env.DB, id);
     if (id === admin.id) throw new HttpError(400, { error: 'self' });
     if (confirm !== user.username) throw new HttpError(400, { error: 'invalid', field: 'confirm' });
-    const db = env.DB;
-    if (user.is_admin === 1) {
-      const { n } = await db.prepare('SELECT count(*) AS n FROM users WHERE is_admin = 1').first();
-      if (n <= 1) throw new HttpError(409, { error: 'last_admin' });
-    }
-    /* Stage 5 hands an owner's spaces on before deleting the account; until then it is refused. */
-    const owns = await db.prepare(`SELECT 1 AS x FROM members AS m JOIN spaces AS s ON s.id = m.space_id
-      WHERE m.user_id = ? AND m.role = 'owner' AND m.deleted_at IS NULL AND s.deleted_at IS NULL LIMIT 1`).bind(id).first();
-    if (owns) throw new HttpError(409, { error: 'owns_space' });
-    await db.batch([
-      ...ACCOUNT_TABLES.map(([table, owner]) => db.prepare(`DELETE FROM ${table} WHERE ${owner}`).bind(id)),
-      db.prepare('DELETE FROM users WHERE id = ?').bind(id),
-      throttleRows(db, user.username),
-      db.prepare("DELETE FROM request_limits WHERE key IN ('api:' || ?1, 'spotify:' || ?1, 'outline:' || ?1, 'invite:' || ?1, 'join:' || ?1)").bind(id),
-      audit(db, admin, 'delete', user.username),
-    ]);
+    await removeAccount(env.DB, user, [audit(env.DB, admin, 'delete', user.username)]);
+    return done();
+  }],
+
+  /* Term Pro for free (worker/plans.js): `days` from now, or null for no end; pro: false takes it back. */
+  ['PUT', /^\/api\/admin\/accounts\/([^/]{1,64})\/plan$/, async ({ request, env, params: [id] }) => {
+    const admin = await requireAdmin(request, env);
+    const { pro, days = null } = await readJson(request);
+    if (typeof pro !== 'boolean') throw new HttpError(400, { error: 'invalid', field: 'pro' });
+    if (days !== null && (!Number.isInteger(days) || days < 1 || days > 3650)) throw new HttpError(400, { error: 'invalid', field: 'days' });
+    const user = await target(env.DB, id);
+    await setComp(env.DB, id, pro, days);
+    await audit(env.DB, admin, pro ? 'comp' : 'uncomp', user.username, pro ? (days ? `${days} days` : 'no end') : '').run();
     return done();
   }],
 
