@@ -63,7 +63,7 @@ describe('Sign in with Apple', () => {
   it('links to the signed-in account, then signs in to it on the web and in the app', async () => {
     const api = await signIn();
     const me = await (await api('/api/me')).json();
-    expect(await (await api('/api/apple')).json()).toEqual({ available: true, linked: false, email: '' });
+    expect(await (await api('/api/apple')).json()).toEqual({ available: true, linked: false, email: '', password: true });
     const link = await api('/api/login/apple', { method: 'POST', body: { ...(await signedBody('apple-ana')), link: true, authorizationCode: 'c1' } });
     expect(link.status).toBe(200);
     expect(await (await api('/api/apple')).json()).toMatchObject({ linked: true, email: 'x@privaterelay.appleid.com' });

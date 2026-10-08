@@ -208,11 +208,13 @@ async function appleLogin({ request, env, url }) {
   return session(env, url, userId, body.client === 'app');
 }
 
-/** GET /api/apple: whether Sign in with Apple is set up, and the Apple ID linked to me. */
+/** GET /api/apple: whether Sign in with Apple is set up, the Apple ID linked to me, and
+    whether I have a password (an account made with Apple has none). */
 async function appleStatus({ request, env }) {
   const { userId } = await requireSession(request, env);
-  const row = await env.DB.prepare('SELECT email FROM apple_accounts WHERE user_id = ?').bind(userId).first();
-  return json({ available: configured(env), linked: !!row, email: row?.email ?? '' });
+  const row = await env.DB.prepare(`SELECT a.email, substr(u.password_hash, 1, 7) = 'pbkdf2$' AS password
+    FROM users AS u LEFT JOIN apple_accounts AS a ON a.user_id = u.id WHERE u.id = ?`).bind(userId).first();
+  return json({ available: configured(env), linked: row?.email != null, email: row?.email ?? '', password: row?.password === 1 });
 }
 
 export const appleRoutes = [

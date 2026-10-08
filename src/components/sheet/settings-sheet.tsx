@@ -19,7 +19,9 @@ import { runReviews } from "@/data/sync-status"
 import { savePrefs } from "@/data/study-controller"
 import { setBg, setTheme } from "@/data/theme"
 import { openPro, themeOpen, usePlan, usePro } from "@/data/plan"
-import { deleteAccount } from "@/data/session"
+import { deleteAccount, deleteAccountWithApple } from "@/data/session"
+import { appleAvailable, appleCredential } from "@/data/apple"
+import { api as client, ApiError } from "@/core/api"
 import { remindersOn, setReminders } from "@/data/reminders"
 import { NATIVE } from "@/core/native"
 import { notify } from "@/bridge"
@@ -535,7 +537,12 @@ function SpotifyGroup() {
 
 /* ── Account ── */
 
+type AppleStatus = { available: boolean; linked: boolean; email: string; password: boolean }
+
 function AccountTab({ profile }: { profile: Profile }) {
+    /* Sign in with Apple, and whether this account has a password (one made with Apple has none) */
+    const [apple, setApple] = useState<AppleStatus | null>(null)
+    useEffect(() => { client.appleStatus?.().then(setApple).catch(() => {}) }, [])
     const items = useItems(), courses = useCourses()
     const conflicts = useConflicts()
     const status = useSyncStatus()
@@ -583,7 +590,8 @@ function AccountTab({ profile }: { profile: Profile }) {
                     </Row>
                 )}
             </Group>
-            <DeleteGroup username={profile.username || ""} />
+            <AppleGroup apple={apple} onLinked={(email) => setApple((a) => a && { ...a, linked: true, email })} />
+            <DeleteGroup username={profile.username || ""} password={apple?.password ?? true} />
         </>
     )
 }
@@ -600,8 +608,32 @@ function ProGroup() {
     )
 }
 
-/* Deleting your account (the App Store requires it): your username typed out and your password. */
-function DeleteGroup({ username }: { username: string }) {
+/* Sign in with Apple (worker/apple.js): connect this account to an Apple ID, so either signs in. */
+function AppleGroup({ apple, onLinked }: { apple: AppleStatus | null; onLinked: (email: string) => void }) {
+    const [busy, setBusy] = useState(false)
+    const [err, setErr] = useState("")
+    if (!apple?.available || !appleAvailable()) return null
+    const link = async () => {
+        setBusy(true); setErr("")
+        try {
+            const credential = await appleCredential()
+            if (credential) onLinked((await client.appleLink({ ...credential })).email)
+        } catch (e) {
+            setErr(e instanceof ApiError && e.body?.error === "apple_linked" ? "That Apple ID is already used by another Term account." : "Sign in with Apple did not finish. Try again.")
+        } finally { setBusy(false) }
+    }
+    return (
+        <Group title="Sign in with Apple" state={apple.linked ? "Connected" : "Not connected"}>
+            <Hint>{apple.linked ? "You can sign in with your Apple ID" + (apple.email ? " (" + apple.email + ")" : "") + " as well as your username." : "Sign in with your Apple ID as well as your username, on the iPhone and here."}</Hint>
+            {!apple.linked && <Row><Button variant="ghost" disabled={busy} onClick={() => void link()}>Connect Apple ID</Button></Row>}
+            {err && <Hint error>{err}</Hint>}
+        </Group>
+    )
+}
+
+/* Deleting your account (the App Store requires it): your username typed out and your password,
+   or, for an account made with Apple, a fresh Sign in with Apple. */
+function DeleteGroup({ username, password: hasPassword }: { username: string; password: boolean }) {
     const [open, setOpen] = useState(false)
     const [typed, setTyped] = useState("")
     const [password, setPassword] = useState("")
@@ -609,7 +641,7 @@ function DeleteGroup({ username }: { username: string }) {
     const [err, setErr] = useState("")
     const go = async () => {
         setBusy(true); setErr("")
-        setErr(await deleteAccount(typed, password))
+        setErr(hasPassword ? await deleteAccount(typed, password) : await deleteAccountWithApple(typed))
         setBusy(false)
     }
     return (
@@ -619,11 +651,13 @@ function DeleteGroup({ username }: { username: string }) {
             ) : <>
                 <Hint error>This deletes your courses, items, study history and achievements from Term for good. Export your data first to keep a copy. A subscription is cancelled in your Apple account settings, not here.</Hint>
                 <TextInput aria-label="Type your username to confirm" placeholder={"Type " + username} autoComplete="off" value={typed} onChange={(e) => setTyped(e.target.value)} className="border-border" />
-                <input type="password" aria-label="Your password" placeholder="Your password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} className={cn(CONTROL, "border-border")} />
+                {hasPassword
+                    ? <input type="password" aria-label="Your password" placeholder="Your password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} className={cn(CONTROL, "border-border")} />
+                    : <Hint>You will confirm with Sign in with Apple.</Hint>}
                 {err && <Hint error>{err}</Hint>}
                 <Row>
                     <Button variant="ghost" disabled={busy} onClick={() => { setOpen(false); setTyped(""); setPassword(""); setErr("") }}>Keep my account</Button>
-                    <Button variant="danger" disabled={busy || typed !== username || !password} onClick={() => void go()}>Delete for good</Button>
+                    <Button variant="danger" disabled={busy || typed !== username || (hasPassword && !password)} onClick={() => void go()}>Delete for good</Button>
                 </Row>
             </>}
         </Group>

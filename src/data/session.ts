@@ -23,6 +23,7 @@ import { ui } from "./ui"
 import { preloadIdle } from "@/lib/lazy"
 import { openJoin, watchInvites } from "./classes"
 import { rescheduleSoon, stopReminders } from "./reminders"
+import { appleCredential } from "./apple"
 
 function rememberedSession(): ServerProfile | null {
     try { return JSON.parse(localStorage.getItem("rounds.session") || "null") } catch { return null }
@@ -141,24 +142,58 @@ export async function signOut({ everywhere = false, force = false }: { everywher
     location.reload() // Clear every in-memory account cache at the session boundary.
 }
 
+/** The Apple button on the sign-in form: Apple's sheet, then the Worker. Success reloads. */
+export async function signInWithApple() {
+    try {
+        const credential = await appleCredential()
+        if (!credential) { showSignIn(); return }
+        sync.stop(); spotify.stop(); resetRequests()
+        await api.appleLogin({ ...credential })
+        location.reload()
+    } catch (err) {
+        showSignIn(!(err instanceof ApiError) ? "Sign in with Apple did not finish. Check your connection and try again."
+            : err.body?.error === "no_account" ? "No Term account uses this Apple ID yet. Sign in with your username, then connect Apple in Settings → Account."
+            : err.status === 429 ? "Too many attempts. Try again in a minute."
+            : "Sign in with Apple failed (" + (err.body?.error || err.status) + ").")
+    }
+}
+
+/** Delete an account that has no password, confirmed by signing in with Apple again. */
+export async function deleteAccountWithApple(confirm: string): Promise<string> {
+    let credential
+    try { credential = await appleCredential() } catch { return "Sign in with Apple did not finish." }
+    if (!credential) return ""
+    try { await api.deleteMeWithApple(confirm, { idToken: credential.idToken, nonce: credential.nonce }) }
+    catch (err) { return deleteProblem(err) }
+    await afterDelete()
+    return ""
+}
+
 /** Delete the account for good (Settings → Account). Returns the reason it failed, or never
     returns: success erases this device's copy and reloads to the sign-in. */
 export async function deleteAccount(confirm: string, password: string): Promise<string> {
     try { await api.deleteMe(confirm, password) }
-    catch (err) {
-        if (!(err instanceof ApiError)) return "You seem to be offline. Deleting needs a connection."
-        if (err.status === 403) return "That password is not right."
-        if (err.status === 429) return "Too many attempts. Try again later."
-        if (err.body?.error === "owns_space") return "You own a shared class. Hand it to someone else or delete it first."
-        if (err.body?.error === "last_admin") return "You are the last admin. Make someone else an admin first."
-        return "The account could not be deleted (" + (err.body?.error || err.status) + ")."
-    }
+    catch (err) { return deleteProblem(err) }
+    await afterDelete()
+    return ""
+}
+
+function deleteProblem(err: unknown): string {
+    if (!(err instanceof ApiError)) return "You seem to be offline. Deleting needs a connection."
+    if (err.status === 403) return "That did not confirm it is you. Check the password, or the Apple ID."
+    if (err.status === 429) return "Too many attempts. Try again later."
+    if (err.body?.error === "owns_space") return "You own a shared class. Hand it to someone else or delete it first."
+    if (err.body?.error === "last_admin") return "You are the last admin. Make someone else an admin first."
+    return "The account could not be deleted (" + (err.body?.error || err.status) + ")."
+}
+
+/* Deleted: nothing of the account stays on this device. */
+async function afterDelete() {
     sync.stop(); spotify.stop(); web.stop(); resetRequests(); run.reset(); closeSheet(); forgetReads()
     await stopReminders().catch(() => {})
     const id = data.profile?.id
     try { if (id) await store.wipe(id); else await store.close() } catch {}
     location.reload()
-    return ""
 }
 
 /** The sign-in form's submit (src/components/sign-in.tsx). Success reloads the page;

@@ -29,6 +29,7 @@ const api = vi.hoisted(() => ({
     calendarFeed: vi.fn(async () => ({ on: true, url: "https://x.org/cal/abc.ics" })),
     calendarRenew: vi.fn(async () => ({ on: true, url: "https://x.org/cal/new.ics" })),
     calendarStop: vi.fn(async () => undefined),
+    appleStatus: vi.fn(async () => ({ available: true, linked: false, email: "", password: true })),
 }))
 const legacy = vi.hoisted(() => ({ setTheme: vi.fn(), setBg: vi.fn(), savePrefs: vi.fn(), runReviews: vi.fn(), writeSetting: vi.fn(), saveRows: vi.fn(), saveProfile: vi.fn(), render: vi.fn() }))
 
@@ -250,6 +251,16 @@ describe("Settings", () => {
         expect(go.disabled).toBe(false)
         fireEvent.click(screen.getByRole("button", { name: "Keep my account" }))
         expect(screen.queryByRole("button", { name: "Delete for good" })).toBeNull()
+    })
+
+    it("an account made with Apple confirms its deletion with Apple, not a password", async () => {
+        api.appleStatus.mockResolvedValueOnce({ available: true, linked: true, email: "a@privaterelay.appleid.com", password: false })
+        settings("account")
+        fireEvent.click(screen.getByRole("button", { name: "Delete my account…" }))
+        expect(await screen.findByText("You will confirm with Sign in with Apple.")).toBeTruthy()
+        expect(screen.queryByLabelText("Your password")).toBeNull()
+        fireEvent.change(screen.getByRole("textbox", { name: "Type your username to confirm" }), { target: { value: "demo" } })
+        expect((screen.getByRole("button", { name: "Delete for good" }) as HTMLButtonElement).disabled).toBe(false)
     })
 
     it("counts saved copies on the Account tab, restores or discards them, and asks before erasing on sign-out", () => {

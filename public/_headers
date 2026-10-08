@@ -1,16 +1,18 @@
 # Security headers for every static file. The API sets its own in worker/api.js.
 # The script-src hash is the inline theme script in index.html; regenerate it if
 # that script changes: `node scripts/csp-hash.mjs` prints it.
+# appleid.cdn-apple.com is Sign in with Apple's script; its popup answers through the opener,
+# so the opener policy allows popups (same-origin-allow-popups) instead of cutting them off.
 # sdk.scdn.co is Spotify's Web Playback SDK and the frame it plays in; the frame
 # streams under its own origin. Artwork uses i.scdn.co and playlist mosaics use
 # mosaic.scdn.co; allow those hosts only for images.
 /*
-  Content-Security-Policy: default-src 'self'; script-src 'self' 'sha256-gqf3ccvqhHu/99aH3ngLCHFTo1To6/EhR3Bcs3ZVF8c=' https://sdk.scdn.co; frame-src https://sdk.scdn.co; style-src 'self'; style-src-attr 'none'; font-src 'self'; img-src 'self' data: https://i.scdn.co https://mosaic.scdn.co; connect-src 'self'; worker-src 'self'; manifest-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'; object-src 'none'
+  Content-Security-Policy: default-src 'self'; script-src 'self' 'sha256-gqf3ccvqhHu/99aH3ngLCHFTo1To6/EhR3Bcs3ZVF8c=' https://sdk.scdn.co https://appleid.cdn-apple.com; frame-src https://sdk.scdn.co; style-src 'self'; style-src-attr 'none'; font-src 'self'; img-src 'self' data: https://i.scdn.co https://mosaic.scdn.co; connect-src 'self'; worker-src 'self'; manifest-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'; object-src 'none'
   X-Content-Type-Options: nosniff
   Referrer-Policy: same-origin
   Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=()
   Strict-Transport-Security: max-age=31536000; includeSubDomains
-  Cross-Origin-Opener-Policy: same-origin
+  Cross-Origin-Opener-Policy: same-origin-allow-popups
 
 # Cache-Control is set per path, not on /* above: two matching rules would have
 # their values joined with a comma. Anything unlisted gets the platform default,

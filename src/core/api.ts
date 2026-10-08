@@ -130,7 +130,7 @@ async function send(method: string, path: string, body?: unknown, extraHeaders: 
     if (!res.ok) throw new ApiError(res.status, data, Number(res.headers.get('retry-after')) || null);
     if (res.status !== 204 && (!data || typeof data !== 'object')) throw invalidResponse();
     /* the app's session: given at sign-in, renewed by /api/me in its last week */
-    if (NATIVE && (path === '/api/login' || path === '/api/me') && typeof data.token === 'string') {
+    if (NATIVE && (path === '/api/login' || path === '/api/login/apple' || path === '/api/me') && typeof data.token === 'string') {
       setSessionToken(data.token);
       if (typeof data.device === 'string') setDeviceMark(data.device);
       delete data.token;
@@ -233,6 +233,13 @@ export const api = {
   signOut: () => empty(request('DELETE', '/api/session')).then(forgetToken),
   /* delete my own account for good (the App Store requires it): my username typed out, and my password */
   deleteMe: (confirm: string, password: string) => empty(request('DELETE', '/api/me', { confirm, password })).then(forgetToken),
+  /* Sign in with Apple (worker/apple.js): a nonce to hand Apple, then its token to sign in or to link */
+  appleNonce: (): Promise<{ nonce: string; signups: boolean }> => request('GET', '/api/login/apple/nonce'),
+  appleLogin: (body: Record<string, unknown>) => record<ServerProfile & Row>(request('POST', '/api/login/apple', NATIVE ? { ...body, client: 'app' } : body)),
+  appleLink: (body: Record<string, unknown>): Promise<{ linked: boolean; email: string }> => request('POST', '/api/login/apple', { ...body, link: true }),
+  appleStatus: (): Promise<{ available: boolean; linked: boolean; email: string; password: boolean }> => request('GET', '/api/apple'),
+  /* delete my own account confirmed by a fresh Apple sign-in, for an account with no password */
+  deleteMeWithApple: (confirm: string, credential: Record<string, unknown>) => empty(request('DELETE', '/api/me', { confirm, ...credential })).then(forgetToken),
   /* Term Pro: the plan alone, to check right after a purchase */
   plan: (): Promise<Plan> => request('GET', '/api/plan'),
   sync: changes,
