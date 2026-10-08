@@ -1,9 +1,10 @@
-// The six themes: what each one says and the few colours the code needs as values (the
+// The themes: Notebook, the free plan's, and the six by field, which come with Term Pro in the
+// app (src/data/plan.ts). What each one says and the few colours the code needs as values (the
 // Settings swatches and the pictures). Every other colour is a CSS token per theme
 // (styles/tokens.css, :root[data-bg="…"]). Values from the prototype's THEMES, STUDY, GOALS; the music's words from its lists() and themeWord.
 
-export type Bg = "med" | "cs" | "law" | "pilot" | "sports" | "eng"
-export const BGS: readonly Bg[] = ["med", "cs", "law", "pilot", "sports", "eng"]
+export type Bg = "note" | "med" | "cs" | "law" | "pilot" | "sports" | "eng"
+export const BGS: readonly Bg[] = ["note", "med", "cs", "law", "pilot", "sports", "eng"]
 
 export interface ThemeInfo {
     label: string
@@ -27,6 +28,10 @@ export interface ThemeInfo {
 }
 
 export const THEMES: Record<Bg, ThemeInfo> = {
+    note: { label: "Notebook", desc: "Spiral notebook and stickers · butter when done", accent: "#5B54C7", done: "#FFF3C4", wear: "notebook",
+        picture: "Spiral notebook with your name on the label and stickers", studyWord: "Studying", preset: "Read then quiz",
+        music: { word: "a cosy study session", name: "Study café", query: "study cafe lofi" },
+        quote: { text: "The beautiful thing about learning is that nobody can take it away from you.", source: "B.B. King" } },
     med: { label: "Medicine", desc: "Lab coat · pink when done", accent: "#0F5F58", done: "#FBE8EF", wear: "coat",
         picture: "Lab coat with your name embroidered", studyWord: "On shift", preset: "Anki then read",
         music: { word: "the night shift", name: "Night shift", query: "night shift study" },
@@ -54,6 +59,7 @@ export const THEMES: Record<Bg, ThemeInfo> = {
 }
 
 export const GOALS: Record<Bg, readonly string[]> = {
+    note: ["Dean's list", "Straight A's", "Graduate", "Top of the class", "Scholarship", "Grad school"],
     med: ["Neurologist", "Dermatologist", "Cardiologist", "Surgeon", "Pediatrician", "ER physician"],
     cs: ["Team lead", "Software engineer", "Data scientist", "Security engineer", "ML engineer", "Founder"],
     law: ["Litigator", "Judge", "Corporate lawyer", "Prosecutor", "Public defender", "Partner"],
@@ -62,7 +68,7 @@ export const GOALS: Record<Bg, readonly string[]> = {
     eng: ["Structural eng.", "Mechanical eng.", "Electrical eng.", "Project lead", "Chief engineer", "Aerospace eng."],
 }
 
-export const toBg = (v: unknown): Bg => (BGS.includes(v as Bg) ? (v as Bg) : "med")
+export const toBg = (v: unknown): Bg => (BGS.includes(v as Bg) ? (v as Bg) : "note")
 
 /** The goal shown on the picture: the one saved in coat.role, else the theme's first. */
 export const goalFor = (bg: Bg, role: string) => role.trim() || GOALS[bg][0]

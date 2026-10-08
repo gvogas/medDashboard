@@ -8,8 +8,9 @@ import { Suit } from "./suit"
 import { Jacket } from "./jacket"
 import { Jersey } from "./jersey"
 import { Vest } from "./vest"
+import { Notebook } from "./notebook"
 
-const PICTURES: Record<Bg, (p: PictureProps) => React.JSX.Element> = { med: Coat, cs: Badge, law: Suit, pilot: Jacket, sports: Jersey, eng: Vest }
+const PICTURES: Record<Bg, (p: PictureProps) => React.JSX.Element> = { note: Notebook, med: Coat, cs: Badge, law: Suit, pilot: Jacket, sports: Jersey, eng: Vest }
 
 export function SidebarPicture({ bg, ...props }: PictureProps & { bg: Bg }) {
     const Picture = PICTURES[bg]

@@ -485,7 +485,7 @@ describe("a run", () => {
 
     it("titles the tab and badges the Study icon with the time left, and clears both at the end", async () => {
         await begin({ steps: [["study", 1], ["break", 1]], rounds: 1 })
-        expect(document.title).toBe("01:00 · On shift")
+        expect(document.title).toBe("01:00 · Studying")
         expect(getStudyBadge()).toBe("01:00")
         await tickFor(61_000)
         expect(document.title).toBe("00:59 · Break")

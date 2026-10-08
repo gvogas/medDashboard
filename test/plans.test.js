@@ -136,3 +136,17 @@ describe('DELETE /api/me', () => {
     expect((await api('/api/me')).status).toBe(401);
   });
 });
+
+describe('the theme in the profile', () => {
+  it('saves Notebook in look, and the six in both columns; leaving it out keeps it', async () => {
+    const api = await signIn();
+    const me = await (await api('/api/me')).json();
+    expect(me.bg).toBe('note');
+    const save = async (extra) => (await api('/api/me', { method: 'PUT', body: { coat: me.coat, theme: 'system', termStart: null, displayName: '', ...extra } })).json();
+    expect((await save({ bg: 'law' })).bg).toBe('law');
+    expect(await env.DB.prepare('SELECT look, bg FROM users WHERE id = ?').bind(me.id).first()).toEqual({ look: 'law', bg: 'law' });
+    expect((await save({ bg: 'note' })).bg).toBe('note');
+    expect(await env.DB.prepare('SELECT look, bg FROM users WHERE id = ?').bind(me.id).first()).toEqual({ look: 'note', bg: 'law' });
+    expect((await save({})).bg).toBe('note');
+  });
+});

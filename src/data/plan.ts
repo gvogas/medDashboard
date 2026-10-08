@@ -13,8 +13,8 @@ import type { Plan } from "@/core/types"
 /** Why the Pro sheet opened, so it can say what the person was reaching for. */
 export type ProReason = "ai" | "themes" | "settings"
 
-/** Themes on the free plan; the rest come with Pro. */
-export const FREE_THEMES: readonly string[] = ["med", "cs"]
+/** The free plan's theme, Notebook; the six by field come with Pro. */
+export const FREE_THEMES: readonly string[] = ["note"]
 
 const FREE_PLAN: Plan = { tier: "free", source: null, expiresAt: null, renews: false, paywall: false }
 

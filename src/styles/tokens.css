@@ -113,6 +113,18 @@
   --done:#35311D; --done-2:#3F3A22; --done-line:#4B452A; --done-ink:#EAE1B8; --done-track:#4B452A; --done-bar-a:#C9A21C; --done-bar-b:#E2CF8D;
 }
 
+:root[data-bg="note"]{
+  /* Notebook, the free plan's theme: periwinkle ink, butter yellow when done, a warm paper */
+  --bg:#F7F5F0; --side-bg:#F0EEF6;
+  --accent:#5B54C7; --accent-soft:#F1F0FB; --accent-ink:#3F3A99; --motif:#E0708F; --box-line:#8A87B3; --disabled:#D3D1EE;
+  --done:#FFF3C4; --done-2:#FCEBB0; --done-line:#F4E0A0; --done-ink:#6B5310; --done-track:#F8E7A8; --done-bar-a:#FADF85; --done-bar-b:#D9A92B;
+}
+:root[data-app="dark"][data-bg="note"]{
+  --bg:#13121A; --side-bg:#17161F;
+  --accent:#A9A4F2; --accent-soft:#232142; --accent-ink:#CAC7F8; --on-accent:#120F33; --motif:#F29CB4; --box-line:#66638F; --disabled:#2E2C4D;
+  --done:#352F18; --done-2:#3F381D; --done-line:#4B4324; --done-ink:#F2E2A6; --done-track:#4B4324; --done-bar-a:#D9A92B; --done-bar-b:#F5D776;
+}
+
 /* The coat colour is chosen in Settings only on Medicine, so only there does it colour your own achievements. */
 :root:not([data-bg]), :root[data-bg="med"]{ --mine:var(--coat); }
 
@@ -171,6 +183,14 @@
 :root[data-bg="pilot"][data-app="dark"]{ --study:#8DB7E2; --study-soft:#213A52; --study-ink:#B8D1EA; --break:#8CADD9; --break-soft:#1A212B; --break-ink:#B0C8E8; }
 :root[data-bg="sports"][data-app="dark"]{ --study:#E2AF8D; --study-soft:#35271D; --study-ink:#EACEB8; --break:#8CD99A; --break-soft:#19341E; --break-ink:#B0E8BA; }
 :root[data-bg="eng"][data-app="dark"]{ --study:#E2CF8D; --study-soft:#35311D; --study-ink:#EAE1B8; --break:#8CB1D9; --break-soft:#192634; --break-ink:#B0CBE8; }
+/* Notebook: coral-pink study, periwinkle break; a night-sky focus screen. */
+:root[data-bg="note"]{
+  --study:#E0708F; --study-soft:#FCE6EC; --study-ink:#9A3F58; --study-card:#7A3248; --study-card-2:#8E3B55;
+  --break:#5B54C7; --break-soft:#F1F0FB; --break-ink:#3F3A99; --break-card:#36317F; --break-card-2:#413B95;
+  --fx-study-bg:#1B1838; --fx-break-bg:#2A2640; --fx-study:#F6A9BE; --fx-break:#FBE08A;
+}
+:root[data-bg="note"][data-app="dark"]{ --study:#F29CB4; --study-soft:#3A2030; --study-ink:#F7C1D0; --break:#A9A4F2; --break-soft:#232142; --break-ink:#CAC7F8;
+  --study-card:#421B28; --study-card-2:#552334; --break-card:#1E1B47; --break-card-2:#262259; }
 /* Dark study cards: the light cards at about 55-60% of their brightness, as Medicine and CS do. */
 :root[data-bg="law"][data-app="dark"]{ --study-card:#32270D; --study-card-2:#423412; --break-card:#2C1111; --break-card-2:#371616; }
 :root[data-bg="pilot"][data-app="dark"]{ --study-card:#132334; --study-card-2:#192E43; --break-card:#0D1926; --break-card-2:#111F2F; }

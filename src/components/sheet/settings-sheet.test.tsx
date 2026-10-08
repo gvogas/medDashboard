@@ -85,15 +85,16 @@ describe("Settings", () => {
         expect(actions.setSettingsTab).toHaveBeenCalledWith("study")
     })
 
-    it("picks a theme from six rows, a goal from its chips or typed, and the name", () => {
+    it("picks a theme from seven rows, a goal from its chips or typed, and the name", () => {
         settings("you")
         const rows = within(screen.getByRole("radiogroup", { name: "Theme" })).getAllByRole("radio")
         expect(rows.map((r) => r.textContent)).toEqual([
+            "NotebookSpiral notebook and stickers · butter when done",
             "MedicineLab coat · pink when done", "Computer ScienceID badge · mint when done",
             "LawSuit and name plate · parchment when done", "AviationFlight jacket · sky blue when done",
             "SportsJersey · peach when done", "EngineeringHi-vis vest · yellow when done",
         ])
-        expect(rows[0].getAttribute("aria-checked")).toBe("true")
+        expect(rows[1].getAttribute("aria-checked")).toBe("true")
         fireEvent.click(screen.getByRole("radio", { name: /Aviation/ }))
         expect(legacy.setBg).toHaveBeenCalledWith("pilot")
 
@@ -114,19 +115,19 @@ describe("Settings", () => {
         settings("you")
         const group = screen.getByRole("radiogroup", { name: "Theme" })
         const rows = within(group).getAllByRole("radio")
-        expect(rows.map((r) => r.tabIndex)).toEqual([0, -1, -1, -1, -1, -1])
-        rows[0].focus()
-        fireEvent.keyDown(rows[0], { key: "ArrowDown" })
+        expect(rows.map((r) => r.tabIndex)).toEqual([-1, 0, -1, -1, -1, -1, -1])
+        rows[1].focus()
+        fireEvent.keyDown(rows[1], { key: "ArrowDown" })
         expect(legacy.setBg).toHaveBeenLastCalledWith("cs")
-        expect(document.activeElement).toBe(rows[1])
-        rows[0].focus()
-        fireEvent.keyDown(rows[0], { key: "ArrowLeft" })
-        expect(legacy.setBg).toHaveBeenLastCalledWith("eng")
-        rows[0].focus()
-        fireEvent.keyDown(rows[0], { key: "End" })
+        expect(document.activeElement).toBe(rows[2])
+        rows[1].focus()
+        fireEvent.keyDown(rows[1], { key: "ArrowLeft" })
+        expect(legacy.setBg).toHaveBeenLastCalledWith("note")
+        rows[1].focus()
+        fireEvent.keyDown(rows[1], { key: "End" })
         expect(legacy.setBg).toHaveBeenLastCalledWith("eng")
         fireEvent.keyDown(document.activeElement!, { key: "Home" })
-        expect(legacy.setBg).toHaveBeenLastCalledWith("med")
+        expect(legacy.setBg).toHaveBeenLastCalledWith("note")
 
         const chips = within(screen.getByRole("radiogroup", { name: "Where you’re headed" })).getAllByRole("radio")
         chips[0].focus()
@@ -137,13 +138,17 @@ describe("Settings", () => {
         expect(chips.map((c) => c.tabIndex)).toEqual([0, -1, -1, -1, -1, -1])
     })
 
-    it("with the paywall on, a free account sees the Pro themes marked, and choosing one opens Term Pro", async () => {
+    it("with the paywall on, a free account has Notebook, and every other theme opens Term Pro", async () => {
         fake.data.profile.plan = { tier: "free", source: null, expiresAt: null, renews: false, paywall: true }
         settings("you")
-        expect(screen.getByRole("radio", { name: /^Medicine/ }).textContent).not.toContain("Pro")
-        expect(screen.getByRole("radio", { name: /^Law/ }).textContent).toContain("Pro")
+        expect(screen.getByRole("radio", { name: /^Notebook/ }).textContent).not.toContain("Pro")
+        for (const name of [/^Medicine/, /^Computer Science/, /^Law/, /^Aviation/, /^Sports/, /^Engineering/]) {
+            expect(screen.getByRole("radio", { name }).textContent).toContain("Pro")
+        }
+        fireEvent.click(screen.getByRole("radio", { name: /^Notebook/ }))
+        expect(legacy.setBg).toHaveBeenCalledWith("note")
         fireEvent.click(screen.getByRole("radio", { name: /^Law/ }))
-        expect(legacy.setBg).not.toHaveBeenCalled()
+        expect(legacy.setBg).toHaveBeenCalledTimes(1)     /* Notebook's, not Law's */
         expect(getSheet()).toEqual({ kind: "pro", reason: "themes" })
         expect(await screen.findByRole("list", { name: "What Term Pro adds" })).toBeTruthy()
         expect(screen.getByText("That theme comes with Term Pro.")).toBeTruthy()

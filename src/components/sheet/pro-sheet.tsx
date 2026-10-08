@@ -21,7 +21,7 @@ const WHY: Record<ProReason, string> = {
 /* What Pro adds; the free plan keeps courses, items, the week and month, grades and the timer. */
 export const PRO_FEATURES = [
     ["More AI imports", "10 reads a day of outlines, timetables and school calendars, instead of 3."],
-    ["Every theme", "All six themes, each with its picture, wording and animation."],
+    ["Every theme", "Six themes for your field, each with its own picture, wording and animation."],
     ["Support a small app", "Pro pays for the servers and the AI, and keeps Term free of ads."],
 ] as const
 

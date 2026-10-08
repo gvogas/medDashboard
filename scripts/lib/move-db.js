@@ -6,7 +6,7 @@
    start empty. users comes first: scripts/move-db.mjs refuses a target that holds any
    user, so a run that failed partway is never continued on top of itself. */
 export const TABLES = {
-  users: ['id', 'username', 'password_hash', 'pw_gen', 'display_name', 'coat_name', 'coat_role', 'coat_color', 'theme', 'bg', 'term_start', 'types', 'study_flow', 'feed_gen', 'study_prefs', 'school_calendar', 'leaderboard', 'is_admin', 'last_seen_day', 'hidden_sources', 'created_at', 'updated_at', 'revision'],
+  users: ['id', 'username', 'password_hash', 'pw_gen', 'display_name', 'coat_name', 'coat_role', 'coat_color', 'theme', 'bg', 'term_start', 'types', 'study_flow', 'feed_gen', 'study_prefs', 'school_calendar', 'leaderboard', 'is_admin', 'last_seen_day', 'hidden_sources', 'look', 'created_at', 'updated_at', 'revision'],
   spaces: ['id', 'kind', 'archived', 'school_calendar', 'parent_space', 'parent_item', 'code_hash', 'code_expires', 'code_uses_left', 'created_at', 'updated_at', 'deleted_at', 'revision'],
   members: ['space_id', 'user_id', 'role', 'joined_at', 'updated_at', 'deleted_at', 'revision'],
   invites: ['space_id', 'user_id', 'invited_by', 'role', 'status', 'created_at', 'expires_at'],
@@ -35,8 +35,9 @@ const ORDER_BY = { users: 'id', spaces: 'id', members: 'space_id, user_id', invi
 const SCOPE_FROM_USER = `'u:' || "user_id" AS "scope"`;
 const PAYLOAD_FROM_USER = `CASE WHEN kind IN ('courses', 'items') AND json_valid(payload) AND json_type(payload, '$.user_id') = 'text'
   THEN json_set(json_remove(payload, '$.user_id'), '$.scope', 'u:' || json_extract(payload, '$.user_id')) ELSE payload END AS "payload"`;
-const DEFAULTS = { assignees: "'[]'", hidden_sources: "'[]'" };
-const ADDED_IN_V7 = new Set(['hidden_sources', 'updated_by', 'class_id', 'assignees', 'completed_by', 'space_id']);
+/* a source from before 0007_look.sql has its theme in bg alone */
+const DEFAULTS = { assignees: "'[]'", hidden_sources: "'[]'", look: '"bg"' };
+const ADDED_IN_V7 = new Set(['hidden_sources', 'updated_by', 'class_id', 'assignees', 'completed_by', 'space_id', 'look']);
 /* Short-lived, or filled by the fresh schema itself. The error log, the announcement and
    the cron's last run start fresh too, and so do the webhook ids already seen. */
 const LEFT_BEHIND = ['billing_events', 'error_log', 'app_meta', 'login_throttle', 'request_limits', 'spotify_oauth_states', 'spotify_refresh_locks', 'sync_state', 'd1_migrations'];

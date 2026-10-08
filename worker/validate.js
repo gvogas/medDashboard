@@ -16,7 +16,8 @@ const TYPE_COLOURS = ['#C0392B', '#B77505', '#1E628F', '#5A46A8', '#4C7370', '#0
 const TYPE_KINDS = ['todo', 'event', 'graded'];
 const KINDS = ['Lecture', 'Lab', 'Seminar', 'Tutorial', 'PBL', 'Clinical'];
 const THEMES = ['light', 'dark', 'system'];
-const BACKGROUNDS = ['med', 'cs', 'law', 'pilot', 'sports', 'eng'];
+/* the themes: Notebook (the free plan's) and the six (users.look, migrations/0007_look.sql) */
+const BACKGROUNDS = ['note', 'med', 'cs', 'law', 'pilot', 'sports', 'eng'];
 const DATE = /^[0-9]{4}-[0-9]{2}-[0-9]{2}$/;
 const TIME = /^(?:[01][0-9]|2[0-3]):[0-5][0-9]$/;
 
@@ -158,8 +159,8 @@ export function validateProfile(body) {
     coatRole: str(coat.role ?? '', 'coat.role', 34),
     coatColor: oneOf(coat.color, 'coat.color', COLOURS),
     theme: oneOf(body.theme, 'theme', THEMES),
-    // Older clients do not send a background; they keep Med.
-    bg: oneOf(body.bg ?? 'med', 'bg', BACKGROUNDS),
+    // Older clients do not send a theme; the stored one is kept (null here).
+    bg: body.bg === undefined ? null : oneOf(body.bg, 'bg', BACKGROUNDS),
     termStart: optDate(body.termStart, 'termStart'),
     // Older clients do not send types; the stored list is kept (null here).
     types: body.types === undefined ? null : typeList(body.types),

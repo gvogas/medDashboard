@@ -66,3 +66,12 @@ describe('database relationships and inspection views', () => {
     expect(plan.results.some((row) => row.detail.includes(index))).toBe(true);
   });
 });
+
+describe('users.look (the theme, Notebook included)', () => {
+  it('new accounts start on Notebook; the old bg column keeps to the six', async () => {
+    const id = await createUser('lookfresh');
+    expect(await env.DB.prepare('SELECT look, bg FROM users WHERE id = ?').bind(id).first()).toEqual({ look: 'note', bg: 'med' });
+    await expect(env.DB.prepare("UPDATE users SET look = 'foo' WHERE id = ?").bind(id).run()).rejects.toThrow(/CHECK constraint failed/);
+    await expect(env.DB.prepare("UPDATE users SET bg = 'note' WHERE id = ?").bind(id).run()).rejects.toThrow(/CHECK constraint failed/);
+  });
+});

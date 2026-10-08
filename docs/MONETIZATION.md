@@ -45,7 +45,7 @@ What follows is the app. On the website everything in the Pro column is open to 
 | Deadline and exam reminders (app) | ✓ **built** | ✓ |
 | Calendar feed, Spotify controls | ✓ | ✓ |
 | AI imports (outlines, timetables, school calendars) | 3 a day **built** | 10 a day **built** |
-| Themes | Medicine, Computer Science **built** | all six **built** |
+| Themes | Notebook, a cheerful periwinkle-and-butter theme made for everyone **built** | Notebook and the six by field (Medicine, CS, Law, Aviation, Sports, Engineering) **built** |
 | Home-screen and Lock Screen widgets (next exam, today) | — | ✓ **built** |
 | Study timer on the Lock Screen (Live Activity) | — | ✓ *to build* |
 | Full study history, year heatmap, per-course stats | this month | ✓ *to build* |

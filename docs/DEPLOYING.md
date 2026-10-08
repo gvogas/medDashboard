@@ -144,10 +144,11 @@ runs once per database.
 | `0004_marks.sql` | `marks` (your status, grade and notes on a shared item) and `space_prefs` (your colour, target and term for a space) |
 | `0005_plans.sql` | `plans` (Term Pro: App Store, web or given) and `billing_events` (webhook ids already applied); `admin_log` learns `comp`/`uncomp` |
 | `0006_apple.sql` | `apple_accounts`: Apple IDs linked to Term accounts (Sign in with Apple) |
+| `0007_look.sql` | `users.look`: the theme, now including Notebook, the free plan's; new accounts start on it |
 
 To change the database:
 
-1. Add a new file with the next number, `0007_something.sql`. Never edit a file that
+1. Add a new file with the next number, `0008_something.sql`. Never edit a file that
    has already run.
 2. Apply it locally with `npm run db:local`, then test.
 3. Apply it to live with `npm run db:remote` **before** pushing the code that needs

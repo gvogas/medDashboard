@@ -75,10 +75,10 @@ let last = ""
 function current(): WidgetData {
     const hidden = sharedShown() ? data.profile?.hiddenSources ?? [] : []
     const { items, courses } = onCalendar(effectiveItems(), effectiveCourses(), hidden)
-    const bg = (data.profile?.bg || "med") as keyof typeof THEMES
+    const bg = (data.profile?.bg || "note") as keyof typeof THEMES
     return widgetData({
         items, courses, sessions: data.study_sessions, studyPrefs: data.profile?.studyPrefs, cal: schoolCal(),
-        today: todayIso(), pro: hasPro(), accent: THEMES[bg]?.accent ?? THEMES.med.accent, now: Date.now(),
+        today: todayIso(), pro: hasPro(), accent: THEMES[bg]?.accent ?? THEMES.note.accent, now: Date.now(),
     })
 }
 

@@ -1,5 +1,5 @@
 // The next-exam box's animation, one per theme, in --motif (prototype lines 226–263):
-// an ECG trace, a terminal countdown, swaying scales, a plane on its route, a stopwatch,
+// Notebook's twinkling stickers, an ECG trace, a terminal countdown, swaying scales, a plane on its route, a stopwatch,
 // two gears. The keyframes are in index.css and stop under prefers-reduced-motion.
 
 import { useEffect, useState } from "react"
@@ -35,6 +35,16 @@ export function ExamMotif({ bg, at, steps }: { bg: Bg; at: Date; steps: string }
     const rule = steps ? <><span className="h-px min-w-2 grow bg-border" /><span className="min-w-0 truncate">{steps}</span></> : null
     return (
         <span data-motif={bg} aria-hidden="true" className="relative mt-auto flex h-[26px] w-full min-w-0 items-center overflow-hidden gap-2.5 text-[12px] text-ink-2">
+            {bg === "note" && (
+                <>
+                    <svg width="44" height="24" viewBox="0 0 44 24" fill="var(--motif)">
+                        <path className="motif-twinkle" d="M8 4l1.6 4.4L14 10l-4.4 1.6L8 16l-1.6-4.4L2 10l4.4-1.6z" />
+                        <path className="motif-twinkle motif-twinkle-2" fill="var(--accent)" d="M22 10l1.1 3 3 1.1-3 1.1L22 18.2l-1.1-3-3-1.1 3-1.1z" />
+                        <path className="motif-twinkle motif-twinkle-3" d="M35 3l1.3 3.5L40 8l-3.7 1.4L35 13l-1.3-3.6L30 8l3.7-1.5z" />
+                    </svg>
+                    {rule}
+                </>
+            )}
             {bg === "med" && (
                 <svg viewBox="0 0 300 26" preserveAspectRatio="none" width="100%" height="26" className="block w-full">
                     <path d={TRACE} fill="none" stroke="var(--motif)" strokeOpacity=".16" strokeWidth="1.4" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />

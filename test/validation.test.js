@@ -50,12 +50,12 @@ describe('item times and repeats', () => {
 });
 
 describe('backgrounds and projects', () => {
-  it('defaults a profile without a background to Med, for older clients', () => {
-    expect(validateProfile(profile).bg).toBe('med');
+  it('keeps the stored theme when an older client sends none', () => {
+    expect(validateProfile(profile).bg).toBeNull();
   });
 
-  it('accepts the six backgrounds and rejects anything else', () => {
-    for (const bg of ['med', 'cs', 'law', 'pilot', 'sports', 'eng']) expect(validateProfile({ ...profile, bg }).bg).toBe(bg);
+  it('accepts Notebook and the six themes, and rejects anything else', () => {
+    for (const bg of ['note', 'med', 'cs', 'law', 'pilot', 'sports', 'eng']) expect(validateProfile({ ...profile, bg }).bg).toBe(bg);
     expect(() => validateProfile({ ...profile, bg: 'foo' })).toThrow();
   });
 

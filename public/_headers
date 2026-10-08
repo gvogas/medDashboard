@@ -7,7 +7,7 @@
 # streams under its own origin. Artwork uses i.scdn.co and playlist mosaics use
 # mosaic.scdn.co; allow those hosts only for images.
 /*
-  Content-Security-Policy: default-src 'self'; script-src 'self' 'sha256-gqf3ccvqhHu/99aH3ngLCHFTo1To6/EhR3Bcs3ZVF8c=' https://sdk.scdn.co https://appleid.cdn-apple.com; frame-src https://sdk.scdn.co; style-src 'self'; style-src-attr 'none'; font-src 'self'; img-src 'self' data: https://i.scdn.co https://mosaic.scdn.co; connect-src 'self'; worker-src 'self'; manifest-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'; object-src 'none'
+  Content-Security-Policy: default-src 'self'; script-src 'self' 'sha256-P4dZVOb2ddAgW1G0qHZ8frxw3UpolG2rGr9Lc0YjMjY=' https://sdk.scdn.co https://appleid.cdn-apple.com; frame-src https://sdk.scdn.co; style-src 'self'; style-src-attr 'none'; font-src 'self'; img-src 'self' data: https://i.scdn.co https://mosaic.scdn.co; connect-src 'self'; worker-src 'self'; manifest-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'; object-src 'none'
   X-Content-Type-Options: nosniff
   Referrer-Policy: same-origin
   Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=()

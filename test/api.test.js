@@ -35,7 +35,7 @@ describe('profile', () => {
       displayName: '',
       coat: { name: '', role: '', color: '#17B3AE' },
       theme: 'system',
-      bg: 'med',
+      bg: 'note',
       termStart: null,
     });
     expect(profile).not.toHaveProperty('passwordHash');

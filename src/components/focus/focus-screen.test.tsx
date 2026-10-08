@@ -128,7 +128,7 @@ describe("starting", () => {
         expect(stage().getByRole("meter", { name: "Daily goal" }).getAttribute("aria-valuenow")).toBe("20")
         expect(stage().getByText("of 1h 00m today").parentElement!.textContent).toBe("20m of 1h 00m today")
         /* the stage */
-        expect(stage().getByText("On shift · round 1 of 4")).toBeTruthy()
+        expect(stage().getByText("Studying · round 1 of 4")).toBeTruthy()
         expect(stage().getByRole("timer").textContent).toContain("25 minutes 0 seconds left")
         expect(screenEl()!.querySelectorAll("[data-strip] > span")).toHaveLength(4)
         expect(nextText()).toBe("Next · Break 5 min · done at 16:00")
@@ -172,7 +172,7 @@ describe("the run on the focus screen", () => {
         fireEvent.click(stage().getByRole("button", { name: "Pause timer" }))
         await settle()
         expect(focus.read()!.paused).toBe(true)
-        expect(stage().getByText("On shift · round 1 of 4 · paused")).toBeTruthy()
+        expect(stage().getByText("Studying · round 1 of 4 · paused")).toBeTruthy()
         await tickFor(7 * MIN)
         expect(stage().getByRole("timer").textContent).toContain("25 minutes 0 seconds left")
         expect(nextText()).toBe("Next · Break 5 min · done at 16:07")
@@ -191,7 +191,7 @@ describe("the run on the focus screen", () => {
         expect(focus.read()).toMatchObject({ kind: "break", index: 1, studyMs: 10 * MIN })
         expect(screenEl()!.dataset.phase).toBe("break")
         expect(stage().getByText("Break · round 1 of 4")).toBeTruthy()
-        expect(nextText()).toBe("Next · On shift 25 min · done at 15:45")
+        expect(nextText()).toBe("Next · Studying 25 min · done at 15:45")
     })
 
     it("says so on the last step", async () => {
@@ -226,10 +226,10 @@ describe("the run on the focus screen", () => {
 
     it("titles the tab with the time and badges the Study icon, until the run is done", async () => {
         await begin()
-        expect(document.title).toBe("25:00 · On shift")
+        expect(document.title).toBe("25:00 · Studying")
         expect(getStudyBadge()).toBe("25:00")
         await tickFor(90_000)
-        expect(document.title).toBe("23:30 · On shift")
+        expect(document.title).toBe("23:30 · Studying")
         expect(getStudyBadge()).toBe("23:30")
         fireEvent.click(stage().getByRole("button", { name: "Stop & log" }))
         await settle()

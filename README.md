@@ -25,8 +25,8 @@ the database, cookies and IndexedDB).
   grade, notes, colour) on top. Admin-only for now; shared projects come later.
 - **Admin page**: accounts, error log, audit log, announcement banner, and maintenance
   switches per feature.
-- **Themes**: Medicine, Computer Science, Law, Aviation, Sports and Engineering, each
-  in light or dark.
+- **Themes**: Notebook (the default, and the free plan's in the app), and Medicine, Computer
+  Science, Law, Aviation, Sports and Engineering (Pro in the app), each in light or dark.
 - **Local-first**: the app reads from IndexedDB, works offline, and syncs to D1. A
   private calendar feed works with Google or Apple Calendar.
 

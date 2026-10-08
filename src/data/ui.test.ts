@@ -45,11 +45,11 @@ describe("the remembered Study tab", () => {
 })
 
 describe("the theme", () => {
-    it("applies any of the six to <html>, and Medicine for anything else", () => {
+    it("applies any theme to <html>, and Notebook for anything else", () => {
         setBg("law", { persist: false })
         expect(document.documentElement.getAttribute("data-bg")).toBe("law")
         expect(ui.bg).toBe("law")
         setBg("foo", { persist: false })
-        expect(document.documentElement.getAttribute("data-bg")).toBe("med")
+        expect(document.documentElement.getAttribute("data-bg")).toBe("note")
     })
 })

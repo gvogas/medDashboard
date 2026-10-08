@@ -15,9 +15,9 @@
      of the wrong one. "system" follows the device. The last choice is remembered in
      this browser; the signed-in profile's choice takes over once it loads. */
   (function () {
-    var pref = 'system', bg = 'med';
+    var pref = 'system', bg = 'note';
     try { pref = localStorage.getItem('rounds.theme') || 'system'; } catch (e) {}
-    try { var saved = localStorage.getItem('rounds.bg'); if (['med', 'cs', 'law', 'pilot', 'sports', 'eng'].indexOf(saved) >= 0) bg = saved; } catch (e) {}
+    try { var saved = localStorage.getItem('rounds.bg'); if (['note', 'med', 'cs', 'law', 'pilot', 'sports', 'eng'].indexOf(saved) >= 0) bg = saved; } catch (e) {}
     window.__roundsTheme = pref;
     window.__roundsBg = bg;
     document.documentElement.setAttribute('data-bg', bg);

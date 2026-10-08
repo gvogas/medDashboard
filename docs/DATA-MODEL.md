@@ -114,7 +114,8 @@ Conventions used throughout:
 | `coat_role` | text | ≤ 34 | Your goal, the line "Headed for …" on the picture, e.g. `Headed for MS II`. |
 | `coat_color` | text | one of the five | Tints the Medicine coat (the only theme where it is chosen), the Spotify clip and your own achievements. |
 | `theme` | text | `light` \| `dark` \| `system` | |
-| `bg` | text | `med` \| `cs` \| `law` \| `pilot` \| `sports` \| `eng`, default `med` | The theme (Medicine, Computer Science, Law, Aviation, Sports, Engineering), independent of `theme` (the appearance). |
+| `look` | text | `note` \| `med` \| `cs` \| `law` \| `pilot` \| `sports` \| `eng`, default `note` | The theme (Notebook, Medicine, Computer Science, Law, Aviation, Sports, Engineering), independent of `theme` (the appearance); `bg` on the wire. Added in `0007_look.sql`, because `bg`'s CHECK could not take Notebook without rebuilding `users`. |
+| `bg` | text | `med` \| `cs` \| `law` \| `pilot` \| `sports` \| `eng`, default `med` | The theme as it was before Notebook, kept for older readers: the Worker writes it with `look` for the six and leaves it alone for Notebook. |
 | `term_start` | text \| null | `YYYY-MM-DD` | The week board's default start. Null means today. With a school calendar, its current semester's first day counts instead. |
 | `school_calendar` | JSON object | `{}` = none | The school's academic calendar, below. |
 | `types` | JSON array | ≤ 20 | Your item types: overrides for the built-ins (label, colour, hidden, order) and up to 12 of your own, ids `c-` plus 1–12 of `[a-z0-9]`. |

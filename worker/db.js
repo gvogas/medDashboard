@@ -7,7 +7,7 @@ import { SPACE_LIMIT } from './spaces.js';
 import { MARK_DEFAULTS, stable } from '../src/core/shared.ts';
 
 const PROFILE_COLS =
-  'id, username, display_name, coat_name, coat_role, coat_color, theme, bg, types, study_flow, study_prefs, school_calendar, hidden_sources, term_start, is_admin, created_at, updated_at, revision';
+  'id, username, display_name, coat_name, coat_role, coat_color, theme, look, types, study_flow, study_prefs, school_calendar, hidden_sources, term_start, is_admin, created_at, updated_at, revision';
 
 function profileFromRow(r) {
   return {
@@ -16,7 +16,7 @@ function profileFromRow(r) {
     displayName: r.display_name,
     coat: { name: r.coat_name, role: r.coat_role, color: r.coat_color },
     theme: r.theme,
-    bg: r.bg,
+    bg: r.look,
     types: jsonOut(r.types),
     studyFlow: flowOut(r.study_flow),
     studyPrefs: prefsOut(r.study_prefs),
@@ -52,9 +52,9 @@ export async function getProfile(db, userId) {
 export async function updateProfile(db, userId, p, now = Date.now(), revision) {
   const saved = await db
     .prepare(
-      `UPDATE users SET display_name = ?, coat_name = ?, coat_role = ?, coat_color = ?, theme = ?, bg = ?, types = COALESCE(?, types), study_flow = COALESCE(?, study_flow), study_prefs = COALESCE(?, study_prefs), school_calendar = COALESCE(?, school_calendar), hidden_sources = COALESCE(?, hidden_sources), term_start = ?, updated_at = ?, revision = revision + 1 WHERE id = ? AND revision = ? RETURNING ${PROFILE_COLS}`,
+      `UPDATE users SET display_name = ?, coat_name = ?, coat_role = ?, coat_color = ?, theme = ?, look = COALESCE(?, look), bg = CASE WHEN ? IN ('med', 'cs', 'law', 'pilot', 'sports', 'eng') THEN ? ELSE bg END, types = COALESCE(?, types), study_flow = COALESCE(?, study_flow), study_prefs = COALESCE(?, study_prefs), school_calendar = COALESCE(?, school_calendar), hidden_sources = COALESCE(?, hidden_sources), term_start = ?, updated_at = ?, revision = revision + 1 WHERE id = ? AND revision = ? RETURNING ${PROFILE_COLS}`,
     )
-    .bind(p.displayName, p.coatName, p.coatRole, p.coatColor, p.theme, p.bg, p.types === null ? null : JSON.stringify(p.types), p.studyFlow ? JSON.stringify(p.studyFlow) : null, p.studyPrefs ? JSON.stringify(p.studyPrefs) : null, p.schoolCalendar ? JSON.stringify(p.schoolCalendar) : null, p.hiddenSources ? JSON.stringify(p.hiddenSources) : null, p.termStart, now, userId, revision ?? -1)
+    .bind(p.displayName, p.coatName, p.coatRole, p.coatColor, p.theme, p.bg, p.bg, p.bg, p.types === null ? null : JSON.stringify(p.types), p.studyFlow ? JSON.stringify(p.studyFlow) : null, p.studyPrefs ? JSON.stringify(p.studyPrefs) : null, p.schoolCalendar ? JSON.stringify(p.schoolCalendar) : null, p.hiddenSources ? JSON.stringify(p.hiddenSources) : null, p.termStart, now, userId, revision ?? -1)
     .first();
   if (!saved) throw new HttpError(409, { error: 'conflict', current: await getProfile(db, userId) });
   return profileFromRow(saved);
