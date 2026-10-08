@@ -41,7 +41,7 @@ and feels like theirs:
 | Calendar feed, Spotify controls | ✓ | ✓ |
 | AI imports (outlines, timetables, school calendars) | 3 a day **built** | 10 a day **built** |
 | Themes | Medicine, Computer Science **built** | all six **built** |
-| Home-screen widgets (next exam, today's classes) | — | ✓ *to build* |
+| Home-screen and Lock Screen widgets (next exam, today) | — | ✓ **built** |
 | Study timer on the Lock Screen (Live Activity) | — | ✓ *to build* |
 | Full study history, year heatmap, per-course stats | this month | ✓ *to build* |
 | Custom reminder times | — | ✓ *to build* |
@@ -104,8 +104,9 @@ Usage is the hard part, not the code. The plan below spends most of its effort t
   links Apple asks for; Pro shown on the themes and when the AI limit is reached.
 - **App Store must-haves:** delete your own account, a draft privacy policy, the app
   version check, token sign-in for the app.
-- **The iPhone/iPad/Mac app** itself (Capacitor), with deadline and exam reminders. See
-  [IOS.md](IOS.md).
+- **The iPhone/iPad/Mac app** itself (Capacitor), with deadline and exam reminders,
+  home-screen and Lock Screen widgets, and Sign in with Apple in the app and on the
+  website. See [IOS.md](IOS.md).
 
 ## The plan
 
@@ -121,8 +122,9 @@ Usage is the hard part, not the code. The plan below spends most of its effort t
 
 Selling to strangers needs a way in. This is the biggest piece still to build:
 
-- **Sign-up** in the app and on the website: username, password, and **Sign in with
-  Apple** (fastest on iPhone, and Apple requires it if other social sign-ins are added).
+- **Sign-up** in the app and on the website. Sign in with Apple is **built**: setting
+  `SIGNUPS` to `"open"` already lets new people in with their Apple ID. Still to build: a
+  username-and-password sign-up for people without an Apple device.
 - **Abuse protection**: Cloudflare Turnstile (free) on web sign-up, rate limits per
   address (the existing `request_limits` table), and a cap on AI reads for new accounts.
 - **Email** (optional) for password resets; until then, Sign in with Apple covers it.
@@ -144,9 +146,8 @@ Selling to strangers needs a way in. This is the biggest piece still to build:
 
 In order of what moves downloads and conversions:
 
-1. **Widgets**: next exam countdown, today's classes, today's study goal. The most
-   requested kind of feature in planner apps, and visible on the home screen every day.
-   Needs a small Swift widget extension reading data the app shares with it.
+1. **Widgets** (**built**, needs the one-time Xcode target setup in IOS.md): next exam
+   countdown, today's classes and what is due. Visible on the home screen every day.
 2. **Live Activity for the study timer**: the timer on the Lock Screen and Dynamic
    Island. Pro.
 3. **Study stats**: per course, per week, the year heatmap, "hours before each exam".

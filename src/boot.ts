@@ -84,10 +84,10 @@ export function boot() {
 
     /* ═════════ the app ═════════ */
     /* iOS suspends the app in the background: coming back is the moment to pull, and to
-       bring the reminders up to date with it. */
+       bring the reminders and the widgets up to date with it (a new day, too). */
     if (NATIVE) {
         void import("@capacitor/app").then(({ App }) => App.addListener("appStateChange", ({ isActive }) => {
-            if (isActive && data.profile) { void sync.syncNow(); rescheduleSoon() }
+            if (isActive && data.profile) { void sync.syncNow(); rescheduleSoon(); void import("@/data/widgets").then((m) => m.updateWidgetsSoon()) }
         })).catch(() => {})
     }
 

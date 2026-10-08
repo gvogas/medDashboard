@@ -15,6 +15,8 @@ website.
 | Security policy | `public/_headers` | a `<meta>` written by `scripts/build-ios.mjs` |
 | Spotify | connect, control, and play in the tab | control only; connecting opens the website |
 | Reminders | none | local notifications (Settings → Study → Reminders) |
+| Sign in with Apple | Apple's popup, once a Services ID is set | Apple's own sheet |
+| Widgets | none | next exam (home and Lock Screen), today (classes and what is due) |
 | Term Pro | shown, not sold | sold through the App Store (RevenueCat) |
 
 `src/core/native.ts` holds the switch (`NATIVE`, set by `vite build --mode ios`), the API
@@ -49,8 +51,63 @@ VITE_API_BASE=http://192.168.1.20:8787 npm run ios:sync
 
 ## Capabilities to turn on in Xcode
 
+`ios/App/App/App.entitlements` already asks for Sign in with Apple and the App Group
+`group.net.vogas.term`. In Xcode → the App target → Signing & Capabilities, check they
+show, and add:
+
 - **In-App Purchase** (for Term Pro).
 - **Push Notifications** is not needed: reminders are local.
+
+## Sign in with Apple
+
+It works in the app and on the website, and both end up in the same Term account.
+
+1. In the Apple Developer portal → Identifiers, open the app's id (`net.vogas.term`) and
+   tick **Sign in with Apple**.
+2. For the website, make a **Services ID** (for example `net.vogas.term.web`), tick Sign in
+   with Apple, and add the domain `rounds.termanitor07.workers.dev` with the return URL
+   `https://rounds.termanitor07.workers.dev/`.
+3. Make a **key** with Sign in with Apple ticked and download the `.p8`. This lets Term
+   revoke Apple's grant when someone deletes their account, as Apple asks.
+4. On the Worker, in `wrangler.jsonc` vars: `APPLE_CLIENT_IDS` = `net.vogas.term,net.vogas.term.web`,
+   `APPLE_TEAM_ID` = your team id, `APPLE_KEY_ID` = the key's id. Then
+   `npx wrangler secret put APPLE_PRIVATE_KEY` and paste the whole `.p8` file.
+5. For the website's button, build with the Services ID: set `VITE_APPLE_WEB_CLIENT_ID` in
+   Cloudflare's build settings (Settings → Build → Variables) to `net.vogas.term.web`.
+
+How it behaves (`worker/apple.js`):
+- Someone signed in connects their Apple ID in Settings → Account; after that either signs in.
+- An Apple ID with no Term account is refused while `SIGNUPS` is `"closed"` (the default).
+  With `"open"`, it makes a new account with no password; its owner deletes it by signing
+  in with Apple again.
+
+## Widgets
+
+Two widgets, Pro only (they say so without Pro): **Next exam** (small, and the Lock Screen's
+rectangular, circular and inline spots) and **Today** (medium and large: today's classes
+and what is due in the next week). The app works out what they show
+(`src/data/widgets.ts`) after every change, on opening and at midnight, and hands it to them
+through a small plugin of its own (`native/term-widgets`), which `cap sync` installs.
+
+The widget extension is a separate Xcode target. Xcode makes targets best, so this is a
+one-time setup by hand (about five minutes):
+
+1. In Xcode: File → New → Target → **Widget Extension**. Name it `TermWidget`, untick
+   "Include Live Activity" and "Include Configuration App Intent". When asked to activate
+   the scheme, say yes.
+2. Xcode creates a `TermWidget` folder with its own Swift files. Delete those Swift files
+   (Move to Trash), then drag in `ios/App/TermWidget/TermWidget.swift` and
+   `TermWidgetData.swift` from this repo, ticked for the **TermWidget** target only.
+3. TermWidget target → General: set **Minimum Deployments** to iOS 17.0 (the widgets use
+   iOS 17's backgrounds; the app itself still runs from iOS 15).
+4. TermWidget target → Signing & Capabilities: add **App Groups** and tick
+   `group.net.vogas.term`. Under Build Settings, set Code Signing Entitlements to
+   `TermWidget/TermWidget.entitlements` (the file is in the repo).
+5. Build and run the app once, sign in, then long-press the home screen → Edit → Add
+   Widget → Term.
+
+If the widgets say "Open Term and sign in" after signing in, the App Group is not ticked on
+both targets.
 
 ## In-app purchases (Term Pro)
 
@@ -92,7 +149,8 @@ When a new Worker change would break old builds, set `MIN_APP_VERSION` in
       contact address and review it).
 - [ ] App Privacy answers: account info (username), user content, purchases; no tracking.
 - [ ] A demo account for the reviewer (there is no sign-up page yet, see MONETIZATION.md).
-- [ ] Account deletion in the app: Settings → Account → Delete account (`DELETE /api/me`).
+- [ ] Account deletion in the app: Settings → Account → Delete account (`DELETE /api/me`),
+      which also revokes Sign in with Apple.
 - [ ] The paywall shows the price, the period, that it renews, Restore, and links to the
       terms and the privacy policy (`src/components/sheet/pro-sheet.tsx`).
 - [ ] Screenshots for 6.9" iPhone, 13" iPad and Mac.
@@ -102,8 +160,11 @@ When a new Worker change would break old builds, set `MIN_APP_VERSION` in
 
 - **Connecting Spotify** opens the website, which needs you signed in there too. A
   native connect flow (a redirect back into the app) is a later step.
-- **Sign-up**: accounts are still made by an admin. Selling Pro to strangers needs a
-  sign-up page first (MONETIZATION.md, phase 2).
+- **Sign-up**: with `SIGNUPS` closed, accounts are still made by an admin. Opening it lets
+  new people in with Sign in with Apple; a username-and-password sign-up page is still to
+  come (MONETIZATION.md, phase 2).
 - **Token storage** is the web view's `localStorage`, inside the app's sandbox. Moving it
   to the Keychain is a small later step.
-- **Widgets and Live Activities** need Swift code; they are on the roadmap, not here.
+- **Live Activities** (the study timer on the Lock Screen) are on the roadmap, not here.
+- **The widget extension is not compiled here**: these files were written without Xcode.
+  If Xcode reports an error in them, it will be small; fix it there or send it back.

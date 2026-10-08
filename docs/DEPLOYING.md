@@ -143,10 +143,11 @@ runs once per database.
 | `0003_invites.sql` | `invites`: invitations to a space by username |
 | `0004_marks.sql` | `marks` (your status, grade and notes on a shared item) and `space_prefs` (your colour, target and term for a space) |
 | `0005_plans.sql` | `plans` (Term Pro: App Store, web or given) and `billing_events` (webhook ids already applied); `admin_log` learns `comp`/`uncomp` |
+| `0006_apple.sql` | `apple_accounts`: Apple IDs linked to Term accounts (Sign in with Apple) |
 
 To change the database:
 
-1. Add a new file with the next number, `0006_something.sql`. Never edit a file that
+1. Add a new file with the next number, `0007_something.sql`. Never edit a file that
    has already run.
 2. Apply it locally with `npm run db:local`, then test.
 3. Apply it to live with `npm run db:remote` **before** pushing the code that needs
@@ -336,9 +337,9 @@ tables. This happened on 2026-09-21, when every live sign-in failed. Run
 `npx wrangler d1 migrations list DB --remote`; if anything is listed, run
 `npm run db:remote`, then `npm run db:check -- --remote`.
 
-## Term Pro and the apps
+## Term Pro, Sign in with Apple and the apps
 
-Paid plans and the iPhone/Mac app are described in [MONETIZATION.md](MONETIZATION.md) and
+Paid plans, Sign in with Apple and the iPhone/Mac app are described in [MONETIZATION.md](MONETIZATION.md) and
 [IOS.md](IOS.md). On the Worker side they use these settings:
 
 | Setting | Where | What it does |
@@ -346,6 +347,9 @@ Paid plans and the iPhone/Mac app are described in [MONETIZATION.md](MONETIZATIO
 | `PAYWALL` | `vars` in `wrangler.jsonc` | `"on"` limits the free plan (3 AI reads a day, two themes). `"off"` (the default) gives everyone everything. |
 | `BILLING_SANDBOX` | `vars` | `"on"` lets TestFlight's sandbox purchases count. Turn it off for the public launch. |
 | `MIN_APP_VERSION` | `vars` | App builds older than this get `426 update_required`. Empty asks none. |
+| `APPLE_CLIENT_IDS`, `APPLE_TEAM_ID`, `APPLE_KEY_ID` | `vars` | Sign in with Apple: the app's bundle id and the website's Services ID, comma-separated (empty turns it off), and the team and key ids. See IOS.md. |
+| `APPLE_PRIVATE_KEY` | `npx wrangler secret put APPLE_PRIVATE_KEY` | The `.p8` key, used to revoke Apple's grant when an account is deleted. Without it, sign-in still works but nothing is revoked. |
+| `SIGNUPS` | `vars` | `"open"` lets a new Apple ID make an account; `"closed"` (the default) keeps Term invite-only. |
 | `REVENUECAT_WEBHOOK_SECRET` | `npx wrangler secret put REVENUECAT_WEBHOOK_SECRET` | The value RevenueCat sends as `Authorization: Bearer …` on its webhook to `/api/billing/revenuecat`. Without it the webhook answers `503`. |
 
 Give someone Pro for free from the Admin page (Accounts → Give Pro). Before turning

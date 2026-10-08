@@ -1,0 +1,11 @@
+{
+  "name": "term-widgets",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Term's bridge from the app to its home-screen widgets: writes what they show to the shared App Group and asks iOS to redraw them (docs/IOS.md).",
+  "license": "MIT",
+  "capacitor": {
+    "ios": { "src": "ios" }
+  },
+  "files": ["Package.swift", "ios/Sources"]
+}

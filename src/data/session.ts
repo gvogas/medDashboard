@@ -25,6 +25,10 @@ import { openJoin, watchInvites } from "./classes"
 import { rescheduleSoon, stopReminders } from "./reminders"
 import { appleCredential } from "./apple"
 
+/* The app's widgets (src/data/widgets.ts): loaded only in the app build. */
+const updateWidgetsSoon = () => { if (NATIVE) void import("./widgets").then((m) => m.updateWidgetsSoon()).catch(() => {}) }
+const clearWidgets = async () => { if (NATIVE) await import("./widgets").then((m) => m.clearWidgets()).catch(() => {}) }
+
 function rememberedSession(): ServerProfile | null {
     try { return JSON.parse(localStorage.getItem("rounds.session") || "null") } catch { return null }
 }
@@ -56,6 +60,7 @@ async function start(profile: ServerProfile) {
     sync.syncNow()
     spotify.start()
     rescheduleSoon()                             /* the app's reminders, from what is here now */
+    updateWidgetsSoon()                          /* and its widgets */
     preloadIdle()                                /* the other pages and the sheets */
     const back = spotifyReturn()
     if (back) { ui.spotifyNote = back; openSettings("spotifyGrp") }
@@ -90,7 +95,7 @@ export function onStoreEvent(evt: StoreEvent) {
     if (evt.type === "save-error") toast("The change could not be saved on this device. " + evt.message, { error: true, ms: 10000 })
     if (evt.type === "signed-out") { sync.stop(); spotify.stop(); web.stop(); resetRequests(); forgetReads(); location.reload() }
     if (evt.type === "remote" && data.profile) refreshAfterSync()
-    if ((evt.type === "change" || evt.type === "synced" || evt.type === "remote") && data.profile) rescheduleSoon()
+    if ((evt.type === "change" || evt.type === "synced" || evt.type === "remote") && data.profile) { rescheduleSoon(); updateWidgetsSoon() }
     if ((evt.type === "synced" || evt.type === "remote") && data.profile) celebrateAchievements({ quiet: true })
 }
 
@@ -129,6 +134,7 @@ export async function signOut({ everywhere = false, force = false }: { everywher
     }
     await sync.drain()
     await stopReminders().catch(() => {})
+    await clearWidgets()
     run.reset()
     const id = data.profile?.id
     spotify.stop()
@@ -191,6 +197,7 @@ function deleteProblem(err: unknown): string {
 async function afterDelete() {
     sync.stop(); spotify.stop(); web.stop(); resetRequests(); run.reset(); closeSheet(); forgetReads()
     await stopReminders().catch(() => {})
+    await clearWidgets()
     const id = data.profile?.id
     try { if (id) await store.wipe(id); else await store.close() } catch {}
     location.reload()

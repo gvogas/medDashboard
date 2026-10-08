@@ -447,8 +447,11 @@ as `Authorization: Bearer <token>` instead (see App clients). Rows are camelCase
 | `DELETE /api/session` | → clears the cookie. |
 | `POST /api/session/revoke-all` | → `204`, clears the cookie and invalidates every other session of this user. |
 | `GET /api/me` | → `{profile}`, with `announcement`, `maintenance` (see Maintenance mode) and `plan` (see Term Pro); for an app in its token's last week, a fresh `token` |
-| `DELETE /api/me` | `{confirm: <username>, password}` → `204`: deletes the account and everything it owns (as the Admin page's delete). `403 bad_password`, `409 owns_space` / `last_admin`; counted like a sign-in. |
+| `DELETE /api/me` | `{confirm: <username>, password}` (or, with no password, `{confirm, idToken, nonce}` from a fresh Sign in with Apple) → `204`: deletes the account and everything it owns (as the Admin page's delete). `403 bad_password`, `409 owns_space` / `last_admin`; counted like a sign-in. |
 | `GET /api/plan` | → `{tier, source, expiresAt, renews, paywall}`, as in `/api/me`. |
+| `GET /api/login/apple/nonce` | no session: `{nonce, signups}`, a nonce signed by the Worker for one Sign in with Apple (10 minutes). `503 apple_not_configured` without `APPLE_CLIENT_IDS`. |
+| `POST /api/login/apple` | `{idToken, nonce, authorizationCode?, givenName?, familyName?, client?, link?}`: signs in the account linked to that Apple ID (cookie, or `token` for `client: 'app'`); `link: true` with a session links it to me (`409 apple_linked` if either side is taken); else `403 no_account`, or a new account while `SIGNUPS` is open. `401 bad_apple_token` for a bad signature, audience, expiry or nonce. |
+| `GET /api/apple` | → `{available, linked, email, password}`: whether Sign in with Apple is set up, mine, and whether my account has a password. |
 | `POST /api/billing/revenuecat` | RevenueCat's webhook, `Authorization: Bearer <REVENUECAT_WEBHOOK_SECRET>`. See Term Pro. |
 | `PUT /api/me` | `{coat, theme, bg, termStart, displayName, types, studyFlow, studyPrefs, schoolCalendar, hiddenSources}` (`bg` optional, default `med`; `types`, `studyFlow`, `studyPrefs`, `schoolCalendar` and `hiddenSources` optional, kept when left out; `schoolCalendar: {}` removes it) → `{profile}` |
 | `POST /api/outline` · `POST /api/school-calendar` · `POST /api/ai/schedule` | the file (or a PDF's text) as the body, `?name=&today=` (and `terms`, `codes`) → what Workers AI read: an outline, a school calendar `{name, terms, days, truncated}`, or a timetable. Nothing is saved. The three share ten reads a day per person, three on the free plan while the paywall is on (`429 outline_limit`); a failed read is `503 outline_unavailable`. |
@@ -520,6 +523,15 @@ events count only with `BILLING_SANDBOX=on`. The nightly cron drops event ids af
 
 With `PAYWALL` off everyone gets Pro's features. With it on, the Worker enforces the
 AI reads (3 a day free, 10 with Pro); the app checks the themes.
+
+### Sign in with Apple
+
+`apple_accounts` links an Apple ID (`sub`, Apple's stable id for the person) to one Term
+account (`user_id`, unique, cascade on delete), with Apple's `email` (often a private
+relay), the `client_id` the grant was for (the app's bundle id or the website's Services
+ID) and, sealed, the `refresh_token` from the sign-in's authorization code. Deleting the
+account revokes that grant with Apple first (`worker/apple.js`, `revokeApple`). An account
+made by Sign in with Apple has `password_hash = 'apple'`, which no password matches.
 
 ### App clients
 
