@@ -197,8 +197,21 @@ async function player(request, url) {
   return new Response(null, { status: 204 });
 }
 
+// Apple, for Sign in with Apple (worker/apple.js): the public key the tests sign identity
+// tokens with (vitest.config.js makes a fresh pair per run), and the token and revoke endpoints.
+let appleKeys = { keys: [] };
+export function setAppleKeys(jwks) { appleKeys = jwks; }
+
+function apple(request, url) {
+  if (url.pathname === '/auth/keys') return json(appleKeys);
+  if (url.pathname === '/auth/token' && request.method === 'POST') return json({ access_token: 'a', token_type: 'Bearer', expires_in: 3600, refresh_token: 'apple-refresh', id_token: 'x' });
+  if (url.pathname === '/auth/revoke' && request.method === 'POST') return new Response(null, { status: 200 });
+  return json({ error: 'invalid_request' }, 400);
+}
+
 export async function spotifyStub(request) {
   const url = new URL(request.url);
+  if (url.host === 'appleid.apple.com') return apple(request, url);
   if (url.host === 'accounts.spotify.com' && url.pathname === '/api/token' && request.method === 'POST') return token(request);
   if (url.host === 'api.spotify.com') return player(request, url);
   return new Response('outbound fetch blocked in tests: ' + request.url, { status: 502 });

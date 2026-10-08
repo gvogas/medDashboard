@@ -10,6 +10,7 @@ import { requireUser } from './auth.js';
 import { hashPassword, verifyPassword, normalizeUsername } from './password.js';
 import { claimAttempt, recordSuccess } from './throttle.js';
 import { setComp } from './plans.js';
+import { appleUserOf, revokeApple } from './apple.js';
 import { errorGroups, recentErrors } from './errors.js';
 import { cachedTrafficReport, configured as analyticsConfigured } from './analytics.js';
 import { configured as spotifyConfigured } from './spotify.js';
@@ -17,7 +18,7 @@ import { ACCOUNT_TABLES } from './accounts.js';
 import { readMaintenance, validateMaintenance } from './maintenance.js';
 
 /* The newest file in migrations/; a test keeps it in step. */
-export const LATEST_MIGRATION = '0005_plans.sql';
+export const LATEST_MIGRATION = '0006_apple.sql';
 const AUDIT_KEEP_MS = 90 * 24 * 60 * 60 * 1000;
 const DAY_MS = 24 * 60 * 60 * 1000;
 export const MIN_PASSWORD = 8;
@@ -60,8 +61,8 @@ const throttleRows = (db, username) =>
  * Delete an account and everything it owns, with `extra` statements in the same batch.
  * Refused (409) for the last admin, and for someone who still owns a shared space.
  */
-async function removeAccount(db, user, extra = []) {
-  const id = user.id;
+async function removeAccount(env, user, extra = []) {
+  const db = env.DB, id = user.id;
   if (user.is_admin === 1) {
     const { n } = await db.prepare('SELECT count(*) AS n FROM users WHERE is_admin = 1').first();
     if (n <= 1) throw new HttpError(409, { error: 'last_admin' });
@@ -70,6 +71,8 @@ async function removeAccount(db, user, extra = []) {
   const owns = await db.prepare(`SELECT 1 AS x FROM members AS m JOIN spaces AS s ON s.id = m.space_id
     WHERE m.user_id = ? AND m.role = 'owner' AND m.deleted_at IS NULL AND s.deleted_at IS NULL LIMIT 1`).bind(id).first();
   if (owns) throw new HttpError(409, { error: 'owns_space' });
+  /* Apple asks for its grant to be revoked with the account (worker/apple.js) */
+  await revokeApple(env, id);
   await db.batch([
     ...ACCOUNT_TABLES.map(([table, owner]) => db.prepare(`DELETE FROM ${table} WHERE ${owner}`).bind(id)),
     db.prepare('DELETE FROM users WHERE id = ?').bind(id),
@@ -80,8 +83,9 @@ async function removeAccount(db, user, extra = []) {
 }
 
 /**
- * DELETE /api/me: a person deletes their own account, as the App Store requires. They give
- * their password again (counted like a sign-in, worker/throttle.js) and type their username.
+ * DELETE /api/me: a person deletes their own account, as the App Store requires. They type
+ * their username and give their password again (counted like a sign-in, worker/throttle.js),
+ * or, for an account with no password, sign in with Apple again (idToken and nonce).
  * This does not cancel an App Store subscription; only Apple's settings can.
  */
 export async function deleteOwnAccount(env, userId, body) {
@@ -89,12 +93,16 @@ export async function deleteOwnAccount(env, userId, body) {
   const user = await db.prepare('SELECT id, username, password_hash, is_admin FROM users WHERE id = ?').bind(userId).first();
   if (!user) throw new HttpError(401, { error: 'unauthenticated' });
   if (body.confirm !== user.username) throw new HttpError(400, { error: 'invalid', field: 'confirm' });
-  if (typeof body.password !== 'string') throw new HttpError(400, { error: 'invalid', field: 'password' });
-  const wait = await claimAttempt(db, user.username);
-  if (wait) throw new HttpError(429, { error: 'too_many_attempts', retryAfter: wait }, { 'retry-after': String(wait) });
-  if (!(await verifyPassword(body.password, user.password_hash))) throw new HttpError(403, { error: 'bad_password' });
-  await recordSuccess(db, user.username);
-  await removeAccount(db, user, [
+  if (typeof body.password === 'string') {
+    const wait = await claimAttempt(db, user.username);
+    if (wait) throw new HttpError(429, { error: 'too_many_attempts', retryAfter: wait }, { 'retry-after': String(wait) });
+    if (!(await verifyPassword(body.password, user.password_hash))) throw new HttpError(403, { error: 'bad_password' });
+    await recordSuccess(db, user.username);
+  } else if (typeof body.idToken === 'string') {
+    /* an account made with Sign in with Apple has no password: a fresh Apple sign-in confirms */
+    if ((await appleUserOf(env, body)) !== userId) throw new HttpError(403, { error: 'bad_password' });
+  } else throw new HttpError(400, { error: 'invalid', field: 'password' });
+  await removeAccount(env, user, [
     db.prepare("INSERT INTO admin_log (at, admin, action, target, detail) VALUES (?, ?, 'delete', ?, 'by themselves')").bind(Date.now(), user.username, user.username),
   ]);
 }
@@ -250,7 +258,7 @@ export const adminRoutes = [
     const user = await target(env.DB, id);
     if (id === admin.id) throw new HttpError(400, { error: 'self' });
     if (confirm !== user.username) throw new HttpError(400, { error: 'invalid', field: 'confirm' });
-    await removeAccount(env.DB, user, [audit(env.DB, admin, 'delete', user.username)]);
+    await removeAccount(env, user, [audit(env.DB, admin, 'delete', user.username)]);
     return done();
   }],
 

@@ -3,7 +3,16 @@ import { availableParallelism } from 'node:os';
 import { defineConfig } from 'vitest/config';
 import react from '@vitejs/plugin-react';
 import { cloudflareTest, readD1Migrations } from '@cloudflare/vitest-pool-workers';
-import { spotifyStub } from './test/spotify-stub.js';
+import { generateKeyPairSync } from 'node:crypto';
+import { spotifyStub, setAppleKeys } from './test/spotify-stub.js';
+
+// Stand-ins for Apple's keys, made fresh each run so no private key lives in the repo: the
+// RSA pair Apple signs identity tokens with (the stub serves the public half), and the .p8
+// key the Worker signs its client secret with.
+const appleRsa = generateKeyPairSync('rsa', { modulusLength: 2048 });
+const applePublic = { ...appleRsa.publicKey.export({ format: 'jwk' }), kid: 'test-kid', alg: 'RS256', use: 'sig' };
+setAppleKeys({ keys: [applePublic] });
+const appleP8 = generateKeyPairSync('ec', { namedCurve: 'P-256' }).privateKey.export({ format: 'pem', type: 'pkcs8' });
 
 export default defineConfig(async () => {
   const migrations = await readD1Migrations(path.join(import.meta.dirname, 'migrations'));
@@ -33,6 +42,11 @@ export default defineConfig(async () => {
                   SPOTIFY_CLIENT_ID: 'test-client-id',
                   SPOTIFY_CLIENT_SECRET: 'test-client-secret',
                   REVENUECAT_WEBHOOK_SECRET: 'test-revenuecat-secret',
+                  APPLE_CLIENT_IDS: 'net.vogas.term,net.vogas.term.web',
+                  APPLE_TEAM_ID: 'TEAM123456',
+                  APPLE_KEY_ID: 'KEY1234567',
+                  APPLE_PRIVATE_KEY: appleP8,
+                  APPLE_TEST_SIGNING_KEY: JSON.stringify({ ...appleRsa.privateKey.export({ format: 'jwk' }), kid: 'test-kid' }),
                 },
                 // The only outbound calls are to Spotify, answered by the fake in
                 // test/spotify-stub.js; anything else gets a 502, so tests never touch the network.

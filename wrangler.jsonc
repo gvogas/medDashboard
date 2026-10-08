@@ -41,7 +41,15 @@
     "CF_ACCOUNT_ID": "2c6057041650be9d99932b4013571adb",
     "PAYWALL": "off",
     "BILLING_SANDBOX": "off",
-    "MIN_APP_VERSION": ""
+    "MIN_APP_VERSION": "",
+    // Sign in with Apple (worker/apple.js): our client ids, the app's bundle id and the
+    // website's Services ID, comma-separated; empty turns it off. APPLE_TEAM_ID and
+    // APPLE_KEY_ID are public; APPLE_PRIVATE_KEY (the .p8) is a secret. SIGNUPS "open" lets
+    // a new Apple ID make an account; "closed" keeps Term invite-only.
+    "APPLE_CLIENT_IDS": "",
+    "APPLE_TEAM_ID": "",
+    "APPLE_KEY_ID": "",
+    "SIGNUPS": "closed"
   },
 
   // Workers AI reads uploaded course outlines (free daily allowance; see worker/outline.js).

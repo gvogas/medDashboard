@@ -21,12 +21,13 @@ export const TABLES = {
   changes: ['seq', 'scope', 'kind', 'row_id', 'payload', 'deleted_at'],
   admin_log: ['id', 'at', 'admin', 'action', 'target', 'detail'],
   plans: ['user_id', 'tier', 'source', 'expires_at', 'product', 'renews', 'event_at', 'updated_at'],
+  apple_accounts: ['sub', 'user_id', 'email', 'client_id', 'refresh_token', 'created_at'],
 };
 
 /* Tables added after rounds-v7's first schema (0002_spaces.sql, 0003_invites.sql,
-   0004_marks.sql, 0005_plans.sql): a database made before them has none of their rows. */
-const ADDED_TABLES = new Set(['spaces', 'members', 'invites', 'marks', 'space_prefs', 'plans']);
-const ORDER_BY = { users: 'id', spaces: 'id', members: 'space_id, user_id', invites: 'space_id, user_id', courses: 'scope, id', items: 'scope, id', changes: 'seq', spotify_tokens: 'user_id', admin_log: 'id', plans: 'user_id' };
+   0004_marks.sql, 0005_plans.sql, 0006_apple.sql): a database made before them has none of their rows. */
+const ADDED_TABLES = new Set(['spaces', 'members', 'invites', 'marks', 'space_prefs', 'plans', 'apple_accounts']);
+const ORDER_BY = { users: 'id', spaces: 'id', members: 'space_id, user_id', invites: 'space_id, user_id', courses: 'scope, id', items: 'scope, id', changes: 'seq', spotify_tokens: 'user_id', admin_log: 'id', plans: 'user_id', apple_accounts: 'sub' };
 
 /* Reading rounds-v6 or older, whose courses, items and change feed name a user: the owner
    becomes the scope of that person's own rows, a course's or item's change names the

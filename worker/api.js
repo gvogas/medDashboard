@@ -4,6 +4,7 @@ import { verifyPassword, normalizeUsername } from './password.js';
 import { claimAttempt, recordSuccess } from './throttle.js';
 import { limitLogin, limitOutline, readsLeft, OUTLINE_DAILY_LIMIT, FREE_AI_READS } from './limits.js';
 import { planOf, hasPro, planRoutes } from './plans.js';
+import { appleRoutes } from './apple.js';
 import { readOutline, cleanCode, MAX_BYTES } from './outline.js';
 import { readSchool } from './school.js';
 import { readSchedule } from './schedule.js';
@@ -464,6 +465,7 @@ const routes = [
   ...classRoutes,
   ...layerRoutes,
   ...planRoutes,
+  ...appleRoutes,
   ...adminRoutes,
 ];
 
