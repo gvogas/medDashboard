@@ -6,6 +6,7 @@ import { createUser, signIn, PASSWORD } from './helpers.js';
 const BASE = 'http://localhost';
 const DAY = 24 * 60 * 60 * 1000;
 const ON = { ...env, PAYWALL: 'on' };
+const APP = { app: true };
 
 let n = 0;
 const event = (userId, extra = {}) => ({
@@ -22,18 +23,26 @@ describe('plans', () => {
     const plan = await planOf(env, id);
     expect(plan).toMatchObject({ tier: 'free', source: null, paywall: false });
     expect(hasPro(plan)).toBe(true);
-    expect(hasPro(await planOf(ON, id))).toBe(false);
+    expect(hasPro(await planOf(ON, id, APP))).toBe(false);
+  });
+
+  it('the paywall applies only in the app: the website stays open even with it on', async () => {
+    const id = await createUser('webonly');
+    const web = await planOf(ON, id);
+    expect(web).toMatchObject({ tier: 'free', paywall: false });
+    expect(hasPro(web)).toBe(true);
+    expect(hasPro(await planOf(ON, id, APP))).toBe(false);
   });
 
   it('a comp is Pro until it ends, and can be taken back', async () => {
     const id = await createUser('comped');
     await setComp(env.DB, id, true, 30);
-    expect(await planOf(ON, id)).toMatchObject({ tier: 'pro', source: 'comp' });
-    expect((await planOf(ON, id, Date.now() + 31 * DAY)).tier).toBe('free');
+    expect(await planOf(ON, id, APP)).toMatchObject({ tier: 'pro', source: 'comp' });
+    expect((await planOf(ON, id, { app: true, now: Date.now() + 31 * DAY })).tier).toBe('free');
     await setComp(env.DB, id, true, null);
-    expect(await planOf(ON, id, Date.now() + 9999 * DAY)).toMatchObject({ tier: 'pro', expiresAt: null });
+    expect(await planOf(ON, id, { app: true, now: Date.now() + 9999 * DAY })).toMatchObject({ tier: 'pro', expiresAt: null });
     await setComp(env.DB, id, false);
-    expect((await planOf(ON, id)).tier).toBe('free');
+    expect((await planOf(ON, id, APP)).tier).toBe('free');
   });
 
   it('/api/me and /api/plan say the plan', async () => {
@@ -53,17 +62,17 @@ describe('RevenueCat webhook', () => {
     const id = await createUser('buyer');
     const first = event(id);
     expect(await (await hook({ event: first })).json()).toEqual({ ok: true, applied: true });
-    expect(await planOf(ON, id)).toMatchObject({ tier: 'pro', source: 'app_store', renews: true });
+    expect(await planOf(ON, id, APP)).toMatchObject({ tier: 'pro', source: 'app_store', renews: true });
     expect(await (await hook({ event: first })).json()).toEqual({ ok: true, applied: false });
     // cancelled: still Pro to the end of the period, no longer renewing
     await hook({ event: event(id, { type: 'CANCELLATION', event_timestamp_ms: Date.now() + 1000 }) });
-    expect(await planOf(ON, id)).toMatchObject({ tier: 'pro', renews: false });
+    expect(await planOf(ON, id, APP)).toMatchObject({ tier: 'pro', renews: false });
     // an older renewal arriving now changes nothing
     expect(await (await hook({ event: event(id, { type: 'RENEWAL', event_timestamp_ms: Date.now() - DAY }) })).json()).toMatchObject({ applied: false });
-    expect((await planOf(ON, id)).renews).toBe(false);
+    expect((await planOf(ON, id, APP)).renews).toBe(false);
     // expired
     await hook({ event: event(id, { type: 'EXPIRATION', event_timestamp_ms: Date.now() + 2000, expiration_at_ms: Date.now() - 1 }) });
-    expect((await planOf(ON, id)).tier).toBe('free');
+    expect((await planOf(ON, id, APP)).tier).toBe('free');
   });
 
   it('ignores the sandbox, other entitlements, unknown users and test events', async () => {
@@ -72,7 +81,7 @@ describe('RevenueCat webhook', () => {
       const res = await hook({ event: event(id, extra) });
       expect(res.status).toBe(200);
     }
-    expect((await planOf(ON, id)).tier).toBe('free');
+    expect((await planOf(ON, id, APP)).tier).toBe('free');
     expect(await env.DB.prepare("SELECT 1 FROM plans WHERE user_id = 'u-nobody'").first()).toBeNull();
   });
 
@@ -80,7 +89,7 @@ describe('RevenueCat webhook', () => {
     const id = await createUser('compkeep');
     await setComp(env.DB, id, true, null);
     await hook({ event: event(id, { type: 'EXPIRATION', expiration_at_ms: Date.now() - 1 }) });
-    expect(await planOf(ON, id)).toMatchObject({ tier: 'pro', source: 'comp' });
+    expect(await planOf(ON, id, APP)).toMatchObject({ tier: 'pro', source: 'comp' });
   });
 
   it('reads the parts of an event it needs', () => {
@@ -106,7 +115,7 @@ describe('admin comp', () => {
     const { accounts } = await (await admin('/api/admin/accounts')).json();
     expect(accounts.find((a) => a.id === id).plan).toMatchObject({ source: 'comp' });
     expect((await admin(`/api/admin/accounts/${id}/plan`, { method: 'PUT', body: { pro: false } })).status).toBe(204);
-    expect((await planOf(ON, id)).tier).toBe('free');
+    expect((await planOf(ON, id, APP)).tier).toBe('free');
   });
 });
 

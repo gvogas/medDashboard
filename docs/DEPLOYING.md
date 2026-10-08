@@ -344,7 +344,7 @@ Paid plans, Sign in with Apple and the iPhone/Mac app are described in [MONETIZA
 
 | Setting | Where | What it does |
 | --- | --- | --- |
-| `PAYWALL` | `vars` in `wrangler.jsonc` | `"on"` limits the free plan (3 AI reads a day, two themes). `"off"` (the default) gives everyone everything. |
+| `PAYWALL` | `vars` in `wrangler.jsonc` | `"on"` limits the free plan in the iPhone/iPad/Mac app (3 AI reads a day, two themes, no widgets). The website is never limited. `"off"` (the default) gives everyone everything. |
 | `BILLING_SANDBOX` | `vars` | `"on"` lets TestFlight's sandbox purchases count. Turn it off for the public launch. |
 | `MIN_APP_VERSION` | `vars` | App builds older than this get `426 update_required`. Empty asks none. |
 | `APPLE_CLIENT_IDS`, `APPLE_TEAM_ID`, `APPLE_KEY_ID` | `vars` | Sign in with Apple: the app's bundle id and the website's Services ID, comma-separated (empty turns it off), and the team and key ids. See IOS.md. |

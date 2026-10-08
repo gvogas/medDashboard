@@ -121,3 +121,16 @@ describe('app version', () => {
     expect((await appFetch('/api/me', token, { headers: { 'x-rounds-app': '1.0.0' } })).status).toBe(200);
   });
 });
+
+describe('the paywall follows the client', () => {
+  it('the app is told whether the paywall applies, and the website never is', async () => {
+    const { fromApp } = await import('../worker/app.js');
+    expect(fromApp(new Request(BASE, { headers: { origin: APP } }))).toBe(true);
+    expect(fromApp(new Request(BASE, { headers: { 'x-rounds-app': '1.0.0' } }))).toBe(true);
+    expect(fromApp(new Request(BASE, { headers: { origin: BASE } }))).toBe(false);
+    await createUser('planclient');
+    const { token } = await (await appLogin('planclient')).json();
+    // PAYWALL is off in the tests, so neither sees it; the unit tests in plans.test.js turn it on
+    expect((await (await appFetch('/api/plan', token)).json()).paywall).toBe(false);
+  });
+});

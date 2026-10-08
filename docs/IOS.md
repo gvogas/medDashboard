@@ -17,7 +17,7 @@ website.
 | Reminders | none | local notifications (Settings → Study → Reminders) |
 | Sign in with Apple | Apple's popup, once a Services ID is set | Apple's own sheet |
 | Widgets | none | next exam (home and Lock Screen), today (classes and what is due) |
-| Term Pro | shown, not sold | sold through the App Store (RevenueCat) |
+| Term Pro | everything open, no paywall | the paywall, and Pro sold through the App Store (RevenueCat) |
 
 `src/core/native.ts` holds the switch (`NATIVE`, set by `vite build --mode ios`), the API
 address and the token. Everything else is shared code.
@@ -126,7 +126,7 @@ both targets.
 5. For TestFlight, set `BILLING_SANDBOX` to `"on"` in `wrangler.jsonc` so sandbox purchases
    count. Turn it off before the public launch.
 6. Turn on `PAYWALL` only when the store is live, and give Pro to the existing accounts
-   first (Admin → Accounts → Give Pro).
+   first (Admin → Accounts → Give Pro). It limits the app only; the website stays open.
 
 The app never decides Pro itself: it buys through RevenueCat, then asks the Worker
 (`GET /api/plan`) until the webhook has landed (`src/data/plan.ts`).

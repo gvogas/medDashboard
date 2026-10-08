@@ -602,7 +602,7 @@ function ProGroup() {
     const state = plan.tier === "pro" ? "Pro" : plan.paywall ? "Free" : "Everything open"
     return (
         <Group title="Term Pro" state={state} id="proGrp">
-            <Hint>{plan.tier === "pro" ? "Thank you for supporting Term." : "More AI imports and every theme."}</Hint>
+            <Hint>{plan.tier === "pro" ? "Thank you for supporting Term." : NATIVE ? "More AI imports, every theme and the widgets." : "Everything is open on the website. Term Pro is for the iPhone, iPad and Mac app."}</Hint>
             <Row><Button variant="ghost" onClick={() => openPro("settings")}>{plan.tier === "pro" ? "Your plan" : "See Term Pro"}</Button></Row>
         </Group>
     )

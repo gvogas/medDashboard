@@ -521,8 +521,11 @@ and an event older than the row's `event_at` changes nothing. A comp (`PUT
 /api/admin/accounts/:id/plan {pro, days}`) is left alone by store events. Sandbox
 events count only with `BILLING_SANDBOX=on`. The nightly cron drops event ids after 30 days.
 
-With `PAYWALL` off everyone gets Pro's features. With it on, the Worker enforces the
-AI reads (3 a day free, 10 with Pro); the app checks the themes.
+With `PAYWALL` off everyone gets Pro's features. With it on, the paywall applies only to
+requests from the app (its origin or its `x-rounds-app` header; `fromApp` in
+`worker/app.js`): there the Worker enforces the AI reads (3 a day free, 10 with Pro) and
+says `paywall: true`, and the app checks the themes and widgets. The website always gets
+`paywall: false` and every feature.
 
 ### Sign in with Apple
 

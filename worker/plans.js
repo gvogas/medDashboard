@@ -2,7 +2,9 @@
 // takes the App Store's word for it from RevenueCat's webhook, and lets an admin give it.
 //
 // The paywall is off until PAYWALL is "on" (wrangler.jsonc vars): until then everyone gets
-// what Pro gets, so the accounts made before it keep everything they have today.
+// what Pro gets, so the accounts made before it keep everything they have today. Even on, it
+// applies only in the iPhone/iPad/Mac app (`app`, worker/app.js fromApp): the website stays
+// open to everyone.
 
 import { json, readJson, HttpError } from './http.js';
 import { sameString } from './auth.js';
@@ -14,8 +16,9 @@ const EVENT_KEEP_MS = 30 * 24 * 60 * 60 * 1000;
 
 export const paywallOn = (env) => env.PAYWALL === 'on';
 
-/** {tier, source, expiresAt, renews, paywall}: the person's real tier, and whether the paywall applies. */
-export async function planOf(env, userId, now = Date.now()) {
+/** {tier, source, expiresAt, renews, paywall}: the person's real tier, and whether the paywall
+    applies to this request: only to the app's, and only while PAYWALL is on. */
+export async function planOf(env, userId, { app = false, now = Date.now() } = {}) {
   const row = await env.DB.prepare('SELECT tier, source, expires_at, renews FROM plans WHERE user_id = ?').bind(userId).first();
   const live = row && (row.expires_at === null || row.expires_at > now);
   return {
@@ -23,11 +26,11 @@ export async function planOf(env, userId, now = Date.now()) {
     source: live ? row.source : null,
     expiresAt: live ? row.expires_at : null,
     renews: !!(live && row.renews),
-    paywall: paywallOn(env),
+    paywall: paywallOn(env) && app,
   };
 }
 
-/** Whether the person gets Pro's features: they have it, or the paywall is off. */
+/** Whether the person gets Pro's features: they have it, or the paywall does not apply. */
 export const hasPro = (plan) => !plan.paywall || plan.tier === PRO;
 
 // ── RevenueCat ──────────────────────────────────────────────────────────────

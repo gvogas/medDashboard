@@ -1,6 +1,6 @@
 // Term Pro (docs/MONETIZATION.md): what it adds, the store's prices and Buy in the app, and
 // Restore. Opened from Settings, or by reaching for something Pro has (the reason says what).
-// The browser has no store: it says where to get Pro. Apple asks for the price, the period,
+// The paywall is the app's only (worker/plans.js): on the website everything is open. Apple asks for the price, the period,
 // that it renews, and links to the terms and the privacy policy next to the button.
 
 import { useEffect, useState } from "react"
@@ -8,6 +8,7 @@ import { data } from "@/core/store"
 import { closeSheet } from "@/data/overlay"
 import { isPro, usePlan, waitForPro, type ProReason } from "@/data/plan"
 import { canBuy, offers, buy, restore, type Offer } from "@/data/purchases"
+import { NATIVE } from "@/core/native"
 import { dayMonth, iso } from "@/core/dates"
 import { Button, Note, SheetBody, SheetFoot, SheetHead } from "./fields"
 
@@ -68,7 +69,7 @@ export function ProSheet({ reason }: { reason: ProReason }) {
                         You have Term Pro{plan.source === "comp" ? ", as a gift" : ""}
                         {plan.expiresAt ? `${plan.renews ? ", renewing" : ", until"} ${dayMonth(iso(new Date(plan.expiresAt)))}` : ""}. Thank you.
                     </Note>
-                ) : !plan.paywall ? <Note>Everything is open while Term is in early access.</Note> : null}
+                ) : !plan.paywall ? <Note>{NATIVE ? "Everything is open while Term is in early access." : "Everything is open on the website. Term Pro is for the iPhone, iPad and Mac app."}</Note> : null}
                 <ul aria-label="What Term Pro adds" className="m-0 flex list-none flex-col gap-2 p-0">
                     {PRO_FEATURES.map(([title, text]) => (
                         <li key={title} className="rounded-lg bg-muted px-3 py-2 text-[12.5px]">

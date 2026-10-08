@@ -20,7 +20,7 @@ import { classRoutes } from './classes.js';
 import { layerRoutes } from './layer.js';
 import { logError, messageOf } from './errors.js';
 import { guardMaintenance, publicMaintenance } from './maintenance.js';
-import { assertAppVersion, corsHeaders, isAppOrigin, preflight, withoutCookie } from './app.js';
+import { assertAppVersion, corsHeaders, fromApp, isAppOrigin, preflight, withoutCookie } from './app.js';
 
 /** `cursors=u:<me>:812,c:<space id>:r640.700`: each entry split at its last ':', a sequence or a
     resync's tagged cursor (db.js parseCursor). At most 25; anything malformed is a 400. */
@@ -209,7 +209,7 @@ const aiRead = (read, what) => async ({ request, env, url }) => {
   try {
     return json(await read(env.AI, {
       bytes, type: request.headers.get('content-type') || '', name: (url.searchParams.get('name') || what).slice(0, 120),
-      today: date('today') || new Date().toISOString().slice(0, 10), termStart: date('termStart'), claim: async () => limitOutline(env, userId, await aiLimit(env, userId)),
+      today: date('today') || new Date().toISOString().slice(0, 10), termStart: date('termStart'), claim: async () => limitOutline(env, userId, await aiLimit(request, env, userId)),
       deadline: t0 + TIMEOUT_MS,
       ...knownParams(url.searchParams),
     }));
@@ -221,8 +221,8 @@ const aiRead = (read, what) => async ({ request, env, url }) => {
   }
 };
 
-/** The person's AI reads a day: more with Pro (worker/plans.js). */
-const aiLimit = async (env, userId) => (hasPro(await planOf(env, userId)) ? OUTLINE_DAILY_LIMIT : FREE_AI_READS);
+/** The person's AI reads a day: fewer on the app's free plan, all of them on the website (worker/plans.js). */
+const aiLimit = async (request, env, userId) => (hasPro(await planOf(env, userId, { app: fromApp(request) })) ? OUTLINE_DAILY_LIMIT : FREE_AI_READS);
 
 const routes = [
   ['POST', /^\/api\/outline$/, aiRead(readOutline, 'outline')],
@@ -230,7 +230,7 @@ const routes = [
   ['POST', /^\/api\/ai\/schedule$/, aiRead(readSchedule, 'schedule')],
   ['GET', /^\/api\/ai\/reads$/, async ({ request, env }) => {
     const userId = await requireUser(request, env);
-    return json(await readsLeft(env.DB, userId, Date.now(), await aiLimit(env, userId)));
+    return json(await readsLeft(env.DB, userId, Date.now(), await aiLimit(request, env, userId)));
   }],
   // Username + password. Accounts are created with `npm run user:add`. The apps send
   // `client: 'app'` and get the session as `token` in the answer instead of a cookie, and
@@ -276,7 +276,7 @@ const routes = [
 
   ['GET', /^\/api\/me$/, async ({ request, env, url }) => {
     const session = await requireSession(request, env);
-    const [profile, announcement, maintenance, plan] = await Promise.all([getProfile(env.DB, session.userId), readAnnouncement(env.DB), publicMaintenance(env.DB), planOf(env, session.userId)]);
+    const [profile, announcement, maintenance, plan] = await Promise.all([getProfile(env.DB, session.userId), readAnnouncement(env.DB), publicMaintenance(env.DB), planOf(env, session.userId, { app: fromApp(request) })]);
     if (!profile) throw new HttpError(401, { error: 'unauthenticated' });
     await markSeen(env.DB, session.userId);
     // Keep a regular user signed in: a session in its last week is re-issued, as a cookie
@@ -298,7 +298,7 @@ const routes = [
   }],
 
   // Term Pro: what /api/me says, alone, for the app to check after a purchase.
-  ['GET', /^\/api\/plan$/, async ({ request, env }) => json(await planOf(env, await requireUser(request, env)))],
+  ['GET', /^\/api\/plan$/, async ({ request, env }) => json(await planOf(env, await requireUser(request, env), { app: fromApp(request) }))],
 
   ['PUT', /^\/api\/me$/, async ({ request, env }) => {
     const userId = await requireUser(request, env);

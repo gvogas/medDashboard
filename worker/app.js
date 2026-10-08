@@ -45,6 +45,10 @@ export function withoutCookie(request) {
   return new Request(request, { headers });
 }
 
+/** Whether the request comes from the app: its origin, or its version header. A browser that
+    sends the header only puts itself under the app's paywall. */
+export const fromApp = (request) => isAppOrigin(request.headers.get('origin')) || request.headers.has('x-rounds-app');
+
 /** '1.4.2' → [1, 4, 2]; null when it is not a plain version. */
 export function parseVersion(raw) {
   const m = /^(\d{1,4})\.(\d{1,4})(?:\.(\d{1,4}))?$/.exec(raw || '');

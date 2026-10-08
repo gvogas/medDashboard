@@ -10,6 +10,9 @@ What is already built is marked **built**. Everything else is a proposal to deci
 
 - **Model:** free app with a subscription, **Term Pro**, sold in the iPhone/iPad/Mac app.
   No ads: ads in a study app cost trust and earn little.
+- **The paywall is the app's only.** The website keeps every feature for everyone, as a
+  free way in and a place to try Term before downloading it. Pro pays for what the app
+  adds and for the AI reads used there. **built**
 - **Price:** $3.99 a month or $24.99 a year, with a 7-day free trial on the yearly plan.
 - **Free keeps the core:** courses, the timetable, deadlines, the week and month, grades,
   the study timer, reminders. Pro sells what costs money to run (AI) and what people
@@ -32,7 +35,9 @@ and feels like theirs:
 
 ## Free and Pro
 
-| | Free | Pro |
+What follows is the app. On the website everything in the Pro column is open to everyone.
+
+| | Free (app) | Pro (app) |
 | --- | --- | --- |
 | Courses, timetable, items, week, month, all items | ✓ | ✓ |
 | Grades and "what if" | ✓ | ✓ |
@@ -192,6 +197,9 @@ clean.
 - **Spotify:** apps in Spotify's development mode are limited to a small list of
   users. Opening the music player to the public needs Spotify's approval, which is
   hard to get for small apps. Plan for Term to sell without it; keep it as a perk.
+- **The open website** is a way round the app's limits: someone could import on the web
+  instead. That is accepted on purpose; if AI costs climb, the first lever is a daily cap
+  on the website's AI reads too (one line in `worker/api.js`, `aiLimit`).
 - **AI costs** grow with users. The free limit, the Pro limit, and caching (already
   built for repeat reads) keep it bounded; watch the Admin page's usage meters.
 - **App Review:** the usual first-time rejections are a missing demo account, a paywall
