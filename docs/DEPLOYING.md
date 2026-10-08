@@ -142,10 +142,11 @@ runs once per database.
 | `0002_spaces.sql` | Shared spaces (classes and projects) and their `members` |
 | `0003_invites.sql` | `invites`: invitations to a space by username |
 | `0004_marks.sql` | `marks` (your status, grade and notes on a shared item) and `space_prefs` (your colour, target and term for a space) |
+| `0005_plans.sql` | `plans` (Term Pro: App Store, web or given) and `billing_events` (webhook ids already applied); `admin_log` learns `comp`/`uncomp` |
 
 To change the database:
 
-1. Add a new file with the next number, `0005_something.sql`. Never edit a file that
+1. Add a new file with the next number, `0006_something.sql`. Never edit a file that
    has already run.
 2. Apply it locally with `npm run db:local`, then test.
 3. Apply it to live with `npm run db:remote` **before** pushing the code that needs
@@ -334,6 +335,21 @@ code without applying migrations, so new code can reach a database that lacks it
 tables. This happened on 2026-09-21, when every live sign-in failed. Run
 `npx wrangler d1 migrations list DB --remote`; if anything is listed, run
 `npm run db:remote`, then `npm run db:check -- --remote`.
+
+## Term Pro and the apps
+
+Paid plans and the iPhone/Mac app are described in [MONETIZATION.md](MONETIZATION.md) and
+[IOS.md](IOS.md). On the Worker side they use these settings:
+
+| Setting | Where | What it does |
+| --- | --- | --- |
+| `PAYWALL` | `vars` in `wrangler.jsonc` | `"on"` limits the free plan (3 AI reads a day, two themes). `"off"` (the default) gives everyone everything. |
+| `BILLING_SANDBOX` | `vars` | `"on"` lets TestFlight's sandbox purchases count. Turn it off for the public launch. |
+| `MIN_APP_VERSION` | `vars` | App builds older than this get `426 update_required`. Empty asks none. |
+| `REVENUECAT_WEBHOOK_SECRET` | `npx wrangler secret put REVENUECAT_WEBHOOK_SECRET` | The value RevenueCat sends as `Authorization: Bearer …` on its webhook to `/api/billing/revenuecat`. Without it the webhook answers `503`. |
+
+Give someone Pro for free from the Admin page (Accounts → Give Pro). Before turning
+`PAYWALL` on, give it to everyone who was using Term before, so nobody loses anything.
 
 ## Command cheat sheet
 

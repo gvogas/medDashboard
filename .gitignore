@@ -34,3 +34,6 @@ dist/
 *CLAUDE*
 *Claude*
 .mcp.json
+
+# The iPhone/Mac app's web build (npm run build:ios); ios/.gitignore covers what Xcode makes
+dist-ios/

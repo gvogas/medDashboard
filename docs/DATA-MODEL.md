@@ -438,16 +438,20 @@ Foreign-key behavior follows [D1's enforced relationship rules](https://develope
 ## API
 
 All routes are under `/api`, speak JSON, and require the session cookie except
-`POST /api/login`. Rows are camelCase on the wire.
+`POST /api/login` and the RevenueCat webhook. The iPhone/Mac app sends the same session
+as `Authorization: Bearer <token>` instead (see App clients). Rows are camelCase on the wire.
 
 | Route | Body → Response |
 | --- | --- |
-| `POST /api/login` | `{username, password}` → `{profile}` and `Set-Cookie`. `401 bad_login` for a wrong password or an unknown user alike. |
+| `POST /api/login` | `{username, password}` → `{profile}` and `Set-Cookie`. `401 bad_login` for a wrong password or an unknown user alike. With `client: 'app'` (and the `device` mark it was given before) → `{profile, token, device?}` and no cookie. |
 | `DELETE /api/session` | → clears the cookie. |
 | `POST /api/session/revoke-all` | → `204`, clears the cookie and invalidates every other session of this user. |
-| `GET /api/me` | → `{profile}`, with `announcement` and `maintenance` (see Maintenance mode) |
+| `GET /api/me` | → `{profile}`, with `announcement`, `maintenance` (see Maintenance mode) and `plan` (see Term Pro); for an app in its token's last week, a fresh `token` |
+| `DELETE /api/me` | `{confirm: <username>, password}` → `204`: deletes the account and everything it owns (as the Admin page's delete). `403 bad_password`, `409 owns_space` / `last_admin`; counted like a sign-in. |
+| `GET /api/plan` | → `{tier, source, expiresAt, renews, paywall}`, as in `/api/me`. |
+| `POST /api/billing/revenuecat` | RevenueCat's webhook, `Authorization: Bearer <REVENUECAT_WEBHOOK_SECRET>`. See Term Pro. |
 | `PUT /api/me` | `{coat, theme, bg, termStart, displayName, types, studyFlow, studyPrefs, schoolCalendar, hiddenSources}` (`bg` optional, default `med`; `types`, `studyFlow`, `studyPrefs`, `schoolCalendar` and `hiddenSources` optional, kept when left out; `schoolCalendar: {}` removes it) → `{profile}` |
-| `POST /api/outline` · `POST /api/school-calendar` · `POST /api/ai/schedule` | the file (or a PDF's text) as the body, `?name=&today=` (and `terms`, `codes`) → what Workers AI read: an outline, a school calendar `{name, terms, days, truncated}`, or a timetable. Nothing is saved. The three share ten reads a day per person (`429 outline_limit`); a failed read is `503 outline_unavailable`. |
+| `POST /api/outline` · `POST /api/school-calendar` · `POST /api/ai/schedule` | the file (or a PDF's text) as the body, `?name=&today=` (and `terms`, `codes`) → what Workers AI read: an outline, a school calendar `{name, terms, days, truncated}`, or a timetable. Nothing is saved. The three share ten reads a day per person, three on the free plan while the paywall is on (`429 outline_limit`); a failed read is `503 outline_unavailable`. |
 | `GET /api/ai/reads` | → `{left, limit}`: the AI reads left today. |
 | `GET /api/sync?v=3&cursors=<scope>:<seq>,…&sv=<n>` | the current protocol: a cursor per scope, your own rows (including `marks` and `space_prefs`) and those of your live spaces. See Sync v3 below. |
 | `GET /api/sync?v=2&cursor=<seq>` | kept only for tabs on the old client: `{changes: [{kind, row}], cursor, more, reset}`, at most 100 changes of your own `courses`, `items`, `quotes`, `study_sessions`, `achievements` after `cursor`. |
@@ -473,7 +477,7 @@ All routes are under `/api`, speak JSON, and require the session cookie except
 | `GET\|PUT\|DELETE /api/spaces/:sid/{courses,items}/:id` | a shared row of a space you are in; see Sync v3 for how a `PUT` merges. |
 | `GET /api/leaderboard?since=<ms>` · `PUT /api/leaderboard` | → `{joined, week, all}`, each list `[{name, minutes, me}]`, empty until you join; `since` is your Monday 00:00. PUT `{joined: true\|false}` → `204`. See `worker/leaderboard.js`. |
 | `/api/spotify/…` | the Music player: `connect` and `callback` (OAuth), `status`, `token` (for the Web Playback SDK), `player` and its controls, `devices`, `transfer`, `shuffle`, `repeat`, `volume`, `queue`, `play`, `search`, `recent`, `me`, `playlists`, `albums/:id/tracks`, `artists/:id/albums`; `DELETE /api/spotify` disconnects. Compact answers, never raw Spotify JSON. See `worker/api.js` and `worker/spotify/`. |
-| `/api/admin/…` | admins only (`403 forbidden` otherwise): `accounts` (list, create, `:id/password`, `:id/revoke`, `:id/admin`, delete), `locks/:key` (clear a login lockout), `errors`, `audit`, `traffic`, `health`, `announcement`, `maintenance`. See `worker/admin.js`. |
+| `/api/admin/…` | admins only (`403 forbidden` otherwise): `accounts` (list, create, `:id/password`, `:id/revoke`, `:id/admin`, `:id/plan`, delete), `locks/:key` (clear a login lockout), `errors`, `audit`, `traffic`, `health`, `announcement`, `maintenance`. See `worker/admin.js`. |
 
 Errors are `{error, field?}`: `400` bad shape (with the field), `401` no session,
 `404` a row that isn't yours, `413` body over 1 MB.
@@ -499,6 +503,31 @@ bar. The Worker enforces what is a feature of its own: for non-admins, with
 `/api/spaces…`, `/api/invites…` and `/api/join` route. Personal
 rows, `/api/me` and `/api/sync` are never stopped. A shared edit refused this way
 stays pending on the device, with no try counted, and uploads once it is back.
+
+### Term Pro
+
+`plans` holds one row per person who has, or had, Pro: `tier` ('pro'), `source`
+(`app_store`, `web` or `comp`), `expires_at` (ms; NULL for no end), `product`, `renews`,
+`event_at` (the store event it was last written from) and `updated_at`. No row is the
+free plan. It is kept out of `users` so a renewal never bumps the profile's revision.
+Deleting the account deletes the row (foreign key cascade).
+
+RevenueCat's webhook writes it: the app logs in to RevenueCat with the Term user id, so
+the event's `app_user_id` is ours. An event id already in `billing_events` is skipped,
+and an event older than the row's `event_at` changes nothing. A comp (`PUT
+/api/admin/accounts/:id/plan {pro, days}`) is left alone by store events. Sandbox
+events count only with `BILLING_SANDBOX=on`. The nightly cron drops event ids after 30 days.
+
+With `PAYWALL` off everyone gets Pro's features. With it on, the Worker enforces the
+AI reads (3 a day free, 10 with Pro); the app checks the themes.
+
+### App clients
+
+The iPhone/Mac app (Capacitor, `docs/IOS.md`) runs from `capacitor://localhost`.
+`worker/app.js` lets that origin through the same-origin check and answers its CORS
+preflight, but strips any cookie from its requests: it authenticates only with the
+bearer token. It sends its version as `x-rounds-app`; below `MIN_APP_VERSION` the answer
+is `426 update_required`.
 
 ### Session
 

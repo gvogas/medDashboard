@@ -22,6 +22,7 @@ import { refreshAfterSync } from "./sync-status"
 import { ui } from "./ui"
 import { preloadIdle } from "@/lib/lazy"
 import { openJoin, watchInvites } from "./classes"
+import { rescheduleSoon, stopReminders } from "./reminders"
 
 function rememberedSession(): ServerProfile | null {
     try { return JSON.parse(localStorage.getItem("rounds.session") || "null") } catch { return null }
@@ -53,6 +54,7 @@ async function start(profile: ServerProfile) {
     sync.init()
     sync.syncNow()
     spotify.start()
+    rescheduleSoon()                             /* the app's reminders, from what is here now */
     preloadIdle()                                /* the other pages and the sheets */
     const back = spotifyReturn()
     if (back) { ui.spotifyNote = back; openSettings("spotifyGrp") }
@@ -87,6 +89,7 @@ export function onStoreEvent(evt: StoreEvent) {
     if (evt.type === "save-error") toast("The change could not be saved on this device. " + evt.message, { error: true, ms: 10000 })
     if (evt.type === "signed-out") { sync.stop(); spotify.stop(); web.stop(); resetRequests(); forgetReads(); location.reload() }
     if (evt.type === "remote" && data.profile) refreshAfterSync()
+    if ((evt.type === "change" || evt.type === "synced" || evt.type === "remote") && data.profile) rescheduleSoon()
     if ((evt.type === "synced" || evt.type === "remote") && data.profile) celebrateAchievements({ quiet: true })
 }
 
@@ -124,6 +127,7 @@ export async function signOut({ everywhere = false, force = false }: { everywher
         return
     }
     await sync.drain()
+    await stopReminders().catch(() => {})
     run.reset()
     const id = data.profile?.id
     spotify.stop()
@@ -150,6 +154,7 @@ export async function deleteAccount(confirm: string, password: string): Promise<
         return "The account could not be deleted (" + (err.body?.error || err.status) + ")."
     }
     sync.stop(); spotify.stop(); web.stop(); resetRequests(); run.reset(); closeSheet(); forgetReads()
+    await stopReminders().catch(() => {})
     const id = data.profile?.id
     try { if (id) await store.wipe(id); else await store.close() } catch {}
     location.reload()

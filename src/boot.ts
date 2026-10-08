@@ -18,6 +18,8 @@ import { boot as openSession, showSignIn, onStoreEvent, onStorage } from "@/data
 import { commitUndo, finishDelete } from "@/data/study-controller"
 import { onKeydown } from "@/data/keyboard"
 import { forgetReads } from "@/data/ai-cache"
+import { NATIVE } from "@/core/native"
+import { rescheduleSoon } from "@/data/reminders"
 // Listen to the store and sync from the start, before any component mounts.
 import "@/data/store"
 import "@/data/sync"
@@ -79,6 +81,15 @@ export function boot() {
     })
 
     watchSidebar()
+
+    /* ═════════ the app ═════════ */
+    /* iOS suspends the app in the background: coming back is the moment to pull, and to
+       bring the reminders up to date with it. */
+    if (NATIVE) {
+        void import("@capacitor/app").then(({ App }) => App.addListener("appStateChange", ({ isActive }) => {
+            if (isActive && data.profile) { void sync.syncNow(); rescheduleSoon() }
+        })).catch(() => {})
+    }
 
     document.addEventListener("keydown", onKeydown)
 

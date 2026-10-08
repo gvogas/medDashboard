@@ -20,6 +20,8 @@ import { savePrefs } from "@/data/study-controller"
 import { setBg, setTheme } from "@/data/theme"
 import { openPro, themeOpen, usePlan, usePro } from "@/data/plan"
 import { deleteAccount } from "@/data/session"
+import { remindersOn, setReminders } from "@/data/reminders"
+import { NATIVE } from "@/core/native"
 import { notify } from "@/bridge"
 import { useConflicts, useItems, useCourses, useProfile, useQuotes } from "@/data/store"
 import { useSyncStatus } from "@/data/sync"
@@ -271,9 +273,29 @@ function Quotes() {
 
 /* ── Study ── */
 
+/* The app's deadline and exam reminders (src/data/reminders.ts): this device only. */
+function Reminders() {
+    const [on, setOn] = useState(remindersOn)
+    const [denied, setDenied] = useState(false)
+    const toggle = async () => {
+        const want = !on
+        const now = await setReminders(want).catch(() => false)
+        setOn(now)
+        setDenied(want && !now)
+    }
+    return (
+        <Group title="Reminders" state={on ? "on" : "off"} id="remindGrp">
+            <Hint>Exams and quizzes two evenings before and that morning; anything due, the evening before and on the day. On this device only.</Hint>
+            {denied && <Hint error>Notifications are off for Term. Turn them on in the iPhone's Settings → Notifications → Term.</Hint>}
+            <Row><Chip on={on} onClick={() => void toggle()}>{on ? "On" : "Off"}</Chip></Row>
+        </Group>
+    )
+}
+
 function StudyTab({ profile }: { profile: Profile }) {
     return (
         <>
+            {NATIVE && <Reminders />}
             <Goal profile={profile} />
             <Streak profile={profile} />
             <Reviews profile={profile} />
