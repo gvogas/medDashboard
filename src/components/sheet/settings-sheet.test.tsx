@@ -71,6 +71,7 @@ afterEach(() => {
     Object.assign(fake.ui, { bg: "med", importNote: null, schoolAsk: false, signoutAsk: null, feed: null })
     fake.conflicts.length = 0
     fake.cal = null
+    delete fake.data.profile.plan
 })
 
 const settings = (tab: "you" | "study" | "connections" | "account", focus: string | null = null) => act(() => openSheet({ kind: "settings", tab, focus }))
@@ -133,6 +134,26 @@ describe("Settings", () => {
         expect(document.activeElement).toBe(chips[1])
         // a custom goal checks no chip: the first is still the one Tab stop
         expect(chips.map((c) => c.tabIndex)).toEqual([0, -1, -1, -1, -1, -1])
+    })
+
+    it("with the paywall on, a free account sees the Pro themes marked, and choosing one opens Term Pro", async () => {
+        fake.data.profile.plan = { tier: "free", source: null, expiresAt: null, renews: false, paywall: true }
+        settings("you")
+        expect(screen.getByRole("radio", { name: /^Medicine/ }).textContent).not.toContain("Pro")
+        expect(screen.getByRole("radio", { name: /^Law/ }).textContent).toContain("Pro")
+        fireEvent.click(screen.getByRole("radio", { name: /^Law/ }))
+        expect(legacy.setBg).not.toHaveBeenCalled()
+        expect(getSheet()).toEqual({ kind: "pro", reason: "themes" })
+        expect(await screen.findByRole("list", { name: "What Term Pro adds" })).toBeTruthy()
+        expect(screen.getByText("That theme comes with Term Pro.")).toBeTruthy()
+        expect(screen.getByText(/Get Term Pro in the Term app/)).toBeTruthy()
+    })
+
+    it("with the paywall off, every theme is open", () => {
+        fake.data.profile.plan = { tier: "free", source: null, expiresAt: null, renews: false, paywall: false }
+        settings("you")
+        fireEvent.click(screen.getByRole("radio", { name: /^Law/ }))
+        expect(legacy.setBg).toHaveBeenCalledWith("law")
     })
 
     it("a deep link to the theme focuses its group, and it belongs to the You tab", () => {
@@ -216,6 +237,19 @@ describe("Settings", () => {
         act(() => notify())
         expect(screen.getByRole("link", { name: "Connect" }).getAttribute("href")).toBe("/api/spotify/connect")
         fake.spotify.connected = true
+    })
+
+    it("shows the plan and asks for the username and password before deleting the account", () => {
+        settings("account")
+        expect(screen.getByText("Everything open")).toBeTruthy()
+        fireEvent.click(screen.getByRole("button", { name: "Delete my account…" }))
+        const go = screen.getByRole("button", { name: "Delete for good" }) as HTMLButtonElement
+        expect(go.disabled).toBe(true)
+        fireEvent.change(screen.getByRole("textbox", { name: "Type your username to confirm" }), { target: { value: "demo" } })
+        fireEvent.change(screen.getByLabelText("Your password"), { target: { value: "pw" } })
+        expect(go.disabled).toBe(false)
+        fireEvent.click(screen.getByRole("button", { name: "Keep my account" }))
+        expect(screen.queryByRole("button", { name: "Delete for good" })).toBeNull()
     })
 
     it("counts saved copies on the Account tab, restores or discards them, and asks before erasing on sign-out", () => {

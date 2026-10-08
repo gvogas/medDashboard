@@ -24,6 +24,7 @@
     "spotify:key": "node scripts/spotify-key.mjs"
   },
   "devDependencies": {
+    "@capacitor/cli": "^8.5.3",
     "@cloudflare/vite-plugin": "^1.61.0",
     "@cloudflare/vitest-pool-workers": "^0.22.0",
     "@tailwindcss/vite": "^4.3.3",
@@ -45,9 +46,14 @@
     "sharp": "^0.35.4"
   },
   "dependencies": {
+    "@capacitor/app": "^8.1.2",
+    "@capacitor/core": "^8.5.3",
+    "@capacitor/ios": "^8.5.3",
+    "@capacitor/local-notifications": "^8.3.1",
     "@fontsource-variable/source-serif-4": "^5.3.0",
     "@fontsource/ibm-plex-mono": "^5.3.0",
     "@fontsource/ibm-plex-sans": "^5.3.0",
+    "@revenuecat/purchases-capacitor": "^13.7.0",
     "clsx": "^2.1.1",
     "framer-motion": "^13.4.4",
     "react": "^19.3.0",

@@ -12,6 +12,7 @@ import { Art, chipButton, Count, Empty, Icon, Loading, More, Refresh, Sub } from
 import { AlbumRow, ArtistRow, COLUMNS, LikedTile, PlaylistRow, PlaylistTile, TrackRow } from "./rows"
 import { ForTheme } from "./for-theme"
 import { goBack } from "./use-music"
+import { SPOTIFY_CONNECT } from "@/core/native"
 
 interface ListProps { s: SpotifySnapshot; cooling: boolean }
 
@@ -70,7 +71,7 @@ export function RecentList({ s, cooling }: ListProps) {
             <Empty title="Reconnect to see what you played lately">
                 Term needs one more permission from Spotify for this.
                 <br />
-                <a href="/api/spotify/connect" className={cn(chipButton, "mt-2.5 border-primary bg-primary text-primary-foreground no-underline hover:text-primary-foreground")}>Reconnect Spotify</a>
+                <a href={SPOTIFY_CONNECT} className={cn(chipButton, "mt-2.5 border-primary bg-primary text-primary-foreground no-underline hover:text-primary-foreground")}>Reconnect Spotify</a>
             </Empty>
         )
     }

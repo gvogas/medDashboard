@@ -324,10 +324,10 @@ export function settleOperation(op: PendingOp, saved: Row | null | undefined): P
     }
     await a('pending').del(op.key);
     if (saved && op.key === 'profile') {
-      /* PUT /api/me answers the profile alone: the announcement and maintenance it held stay
+      /* PUT /api/me answers the profile alone: the announcement, maintenance and plan it held stay
          until the pull that follows brings them again */
       const local = (await a('meta').get('profile'))?.value as Profile | undefined;
-      await a('meta').put(wrap('profile', { ...saved, announcement: local?.announcement ?? null, maintenance: local?.maintenance ?? null }));
+      await a('meta').put(wrap('profile', { ...saved, announcement: local?.announcement ?? null, maintenance: local?.maintenance ?? null, plan: local?.plan ?? null }));
     } else if (saved) await a(rowStore(op.key)).put(wrap(op.key, saved));
     return true;
   }, 'synced');

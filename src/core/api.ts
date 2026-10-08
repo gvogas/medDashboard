@@ -1,8 +1,10 @@
-// The only file that knows the API's URLs. Same-origin, cookie session.
+// The only file that knows the API's URLs. Same-origin with a cookie session in the browser;
+// the iPhone and Mac apps send it to API_BASE with a token (src/core/native.ts).
 
 import type { Row } from './db.ts';
 import type { Cursor, Page, ServerProfile } from './store.ts';
-import type { Invite, JoinCode, Space, SpaceDetails, SpaceInvite, SpaceSummary } from './types.ts';
+import type { Invite, JoinCode, Plan, Space, SpaceDetails, SpaceInvite, SpaceSummary } from './types.ts';
+import { NATIVE, API_BASE, APP_VERSION, sessionToken, setSessionToken, deviceMark, setDeviceMark } from './native.ts';
 
 /** An error's body as the Worker sends it: its code, and for some the server's copy or a wait. */
 export interface ErrorBody { error?: string; retryAfter?: unknown; current?: Row | null; [field: string]: unknown }
@@ -110,13 +112,15 @@ async function send(method: string, path: string, body?: unknown, extraHeaders: 
   try {
     session.throwIfAborted();
     outer?.throwIfAborted();
-    const res = await fetch(path, {
+    const token = sessionToken();
+    const res = await fetch(API_BASE + path, {
       method,
-      credentials: 'same-origin',
+      credentials: NATIVE ? 'omit' : 'same-origin',
       cache: 'no-store',
       redirect: 'error',
       signal,
-      headers: { ...(body !== undefined ? { 'content-type': file ? body.type || 'application/octet-stream' : 'application/json' } : {}), ...(accountId && path !== '/api/login' ? { 'x-rounds-user': accountId } : {}), ...extraHeaders },
+      headers: { ...(body !== undefined ? { 'content-type': file ? body.type || 'application/octet-stream' : 'application/json' } : {}), ...(accountId && path !== '/api/login' ? { 'x-rounds-user': accountId } : {}),
+        ...(NATIVE ? { 'x-rounds-app': APP_VERSION, ...(token && path !== '/api/login' ? { authorization: `Bearer ${token}` } : {}) } : {}), ...extraHeaders },
       body: file ? body : body !== undefined ? JSON.stringify(body) : undefined,
     });
     signal.throwIfAborted();
@@ -125,6 +129,13 @@ async function send(method: string, path: string, body?: unknown, extraHeaders: 
     signal.throwIfAborted();
     if (!res.ok) throw new ApiError(res.status, data, Number(res.headers.get('retry-after')) || null);
     if (res.status !== 204 && (!data || typeof data !== 'object')) throw invalidResponse();
+    /* the app's session: given at sign-in, renewed by /api/me in its last week */
+    if (NATIVE && (path === '/api/login' || path === '/api/me') && typeof data.token === 'string') {
+      setSessionToken(data.token);
+      if (typeof data.device === 'string') setDeviceMark(data.device);
+      delete data.token;
+      delete data.device;
+    }
     return data;
   } catch (error) {
     signal.throwIfAborted();
@@ -136,6 +147,8 @@ async function send(method: string, path: string, body?: unknown, extraHeaders: 
   }
 }
 
+/* Signed out (or deleted): the app's token goes with the session. */
+const forgetToken = (r: null): null => { setSessionToken(null); return r; };
 const match = (revision: number | undefined = 0) => ({ 'if-match': `"${revision}"` });
 function invalidResponse() {
   const error = new ApiError(502, { error: 'invalid_response' });
@@ -215,8 +228,13 @@ type ReadQuery = { name: string; today: string; termStart?: string; terms?: stri
 export const api = {
   me: () => record<ServerProfile & Row>(request('GET', '/api/me'), accountId),
   saveMe: (profile: Record<string, unknown> & { id?: string; revision?: number }) => record<ServerProfile & Row>(request('PUT', '/api/me', profile, match(profile.revision)), accountId || profile.id, profile.revision),
-  login: (username: string, password: string) => record<ServerProfile & Row>(request('POST', '/api/login', { username, password })),
-  signOut: () => empty(request('DELETE', '/api/session')),
+  login: (username: string, password: string) => record<ServerProfile & Row>(request('POST', '/api/login',
+    NATIVE ? { username, password, client: 'app', ...(deviceMark() ? { device: deviceMark() } : {}) } : { username, password })),
+  signOut: () => empty(request('DELETE', '/api/session')).then(forgetToken),
+  /* delete my own account for good (the App Store requires it): my username typed out, and my password */
+  deleteMe: (confirm: string, password: string) => empty(request('DELETE', '/api/me', { confirm, password })).then(forgetToken),
+  /* Term Pro: the plan alone, to check right after a purchase */
+  plan: (): Promise<Plan> => request('GET', '/api/plan'),
   sync: changes,
   syncV3: changesV3,
   /* a class's or a project's course or item; `changed` is {field: value before} (spec §6 Push) */
@@ -250,7 +268,7 @@ export const api = {
   /* `changed` for a mark only: {field: value before}, merged field by field (spec §6 Push) */
   put: (kind: string, id: string, row: { revision?: number; [field: string]: unknown }, changed?: Record<string, unknown>) =>
     record(request('PUT', rowPath(kind, id), changed ? { ...row, changed } : row, match(row.revision)), id, row.revision),
-  revokeAll: () => empty(request('POST', '/api/session/revoke-all')),
+  revokeAll: () => empty(request('POST', '/api/session/revoke-all')).then(forgetToken),
   del: (kind: string, id: string, revision = 0) => empty(request('DELETE', rowPath(kind, id), undefined, match(revision))),
   calendarFeed: () => request('GET', '/api/calendar'),
   calendarRenew: () => request('POST', '/api/calendar'),
@@ -267,6 +285,7 @@ export const api = {
     create: (body: { username: string; displayName: string; password: string; admin: boolean }) => request('POST', '/api/admin/accounts', body),
     resetPassword: (id: string, password: string) => empty(request('POST', `/api/admin/accounts/${encodeURIComponent(id)}/password`, { password })),
     revoke: (id: string) => empty(request('POST', `/api/admin/accounts/${encodeURIComponent(id)}/revoke`)),
+    setPlan: (id: string, pro: boolean, days: number | null = null) => empty(request('PUT', `/api/admin/accounts/${encodeURIComponent(id)}/plan`, { pro, days })),
     setAdmin: (id: string, admin: boolean) => empty(request('PUT', `/api/admin/accounts/${encodeURIComponent(id)}/admin`, { admin })),
     remove: (id: string, confirm: string) => empty(request('DELETE', `/api/admin/accounts/${encodeURIComponent(id)}`, { confirm })),
     unlock: (key: string) => empty(request('DELETE', `/api/admin/locks/${encodeURIComponent(key)}`)),

@@ -12,6 +12,7 @@ import type { ImportPlan } from "./import-edit"
 import type { SchoolDraft } from "./school-edit"
 import type { SessionDraft } from "./session-edit"
 import type { AchievementDraft } from "./achievement-edit"
+import type { ProReason } from "./plan"
 
 /** The class sheet's tabs. */
 export type ClassTab = "details" | "members"
@@ -33,6 +34,7 @@ export type SheetState =
     | { kind: "join"; code: string; space: SpaceSummary | null }
     | { kind: "invites" }
     | { kind: "merge"; spaceId: string; courseId: string; fromCourse: boolean }
+    | { kind: "pro"; reason: ProReason }
     | null
 
 let sheet: SheetState = null

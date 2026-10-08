@@ -16,6 +16,8 @@ import { problem, useLoad, when } from "./use-admin"
 export interface Account {
     id: string; username: string; displayName: string; admin: boolean; lastSeen: string | null; createdAt: number
     feed: boolean; leaderboard: boolean; spotify: boolean; courses: number; items: number; studyMinutes: number
+    /** Term Pro while it lasts: bought in the App Store, on the web, or given here ('comp') */
+    plan?: { source: "app_store" | "web" | "comp"; until: number | null } | null
 }
 interface Lock { key: string; username: string; device: boolean; fails: number; lockedUntil: number }
 interface List { accounts: Account[]; locks: Lock[] }
@@ -144,6 +146,7 @@ function AccountTable({ accounts, me, onChanged }: { accounts: Account[]; me: st
                                     <div className="flex items-center gap-1.5">
                                         <span className="font-medium text-foreground">{a.username}</span>
                                         {a.admin && <span className="rounded-full bg-muted px-1.5 py-px text-[10.5px] font-semibold text-accent-foreground">admin</span>}
+                                        {a.plan && <span className="rounded-full bg-muted px-1.5 py-px text-[10.5px] font-semibold text-accent-foreground" title={a.plan.until ? "Until " + when(a.plan.until) : "No end"}>{a.plan.source === "comp" ? "pro (given)" : "pro"}</span>}
                                         {self && <span className="text-[11px] text-muted-foreground">(you)</span>}
                                     </div>
                                     {a.displayName && <div className="text-[11.5px] text-muted-foreground">{a.displayName}</div>}
@@ -158,6 +161,7 @@ function AccountTable({ accounts, me, onChanged }: { accounts: Account[]; me: st
                                         <Small onClick={() => setOpen(open?.id === a.id && open.kind === "password" ? null : { id: a.id, kind: "password" })} aria-expanded={open?.id === a.id && open.kind === "password"}>New password</Small>
                                         <Small disabled={busy === a.id + "r"} onClick={() => void run(a.id + "r", () => api.admin.revoke(a.id), a.username + " is signed out everywhere.")}>Sign out</Small>
                                         {!self && <Small disabled={busy === a.id + "a"} onClick={() => void run(a.id + "a", () => api.admin.setAdmin(a.id, !a.admin), a.admin ? a.username + " is no longer an admin." : a.username + " is now an admin.")}>{a.admin ? "Remove admin" : "Make admin"}</Small>}
+                                        {a.plan?.source !== "app_store" && a.plan?.source !== "web" && <Small disabled={busy === a.id + "p"} onClick={() => void run(a.id + "p", () => api.admin.setPlan(a.id, !a.plan), a.plan ? a.username + " is back on the free plan." : a.username + " has Term Pro, with no end.")}>{a.plan ? "Take Pro" : "Give Pro"}</Small>}
                                         {!self && <Small danger onClick={() => setOpen(open?.id === a.id && open.kind === "delete" ? null : { id: a.id, kind: "delete" })} aria-expanded={open?.id === a.id && open.kind === "delete"}>Delete</Small>}
                                     </div>
                                 </td>

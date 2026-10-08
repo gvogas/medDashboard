@@ -33,6 +33,7 @@ const ConvertSheet = lazyNamed(() => import("./convert-sheet"), "ConvertSheet", 
 const JoinSheet = lazyNamed(() => import("./join-sheet"), "JoinSheet", { idle: false })
 const InvitesSheet = lazyNamed(() => import("./invites-sheet"), "InvitesSheet", { idle: false })
 const MergeSheet = lazyNamed(() => import("./merge-sheet"), "MergeSheet", { idle: false })
+const ProSheet = lazyNamed(() => import("./pro-sheet"), "ProSheet")
 /* a class's item, opened by its key: admins only until Stage 6, so nobody else downloads it */
 const ClassItemSheet = lazyNamed(() => import("./class-item-sheet"), "ClassItemSheet", { idle: false })
 
@@ -53,6 +54,7 @@ export function sheetLabel(s: Exclude<SheetState, null>): string {
     if (s.kind === "join") return "Join a class"
     if (s.kind === "invites") return "Invites"
     if (s.kind === "merge") return "Merge into the class"
+    if (s.kind === "pro") return "Term Pro"
     const it = (itemByKey(s.id) ?? store.item(s.id)) as Item | null
     return it ? tmeta(it.type).label : "Item"
 }
@@ -118,6 +120,7 @@ export function Sheet() {
                 {shown?.kind === "convert" && <ConvertSheet key={shown.courseId} courseId={shown.courseId} />}
                 {shown?.kind === "join" && <JoinSheet key={shown.space?.id ?? "code:" + shown.code} code={shown.code} space={shown.space} />}
                 {shown?.kind === "invites" && <InvitesSheet />}
+                {shown?.kind === "pro" && <ProSheet reason={shown.reason} />}
                 {shown?.kind === "merge" && <MergeSheet key={shown.spaceId + shown.courseId} spaceId={shown.spaceId} courseId={shown.courseId} fromCourse={shown.fromCourse} />}
             </Suspense>
         </div>

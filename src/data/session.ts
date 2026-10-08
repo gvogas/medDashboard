@@ -2,6 +2,7 @@
 // Spotify, and starting over when the account changes in another tab.
 
 import { api, ApiError, resetRequests, bindAccount } from "@/core/api"
+import { NATIVE } from "@/core/native"
 import * as store from "@/core/store"
 import { data, type ServerProfile, type StoreEvent } from "@/core/store"
 import * as sync from "@/core/sync"
@@ -27,7 +28,8 @@ function rememberedSession(): ServerProfile | null {
 }
 
 export async function boot() {
-    if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").catch(() => {})
+    /* the apps carry their files in the bundle and need no offline cache */
+    if (!NATIVE && "serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").catch(() => {})
     const profile = await sync.startingProfile(rememberedSession())
     if (profile) { try { await start(profile) } catch (e) { showSignIn((e as Error).message) } } else showSignIn()
 }
@@ -133,6 +135,25 @@ export async function signOut({ everywhere = false, force = false }: { everywher
         catch (e) { alert("You are signed out, but local cleanup is still pending. " + (e as Error).message) }
     } else await store.close()
     location.reload() // Clear every in-memory account cache at the session boundary.
+}
+
+/** Delete the account for good (Settings → Account). Returns the reason it failed, or never
+    returns: success erases this device's copy and reloads to the sign-in. */
+export async function deleteAccount(confirm: string, password: string): Promise<string> {
+    try { await api.deleteMe(confirm, password) }
+    catch (err) {
+        if (!(err instanceof ApiError)) return "You seem to be offline. Deleting needs a connection."
+        if (err.status === 403) return "That password is not right."
+        if (err.status === 429) return "Too many attempts. Try again later."
+        if (err.body?.error === "owns_space") return "You own a shared class. Hand it to someone else or delete it first."
+        if (err.body?.error === "last_admin") return "You are the last admin. Make someone else an admin first."
+        return "The account could not be deleted (" + (err.body?.error || err.status) + ")."
+    }
+    sync.stop(); spotify.stop(); web.stop(); resetRequests(); run.reset(); closeSheet(); forgetReads()
+    const id = data.profile?.id
+    try { if (id) await store.wipe(id); else await store.close() } catch {}
+    location.reload()
+    return ""
 }
 
 /** The sign-in form's submit (src/components/sign-in.tsx). Success reloads the page;

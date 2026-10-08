@@ -19,6 +19,7 @@ import { NowPlaying } from "./now-playing"
 import { FocusButton } from "./focus-button"
 import { MusicBrowser, UpNextRecent } from "./music-browser"
 import { useCooling, useFollowTrack } from "./use-music"
+import { SPOTIFY_CONNECT } from "@/core/native"
 
 /* Keys go to a control or a box when one has focus: Space presses a button, / is typed. */
 const OWN_KEYS = /^(input|textarea|select|button|a)$/i
@@ -69,7 +70,7 @@ export function SpotifyPage() {
                                 <b className="mb-1 block font-serif text-[20px] font-medium text-foreground">Spotify is not connected</b>
                                 Connect your account to search, browse your playlists, see the queue and set the volume from here.
                                 <br />
-                                <a href="/api/spotify/connect" className="mt-4 inline-flex h-10 items-center rounded-full bg-primary px-4 text-[13px] font-semibold text-primary-foreground no-underline hover:brightness-110">Connect Spotify</a>
+                                <a href={SPOTIFY_CONNECT} className="mt-4 inline-flex h-10 items-center rounded-full bg-primary px-4 text-[13px] font-semibold text-primary-foreground no-underline hover:brightness-110">Connect Spotify</a>
                             </>}
                     </div>
                 </Card>

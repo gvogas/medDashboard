@@ -11,6 +11,7 @@ import { FX, GLASS, Icon, Notice, SpotifyMark } from "@/components/spotify/bits"
 import { NowPlaying } from "@/components/spotify/now-playing"
 import { MusicBrowser } from "@/components/spotify/music-browser"
 import { useCooling, useFollowTrack } from "@/components/spotify/use-music"
+import { SPOTIFY_CONNECT } from "@/core/native"
 
 export interface MusicPanelProps {
     /** ✕: close the panel. */
@@ -40,7 +41,7 @@ export function MusicPanel({ onClose, className }: MusicPanelProps) {
                         <Message title="Spotify is not connected">
                             Connect your account to search, browse your playlists, see the queue and set the volume from here.
                             <br />
-                            <a href="/api/spotify/connect" className="mt-4 inline-flex h-9 items-center rounded-full bg-foreground px-4 text-[12.5px] font-semibold text-background no-underline hover:brightness-90">Connect Spotify</a>
+                            <a href={SPOTIFY_CONNECT} className="mt-4 inline-flex h-9 items-center rounded-full bg-foreground px-4 text-[12.5px] font-semibold text-background no-underline hover:brightness-90">Connect Spotify</a>
                         </Message>
                     )
                     : <>

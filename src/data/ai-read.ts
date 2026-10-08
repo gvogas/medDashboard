@@ -11,6 +11,7 @@ import { notify } from "@/bridge"
 import { cacheKey, cached, remember } from "./ai-cache"
 import { cover } from "./overlay"
 import { maintenanceMessage } from "./maintenance"
+import { currentPlan, isPro, openPro } from "./plan"
 import { ui } from "./ui"
 import type { Note, Ui } from "./types"
 
@@ -42,6 +43,9 @@ function hideBusy() {
     if (had) document.querySelector<HTMLElement>("#sheet [role=dialog]")?.focus({ preventScroll: true })
 }
 
+/* On the free plan with the paywall on, Pro raises the limit (worker/limits.js). */
+const proWouldHelp = () => currentPlan().paywall && !isPro()
+
 /** The AI reads a day: the Worker's limit once it has said, else 10. */
 const readsLimit = () => ui.aiLimit ?? 10
 
@@ -49,7 +53,10 @@ const readsLimit = () => ui.aiLimit ?? 10
 const AI_ERRORS: Record<string, string> = {
     outline_unsupported: "That kind of file cannot be read. Try a PDF or Word document.",
     outline_unavailable: "The reader is not available right now. Try again later.",
-    get outline_limit() { return "That is the limit of " + readsLimit() + " AI reads for today (outlines, timetables and calendars). Try again tomorrow." },
+    get outline_limit() {
+        return "That is the limit of " + readsLimit() + " AI reads for today (outlines, timetables and calendars). Try again tomorrow."
+            + (proWouldHelp() ? " Term Pro gives you more." : "")
+    },
     outline_quota: "The free AI allowance for today is used up. It resets at 8 pm Eastern (midnight UTC).",
     too_large: "That file is over 5 MB.",
     ai_timeout: "The AI took too long to answer. Try again in a minute.",
@@ -157,6 +164,7 @@ export async function readWithAi<T>(file: File, { what, title, steps, flag, note
                 error: true,
             }
         refresh()
+        if (code === "outline_limit" && proWouldHelp()) openPro("ai")
     }
     await refreshReads()
 }

@@ -8,6 +8,7 @@ import { cn } from "@/lib/utils"
 import { activate, control, cooldownMessage, previous, useSpotify } from "@/data/spotify"
 import { Art, controlError, FX, Icon, SpotifyMark } from "@/components/spotify/bits"
 import { useCooling } from "@/components/spotify/use-music"
+import { SPOTIFY_CONNECT } from "@/core/native"
 
 export interface MusicPillProps {
     /** ▴ Music (or "Pick something to play ▴"): open the player. */
@@ -59,7 +60,7 @@ export function MusicPill({ onOpen, open = false, tone = "glass", className }: M
             <div role="region" aria-label="Music" className={shell}>
                 <SpotifyMark className="ml-1.5 size-5" />
                 <span className="min-w-0 flex-1 truncate text-muted-foreground">Spotify is not connected</span>
-                <a href="/api/spotify/connect" className={cn(chip, "border-primary bg-primary text-primary-foreground no-underline hover:brightness-110")}>Connect Spotify</a>
+                <a href={SPOTIFY_CONNECT} className={cn(chip, "border-primary bg-primary text-primary-foreground no-underline hover:brightness-110")}>Connect Spotify</a>
             </div>
         )
     }

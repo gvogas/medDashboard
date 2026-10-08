@@ -73,12 +73,17 @@ export interface Profile {
     announcement?: Announcement | null
     /** The features the admins have switched off while they work on them (core/maintenance.ts). */
     maintenance?: Maintenance | null
+    /** Term Pro, from GET /api/me (worker/plans.js); missing on a profile from before it. */
+    plan?: Plan | null
     /** What you hid from your Week and Month: 'course:<id>', 'space:<sid>', 'personal' (spec §9). */
     hiddenSources?: string[]
     revision?: number
 }
 
 export interface Announcement { id: number; text: string; until: number }
+
+/** Term Pro (worker/plans.js): the real tier, and whether the paywall applies at all. */
+export interface Plan { tier: 'free' | 'pro'; source: 'app_store' | 'web' | 'comp' | null; expiresAt: number | null; renews: boolean; paywall: boolean }
 
 /** A type as the profile stores it: built-ins only carry what differs from their default. */
 export interface TypePref { id: string; label?: string; color?: string; kind?: string | null; hidden?: boolean }

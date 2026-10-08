@@ -18,6 +18,8 @@ import { readSetting, writeSetting } from "@/core/reviews"
 import { runReviews } from "@/data/sync-status"
 import { savePrefs } from "@/data/study-controller"
 import { setBg, setTheme } from "@/data/theme"
+import { openPro, themeOpen, usePlan, usePro } from "@/data/plan"
+import { deleteAccount } from "@/data/session"
 import { notify } from "@/bridge"
 import { useConflicts, useItems, useCourses, useProfile, useQuotes } from "@/data/store"
 import { useSyncStatus } from "@/data/sync"
@@ -32,6 +34,7 @@ import { BGS, GOALS as THEME_GOALS, THEMES, goalFor, type Bg } from "@/data/them
 import type { Feed, Profile } from "@/data/types"
 import { radioKeys, rovingTab } from "./radio-keys"
 import { Button, CONTROL, RemoveButton, SheetBody, SheetFoot, SheetHead, Swatches, TextInput } from "./fields"
+import { SPOTIFY_CONNECT } from "@/core/native"
 
 export function SettingsSheet({ tab, focus }: { tab: SettingsTab; focus: string | null }) {
     const profile = useProfile()
@@ -135,6 +138,7 @@ const LOOKS = [
 ] as const
 
 function YouTab({ profile }: { profile: Profile }) {
+    const open = usePro()
     const theme = useUi((u) => u.theme)
     const bg = useUi((u) => u.bg)
     const dark = document.documentElement.getAttribute("data-app") === "dark"
@@ -144,9 +148,9 @@ function YouTab({ profile }: { profile: Profile }) {
                 <Hint>Changes the sidebar, colours and the next-exam animation.</Hint>
                 <div role="radiogroup" aria-label="Theme" onKeyDown={radioKeys} className="flex flex-col gap-1.5">
                     {BGS.map((id, i) => {
-                        const t = THEMES[id], on = bg === id
+                        const t = THEMES[id], on = bg === id, locked = !open && !themeOpen(id)
                         return (
-                            <button key={id} type="button" role="radio" aria-checked={on} tabIndex={rovingTab(i, BGS.indexOf(bg))} onClick={() => setBg(id)}
+                            <button key={id} type="button" role="radio" aria-checked={on} tabIndex={rovingTab(i, BGS.indexOf(bg))} onClick={() => (locked ? openPro("themes") : setBg(id))}
                                 className={cn(
                                     "grid min-h-[60px] cursor-pointer grid-cols-[44px_minmax(0,1fr)_20px] items-center gap-3.5 rounded-lg border px-3.5 py-2 text-left font-[inherit] text-[14px] text-foreground",
                                     "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)]",
@@ -155,7 +159,7 @@ function YouTab({ profile }: { profile: Profile }) {
                                 <span aria-hidden="true" className="grid h-8 w-11 grid-cols-2 overflow-hidden rounded-[5px] shadow-[inset_0_0_0_1px_var(--line)]">
                                     <span style={{ background: t.accent }} /><span style={{ background: t.done }} />
                                 </span>
-                                <span className="flex flex-col gap-px"><span className="font-medium">{t.label}</span><span className="text-[12.5px] text-muted-foreground">{t.desc}</span></span>
+                                <span className="flex flex-col gap-px"><span className="font-medium">{t.label}{locked && <span className="ml-1.5 rounded bg-muted px-1.5 py-px text-[10.5px] font-semibold text-muted-foreground">Pro</span>}</span><span className="text-[12.5px] text-muted-foreground">{t.desc}</span></span>
                                 <span aria-hidden="true" className={cn("size-[18px] rounded-full", on ? "border-[5px] border-foreground" : "border-[1.5px] border-[var(--box-line)]")} />
                             </button>
                         )
@@ -488,7 +492,7 @@ function SpotifyGroup() {
         action = <Button variant="ghost" onClick={() => void disconnectSpotify()}>Disconnect</Button>
     } else {
         who = <><b>Not connected</b><span>Show what you are listening to at the bottom of the sidebar.</span></>
-        action = <a href="/api/spotify/connect" className="inline-flex items-center rounded-[10px] border border-[color-mix(in_srgb,var(--accent)_72%,#000)] bg-[linear-gradient(color-mix(in_srgb,var(--accent)_90%,#fff),color-mix(in_srgb,var(--accent)_92%,#000))] px-3 py-[5px] text-[12px] font-[650] text-primary-foreground no-underline">Connect</a>
+        action = <a href={SPOTIFY_CONNECT} className="inline-flex items-center rounded-[10px] border border-[color-mix(in_srgb,var(--accent)_72%,#000)] bg-[linear-gradient(color-mix(in_srgb,var(--accent)_90%,#fff),color-mix(in_srgb,var(--accent)_92%,#000))] px-3 py-[5px] text-[12px] font-[650] text-primary-foreground no-underline">Connect</a>
     }
     return (
         <Group title="Spotify" state={!spotify.loaded ? "Checking connection" : on ? "Connected" : "Not connected"} id="spotifyGrp">
@@ -498,7 +502,7 @@ function SpotifyGroup() {
                 {action}
             </div>
             {on && retry > 0 && <Hint>Your account is connected. Spotify requests are paused until {new Date(retry).toLocaleString()}.</Hint>}
-            {on && web.status === "needs_reconnect" && <Hint error>Reconnect Spotify to play in this browser. <a href="/api/spotify/connect">Reconnect</a></Hint>}
+            {on && web.status === "needs_reconnect" && <Hint error>Reconnect Spotify to play in this browser. <a href={SPOTIFY_CONNECT}>Reconnect</a></Hint>}
             {on && web.status === "ready" && <Hint>This tab is a Spotify device called <b>Term</b>: press play here and it plays here.</Hint>}
             {note === "error" && <Hint error>Spotify did not connect. Try again.</Hint>}
             {note === "connected" && <span className="text-[11.5px] text-[var(--good)]">Connected. The badge on the coat shows what is playing.</span>}
@@ -539,6 +543,7 @@ function AccountTab({ profile }: { profile: Profile }) {
                     ))}
                 </Group>
             )}
+            <ProGroup />
             <Group title="Account" state={profile.username}>
                 {asking ? <>
                     <div role="alert" className="rounded-lg border border-[var(--warn-line)] bg-[var(--warn-bg)] px-2.5 py-[7px] text-[11.5px] text-[var(--warn-ink)]">
@@ -556,6 +561,49 @@ function AccountTab({ profile }: { profile: Profile }) {
                     </Row>
                 )}
             </Group>
+            <DeleteGroup username={profile.username || ""} />
         </>
+    )
+}
+
+/* Term Pro: the plan, and the sheet that sells it (worker/plans.js, docs/MONETIZATION.md). */
+function ProGroup() {
+    const plan = usePlan()
+    const state = plan.tier === "pro" ? "Pro" : plan.paywall ? "Free" : "Everything open"
+    return (
+        <Group title="Term Pro" state={state} id="proGrp">
+            <Hint>{plan.tier === "pro" ? "Thank you for supporting Term." : "More AI imports and every theme."}</Hint>
+            <Row><Button variant="ghost" onClick={() => openPro("settings")}>{plan.tier === "pro" ? "Your plan" : "See Term Pro"}</Button></Row>
+        </Group>
+    )
+}
+
+/* Deleting your account (the App Store requires it): your username typed out and your password. */
+function DeleteGroup({ username }: { username: string }) {
+    const [open, setOpen] = useState(false)
+    const [typed, setTyped] = useState("")
+    const [password, setPassword] = useState("")
+    const [busy, setBusy] = useState(false)
+    const [err, setErr] = useState("")
+    const go = async () => {
+        setBusy(true); setErr("")
+        setErr(await deleteAccount(typed, password))
+        setBusy(false)
+    }
+    return (
+        <Group title="Delete account">
+            {!open ? (
+                <Row><Button variant="ghost" onClick={() => setOpen(true)}>Delete my account…</Button></Row>
+            ) : <>
+                <Hint error>This deletes your courses, items, study history and achievements from Term for good. Export your data first to keep a copy. A subscription is cancelled in your Apple account settings, not here.</Hint>
+                <TextInput aria-label="Type your username to confirm" placeholder={"Type " + username} autoComplete="off" value={typed} onChange={(e) => setTyped(e.target.value)} className="border-border" />
+                <input type="password" aria-label="Your password" placeholder="Your password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} className={cn(CONTROL, "border-border")} />
+                {err && <Hint error>{err}</Hint>}
+                <Row>
+                    <Button variant="ghost" disabled={busy} onClick={() => { setOpen(false); setTyped(""); setPassword(""); setErr("") }}>Keep my account</Button>
+                    <Button variant="danger" disabled={busy || typed !== username || !password} onClick={() => void go()}>Delete for good</Button>
+                </Row>
+            </>}
+        </Group>
     )
 }

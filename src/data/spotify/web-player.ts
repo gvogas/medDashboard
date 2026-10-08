@@ -4,6 +4,7 @@
 // See docs/superpowers/specs/2026-09-22-spotify-web-playback-design.md.
 
 import { api } from "@/core/api"
+import { NATIVE } from "@/core/native"
 import { changed } from "./signal"
 import type { WebState, WebStatus } from "./types"
 
@@ -76,7 +77,7 @@ function create() {
 /** Load the SDK and register the device. Safe to call again; does nothing once started. */
 export function start() {
     if (state.status !== "off") return
-    if (isPhone()) { set("unsupported"); return }
+    if (NATIVE || isPhone()) { set("unsupported"); return }      /* the SDK plays in desktop browsers only */
     set("loading")
     const w = sdkWindow()
     if (w.Spotify) { create(); return }

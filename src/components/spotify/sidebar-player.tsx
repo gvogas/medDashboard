@@ -6,6 +6,7 @@
 import { cn } from "@/lib/utils"
 import { activate, control, playHere, previous, useSpotify } from "@/data/spotify"
 import { controlError, Icon, SpotifyMark } from "./bits"
+import { SPOTIFY_CONNECT } from "@/core/native"
 
 const ctl = "grid size-7 flex-none cursor-pointer place-items-center rounded-full border border-border bg-card p-0 text-ink-2 hover:border-primary hover:text-primary"
 const pp = "grid flex-none cursor-pointer place-items-center rounded-full border-0 bg-foreground p-0 text-card hover:bg-primary hover:text-primary-foreground"
@@ -23,7 +24,7 @@ export function SidebarPlayer() {
     let body
     if (!p.connected) {
         body = (
-            <a href="/api/spotify/connect" className="group/connect flex w-full items-center gap-2 rounded-md py-px text-left text-[12px] text-muted-foreground no-underline hover:text-primary">
+            <a href={SPOTIFY_CONNECT} className="group/connect flex w-full items-center gap-2 rounded-md py-px text-left text-[12px] text-muted-foreground no-underline hover:text-primary">
                 <SpotifyMark className="text-muted-foreground group-hover/connect:text-[var(--spotify)]" />
                 Connect Spotify
             </a>
