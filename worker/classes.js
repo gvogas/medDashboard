@@ -6,6 +6,7 @@ import { requireUser } from './auth.js';
 import { requireAdmin } from './admin.js';
 import { validateSharedCourse } from './validate.js';
 import { ADMINS_ONLY, absorb, checkConvert, createClass, priorConvert, setRole, spaceDetails, transfer } from './spaces.js';
+import { leave, removeMember } from './leaving.js';
 import { acceptInvite, declineInvite, dropCode, invite, joinByCode, makeCode, myInvites, revokeInvite } from './invites.js';
 
 const SID = '([a-z0-9]{12})';
@@ -20,6 +21,13 @@ const joiner = async (request, env) => (ADMINS_ONLY ? (await requireAdmin(reques
 /* An id as these routes take it: 1 to `max` characters, no control characters. */
 function idOf(v, field, max = 24) {
   if (typeof v !== 'string' || v.length < 1 || v.length > max || /[\u0000-\u001f\u007f]/.test(v)) throw bad(field);
+  return v;
+}
+
+/* keepCopy: on unless false is sent. */
+function keepOf(v) {
+  if (v == null) return true;
+  if (typeof v !== 'boolean') throw bad('keepCopy');
   return v;
 }
 
@@ -72,6 +80,15 @@ export const classRoutes = [
   ['POST', route(`spaces/${SID}/transfer`), async ({ request, env, params: [sid] }) => {
     const userId = await requireUser(request, env);
     await transfer(env.DB, userId, sid, idOf((await readJson(request)).userId, 'userId', 64));
+    return done();
+  }],
+  ['POST', route(`spaces/${SID}/leave`), async ({ request, env, params: [sid] }) => {
+    const userId = await requireUser(request, env);
+    await leave(env.DB, userId, sid, keepOf((await readJson(request)).keepCopy));
+    return done();
+  }],
+  ['DELETE', route(`spaces/${SID}/members/${UID}`), async ({ request, env, params: [sid, uid] }) => {
+    await removeMember(env.DB, await requireUser(request, env), sid, uid);
     return done();
   }],
   ['POST', route(`spaces/${SID}/invites`), async ({ request, env, params: [sid] }) => {

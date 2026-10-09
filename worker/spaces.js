@@ -2,7 +2,7 @@
 // Worker-made ids, the space revision and a space's summary. Making a class, its details,
 // roles and transfer follow below; invites and join codes are in worker/invites.js.
 import { HttpError } from './http.js';
-import { assertAllowed, assertOwner, memberGuard, ownerGuard, scopeOf } from './access.js';
+import { assertAllowed, assertKeeper, keeperGuard, memberGuard, scopeOf } from './access.js';
 import { REVIEW_ID } from '../src/core/shared.ts';
 import { COURSE_COLOURS } from './validate.js';
 
@@ -235,13 +235,13 @@ export async function spaceDetails(db, userId, spaceId, now = Date.now()) {
 }
 
 /**
- * The owner makes a member an editor or a member (spec §5): never themselves, never the
- * owner (a transfer does that). Answers {userId, role}; 404 when they are not a live member.
+ * The owner makes a member an editor or a member (spec §5), archived or not: never themselves,
+ * never the owner (a transfer does that). Answers {userId, role}; 404 when they are not a live member.
  */
 export async function setRole(db, userId, spaceId, targetId, role, now = Date.now()) {
-  await assertOwner(db, userId, spaceId);
+  await assertKeeper(db, userId, spaceId);
   if (targetId === userId) throw new HttpError(403, { error: 'forbidden' });
-  const g = ownerGuard(spaceId, userId);
+  const g = keeperGuard(spaceId, userId);
   await db.batch([
     db.prepare(`UPDATE members SET role = ?, updated_at = ?, revision = revision + 1
       WHERE space_id = ? AND user_id = ? AND deleted_at IS NULL AND role NOT IN ('owner', ?) AND ${g.sql}`)
@@ -255,14 +255,14 @@ export async function setRole(db, userId, spaceId, targetId, role, now = Date.no
 }
 
 /**
- * The owner hands the space to another live member (spec §13): the owner becomes an editor
+ * The owner hands the space to another live member (spec §13), archived or not: the owner becomes an editor
  * before the other becomes the owner, since the one-owner index is checked statement by
  * statement; both in one batch. 404 when the other is not a live member.
  */
 export async function transfer(db, userId, spaceId, targetId, now = Date.now()) {
-  await assertOwner(db, userId, spaceId);
+  await assertKeeper(db, userId, spaceId);
   if (targetId === userId) throw new HttpError(400, { error: 'invalid', field: 'userId' });
-  const g = ownerGuard(spaceId, userId);
+  const g = keeperGuard(spaceId, userId);
   const [demoted] = await db.batch([
     db.prepare(`UPDATE members SET role = 'editor', updated_at = ?, revision = revision + 1
       WHERE space_id = ? AND user_id = ? AND role = 'owner' AND deleted_at IS NULL AND ${g.sql}

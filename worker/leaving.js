@@ -7,6 +7,8 @@
 //   ?1 whose rows   ?2 the space   ?3 'u:' || ?1   ?4 'c:' || ?2   ?5 now
 //   ?6 the item ids a copy takes, [[class id, copy id]]   ?7 the course copy's id
 //   ?8 the items a keep copies (JSON)   ?9 who acts (a removal's owner)
+import { HttpError } from './http.js';
+import { assertAllowed, assertKeeper, roleOf } from './access.js';
 import { NEXT_ROW_REVISION, NEXT_SPACE_REVISION, touchSpace } from './spaces.js';
 
 /** A mark holding anything of yours (spec §13): a status, grade, weight, notes, a checklist or a completion. `m` is its alias. */
@@ -150,4 +152,26 @@ export async function detach(db, userId, spaceId, { keepCopy, who, actor = null,
   );
   const results = await db.batch(stmts);
   return results[results.length - 2].results[0].n > 0;
+}
+
+/* Whom a statement may still detach: a live member who is not the owner (leaving, or removed by ?9, the live owner). */
+const LEAVING = "EXISTS (SELECT 1 FROM members AS lv WHERE lv.space_id = ?2 AND lv.user_id = ?1 AND lv.deleted_at IS NULL AND lv.role != 'owner')";
+const REMOVING = `${LEAVING} AND EXISTS (SELECT 1 FROM members AS ow WHERE ow.space_id = ?2 AND ow.user_id = ?9 AND ow.role = 'owner' AND ow.deleted_at IS NULL)`;
+
+/** Leave a class (spec §13): with a copy (the default) or without one. The owner hands it on first: 403 owner. */
+export async function leave(db, userId, spaceId, keepCopy, now = Date.now()) {
+  const me = await assertAllowed(db, userId, spaceId, 'read');
+  if (me.kind !== 'class') throw new HttpError(404, { error: 'not_found' });
+  if (me.role === 'owner') throw new HttpError(403, { error: 'owner' });
+  if (!(await detach(db, userId, spaceId, { keepCopy, who: LEAVING, now }))) throw new HttpError(404, { error: 'not_found' });
+}
+
+/** The owner removes a member, who always keeps a copy (spec §13); never themselves or the owner. 404 when not a live member. */
+export async function removeMember(db, userId, spaceId, targetId, now = Date.now()) {
+  const me = await assertKeeper(db, userId, spaceId);
+  if (me.kind !== 'class') throw new HttpError(404, { error: 'not_found' });
+  if (targetId === userId) throw new HttpError(403, { error: 'forbidden' });
+  if (await detach(db, targetId, spaceId, { keepCopy: true, who: REMOVING, actor: userId, now })) return;
+  const them = await roleOf(db, targetId, spaceId);
+  throw them ? new HttpError(403, { error: 'forbidden' }) : new HttpError(404, { error: 'not_found' });
 }

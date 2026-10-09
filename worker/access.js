@@ -36,6 +36,8 @@ export const writerGuard = guard(' AND gs.archived = 0');
 export const editorGuard = guard(" AND gs.archived = 0 AND gm.role IN ('owner', 'editor')");
 /** The owner's own acts on an unarchived space: codes, roles, inviting with another role, handing it on. */
 export const ownerGuard = guard(" AND gs.archived = 0 AND gm.role = 'owner'");
+/** The owner's management of the space, archived or not: roles, transfer, removing, archiving (Stage 5 plan, Decision 4). */
+export const keeperGuard = guard(" AND gm.role = 'owner'");
 
 /** {kind, role, archived} of this person in the space, or null outside it (or if it is deleted). */
 export async function roleOf(db, userId, spaceId) {
@@ -62,6 +64,13 @@ export async function assertAllowed(db, userId, spaceId, need) {
 /** As assertAllowed(…, 'editor'), and 403 forbidden for anyone in the space but its owner. */
 export async function assertOwner(db, userId, spaceId) {
   const r = await assertAllowed(db, userId, spaceId, 'editor');
+  if (r.role !== 'owner') throw new HttpError(403, { error: 'forbidden' });
+  return r;
+}
+
+/** 404 outside the space, 403 forbidden for anyone in it but its owner; archived or not. */
+export async function assertKeeper(db, userId, spaceId) {
+  const r = await assertAllowed(db, userId, spaceId, 'read');
   if (r.role !== 'owner') throw new HttpError(403, { error: 'forbidden' });
   return r;
 }

@@ -1,7 +1,7 @@
 import { env } from 'cloudflare:test';
 import { describe, expect, it } from 'vitest';
 import { createUser } from './helpers.js';
-import { achievement, makeSpace, mark, ownItem, pref, session, setMember, sharedItem, spaceRevision } from './spaces.js';
+import { achievement, makeSpace, mark, ownItem, post, pref, session, setMember, sharedItem, signInAdmin, spaceRevision } from './spaces.js';
 import { copyIds, detach } from '../worker/leaving.js';
 
 let n = 0;
@@ -147,5 +147,59 @@ describe('detach', () => {
     await env.DB.prepare("UPDATE items SET deleted_at = 9 WHERE scope = ? AND id = 'a1'").bind(s.scope).run();
     await detach(env.DB, member, s.id, { keepCopy: true, who: LEAVING, now: 50 });
     expect(await one("SELECT grade, deleted_at FROM items WHERE scope = 'u:' || ? AND id = 'a1'", member)).toEqual({ grade: 88, deleted_at: null });
+  });
+});
+
+describe('leaving and removing, through the routes', () => {
+  async function three() {
+    const tag = ++n;
+    const owner = await signInAdmin('lvo' + tag), member = await signInAdmin('lvm' + tag), outsider = await signInAdmin('lvx' + tag);
+    const s = await makeSpace({ members: { [owner.id]: 'owner', [member.id]: 'member' } });
+    await sharedItem(s.scope, 'a1', { course_id: 'web', weight: 20 });
+    await mark(member.id, s.id, 'a1', { grade: 75 });
+    return { owner, member, outsider, s };
+  }
+
+  it('a member leaves with a copy by default, and the revision moves', async () => {
+    const { member, s } = await three();
+    const before = await spaceRevision(s.id);
+    expect((await post(member, `/api/spaces/${s.id}/leave`, {})).status).toBe(204);
+    expect(await one("SELECT grade FROM items WHERE scope = 'u:' || ? AND id = 'a1'", member.id)).toEqual({ grade: 75 });
+    expect(await spaceRevision(s.id)).toBeGreaterThan(before);
+    expect((await post(member, `/api/spaces/${s.id}/leave`, {})).status).toBe(404);
+  });
+
+  it('keepCopy false leaves no course; a bad keepCopy is refused', async () => {
+    const { member, s } = await three();
+    expect(await (await post(member, `/api/spaces/${s.id}/leave`, { keepCopy: 'yes' })).json()).toEqual({ error: 'invalid', field: 'keepCopy' });
+    expect((await post(member, `/api/spaces/${s.id}/leave`, { keepCopy: false })).status).toBe(204);
+    expect(await one("SELECT count(*) AS n FROM courses WHERE scope = 'u:' || ?", member.id)).toEqual({ n: 0 });
+  });
+
+  it('the owner cannot leave; an outsider gets 404', async () => {
+    const { owner, outsider, s } = await three();
+    const res = await post(owner, `/api/spaces/${s.id}/leave`, {});
+    expect(res.status).toBe(403);
+    expect(await res.json()).toEqual({ error: 'owner' });
+    expect((await post(outsider, `/api/spaces/${s.id}/leave`, {})).status).toBe(404);
+  });
+
+  it('the owner removes a member, who keeps a copy; nobody else removes, nor the owner themselves', async () => {
+    const { owner, member, outsider, s } = await three();
+    const remove = (api, uid) => api(`/api/spaces/${s.id}/members/${uid}`, { method: 'DELETE' });
+    expect((await remove(member, owner.id)).status).toBe(403);
+    expect((await remove(outsider, member.id)).status).toBe(404);
+    expect((await remove(owner, owner.id)).status).toBe(403);
+    expect((await remove(owner, member.id)).status).toBe(204);
+    expect(await one("SELECT grade FROM items WHERE scope = 'u:' || ? AND id = 'a1'", member.id)).toEqual({ grade: 75 });
+    expect(await one('SELECT deleted_at IS NOT NULL AS gone FROM members WHERE space_id = ? AND user_id = ?', s.id, member.id)).toEqual({ gone: 1 });
+    expect((await remove(owner, member.id)).status).toBe(404);
+  });
+
+  it('a member who merged their course gets it back under its ids on leaving', async () => {
+    const { member, s } = await three();
+    await env.DB.prepare("INSERT INTO courses (scope, id, code, name, color, created_at, updated_at, deleted_at) VALUES ('u:' || ?, 'web', 'WEB', 'Web', '#17B3AE', 1, 1, 5)").bind(member.id).run();
+    expect((await post(member, `/api/spaces/${s.id}/leave`, {})).status).toBe(204);
+    expect(await one("SELECT id, deleted_at FROM courses WHERE scope = 'u:' || ?", member.id)).toEqual({ id: 'web', deleted_at: null });
   });
 });
