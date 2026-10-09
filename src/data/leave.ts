@@ -43,19 +43,19 @@ export async function deleteClass(spaceId: string, keepCopy: boolean, name: stri
     await syncNow()
 }
 
-/** Keep as mine: a removed item becomes yours, filed under the class. */
-export async function keepItem(key: string): Promise<void> {
+/** Keep as mine: a removed item becomes yours, filed under the class. The item's card closes; the class sheet's list passes `close: false`. */
+export async function keepItem(key: string, { close = true } = {}): Promise<void> {
     const k = splitKey(key)
     await api.spaces.keep(k.spaceId!, k.id)
-    closeSheet()
+    if (close) closeSheet()
     await syncNow()
 }
 
-/** Dismiss: your mark on a removed item goes; the item leaves your views. */
-export async function dismissItem(key: string): Promise<void> {
+/** Dismiss: your mark on a removed item goes; the item leaves your views. Closes as keepItem does. */
+export async function dismissItem(key: string, { close = true } = {}): Promise<void> {
     const k = splitKey(key)
     await store.deleteMark(k.spaceId + ":" + k.id)
-    closeSheet()
+    if (close) closeSheet()
 }
 
 /** Restore for everyone (owner, editors). */

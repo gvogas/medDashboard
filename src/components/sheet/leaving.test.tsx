@@ -100,10 +100,11 @@ describe("leaving a class", () => {
     })
 
     it("an archived class says so, and its owner unarchives it", async () => {
-        fake.data.spaces = [{ ...space("owner"), archived: true }]
+        fake.data.spaces = [{ ...space("owner"), archived: true, members: [{ userId: "u-me", name: "George", role: "owner" }] }]
         render(<ClassSheet spaceId={SID} tab="details" />)
         expect(screen.getByText(/Archived: read-only for everyone/)).toBeTruthy()
         expect(screen.queryByRole("button", { name: "Archive the class" })).toBeNull()
+        expect(screen.queryByText(/Archiving makes it read-only/)).toBeNull()
         fireEvent.click(screen.getByRole("button", { name: "Unarchive" }))
         await waitFor(() => expect(fake.api.spaces.archive).toHaveBeenCalledWith(SID, false))
     })
@@ -139,6 +140,26 @@ describe("leaving a class", () => {
         await waitFor(() => expect(fake.store.deleteMark).toHaveBeenCalledWith(SID + ":a1"))
     })
 
+    it("Keep and Dismiss in the list leave the class sheet open, and a second click waits for the first", async () => {
+        fake.data.spaces = [space("member")]
+        fake.data.removed_items = [removed("a1", "Lab 3")]
+        fake.data.marks = [mark("a1", { grade: 80 })]
+        let done = () => {}
+        fake.api.spaces.keep.mockImplementationOnce(() => new Promise<undefined>((r) => { done = () => r(undefined) }))
+        render(<ClassSheet spaceId={SID} tab="details" />)
+        const list = within(screen.getByRole("list", { name: "Removed from the class" }))
+        const keep = list.getByRole("button", { name: "Keep Lab 3 as mine" })
+        fireEvent.click(keep)
+        fireEvent.click(keep)
+        expect(fake.api.spaces.keep).toHaveBeenCalledTimes(1)
+        expect(list.getByRole<HTMLButtonElement>("button", { name: "Dismiss Lab 3" }).disabled).toBe(true)
+        done()
+        await waitFor(() => expect((keep as HTMLButtonElement).disabled).toBe(false))
+        fireEvent.click(list.getByRole("button", { name: "Dismiss Lab 3" }))
+        await waitFor(() => expect(fake.store.deleteMark).toHaveBeenCalledWith(SID + ":a1"))
+        expect(fake.overlay.closeSheet).not.toHaveBeenCalled()
+    })
+
     it("a member sees only the removed items they hold something on, hidden or not, and no Restore", () => {
         fake.data.spaces = [space("member")]
         fake.data.removed_items = [removed("a1", "Lab 3"), removed("a2", "Lab 4"), removed("a3", "Lab 5"), removed("a4", "Lab 6")]
@@ -171,6 +192,22 @@ describe("removing a member", () => {
         fireEvent.click(screen.getByRole("button", { name: "Remove Sam from the class" }))
         await waitFor(() => expect(fake.api.spaces.remove).toHaveBeenCalledWith(SID, "u-sam"))
         await waitFor(() => expect(fake.api.spaces.get).toHaveBeenCalledTimes(2))
+    })
+
+    it("a second click on Remove waits for the first", async () => {
+        fake.data.spaces = [space("owner")]
+        fake.data.shared_courses = [course]
+        fake.api.spaces.get.mockResolvedValue(details("owner"))
+        let done = () => {}
+        fake.api.spaces.remove.mockImplementationOnce(() => new Promise<undefined>((r) => { done = () => r(undefined) }))
+        render(<ClassSheet spaceId={SID} tab="members" />)
+        fireEvent.click(await screen.findByRole("button", { name: "Remove Sam" }))
+        const confirm = screen.getByRole("button", { name: "Remove Sam from the class" })
+        fireEvent.click(confirm)
+        fireEvent.click(confirm)
+        expect(fake.api.spaces.remove).toHaveBeenCalledTimes(1)
+        done()
+        await waitFor(() => expect(screen.queryByRole("button", { name: "Remove Sam from the class" })).toBeNull())
     })
 
     it("a member removes nobody", async () => {

@@ -57,7 +57,8 @@ export function ClassActions({ space, name }: { space: Space; name: string }) {
                     {!space.archived && <Button variant="ghost" disabled={busy} onClick={() => void run(() => setArchived(space.id, true))}>Archive the class</Button>}
                     {alone && <Button variant="ghost" onClick={() => ask("delete")}>Delete the class…</Button>}
                 </span>
-                <Note>{alone ? "Archiving makes it read-only for everyone until you unarchive it." : "Hand the class on in Members to leave it. A class can be deleted once nobody else is in it."}</Note>
+                {!alone ? <Note>Hand the class on in Members to leave it. A class can be deleted once nobody else is in it.</Note>
+                    : !space.archived && <Note>Archiving makes it read-only for everyone until you unarchive it.</Note>}
             </> : (
                 <Button variant="ghost" className="self-start" onClick={() => ask("leave")}>Leave the class…</Button>
             )}

@@ -153,6 +153,11 @@ function CodeBox({ spaceId, code, reload }: { spaceId: string; code: SpaceDetail
 function MemberList({ spaceId, members, owner, me, reload }: { spaceId: string; members: SpaceMember[]; owner: boolean; me: string; reload: Reload }) {
     const [err, setErr] = useState("")
     const [removing, setRemoving] = useState<SpaceMember | null>(null)
+    const [busy, setBusy] = useState(false)
+    const remove = async (m: SpaceMember) => {
+        setBusy(true)
+        try { await removeMember(spaceId, m.userId); setRemoving(null); setErr(""); await reload() } catch (e) { setErr(messageFor(e)) } finally { setBusy(false) }
+    }
     const change = async (userId: string, role: string) => {
         try { await api.spaces.setRole(spaceId, userId, role); setErr(""); await reload(); void syncNow() } catch (e) { setErr(messageFor(e)) }
     }
@@ -178,9 +183,7 @@ function MemberList({ spaceId, members, owner, me, reload }: { spaceId: string; 
                 <div className="flex flex-wrap items-center gap-2">
                     <Note>Remove {removing.name}? They keep a copy of the class as their own course.</Note>
                     <Button variant="ghost" onClick={() => setRemoving(null)}>Cancel</Button>
-                    <Button variant="danger" onClick={() => void (async () => {
-                        try { await removeMember(spaceId, removing.userId); setRemoving(null); setErr(""); await reload() } catch (e) { setErr(messageFor(e)) }
-                    })()}>Remove {removing.name} from the class</Button>
+                    <Button variant="danger" disabled={busy} onClick={() => void remove(removing)}>Remove {removing.name} from the class</Button>
                 </div>
             )}
             {err && <Note tone="bad">{err}</Note>}
