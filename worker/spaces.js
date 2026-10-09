@@ -56,6 +56,9 @@ export async function spaceSummary(db, userId, spaceId) {
 
 /* A row's first revision: the change feed's next sequence value, as worker/db.js writes it. */
 export const NEXT_ROW_REVISION = "COALESCE((SELECT seq FROM sqlite_sequence WHERE name = 'changes'), 0) + 1";
+/* A person's school calendar, as a class keeps a copy of it (spec §8): only one with a semester; bind the user id. */
+const OWNER_CALENDAR = `(SELECT CASE WHEN json_valid(u.school_calendar) AND json_type(u.school_calendar) = 'object'
+    AND COALESCE(json_array_length(u.school_calendar, '$.terms'), 0) > 0 THEN u.school_calendar END FROM users AS u WHERE u.id = ?)`;
 /* A live class this person owns whose course has the id bound second: an earlier convert of that course. */
 const MADE_FROM = `SELECT s.id FROM spaces AS s JOIN members AS m ON m.space_id = s.id
   WHERE m.user_id = ? AND m.role = 'owner' AND m.deleted_at IS NULL AND s.kind = 'class' AND s.deleted_at IS NULL
@@ -165,9 +168,9 @@ export async function createClass(db, userId, { course, convertCourseId = null, 
   const copy = convertCourseId !== null, courseId = copy ? convertCourseId : randomId();
   const made = 'EXISTS (SELECT 1 FROM spaces WHERE id = ?)';
   const stmts = [
-    db.prepare(`INSERT INTO spaces (id, kind, created_at, updated_at, revision) SELECT ?, 'class', ?, ?, ${NEXT_SPACE_REVISION}
+    db.prepare(`INSERT INTO spaces (id, kind, school_calendar, created_at, updated_at, revision) SELECT ?, 'class', ${OWNER_CALENDAR}, ?, ?, ${NEXT_SPACE_REVISION}
       WHERE ${MY_SPACES} < ?${copy ? ` AND EXISTS (SELECT 1 FROM courses WHERE scope = ? AND id = ? AND deleted_at IS NULL) AND NOT EXISTS (${MADE_FROM})` : ''}`)
-      .bind(id, now, now, userId, SPACE_LIMIT, ...(copy ? [mine, courseId, userId, courseId] : [])),
+      .bind(id, userId, now, now, userId, SPACE_LIMIT, ...(copy ? [mine, courseId, userId, courseId] : [])),
     db.prepare(`INSERT INTO members (space_id, user_id, role, joined_at, updated_at) SELECT ?, ?, 'owner', ?, ? WHERE ${made}`).bind(id, userId, now, now, id),
     copy
       ? db.prepare(`INSERT INTO courses (scope, id, code, name, color, instructor, term, archived, meetings, target, updated_by, created_at, updated_at, revision)
@@ -208,18 +211,20 @@ const NAME = "COALESCE(NULLIF(u.display_name, ''), u.username)";
  * A space for its Members tab (spec §11, §15): its members for everyone in it; its invites
  * not yet accepted for the owner and editors (a pending one past its expiry reads
  * 'expired'); and its join code's expiry and uses left for the owner. The code itself is
- * kept only as its hash. 404 outside the space.
+ * kept only as its hash; and the class's copy of its owner's school calendar for everyone in
+ * it (offered to joiners with none). 404 outside the space.
  */
 export async function spaceDetails(db, userId, spaceId, now = Date.now()) {
   const me = await assertAllowed(db, userId, spaceId, 'read');
   const g = memberGuard(spaceId, userId);
-  const [members, invites, code] = await db.batch([
+  const [members, invites, code, cal] = await db.batch([
     db.prepare(`SELECT m.user_id, m.role, m.joined_at, u.username, ${NAME} AS name FROM members AS m JOIN users AS u ON u.id = m.user_id
       WHERE m.space_id = ? AND m.deleted_at IS NULL AND ${g.sql} ORDER BY m.joined_at, m.user_id`).bind(spaceId, ...g.binds),
     db.prepare(`SELECT i.user_id, i.role, i.status, i.created_at, i.expires_at, i.invited_by, u.username, ${NAME} AS name
       FROM invites AS i JOIN users AS u ON u.id = i.user_id
       WHERE i.space_id = ? AND i.status != 'accepted' AND ${g.sql} ORDER BY i.created_at DESC, i.user_id`).bind(spaceId, ...g.binds),
     db.prepare(`SELECT code_expires, code_uses_left FROM spaces WHERE id = ? AND code_hash IS NOT NULL AND ${g.sql}`).bind(spaceId, ...g.binds),
+    db.prepare(`SELECT school_calendar FROM spaces WHERE id = ? AND ${g.sql}`).bind(spaceId, ...g.binds),
   ]);
   const c = code.results[0];
   return {
@@ -231,7 +236,19 @@ export async function spaceDetails(db, userId, spaceId, now = Date.now()) {
       createdAt: i.created_at, expiresAt: i.expires_at, invitedBy: i.invited_by,
     })),
     code: me.role === 'owner' && c && c.code_expires > now && c.code_uses_left > 0 ? { expires: c.code_expires, usesLeft: c.code_uses_left } : null,
+    schoolCalendar: cal.results[0]?.school_calendar ? JSON.parse(cal.results[0].school_calendar) : null,
   };
+}
+
+/** The owner copies their school calendar into the class again (spec §8), archived or not. Answers {schoolCalendar}. */
+export async function refreshSchool(db, userId, spaceId, now = Date.now()) {
+  const me = await assertKeeper(db, userId, spaceId);
+  if (me.kind !== 'class') throw new HttpError(404, { error: 'not_found' });
+  const g = keeperGuard(spaceId, userId);
+  await db.prepare(`UPDATE spaces SET school_calendar = ${OWNER_CALENDAR}, updated_at = ?, revision = ${NEXT_SPACE_REVISION} WHERE id = ? AND ${g.sql}`)
+    .bind(userId, now, spaceId, ...g.binds).run();
+  const row = await db.prepare('SELECT school_calendar FROM spaces WHERE id = ?').bind(spaceId).first();
+  return { schoolCalendar: row?.school_calendar ? JSON.parse(row.school_calendar) : null };
 }
 
 /**

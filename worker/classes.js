@@ -5,7 +5,7 @@ import { json, readJson, HttpError } from './http.js';
 import { requireUser } from './auth.js';
 import { requireAdmin } from './admin.js';
 import { validateSharedCourse } from './validate.js';
-import { ADMINS_ONLY, absorb, checkConvert, createClass, priorConvert, setRole, spaceDetails, transfer } from './spaces.js';
+import { ADMINS_ONLY, absorb, checkConvert, createClass, priorConvert, refreshSchool, setRole, spaceDetails, transfer } from './spaces.js';
 import { deleteClass, keep, leave, removeMember, setArchived, shareItems } from './leaving.js';
 import { acceptInvite, declineInvite, dropCode, invite, joinByCode, makeCode, myInvites, revokeInvite } from './invites.js';
 
@@ -133,6 +133,7 @@ export const classRoutes = [
     await declineInvite(env.DB, await requireUser(request, env), sid);
     return done();
   }],
+  ['POST', route(`spaces/${SID}/school`), async ({ request, env, params: [sid] }) => json(await refreshSchool(env.DB, await requireUser(request, env), sid))],
   ['POST', route(`spaces/${SID}/code`), async ({ request, env, params: [sid] }) => json(await makeCode(env.DB, await requireUser(request, env), sid), 201)],
   ['DELETE', route(`spaces/${SID}/code`), async ({ request, env, params: [sid] }) => {
     await dropCode(env.DB, await requireUser(request, env), sid);

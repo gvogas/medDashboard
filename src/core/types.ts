@@ -188,6 +188,7 @@ export interface SpaceInvite {
 export interface SpaceDetails {
     id: string; scope: string; kind: "class" | "project"; role: "owner" | "editor" | "member"; archived: boolean
     members: SpaceMember[]; invites: SpaceInvite[]; code: { expires: number; usesLeft: number } | null
+    schoolCalendar: unknown | null
 }
 /** A join code just made: shown now and never again (only its hash is kept). */
 export interface JoinCode { code: string; expires: number; usesLeft: number }
