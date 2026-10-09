@@ -10,6 +10,7 @@
 import { HttpError } from './http.js';
 import { assertAllowed, assertKeeper, keeperGuard, roleOf } from './access.js';
 import { LIVE_MEMBERS, NEXT_ROW_REVISION, NEXT_SPACE_REVISION, touchSpace } from './spaces.js';
+import { REVIEW_ID } from '../src/core/shared.ts';
 
 /** A mark holding anything of yours (spec §13): a status, grade, weight, notes, a checklist or a completion. `m` is its alias. */
 export const MEANINGFUL = (m) =>
@@ -201,4 +202,97 @@ export async function deleteClass(db, userId, spaceId, keepCopy, now = Date.now(
   if (await detach(db, userId, spaceId, { keepCopy, who: CLOSING, closing: true, now })) return;
   /* someone joined between the count and the batch */
   throw (await crowded()) ? new HttpError(409, { error: 'members' }) : new HttpError(404, { error: 'not_found' });
+}
+
+/* The items a keep names (?8) that are removed and hold something of yours in your live mark. */
+const KEPT = `(SELECT km.item_id FROM marks AS km JOIN items AS ki ON ki.scope = ?4 AND ki.id = km.item_id AND ki.deleted_at IS NOT NULL
+  WHERE km.user_id = ?1 AND km.space_id = ?2 AND km.deleted_at IS NULL AND km.item_id IN (SELECT value FROM json_each(?8)) AND ${MEANINGFUL('km')})`;
+const MEMBER_LIVE = 'EXISTS (SELECT 1 FROM members AS kl WHERE kl.space_id = ?2 AND kl.user_id = ?1 AND kl.deleted_at IS NULL)';
+
+/**
+ * Keep as mine (spec §13): each removed class item `only` names that holds something of yours
+ * becomes your own item, filed under the class, with your layer folded in (under a free id,
+ * `copyIds`); your sessions and grade achievements on it follow; your marks on them go, which
+ * ends every statement's condition (KEPT), so a retry copies nothing. With `member`, only
+ * while you are still in the class (the route); the nightly purge keeps without it.
+ */
+export async function keepItems(db, userId, spaceId, only, now = Date.now(), { member = false } = {}) {
+  const ids = await copyIds(db, userId, spaceId, only);
+  const v = valuesOf({ userId, spaceId, now, items: ids.items, only: JSON.stringify(only) });
+  const live = member ? ` AND ${MEMBER_LIVE}` : '';
+  await db.batch([
+    itemCopy(`i.id IN ${KEPT}${live}`, 'NULL', '?2'),
+    `UPDATE study_sessions SET space_id = NULL, course_id = NULL, item_id = ${TO('study_sessions.item_id')}, updated_at = ?5, revision = revision + 1
+      WHERE user_id = ?1 AND space_id = ?2 AND deleted_at IS NULL AND item_id IN ${KEPT}${live}`,
+    `UPDATE achievements SET space_id = NULL, item_id = ${TO('achievements.item_id')}, updated_at = ?5, revision = revision + 1
+      WHERE user_id = ?1 AND space_id = ?2 AND rule = 'grade' AND deleted_at IS NULL AND item_id IN ${KEPT}${live}`,
+    `UPDATE marks SET deleted_at = ?5, updated_at = ?5, revision = revision + 1
+      WHERE user_id = ?1 AND space_id = ?2 AND deleted_at IS NULL AND item_id IN ${KEPT}${live}`,
+  ].map((sql) => prepare(db, sql, v)));
+}
+
+/** POST …/items/:id/keep: a removed item of the class you hold something on, archived or not. 404 otherwise. */
+export async function keep(db, userId, spaceId, itemId, now = Date.now()) {
+  const me = await assertAllowed(db, userId, spaceId, 'read');
+  if (me.kind !== 'class') throw new HttpError(404, { error: 'not_found' });
+  const found = await db.prepare(`SELECT 1 AS x FROM items AS i JOIN marks AS m ON m.user_id = ? AND m.space_id = ? AND m.item_id = i.id AND m.deleted_at IS NULL
+    WHERE i.scope = ? AND i.id = ? AND i.deleted_at IS NOT NULL AND ${MEANINGFUL('m')}`).bind(userId, spaceId, 'c:' + spaceId, itemId).first();
+  if (!found) throw new HttpError(404, { error: 'not_found' });
+  await keepItems(db, userId, spaceId, [itemId], now, { member: true });
+}
+
+/* The owner or an editor of the unarchived class. */
+const EDITOR = `EXISTS (SELECT 1 FROM members AS gm JOIN spaces AS gs ON gs.id = gm.space_id WHERE gm.space_id = ?2 AND gm.user_id = ?1
+  AND gm.deleted_at IS NULL AND gs.deleted_at IS NULL AND gs.archived = 0 AND gm.role IN ('owner', 'editor'))`;
+
+/**
+ * Share items of yours filed under a class with it (spec §13; absorb {items}): each becomes a
+ * class item under the same id (reviving a class tombstone), its facts the class's; your
+ * status, grade, checklist, notes and completion move into your mark; your sessions and grade
+ * achievements on it get the space; your item goes, which ends the batch (a retry is 400
+ * items). 400 items for one that is not yours under the class or is a lecture review, 400 type
+ * for a custom type, 409 exists for an id the class has live. Answers {shared}.
+ */
+export async function shareItems(db, userId, spaceId, ids, now = Date.now()) {
+  const me = await assertAllowed(db, userId, spaceId, 'editor');
+  if (me.kind !== 'class') throw new HttpError(404, { error: 'not_found' });
+  const mine = 'u:' + userId, scope = 'c:' + spaceId, J = JSON.stringify(ids);
+  const [own, taken] = await db.batch([
+    db.prepare('SELECT id, type FROM items WHERE scope = ? AND class_id = ? AND deleted_at IS NULL AND id IN (SELECT value FROM json_each(?))').bind(mine, spaceId, J),
+    db.prepare('SELECT id FROM items WHERE scope = ? AND deleted_at IS NULL AND id IN (SELECT value FROM json_each(?))').bind(scope, J),
+  ]);
+  if (own.results.length !== ids.length || own.results.some((r) => r.type === 'task' && REVIEW_ID.test(r.id))) throw new HttpError(400, { error: 'invalid', field: 'items' });
+  if (own.results.some((r) => r.type.startsWith('c-'))) throw new HttpError(400, { error: 'invalid', field: 'type' });
+  if (taken.results.length) throw new HttpError(409, { error: 'exists' });
+  const v = [userId, spaceId, mine, scope, now, J];
+  const OWN = 'p.scope = ?3 AND p.class_id = ?2 AND p.deleted_at IS NULL AND p.id IN (SELECT value FROM json_each(?6))';
+  /* the class item this batch wrote: if the class made one live in between, it keeps its facts and your item stays yours */
+  const SHARED = 'EXISTS (SELECT 1 FROM items AS ci WHERE ci.scope = ?4 AND ci.id = p.id AND ci.deleted_at IS NULL AND ci.updated_at = ?5 AND ci.updated_by = ?1)';
+  const COURSE = '(SELECT id FROM courses WHERE scope = ?4 AND deleted_at IS NULL LIMIT 1)';
+  const results = await db.batch([
+    `INSERT INTO items (scope, id, type, title, course_id, date, start, end, location, status, weight, notes, links, recur, weekday, recur_until, dept,
+        updated_by, created_at, updated_at, revision)
+      SELECT ?4, p.id, p.type, p.title, ${COURSE}, p.date, p.start, p.end, p.location, 'todo', p.weight, '', p.links, p.recur, p.weekday, p.recur_until, p.dept,
+        ?1, ?5, ?5, ${NEXT_ROW_REVISION}
+      FROM items AS p WHERE ${OWN} AND p.type NOT GLOB 'c-*' AND ${EDITOR}
+      ON CONFLICT (scope, id) DO UPDATE SET type = excluded.type, title = excluded.title, course_id = excluded.course_id, date = excluded.date,
+        start = excluded.start, end = excluded.end, location = excluded.location, weight = excluded.weight, notes = '', links = excluded.links,
+        recur = excluded.recur, weekday = excluded.weekday, recur_until = excluded.recur_until, dept = excluded.dept,
+        updated_by = excluded.updated_by, updated_at = excluded.updated_at, deleted_at = NULL, revision = items.revision + 1
+        WHERE items.deleted_at IS NOT NULL`,
+    `INSERT INTO marks (user_id, id, space_id, item_id, status, grade, weight, notes, checklist, completed_at, hidden, created_at, updated_at, revision)
+      SELECT ?1, ?2 || ':' || p.id, ?2, p.id, p.status, p.grade, NULL, p.notes, p.checklist, p.completed_at, 0, ?5, ?5, ${NEXT_ROW_REVISION}
+      FROM items AS p WHERE ${OWN} AND ${SHARED} AND ${EDITOR}
+        AND (p.status != 'todo' OR p.grade IS NOT NULL OR p.notes != '' OR p.checklist != '[]' OR p.completed_at IS NOT NULL)
+      ON CONFLICT (user_id, id) DO UPDATE SET status = excluded.status, grade = excluded.grade, weight = NULL, notes = excluded.notes,
+        checklist = excluded.checklist, completed_at = excluded.completed_at, hidden = 0, deleted_at = NULL,
+        updated_at = excluded.updated_at, revision = marks.revision + 1`,
+    `UPDATE study_sessions SET space_id = ?2, course_id = ${COURSE}, updated_at = ?5, revision = revision + 1
+      WHERE user_id = ?1 AND space_id IS NULL AND deleted_at IS NULL AND item_id IN (SELECT p.id FROM items AS p WHERE ${OWN} AND ${SHARED}) AND ${EDITOR}`,
+    `UPDATE achievements SET space_id = ?2, updated_at = ?5, revision = revision + 1
+      WHERE user_id = ?1 AND space_id IS NULL AND rule = 'grade' AND deleted_at IS NULL AND item_id IN (SELECT p.id FROM items AS p WHERE ${OWN} AND ${SHARED}) AND ${EDITOR}`,
+    `UPDATE items AS p SET deleted_at = ?5, updated_at = ?5, revision = revision + 1 WHERE ${OWN} AND ${SHARED} AND ${EDITOR}`,
+    'SELECT changes() AS n',
+  ].map((sql) => prepare(db, sql, v)));
+  return { shared: results[5].results[0].n };
 }

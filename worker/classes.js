@@ -6,7 +6,7 @@ import { requireUser } from './auth.js';
 import { requireAdmin } from './admin.js';
 import { validateSharedCourse } from './validate.js';
 import { ADMINS_ONLY, absorb, checkConvert, createClass, priorConvert, setRole, spaceDetails, transfer } from './spaces.js';
-import { deleteClass, leave, removeMember, setArchived } from './leaving.js';
+import { deleteClass, keep, leave, removeMember, setArchived, shareItems } from './leaving.js';
 import { acceptInvite, declineInvite, dropCode, invite, joinByCode, makeCode, myInvites, revokeInvite } from './invites.js';
 
 const SID = '([a-z0-9]{12})';
@@ -58,6 +58,15 @@ export function absorbBody(body) {
   if (new Set(out.map((p) => p[0])).size !== out.length || new Set(out.map((p) => p[1])).size !== out.length) throw bad('pairs');
   if (body.fromCourse != null && typeof body.fromCourse !== 'boolean') throw bad('fromCourse');
   return { courseId, pairs: out, fromCourse: body.fromCourse === true };
+}
+
+/** POST /api/spaces/:sid/absorb {items}: share items of yours filed under the class (1 to 50 ids, each once). */
+export function shareBody(body) {
+  const items = body.items;
+  if (!Array.isArray(items) || items.length < 1 || items.length > 50) throw bad('items');
+  const out = items.map((id) => idOf(id, 'items'));
+  if (new Set(out).size !== out.length) throw bad('items');
+  return out;
 }
 
 export const classRoutes = [
@@ -133,6 +142,14 @@ export const classRoutes = [
     const userId = await joiner(request, env);
     return json({ space: await joinByCode(env.DB, userId, (await readJson(request)).code) });
   }],
-  ['POST', route(`spaces/${SID}/absorb`), async ({ request, env, params: [sid] }) =>
-    json(await absorb(env.DB, await requireUser(request, env), sid, absorbBody(await readJson(request))))],
+  ['POST', route(`spaces/${SID}/absorb`), async ({ request, env, params: [sid] }) => {
+    const userId = await requireUser(request, env);
+    const body = await readJson(request);
+    if (body.items !== undefined) return json(await shareItems(env.DB, userId, sid, shareBody(body)));
+    return json(await absorb(env.DB, userId, sid, absorbBody(body)));
+  }],
+  ['POST', route(`spaces/${SID}/items/([^/]{1,72})/keep`), async ({ request, env, params: [sid, itemId] }) => {
+    await keep(env.DB, await requireUser(request, env), sid, idOf(itemId, 'id'));
+    return done();
+  }],
 ];
