@@ -292,8 +292,10 @@ describe("a removed item's card", () => {
         fireEvent.click(keep)
         expect(fake.api.spaces.keep).toHaveBeenCalledTimes(1)
         expect(screen.getByRole<HTMLButtonElement>("button", { name: "Dismiss" }).disabled).toBe(true)
+        /* not found, and your mark is still here after a sync: not a keep that already happened */
         fail(new ApiError(404, { error: "not_found" }))
-        expect(await screen.findByText(/doesn't match a class/)).toBeTruthy()
+        expect(await screen.findByText("That may already be done, or the class changed. Look again in a moment.")).toBeTruthy()
+        expect(fake.syncNow).toHaveBeenCalled()
         expect(keep.disabled).toBe(false)
     })
 

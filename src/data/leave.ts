@@ -3,7 +3,7 @@
 // for everyone; one item of yours shared with its class. Every call but Dismiss and Restore
 // needs a connection; what changed arrives by sync like everything else.
 
-import { api } from "@/core/api"
+import { api, ApiError } from "@/core/api"
 import * as store from "@/core/store"
 import { syncNow } from "@/core/sync"
 import { REVIEW_ID } from "@/core/shared"
@@ -22,10 +22,24 @@ async function uploadFirst(): Promise<void> {
     if (store.pendingCount()) await syncNow()
 }
 
+/* A call that already happened answers not found when it comes again (its answer was lost and
+   the tap repeated, or another device did it first): sync, and when what it acted on is gone
+   here too, it is done. Else it fails as "changed" (messageFor), not as a code that matched nothing. */
+async function once(call: () => Promise<unknown>, done: () => boolean): Promise<void> {
+    try {
+        await call()
+    } catch (e) {
+        if (!(e instanceof ApiError) || e.status !== 404) throw e
+        await syncNow()
+        if (!done()) throw new ApiError(404, { error: "changed" })
+    }
+}
+const spaceGone = (spaceId: string) => () => !store.data.spaces.some((s) => s.id === spaceId)
+
 /** Leave a class: your edits upload first, so the copy holds them. */
 export async function leaveClass(spaceId: string, keepCopy: boolean, name: string): Promise<void> {
     await uploadFirst()
-    await api.spaces.leave(spaceId, keepCopy)
+    await once(() => api.spaces.leave(spaceId, keepCopy), spaceGone(spaceId))
     closeSheet()
     toast(keepCopy ? `You left ${name}. Your copy is in your courses.` : `You left ${name}.`)
     await syncNow()
@@ -33,7 +47,7 @@ export async function leaveClass(spaceId: string, keepCopy: boolean, name: strin
 
 /** The owner removes someone; they keep a copy of the class. */
 export async function removeMember(spaceId: string, userId: string): Promise<void> {
-    await api.spaces.remove(spaceId, userId)
+    await once(() => api.spaces.remove(spaceId, userId), () => !store.data.spaces.find((s) => s.id === spaceId)?.members.some((m) => m.userId === userId))
     await syncNow()
 }
 
@@ -46,7 +60,7 @@ export async function setArchived(spaceId: string, archived: boolean): Promise<v
 /** Delete a class only you are in; a copy by default. */
 export async function deleteClass(spaceId: string, keepCopy: boolean, name: string): Promise<void> {
     await uploadFirst()
-    await api.spaces.del(spaceId, keepCopy)
+    await once(() => api.spaces.del(spaceId, keepCopy), spaceGone(spaceId))
     closeSheet()
     toast(keepCopy ? `${name} is deleted. Your copy is in your courses.` : `${name} is deleted.`)
     await syncNow()
@@ -55,7 +69,8 @@ export async function deleteClass(spaceId: string, keepCopy: boolean, name: stri
 /** Keep as mine: a removed item becomes yours, filed under the class. The item's card closes; the class sheet's list passes `close: false`. */
 export async function keepItem(key: string, { close = true } = {}): Promise<void> {
     const k = splitKey(key)
-    await api.spaces.keep(k.spaceId!, k.id)
+    /* a keep deletes your mark on it */
+    await once(() => api.spaces.keep(k.spaceId!, k.id), () => !store.data.marks.some((m) => m.id === k.spaceId + ":" + k.id))
     if (close) closeSheet()
     await syncNow()
 }

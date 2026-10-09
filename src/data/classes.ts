@@ -141,6 +141,7 @@ export function messageFor(e: unknown, name = ""): string {
     if (code === "limit") return "You're in 20 classes and projects, the most anyone can be in."
     if (code === "full") return "This class is full: 30 people is the most it holds."
     if (code === "expired") return "That has expired. Ask for a new code or invite."
+    if (code === "changed") return "That may already be done, or the class changed. Look again in a moment."
     if (code === "not_found") return "That doesn't match a class. The code or invite may have been withdrawn."
     if (code === "forbidden") return "Only the class's owner can do that."
     if (code === "owner") return "Hand the class on to someone first: the owner can't leave."

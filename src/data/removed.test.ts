@@ -2,13 +2,16 @@ import { afterEach, describe, expect, it, vi } from "vitest"
 
 const fake = vi.hoisted(() => ({
     data: { profile: { id: "u-me", isAdmin: true }, items: [], courses: [], shared_items: [], removed_items: [] as unknown[], shared_courses: [], marks: [] as unknown[], space_prefs: [], spaces: [] as unknown[] },
-    api: { spaces: { leave: vi.fn(async () => undefined), keep: vi.fn(async () => undefined), share: vi.fn(async () => ({ shared: 1 })), del: vi.fn(async () => undefined) } },
+    api: { spaces: { leave: vi.fn(async () => undefined), keep: vi.fn(async () => undefined), share: vi.fn(async () => ({ shared: 1 })), del: vi.fn(async () => undefined), remove: vi.fn(async () => undefined) } },
     store: { deleteMark: vi.fn(async () => undefined), restoreShared: vi.fn(async () => undefined), pendingCount: vi.fn(() => 0) },
     syncNow: vi.fn(async () => true),
     closeSheet: vi.fn(), toast: vi.fn(),
 }))
 vi.mock("@/core/store", () => ({ data: fake.data, subscribe: () => () => {}, ...fake.store }))
-vi.mock("@/core/api", () => ({ api: fake.api, ApiError: class extends Error {} }))
+vi.mock("@/core/api", () => ({
+    api: fake.api,
+    ApiError: class extends Error { status: number; body: unknown; constructor(status: number, body: unknown) { super(); this.status = status; this.body = body } },
+}))
 vi.mock("@/core/sync", () => ({ syncNow: fake.syncNow }))
 vi.mock("@/data/overlay", () => ({ closeSheet: fake.closeSheet, openSheet: vi.fn() }))
 vi.mock("@/data/toast", () => ({ toast: fake.toast }))
@@ -16,7 +19,8 @@ vi.mock("@/data/query", () => ({ schoolCal: () => null }))
 
 import { normalizeItem } from "@/core/model"
 import { meaningful, mergeItems } from "./effective"
-import { canShareItem, deleteClass, dismissItem, keepItem, leaveClass, removedLine, restoreItem, shareItem } from "./leave"
+import { ApiError } from "@/core/api"
+import { canShareItem, deleteClass, dismissItem, keepItem, leaveClass, removeMember, removedLine, restoreItem, shareItem } from "./leave"
 import { leftClass } from "./refs"
 import type { Mark } from "./types"
 
@@ -85,6 +89,43 @@ describe("leaving", () => {
         expect(fake.syncNow).toHaveBeenCalledTimes(3)
         expect(fake.api.spaces.leave).toHaveBeenCalled()
         fake.store.pendingCount.mockReturnValue(0)
+    })
+
+    it("a call answered not found is done when a sync shows it done (a retry after a lost answer), else says the class changed", async () => {
+        const notFound = () => new ApiError(404, { error: "not_found" })
+        const space = { id: SID, scope: WEB, kind: "class", members: [{ userId: "u-sam", name: "Sam", role: "member" }] }
+        /* gone from this device after the sync: done, as if it had answered */
+        fake.data.spaces = []
+        fake.data.marks = []
+        fake.api.spaces.leave.mockRejectedValueOnce(notFound())
+        await leaveClass(SID, true, "Web Services")
+        expect(fake.toast).toHaveBeenCalledWith("You left Web Services. Your copy is in your courses.")
+        fake.api.spaces.del.mockRejectedValueOnce(notFound())
+        await deleteClass(SID, false, "Web Services")
+        expect(fake.toast).toHaveBeenCalledWith("Web Services is deleted.")
+        fake.api.spaces.keep.mockRejectedValueOnce(notFound())
+        await keepItem(WEB + "/a1")
+        fake.data.spaces = [{ ...space, members: [] }]
+        fake.api.spaces.remove.mockRejectedValueOnce(notFound())
+        await removeMember(SID, "u-sam")
+        /* still here after the sync: not done */
+        vi.clearAllMocks()
+        fake.data.spaces = [space]
+        fake.data.marks = [mark({ grade: 80 })]
+        const changed = { status: 404, body: { error: "changed" } }
+        fake.api.spaces.leave.mockRejectedValueOnce(notFound())
+        await expect(leaveClass(SID, true, "Web Services")).rejects.toMatchObject(changed)
+        fake.api.spaces.keep.mockRejectedValueOnce(notFound())
+        await expect(keepItem(WEB + "/a1")).rejects.toMatchObject(changed)
+        fake.api.spaces.remove.mockRejectedValueOnce(notFound())
+        await expect(removeMember(SID, "u-sam")).rejects.toMatchObject(changed)
+        expect(fake.closeSheet).not.toHaveBeenCalled()
+        expect(fake.toast).not.toHaveBeenCalled()
+        /* any other refusal is as it came */
+        fake.api.spaces.leave.mockRejectedValueOnce(new ApiError(403, { error: "owner" }))
+        await expect(leaveClass(SID, true, "Web Services")).rejects.toMatchObject({ body: { error: "owner" } })
+        fake.data.spaces = []
+        fake.data.marks = []
     })
 
     it("knows a class you left, and what you may share", () => {
