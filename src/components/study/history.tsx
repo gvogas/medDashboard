@@ -11,6 +11,7 @@ import { dayOf } from "@/core/history"
 import { shortDate, DOW } from "@/core/dates"
 /* History's sessions are in key space (study.ts): their course and item are found by key */
 import { courseByKey as courseOf, itemByKey as itemOf } from "@/data/effective"
+import { leftClass } from "@/data/refs"
 import { accent, Panel } from "@/components/views/bits"
 import { Segmented } from "@/components/sheet/fields"
 import {
@@ -24,7 +25,7 @@ const TABS = [["week", "Week"], ["month", "Month"], ["term", "Term"]] as const
 
 /* A course's colour for --c; sessions with none, or a course since deleted, are grey. */
 const courseColour = (id: string | null): CSSProperties | undefined => accent((courseOf(id) as Course | null)?.color) ?? accent(NO_COURSE)
-const courseCode = (id: string | null) => (courseOf(id) as Course | null)?.code || "No course"
+const courseCode = (id: string | null) => (courseOf(id) as Course | null)?.code || (leftClass(id) ? "A class you left" : "No course")
 const plural = (n: number, one: string) => n + " " + one + (n === 1 ? "" : "s")
 const reduced = () => !!window.matchMedia?.("(prefers-reduced-motion: reduce)").matches
 
@@ -244,7 +245,7 @@ function SessionRow({ s, withDay, onDelete }: { s: StudySession; withDay: boolea
                 <i aria-hidden="true" className="size-[7px] flex-none rounded-full bg-[var(--c)]" />{courseCode(s.courseId)}
             </span>
             <span className="flex min-w-0 flex-col @max-[520px]:[grid-area:what]">
-                <b className="truncate font-semibold">{it ? it.title : (courseOf(s.courseId) as Course | null)?.name || "No course"}</b>
+                <b className="truncate font-semibold">{it ? it.title : (courseOf(s.courseId) as Course | null)?.name || (leftClass(s.courseId) ? "A class you left" : "No course")}</b>
                 {note && <em className="truncate font-serif text-[12.5px] text-ink-2 italic">{note}</em>}
             </span>
             <span className="text-right font-mono font-semibold @max-[520px]:[grid-area:mins]">{duration(s.studyMinutes)}</span>

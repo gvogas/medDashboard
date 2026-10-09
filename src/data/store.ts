@@ -43,6 +43,9 @@ const spacePrefs = () => data.space_prefs ?? NONE
 /** Your marks on shared items, and your prefs for your spaces: the class item card and the class sheet read them. */
 export const useMarks = () => useSyncExternalStore(subscribe, marks)
 export const useSpacePrefs = () => useSyncExternalStore(subscribe, spacePrefs)
+const removedItems = () => data.removed_items ?? NONE
+/** Class items an editor removed, as tombstones: their cards and the class sheet's Removed list read them. */
+export const useRemovedItems = () => useSyncExternalStore(subscribe, removedItems)
 
 /** Edits the server turned down, kept on this device. The store changes this list in place,
     so the bridge's version is the snapshot. */
