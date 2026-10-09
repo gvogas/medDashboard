@@ -95,6 +95,44 @@ describe('the feed, served', () => {
     expect(ics).not.toContain('Shelved reading');
   });
 
+  it("never carries a class you were not in", async () => {
+    const me = await signInAdmin('feedstranger'), other = await signInAdmin('feedowner');
+    const s = await makeSpace({ members: { [other.id]: 'owner' } });
+    await sharedItem(s.scope, 'a1', { course_id: 'web', title: 'Not your class' });
+    const { ics } = await feedOf(me);
+    expect(ics).not.toContain('Not your class');
+    expect(ics).not.toContain(s.id);
+  });
+
+  it('cancels a class item you marked missed', async () => {
+    const me = await signInAdmin('feedmissed');
+    const s = await makeSpace({ members: { [me.id]: 'member' } });
+    await sharedItem(s.scope, 'a1', { course_id: 'web', title: 'Skipped lab' });
+    await mark(me.id, s.id, 'a1', { status: 'missed' });
+    const ev = (await feedOf(me)).ics.split('BEGIN:VEVENT').find((e) => e.includes('Skipped lab'));
+    expect(ev).toContain('STATUS:CANCELLED');
+  });
+
+  it("runs a class's meetings through your semester of your school calendar", async () => {
+    const me = await signInAdmin('feedterm');
+    const s = await makeSpace({ members: { [me.id]: 'member' } });
+    await env.DB.prepare('UPDATE courses SET meetings = ? WHERE scope = ?').bind(meetings, s.scope).run();
+    const cal = { name: 'Northfield', days: [], terms: [
+      { name: 'Fall 2026', start: '2026-09-08', end: '2026-12-18' }, { name: 'Winter 2027', start: '2027-01-05', end: '2027-04-16' }] };
+    await env.DB.prepare('UPDATE users SET school_calendar = ? WHERE id = ?').bind(JSON.stringify(cal), me.id).run();
+    await pref(me.id, s.id, { term: 'Fall 2026' });
+    const { ics } = await feedOf(me);
+    expect(ics).toContain(`UID:class-${s.id}-web-m1-2026-09-08@rounds`);
+    expect(ics).not.toContain('-2027-01-05@rounds');
+  });
+
+  it('keeps a class its owner archived', async () => {
+    const me = await signInAdmin('feedownerarch');
+    const s = await makeSpace({ members: { [me.id]: 'member' }, archived: 1 });
+    await sharedItem(s.scope, 'a1', { course_id: 'web', title: 'Archived but kept' });
+    expect((await feedOf(me)).ics).toContain('SUMMARY:WEB · Archived but kept');
+  });
+
   it('drops a class you left', async () => {
     const me = await signInAdmin('feedleft');
     const s = await makeSpace({ members: { [me.id]: 'member' } });
