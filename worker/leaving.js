@@ -207,6 +207,8 @@ export async function deleteClass(db, userId, spaceId, keepCopy, now = Date.now(
 /* The items a keep names (?8) that are removed and hold something of yours in your live mark. */
 const KEPT = `(SELECT km.item_id FROM marks AS km JOIN items AS ki ON ki.scope = ?4 AND ki.id = km.item_id AND ki.deleted_at IS NOT NULL
   WHERE km.user_id = ?1 AND km.space_id = ?2 AND km.deleted_at IS NULL AND km.item_id IN (SELECT value FROM json_each(?8)) AND ${MEANINGFUL('km')})`;
+/* The copy of the class item `col` that this batch wrote: if its id became live in between, the copy did not land, so nothing else moves and your mark stays for a later keep. */
+const COPIED = (col) => `EXISTS (SELECT 1 FROM items AS kc WHERE kc.scope = ?3 AND kc.id = ${TO(col)} AND kc.deleted_at IS NULL AND kc.updated_at = ?5 AND kc.class_id = ?2)`;
 const MEMBER_LIVE = 'EXISTS (SELECT 1 FROM members AS kl WHERE kl.space_id = ?2 AND kl.user_id = ?1 AND kl.deleted_at IS NULL)';
 
 /**
@@ -223,11 +225,11 @@ export async function keepItems(db, userId, spaceId, only, now = Date.now(), { m
   await db.batch([
     itemCopy(`i.id IN ${KEPT}${live}`, 'NULL', '?2'),
     `UPDATE study_sessions SET space_id = NULL, course_id = NULL, item_id = ${TO('study_sessions.item_id')}, updated_at = ?5, revision = revision + 1
-      WHERE user_id = ?1 AND space_id = ?2 AND deleted_at IS NULL AND item_id IN ${KEPT}${live}`,
+      WHERE user_id = ?1 AND space_id = ?2 AND deleted_at IS NULL AND item_id IN ${KEPT} AND ${COPIED('study_sessions.item_id')}${live}`,
     `UPDATE achievements SET space_id = NULL, item_id = ${TO('achievements.item_id')}, updated_at = ?5, revision = revision + 1
-      WHERE user_id = ?1 AND space_id = ?2 AND rule = 'grade' AND deleted_at IS NULL AND item_id IN ${KEPT}${live}`,
+      WHERE user_id = ?1 AND space_id = ?2 AND rule = 'grade' AND deleted_at IS NULL AND item_id IN ${KEPT} AND ${COPIED('achievements.item_id')}${live}`,
     `UPDATE marks SET deleted_at = ?5, updated_at = ?5, revision = revision + 1
-      WHERE user_id = ?1 AND space_id = ?2 AND deleted_at IS NULL AND item_id IN ${KEPT}${live}`,
+      WHERE user_id = ?1 AND space_id = ?2 AND deleted_at IS NULL AND item_id IN ${KEPT} AND ${COPIED('marks.item_id')}${live}`,
   ].map((sql) => prepare(db, sql, v)));
 }
 
@@ -251,7 +253,8 @@ const EDITOR = `EXISTS (SELECT 1 FROM members AS gm JOIN spaces AS gs ON gs.id =
  * status, grade, checklist, notes and completion move into your mark; your sessions and grade
  * achievements on it get the space; your item goes, which ends the batch (a retry is 400
  * items). 400 items for one that is not yours under the class or is a lecture review, 400 type
- * for a custom type, 409 exists for an id the class has live. Answers {shared}.
+ * for a custom type, 409 exists for an id the class has live (also when the class made every one
+ * live after the check, so nothing was shared). Answers {shared}, the items shared.
  */
 export async function shareItems(db, userId, spaceId, ids, now = Date.now()) {
   const me = await assertAllowed(db, userId, spaceId, 'editor');
@@ -283,7 +286,9 @@ export async function shareItems(db, userId, spaceId, ids, now = Date.now()) {
     `INSERT INTO marks (user_id, id, space_id, item_id, status, grade, weight, notes, checklist, completed_at, hidden, created_at, updated_at, revision)
       SELECT ?1, ?2 || ':' || p.id, ?2, p.id, p.status, p.grade, NULL, p.notes, p.checklist, p.completed_at, 0, ?5, ?5, ${NEXT_ROW_REVISION}
       FROM items AS p WHERE ${OWN} AND ${SHARED} AND ${EDITOR}
-        AND (p.status != 'todo' OR p.grade IS NOT NULL OR p.notes != '' OR p.checklist != '[]' OR p.completed_at IS NOT NULL)
+        /* an item holding nothing makes no mark, but one you have (a hidden one on a class tombstone) becomes yours, shown */
+        AND (p.status != 'todo' OR p.grade IS NOT NULL OR p.notes != '' OR p.checklist != '[]' OR p.completed_at IS NOT NULL
+          OR EXISTS (SELECT 1 FROM marks AS om WHERE om.user_id = ?1 AND om.id = ?2 || ':' || p.id AND om.deleted_at IS NULL))
       ON CONFLICT (user_id, id) DO UPDATE SET status = excluded.status, grade = excluded.grade, weight = NULL, notes = excluded.notes,
         checklist = excluded.checklist, completed_at = excluded.completed_at, hidden = 0, deleted_at = NULL,
         updated_at = excluded.updated_at, revision = marks.revision + 1`,
@@ -294,5 +299,9 @@ export async function shareItems(db, userId, spaceId, ids, now = Date.now()) {
     `UPDATE items AS p SET deleted_at = ?5, updated_at = ?5, revision = revision + 1 WHERE ${OWN} AND ${SHARED} AND ${EDITOR}`,
     'SELECT changes() AS n',
   ].map((sql) => prepare(db, sql, v)));
-  return { shared: results[5].results[0].n };
+  const shared = results[5].results[0].n;
+  if (shared) return { shared };
+  /* nothing moved: you lost the role, or the class made the id live in between */
+  await assertAllowed(db, userId, spaceId, 'editor');
+  throw new HttpError(409, { error: 'exists' });
 }

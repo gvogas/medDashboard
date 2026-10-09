@@ -1,7 +1,7 @@
 import { env } from 'cloudflare:test';
 import { describe, expect, it } from 'vitest';
 import { achievement, makeSpace, mark, ownItem, post, session, sharedItem, signInAdmin } from './spaces.js';
-import { keepItems } from '../worker/leaving.js';
+import { keepItems, shareItems } from '../worker/leaving.js';
 
 let n = 0;
 const one = (sql, ...binds) => env.DB.prepare(sql).bind(...binds).first();
@@ -10,6 +10,11 @@ async function pair(role = 'member', archived = 0) {
   const tag = ++n, owner = await signInAdmin('kpo' + tag), member = await signInAdmin('kpm' + tag);
   const s = await makeSpace({ members: { [owner.id]: 'owner', [member.id]: role }, archived });
   return { owner, member, s };
+}
+/* The database, with `between` run just before the second batch: after a function's checks, before its writes. */
+function racing(between) {
+  let batches = 0;
+  return { prepare: (sql) => env.DB.prepare(sql), batch: async (stmts) => { if (++batches === 2) await between(); return env.DB.batch(stmts); } };
 }
 
 describe('Keep as mine', () => {
@@ -77,6 +82,21 @@ describe('Keep as mine', () => {
     expect(await one("SELECT count(*) AS n FROM items WHERE scope = 'u:' || ?", member.id)).toEqual({ n: 0 });
   });
 
+  it('moves nothing when the copy id turns live before the batch: the mark stays for a later keep', async () => {
+    const { member, s } = await pair();
+    await sharedItem(s.scope, 'a1', { course_id: 'web', title: 'Lab 3', deleted_at: 9 });
+    await mark(member.id, s.id, 'a1', { grade: 80 });
+    await session(member.id, 's1', { item_id: 'a1', space_id: s.id });
+    await keepItems(racing(() => ownItem(member.id, 'a1', { title: 'Mine meanwhile' })), member.id, s.id, ['a1'], 50);
+    expect(await rows("SELECT id, title FROM items WHERE scope = 'u:' || ?", member.id)).toEqual([{ id: 'a1', title: 'Mine meanwhile' }]);
+    expect(await one('SELECT deleted_at FROM marks WHERE user_id = ?', member.id)).toEqual({ deleted_at: null });
+    expect(await one('SELECT item_id, space_id FROM study_sessions WHERE user_id = ?', member.id)).toEqual({ item_id: 'a1', space_id: s.id });
+    /* a later keep takes a free id */
+    await keepItems(env.DB, member.id, s.id, ['a1'], 60);
+    expect(await one("SELECT grade, class_id FROM items WHERE scope = 'u:' || ? AND id = 'ka1'", member.id)).toEqual({ grade: 80, class_id: s.id });
+    expect(await one('SELECT item_id, space_id FROM study_sessions WHERE user_id = ?', member.id)).toEqual({ item_id: 'ka1', space_id: null });
+  });
+
   it('works in an archived class', async () => {
     const { member, s } = await pair('member', 1);
     await sharedItem(s.scope, 'a1', { course_id: 'web', deleted_at: 9 });
@@ -112,6 +132,27 @@ describe('sharing one item with the class', () => {
     expect(await (await post(editor, `/api/spaces/${s.id}/absorb`, { items: ['p2'] })).json()).toEqual({ shared: 1 });
     expect(await one('SELECT title, deleted_at FROM items WHERE scope = ? AND id = ?', s.scope, 'p2')).toEqual({ title: 'New reading', deleted_at: null });
     expect(await one('SELECT count(*) AS n FROM marks WHERE user_id = ?', editor.id)).toEqual({ n: 0 });
+  });
+
+  it('shows a hidden mark you had on a class tombstone once your item holding nothing is shared', async () => {
+    const { owner, s } = await pair();
+    await sharedItem(s.scope, 'p3', { course_id: 'web', deleted_at: 9 });
+    await mark(owner.id, s.id, 'p3', { hidden: 1, grade: 40 });
+    await ownItem(owner.id, 'p3', { class_id: s.id, title: 'Reading 5' });
+    expect(await (await post(owner, `/api/spaces/${s.id}/absorb`, { items: ['p3'] })).json()).toEqual({ shared: 1 });
+    expect(await one('SELECT hidden, grade, status, deleted_at FROM marks WHERE user_id = ?', owner.id)).toEqual({ hidden: 0, grade: null, status: 'todo', deleted_at: null });
+  });
+
+  it('shares nothing when the class makes the id live before the batch: 409, your item stays yours', async () => {
+    const { owner, s } = await pair();
+    await ownItem(owner.id, 'p4', { class_id: s.id, status: 'done' });
+    await session(owner.id, 's1', { item_id: 'p4' });
+    const db = racing(() => sharedItem(s.scope, 'p4', { course_id: 'web', title: 'Theirs' }));
+    await expect(shareItems(db, owner.id, s.id, ['p4'], 50)).rejects.toMatchObject({ status: 409, body: { error: 'exists' } });
+    expect(await one('SELECT title FROM items WHERE scope = ? AND id = ?', s.scope, 'p4')).toEqual({ title: 'Theirs' });
+    expect(await one("SELECT deleted_at FROM items WHERE scope = 'u:' || ? AND id = 'p4'", owner.id)).toEqual({ deleted_at: null });
+    expect(await one('SELECT count(*) AS n FROM marks WHERE user_id = ?', owner.id)).toEqual({ n: 0 });
+    expect(await one('SELECT space_id FROM study_sessions WHERE user_id = ?', owner.id)).toEqual({ space_id: null });
   });
 
   it('refuses members, custom types, lecture reviews, items not filed under it, and an id the class has', async () => {
