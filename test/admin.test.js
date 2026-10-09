@@ -5,6 +5,8 @@ import { LATEST_MIGRATION, adminHousekeeping } from '../worker/admin.js';
 import { DAILY_CAP, logError, purgeErrors } from '../worker/errors.js';
 import { trafficReport } from '../worker/analytics.js';
 import { upsertRow } from '../worker/db.js';
+import { NEXT_SPACE_REVISION as COPIED_REVISION } from '../worker/accounts.js';
+import { NEXT_SPACE_REVISION } from '../worker/spaces.js';
 
 const makeAdmin = (username) => env.DB.prepare('UPDATE users SET is_admin = 1 WHERE username = ?').bind(username).run();
 
@@ -106,6 +108,10 @@ describe('accounts', () => {
     expect(await env.DB.prepare("SELECT count(*) AS n FROM courses WHERE scope = 'u:' || ?").bind(id).first()).toEqual({ n: 0 });
     expect(await env.DB.prepare("SELECT count(*) AS n FROM changes WHERE scope = 'u:' || ?").bind(id).first()).toEqual({ n: 0 });
     expect((await admin('/api/admin/accounts/u-gone1', { method: 'DELETE', body: { confirm: 'gone1' } })).status).toBe(404);
+  });
+
+  it("keeps worker/accounts.js's copy of the next space revision in step with worker/spaces.js", () => {
+    expect(COPIED_REVISION).toBe(NEXT_SPACE_REVISION);
   });
 
   it('hands a class the account owns to its longest-standing editor, deletes one with nobody else, and drops its memberships', async () => {

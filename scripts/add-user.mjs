@@ -12,7 +12,7 @@ import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { hashPassword, normalizeUsername } from '../worker/password.js';
 import { throttleRowsFor } from '../worker/throttle.js';
-import { ACCOUNT_TABLES } from '../worker/accounts.js';
+import { ACCOUNT_TABLES, HAND_ON } from '../worker/accounts.js';
 
 const args = process.argv.slice(2);
 const remote = args.includes('--remote');
@@ -74,8 +74,18 @@ if (admin) {
 } else if (remove) {
   const typed = await ask(`This deletes ${username} and every course, item, quote, study session and achievement it owns. Type the username to confirm: `);
   if (typed.trim().toLowerCase() !== username) { console.error('Not deleted.'); process.exit(1); }
-  const who = `(SELECT id FROM users WHERE username = '${username}')`;
-  sql = `${ACCOUNT_TABLES.map(([table, owner]) => `DELETE FROM ${table} WHERE ${owner.replaceAll('?1', who)};`).join(' ')}
+  // Its classes pass on first (HAND_ON), as the Admin page's deletion does. ?N becomes the
+  // Nth value, whole numbers only (so ?10 is never read as ?1 and a 0); any other is an error.
+  const values = [`(SELECT id FROM users WHERE username = '${username}')`, String(Date.now())];
+  const bind = (text) => text.replace(/\?(\d+)/g, (_, n) => {
+    if (values[n - 1] === undefined) throw new Error(`No value for ?${n}`);
+    return values[n - 1];
+  });
+  // wrangler d1 execute ran a multi-statement --command as one transaction on the local
+  // database (a failing statement undid the earlier ones; checked 2026-10-09). Not checked
+  // with --remote.
+  sql = `${HAND_ON.map((s) => bind(s) + ';').join(' ')}
+         ${ACCOUNT_TABLES.map(([table, owner]) => `DELETE FROM ${table} WHERE ${bind(owner)};`).join(' ')}
          DELETE FROM users WHERE username = '${username}';
          DELETE FROM login_throttle WHERE ${throttleRowsFor(username)};`;
 } else {
