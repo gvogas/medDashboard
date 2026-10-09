@@ -13,9 +13,18 @@ import { ago } from "./marks"
 import { splitKey } from "./refs"
 import type { Item, SharedItem, Space } from "./types"
 
+/* Your edits upload before the server copies or shares. syncNow hands back a cycle already
+   running, which may have uploaded before your last edit was saved: an edit still waiting
+   gets a second sync. If it is still waiting after that (offline, refused), the call goes
+   ahead; an edit refused later goes to Saved copies, as any other. */
+async function uploadFirst(): Promise<void> {
+    await syncNow()
+    if (store.pendingCount()) await syncNow()
+}
+
 /** Leave a class: your edits upload first, so the copy holds them. */
 export async function leaveClass(spaceId: string, keepCopy: boolean, name: string): Promise<void> {
-    await syncNow()
+    await uploadFirst()
     await api.spaces.leave(spaceId, keepCopy)
     closeSheet()
     toast(keepCopy ? `You left ${name}. Your copy is in your courses.` : `You left ${name}.`)
@@ -36,7 +45,7 @@ export async function setArchived(spaceId: string, archived: boolean): Promise<v
 
 /** Delete a class only you are in; a copy by default. */
 export async function deleteClass(spaceId: string, keepCopy: boolean, name: string): Promise<void> {
-    await syncNow()
+    await uploadFirst()
     await api.spaces.del(spaceId, keepCopy)
     closeSheet()
     toast(keepCopy ? `${name} is deleted. Your copy is in your courses.` : `${name} is deleted.`)
@@ -73,7 +82,7 @@ export function canShareItem(it: Pick<Item, "id" | "type" | "classId">, space: P
 
 /** Share an item of yours with its class: your edits upload first. */
 export async function shareItem(itemId: string, spaceId: string, name: string): Promise<void> {
-    await syncNow()
+    await uploadFirst()
     await api.spaces.share(spaceId, [itemId])
     closeSheet()
     toast(`Shared with ${name}. Your status, grade and notes stay yours.`)

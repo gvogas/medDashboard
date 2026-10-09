@@ -2,8 +2,8 @@ import { afterEach, describe, expect, it, vi } from "vitest"
 
 const fake = vi.hoisted(() => ({
     data: { profile: { id: "u-me", isAdmin: true }, items: [], courses: [], shared_items: [], removed_items: [] as unknown[], shared_courses: [], marks: [] as unknown[], space_prefs: [], spaces: [] as unknown[] },
-    api: { spaces: { leave: vi.fn(async () => undefined), keep: vi.fn(async () => undefined), share: vi.fn(async () => ({ shared: 1 })) } },
-    store: { deleteMark: vi.fn(async () => undefined), restoreShared: vi.fn(async () => undefined) },
+    api: { spaces: { leave: vi.fn(async () => undefined), keep: vi.fn(async () => undefined), share: vi.fn(async () => ({ shared: 1 })), del: vi.fn(async () => undefined) } },
+    store: { deleteMark: vi.fn(async () => undefined), restoreShared: vi.fn(async () => undefined), pendingCount: vi.fn(() => 0) },
     syncNow: vi.fn(async () => true),
     closeSheet: vi.fn(), toast: vi.fn(),
 }))
@@ -16,7 +16,7 @@ vi.mock("@/data/query", () => ({ schoolCal: () => null }))
 
 import { normalizeItem } from "@/core/model"
 import { meaningful, mergeItems } from "./effective"
-import { canShareItem, dismissItem, keepItem, leaveClass, removedLine, restoreItem } from "./leave"
+import { canShareItem, deleteClass, dismissItem, keepItem, leaveClass, removedLine, restoreItem, shareItem } from "./leave"
 import { leftClass } from "./refs"
 import type { Mark } from "./types"
 
@@ -62,6 +62,29 @@ describe("leaving", () => {
         expect(fake.api.spaces.leave).toHaveBeenCalledWith(SID, true)
         expect(fake.closeSheet).toHaveBeenCalled()
         expect(fake.toast).toHaveBeenCalledWith("You left Web Services. Your copy is in your courses.")
+    })
+
+    it("syncs again first when an edit saved after the running sync began is still waiting", async () => {
+        /* syncNow hands back a cycle already running, which may have uploaded before the edit was saved */
+        for (const [call, server] of [[() => leaveClass(SID, true, "Web Services"), fake.api.spaces.leave],
+            [() => deleteClass(SID, true, "Web Services"), fake.api.spaces.del], [() => shareItem("x1", SID, "Web Services"), fake.api.spaces.share]] as const) {
+            vi.clearAllMocks()
+            fake.store.pendingCount.mockReturnValueOnce(1)
+            await call()
+            expect(fake.syncNow.mock.invocationCallOrder[1]).toBeLessThan(server.mock.invocationCallOrder[0])
+            expect(fake.syncNow).toHaveBeenCalledTimes(3)
+        }
+        /* nothing waiting: one sync before the call, as before */
+        vi.clearAllMocks()
+        await leaveClass(SID, true, "Web Services")
+        expect(fake.syncNow).toHaveBeenCalledTimes(2)
+        /* still waiting after the second (offline, refused): it goes ahead; an edit refused later lands in Saved copies */
+        vi.clearAllMocks()
+        fake.store.pendingCount.mockReturnValue(1)
+        await leaveClass(SID, true, "Web Services")
+        expect(fake.syncNow).toHaveBeenCalledTimes(3)
+        expect(fake.api.spaces.leave).toHaveBeenCalled()
+        fake.store.pendingCount.mockReturnValue(0)
     })
 
     it("knows a class you left, and what you may share", () => {

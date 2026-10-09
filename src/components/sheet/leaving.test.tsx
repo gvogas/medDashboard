@@ -19,7 +19,7 @@ const fake = vi.hoisted(() => ({
         invites: { list: vi.fn(), accept: vi.fn(), decline: vi.fn() },
         join: vi.fn(),
     },
-    store: { deleteMark: vi.fn(async () => undefined), restoreShared: vi.fn(async () => undefined) },
+    store: { deleteMark: vi.fn(async () => undefined), restoreShared: vi.fn(async () => undefined), pendingCount: () => 0 },
     syncNow: vi.fn(async () => true),
     overlay: { openSheet: vi.fn(), replaceSheet: vi.fn(), closeSheet: vi.fn(), beforeSheetClose: new Set<() => void>() },
     toast: vi.fn(),
