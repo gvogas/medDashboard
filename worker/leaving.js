@@ -105,7 +105,7 @@ const layerGone = (live) => [
 /** The class copied into your scope (spec §13 Detach), then your layer there deleted. */
 const copyClass = (live) => [
   `INSERT INTO courses (scope, id, code, name, color, instructor, term, archived, meetings, target, created_at, updated_at, revision)
-    SELECT ?3, ?7, c.code, c.name, COALESCE(p.color, c.color), c.instructor, COALESCE(p.term, c.term), COALESCE(p.archived, 0), c.meetings, p.target, ?5, ?5, ${NEXT_ROW_REVISION}
+    SELECT ?3, ?7, c.code, c.name, COALESCE(p.color, c.color), c.instructor, COALESCE(p.term, c.term), COALESCE(p.archived, (SELECT sa.archived FROM spaces AS sa WHERE sa.id = ?2)), c.meetings, p.target, ?5, ?5, ${NEXT_ROW_REVISION}
     FROM courses AS c LEFT JOIN space_prefs AS p ON p.user_id = ?1 AND p.id = ?2 AND p.deleted_at IS NULL
     WHERE c.scope = ?4 AND c.deleted_at IS NULL AND ${live}
     ON CONFLICT (scope, id) DO UPDATE SET code = excluded.code, name = excluded.name, color = excluded.color, instructor = excluded.instructor,
@@ -178,7 +178,8 @@ export async function removeMember(db, userId, spaceId, targetId, now = Date.now
 
 /** Archive or unarchive a class (spec §13), the owner only, archived or not; moves the revision when it changes. */
 export async function setArchived(db, userId, spaceId, archived, now = Date.now()) {
-  await assertKeeper(db, userId, spaceId);
+  const me = await assertKeeper(db, userId, spaceId);
+  if (me.kind !== 'class') throw new HttpError(404, { error: 'not_found' });
   const g = keeperGuard(spaceId, userId), a = archived ? 1 : 0;
   await db.prepare(`UPDATE spaces SET archived = ?, updated_at = ?, revision = ${NEXT_SPACE_REVISION} WHERE id = ? AND archived != ? AND ${g.sql}`)
     .bind(a, now, spaceId, a, ...g.binds).run();
@@ -195,7 +196,9 @@ const CLOSING = "EXISTS (SELECT 1 FROM members AS lv WHERE lv.space_id = ?2 AND 
 export async function deleteClass(db, userId, spaceId, keepCopy, now = Date.now()) {
   const me = await assertKeeper(db, userId, spaceId);
   if (me.kind !== 'class') throw new HttpError(404, { error: 'not_found' });
-  const { n } = await db.prepare(`SELECT ${LIVE_MEMBERS('?')} AS n`).bind(spaceId).first();
-  if (n > 1) throw new HttpError(409, { error: 'members' });
-  if (!(await detach(db, userId, spaceId, { keepCopy, who: CLOSING, closing: true, now }))) throw new HttpError(404, { error: 'not_found' });
+  const crowded = async () => (await db.prepare(`SELECT ${LIVE_MEMBERS('?')} AS n`).bind(spaceId).first()).n > 1;
+  if (await crowded()) throw new HttpError(409, { error: 'members' });
+  if (await detach(db, userId, spaceId, { keepCopy, who: CLOSING, closing: true, now })) return;
+  /* someone joined between the count and the batch */
+  throw (await crowded()) ? new HttpError(409, { error: 'members' }) : new HttpError(404, { error: 'not_found' });
 }

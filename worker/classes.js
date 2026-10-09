@@ -31,6 +31,9 @@ function keepOf(v) {
   return v;
 }
 
+/* A body that may be left out (only keepCopy): none, or an empty one, reads as {}. */
+const optionalJson = (request) => (request.body && request.headers.get('content-length') !== '0' ? readJson(request) : {});
+
 /** POST /api/spaces in Stage 3: a class, blank (`course`) or from a course of yours (`convertCourseId`, `items`). */
 export function classBody(body) {
   if (body.kind !== 'class') throw bad('kind');
@@ -91,12 +94,12 @@ export const classRoutes = [
   }],
   ['DELETE', route(`spaces/${SID}`), async ({ request, env, params: [sid] }) => {
     const userId = await requireUser(request, env);
-    await deleteClass(env.DB, userId, sid, keepOf((await readJson(request)).keepCopy));
+    await deleteClass(env.DB, userId, sid, keepOf((await optionalJson(request)).keepCopy));
     return done();
   }],
   ['POST', route(`spaces/${SID}/leave`), async ({ request, env, params: [sid] }) => {
     const userId = await requireUser(request, env);
-    await leave(env.DB, userId, sid, keepOf((await readJson(request)).keepCopy));
+    await leave(env.DB, userId, sid, keepOf((await optionalJson(request)).keepCopy));
     return done();
   }],
   ['DELETE', route(`spaces/${SID}/members/${UID}`), async ({ request, env, params: [sid, uid] }) => {

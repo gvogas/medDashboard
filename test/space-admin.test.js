@@ -1,6 +1,7 @@
 import { env } from 'cloudflare:test';
 import { describe, expect, it } from 'vitest';
-import { makeSpace, post, sharedItem, signInAdmin, spaceRevision } from './spaces.js';
+import { makeSpace, post, pref, sharedItem, signInAdmin, spaceRevision } from './spaces.js';
+import { deleteClass } from '../worker/leaving.js';
 
 let n = 0;
 const one = (sql, ...binds) => env.DB.prepare(sql).bind(...binds).first();
@@ -49,6 +50,15 @@ describe('archiving a class', () => {
     expect(inv.status).toBe(403);
     expect(await inv.json()).toEqual({ error: 'archived' });
   });
+
+  it('a project cannot be archived here, and an outsider gets 404', async () => {
+    const tag = ++n, owner = await signInAdmin('apo' + tag), outsider = await signInAdmin('apx' + tag);
+    const p = await makeSpace({ kind: 'project', members: { [owner.id]: 'owner' } });
+    expect((await post(owner, `/api/spaces/${p.id}/archive`, { archived: true })).status).toBe(404);
+    expect(await one('SELECT archived FROM spaces WHERE id = ?', p.id)).toEqual({ archived: 0 });
+    const { s } = await pair();
+    expect((await post(outsider, `/api/spaces/${s.id}/archive`, { archived: true })).status).toBe(404);
+  });
 });
 
 describe('deleting a class', () => {
@@ -74,6 +84,54 @@ describe('deleting a class', () => {
     const tag = ++n, owner = await signInAdmin('solo' + tag);
     const s = await makeSpace({ members: { [owner.id]: 'owner' } });
     expect((await owner(`/api/spaces/${s.id}`, { method: 'DELETE', body: { keepCopy: false } })).status).toBe(204);
+    expect(await one("SELECT count(*) AS n FROM courses WHERE scope = 'u:' || ?", owner.id)).toEqual({ n: 0 });
+  });
+
+  it('a project is not deleted here; a bad keepCopy is refused', async () => {
+    const tag = ++n, owner = await signInAdmin('dpo' + tag);
+    const p = await makeSpace({ kind: 'project', members: { [owner.id]: 'owner' } });
+    expect((await owner(`/api/spaces/${p.id}`, { method: 'DELETE', body: {} })).status).toBe(404);
+    const s = await makeSpace({ members: { [owner.id]: 'owner' } });
+    expect(await (await owner(`/api/spaces/${s.id}`, { method: 'DELETE', body: { keepCopy: 'no' } })).json()).toEqual({ error: 'invalid', field: 'keepCopy' });
+  });
+
+  it('no body, or an empty one, keeps a copy (Decision 5), for deleting and for leaving', async () => {
+    for (const body of [undefined, '']) {
+      const { owner, member, s } = await pair();
+      expect((await owner(`/api/spaces/${s.id}/leave`, { method: 'POST', body })).status).toBe(403);
+      expect((await member(`/api/spaces/${s.id}/leave`, { method: 'POST', body })).status).toBe(204);
+      expect(await one("SELECT count(*) AS n FROM courses WHERE scope = 'u:' || ? AND deleted_at IS NULL", member.id)).toEqual({ n: 1 });
+      expect((await owner(`/api/spaces/${s.id}`, { method: 'DELETE', body })).status).toBe(204);
+      expect(await one("SELECT count(*) AS n FROM courses WHERE scope = 'u:' || ? AND deleted_at IS NULL", owner.id)).toEqual({ n: 1 });
+    }
+  });
+
+  it("an archived class's copy is archived when you have no prefs; your prefs' flag wins", async () => {
+    const tag = ++n, owner = await signInAdmin('dao' + tag), member = await signInAdmin('dam' + tag);
+    const s = await makeSpace({ archived: 1, members: { [owner.id]: 'owner', [member.id]: 'member' } });
+    await pref(member.id, s.id, { archived: 0 });
+    expect((await post(member, `/api/spaces/${s.id}/leave`)).status).toBe(204);
+    expect(await one("SELECT archived FROM courses WHERE scope = 'u:' || ?", member.id)).toEqual({ archived: 0 });
+    expect((await owner(`/api/spaces/${s.id}`, { method: 'DELETE' })).status).toBe(204);
+    expect(await one("SELECT archived FROM courses WHERE scope = 'u:' || ?", owner.id)).toEqual({ archived: 1 });
+  });
+
+  it('someone joining between the count and the batch makes it 409 members, not 404', async () => {
+    const tag = ++n, owner = await signInAdmin('dro' + tag), joiner = await signInAdmin('drj' + tag);
+    const s = await makeSpace({ members: { [owner.id]: 'owner' } });
+    let joined = false;
+    const racing = {
+      prepare: (sql) => env.DB.prepare(sql),
+      batch: async (stmts) => {
+        if (!joined) {
+          joined = true;
+          await env.DB.prepare("INSERT INTO members (space_id, user_id, role, joined_at, updated_at) VALUES (?, ?, 'member', 1, 1)").bind(s.id, joiner.id).run();
+        }
+        return env.DB.batch(stmts);
+      },
+    };
+    await expect(deleteClass(racing, owner.id, s.id, true)).rejects.toMatchObject({ status: 409, body: { error: 'members' } });
+    expect(await one('SELECT deleted_at FROM spaces WHERE id = ?', s.id)).toEqual({ deleted_at: null });
     expect(await one("SELECT count(*) AS n FROM courses WHERE scope = 'u:' || ?", owner.id)).toEqual({ n: 0 });
   });
 });
