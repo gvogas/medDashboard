@@ -2,7 +2,8 @@
 // course and its lectures, labs and tutorials. Nothing is saved here; the browser shows the
 // courses in the schedule preview and saves what the person ticks.
 //
-// A PDF arrives as text (read in the browser, like outlines) and goes to the text model,
+// A PDF arrives as text (read in the browser, like outlines; a weekday grid comes first as one
+// line per class with the day and times its cell gives, src/core/timetable-grid.ts) and goes to the text model,
 // thinking little: a timetable needs reading, not reasoning. Measured 1 October 2026 on a
 // one-page timetable (test/fixtures/timetable.html as a PDF): 778 tokens in, 1,353 out with
 // the thinking, 117 neurons.
@@ -69,6 +70,8 @@ const RULES = [
   'courses: one entry per course. code: the course code exactly as written, e.g. "CHEM 271" or "420-521-VA" ("" if there is none). name: the course title.',
   'classes: every weekly meeting of that course, one entry per weekday: kind (Lecture, Lab, Seminar, Tutorial, PBL or Clinical; "LEC" and "Cours" are Lecture, "LAB" is Lab, "TUT" and "TD" are Tutorial), day, start and end in 24-hour HH:MM, room as written ("" if none).',
   'A class that meets on Tuesday and Thursday is two entries. In a grid, a class runs from the row of its start time to the row of its end time.',
+  'Under "Timetable grid", each line is one class with its weekday and its start and end times, read from the page layout: make every line one class entry with exactly that day, start and end.',
+  'A room followed by a lone "L" marks a Lab: keep the "L" in the room as written ("D-243 L").',
   'Leave out exams, office hours, breaks and anything that is not a weekly class. Never invent courses, times or rooms.',
 ];
 
@@ -98,12 +101,21 @@ export function cleanSchedule(raw) {
     } else merged.push({ code, name, raw: [...classes] });
   }
   const courses = merged
-    .map((c) => ({ code: c.code, name: c.name, classes: cleanClasses(c.raw) }))
+    .map((c) => ({ code: c.code, name: c.name, classes: cleanClasses(c.raw).map(omnivoxRoom) }))
     .filter((c) => (c.code || c.name) && c.classes.length)
     .slice(0, MAX_COURSES);
   if (!courses.length) throw new HttpError(502, { error: 'schedule_unreadable' });
   return { term: clip(o.term, 40), courses };
 }
+
+/* Omnivox writes a room as "Classroom D-243", a lab's with a lone "L" after it ("Classroom D-243 L");
+   a model does not reliably make that a Lab or drop the word, so both are done here. */
+const LAB_MARK = /\s+L$/;
+const CLASSROOM = /^classroom\s+(?=\S)/i;
+const omnivoxRoom = (c) => {
+  const room = c.room.replace(CLASSROOM, '');
+  return LAB_MARK.test(room) ? { ...c, kind: 'Lab', room: room.replace(LAB_MARK, '') } : { ...c, room };
+};
 
 /** Bytes as base64, in chunks: String.fromCharCode(...bytes) overflows the stack on a large picture. */
 export function toBase64(bytes) {

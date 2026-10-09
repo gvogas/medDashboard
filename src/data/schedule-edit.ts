@@ -1,16 +1,18 @@
 // A class schedule read with AI (worker/schedule.js): the courses it found, matched to yours
 // (core/importers/plan.ts, planSchedule), shown in the schedule sheet with a semester and a
 // tick per class, and written on "Add N classes" through the import's commit. Nothing is
-// saved before. A screenshot is made smaller here first (core/image.ts).
+// saved before. A screenshot is made smaller here first (core/image.ts); a PDF goes as its
+// text with its grid read from the page layout (core/pdftext.ts, pdfTimetable).
 
 import { data } from "@/core/store"
 import { today } from "@/core/dates"
 import { planSchedule, type Schedule } from "@/core/importers/plan"
 import { shrinkImage } from "@/core/image"
+import { pdfTimetable } from "@/core/pdftext"
 import { api } from "@/core/api"
 import { schoolCal } from "@/data/query"
 import { notify } from "@/bridge"
-import { asSent, MAX_FILE, readWithAi, type NoteKey } from "./ai-read"
+import { isPdf, MAX_FILE, readWithAi, type NoteKey } from "./ai-read"
 import { readContext } from "./ai-context"
 import { commitImport, defaultTerm, type ImportPlan } from "./import-edit"
 import { closeSheet, openSheet } from "./overlay"
@@ -31,7 +33,7 @@ export function readScheduleFile(file: File, note: NoteKey = "aiNote") {
         what: "timetable", title: "Reading your timetable",
         steps: ["Reading the timetable", "Finding courses and class times", "Matching them to your courses"],
         flag: "scheduleBusy", note, refresh: notify,
-        prepare: (f) => (isImage(f) ? shrinkImage(f) : asSent(f)),
+        prepare: async (f) => (isImage(f) ? shrinkImage(f) : isPdf(f) ? new Blob([await pdfTimetable(f)], { type: "text/plain" }) : f),
         /* a phone or retina screenshot can be over 5 MB; what is sent is a 1600 px JPEG */
         maxBytes: isImage(file) ? 4 * MAX_FILE : MAX_FILE,
         errors: {

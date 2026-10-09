@@ -62,7 +62,7 @@ type Flag = "outlineBusy" | "schoolBusy" | "scheduleBusy"
 export type NoteKey = "importNote" | "schoolNote" | "aiNote"
 
 export const MAX_FILE = 5 * 1024 * 1024
-const isPdf = (f: File) => f.type === "application/pdf" || /\.pdf$/i.test(f.name)
+export const isPdf = (f: File) => f.type === "application/pdf" || /\.pdf$/i.test(f.name)
 
 /** What most files are sent as: a PDF's text (the Worker's converter drops the text of many tables), anything else as it is. */
 export const asSent = async (file: File): Promise<Blob> => (isPdf(file) ? new Blob([await pdfText(file)], { type: "text/plain" }) : file)

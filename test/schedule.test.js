@@ -52,6 +52,26 @@ describe('cleanSchedule', () => {
     });
   });
 
+  it('makes a class whose room ends in a lone "L" a Lab, the room without it (Omnivox marks labs so)', () => {
+    const { courses: [c] } = cleanSchedule({ term: '', courses: [{ code: '420-541-VA', name: 'Game Programming 2', classes: [
+      { kind: 'Lecture', day: 'Mon', start: '10:00', end: '12:00', room: 'D-243 L' },
+      { kind: 'Lecture', day: 'Fri', start: '10:00', end: '12:00', room: 'D-242' },
+      { kind: 'Lecture', day: 'Wed', start: '10:30', end: '12:30', room: 'Hall L' },
+      { kind: 'Lecture', day: 'Thu', start: '10:30', end: '12:30', room: 'HallL' },
+    ] }] });
+    expect(c.classes.map((k) => [k.kind, k.room])).toEqual([['Lab', 'D-243'], ['Lecture', 'D-242'], ['Lab', 'Hall'], ['Lecture', 'HallL']]);
+  });
+
+  it('drops the word "Classroom" before a room, and keeps a room that is only that word', () => {
+    const { courses: [c] } = cleanSchedule({ term: '', courses: [{ code: '345-HSZ-VF', name: 'Le Contrat Racial', classes: [
+      { kind: 'Lecture', day: 'Mon', start: '08:30', end: '10:00', room: 'Classroom N-362' },
+      { kind: 'Lecture', day: 'Tue', start: '10:00', end: '12:00', room: 'Classroom D-243 L' },
+      { kind: 'Lecture', day: 'Wed', start: '08:30', end: '10:00', room: 'classroom  A-312' },
+      { kind: 'Lecture', day: 'Thu', start: '08:30', end: '10:00', room: 'Classroom' },
+    ] }] });
+    expect(c.classes.map((k) => [k.kind, k.room])).toEqual([['Lecture', 'N-362'], ['Lab', 'D-243'], ['Lecture', 'A-312'], ['Lecture', 'Classroom']]);
+  });
+
   it('answers 502 when there is no JSON or no class at all', () => {
     expect(fail('I cannot read this')).toEqual([502, 'schedule_unreadable']);
     expect(fail({ term: '', courses: [] })).toEqual([502, 'schedule_unreadable']);
