@@ -8,6 +8,7 @@
 //   ?6 the item ids a copy takes, [[class id, copy id]]   ?7 the course copy's id
 //   ?8 the items a keep copies (JSON)   ?9 who acts (a removal's owner)
 import { HttpError } from './http.js';
+import { logError, messageOf } from './errors.js';
 import { assertAllowed, assertKeeper, keeperGuard, roleOf } from './access.js';
 import { LIVE_MEMBERS, NEXT_ROW_REVISION, NEXT_SPACE_REVISION, touchSpace } from './spaces.js';
 import { REVIEW_ID } from '../src/core/shared.ts';
@@ -207,13 +208,15 @@ export async function deleteClass(db, userId, spaceId, keepCopy, now = Date.now(
 /* The items a keep names (?8) that are removed and hold something of yours in your live mark. */
 const KEPT = `(SELECT km.item_id FROM marks AS km JOIN items AS ki ON ki.scope = ?4 AND ki.id = km.item_id AND ki.deleted_at IS NOT NULL
   WHERE km.user_id = ?1 AND km.space_id = ?2 AND km.deleted_at IS NULL AND km.item_id IN (SELECT value FROM json_each(?8)) AND ${MEANINGFUL('km')})`;
-/* The copy of the class item `col` that this batch wrote: if its id became live in between, the copy did not land, so nothing else moves and your mark stays for a later keep. */
-const COPIED = (col) => `EXISTS (SELECT 1 FROM items AS kc WHERE kc.scope = ?3 AND kc.id = ${TO(col)} AND kc.deleted_at IS NULL AND kc.updated_at = ?5 AND kc.class_id = ?2)`;
 const MEMBER_LIVE = 'EXISTS (SELECT 1 FROM members AS kl WHERE kl.space_id = ?2 AND kl.user_id = ?1 AND kl.deleted_at IS NULL)';
+/* The class a kept copy is filed under: none once you are no longer in it (the purge keeps for people who left). */
+const FILED = `(CASE WHEN ${MEMBER_LIVE} THEN ?2 END)`;
+/* The copy of the class item `col` that this batch wrote: if its id became live in between, the copy did not land, so nothing else moves and your mark stays for a later keep. */
+const COPIED = (col) => `EXISTS (SELECT 1 FROM items AS kc WHERE kc.scope = ?3 AND kc.id = ${TO(col)} AND kc.deleted_at IS NULL AND kc.updated_at = ?5 AND kc.class_id IS ${FILED})`;
 
 /**
  * Keep as mine (spec §13): each removed class item `only` names that holds something of yours
- * becomes your own item, filed under the class, with your layer folded in (under a free id,
+ * becomes your own item, filed under the class (if you are still in it), with your layer folded in (under a free id,
  * `copyIds`); your sessions and grade achievements on it follow; your marks on them go, which
  * ends every statement's condition (KEPT), so a retry copies nothing. With `member`, only
  * while you are still in the class (the route); the nightly purge keeps without it.
@@ -223,7 +226,7 @@ export async function keepItems(db, userId, spaceId, only, now = Date.now(), { m
   const v = valuesOf({ userId, spaceId, now, items: ids.items, only: JSON.stringify(only) });
   const live = member ? ` AND ${MEMBER_LIVE}` : '';
   await db.batch([
-    itemCopy(`i.id IN ${KEPT}${live}`, 'NULL', '?2'),
+    itemCopy(`i.id IN ${KEPT}${live}`, 'NULL', FILED),
     `UPDATE study_sessions SET space_id = NULL, course_id = NULL, item_id = ${TO('study_sessions.item_id')}, updated_at = ?5, revision = revision + 1
       WHERE user_id = ?1 AND space_id = ?2 AND deleted_at IS NULL AND item_id IN ${KEPT} AND ${COPIED('study_sessions.item_id')}${live}`,
     `UPDATE achievements SET space_id = NULL, item_id = ${TO('achievements.item_id')}, updated_at = ?5, revision = revision + 1
@@ -307,13 +310,14 @@ export async function shareItems(db, userId, spaceId, ids, now = Date.now()) {
 }
 
 /* People-and-classes the purge keeps for in one night: each is two D1 calls, and the cron's invocation has few to spare. */
-const AUTO_KEEP_GROUPS = 5;
+const AUTO_KEEP_GROUPS = 3;
 
 /**
- * The purge's first step (spec §13): Keep as mine, for its holder, every live mark holding
+ * The purge's last step (spec §13; after the sweep, so the sweep never waits on it): Keep as mine, for its holder, every live mark holding
  * something on a class item whose tombstone is older than `before`, whether or not they are
  * still in the class. At most 500 marks in AUTO_KEEP_GROUPS (person, class) groups a night;
- * the rest the next (their items wait for them, see purgeTombstones).
+ * the rest the next (their items wait for them, see purgeTombstones). A kept item's class row
+ * goes the night after. A group that fails is logged and skipped, so it never blocks the others.
  */
 export async function autoKeep(db, before, now = Date.now()) {
   const { results } = await db.prepare(`SELECT m.user_id, m.space_id, m.item_id FROM marks AS m
@@ -329,5 +333,13 @@ export async function autoKeep(db, before, now = Date.now()) {
     }
     groups.get(k).push(r);
   }
-  for (const rows of groups.values()) await keepItems(db, rows[0].user_id, rows[0].space_id, rows.map((r) => r.item_id), now);
+  for (const rows of groups.values()) {
+    const { user_id: userId, space_id: spaceId } = rows[0];
+    try {
+      await keepItems(db, userId, spaceId, rows.map((r) => r.item_id), now);
+    } catch (e) {
+      console.error('autoKeep:', spaceId, messageOf(e));
+      await logError(db, { method: 'CRON', route: 'purge/keep/' + spaceId, message: messageOf(e), userId }, now);
+    }
+  }
 }

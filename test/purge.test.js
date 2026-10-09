@@ -32,7 +32,7 @@ async function runNightly() {
 const one = (sql, ...binds) => env.DB.prepare(sql).bind(...binds).first();
 
 describe('nightly purge of shared rows (spec §13)', () => {
-  it('keeps a removed item for whoever holds something on it before purging it; drops bare marks', async () => {
+  it('keeps a removed item for whoever holds something on it, purging it the next night; bare marks are deleted', async () => {
     const owner = await createUser('pgo1'), member = await createUser('pgm1'), other = await createUser('pgx1');
     const s = await makeSpace({ members: { [owner]: 'owner', [member]: 'member', [other]: 'member' } });
     const old = Date.now() - 31 * DAY;
@@ -41,21 +41,44 @@ describe('nightly purge of shared rows (spec §13)', () => {
     await mark(other, s.id, 'a1', { hidden: 1 });
     await runNightly();
     expect(await one("SELECT class_id, grade FROM items WHERE scope = 'u:' || ? AND id = 'a1'", member)).toEqual({ class_id: s.id, grade: 81 });
-    expect(await one('SELECT count(*) AS n FROM marks WHERE item_id = ? AND space_id = ?', 'a1', s.id)).toEqual({ n: 1 });   // the kept one's tombstone
+    expect(await one('SELECT count(*) AS n FROM marks WHERE item_id = ? AND space_id = ? AND deleted_at IS NULL', 'a1', s.id)).toEqual({ n: 0 });
+    /* the bare mark is a tombstone, and the change feed says so */
+    expect(await one("SELECT deleted_at IS NOT NULL AS d FROM changes WHERE scope = 'u:' || ? AND kind = 'marks' AND row_id = ?", other, s.id + ':a1')).toEqual({ d: 1 });
+    /* the sweep ran before the keep, so the class row waits a night */
+    expect(await one('SELECT count(*) AS n FROM items WHERE scope = ? AND id = ?', s.scope, 'a1')).toEqual({ n: 1 });
+    await runNightly();
     expect(await one('SELECT count(*) AS n FROM items WHERE scope = ? AND id = ?', s.scope, 'a1')).toEqual({ n: 0 });
-    await runNightly();   // a rerun changes nothing
     expect(await one("SELECT count(*) AS n, max(grade) AS grade FROM items WHERE scope = 'u:' || ? AND deleted_at IS NULL", member)).toEqual({ n: 1, grade: 81 });
   });
 
-  it('keeps for someone who has since left the class too', async () => {
+  it('keeps for someone who has since left the class too, filed under no class', async () => {
     const owner = await createUser('pgo4'), gone = await createUser('pgl4');
     const s = await makeSpace({ members: { [owner]: 'owner', [gone]: 'member' } });
     await sharedItem(s.scope, 'b1', { course_id: 'web', deleted_at: Date.now() - 31 * DAY });
     await mark(gone, s.id, 'b1', { notes: 'mine' });
     await env.DB.prepare('UPDATE members SET deleted_at = ? WHERE space_id = ? AND user_id = ?').bind(Date.now() - DAY, s.id, gone).run();
     await runNightly();
-    expect(await one("SELECT notes FROM items WHERE scope = 'u:' || ? AND id = 'b1'", gone)).toEqual({ notes: 'mine' });
+    expect(await one("SELECT notes, class_id FROM items WHERE scope = 'u:' || ? AND id = 'b1'", gone)).toEqual({ notes: 'mine', class_id: null });
+    expect(await one('SELECT count(*) AS n FROM marks WHERE user_id = ? AND deleted_at IS NULL', gone)).toEqual({ n: 0 });
+    await runNightly();
     expect(await one('SELECT count(*) AS n FROM items WHERE scope = ? AND id = ?', s.scope, 'b1')).toEqual({ n: 0 });
+  });
+
+  it('keeps for three people a night; the rest the next', async () => {
+    const owner = await createUser('pgo5');
+    const people = [];
+    for (const name of ['pgd5a', 'pgd5b', 'pgd5c', 'pgd5d']) people.push(await createUser(name));
+    const s = await makeSpace({ members: Object.fromEntries([[owner, 'owner'], ...people.map((p) => [p, 'member'])]) });
+    await sharedItem(s.scope, 'c1', { course_id: 'web', deleted_at: Date.now() - 31 * DAY });
+    for (const p of people) await mark(p, s.id, 'c1', { grade: 70 });
+    const kept = async () => (await one("SELECT count(*) AS n FROM items WHERE id = 'c1' AND scope IN (SELECT 'u:' || value FROM json_each(?))", JSON.stringify(people))).n;
+    await runNightly();
+    expect(await kept()).toBe(3);
+    await runNightly();
+    expect(await kept()).toBe(4);
+    expect(await one('SELECT count(*) AS n FROM items WHERE scope = ?', s.scope)).toEqual({ n: 1 });   // the class row goes on night three
+    await runNightly();
+    expect(await one('SELECT count(*) AS n FROM items WHERE scope = ?', s.scope)).toEqual({ n: 0 });
   });
 
   it('removes a space deleted over 30 days ago with everything in it; a newer one stays', async () => {
