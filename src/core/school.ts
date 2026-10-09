@@ -146,6 +146,14 @@ export function courseTerm(cal: SchoolCalendar | null, text: string | null | und
   return cal.terms.find((t) => t.name.toLowerCase() === want) || null;
 }
 
+/** A new course's semester: with a school calendar, the one its file names, else the current
+    one; without one, the file's own words. The imports share it (src/data/import-edit.ts,
+    src/data/class-import.ts). */
+export function defaultTerm(cal: SchoolCalendar | null, named: string, day: string): string {
+  if (!cal) return named;
+  return (courseTerm(cal, named) ?? currentTerm(cal, day))?.name ?? '';
+}
+
 /** Whether a course of semester `text` can have classes on `date`: all-year courses always. */
 export function courseRunsOn(cal: SchoolCalendar | null, text: string | null | undefined, date: string): boolean {
   const t = courseTerm(cal, text);

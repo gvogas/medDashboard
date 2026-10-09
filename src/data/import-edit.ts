@@ -7,7 +7,7 @@ import * as store from "@/core/store"
 import { data } from "@/core/store"
 import { classRoom, normalizeCourse, normalizeItem } from "@/core/model"
 import { today } from "@/core/dates"
-import { courseTerm, currentTerm, type SchoolCalendar } from "@/core/school"
+import { defaultTerm } from "@/core/school"
 import { schoolCal, termStart } from "@/data/query"
 import { parseIcs } from "@/core/importers/ics"
 import { parseCsv } from "@/core/importers/csv"
@@ -26,12 +26,8 @@ export type ImportPlan = Plan
 
 export const MAX_BYTES = 2_000_000
 
-/** A new course's semester: with a school calendar, the one its file names, else the current
-    one; without one, the file's own words, as before. */
-export function defaultTerm(cal: SchoolCalendar | null, named: string, day: string): string {
-    if (!cal) return named
-    return (courseTerm(cal, named) ?? currentTerm(cal, day))?.name ?? ""
-}
+/* A new course's semester lives in core/school.ts, so class-import.ts can share it without importing this file. */
+export { defaultTerm }
 
 /** Read a calendar or CSV and open the preview. Returns an error message, or "" when it opened. */
 export function previewImport(text: string, name = ""): string {
