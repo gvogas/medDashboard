@@ -240,12 +240,15 @@ export async function spaceDetails(db, userId, spaceId, now = Date.now()) {
   };
 }
 
-/** The owner copies their school calendar into the class again (spec §8), archived or not. Answers {schoolCalendar}. */
+/**
+ * The owner copies their school calendar into the class again (spec §8), archived or not; one
+ * with no semester leaves the class's copy as it was. Answers {schoolCalendar}.
+ */
 export async function refreshSchool(db, userId, spaceId, now = Date.now()) {
   const me = await assertKeeper(db, userId, spaceId);
   if (me.kind !== 'class') throw new HttpError(404, { error: 'not_found' });
   const g = keeperGuard(spaceId, userId);
-  await db.prepare(`UPDATE spaces SET school_calendar = ${OWNER_CALENDAR}, updated_at = ?, revision = ${NEXT_SPACE_REVISION} WHERE id = ? AND ${g.sql}`)
+  await db.prepare(`UPDATE spaces SET school_calendar = COALESCE(${OWNER_CALENDAR}, school_calendar), updated_at = ?, revision = ${NEXT_SPACE_REVISION} WHERE id = ? AND ${g.sql}`)
     .bind(userId, now, spaceId, ...g.binds).run();
   const row = await db.prepare('SELECT school_calendar FROM spaces WHERE id = ?').bind(spaceId).first();
   return { schoolCalendar: row?.school_calendar ? JSON.parse(row.school_calendar) : null };
