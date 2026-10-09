@@ -8,8 +8,8 @@
 //   ?6 the item ids a copy takes, [[class id, copy id]]   ?7 the course copy's id
 //   ?8 the items a keep copies (JSON)   ?9 who acts (a removal's owner)
 import { HttpError } from './http.js';
-import { assertAllowed, assertKeeper, roleOf } from './access.js';
-import { NEXT_ROW_REVISION, NEXT_SPACE_REVISION, touchSpace } from './spaces.js';
+import { assertAllowed, assertKeeper, keeperGuard, roleOf } from './access.js';
+import { LIVE_MEMBERS, NEXT_ROW_REVISION, NEXT_SPACE_REVISION, touchSpace } from './spaces.js';
 
 /** A mark holding anything of yours (spec §13): a status, grade, weight, notes, a checklist or a completion. `m` is its alias. */
 export const MEANINGFUL = (m) =>
@@ -174,4 +174,28 @@ export async function removeMember(db, userId, spaceId, targetId, now = Date.now
   if (await detach(db, targetId, spaceId, { keepCopy: true, who: REMOVING, actor: userId, now })) return;
   const them = await roleOf(db, targetId, spaceId);
   throw them ? new HttpError(403, { error: 'forbidden' }) : new HttpError(404, { error: 'not_found' });
+}
+
+/** Archive or unarchive a class (spec §13), the owner only, archived or not; moves the revision when it changes. */
+export async function setArchived(db, userId, spaceId, archived, now = Date.now()) {
+  await assertKeeper(db, userId, spaceId);
+  const g = keeperGuard(spaceId, userId), a = archived ? 1 : 0;
+  await db.prepare(`UPDATE spaces SET archived = ?, updated_at = ?, revision = ${NEXT_SPACE_REVISION} WHERE id = ? AND archived != ? AND ${g.sql}`)
+    .bind(a, now, spaceId, a, ...g.binds).run();
+}
+
+/* The owner, the space's only live member. */
+const CLOSING = "EXISTS (SELECT 1 FROM members AS lv WHERE lv.space_id = ?2 AND lv.user_id = ?1 AND lv.deleted_at IS NULL AND lv.role = 'owner') AND (SELECT count(*) FROM members AS sm WHERE sm.space_id = ?2 AND sm.deleted_at IS NULL) = 1";
+
+/**
+ * Delete a class (spec §13): the owner, while nobody else is in it (409 members). Keep a copy
+ * (the default) detaches first; the invites go, then the membership, then the space. Sync
+ * revokes it from every device; the nightly purge removes it 30 days later.
+ */
+export async function deleteClass(db, userId, spaceId, keepCopy, now = Date.now()) {
+  const me = await assertKeeper(db, userId, spaceId);
+  if (me.kind !== 'class') throw new HttpError(404, { error: 'not_found' });
+  const { n } = await db.prepare(`SELECT ${LIVE_MEMBERS('?')} AS n`).bind(spaceId).first();
+  if (n > 1) throw new HttpError(409, { error: 'members' });
+  if (!(await detach(db, userId, spaceId, { keepCopy, who: CLOSING, closing: true, now }))) throw new HttpError(404, { error: 'not_found' });
 }

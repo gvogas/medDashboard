@@ -6,7 +6,7 @@ import { requireUser } from './auth.js';
 import { requireAdmin } from './admin.js';
 import { validateSharedCourse } from './validate.js';
 import { ADMINS_ONLY, absorb, checkConvert, createClass, priorConvert, setRole, spaceDetails, transfer } from './spaces.js';
-import { leave, removeMember } from './leaving.js';
+import { deleteClass, leave, removeMember, setArchived } from './leaving.js';
 import { acceptInvite, declineInvite, dropCode, invite, joinByCode, makeCode, myInvites, revokeInvite } from './invites.js';
 
 const SID = '([a-z0-9]{12})';
@@ -80,6 +80,18 @@ export const classRoutes = [
   ['POST', route(`spaces/${SID}/transfer`), async ({ request, env, params: [sid] }) => {
     const userId = await requireUser(request, env);
     await transfer(env.DB, userId, sid, idOf((await readJson(request)).userId, 'userId', 64));
+    return done();
+  }],
+  ['POST', route(`spaces/${SID}/archive`), async ({ request, env, params: [sid] }) => {
+    const userId = await requireUser(request, env);
+    const { archived } = await readJson(request);
+    if (typeof archived !== 'boolean') throw bad('archived');
+    await setArchived(env.DB, userId, sid, archived);
+    return done();
+  }],
+  ['DELETE', route(`spaces/${SID}`), async ({ request, env, params: [sid] }) => {
+    const userId = await requireUser(request, env);
+    await deleteClass(env.DB, userId, sid, keepOf((await readJson(request)).keepCopy));
     return done();
   }],
   ['POST', route(`spaces/${SID}/leave`), async ({ request, env, params: [sid] }) => {
