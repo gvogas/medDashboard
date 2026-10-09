@@ -365,7 +365,7 @@ A shared class (`kind = 'class'`, its rows in scope `c:<id>`) or team project (`
 
 ## `marks`
 
-`(user_id, id)`, `id = '<space id>:<item id>'`, unique `(user_id, space_id, item_id)`: your layer on one shared item (spec §4). `status`, `grade`, `weight` (an override; NULL uses the class's), `notes`, `checklist` (exam prep's topics), `completed_at`, `hidden` ("not mine": out of your views, grades and stats), timestamps, `deleted_at`, `revision`. Same `CHECK`s as the matching `items` columns. On a project's item only `notes` and `hidden` are used. Its changes go into your own feed (`'u:' || user_id`). Written through `/api/marks/:sid/:itemId` with a field-level merge, and by the convert and absorb batches. Deleted with the account.
+`(user_id, id)`, `id = '<space id>:<item id>'`, unique `(user_id, space_id, item_id)`: your layer on one shared item (spec §4). `status`, `grade`, `weight` (an override; NULL uses the class's), `notes`, `checklist` (exam prep's topics), `completed_at`, `hidden` ("not mine": out of your views, grades and stats), timestamps, `deleted_at`, `revision`. Same `CHECK`s as the matching `items` columns. On a project's item only `notes` and `hidden` are used. Its changes go into your own feed (`'u:' || user_id`). Written through `/api/marks/:sid/:itemId` with a field-level merge, and by the convert and absorb batches; detach (leaving, removal, deleting a class) and **Keep as mine** soft-delete yours as they copy, sharing an item writes your part of it into one, and the nightly purge soft-deletes the bare ones on expiring shared items. Deleted with the account.
 
 ## `space_prefs`
 
@@ -566,7 +566,7 @@ On the device, IndexedDB version 6 holds shared rows in `shared_courses` and `sh
 
 ### The nightly purge
 
-`purgeTombstones` (`worker/db.js`) runs in this order: (1) soft-delete the bare marks (holding nothing) on class items whose tombstones expire, so the change feed carries it; (2) for each space deleted more than 30 days ago, its items, course, change feed, members, invites, marks and prefs, then the space; (3) the floor and the 30-day tombstones, now also `members`, never an expiring class item that a meaningful live mark still holds, and invites 90 days after `created_at`; (4) after that batch, **Keep as mine** on behalf of each person still holding something on an expiring class item, at most 3 (person, class) groups a night, each group's failure logged and skipped. The kept item's class row goes the next night. A project's item with a meaningful mark waits until Stage 8 gives it a keep.
+`purgeTombstones` (`worker/db.js`) runs in this order: (1) soft-delete the bare marks (holding nothing) on shared items (a class's or a project's) whose tombstones expire, so the change feed carries it; (2) for each space deleted more than 30 days ago, its items, course, change feed, members, invites, marks and prefs, then the space; (3) the floor and the 30-day tombstones, now also `members`, never an expiring class item that a meaningful live mark still holds, and invites 90 days after `created_at`; (4) after that batch, **Keep as mine** on behalf of each person still holding something on an expiring class item, at most 3 (person, class) groups a night, each group's failure logged and skipped. The kept item's class row goes the next night. A project's item with a meaningful mark waits until Stage 8 gives it a keep.
 
 ---
 
