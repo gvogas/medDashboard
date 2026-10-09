@@ -10,7 +10,7 @@ import { schoolCal, typeOn } from "@/data/query"
 import { inTerm, pickedTerm } from "@/core/school"
 import { addDays, iso, parse, today } from "@/core/dates"
 import { setSide } from "./sidebar"
-import { effectiveCourses, effectiveItems, keyOf } from "./effective"
+import { effectiveCourses, effectiveItems, itemByKey, keyOf } from "./effective"
 import { isSharedKey, keyedCourses, placeCourse, splitKey } from "./refs"
 import { openClass } from "./classes"
 import { toggleClassTask } from "./marks"
@@ -336,8 +336,10 @@ export function sortTable(key: SortKey) {
     notify()
 }
 
-/** Tick a task off or back on, by its key: a class's task in your mark. Finishing one celebrates from `from` and books its next review. */
+/** Tick a task off or back on, by its key: a class's task in your mark. Finishing one celebrates from `from` and books its next review.
+ *  A class task an editor removed opens its card instead: your layer on it is read-only (the Worker refuses the mark). */
 export async function toggleTask(key: string, from?: Element) {
+    if (isSharedKey(key) && itemByKey(key)?.removed) { openItem(key); return }
     if (isSharedKey(key)) { await toggleClassTask(key, from); notify(); return }
     const it = store.item(key) as Item | null
     if (!it) return

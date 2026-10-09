@@ -88,6 +88,8 @@ export function mergeItems(own: Item[], shared: (Item & { scope: string })[], sh
         const mark = layer.marks?.get(it.scope.slice(2) + ":" + it.id) ?? null
         if (mark && !mark.hidden && meaningful(mark)) theirs.push({ ...withMark(it, mark), removed: { by: it.updatedBy ?? null, at: it.deletedAt ?? null } })
     }
+    /* removed items holding nothing of yours leave your own list itself */
+    if (!theirs.length && !shared.length && !filed) return own
     return [...mine, ...theirs]
 }
 

@@ -33,6 +33,9 @@ describe("removed class items", () => {
         expect(out.map((it) => [it.key, it.grade, it.removed])).toEqual([[WEB + "/a1", 80, { by: "u-alex", at: 1000 }]])
         expect(mergeItems([], [], true, { marks: new Map([[SID + ":a1", mark({ hidden: true, grade: 80 })]]), removed: [row] })).toEqual([])
         expect(mergeItems([], [], true, { marks: new Map(), removed: [row] })).toEqual([])
+        /* a tombstone holding nothing of yours leaves your own list as it is, the same array */
+        const own = [normalizeItem({ id: "b1", type: "lab", title: "Mine", date: "2026-10-09" })]
+        expect(mergeItems(own, [], true, { marks: new Map(), removed: [row] })).toBe(own)
     })
 
     it("say who removed them, and from where", () => {
