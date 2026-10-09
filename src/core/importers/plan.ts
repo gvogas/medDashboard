@@ -29,8 +29,9 @@ export interface PlanCourse {
 }
 /** An item to create, ready for normalizeItem(). */
 export interface PlanRow { type: string; title: string; courseId: string | null; date: string; start: string; end: string; where: string; status: string; weight: number | null; recur?: 'weekly'; weekday?: number }
-export interface PlanItem { include: boolean; duplicate?: boolean; week?: number; row: PlanRow }
-export interface Plan { courses: PlanCourse[]; items: PlanItem[]; notes: string[]; week1?: string; termStart?: string; kind?: 'outline' | 'schedule' }
+/** An item to create; against a class (src/data/class-import.ts), `match` is the class's item it would change and `was` what that item says now. */
+export interface PlanItem { include: boolean; duplicate?: boolean; week?: number; row: PlanRow; match?: string; was?: string }
+export interface Plan { courses: PlanCourse[]; items: PlanItem[]; notes: string[]; week1?: string; termStart?: string; kind?: 'outline' | 'schedule'; outline?: Outline }
 
 /** A course outline as the Worker reads it (worker/outline.js). */
 export interface Outline {
