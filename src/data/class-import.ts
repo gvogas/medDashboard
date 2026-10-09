@@ -8,7 +8,7 @@ import * as store from "@/core/store"
 import { data } from "@/core/store"
 import { api } from "@/core/api"
 import { normalizeItem } from "@/core/model"
-import { DOW, shortDate, today } from "@/core/dates"
+import { shortDate, today } from "@/core/dates"
 import { defaultTerm } from "@/core/school"
 import { planOutline, type Outline, type Plan, type PlanItem, type PlanRow } from "@/core/importers/plan"
 import type { Row } from "@/core/db"
@@ -28,6 +28,8 @@ const norm = (s: string) => s.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").tri
 /* type and title, or "" for a title with nothing to match on */
 const key = (x: { type: string; title: string }) => { const t = norm(x.title); return t ? x.type + "|" + t : "" }
 /* the same occurrence: a recurring row by weekday and start (its date moves), else by date */
+/* a recurring item's day, as `was` says it: "Mondays" */
+const WEEKDAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
 const sameWhen = (row: PlanRow, twin: SharedItem) =>
     row.recur ? twin.recur === row.recur && twin.weekday === row.weekday && twin.start === row.start : twin.date === row.date
 
@@ -38,7 +40,7 @@ const sameWhen = (row: PlanRow, twin: SharedItem) =>
  */
 export function changes(row: PlanRow, twin: SharedItem): string[] {
     const was: string[] = []
-    const day = (x: SharedItem) => x.recur ? DOW[x.weekday ?? 0] + "s" : x.date ? shortDate(x.date) : "no date"
+    const day = (x: SharedItem) => x.recur ? WEEKDAYS[x.weekday ?? 0] + "s" : x.date ? shortDate(x.date) : "no date"
     /* a one-off row keeps a recurring item's series (see changed()), so only its date can differ */
     if (row.recur ? twin.recur !== row.recur || twin.weekday !== row.weekday : !twin.recur && twin.date !== row.date) was.push(day(twin))
     if (row.start && (row.start !== twin.start || (!!row.end && row.end !== twin.end))) was.push(twin.start ? twin.start + (twin.end ? "–" + twin.end : "") : "no time")
@@ -137,7 +139,8 @@ export async function commitToClass(plan: Plan, spaceId: string): Promise<string
     ].filter(Boolean)
     if (!parts.length) return `Nothing new for ${course.name}.`
     const said = list(parts)
-    return said[0].toUpperCase() + said.slice(1) + ` to ${course.name}.`
+    /* "to" a class something was added to, else "in" it */
+    return said[0].toUpperCase() + said.slice(1) + (added || classes > 0 ? " to " : " in ") + course.name + "."
 }
 
 /** A new class from the outline (spec §20): made on Import with the ticked meetings, then its ticked items written. Needs a connection. */

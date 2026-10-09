@@ -26,7 +26,7 @@ const TITLE = "m-0 text-[22px] leading-[1.22] font-[750] tracking-[-.02em] text-
 const asRole = (role: string) => (role === "editor" ? "an editor" : "a " + role)
 
 /** The semester offered for a class (spec §8): its own when your calendar has a semester of that name, else the one covering today. */
-export function defaultTerm(classTerm: string, cal: SchoolCalendar | null, day = today()): string {
+export function joinTerm(classTerm: string, cal: SchoolCalendar | null, day = today()): string {
     if (!cal) return classTerm
     return cal.terms.some((t) => t.name === classTerm) ? classTerm : currentTerm(cal, day)?.name ?? ""
 }
@@ -104,7 +104,7 @@ function Joined({ space: s, here, bar }: { space: SpaceSummary; here: boolean; b
     const pref = (data.space_prefs ?? []).find((p) => p.id === s.id) ?? null
     const classTerm = (data.shared_courses ?? []).find((c) => c.scope === s.scope)?.term ?? ""
     const [color, setColor] = useState(pref?.color ?? "")
-    const [term, setTerm] = useState(() => defaultTerm(pref?.term ?? classTerm, cal))
+    const [term, setTerm] = useState(() => joinTerm(pref?.term ?? classTerm, cal))
     const match = matchFor(s.id)
     const [err, setErr] = useState("")
     const go = async (next: () => void) => {

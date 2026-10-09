@@ -102,7 +102,7 @@ describe("an outline planned against a class", () => {
         const o = only([], { instructor: "Dr Lee", officeHours: [{ weekday: 2, start: "14:00", end: "15:00" }] })
         const office = (over: Record<string, unknown>) => shared({ type: "office", title: "Dr Lee — office hours", date: "2026-09-01", start: "14:00", end: "15:00", weight: null, recur: "weekly", weekday: 2, ...over })
         expect(planForClass(o, course as never, [office({ id: "o1" })] as never).items[0]).toMatchObject({ match: "o1", duplicate: true, include: false })
-        expect(planForClass(o, course as never, [office({ id: "o1", weekday: 1, date: "2026-08-31" })] as never).items[0]).toMatchObject({ match: "o1", duplicate: false, was: "Mons" })
+        expect(planForClass(o, course as never, [office({ id: "o1", weekday: 1, date: "2026-08-31" })] as never).items[0]).toMatchObject({ match: "o1", duplicate: false, was: "Mondays" })
     })
 
     it("lists the classes you can import into: not a member's, an archived one or a project", () => {
@@ -134,7 +134,7 @@ describe("importing into a class", () => {
         const plan = planForClass(only([quiz({ weight: null })]), course as never, fake.data.shared_items as never)
         expect(plan.items[0].was).toBe("Wed 30 Sep")
         plan.items[0].include = true
-        expect(await commitToClass(plan, SID)).toBe("Updated 1 item to Web Services.")
+        expect(await commitToClass(plan, SID)).toBe("Updated 1 item in Web Services.")
         expect(saved()[0]).toMatchObject({ id: "q1", title: "Quiz 1", date: "2026-10-01", start: "10:00", end: "11:00", where: "Hall B", weight: 5, notes: "bring a calculator", status: "done", assignees: ["u-a"] })
     })
 
@@ -146,6 +146,16 @@ describe("importing into a class", () => {
         plan.items[0].include = true
         await commitToClass(plan, SID)
         expect(saved()[0]).toMatchObject({ id: "q1", date: "2026-09-03", recur: "weekly", weekday: 4, weight: 20 })
+    })
+
+    it("a Changed weekly row moves a weekly item to its weekday", async () => {
+        fake.data.shared_courses = [course]
+        fake.data.shared_items = [shared({ id: "o1", type: "office", title: "Dr Lee — office hours", date: "2026-08-31", start: "14:00", end: "15:00", weight: null, recur: "weekly", weekday: 1 })]
+        const plan = planForClass(only([], { instructor: "Dr Lee", officeHours: [{ weekday: 2, start: "14:00", end: "15:00" }] }), course as never, fake.data.shared_items as never)
+        plan.items[0].include = true
+        expect(await commitToClass(plan, SID)).toBe("Updated 1 item in Web Services.")
+        expect(saved()[0]).toMatchObject({ id: "o1", recur: "weekly", weekday: 2, date: plan.items[0].row.date })
+        expect(new Date(plan.items[0].row.date + "T12:00").getDay()).toBe(2)
     })
 
     it("a Changed row whose item was removed after the preview is added as new", async () => {
