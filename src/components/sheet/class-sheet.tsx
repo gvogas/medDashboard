@@ -2,8 +2,9 @@
 // facts and its items (each opening in the item card), with Edit class details for the owner
 // and editors; **Yours**: your colour, semester and sidebar archive for it, your grade so far
 // over its items with your marks on top, and the items you hid, to show again; a banner while
-// a course of yours looks like the class and is not merged. **Members**: who is in it,
-// invites, the join code, roles.
+// a course of yours looks like the class and is not merged, and one while the class is
+// archived; the items removed from it, and the class's own controls (leave, archive, delete).
+// **Members**: who is in it, invites, the join code, roles, removing someone.
 
 import { useId, useState } from "react"
 import { cn } from "@/lib/utils"
@@ -26,6 +27,8 @@ import { tabKeys } from "./radio-keys"
 import { Button, Checkbox, Fields, Label, Note, Section, Select, SheetBody, SheetFoot, SheetHead, Swatches } from "./fields"
 import { Grades } from "./grades"
 import { MembersTab } from "./members-tab"
+import { ArchivedBanner, ClassActions } from "./class-actions"
+import { RemovedList } from "./removed"
 
 const TABS: readonly [ClassTab, string][] = [["details", "Details"], ["members", "Members"]]
 const TITLE = "m-0 text-[22px] leading-[1.22] font-[750] tracking-[-.02em] text-foreground"
@@ -119,6 +122,7 @@ function Details({ space, course, items }: { space: Space; course: SharedCourse;
 
     return (
         <>
+            <ArchivedBanner space={space} />
             {match && (
                 <div role="note" className="flex flex-wrap items-center gap-2 rounded-lg border border-[var(--warn-line)] bg-[var(--warn-bg)] px-2.5 py-2 text-[12px] text-[var(--warn-ink)]">
                     <span className="min-w-0 flex-1">Your own course {match.name} looks like this class. Merge it, so your grades and notes sit on the class's items.</span>
@@ -164,6 +168,8 @@ function Details({ space, course, items }: { space: Space; course: SharedCourse;
                     </ul>
                 </Section>
             )}
+            <RemovedList space={space} course={course.name} />
+            <ClassActions space={space} name={course.name} />
         </>
     )
 }

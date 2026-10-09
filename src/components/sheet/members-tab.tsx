@@ -1,7 +1,8 @@
 // A class's Members tab (spec §11, §15): who is in it, invites by username, the join code,
-// roles, and handing the class on. Owners and editors invite; only the owner gives another
-// role, makes a code, changes roles and hands the class on. Removing someone and leaving
-// wait for Stage 5, so neither is offered. Everything here needs a connection.
+// roles, removing someone, and handing the class on. Owners and editors invite. Only the owner
+// gives another role, makes a code, changes roles, removes someone (who keeps a copy) and hands
+// the class on; those work while the class is archived, inviting does not. Leaving is in
+// Details. Everything here needs a connection.
 
 import { useCallback, useEffect, useState } from "react"
 import { api } from "@/core/api"
@@ -10,6 +11,7 @@ import { dayMonth, iso } from "@/core/dates"
 import { useProfile } from "@/data/store"
 import { formatCode, joinLink, messageFor } from "@/data/classes"
 import { toast } from "@/data/toast"
+import { removeMember } from "@/data/leave"
 import type { JoinCode, SpaceDetails, SpaceInvite, SpaceMember } from "@/data/types"
 import { Button, Note, Section, Select, TextInput } from "./fields"
 
@@ -150,6 +152,7 @@ function CodeBox({ spaceId, code, reload }: { spaceId: string; code: SpaceDetail
 
 function MemberList({ spaceId, members, owner, me, reload }: { spaceId: string; members: SpaceMember[]; owner: boolean; me: string; reload: Reload }) {
     const [err, setErr] = useState("")
+    const [removing, setRemoving] = useState<SpaceMember | null>(null)
     const change = async (userId: string, role: string) => {
         try { await api.spaces.setRole(spaceId, userId, role); setErr(""); await reload(); void syncNow() } catch (e) { setErr(messageFor(e)) }
     }
@@ -165,9 +168,21 @@ function MemberList({ spaceId, members, owner, me, reload }: { spaceId: string; 
                                 <option value="member">Member</option>
                             </Select>
                         ) : <span className="text-[11px] font-semibold text-muted-foreground">{ROLE[m.role]}</span>}
+                        {owner && m.role !== "owner" && m.userId !== me && (
+                            <Button variant="ghost" aria-label={"Remove " + m.name} onClick={() => setRemoving(m)}>Remove</Button>
+                        )}
                     </li>
                 ))}
             </ul>
+            {removing && (
+                <div className="flex flex-wrap items-center gap-2">
+                    <Note>Remove {removing.name}? They keep a copy of the class as their own course.</Note>
+                    <Button variant="ghost" onClick={() => setRemoving(null)}>Cancel</Button>
+                    <Button variant="danger" onClick={() => void (async () => {
+                        try { await removeMember(spaceId, removing.userId); setRemoving(null); setErr(""); await reload() } catch (e) { setErr(messageFor(e)) }
+                    })()}>Remove {removing.name} from the class</Button>
+                </div>
+            )}
             {err && <Note tone="bad">{err}</Note>}
         </Section>
     )
