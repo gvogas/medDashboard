@@ -1,8 +1,9 @@
 // A class's Members tab (spec §11, §15): who is in it, invites by username, the join code,
 // roles, removing someone, and handing the class on. Owners and editors invite. Only the owner
 // gives another role, makes a code, changes roles, removes someone (who keeps a copy) and hands
-// the class on; those work while the class is archived, inviting does not. Leaving is in
-// Details. Everything here needs a connection.
+// the class on. While the class is archived roles, removing and handing on still work; inviting,
+// the code and withdrawing an invite do not, so the tab leaves them out. Leaving is in Details.
+// Everything here needs a connection.
 
 import { useCallback, useEffect, useState } from "react"
 import { api } from "@/core/api"
@@ -37,11 +38,14 @@ export function MembersTab({ spaceId }: { spaceId: string }) {
     const others = info.members.filter((m) => m.userId !== me)
     return (
         <>
-            {editor
-                ? <InviteBox spaceId={spaceId} owner={owner} standard={info.kind === "class" ? "member" : "editor"} reload={load} />
-                : <Note>Owners and editors invite people. Ask {ownerName} for a join code.</Note>}
-            {editor && info.invites.length > 0 && <InviteList spaceId={spaceId} invites={info.invites} owner={owner} me={me} reload={load} />}
-            {owner && <CodeBox spaceId={spaceId} code={info.code} reload={load} />}
+            {/* the Worker refuses invites, codes and withdrawing while the class is archived */}
+            {info.archived
+                ? <Note>The class is archived. {owner ? "Unarchive it" : ownerName + " can unarchive it"} to invite people or make a join code.</Note>
+                : editor
+                    ? <InviteBox spaceId={spaceId} owner={owner} standard={info.kind === "class" ? "member" : "editor"} reload={load} />
+                    : <Note>Owners and editors invite people. Ask {ownerName} for a join code.</Note>}
+            {editor && info.invites.length > 0 && <InviteList spaceId={spaceId} invites={info.invites} owner={owner} me={me} archived={info.archived} reload={load} />}
+            {owner && !info.archived && <CodeBox spaceId={spaceId} code={info.code} reload={load} />}
             <MemberList spaceId={spaceId} members={info.members} owner={owner} me={me} reload={load} />
             {owner && others.length > 0 && <HandOn spaceId={spaceId} members={others} reload={load} />}
             {error && <Note tone="bad">{error}</Note>}
@@ -85,7 +89,7 @@ function InviteBox({ spaceId, owner, standard, reload }: { spaceId: string; owne
     )
 }
 
-function InviteList({ spaceId, invites, owner, me, reload }: { spaceId: string; invites: SpaceInvite[]; owner: boolean; me: string; reload: Reload }) {
+function InviteList({ spaceId, invites, owner, me, archived, reload }: { spaceId: string; invites: SpaceInvite[]; owner: boolean; me: string; archived: boolean; reload: Reload }) {
     const [err, setErr] = useState("")
     const withdraw = async (userId: string) => {
         try { await api.spaces.revokeInvite(spaceId, userId); setErr(""); await reload() } catch (e) { setErr(messageFor(e)) }
@@ -100,7 +104,7 @@ function InviteList({ spaceId, invites, owner, me, reload }: { spaceId: string; 
                             <span className="text-[11px] text-muted-foreground">Invited {day(v.createdAt)} · as {v.role}</span>
                         </span>
                         <span className="text-[11px] text-muted-foreground">{STATUS[v.status]}</span>
-                        {(owner || v.invitedBy === me) && (
+                        {!archived && (owner || v.invitedBy === me) && (
                             <Button variant="ghost" aria-label={"Withdraw the invite to " + v.name} onClick={() => void withdraw(v.userId)}>Withdraw</Button>
                         )}
                     </li>

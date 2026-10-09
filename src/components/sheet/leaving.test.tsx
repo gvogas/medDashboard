@@ -212,6 +212,24 @@ describe("removing a member", () => {
         await waitFor(() => expect(screen.queryByRole("button", { name: "Remove Sam from the class" })).toBeNull())
     })
 
+    it("an archived class offers no inviting, join code or withdrawing, but the owner still removes and hands on", async () => {
+        fake.data.spaces = [{ ...space("owner"), archived: true }]
+        fake.data.shared_courses = [course]
+        fake.api.spaces.get.mockResolvedValue({
+            ...details("owner"), archived: true, code: { expires: Date.now() + 3600e3, usesLeft: 5 },
+            invites: [{ userId: "u-kim", username: "kim", name: "Kim", role: "member", status: "pending", createdAt: 1, expiresAt: Date.now() + 3600e3, invitedBy: "u-me" }],
+        })
+        render(<ClassSheet spaceId={SID} tab="members" />)
+        expect(await screen.findByText(/Unarchive it to invite people or make a join code/)).toBeTruthy()
+        expect(screen.queryByRole("textbox", { name: /username/i })).toBeNull()
+        expect(screen.queryByText("Join code")).toBeNull()
+        expect(screen.queryByRole("button", { name: "Make a new one" })).toBeNull()
+        expect(screen.getByText("Kim")).toBeTruthy()
+        expect(screen.queryByRole("button", { name: "Withdraw the invite to Kim" })).toBeNull()
+        expect(screen.getByRole("button", { name: "Remove Sam" })).toBeTruthy()
+        expect(screen.getByRole("button", { name: "Make owner" })).toBeTruthy()
+    })
+
     it("a member removes nobody", async () => {
         fake.data.spaces = [space("member")]
         fake.data.shared_courses = [course]
