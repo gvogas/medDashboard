@@ -1,7 +1,7 @@
 import { env } from 'cloudflare:test';
 import { describe, expect, it } from 'vitest';
 import { createUser } from './helpers.js';
-import { achievement, makeSpace, mark, ownItem, pref, session, sharedItem, spaceRevision } from './spaces.js';
+import { achievement, makeSpace, mark, ownItem, pref, session, setMember, sharedItem, spaceRevision } from './spaces.js';
 import { copyIds, detach } from '../worker/leaving.js';
 
 let n = 0;
@@ -94,6 +94,52 @@ describe('detach', () => {
     expect(await one("SELECT name FROM courses WHERE scope = 'u:' || ? AND id = 'web'", member)).toEqual({ name: 'Mine' });
     expect(await one('SELECT course_id, item_id FROM study_sessions WHERE user_id = ?', member)).toEqual({ course_id: 'kweb', item_id: 'ka1' });
     expect(await one('SELECT item_id FROM achievements WHERE user_id = ?', member)).toEqual({ item_id: 'ka1' });
+  });
+
+  it('leaving the same class a third time lands a third copy: no copy id is ever a live row', async () => {
+    const { member, s } = await classWithLayer();
+    const grades = [];
+    for (const [i, grade] of [88, 90, 91].entries()) {
+      if (i) {
+        await setMember(s.id, member, 'member');
+        await env.DB.prepare("UPDATE marks SET deleted_at = NULL, grade = ? WHERE user_id = ? AND item_id = 'a1'").bind(grade, member).run();
+      }
+      expect(await detach(env.DB, member, s.id, { keepCopy: true, who: LEAVING, now: 50 + i })).toBe(true);
+      grades.push(grade);
+    }
+    expect(await rows("SELECT id, course_id, grade FROM items WHERE scope = 'u:' || ? AND title = 'REST API Project' AND deleted_at IS NULL ORDER BY grade", member)).toEqual([
+      { id: 'a1', course_id: 'web', grade: 88 },
+      { id: 'ka1', course_id: 'kweb', grade: 90 },
+      { id: 'k1a1', course_id: 'k1web', grade: 91 },
+    ]);
+    expect(await rows("SELECT id FROM courses WHERE scope = 'u:' || ? AND deleted_at IS NULL ORDER BY id", member)).toEqual([{ id: 'k1web' }, { id: 'kweb' }, { id: 'web' }]);
+  });
+
+  it("never gives two class items one copy id, nor a 'k' id the class or you already use", async () => {
+    const { member, s } = await classWithLayer();
+    await sharedItem(s.scope, 'ka1', { course_id: 'web', title: 'Lab 1' });
+    await mark(member, s.id, 'ka1', { grade: 77 });
+    await ownItem(member, 'a1', { title: 'My own a1' });
+    const long = 'x'.repeat(23);
+    await sharedItem(s.scope, long + '1', { course_id: 'web', title: 'Long 1' });
+    await sharedItem(s.scope, long + '2', { course_id: 'web', title: 'Long 2' });
+    await mark(member, s.id, long + '1', { grade: 61 });
+    await mark(member, s.id, long + '2', { grade: 62 });
+    await ownItem(member, long + '1');
+    await ownItem(member, long + '2');
+    const map = JSON.parse((await copyIds(env.DB, member, s.id)).items);
+    expect(new Set(map.map(([, to]) => to)).size).toBe(map.length);
+    expect(map).toContainEqual(['ka1', 'ka1']);
+    expect(map).toContainEqual(['a1', 'k1a1']);
+    expect(map.every(([, to]) => to.length <= 24)).toBe(true);
+    await detach(env.DB, member, s.id, { keepCopy: true, who: LEAVING, now: 50 });
+    expect(await rows("SELECT title, grade FROM items WHERE scope = 'u:' || ? AND course_id = 'web' AND deleted_at IS NULL AND grade IS NOT NULL ORDER BY grade", member)).toEqual([
+      { title: 'Long 1', grade: 61 },
+      { title: 'Long 2', grade: 62 },
+      { title: 'Quiz 2', grade: 70 },
+      { title: 'Lab 1', grade: 77 },
+      { title: 'REST API Project', grade: 88 },
+    ]);
   });
 
   it('brings a removed item along when your mark on it holds something', async () => {

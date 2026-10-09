@@ -25,22 +25,46 @@ const valuesOf = ({ userId, spaceId, now, items = '[]', course = null, only = nu
 const MAP = "(SELECT json_extract(value, '$[0]') AS from_id, json_extract(value, '$[1]') AS to_id FROM json_each(?6))";
 const TO = (col) => `COALESCE((SELECT to_id FROM ${MAP} WHERE from_id = ${col}), ${col})`;
 
+/*
+ * Copy ids for `ids` (class ids, in order) that no live row of yours (`taken`) has and no
+ * other copy in the same map takes: an id's own when free, else 'k' and its first 23
+ * characters, else 'k', a counter and as much of the id as fits in 24. The upserts only
+ * revive tombstones, so a copy id must never be live, or the copy would silently not land.
+ */
+function freeIds(ids, taken) {
+  const used = new Set(taken), out = new Map();
+  for (const id of ids) if (!used.has(id)) { out.set(id, id); used.add(id); }
+  for (const id of ids) {
+    if (out.has(id)) continue;
+    let to = 'k' + id.slice(0, 23);
+    for (let i = 1; used.has(to); i++) to = 'k' + i + id.slice(0, 23 - String(i).length);
+    out.set(id, to);
+    used.add(to);
+  }
+  return ids.map((id) => [id, out.get(id)]);
+}
+
 /**
  * The ids a copy into your scope takes (spec §13): each class row's own, unless a live row of
- * yours already has it, then 'k' and its first 23 characters. `only` limits the items (a keep).
- * Returns {course: the course copy's id or null, items: JSON [[class id, copy id]]}.
+ * yours already has it (or another copy in this map does), then a free 'k' id (`freeIds`).
+ * `only` limits the items (a keep). Returns {course: the course copy's id or null, items: JSON
+ * [[class id, copy id]]}.
  */
 export async function copyIds(db, userId, spaceId, only = null) {
   const mine = 'u:' + userId, scope = 'c:' + spaceId;
-  const [course, items] = await db.batch([
-    db.prepare(`SELECT c.id, EXISTS (SELECT 1 FROM courses AS x WHERE x.scope = ?1 AND x.id = c.id AND x.deleted_at IS NULL) AS clash
-      FROM courses AS c WHERE c.scope = ?2 LIMIT 1`).bind(mine, scope),
-    db.prepare(`SELECT i.id, EXISTS (SELECT 1 FROM items AS x WHERE x.scope = ?1 AND x.id = i.id AND x.deleted_at IS NULL) AS clash
-      FROM items AS i WHERE i.scope = ?2${only ? ' AND i.id IN (SELECT value FROM json_each(?3))' : ''} ORDER BY i.id`)
-      .bind(mine, scope, ...(only ? [JSON.stringify(only)] : [])),
+  const [course, items, myCourses, myItems] = await db.batch([
+    db.prepare('SELECT id FROM courses WHERE scope = ? LIMIT 1').bind(scope),
+    db.prepare(`SELECT id FROM items WHERE scope = ?1${only ? ' AND id IN (SELECT value FROM json_each(?2))' : ''} ORDER BY id`)
+      .bind(scope, ...(only ? [JSON.stringify(only)] : [])),
+    db.prepare('SELECT id FROM courses WHERE scope = ? AND deleted_at IS NULL').bind(mine),
+    db.prepare('SELECT id FROM items WHERE scope = ? AND deleted_at IS NULL').bind(mine),
   ]);
-  const to = (r) => (r.clash ? 'k' + r.id.slice(0, 23) : r.id);
-  return { course: course.results[0] ? to(course.results[0]) : null, items: JSON.stringify(items.results.map((r) => [r.id, to(r)])) };
+  const ids = (r) => r.results.map((x) => x.id);
+  const courseId = course.results[0]?.id;
+  return {
+    course: courseId === undefined ? null : freeIds([courseId], ids(myCourses))[0][1],
+    items: JSON.stringify(freeIds(ids(items), ids(myItems))),
+  };
 }
 
 /* Your notes win; the class's follow under "Class notes:" (spec §13). */
