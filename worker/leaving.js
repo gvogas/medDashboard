@@ -305,3 +305,29 @@ export async function shareItems(db, userId, spaceId, ids, now = Date.now()) {
   await assertAllowed(db, userId, spaceId, 'editor');
   throw new HttpError(409, { error: 'exists' });
 }
+
+/* People-and-classes the purge keeps for in one night: each is two D1 calls, and the cron's invocation has few to spare. */
+const AUTO_KEEP_GROUPS = 5;
+
+/**
+ * The purge's first step (spec §13): Keep as mine, for its holder, every live mark holding
+ * something on a class item whose tombstone is older than `before`, whether or not they are
+ * still in the class. At most 500 marks in AUTO_KEEP_GROUPS (person, class) groups a night;
+ * the rest the next (their items wait for them, see purgeTombstones).
+ */
+export async function autoKeep(db, before, now = Date.now()) {
+  const { results } = await db.prepare(`SELECT m.user_id, m.space_id, m.item_id FROM marks AS m
+      JOIN items AS i ON i.scope = 'c:' || m.space_id AND i.id = m.item_id
+    WHERE m.deleted_at IS NULL AND i.deleted_at IS NOT NULL AND i.deleted_at < ? AND ${MEANINGFUL('m')}
+    ORDER BY m.user_id, m.space_id LIMIT 500`).bind(before).all();
+  const groups = new Map();
+  for (const r of results) {
+    const k = r.user_id + '\n' + r.space_id;
+    if (!groups.has(k)) {
+      if (groups.size === AUTO_KEEP_GROUPS) break;
+      groups.set(k, []);
+    }
+    groups.get(k).push(r);
+  }
+  for (const rows of groups.values()) await keepItems(db, rows[0].user_id, rows[0].space_id, rows.map((r) => r.item_id), now);
+}
