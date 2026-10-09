@@ -4,8 +4,7 @@ import { purgeThrottle } from './throttle.js';
 import { purgeLimits } from './limits.js';
 import { purgeErrors } from './errors.js';
 import { adminHousekeeping } from './admin.js';
-
-const TOMBSTONE_TTL_MS = 30 * 24 * 60 * 60 * 1000;
+import { TOMBSTONE_TTL_MS } from '../src/core/shared.ts';
 
 export default {
   async fetch(request, env) {
