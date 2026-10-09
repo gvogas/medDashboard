@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 // The actions with the store, sync, the ui, the overlay, the class sheets and your marks as fakes.
 const fake = vi.hoisted(() => ({
     data: { profile: { id: "u1", isAdmin: true }, items: [] as unknown[], courses: [] as unknown[], quotes: [] as unknown[], study_sessions: [] as unknown[], achievements: [] as unknown[],
-        spaces: [] as unknown[], shared_courses: [] as unknown[], shared_items: [] as unknown[], marks: [] as unknown[], space_prefs: [] as unknown[] },
+        spaces: [] as unknown[], shared_courses: [] as unknown[], shared_items: [] as unknown[], removed_items: [] as unknown[], marks: [] as unknown[], space_prefs: [] as unknown[] },
     ui: { view: "week", search: "", types: {} as Record<string, boolean>, course: "all", anchor: "2026-10-06", bg: "med" },
     saveItem: vi.fn(async () => {}),
     openSheet: vi.fn(),
@@ -36,6 +36,15 @@ describe("the views act on keys", () => {
     it("tick a class's task in your mark", async () => {
         await toggleTask(WEB + "/t1")
         expect(fake.toggleClassTask).toHaveBeenCalledWith(WEB + "/t1", undefined)
+    })
+
+    it("open a removed class task's card instead of ticking it: your layer on it is read-only", async () => {
+        fake.data.removed_items = [{ scope: WEB, id: "t2", type: "task", title: "Read", courseId: "web", date: "2026-10-06", status: "todo", checklist: [], updatedBy: "u2", deletedAt: 5 }]
+        fake.data.marks = [{ id: SID + ":t2", spaceId: SID, itemId: "t2", status: "done", grade: null, weight: null, notes: "", checklist: [], completedAt: 9, hidden: false }]
+        await toggleTask(WEB + "/t2")
+        expect(fake.toggleClassTask).not.toHaveBeenCalled()
+        expect(fake.openSheet).toHaveBeenCalledWith({ kind: "item", id: WEB + "/t2" })
+        fake.data.removed_items = []; fake.data.marks = []
     })
 
     it("file a new item under the class shown, or under your course", async () => {

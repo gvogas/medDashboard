@@ -25,6 +25,13 @@ export function stable(v: unknown): string {
 /** What each field of a mark holds before you touch the item: what a first write merges against. */
 export const MARK_DEFAULTS: Record<string, unknown> = { status: 'todo', grade: null, weight: null, notes: '', checklist: [], completedAt: null, hidden: false }
 
+/** How long a tombstone lasts before the nightly purge removes it (worker/index.js); the device drops a removed class item it holds after as long. */
+export const TOMBSTONE_TTL_MS = 30 * 24 * 60 * 60 * 1000
+
+/** A mark holding anything of yours besides "not mine" (worker/leaving.js `MEANINGFUL`): a removed item with one waits for you (spec §13). */
+export const meaningfulMark = (m: Record<string, unknown>): boolean =>
+  ['status', 'grade', 'weight', 'notes', 'checklist', 'completedAt'].some((f) => stable(m[f] ?? MARK_DEFAULTS[f]) !== stable(MARK_DEFAULTS[f]))
+
 export type SharedStore = 'shared_courses' | 'shared_items'
 export const SHARED_STORES: SharedStore[] = ['shared_courses', 'shared_items']
 

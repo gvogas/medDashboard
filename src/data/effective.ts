@@ -4,11 +4,13 @@
 // course by `courseKey`. A class course takes your prefs (colour, target, semester,
 // archived); a class item your mark (status, grade, weight, checklist, notes, completion),
 // and is left out when you hid it; an item of yours filed under a class shows under the
-// class's course. Otherwise a personal row is left as it is and its key is its id: with no
+// class's course; and a class item an editor removed stays, marked, while your mark on it
+// holds something. Otherwise a personal row is left as it is and its key is its id: with no
 // shared row and nothing filed under a class these are the store's arrays themselves, so
 // anyone without a class sees exactly what they saw before.
 
 import { data } from "@/core/store"
+import { meaningfulMark } from "@/core/shared"
 import type { Course, Item, Mark, SharedCourse, SpacePref } from "./types"
 
 /** Where a row comes from; a personal row has none. */
@@ -18,6 +20,8 @@ export type EffectiveItem = Item & {
     key?: string; scope?: string; source?: Source; courseKey?: string | null; spaceId?: string
     /** a shared item's: your mark on it, and the class's own weight and notes under yours */
     mark?: Mark | null; classWeight?: number | null; classNotes?: string
+    /** a class item an editor removed, kept while your mark holds something (spec §13) */
+    removed?: { by: string | null; at: number | null }
 }
 
 /** Shared rows are in the views, with marks and the split item card. */
@@ -35,7 +39,14 @@ export const courseKeyOf = (it: EffectiveItem): string | null => (it.courseKey !
 const sourceOf = (scope: string): Source => (scope.startsWith("p:") ? "project" : "class")
 
 /** What a merge reads besides the rows: your marks by id, your prefs by space id, each class's course key by space id. */
-export interface Layer { marks?: ReadonlyMap<string, Mark>; prefs?: ReadonlyMap<string, SpacePref>; classCourse?: ReadonlyMap<string, string> }
+export interface Layer {
+    marks?: ReadonlyMap<string, Mark>; prefs?: ReadonlyMap<string, SpacePref>; classCourse?: ReadonlyMap<string, string>
+    /** class items an editor removed, as tombstones */
+    removed?: (Item & { scope: string; updatedBy?: string | null; deletedAt?: number | null })[]
+}
+
+/** A mark holding anything of yours (spec §13): kept through a removal, copied on leaving. */
+export const meaningful = (m: Mark): boolean => meaningfulMark(m as unknown as Record<string, unknown>)
 
 export function mergeCourses(own: Course[], shared: (Course & { scope: string })[], show: boolean, layer: Layer = {}): EffectiveCourse[] {
     if (!show || !shared.length) return own
@@ -66,13 +77,19 @@ function withMark(it: Item & { scope: string }, mark: Mark | null): EffectiveIte
 
 export function mergeItems(own: Item[], shared: (Item & { scope: string })[], show: boolean, layer: Layer = {}): EffectiveItem[] {
     const filed = show && own.some((it) => it.classId)
-    if (!show || (!shared.length && !filed)) return own
+    if (!show || (!shared.length && !filed && !layer.removed?.length)) return own
     const mine: EffectiveItem[] = filed ? own.map((it) => (it.classId ? { ...it, courseKey: layer.classCourse?.get(it.classId) ?? null } : it)) : own
     const theirs: EffectiveItem[] = []
     for (const it of shared) {
         const mark = layer.marks?.get(it.scope.slice(2) + ":" + it.id) ?? null
         if (!mark?.hidden) theirs.push(withMark(it, mark))
     }
+    for (const it of layer.removed ?? []) {
+        const mark = layer.marks?.get(it.scope.slice(2) + ":" + it.id) ?? null
+        if (mark && !mark.hidden && meaningful(mark)) theirs.push({ ...withMark(it, mark), removed: { by: it.updatedBy ?? null, at: it.deletedAt ?? null } })
+    }
+    /* removed items holding nothing of yours leave your own list itself */
+    if (!theirs.length && !shared.length && !filed) return own
     return [...mine, ...theirs]
 }
 
@@ -84,7 +101,7 @@ const classCourses = (shared: SharedCourse[]) =>
     new Map(shared.filter((c) => c.scope.startsWith("c:")).map((c) => [c.scope.slice(2), c.scope + "/" + c.id]))
 
 let courses = { own: null as unknown, shared: null as unknown, prefs: null as unknown, show: false, out: [] as EffectiveCourse[] }
-let items = { own: null as unknown, shared: null as unknown, marks: null as unknown, classes: null as unknown, show: false, out: [] as EffectiveItem[] }
+let items = { own: null as unknown, shared: null as unknown, removed: null as unknown, marks: null as unknown, classes: null as unknown, show: false, out: [] as EffectiveItem[] }
 
 export function effectiveCourses(): EffectiveCourse[] {
     const show = sharedShown(), prefs: SpacePref[] = data.space_prefs ?? NONE, shared = data.shared_courses ?? NONE
@@ -96,10 +113,11 @@ export function effectiveCourses(): EffectiveCourse[] {
 
 export function effectiveItems(): EffectiveItem[] {
     const show = sharedShown(), marks: Mark[] = data.marks ?? NONE, shared = data.shared_items ?? NONE, classes = data.shared_courses ?? NONE
-    if (items.own !== data.items || items.shared !== shared || items.marks !== marks || items.classes !== classes || items.show !== show) {
+    const removed = data.removed_items ?? NONE
+    if (items.own !== data.items || items.shared !== shared || items.removed !== removed || items.marks !== marks || items.classes !== classes || items.show !== show) {
         items = {
-            own: data.items, shared, marks, classes, show,
-            out: mergeItems(data.items, shared, show, { marks: new Map(marks.map((m) => [m.id, m])), classCourse: classCourses(classes) }),
+            own: data.items, shared, removed, marks, classes, show,
+            out: mergeItems(data.items, shared, show, { marks: new Map(marks.map((m) => [m.id, m])), classCourse: classCourses(classes), removed }),
         }
     }
     return items.out

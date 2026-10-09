@@ -175,7 +175,7 @@ export interface Space {
 /** A class's one course, as the class keeps it. */
 export type SharedCourse = Course & { scope: string; updatedBy: string | null }
 /** A class's item (its facts), or a project's item or task (the team's). */
-export type SharedItem = Item & { scope: string; updatedBy: string | null; assignees: string[]; completedBy: string | null }
+export type SharedItem = Item & { scope: string; updatedBy: string | null; assignees: string[]; completedBy: string | null; deletedAt?: number | null }
 
 /** A space as the class routes answer it: enough to download and open it. */
 export interface SpaceSummary { id: string; scope: string; kind: "class" | "project"; name: string; role: "owner" | "editor" | "member"; members: number }

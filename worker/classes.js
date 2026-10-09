@@ -6,6 +6,7 @@ import { requireUser } from './auth.js';
 import { requireAdmin } from './admin.js';
 import { validateSharedCourse } from './validate.js';
 import { ADMINS_ONLY, absorb, checkConvert, createClass, priorConvert, setRole, spaceDetails, transfer } from './spaces.js';
+import { deleteClass, keep, leave, removeMember, setArchived, shareItems } from './leaving.js';
 import { acceptInvite, declineInvite, dropCode, invite, joinByCode, makeCode, myInvites, revokeInvite } from './invites.js';
 
 const SID = '([a-z0-9]{12})';
@@ -22,6 +23,16 @@ function idOf(v, field, max = 24) {
   if (typeof v !== 'string' || v.length < 1 || v.length > max || /[\u0000-\u001f\u007f]/.test(v)) throw bad(field);
   return v;
 }
+
+/* keepCopy: on unless false is sent. */
+function keepOf(v) {
+  if (v == null) return true;
+  if (typeof v !== 'boolean') throw bad('keepCopy');
+  return v;
+}
+
+/* A body that may be left out (only keepCopy): none, or an empty one, reads as {}. */
+const optionalJson = (request) => (request.body && request.headers.get('content-length') !== '0' ? readJson(request) : {});
 
 /** POST /api/spaces in Stage 3: a class, blank (`course`) or from a course of yours (`convertCourseId`, `items`). */
 export function classBody(body) {
@@ -49,6 +60,15 @@ export function absorbBody(body) {
   return { courseId, pairs: out, fromCourse: body.fromCourse === true };
 }
 
+/** POST /api/spaces/:sid/absorb {items}: share items of yours filed under the class (1 to 50 ids, each once). */
+export function shareBody(body) {
+  const items = body.items;
+  if (!Array.isArray(items) || items.length < 1 || items.length > 50) throw bad('items');
+  const out = items.map((id) => idOf(id, 'items'));
+  if (new Set(out).size !== out.length) throw bad('items');
+  return out;
+}
+
 export const classRoutes = [
   ['POST', route('spaces'), async ({ request, env }) => {
     const userId = await joiner(request, env);
@@ -72,6 +92,27 @@ export const classRoutes = [
   ['POST', route(`spaces/${SID}/transfer`), async ({ request, env, params: [sid] }) => {
     const userId = await requireUser(request, env);
     await transfer(env.DB, userId, sid, idOf((await readJson(request)).userId, 'userId', 64));
+    return done();
+  }],
+  ['POST', route(`spaces/${SID}/archive`), async ({ request, env, params: [sid] }) => {
+    const userId = await requireUser(request, env);
+    const { archived } = await readJson(request);
+    if (typeof archived !== 'boolean') throw bad('archived');
+    await setArchived(env.DB, userId, sid, archived);
+    return done();
+  }],
+  ['DELETE', route(`spaces/${SID}`), async ({ request, env, params: [sid] }) => {
+    const userId = await requireUser(request, env);
+    await deleteClass(env.DB, userId, sid, keepOf((await optionalJson(request)).keepCopy));
+    return done();
+  }],
+  ['POST', route(`spaces/${SID}/leave`), async ({ request, env, params: [sid] }) => {
+    const userId = await requireUser(request, env);
+    await leave(env.DB, userId, sid, keepOf((await optionalJson(request)).keepCopy));
+    return done();
+  }],
+  ['DELETE', route(`spaces/${SID}/members/${UID}`), async ({ request, env, params: [sid, uid] }) => {
+    await removeMember(env.DB, await requireUser(request, env), sid, uid);
     return done();
   }],
   ['POST', route(`spaces/${SID}/invites`), async ({ request, env, params: [sid] }) => {
@@ -101,6 +142,14 @@ export const classRoutes = [
     const userId = await joiner(request, env);
     return json({ space: await joinByCode(env.DB, userId, (await readJson(request)).code) });
   }],
-  ['POST', route(`spaces/${SID}/absorb`), async ({ request, env, params: [sid] }) =>
-    json(await absorb(env.DB, await requireUser(request, env), sid, absorbBody(await readJson(request))))],
+  ['POST', route(`spaces/${SID}/absorb`), async ({ request, env, params: [sid] }) => {
+    const userId = await requireUser(request, env);
+    const body = await readJson(request);
+    if (body.items !== undefined) return json(await shareItems(env.DB, userId, sid, shareBody(body)));
+    return json(await absorb(env.DB, userId, sid, absorbBody(body)));
+  }],
+  ['POST', route(`spaces/${SID}/items/([^/]{1,72})/keep`), async ({ request, env, params: [sid, itemId] }) => {
+    await keep(env.DB, await requireUser(request, env), sid, idOf(itemId, 'id'));
+    return done();
+  }],
 ];

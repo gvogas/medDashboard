@@ -12,7 +12,7 @@ import { currentTerm, type SchoolCalendar } from "@/core/school"
 import { today } from "@/core/dates"
 import { data } from "@/core/store"
 import { closeSheet } from "@/data/overlay"
-import { download, joinWithCode, messageFor, openClass, savePref } from "@/data/classes"
+import { download, joinWithCode, joinMessageFor, messageFor, openClass, savePref } from "@/data/classes"
 import { matchFor, openMerge } from "@/data/merge"
 import { schoolCal } from "@/data/query"
 import { semesterOptions } from "@/data/course-edit"
@@ -60,7 +60,7 @@ function Join({ given, space, bar }: { given: string; space: SpaceSummary | null
         if (!normalizeCode(code)) { setErr("A code is 8 characters."); return }
         setBusy(true); setErr("")
         try { setStage({ at: "loading", space: await joinWithCode(code) }) }
-        catch (e) { setErr(messageFor(e)) }
+        catch (e) { setErr(joinMessageFor(e)) }
         finally { setBusy(false) }
     }
 

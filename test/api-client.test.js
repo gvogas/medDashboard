@@ -228,3 +228,15 @@ describe('your layer, as the client sends it', () => {
     expect(fetch.mock.calls[0][0]).toBe('/api/space_prefs/abcdefghij12');
   });
 });
+
+describe('leaving and keeping, as the client sends them', () => {
+  it('posts a leave with keepCopy, and a keep at the item it names', async () => {
+    respond(null, 204);
+    expect(await client.api.spaces.leave('abcdefghij12', false)).toBeNull();
+    const [path, init] = fetch.mock.calls[0];
+    expect([path, init.method, JSON.parse(init.body)]).toEqual(['/api/spaces/abcdefghij12/leave', 'POST', { keepCopy: false }]);
+    respond(null, 204);
+    expect(await client.api.spaces.keep('abcdefghij12', 'a 1')).toBeNull();
+    expect([fetch.mock.calls[0][0], fetch.mock.calls[0][1].method]).toEqual(['/api/spaces/abcdefghij12/items/a%201/keep', 'POST']);
+  });
+});

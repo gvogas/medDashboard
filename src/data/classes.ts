@@ -141,9 +141,20 @@ export function messageFor(e: unknown, name = ""): string {
     if (code === "limit") return "You're in 20 classes and projects, the most anyone can be in."
     if (code === "full") return "This class is full: 30 people is the most it holds."
     if (code === "expired") return "That has expired. Ask for a new code or invite."
+    if (code === "changed") return "That may already be done, or the class changed. Look again in a moment."
     if (code === "not_found") return "That doesn't match a class. The code or invite may have been withdrawn."
     if (code === "forbidden") return "Only the class's owner can do that."
+    if (code === "owner") return "Hand the class on to someone first: the owner can't leave."
+    if (code === "members") return "Only a class with nobody else in it can be deleted. Remove the others or hand it on."
+    if (code === "exists") return "The class already has an item with this id."
+    if (code === "archived") return "This class is archived. Unarchive it first."
     if (code === "rate_limited") return "Too many tries. Wait a while, then try again."
     if (code === "invalid") return e.body?.field === "code" ? "A code is 8 characters." : "Something in that isn't valid."
     return "That didn't work (" + (code || e.status) + "). Try again."
+}
+
+/** What a failed join or accept says: an archived class is one only its owner can open again. */
+export function joinMessageFor(e: unknown): string {
+    if (e instanceof ApiError && e.body?.error === "archived") return "This class is archived: it can't take new members until its owner unarchives it."
+    return messageFor(e)
 }

@@ -36,7 +36,7 @@ a Spotify player and an admin page.
 | Import | `.ics` calendars, CSV timetables, course outlines (PDF or Word), school calendars and class schedules (PDF or screenshot) read by Workers AI. A timetable PDF's days and times are read from its grid in the browser first, so the model only copies them; a room ending in a lone "L" (Omnivox's mark) is a lab. Everything goes through a preview where the person ticks what to keep. |
 | Calendar feed | A private `.ics` link that Google or Apple Calendar can subscribe to. |
 | Spotify | Each person connects their own account. Now playing, controls, search, playlists, queue and volume. The tab itself can play music through the Web Playback SDK. |
-| Shared classes | A class is a shared space with its own courses and items. Make one blank or convert a course into it, invite by username or a join code, roles (owner, editor, member). Each person keeps a private layer on it: marks on its items (status, grade, weight, notes, checklist, hidden) and prefs (colour, target, term, archived). **Admin-only until Stage 6** (`CLASSES_ADMIN_ONLY` in `src/data/effective.ts`; the Worker gates it too). |
+| Shared classes | A class is a shared space with its own courses and items. Make one blank or convert a course into it, invite by username or a join code, roles (owner, editor, member). Each person keeps a private layer on it: marks on its items (status, grade, weight, notes, checklist, hidden) and prefs (colour, target, term, archived). Leaving keeps a copy of the class as your own course by default. The owner removes members (they keep a copy), archives the class (read-only for everyone, members still managed) and deletes it once nobody else is in it. A class item an editor deletes stays with whoever has something on it, marked *Removed from … by …*, until they **Keep as mine** or **Dismiss** it (editors can **Restore** it for everyone). Editors share one of their own items filed under the class with it. Deleting an account hands its classes on. **Admin-only until Stage 6** (`CLASSES_ADMIN_ONLY` in `src/data/effective.ts`; the Worker gates it too). |
 | Admin | Overview (free-plan usage meters, traffic and health), Accounts, Errors, Audit log, a site-wide Announcement banner, and Maintenance. |
 | Maintenance mode | Admins switch a feature off while they work on it (week, month, all items, study, music, import with AI, shared classes and projects), with a message. Personal data and sync never stop. `worker/maintenance.js`. |
 | Offline / PWA | Local-first: an IndexedDB store (version 6). It can be installed to the home screen and works with no connection. |
@@ -130,7 +130,8 @@ view shows and can be tested on their own.
 | `db.js`, `validate.js` | Row reads and writes by scope, revisions, the sync feed (v2 and v3), input validation. |
 | `access.js` | Who may do what in a shared space. Each guard is a SQL fragment run inside the statement that reads or writes. |
 | `spaces.js` | Spaces: the gate, limits, Worker-made ids, the space revision, making a class, its details, roles and transfer. |
-| `classes.js` | The class routes: making a class, members, invites, join codes, absorb. |
+| `classes.js` | The class routes: making a class, members, invites, join codes, absorb, leaving and removal. |
+| `leaving.js` | Leaving and removal (spec §13): detach (a copy of the class into your own scope), leave, remove, archive, delete a class, Keep as mine, share an item, handing classes on, the purge's auto-keep. |
 | `invites.js` | Invites by username and join codes; the 20-spaces and 30-members limits ride in each statement. |
 | `layer.js` | Your layer on a space: marks on its items and your prefs for it, both yours alone. |
 | `maintenance.js` | Maintenance mode: stored in `app_meta`, sent with `GET /api/me`, enforced (503) for AI reads and shared classes. |
@@ -148,7 +149,8 @@ view shows and can be tested on their own.
 - **Data:** `GET /sync`, and `GET|PUT|DELETE /{courses,items,quotes,study_sessions,achievements}/:id`.
 - **Shared classes:** `POST /spaces`, `GET /spaces/:sid`, `GET|PUT|DELETE /spaces/:sid/{courses,items}/:id`,
   `PUT /spaces/:sid/members/:uid`, `POST /spaces/:sid/transfer`, `POST|DELETE /spaces/:sid/invites…`,
-  `POST|DELETE /spaces/:sid/code`, `POST /spaces/:sid/absorb`, `GET /invites`,
+  `POST|DELETE /spaces/:sid/code`, `POST /spaces/:sid/absorb`, `POST /spaces/:sid/{leave,archive}`,
+  `DELETE /spaces/:sid`, `DELETE /spaces/:sid/members/:uid`, `POST /spaces/:sid/items/:id/keep`, `GET /invites`,
   `POST /invites/:sid/{accept,decline}`, `POST /join`.
 - **Your layer:** `GET|PUT|DELETE /marks/:sid/:itemId`, `GET|PUT|DELETE /space_prefs/:sid`.
 - **AI reads:** `POST /outline`, `POST /school-calendar`, `POST /ai/schedule`, `GET /ai/reads`.

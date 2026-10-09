@@ -56,3 +56,24 @@ export async function signInAdmin(username) {
 
 /** A POST with a JSON body. */
 export const post = (api, path, body = {}) => api(path, { method: 'POST', body });
+
+/* Raw rows of a person's layer and labels, as Stage 5's tests need them. */
+export function mark(userId, spaceId, itemId, cols = {}) {
+  const row = { id: spaceId + ':' + itemId, space_id: spaceId, item_id: itemId, created_at: 1, updated_at: 1, ...cols };
+  const names = Object.keys(row);
+  return env.DB.prepare(`INSERT INTO marks (user_id, ${names.join(', ')}) VALUES (?, ${names.map(() => '?').join(', ')})`).bind(userId, ...Object.values(row)).run();
+}
+export const pref = (userId, spaceId, cols = {}) => {
+  const row = { id: spaceId, space_id: spaceId, color: '#4F74D9', term: 'Fall 2026', target: 85, created_at: 1, updated_at: 1, ...cols };
+  const names = Object.keys(row);
+  return env.DB.prepare(`INSERT INTO space_prefs (user_id, ${names.join(', ')}) VALUES (?, ${names.map(() => '?').join(', ')})`).bind(userId, ...Object.values(row)).run();
+};
+export const ownItem = (userId, id, cols = {}) => {
+  const row = { type: 'assignment', title: id, date: '2026-10-20', status: 'todo', created_at: 1, updated_at: 1, ...cols };
+  const names = Object.keys(row);
+  return env.DB.prepare(`INSERT INTO items (scope, id, ${names.join(', ')}) VALUES (?, ?, ${names.map(() => '?').join(', ')})`).bind('u:' + userId, id, ...Object.values(row)).run();
+};
+export const session = (userId, id, cols) => env.DB.prepare(`INSERT INTO study_sessions (user_id, id, course_id, item_id, space_id, started_at, study_minutes, created_at, updated_at)
+  VALUES (?, ?, ?, ?, ?, 1700000000000, 25, 1, 1)`).bind(userId, id, cols.course_id ?? null, cols.item_id ?? null, cols.space_id ?? null).run();
+export const achievement = (userId, id, cols) => env.DB.prepare(`INSERT INTO achievements (user_id, id, name, sticker, rule, course_id, item_id, space_id, target, created_at, updated_at)
+  VALUES (?, ?, 'Ace', 'data:image/png;base64,AA', ?, ?, ?, ?, ?, 1, 1)`).bind(userId, id, cols.rule, cols.course_id ?? null, cols.item_id ?? null, cols.space_id ?? null, cols.target ?? 90).run();

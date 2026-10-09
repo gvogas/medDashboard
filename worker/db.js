@@ -4,6 +4,7 @@
 import { HttpError } from './http.js';
 import { assertAllowed, editorGuard, memberGuard, parseScope, scopeOf, writerGuard } from './access.js';
 import { SPACE_LIMIT } from './spaces.js';
+import { MEANINGFUL, autoKeep } from './leaving.js';
 import { MARK_DEFAULTS, stable } from '../src/core/shared.ts';
 
 const PROFILE_COLS =
@@ -212,16 +213,39 @@ export async function upsertRow(db, table, userId, id, fields, now = Date.now(),
   throw new HttpError(409, { error: 'conflict', current: row ? rowToApi(table, row) : null });
 }
 
-/** Hard-delete rows soft-deleted before `before`. Items first, so course rows go last. */
-export async function purgeTombstones(db, before) {
-  await db.batch(
-    [db.prepare('UPDATE sync_state SET floor = MAX(floor, COALESCE((SELECT MAX(seq) FROM changes WHERE deleted_at < ?), 0)) WHERE id = 1').bind(before),
+const INVITE_DAYS = 90;
+
+/**
+ * The nightly purge (spec §13), in order: the other marks on expiring shared items are deleted
+ * (soft); each space deleted before `before` goes with everything in it; then the floor moves
+ * and old tombstones go, items first so course rows go last (a class item still holding a
+ * meaningful mark waits); invites go 90 days after they were made. Only then are removed class
+ * items holding something of someone's kept for them (autoKeep, bounded), so the sweep never
+ * waits on the keeps; their class rows go the next night. Every step acts only on what is
+ * already old, so a rerun finds nothing more to do.
+ */
+export async function purgeTombstones(db, before, now = Date.now()) {
+  const GONE = '(SELECT id FROM spaces WHERE deleted_at IS NOT NULL AND deleted_at < ?)';
+  const tombstones = (table) => db.prepare(`DELETE FROM ${table} WHERE deleted_at IS NOT NULL AND deleted_at < ?`).bind(before);
+  await db.batch([
+    /* soft, so the change feed carries the deletion; the tombstone goes with a later night's sweep */
+    db.prepare(`UPDATE marks SET deleted_at = ?, updated_at = ?, revision = revision + 1 WHERE deleted_at IS NULL AND NOT ${MEANINGFUL('marks')} AND EXISTS (SELECT 1 FROM items AS i
+      WHERE i.scope IN ('c:' || marks.space_id, 'p:' || marks.space_id) AND i.id = marks.item_id AND i.deleted_at IS NOT NULL AND i.deleted_at < ?)`).bind(now, now, before),
+    /* a gone space's rows go whatever marks they hold: every way a space is deleted (deleteClass, account deletion) leaves no meaningful live mark in it */
+    ...['items', 'courses', 'changes'].map((t) =>
+      db.prepare(`DELETE FROM ${t} WHERE scope IN (SELECT 'c:' || id FROM ${GONE} UNION ALL SELECT 'p:' || id FROM ${GONE})`).bind(before, before)),
+    ...['members', 'invites', 'marks', 'space_prefs'].map((t) => db.prepare(`DELETE FROM ${t} WHERE space_id IN ${GONE}`).bind(before)),
+    tombstones('spaces'),
+    db.prepare('UPDATE sync_state SET floor = MAX(floor, COALESCE((SELECT MAX(seq) FROM changes WHERE deleted_at < ?), 0)) WHERE id = 1').bind(before),
     db.prepare('DELETE FROM changes WHERE deleted_at < ?').bind(before),
-    /* marks and prefs here are only tombstones; Stage 5 detaches meaningful marks first (spec §13) */
-    ...['marks', 'space_prefs', 'achievements', 'study_sessions', 'items', 'quotes', 'courses'].map((table) =>
-      db.prepare(`DELETE FROM ${table} WHERE deleted_at IS NOT NULL AND deleted_at < ?`).bind(before),
-    )],
-  );
+    ...['marks', 'space_prefs', 'members', 'achievements', 'study_sessions'].map(tombstones),
+    db.prepare(`DELETE FROM items WHERE deleted_at IS NOT NULL AND deleted_at < ? AND (scope GLOB 'u:*' OR NOT EXISTS (SELECT 1 FROM marks AS m
+      WHERE m.space_id = substr(items.scope, 3) AND m.item_id = items.id AND m.deleted_at IS NULL AND ${MEANINGFUL('m')}))`).bind(before),
+    tombstones('quotes'),
+    tombstones('courses'),
+    db.prepare('DELETE FROM invites WHERE created_at < ?').bind(now - INVITE_DAYS * 24 * 60 * 60 * 1000),
+  ]);
+  await autoKeep(db, before, now);
 }
 
 /** Soft delete. Returns false if the row does not exist for this user. */

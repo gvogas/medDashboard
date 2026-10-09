@@ -1,7 +1,9 @@
 // A class's Members tab (spec §11, §15): who is in it, invites by username, the join code,
-// roles, and handing the class on. Owners and editors invite; only the owner gives another
-// role, makes a code, changes roles and hands the class on. Removing someone and leaving
-// wait for Stage 5, so neither is offered. Everything here needs a connection.
+// roles, removing someone, and handing the class on. Owners and editors invite. Only the owner
+// gives another role, makes a code, changes roles, removes someone (who keeps a copy) and hands
+// the class on. While the class is archived roles, removing and handing on still work; inviting,
+// the code and withdrawing an invite do not, so the tab leaves them out. Leaving is in Details.
+// Everything here needs a connection.
 
 import { useCallback, useEffect, useState } from "react"
 import { api } from "@/core/api"
@@ -10,6 +12,7 @@ import { dayMonth, iso } from "@/core/dates"
 import { useProfile } from "@/data/store"
 import { formatCode, joinLink, messageFor } from "@/data/classes"
 import { toast } from "@/data/toast"
+import { removeMember } from "@/data/leave"
 import type { JoinCode, SpaceDetails, SpaceInvite, SpaceMember } from "@/data/types"
 import { Button, Note, Section, Select, TextInput } from "./fields"
 
@@ -35,11 +38,14 @@ export function MembersTab({ spaceId }: { spaceId: string }) {
     const others = info.members.filter((m) => m.userId !== me)
     return (
         <>
-            {editor
-                ? <InviteBox spaceId={spaceId} owner={owner} standard={info.kind === "class" ? "member" : "editor"} reload={load} />
-                : <Note>Owners and editors invite people. Ask {ownerName} for a join code.</Note>}
-            {editor && info.invites.length > 0 && <InviteList spaceId={spaceId} invites={info.invites} owner={owner} me={me} reload={load} />}
-            {owner && <CodeBox spaceId={spaceId} code={info.code} reload={load} />}
+            {/* the Worker refuses invites, codes, withdrawing, joining and accepting while the class is archived */}
+            {info.archived
+                ? <Note>The class is archived: nobody can join it, by invite or code. {owner ? "Unarchive it" : ownerName + " can unarchive it"} to invite people or make a join code.</Note>
+                : editor
+                    ? <InviteBox spaceId={spaceId} owner={owner} standard={info.kind === "class" ? "member" : "editor"} reload={load} />
+                    : <Note>Owners and editors invite people. Ask {ownerName} for a join code.</Note>}
+            {editor && info.invites.length > 0 && <InviteList spaceId={spaceId} invites={info.invites} owner={owner} me={me} archived={info.archived} reload={load} />}
+            {owner && !info.archived && <CodeBox spaceId={spaceId} code={info.code} reload={load} />}
             <MemberList spaceId={spaceId} members={info.members} owner={owner} me={me} reload={load} />
             {owner && others.length > 0 && <HandOn spaceId={spaceId} members={others} reload={load} />}
             {error && <Note tone="bad">{error}</Note>}
@@ -83,7 +89,7 @@ function InviteBox({ spaceId, owner, standard, reload }: { spaceId: string; owne
     )
 }
 
-function InviteList({ spaceId, invites, owner, me, reload }: { spaceId: string; invites: SpaceInvite[]; owner: boolean; me: string; reload: Reload }) {
+function InviteList({ spaceId, invites, owner, me, archived, reload }: { spaceId: string; invites: SpaceInvite[]; owner: boolean; me: string; archived: boolean; reload: Reload }) {
     const [err, setErr] = useState("")
     const withdraw = async (userId: string) => {
         try { await api.spaces.revokeInvite(spaceId, userId); setErr(""); await reload() } catch (e) { setErr(messageFor(e)) }
@@ -98,7 +104,7 @@ function InviteList({ spaceId, invites, owner, me, reload }: { spaceId: string; 
                             <span className="text-[11px] text-muted-foreground">Invited {day(v.createdAt)} · as {v.role}</span>
                         </span>
                         <span className="text-[11px] text-muted-foreground">{STATUS[v.status]}</span>
-                        {(owner || v.invitedBy === me) && (
+                        {!archived && (owner || v.invitedBy === me) && (
                             <Button variant="ghost" aria-label={"Withdraw the invite to " + v.name} onClick={() => void withdraw(v.userId)}>Withdraw</Button>
                         )}
                     </li>
@@ -150,6 +156,12 @@ function CodeBox({ spaceId, code, reload }: { spaceId: string; code: SpaceDetail
 
 function MemberList({ spaceId, members, owner, me, reload }: { spaceId: string; members: SpaceMember[]; owner: boolean; me: string; reload: Reload }) {
     const [err, setErr] = useState("")
+    const [removing, setRemoving] = useState<SpaceMember | null>(null)
+    const [busy, setBusy] = useState(false)
+    const remove = async (m: SpaceMember) => {
+        setBusy(true)
+        try { await removeMember(spaceId, m.userId); setRemoving(null); setErr(""); await reload() } catch (e) { setErr(messageFor(e)) } finally { setBusy(false) }
+    }
     const change = async (userId: string, role: string) => {
         try { await api.spaces.setRole(spaceId, userId, role); setErr(""); await reload(); void syncNow() } catch (e) { setErr(messageFor(e)) }
     }
@@ -165,9 +177,19 @@ function MemberList({ spaceId, members, owner, me, reload }: { spaceId: string; 
                                 <option value="member">Member</option>
                             </Select>
                         ) : <span className="text-[11px] font-semibold text-muted-foreground">{ROLE[m.role]}</span>}
+                        {owner && m.role !== "owner" && m.userId !== me && (
+                            <Button variant="ghost" aria-label={"Remove " + m.name} onClick={() => setRemoving(m)}>Remove</Button>
+                        )}
                     </li>
                 ))}
             </ul>
+            {removing && (
+                <div className="flex flex-wrap items-center gap-2">
+                    <Note>Remove {removing.name}? They keep a copy of the class as their own course.</Note>
+                    <Button variant="ghost" onClick={() => setRemoving(null)}>Cancel</Button>
+                    <Button variant="danger" disabled={busy} onClick={() => void remove(removing)}>Remove {removing.name} from the class</Button>
+                </div>
+            )}
             {err && <Note tone="bad">{err}</Note>}
         </Section>
     )

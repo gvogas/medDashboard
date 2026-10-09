@@ -7,9 +7,9 @@ import type { PendingOp, Row } from './db.ts';
 import type { Cursor, ServerProfile } from './store.ts';
 import type { SyncState, SyncStatus } from './types.ts';
 
-/** One sync cycle: its cancel signal, the account it is for, the edits it held back, and
-    whether any waits on a feature in maintenance. */
-interface Cycle { signal: AbortSignal; account: string; failed: PendingOp[]; waiting: boolean }
+/** One sync cycle: its cancel signal, the account it is for, the edits it held back, the mark
+    edits refused as not found (settled after the pull), and whether any waits on a feature in maintenance. */
+interface Cycle { signal: AbortSignal; account: string; failed: PendingOp[]; deferred: PendingOp[]; waiting: boolean }
 export const status: SyncStatus & { lastPull: number | null } = { state: 'idle', pending: 0, lastPull: null, message: '' };
 const listeners = new Set<(s: typeof status) => void>();
 let initialized = false, paused = false, running: Promise<boolean> | null = null, controller: AbortController | null = null, timer: ReturnType<typeof setTimeout> | undefined;
@@ -112,6 +112,9 @@ async function pushAll(cycle: Cycle): Promise<boolean> {
       /* a feature the admins are working on (shared classes): the edit stays pending as it
          is, with no try counted, and the rest still upload */
       if (e instanceof ApiError && e.status === 503 && e.body?.error === 'maintenance') { cycle.waiting = true; continue; }
+      /* your mark refused as not found: you may have lost the class, and the pull that follows
+         carries the edit onto your copy (store.applyRevoked); it is settled after the pull */
+      if (e instanceof ApiError && e.status === 404 && op.op === 'put' && op.key.startsWith('marks:')) { cycle.deferred.push(op); continue; }
       if (e instanceof ApiError && refused(op, e)) {
         const current = await serverCopy(op, e);
         if (!active(cycle)) return false;
@@ -129,7 +132,10 @@ async function pushAll(cycle: Cycle): Promise<boolean> {
 }
 /** Count a failed cycle against each held-back edit; set aside those out of tries. */
 async function holdBack(cycle: Cycle): Promise<void> {
+  /* an edit the pull settled (a mark carried onto your copy) is no longer held back */
+  const waiting = new Set((await store.pending()).map((op) => op.token));
   for (const op of cycle.failed) {
+    if (!waiting.has(op.token)) { tries.delete(op.token); continue; }
     const n = (tries.get(op.token) || 0) + 1;
     if (n < MAX_TRIES) { tries.set(op.token, n); continue; }
     tries.delete(op.token);
@@ -137,6 +143,18 @@ async function holdBack(cycle: Cycle): Promise<void> {
     if (!active(cycle)) return;
     await store.rejectOperation(op, current, 'The server kept failing to save this edit.');
   }
+}
+/** After a complete pull: a deferred mark edit still waiting (nothing carried it) goes to the saved copies. */
+async function settleDeferred(cycle: Cycle): Promise<boolean> {
+  if (!cycle.deferred.length) return true;
+  const waiting = new Set((await store.pending()).map((op) => op.token));
+  for (const op of cycle.deferred) {
+    if (!waiting.has(op.token)) continue;
+    const current = await serverCopy(op);
+    if (!active(cycle)) return false;
+    await store.rejectOperation(op, current, 'This item was removed from the class, or you left it.');
+  }
+  return active(cycle);
 }
 /* Upload order (spec §6): course puts, then items, then your marks and prefs (a mark on an item
    made offline needs the item first), then course deletes. */
@@ -186,7 +204,7 @@ export async function syncNow(): Promise<boolean> {
   if (running) return running;
   clearTimeout(timer);
   controller = new AbortController();
-  const cycle: Cycle = { signal: controller.signal, account: store.data.profile.id, failed: [], waiting: false };
+  const cycle: Cycle = { signal: controller.signal, account: store.data.profile.id, failed: [], deferred: [], waiting: false };
   running = (async () => {
     try {
       return await store.withSyncLock(async () => {
@@ -195,6 +213,8 @@ export async function syncNow(): Promise<boolean> {
         if (!(await pushAll(cycle))) return false;
         const complete = await pullAll(cycle);
         if (!active(cycle)) return false;
+        /* an incomplete pull leaves deferred edits pending: the next cycle tries them again */
+        if (complete && !(await settleDeferred(cycle))) return false;
         if (cycle.failed.length) {
           await holdBack(cycle);
           if (!active(cycle)) return false;

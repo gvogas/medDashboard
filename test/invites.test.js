@@ -96,6 +96,23 @@ describe('invites', () => {
     expect((await accept(guest3, t)).status).toBe(404);
   });
 
+  it('refuse to be accepted while the class is archived (403 archived); the invite stays pending for when it is unarchived', async () => {
+    const t = await makeSpace({ members: { [owner.id]: 'owner' } });
+    const shut = await signInAdmin('iv-shut');
+    expect((await invite(owner, 'iv-shut', null, t)).status).toBe(201);
+    await env.DB.prepare('UPDATE spaces SET archived = 1 WHERE id = ?').bind(t.id).run();
+    const before = await spaceRevision(t.id);
+    const res = await accept(shut, t);
+    expect(res.status).toBe(403);
+    expect(await res.json()).toEqual({ error: 'archived' });
+    expect(await row(t, shut.id)).toMatchObject({ status: 'pending' });
+    expect(await spaceRevision(t.id)).toBe(before);
+    expect(await env.DB.prepare('SELECT 1 AS x FROM members WHERE space_id = ? AND user_id = ?').bind(t.id, shut.id).first()).toBeNull();
+    await env.DB.prepare('UPDATE spaces SET archived = 0 WHERE id = ?').bind(t.id).run();
+    expect((await accept(shut, t)).status).toBe(200);
+    expect(await row(t, shut.id)).toMatchObject({ status: 'accepted' });
+  });
+
   it('stop at 20 spaces (409 limit) and 30 members (409 full); the invite stays pending', async () => {
     const busy = await signInAdmin('iv-busy');
     for (let i = 0; i < 20; i++) await makeSpace({ members: { [busy.id]: 'member' } });

@@ -29,7 +29,7 @@ vi.mock("./toast", () => ({ toast: fake.toast }))
 
 import { ApiError } from "@/core/api"
 import {
-    accept, classFrom, convert, convertChoice, decline, download, formatCode, freeColour, getInvites, joinLink, joinWithCode, makeBlank, messageFor, refreshInvites,
+    accept, classFrom, convert, convertChoice, decline, download, formatCode, freeColour, getInvites, joinLink, joinMessageFor, joinWithCode, makeBlank, messageFor, refreshInvites,
 } from "./classes"
 
 const SID = "sp0000000001"
@@ -81,6 +81,11 @@ describe("words and small rules", () => {
         expect(messageFor(new ApiError(400, { error: "invalid", field: "code" }))).toBe("A code is 8 characters.")
         expect(messageFor(new ApiError(429, { error: "rate_limited" }))).toBe("Too many tries. Wait a while, then try again.")
         expect(messageFor(new TypeError("Failed to fetch"))).toBe("You seem to be offline. This needs a connection.")
+        /* a leave, removal, delete or keep that answered not found and was not done after all */
+        expect(messageFor(new ApiError(404, { error: "changed" }))).toBe("That may already be done, or the class changed. Look again in a moment.")
+        /* joining an archived class: the one joining can't unarchive it */
+        expect(joinMessageFor(new ApiError(403, { error: "archived" }))).toBe("This class is archived: it can't take new members until its owner unarchives it.")
+        expect(joinMessageFor(new ApiError(410, { error: "expired" }))).toBe("That has expired. Ask for a new code or invite.")
     })
 })
 

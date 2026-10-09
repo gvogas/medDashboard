@@ -34,6 +34,10 @@ export function refOf(courseKey: string | null, itemKey: string | null): { cours
     return { courseId: c?.id ?? null, itemId: i?.id ?? null, spaceId: c?.spaceId ?? i?.spaceId ?? null }
 }
 
+/** A session's or an achievement's class key whose class this device no longer holds: one you left (spec §13). */
+export const leftClass = (key: string | null | undefined): boolean =>
+    isSharedKey(key) && !(data.spaces ?? []).some((s) => s.scope === splitKey(key).scope)
+
 /** The key of a class's course, from its space id. */
 export function classCourseKey(spaceId: string): string | null {
     const c = (data.shared_courses ?? []).find((x) => x.scope === "c:" + spaceId)

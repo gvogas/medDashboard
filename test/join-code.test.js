@@ -98,6 +98,21 @@ describe('join codes', () => {
     expect(await usesLeft(room)).toBe(10);
   });
 
+  it('refuse while the class is archived (403 archived), using nothing; unarchived, it joins', async () => {
+    const t = await makeSpace({ members: { [owner.id]: 'owner' } });
+    const { code } = await (await makeCode(owner, t)).json();
+    const shut = await signInAdmin('jc-shut');
+    await env.DB.prepare('UPDATE spaces SET archived = 1 WHERE id = ?').bind(t.id).run();
+    const res = await join(shut, code);
+    expect(res.status).toBe(403);
+    expect(await res.json()).toEqual({ error: 'archived' });
+    expect(await usesLeft(t)).toBe(10);
+    expect((await env.DB.prepare('SELECT count(*) AS n FROM members WHERE space_id = ?').bind(t.id).first()).n).toBe(1);
+    await env.DB.prepare('UPDATE spaces SET archived = 0 WHERE id = ?').bind(t.id).run();
+    expect((await join(shut, code)).status).toBe(200);
+    expect(await usesLeft(t)).toBe(9);
+  });
+
   it('count ten tries an hour per person', async () => {
     const tries = await signInAdmin('jc-tries');
     for (let i = 0; i < 10; i++) expect((await join(tries, 'ZZZZZZZZ')).status).toBe(404);
