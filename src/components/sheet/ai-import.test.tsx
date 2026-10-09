@@ -10,10 +10,8 @@ const fake = vi.hoisted(() => ({
     cal: null as unknown,
 }))
 const legacy = vi.hoisted(() => ({ saveRows: vi.fn(async (_rows: unknown) => {}), saveProfile: vi.fn(), toast: vi.fn(), shrink: vi.fn(async () => new Blob(["j"], { type: "image/jpeg" })) }))
-const ai = vi.hoisted(() => ({
-    readWithAi: vi.fn(), refreshReads: vi.fn(async () => {}), asSent: vi.fn(async (f: File) => f as Blob), MAX_FILE: 5 * 1024 * 1024,
-    isPdf: (f: File) => /\.pdf$/i.test(f.name), pdfTimetable: vi.fn(async () => "Timetable grid …"),
-}))
+const ai = vi.hoisted(() => ({ readWithAi: vi.fn(), refreshReads: vi.fn(async () => {}), asSent: vi.fn(async (f: File) => f as Blob), MAX_FILE: 5 * 1024 * 1024 }))
+const pdfTimetable = vi.hoisted(() => vi.fn())
 vi.mock("@/core/store", () => ({
     data: fake.data, conflicts: [],
     course: (id: string) => fake.data.courses.find((c) => c.id === id) || null, item: () => null,
@@ -26,7 +24,7 @@ vi.mock("@/core/api", () => ({ api: { readSchedule: vi.fn(), readOutline: vi.fn(
 vi.mock("@/data/ai-read", () => ai)
 vi.mock("@/data/toast", () => ({ toast: legacy.toast }))
 vi.mock("@/core/image", () => ({ shrinkImage: legacy.shrink }))
-vi.mock("@/core/pdftext", () => ({ pdfTimetable: ai.pdfTimetable }))
+vi.mock("@/core/pdftext", () => ({ pdfTimetable }))
 vi.mock("@/data/actions", () => ({ openSettings: vi.fn() }))
 
 import { normalizeSchool } from "@/core/school"
@@ -146,10 +144,8 @@ describe("reading a timetable", () => {
         await cfg.prepare(png)
         expect(legacy.shrink).toHaveBeenCalledWith(png)
         const pdf = new File(["%PDF"], "t.pdf", { type: "application/pdf" })
-        const sent = await cfg.prepare(pdf)
-        expect(ai.pdfTimetable).toHaveBeenCalledWith(pdf)
-        expect(sent.type).toBe("text/plain")
-        expect(await sent.text()).toBe("Timetable grid …")
+        await cfg.prepare(pdf)
+        expect(ai.asSent).toHaveBeenCalledWith(pdf, pdfTimetable)
 
         /* a picture over the Worker's 4 MB is too large as a picture, not "over 5 MB" */
         expect((cfg as unknown as { errors: Record<string, string> }).errors.too_large).toBe("That picture is too large.")

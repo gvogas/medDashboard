@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest"
+import { describe, it, expect, vi } from "vitest"
 import { readGrid, type PdfBox, type PdfItem } from "./timetable-grid"
 
 /* A student portal's timetable as PDF.js gives it (Omnivox's print, in PDF points, y up):
@@ -11,7 +11,7 @@ const border = (min: number) => TOP - ((min - 480) / 30) * ROW
 const hhmm = (min: number) => String(Math.floor(min / 60)).padStart(2, "0") + ":" + String(min % 60).padStart(2, "0")
 const COLS = [[125.2, 207], [207, 288], [288, 369.7]] as const
 
-const item = (str: string, x: number, y: number, w = str.length * 3.3, eol = true): PdfItem => ({ str, x, y, w, h: 5.5, eol })
+const item = (str: string, x: number, y: number, w = str.length * 3.3): PdfItem => ({ str, x, y, w, h: 5.5 })
 
 function layout() {
     const items: PdfItem[] = [
@@ -30,7 +30,7 @@ function layout() {
         const mid = (border(from) + border(to)) / 2
         lines.forEach((parts, i) => {
             let x = x1 + 10
-            parts.forEach((s, j) => { items.push(item(s, x, mid + 13 - i * 6.75, undefined, j === parts.length - 1)); x += s.length * 3.3 + 6 })
+            parts.forEach((s) => { items.push(item(s, x, mid + 13 - i * 6.75)); x += s.length * 3.3 + 6 })
         })
     }
     cell(0, 510, 600, [["Le Contrat Racial"], ["345-HSZ-VF sec.00007"], ["Classroom N-362"], ["Leila Bdeir"]])
@@ -44,31 +44,33 @@ function layout() {
 }
 
 describe("readGrid", () => {
-    it("gives each class its weekday from its column and its times from its cell's borders", () => {
+    it("gives each class its weekday from its column and its times from its cell's borders", async () => {
         const { items, boxes } = layout()
-        expect(readGrid(items, boxes)?.lines).toEqual([
-            "Monday 08:30-10:00 | Le Contrat Racial | 345-HSZ-VF sec.00007 | Classroom N-362 | Leila Bdeir",
-            "Tuesday 10:00-11:00 | Game Programming 2 | 420-541-VA sec.00002 | Classroom D-243 L | Antoine McNabb-Baltar",
-            "Wednesday 08:00-09:00 | Web Services | 420-511-VA sec.00002 | Classroom D-242",
+        expect((await readGrid(items, () => boxes))?.lines).toEqual([
+            "Mon 08:30-10:00 | Le Contrat Racial | 345-HSZ-VF sec.00007 | Classroom N-362 | Leila Bdeir",
+            "Tue 10:00-11:00 | Game Programming 2 | 420-541-VA sec.00002 | Classroom D-243 L | Antoine McNabb-Baltar",
+            "Wed 08:00-09:00 | Web Services | 420-511-VA sec.00002 | Classroom D-242",
         ])
     })
 
-    it("marks the weekdays, the time labels and the classes as used, and leaves the rest", () => {
+    it("marks the weekdays, the time labels and the classes as used, and leaves the rest", async () => {
         const { items, boxes } = layout()
-        const used = readGrid(items, boxes)!.used
+        const used = (await readGrid(items, () => boxes))!.used
         expect(items.filter((_, i) => !used.has(i)).map((i) => i.str)).toEqual(["Vanier College", "Courses List"])
     })
 
-    it("reads French weekdays and times written 8h30", () => {
+    it("reads French weekdays and times written 8h30", async () => {
         const { items, boxes } = layout()
         const fr = items.map((i) => ({ ...i, str: { Monday: "Lundi", Tuesday: "Mardi", Wednesday: "Mercredi" }[i.str] ?? i.str.replace(/^(\d\d):(\d\d)$/, "$1h$2") }))
-        expect(readGrid(fr, boxes)?.lines[0]).toBe("Monday 08:30-10:00 | Le Contrat Racial | 345-HSZ-VF sec.00007 | Classroom N-362 | Leila Bdeir")
+        expect((await readGrid(fr, () => boxes))?.lines[0]).toBe("Mon 08:30-10:00 | Le Contrat Racial | 345-HSZ-VF sec.00007 | Classroom N-362 | Leila Bdeir")
     })
 
-    it("is null for a page that is not a timetable grid", () => {
+    it("is null for a page that is not a timetable grid, without reading its drawing", async () => {
         const { items, boxes } = layout()
-        expect(readGrid(items.filter((i) => !/day$/.test(i.str)), boxes)).toBeNull()
-        expect(readGrid(items.filter((i) => !/^\d\d:\d\d$/.test(i.str)), boxes)).toBeNull()
-        expect(readGrid([item("Week 3: Monday quiz", 80, 500)], [])).toBeNull()
+        const load = vi.fn(() => boxes)
+        expect(await readGrid(items.filter((i) => !/day$/.test(i.str)), load)).toBeNull()
+        expect(await readGrid(items.filter((i) => !/^\d\d:\d\d$/.test(i.str)), load)).toBeNull()
+        expect(await readGrid([item("Week 3: Monday quiz", 80, 500)], load)).toBeNull()
+        expect(load).not.toHaveBeenCalled()
     })
 })

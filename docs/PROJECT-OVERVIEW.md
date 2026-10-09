@@ -33,7 +33,7 @@ a Spotify player and an admin page.
 | Semesters | A school calendar (1–4 semesters, special days: off, break, exams, swapped weekday) read from a PDF by AI. Courses belong to a semester. |
 | Study | A flip-clock timer that runs a flow of study and break steps you build. A focus screen. Sessions logged against a course or item. Streaks, a daily goal, a heatmap, history, spaced lecture reviews, exam prep pacing, built-in and custom achievements (with an uploaded sticker), and an opt-in leaderboard. |
 | Themes | Six: Medicine, Computer Science, Law, Aviation, Sports, Engineering. Each has its own accent colour, sidebar picture (lab coat, badge, suit, jacket, jersey, vest), next-exam animation, wording and quote. All of them work in light, dark or follow-the-device. |
-| Import | `.ics` calendars, CSV timetables, course outlines (PDF or Word), school calendars and class schedules (PDF or screenshot) read by Workers AI. Everything goes through a preview where the person ticks what to keep. |
+| Import | `.ics` calendars, CSV timetables, course outlines (PDF or Word), school calendars and class schedules (PDF or screenshot) read by Workers AI. A timetable PDF's days and times are read from its grid in the browser first, so the model only copies them; a room ending in a lone "L" (Omnivox's mark) is a lab. Everything goes through a preview where the person ticks what to keep. |
 | Calendar feed | A private `.ics` link that Google or Apple Calendar can subscribe to. |
 | Spotify | Each person connects their own account. Now playing, controls, search, playlists, queue and volume. The tab itself can play music through the Web Playback SDK. |
 | Shared classes | A class is a shared space with its own courses and items. Make one blank or convert a course into it, invite by username or a join code, roles (owner, editor, member). Each person keeps a private layer on it: marks on its items (status, grade, weight, notes, checklist, hidden) and prefs (colour, target, term, archived). **Admin-only until Stage 6** (`CLASSES_ADMIN_ONLY` in `src/data/effective.ts`; the Worker gates it too). |
@@ -104,7 +104,8 @@ src/boot.ts         wires controllers and page events once, before React mounts
 src/bridge.ts       tiny pub/sub: notify() → hooks redraw (useSyncExternalStore)
 src/core/           framework-free logic: IndexedDB (db.ts), store, sync, api client,
                     model/normalizers, dates, grades, school calendar, history, timer,
-                    achievements, importers (ics, csv, plan), PDF text extraction
+                    achievements, importers (ics, csv, plan), PDF text extraction and
+                    timetable grids (pdftext.ts, timetable-grid.ts)
 src/data/           state + hooks + controllers on top of core: views selectors, ui state,
                     session, themes, study timer, Spotify engine, item/course edits, keyboard
 src/components/     React UI: shell, sidebar, top bar, views/ (week, month, table, stats),

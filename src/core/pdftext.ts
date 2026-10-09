@@ -50,6 +50,7 @@ const times = (m: Matrix, n: Matrix): Matrix => [
   m[0] * n[0] + m[2] * n[1], m[1] * n[0] + m[3] * n[1], m[0] * n[2] + m[2] * n[3],
   m[1] * n[2] + m[3] * n[3], m[0] * n[4] + m[2] * n[5] + m[4], m[1] * n[4] + m[3] * n[5] + m[5],
 ];
+const point = (m: Matrix, x: number, y: number) => [m[0] * x + m[2] * y + m[4], m[1] * x + m[3] * y + m[5]];
 
 /** The boxes drawn on a page, in PDF points: each path's bounds, through the transforms in force. */
 async function boxesOf(page: PdfPage, ops: Record<string, number>): Promise<PdfBox[]> {
@@ -65,8 +66,7 @@ async function boxesOf(page: PdfPage, ops: Record<string, number>): Promise<PdfB
       /* [op, path, [minX, minY, maxX, maxY]] */
       const b = args?.[2] as ArrayLike<number> | null | undefined;
       if (!b || b.length < 4) return;
-      const xa = ctm[0] * b[0] + ctm[2] * b[1] + ctm[4], ya = ctm[1] * b[0] + ctm[3] * b[1] + ctm[5];
-      const xb = ctm[0] * b[2] + ctm[2] * b[3] + ctm[4], yb = ctm[1] * b[2] + ctm[3] * b[3] + ctm[5];
+      const [xa, ya] = point(ctm, b[0], b[1]), [xb, yb] = point(ctm, b[2], b[3]);
       boxes.push({ x1: Math.min(xa, xb), y1: Math.min(ya, yb), x2: Math.max(xa, xb), y2: Math.max(ya, yb) });
     }
   });
@@ -81,11 +81,9 @@ async function boxesOf(page: PdfPage, ops: Record<string, number>): Promise<PdfB
 export async function pdfTimetable(file: Blob): Promise<string> {
   return eachPage(file, async (page) => {
     const raw = (await page.getTextContent()).items;
-    const items: PdfItem[] = raw.map((i) => ({
-      str: i.str ?? '', x: i.transform?.[4] ?? 0, y: i.transform?.[5] ?? 0, w: i.width ?? 0, h: i.height ?? 0, eol: i.hasEOL,
-    }));
-    let grid = null;
-    try { grid = readGrid(items, await boxesOf(page, pdfjs!.OPS)); } catch { /* its drawing unreadable: the text alone */ }
+    const items: PdfItem[] = raw.map((i) => ({ str: i.str ?? '', x: i.transform?.[4] ?? 0, y: i.transform?.[5] ?? 0, w: i.width ?? 0, h: i.height ?? 0 }));
+    /* a drawing PDF.js cannot read leaves the text alone */
+    const grid = await readGrid(items, () => boxesOf(page, pdfjs!.OPS)).catch(() => null);
     if (!grid) return joined(raw);
     const rest = joined(raw.filter((_, i) => !grid.used.has(i)));
     return 'Timetable grid (each line is one class: its weekday and its start and end times, read from the page layout):\n'

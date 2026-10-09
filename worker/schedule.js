@@ -71,7 +71,7 @@ const RULES = [
   'classes: every weekly meeting of that course, one entry per weekday: kind (Lecture, Lab, Seminar, Tutorial, PBL or Clinical; "LEC" and "Cours" are Lecture, "LAB" is Lab, "TUT" and "TD" are Tutorial), day, start and end in 24-hour HH:MM, room as written ("" if none).',
   'A class that meets on Tuesday and Thursday is two entries. In a grid, a class runs from the row of its start time to the row of its end time.',
   'Under "Timetable grid", each line is one class with its weekday and its start and end times, read from the page layout: make every line one class entry with exactly that day, start and end.',
-  'A room followed by a lone "L" marks a Lab: keep the "L" in the room as written ("D-243 L").',
+  'Copy each room exactly as written, with any word before it and any lone letter after it ("Classroom D-243 L"): the app reads those marks itself.',
   'Leave out exams, office hours, breaks and anything that is not a weekly class. Never invent courses, times or rooms.',
 ];
 
@@ -101,18 +101,19 @@ export function cleanSchedule(raw) {
     } else merged.push({ code, name, raw: [...classes] });
   }
   const courses = merged
-    .map((c) => ({ code: c.code, name: c.name, classes: cleanClasses(c.raw).map(omnivoxRoom) }))
+    .map((c) => ({ code: c.code, name: c.name, classes: cleanClasses(c.raw).map(roomMarks) }))
     .filter((c) => (c.code || c.name) && c.classes.length)
     .slice(0, MAX_COURSES);
   if (!courses.length) throw new HttpError(502, { error: 'schedule_unreadable' });
   return { term: clip(o.term, 40), courses };
 }
 
-/* Omnivox writes a room as "Classroom D-243", a lab's with a lone "L" after it ("Classroom D-243 L");
-   a model does not reliably make that a Lab or drop the word, so both are done here. */
+/* Omnivox (Quebec's CEGEPs) writes a room as "Classroom D-243", a lab's with a lone "L" after it
+   ("Classroom D-243 L"). A model does not reliably make that a Lab or drop the word, so both are
+   done here, for every school's timetable: elsewhere too, a room ending in a lone "L" is a lab. */
 const LAB_MARK = /\s+L$/;
 const CLASSROOM = /^classroom\s+(?=\S)/i;
-const omnivoxRoom = (c) => {
+const roomMarks = (c) => {
   const room = c.room.replace(CLASSROOM, '');
   return LAB_MARK.test(room) ? { ...c, kind: 'Lab', room: room.replace(LAB_MARK, '') } : { ...c, room };
 };

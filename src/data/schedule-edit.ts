@@ -12,7 +12,7 @@ import { pdfTimetable } from "@/core/pdftext"
 import { api } from "@/core/api"
 import { schoolCal } from "@/data/query"
 import { notify } from "@/bridge"
-import { isPdf, MAX_FILE, readWithAi, type NoteKey } from "./ai-read"
+import { asSent, MAX_FILE, readWithAi, type NoteKey } from "./ai-read"
 import { readContext } from "./ai-context"
 import { commitImport, defaultTerm, type ImportPlan } from "./import-edit"
 import { closeSheet, openSheet } from "./overlay"
@@ -33,7 +33,7 @@ export function readScheduleFile(file: File, note: NoteKey = "aiNote") {
         what: "timetable", title: "Reading your timetable",
         steps: ["Reading the timetable", "Finding courses and class times", "Matching them to your courses"],
         flag: "scheduleBusy", note, refresh: notify,
-        prepare: async (f) => (isImage(f) ? shrinkImage(f) : isPdf(f) ? new Blob([await pdfTimetable(f)], { type: "text/plain" }) : f),
+        prepare: (f) => (isImage(f) ? shrinkImage(f) : asSent(f, pdfTimetable)),
         /* a phone or retina screenshot can be over 5 MB; what is sent is a 1600 px JPEG */
         maxBytes: isImage(file) ? 4 * MAX_FILE : MAX_FILE,
         errors: {

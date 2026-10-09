@@ -62,10 +62,11 @@ type Flag = "outlineBusy" | "schoolBusy" | "scheduleBusy"
 export type NoteKey = "importNote" | "schoolNote" | "aiNote"
 
 export const MAX_FILE = 5 * 1024 * 1024
-export const isPdf = (f: File) => f.type === "application/pdf" || /\.pdf$/i.test(f.name)
+const isPdf = (f: File) => f.type === "application/pdf" || /\.pdf$/i.test(f.name)
 
-/** What most files are sent as: a PDF's text (the Worker's converter drops the text of many tables), anything else as it is. */
-export const asSent = async (file: File): Promise<Blob> => (isPdf(file) ? new Blob([await pdfText(file)], { type: "text/plain" }) : file)
+/** What most files are sent as: a PDF's text (the Worker's converter drops the text of many tables), read by
+    `read` (a timetable's with its grid, pdfTimetable), anything else as it is. */
+export const asSent = async (file: File, read = pdfText): Promise<Blob> => (isPdf(file) ? new Blob([await read(file)], { type: "text/plain" }) : file)
 
 export interface AiRead<T> {
     /** "outline", "calendar" or "timetable", for the fallback messages */

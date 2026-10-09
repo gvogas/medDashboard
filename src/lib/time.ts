@@ -6,6 +6,9 @@ export const STEP = 15
 
 const pad = (n: number) => String(n).padStart(2, "0")
 
+/** Minutes after midnight as HH:MM: 510 → "08:30". */
+export const clockTime = (minutes: number) => pad(Math.floor(minutes / 60)) + ":" + pad(minutes % 60)
+
 /** Every quarter hour of the day, for the picker's list. */
 export const SLOTS: string[] = Array.from({ length: (24 * 60) / STEP }, (_, i) => pad(Math.floor((i * STEP) / 60)) + ":" + pad((i * STEP) % 60))
 
@@ -30,8 +33,7 @@ export function stepTime(value: string, dir: number): string {
     const [h, m] = v.split(":").map(Number)
     let total = h * 60 + m
     total = dir > 0 ? Math.floor(total / STEP) * STEP + STEP : Math.ceil(total / STEP) * STEP - STEP
-    total = Math.max(0, Math.min(23 * 60 + 45, total))
-    return pad(Math.floor(total / 60)) + ":" + pad(total % 60)
+    return clockTime(Math.max(0, Math.min(23 * 60 + 45, total)))
 }
 
 /** The quarter hour at or before a time, for highlighting in the list. */
