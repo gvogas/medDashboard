@@ -260,6 +260,14 @@ describe("a removed item's card", () => {
         await waitFor(() => expect(fake.store.deleteMark).toHaveBeenCalledWith(SID + ":a1"))
     })
 
+    it("with no grade, says what you added still counts, whatever it is", () => {
+        fake.data.spaces = [space("member")]
+        fake.data.marks = [mark("a1", { weight: 10 })]
+        render(<ClassItemSheet itemKey={SCOPE + "/a1"} />)
+        expect(screen.getByText("What you added still counts until you choose. Keep it as your own item, or dismiss it.")).toBeTruthy()
+        expect(screen.queryByText(/status and notes/)).toBeNull()
+    })
+
     it("offers an editor Restore for everyone", async () => {
         fake.data.spaces = [space("owner")]
         render(<ClassItemSheet itemKey={SCOPE + "/a1"} />)

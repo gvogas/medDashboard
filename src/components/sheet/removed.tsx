@@ -71,7 +71,7 @@ export function RemovedCard({ row, space, course, bar }: { row: SharedItem; spac
         setBusy(true)
         void fn().then(() => setErr(""), (e) => setErr(messageFor(e))).finally(() => setBusy(false))
     }
-    const counts = mark?.grade != null ? "Your grade of " + mark.grade + "% still counts" : "Your status and notes still count"
+    const counts = mark?.grade != null ? "Your grade of " + mark.grade + "% still counts" : "What you added still counts"
     return (
         <>
             <SheetHead color={tmeta(row.type).color} kind={tmeta(row.type).label} onClose={closeSheet} />
