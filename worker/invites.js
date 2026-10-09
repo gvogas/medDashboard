@@ -96,13 +96,14 @@ export async function declineInvite(db, userId, spaceId) {
  * revived after leaving), the space's revision moved on, the invite marked accepted; the
  * next sync pages the class from 0. A class you are in already answers as it is. 404 with no
  * pending invite (withdrawn, declined, never sent, or the class deleted), 410 expired,
- * 409 limit or full; the invite stays pending after a 409 or 410.
+ * 403 archived (it takes nobody new until it is unarchived: spec §13), 409 limit or full;
+ * the invite stays pending after a 403, 409 or 410.
  */
 export async function acceptInvite(db, userId, spaceId, now = Date.now()) {
   const [joined] = await db.batch([
     db.prepare(`INSERT INTO members (space_id, user_id, role, joined_at, updated_at)
       SELECT i.space_id, i.user_id, i.role, ?, ? FROM invites AS i JOIN spaces AS s ON s.id = i.space_id
-      WHERE i.space_id = ? AND i.user_id = ? AND i.status = 'pending' AND i.expires_at > ? AND s.deleted_at IS NULL
+      WHERE i.space_id = ? AND i.user_id = ? AND i.status = 'pending' AND i.expires_at > ? AND s.deleted_at IS NULL AND s.archived = 0
         AND ${MY_SPACES} < ? AND ${LIVE_MEMBERS('i.space_id')} < ?
       ${REVIVE}`).bind(now, now, spaceId, userId, now, userId, SPACE_LIMIT, MEMBER_LIMIT),
     touchSpace(db, spaceId, now, { ifChanged: true }),
@@ -112,11 +113,12 @@ export async function acceptInvite(db, userId, spaceId, now = Date.now()) {
   ]);
   const held = await spaceSummary(db, userId, spaceId);
   if (joined.meta.changes || held) return held;
-  const why = await db.prepare(`SELECT i.status, i.expires_at, ${MY_SPACES} AS mine, ${LIVE_MEMBERS('i.space_id')} AS n
+  const why = await db.prepare(`SELECT i.status, i.expires_at, s.archived, ${MY_SPACES} AS mine, ${LIVE_MEMBERS('i.space_id')} AS n
     FROM invites AS i JOIN spaces AS s ON s.id = i.space_id AND s.deleted_at IS NULL WHERE i.space_id = ? AND i.user_id = ?`)
     .bind(userId, spaceId, userId).first();
   if (!why || why.status !== 'pending') throw new HttpError(404, { error: 'not_found' });
   if (why.expires_at <= now) throw new HttpError(410, { error: 'expired' });
+  if (why.archived) throw new HttpError(403, { error: 'archived' });
   if (why.mine >= SPACE_LIMIT) throw new HttpError(409, { error: 'limit' });
   if (why.n >= MEMBER_LIMIT) throw new HttpError(409, { error: 'full' });
   throw new HttpError(409, { error: 'conflict' });
@@ -164,7 +166,8 @@ export async function dropCode(db, userId, spaceId, now = Date.now()) {
  * Join with a code (spec §11), in one batch: the membership (with a pending invite's role,
  * else the space's default), one use fewer and the space's revision moved on, the invite
  * marked accepted. A space you are in already answers at once and uses nothing. Ten tries
- * an hour, counted first; 400 malformed, 404 unknown, 410 expired or used up, 409 limit or full.
+ * an hour, counted first; 400 malformed, 404 unknown, 410 expired or used up, 403 archived
+ * (until it is unarchived: spec §13), 409 limit or full.
  */
 export async function joinByCode(db, userId, raw, now = Date.now()) {
   const wait = await claimLimit(db, `join:${userId}`, JOIN_LIMIT, now, HOUR_MS);
@@ -181,7 +184,7 @@ export async function joinByCode(db, userId, raw, now = Date.now()) {
   const [joined] = await db.batch([
     db.prepare(`INSERT INTO members (space_id, user_id, role, joined_at, updated_at)
       SELECT s.id, ?, COALESCE((SELECT i.role FROM invites AS i WHERE i.space_id = s.id AND i.user_id = ? AND i.status = 'pending' AND i.expires_at > ?), ?), ?, ?
-      FROM spaces AS s WHERE s.id = ? AND s.code_hash = ? AND s.code_expires > ? AND s.code_uses_left > 0 AND s.deleted_at IS NULL
+      FROM spaces AS s WHERE s.id = ? AND s.code_hash = ? AND s.code_expires > ? AND s.code_uses_left > 0 AND s.deleted_at IS NULL AND s.archived = 0
         AND ${MY_SPACES} < ? AND ${LIVE_MEMBERS('s.id')} < ?
       ${REVIVE}`).bind(userId, userId, now, standard, now, now, space.id, hash, now, userId, SPACE_LIMIT, MEMBER_LIMIT),
     db.prepare(`UPDATE spaces SET code_uses_left = code_uses_left - 1, updated_at = ?, revision = ${NEXT_SPACE_REVISION} WHERE id = ? AND changes() > 0`)
@@ -191,7 +194,9 @@ export async function joinByCode(db, userId, raw, now = Date.now()) {
   ]);
   const member = await spaceSummary(db, userId, space.id);
   if (joined.meta.changes || member) return member;
-  const why = await db.prepare(`SELECT ${MY_SPACES} AS mine, ${LIVE_MEMBERS('?')} AS n`).bind(userId, space.id).first();
+  const why = await db.prepare(`SELECT ${MY_SPACES} AS mine, ${LIVE_MEMBERS('?')} AS n, (SELECT archived FROM spaces WHERE id = ?) AS archived`)
+    .bind(userId, space.id, space.id).first();
+  if (why.archived) throw new HttpError(403, { error: 'archived' });
   if (why.mine >= SPACE_LIMIT) throw new HttpError(409, { error: 'limit' });
   if (why.n >= MEMBER_LIMIT) throw new HttpError(409, { error: 'full' });
   throw new HttpError(410, { error: 'expired' });

@@ -38,9 +38,9 @@ export function MembersTab({ spaceId }: { spaceId: string }) {
     const others = info.members.filter((m) => m.userId !== me)
     return (
         <>
-            {/* the Worker refuses invites, codes and withdrawing while the class is archived */}
+            {/* the Worker refuses invites, codes, withdrawing, joining and accepting while the class is archived */}
             {info.archived
-                ? <Note>The class is archived. {owner ? "Unarchive it" : ownerName + " can unarchive it"} to invite people or make a join code.</Note>
+                ? <Note>The class is archived: nobody can join it, by invite or code. {owner ? "Unarchive it" : ownerName + " can unarchive it"} to invite people or make a join code.</Note>
                 : editor
                     ? <InviteBox spaceId={spaceId} owner={owner} standard={info.kind === "class" ? "member" : "editor"} reload={load} />
                     : <Note>Owners and editors invite people. Ask {ownerName} for a join code.</Note>}

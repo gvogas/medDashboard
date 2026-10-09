@@ -151,3 +151,9 @@ export function messageFor(e: unknown, name = ""): string {
     if (code === "invalid") return e.body?.field === "code" ? "A code is 8 characters." : "Something in that isn't valid."
     return "That didn't work (" + (code || e.status) + "). Try again."
 }
+
+/** What a failed join or accept says: an archived class is one only its owner can open again. */
+export function joinMessageFor(e: unknown): string {
+    if (e instanceof ApiError && e.body?.error === "archived") return "This class is archived: it can't take new members until its owner unarchives it."
+    return messageFor(e)
+}

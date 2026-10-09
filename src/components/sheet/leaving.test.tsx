@@ -220,7 +220,7 @@ describe("removing a member", () => {
             invites: [{ userId: "u-kim", username: "kim", name: "Kim", role: "member", status: "pending", createdAt: 1, expiresAt: Date.now() + 3600e3, invitedBy: "u-me" }],
         })
         render(<ClassSheet spaceId={SID} tab="members" />)
-        expect(await screen.findByText(/Unarchive it to invite people or make a join code/)).toBeTruthy()
+        expect(await screen.findByText(/nobody can join it, by invite or code\. Unarchive it to invite people or make a join code/)).toBeTruthy()
         expect(screen.queryByRole("textbox", { name: /username/i })).toBeNull()
         expect(screen.queryByText("Join code")).toBeNull()
         expect(screen.queryByRole("button", { name: "Make a new one" })).toBeNull()
