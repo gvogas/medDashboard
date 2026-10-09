@@ -2,7 +2,8 @@
 // them, changed by its owner and editors for everyone; members read them, with who changed
 // them last. **Yours**: what only you see: status, grade, your weight, exam prep's topics,
 // your notes, and "not mine". Opened by the item's key, '<scope>/<id>'; for admins until
-// Stage 6. Text saves once typing pauses; leaving the card saves what is waiting.
+// Stage 6. Text saves once typing pauses; leaving the card saves what is waiting. An item an
+// editor removed opens its removed card instead (removed.tsx).
 
 import { useEffect, useId, useState } from "react"
 import { cn } from "@/lib/utils"
@@ -14,7 +15,7 @@ import { repeatEnds } from "@/core/school"
 import * as store from "@/core/store"
 import { schoolCal, termStart } from "@/data/query"
 import { duration } from "@/lib/time"
-import { useItems, useMarks, useProfile, useSharedItems, useSpaces, useStudySessions } from "@/data/store"
+import { useItems, useMarks, useProfile, useRemovedItems, useSharedCourses, useSharedItems, useSpaces, useStudySessions } from "@/data/store"
 import { useUi } from "@/data/ui"
 import { beforeSheetClose, closeSheet } from "@/data/overlay"
 import { busyDays, countdown, deriveEdit, REPEAT_CHOICES, REPEATS, untilLabel, type ItemField } from "@/data/item-edit"
@@ -33,6 +34,7 @@ import { TimeField } from "./time-field"
 import { DatePicker } from "./date-picker"
 import { ICONS } from "./prop-icons"
 import { Checklist, Links } from "./item-parts"
+import { RemovedCard } from "./removed"
 
 const TITLE = "font-serif text-[30px] leading-[1.15] font-[500] tracking-[-.015em]"
 const KEY = "text-muted-foreground"
@@ -54,6 +56,8 @@ function ClassItemCard({ itemKey, bar }: { itemKey: string; bar: boolean }) {
     const { scope, id } = splitKey(itemKey)
     useTyping()
     const row = useSharedItems().find((it) => it.scope === scope && it.id === id) ?? null
+    const gone = useRemovedItems().find((it) => it.scope === scope && it.id === id) ?? null
+    const courseName = useSharedCourses().find((c) => c.scope === scope)?.name ?? "the class"
     const space = useSpaces().find((s) => s.scope === scope) ?? null
     const stored = useMarks().find((m) => m.id === markIdOf(itemKey)) ?? null
     const items = useItems()
@@ -70,9 +74,10 @@ function ClassItemCard({ itemKey, bar }: { itemKey: string; bar: boolean }) {
         beforeSheetClose.add(save)
         return () => { beforeSheetClose.delete(save) }
     }, [])
-    /* deleted, or the class gone from this device, while open */
-    useEffect(() => { if (!row || !space) closeSheet() }, [row, space])
+    /* deleted for good, or the class gone from this device, while open; a removed item keeps its card */
+    useEffect(() => { if ((!row && !gone) || !space) closeSheet() }, [row, gone, space])
 
+    if (!row && gone && space) return <RemovedCard row={gone} space={space} course={courseName} bar={bar} />
     if (!row || !space || !scope) return null
 
     const it: Item = { ...row, ...pendingRow(itemKey) }

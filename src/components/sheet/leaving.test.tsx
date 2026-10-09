@@ -21,7 +21,7 @@ const fake = vi.hoisted(() => ({
     },
     store: { deleteMark: vi.fn(async () => undefined), restoreShared: vi.fn(async () => undefined) },
     syncNow: vi.fn(async () => true),
-    overlay: { openSheet: vi.fn(), replaceSheet: vi.fn(), closeSheet: vi.fn() },
+    overlay: { openSheet: vi.fn(), replaceSheet: vi.fn(), closeSheet: vi.fn(), beforeSheetClose: new Set<() => void>() },
     toast: vi.fn(),
 }))
 vi.mock("@/core/store", () => ({ data: fake.data, subscribe: () => () => {}, ...fake.store }))
@@ -39,6 +39,8 @@ vi.mock("@/data/toast", () => ({ toast: fake.toast }))
 
 import { ApiError } from "@/core/api"
 import { ClassSheet } from "./class-sheet"
+import { ClassItemSheet } from "./class-item-sheet"
+import { ShareItem } from "./share-item"
 
 const SID = "sp0000000001", SCOPE = "c:" + SID
 const space = (role = "owner") => ({
@@ -217,5 +219,114 @@ describe("removing a member", () => {
         render(<ClassSheet spaceId={SID} tab="members" />)
         expect(await screen.findByText("Sam")).toBeTruthy()
         expect(screen.queryByRole("button", { name: /^Remove / })).toBeNull()
+    })
+})
+
+describe("a removed item's card", () => {
+    const gone = { ...removed("a1", "Lab 3"), deletedAt: Date.now() - 3600e3 }
+    const graded = mark("a1", { status: "graded", grade: 80, completedAt: 1 })
+    beforeEach(() => { fake.data.shared_courses = [course]; fake.data.removed_items = [gone]; fake.data.marks = [graded] })
+
+    it("says who removed it, and offers Keep as mine and Dismiss to a member", async () => {
+        fake.data.spaces = [space("member")]
+        render(<ClassItemSheet itemKey={SCOPE + "/a1"} />)
+        expect(screen.getByText("Removed from Web Services by Sam · 1h ago")).toBeTruthy()
+        expect(screen.getByRole("heading", { name: "Lab 3" })).toBeTruthy()
+        expect(screen.getByText(/Your grade of 80% still counts/)).toBeTruthy()
+        expect(screen.queryByRole("button", { name: "Restore for everyone" })).toBeNull()
+        expect(fake.overlay.closeSheet).not.toHaveBeenCalled()
+        fireEvent.click(screen.getByRole("button", { name: "Keep as mine" }))
+        await waitFor(() => expect(fake.api.spaces.keep).toHaveBeenCalledWith(SID, "a1"))
+        await waitFor(() => expect(fake.overlay.closeSheet).toHaveBeenCalled())
+        fireEvent.click(screen.getByRole("button", { name: "Dismiss" }))
+        await waitFor(() => expect(fake.store.deleteMark).toHaveBeenCalledWith(SID + ":a1"))
+    })
+
+    it("offers an editor Restore for everyone", async () => {
+        fake.data.spaces = [space("owner")]
+        render(<ClassItemSheet itemKey={SCOPE + "/a1"} />)
+        fireEvent.click(screen.getByRole("button", { name: "Restore for everyone" }))
+        await waitFor(() => expect(fake.store.restoreShared).toHaveBeenCalledWith(SCOPE, "a1"))
+    })
+
+    it("offers no Restore while the class is archived", () => {
+        fake.data.spaces = [{ ...space("owner"), archived: true }]
+        render(<ClassItemSheet itemKey={SCOPE + "/a1"} />)
+        expect(screen.queryByRole("button", { name: "Restore for everyone" })).toBeNull()
+        expect(screen.getByRole("button", { name: "Keep as mine" })).toBeTruthy()
+    })
+
+    it("a second click waits for the first, and a failure says why", async () => {
+        fake.data.spaces = [space("member")]
+        let fail = (_e: unknown) => {}
+        fake.api.spaces.keep.mockImplementationOnce(() => new Promise<undefined>((_r, j) => { fail = j }))
+        render(<ClassItemSheet itemKey={SCOPE + "/a1"} />)
+        const keep = screen.getByRole<HTMLButtonElement>("button", { name: "Keep as mine" })
+        fireEvent.click(keep)
+        fireEvent.click(keep)
+        expect(fake.api.spaces.keep).toHaveBeenCalledTimes(1)
+        expect(screen.getByRole<HTMLButtonElement>("button", { name: "Dismiss" }).disabled).toBe(true)
+        fail(new ApiError(404, { error: "not_found" }))
+        expect(await screen.findByText(/doesn't match a class/)).toBeTruthy()
+        expect(keep.disabled).toBe(false)
+    })
+
+    it("with nothing of yours on it, offers only Done (and Restore to an editor)", () => {
+        fake.data.marks = []
+        fake.data.spaces = [space("member")]
+        render(<ClassItemSheet itemKey={SCOPE + "/a1"} />)
+        expect(screen.getByText("Nothing of yours is on it.")).toBeTruthy()
+        expect(screen.queryByRole("button", { name: "Keep as mine" })).toBeNull()
+        expect(screen.queryByRole("button", { name: "Dismiss" })).toBeNull()
+        fireEvent.click(screen.getByRole("button", { name: "Done" }))
+        expect(fake.overlay.closeSheet).toHaveBeenCalled()
+    })
+
+    it("closes when the item is neither live nor removed", () => {
+        fake.data.removed_items = []
+        fake.data.spaces = [space("member")]
+        render(<ClassItemSheet itemKey={SCOPE + "/a1"} />)
+        expect(fake.overlay.closeSheet).toHaveBeenCalled()
+    })
+})
+
+describe("sharing an item with its class", () => {
+    const it1 = { id: "x1", type: "lab", title: "Lab 4", classId: SID, courseId: null, links: [], date: "2026-10-12" }
+
+    it("an editor shares an item filed under the class; a member sees nothing", async () => {
+        fake.data.spaces = [space("owner")]
+        const { unmount } = render(<ShareItem item={it1 as never} />)
+        fireEvent.click(screen.getByRole("button", { name: "Share with the class" }))
+        await waitFor(() => expect(fake.api.spaces.share).toHaveBeenCalledWith(SID, ["x1"]))
+        expect(fake.toast).toHaveBeenCalledWith("Shared with Web Services. Your status, grade and notes stay yours.")
+        unmount()
+        fake.data.spaces = [space("member")]
+        render(<ShareItem item={it1 as never} />)
+        expect(screen.queryByRole("button", { name: "Share with the class" })).toBeNull()
+    })
+
+    it("a second click waits for the first, and a refusal says why", async () => {
+        fake.data.spaces = [space("editor")]
+        let fail = (_e: unknown) => {}
+        fake.api.spaces.share.mockImplementationOnce(() => new Promise<undefined>((_r, j) => { fail = j }))
+        render(<ShareItem item={it1 as never} />)
+        const share = screen.getByRole<HTMLButtonElement>("button", { name: "Share with the class" })
+        fireEvent.click(share)
+        await waitFor(() => expect(fake.api.spaces.share).toHaveBeenCalledTimes(1))
+        fireEvent.click(share)
+        expect(fake.api.spaces.share).toHaveBeenCalledTimes(1)
+        fail(new ApiError(409, { error: "exists" }))
+        expect(await screen.findByText(/already has an item with this id/)).toBeTruthy()
+    })
+
+    it("shows nothing in an archived class, or while classes are switched off", () => {
+        fake.data.spaces = [{ ...space("owner"), archived: true }]
+        const { unmount } = render(<ShareItem item={it1 as never} />)
+        expect(screen.queryByRole("button", { name: "Share with the class" })).toBeNull()
+        unmount()
+        fake.data.spaces = [space("owner")]
+        fake.data.profile = { id: "u-me", isAdmin: false, maintenance: { features: ["classes"], message: "" } }
+        render(<ShareItem item={it1 as never} />)
+        expect(screen.queryByRole("button", { name: "Share with the class" })).toBeNull()
     })
 })

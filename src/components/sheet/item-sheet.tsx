@@ -33,6 +33,7 @@ import { TimeField } from "./time-field"
 import { DatePicker } from "./date-picker"
 import { ICONS } from "./prop-icons"
 import { Checklist, Links } from "./item-parts"
+import { ShareItem } from "./share-item"
 
 /** Fields saved once typing pauses; the rest save at once. */
 const TYPED: ItemField[] = ["title", "notes", "where", "dept", "checklist"]
@@ -274,6 +275,8 @@ export function ItemSheet({ id, draft }: { id?: string; draft?: Item }) {
                         {!show.links && <AddButton aria-label="Add links" onClick={() => unfold("links")}>Links</AddButton>}
                     </div>
                 )}
+
+                {!isNew && it.classId && <ShareItem item={it} />}
             </SheetBody>
 
             {isNew ? (
