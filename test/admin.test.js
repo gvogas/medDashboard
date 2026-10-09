@@ -108,19 +108,34 @@ describe('accounts', () => {
     expect((await admin('/api/admin/accounts/u-gone1', { method: 'DELETE', body: { confirm: 'gone1' } })).status).toBe(404);
   });
 
-  it('will not delete an account that owns a shared class; its memberships and limits go with it otherwise', async () => {
+  it('hands a class the account owns to its longest-standing editor, deletes one with nobody else, and drops its memberships', async () => {
     const admin = await signInAdmin('boss-own');
-    const id = await createUser('owner9');
+    const id = await createUser('owner9'), ed = await createUser('ed9'), mem = await createUser('mem9'), late = await createUser('late9');
     await env.DB.batch([
-      env.DB.prepare("INSERT INTO spaces (id, kind, created_at, updated_at) VALUES ('ownsclass001', 'class', 1, 1)"),
-      env.DB.prepare("INSERT INTO members (space_id, user_id, role, joined_at, updated_at) VALUES ('ownsclass001', ?, 'owner', 1, 1)").bind(id),
+      env.DB.prepare("INSERT INTO spaces (id, kind, created_at, updated_at) VALUES ('ownsclass001', 'class', 1, 1), ('ownsclass002', 'class', 1, 1), ('ownsclass003', 'class', 1, 1), ('ownsclass004', 'class', 1, 1)"),
+      env.DB.prepare(`INSERT INTO members (space_id, user_id, role, joined_at, updated_at) VALUES
+        ('ownsclass001', ?1, 'owner', 1, 1), ('ownsclass001', ?2, 'member', 2, 2), ('ownsclass001', ?3, 'editor', 3, 3), ('ownsclass001', ?4, 'editor', 4, 4),
+        ('ownsclass002', ?1, 'owner', 1, 1),
+        ('ownsclass003', ?3, 'owner', 1, 1), ('ownsclass003', ?1, 'member', 2, 2),
+        ('ownsclass004', ?1, 'owner', 1, 1), ('ownsclass004', ?4, 'member', 3, 3), ('ownsclass004', ?2, 'member', 2, 2)`).bind(id, mem, ed, late),
+      env.DB.prepare("INSERT INTO invites (space_id, user_id, invited_by, role, created_at, expires_at) VALUES ('ownsclass002', ?, ?, 'member', 1, 9e15)").bind(mem, id),
       env.DB.prepare("INSERT INTO request_limits (key, hits, reset_at) VALUES ('invite:' || ?1, 1, 9e15), ('join:' || ?1, 1, 9e15)").bind(id),
     ]);
-    const res = await admin('/api/admin/accounts/u-owner9', { method: 'DELETE', body: { confirm: 'owner9' } });
-    expect(res.status).toBe(409);
-    expect(await res.json()).toEqual({ error: 'owns_space' });
-    await env.DB.prepare("UPDATE members SET role = 'editor' WHERE space_id = 'ownsclass001'").run();
+    const revisions = async () => (await env.DB.prepare("SELECT id, revision FROM spaces WHERE id GLOB 'ownsclass00*' ORDER BY id").all()).results;
+    const before = await revisions();
     expect((await admin('/api/admin/accounts/u-owner9', { method: 'DELETE', body: { confirm: 'owner9' } })).status).toBe(204);
+    const roles = async (space) => (await env.DB.prepare('SELECT user_id, role FROM members WHERE space_id = ? ORDER BY user_id').bind(space).all()).results;
+    /* the longest-standing editor, ahead of a member who joined earlier */
+    expect(await roles('ownsclass001')).toEqual([{ user_id: ed, role: 'owner' }, { user_id: late, role: 'editor' }, { user_id: mem, role: 'member' }]);
+    /* no editor: the longest-standing member */
+    expect(await roles('ownsclass004')).toEqual([{ user_id: late, role: 'member' }, { user_id: mem, role: 'owner' }]);
+    /* a class it was only in keeps its owner */
+    expect(await roles('ownsclass003')).toEqual([{ user_id: ed, role: 'owner' }]);
+    const after = await revisions();
+    for (let i = 0; i < 4; i++) expect(after[i].revision, after[i].id).toBeGreaterThan(before[i].revision);
+    expect(await env.DB.prepare("SELECT deleted_at IS NOT NULL AS gone FROM spaces WHERE id = 'ownsclass002'").first()).toEqual({ gone: 1 });
+    expect(await env.DB.prepare("SELECT count(*) AS n FROM spaces WHERE id GLOB 'ownsclass00*' AND deleted_at IS NOT NULL").first()).toEqual({ n: 1 });
+    expect(await env.DB.prepare("SELECT count(*) AS n FROM invites WHERE space_id = 'ownsclass002'").first()).toEqual({ n: 0 });
     expect(await env.DB.prepare('SELECT count(*) AS n FROM members WHERE user_id = ?').bind(id).first()).toEqual({ n: 0 });
     expect(await env.DB.prepare("SELECT count(*) AS n FROM request_limits WHERE key IN ('invite:' || ?1, 'join:' || ?1)").bind(id).first()).toEqual({ n: 0 });
   });

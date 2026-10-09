@@ -3,7 +3,8 @@
 // cascades to its Spotify attempts. Courses, items and the change feed belong to the
 // scope 'u:<id>', which no foreign key follows, so they are listed here. Shared by the
 // Admin page (worker/admin.js) and scripts/add-user.mjs, so no imports: the script runs
-// it under Node.
+// it under Node. Memberships, invites, marks and space prefs go by ON DELETE CASCADE;
+// the Admin page's deletion runs worker/leaving.js handOnStmts first, to pass owned spaces on.
 
 export const ACCOUNT_TABLES = [
   ['achievements', 'user_id = ?1'],
