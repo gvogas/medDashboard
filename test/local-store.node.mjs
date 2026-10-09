@@ -316,3 +316,75 @@ test('pages bring your marks and prefs; a mark queues with the mark it started f
  await first.saveProfile({ hiddenSources: ['personal'] });
  assert.deepEqual(first.data.profile.hiddenSources, ['personal']);
 });
+
+test('a removed class item stays as a tombstone, apart from the live ones, and a restore revives it', async () => {
+ await first.open(p());
+ await first.applyPage({ cursors: {}, changes: [{ scope: WEB, kind: 'items', row: { id: 'x', title: 'Lab 3', revision: 4 } }] });
+ await first.applyPage({ cursors: {}, changes: [{ scope: WEB, kind: 'items', row: { id: 'x', title: 'Lab 3', revision: 5, deletedAt: 77, updatedBy: 'u-alex' } }] });
+ assert.deepEqual(first.data.shared_items, []);
+ assert.deepEqual(first.data.removed_items.map((r) => [r.id, r.deletedAt, r.updatedBy]), [['x', 77, 'u-alex']]);
+ await first.restoreShared(WEB, 'x');
+ assert.deepEqual(first.data.shared_items.map((r) => [r.id, r.deletedAt]), [['x', null]]);
+ assert.deepEqual(first.data.removed_items, []);
+ const [op] = await first.pending();
+ assert.equal(op.key, `shared_items:${WEB}:x`); assert.equal(op.base.deletedAt, 77); assert.equal(op.revision, 5);
+ /* a course's tombstone still goes */
+ await first.applyPage({ cursors: {}, changes: [{ scope: WEB, kind: 'courses', row: { id: 'web', code: 'WEB', revision: 1 } }] });
+ await first.applyPage({ cursors: {}, changes: [{ scope: WEB, kind: 'courses', row: { id: 'web', code: 'WEB', revision: 2, deletedAt: 9 } }] });
+ assert.deepEqual(first.data.shared_courses, []);
+});
+
+test('losing a class drops your layer there and carries a waiting mark edit onto your copy', async () => {
+ const user = p(); await first.open(user);
+ const own = `u:${user.id}`, sid = 'abcdefghij12';
+ await first.applyPage({ cursors: { [own]: 3 }, changes: [
+  { scope: own, kind: 'marks', row: { id: sid + ':a1', spaceId: sid, itemId: 'a1', notes: 'old', grade: 70, revision: 2 } },
+  { scope: own, kind: 'marks', row: { id: sid + ':q1', spaceId: sid, itemId: 'q1', hidden: true, revision: 2 } },
+  { scope: own, kind: 'space_prefs', row: { id: sid, spaceId: sid, color: '#4F74D9', revision: 2 } },
+ ] });
+ await first.saveMark({ ...first.data.marks.find((m) => m.itemId === 'a1'), notes: 'new', grade: 91 });
+ /* the copy arrives in your own scope on the same sync, then the class is revoked */
+ await first.applyPage({ cursors: { [own]: 9 }, changes: [
+  { scope: own, kind: 'items', row: { id: 'a1', title: 'Lab', courseId: 'web', notes: 'old\n\nClass notes:\nBring a laptop', grade: 70, revision: 1 } },
+ ] });
+ await first.applyRevoked([WEB]);
+ assert.equal(first.item('a1').notes, 'new\n\nClass notes:\nBring a laptop');
+ assert.equal(first.item('a1').grade, 91);
+ assert.deepEqual((await first.pending()).map((o) => o.key), ['items:a1']);
+ assert.deepEqual([first.data.marks, first.data.space_prefs], [[], []]);
+});
+
+test('a waiting mark edit finds your copy under a k id, past a row of yours that had the id, and keeps the class notes apart', async () => {
+ const user = p(); await first.open(user);
+ const own = `u:${user.id}`, sid = 'abcdefghij12';
+ await first.applyPage({ cursors: { [own]: 3, [WEB]: 4 }, changes: [
+  { scope: WEB, kind: 'items', row: { id: 'a1', type: 'lab', title: 'Lab', date: '2026-10-15', notes: 'Bring a laptop', revision: 1 } },
+  { scope: own, kind: 'items', row: { id: 'a1', type: 'lab', title: 'Lab', date: '2026-10-15', revision: 1 } },
+  { scope: own, kind: 'items', row: { id: 'ka1', type: 'lab', title: 'Lab', date: '2026-10-15', notes: 'Kept last time', revision: 1 } },
+  { scope: own, kind: 'marks', row: { id: sid + ':a1', spaceId: sid, itemId: 'a1', revision: 2 } },
+ ] });
+ await first.saveMark({ ...first.data.marks[0], notes: 'mine' });
+ /* a1 and ka1 were live, so the copy took k1a1 */
+ await first.applyPage({ cursors: { [own]: 9 }, changes: [
+  { scope: own, kind: 'items', row: { id: 'k1a1', type: 'lab', title: 'Lab', date: '2026-10-15', notes: 'Class notes:\nBring a laptop', revision: 1, updatedAt: 50 } },
+ ] });
+ await first.applyRevoked([WEB]);
+ assert.equal(first.item('k1a1').notes, 'mine\n\nClass notes:\nBring a laptop');
+ assert.equal(first.item('ka1').notes, 'Kept last time');
+ assert.deepEqual((await first.pending()).map((o) => o.key), ['items:k1a1']);
+ assert.deepEqual(first.data.marks, []);
+});
+
+test('a waiting mark edit with no copy stays queued; a lost class\'s removed items go too', async () => {
+ const user = p(); await first.open(user);
+ const own = `u:${user.id}`, sid = 'abcdefghij12';
+ await first.applyPage({ cursors: { [own]: 3 }, changes: [
+  { scope: WEB, kind: 'items', row: { id: 'r1', title: 'Gone', revision: 2, deletedAt: 5 } },
+  { scope: own, kind: 'marks', row: { id: sid + ':a1', spaceId: sid, itemId: 'a1', revision: 2 } },
+ ] });
+ await first.saveMark({ ...first.data.marks[0], notes: 'mine' });
+ await first.applyRevoked([WEB]);
+ assert.deepEqual((await first.pending()).map((o) => o.key), [`marks:${sid}:a1`]);
+ assert.equal(first.data.marks.length, 1);
+ assert.deepEqual(first.data.removed_items, []);
+});

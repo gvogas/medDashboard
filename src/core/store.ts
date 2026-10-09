@@ -1,7 +1,7 @@
 // The database is authoritative; memory is a render cache, never the shared queue.
 import { openDb, deleteDb, STORES as stores } from './db.ts';
 import { normalizeItem, normalizeCourse, normalizeQuote, normalizeStudySession, normalizeAchievement, normalizeMark, normalizeSpacePref, normalizeFlow, normalizePrefs, DEFAULT_COAT } from './model.ts';
-import { parseKey, sharedKey, SHARED_STORES, type SharedStore } from './shared.ts';
+import { parseKey, sharedKey, stable, MARK_DEFAULTS, SHARED_STORES, type SharedStore } from './shared.ts';
 import { parseMaintenance } from './maintenance.ts';
 import type { Access, Accessor, Conflict, Db, PendingOp, Row, Rows } from './db.ts';
 import type { Raw, RawCourse, RawItem } from './model.ts';
@@ -40,8 +40,10 @@ export const data: {
   /* a class's or a project's rows, and the spaces themselves (spec §7) */
   shared_courses: SharedCourse[];
   shared_items: SharedItem[];
+  /* class items an editor deleted, kept as tombstones until you choose (spec §13 Keep as mine / Dismiss) */
+  removed_items: SharedItem[];
   spaces: Space[];
-} = { profile: null, courses: [], items: [], quotes: [], study_sessions: [], achievements: [], marks: [], space_prefs: [], shared_courses: [], shared_items: [], spaces: [] };
+} = { profile: null, courses: [], items: [], quotes: [], study_sessions: [], achievements: [], marks: [], space_prefs: [], shared_courses: [], shared_items: [], removed_items: [], spaces: [] };
 const dirty: Record<string, string> = {};
 export const conflicts: Conflict[] = [];
 const listeners = new Set<(evt: StoreEvent) => void>();
@@ -55,6 +57,7 @@ const normalShared = {
   shared_items: (r: Row): SharedItem => ({
     ...normalizeItem(r as unknown as RawItem), scope: r.scope as string, updatedBy: (r.updatedBy as string | null) ?? null,
     assignees: Array.isArray(r.assignees) ? r.assignees as string[] : [], completedBy: (r.completedBy as string | null) ?? null,
+    deletedAt: typeof r.deletedAt === 'number' ? r.deletedAt : null,
   }),
 };
 /* The shared store a change of `kind` goes to: only courses and items are shared. */
@@ -112,7 +115,9 @@ export async function reload(): Promise<void> {
   if (db !== handle) return;
   for (const kind of kinds) (data as Record<Kind, Rows[Kind][]>)[kind] = snapshot[kind].filter((r) => !hidden.has(kind + ':' + r.id)).map(normalizer(kind));
   data.shared_courses = snapshot.shared_courses.filter((r) => !hidden.has(sharedKey('shared_courses', r.scope, r.id))).map((r) => normalShared.shared_courses(r as unknown as Row));
-  data.shared_items = snapshot.shared_items.filter((r) => !hidden.has(sharedKey('shared_items', r.scope, r.id))).map((r) => normalShared.shared_items(r as unknown as Row));
+  const sharedItems = snapshot.shared_items.filter((r) => !hidden.has(sharedKey('shared_items', r.scope, r.id))).map((r) => normalShared.shared_items(r as unknown as Row));
+  data.shared_items = sharedItems.filter((r) => !r.deletedAt);
+  data.removed_items = sharedItems.filter((r) => !!r.deletedAt);
   data.spaces = snapshot.spaces;
   index();
   data.profile = snapshot.profile || null;
@@ -150,7 +155,7 @@ export async function close(): Promise<void> {
   channel?.close(); channel = null;
   data.profile = null;
   for (const kind of kinds) data[kind] = [];
-  data.shared_courses = []; data.shared_items = []; data.spaces = [];
+  data.shared_courses = []; data.shared_items = []; data.removed_items = []; data.spaces = [];
   index();
   for (const key of Object.keys(dirty)) delete dirty[key];
   conflicts.length = 0;
@@ -259,6 +264,18 @@ export function removeShared(store: SharedStore, scope: string, id: string): Pro
     await a(store).del([scope, id]);
   });
 }
+/** Bring a removed class item back for everyone (owner and editors, spec §13): the whole row at its tombstone's revision, which the Worker revives. */
+export function restoreShared(scope: string, id: string): Promise<void> {
+  return mutate(async (a) => {
+    const before = await a('shared_items').get([scope, id]);
+    if (!before?.deletedAt) return;
+    const row = { ...before, deletedAt: null };
+    await a('shared_items').put(row);
+    await queue(a, sharedKey('shared_items', scope, id), 'put', row as unknown as Row, before as unknown as Row);
+  });
+}
+/** Dismiss (spec §13): your mark on a removed class item goes. */
+export const deleteMark = (id: string) => deleteRow('marks', id);
 export const deleteAchievement = (id: string) => deleteRow('achievements', id);
 export const deleteItem = (id: string) => deleteRow('items', id, (a) => unlinkSessions(a, 'itemId', id));
 /* The server clears a deleted course's or item's link on its sessions in the same
@@ -350,6 +367,7 @@ export function rejectOperation(op: PendingOp, current: Row | null | undefined, 
  * stores; a class's or a project's course or item to the shared ones, under [scope, id].
  * `reset` lists scopes whose clean rows are wiped first, in the same transaction that
  * stores their cursors (true: the person's own). A row with a pending edit, or held at a newer revision, is left alone.
+ * A class item's tombstone is kept in its store (Stage 5 plan, Decision 6); `reload` lists it apart.
  */
 export function applyPage(page: Page, reset: boolean | string[] = false): Promise<boolean> {
   return mutate(async (a) => {
@@ -376,7 +394,7 @@ export function applyPage(page: Page, reset: boolean | string[] = false): Promis
       const store = a(s) as unknown as Access<'shared_items'>;
       const local = await store.get([scope, row.id]);
       if (local && local.revision! > row.revision!) continue;
-      if (row.deletedAt) await store.del([scope, row.id]);
+      if (row.deletedAt && s === 'shared_courses') await store.del([scope, row.id]);
       else await store.put(normalShared[s]({ ...row, scope }) as SharedItem);
     }
     /* a space's member list comes only when it moved (spec §6): keep the one held */
@@ -391,15 +409,75 @@ export function applyPage(page: Page, reset: boolean | string[] = false): Promis
   }, 'synced');
 }
 
+/* A mark edit not yet uploaded, carried onto the copy of its item you were given (spec §6
+   Revocation): each field changed since the edit began; your notes replace your part of the
+   copy's notes, which a detach wrote as yours, a blank line, then "Class notes:" and the class's. */
+function carryMark(copy: Item, mark: Mark, base: Record<string, unknown>, held: SharedItem | undefined): Item {
+  const out = { ...copy };
+  const moved = (f: keyof Mark) => stable(mark[f]) !== stable(base[f] ?? MARK_DEFAULTS[f]);
+  if (moved('status')) out.status = mark.status;
+  if (moved('grade')) out.grade = mark.grade;
+  if (moved('checklist')) out.checklist = mark.checklist;
+  if (moved('completedAt')) out.completedAt = mark.completedAt;
+  if (moved('weight')) out.weight = mark.weight ?? held?.weight ?? out.weight;
+  if (moved('notes')) {
+    /* the class's part: what follows your notes as they were, else from its "Class notes:" on */
+    const was = typeof base.notes === 'string' ? base.notes : '', rest = copy.notes.slice(was.length), at = copy.notes.indexOf('Class notes:\n');
+    const theirs = copy.notes.startsWith(was) ? (was && rest.startsWith('\n\n') ? rest.slice(2) : rest)
+      : at === 0 || (at > 0 && copy.notes.slice(at - 2, at) === '\n\n') ? copy.notes.slice(at) : '';
+    out.notes = (mark.notes && theirs ? mark.notes + '\n\n' + theirs : mark.notes || theirs).slice(0, 5000);
+  }
+  return out;
+}
+
+/* Your copy of a lost class's item `id`, among the ids a detach may have given it (worker/leaving.js
+   `freeIds`): its own, 'k' and its first 23 characters, then 'k', a counter and as much as fits.
+   A row filed under a class is never one. Of several, the one with the class item's type, title
+   and date (when held) wins, then the newest written (the copy was written as you left), then the
+   one furthest along: a detach takes the first id free, so the rows before it were already yours. */
+function copyOf(items: Map<string, Item>, id: string, held: SharedItem | undefined): Item | null {
+  const ids = [id, 'k' + id.slice(0, 23)];
+  for (let n = 1; n <= items.size; n++) ids.push('k' + n + id.slice(0, 23 - String(n).length));
+  const rank = (r: Item, at: number) => [held && r.type === held.type && r.title === held.title && r.date === held.date ? 1 : 0, r.updatedAt ?? 0, at];
+  let best: Item | null = null, bestRank: number[] = [];
+  for (const [at, candidate] of ids.entries()) {
+    const r = items.get(candidate);
+    if (!r || r.classId) continue;
+    const k = rank(r, at), i = k.findIndex((v, j) => v !== bestRank[j]);
+    if (!best || (i >= 0 && k[i] > bestRank[i])) { best = r; bestRank = k; }
+  }
+  return best;
+}
+
 /**
  * Take away what this device holds of scopes it may no longer read (sync's `revoked`,
- * applied after the cycle's last page): their shared rows, their space, their cursor.
- * Pending edits to them stay queued; uploading them gets 404 and moves them to the saved
- * copies, so nothing is silently thrown away (spec §6 Revocation).
+ * applied after the cycle's last page): their shared rows (removed ones too), their space,
+ * their cursor, and your marks and prefs there. A mark edit still waiting is carried onto
+ * your copy of the item when one came; any other pending edit stays queued and, refused
+ * with 404, moves to the saved copies, so nothing is silently thrown away (spec §6 Revocation).
  */
 export function applyRevoked(scopes: string[]): Promise<boolean> {
   if (!scopes.length) return Promise.resolve(false);
   return mutate(async (a) => {
+    const lost = new Set(scopes.map((s) => s.slice(2)));
+    const items = new Map((await a('items').all()).map((r) => [r.id, r]));
+    const classItems = new Map((await a('shared_items').all()).filter((r) => scopes.includes(r.scope)).map((r) => [`${r.scope.slice(2)}:${r.id}`, r]));
+    for (const op of await a('pending').all()) {
+      if (!op.key.startsWith('marks:') || op.op !== 'put' || !op.body) continue;
+      const mark = op.body as unknown as Mark;
+      if (!lost.has(mark.spaceId)) continue;
+      const held = classItems.get(`${mark.spaceId}:${mark.itemId}`);
+      const copy = copyOf(items, mark.itemId, held);
+      if (!copy) continue;
+      const moved = carryMark(copy, mark, (op.base ?? {}) as Record<string, unknown>, held);
+      await a('items').put(moved);
+      items.set(moved.id, moved);
+      await queue(a, `items:${moved.id}`, 'put', moved as unknown as Row);
+      await a('pending').del(op.key);
+      await a('marks').del(mark.id);
+    }
+    for (const m of await a('marks').all()) if (lost.has(m.spaceId) && !(await a('pending').get(`marks:${m.id}`))) await a('marks').del(m.id);
+    for (const p of await a('space_prefs').all()) if (lost.has(p.spaceId) && !(await a('pending').get(`space_prefs:${p.id}`))) await a('space_prefs').del(p.id);
     for (const s of SHARED_STORES) for (const row of await a(s).all()) if (scopes.includes(row.scope)) await a(s).del([row.scope, row.id]);
     for (const space of await a('spaces').all()) if (scopes.includes(space.scope)) await a('spaces').del(space.id);
     const cursors = { ...((await a('meta').get('cursors'))?.value as Record<string, Cursor> | undefined) };
