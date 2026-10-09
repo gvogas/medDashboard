@@ -472,3 +472,40 @@ test('a removed item past the tombstone time leaves the device, unless your mark
  await first.applyPage({ cursors: {}, changes: [{ scope: own, kind: 'marks', row: { id: sid + ':x', spaceId: sid, itemId: 'x', notes: 'late', revision: 1 } }] });
  assert.deepEqual(first.data.removed_items.map((r) => r.id).sort(), ['w', 'y']);
 });
+
+test('a mark upload refused as not found waits for the pull: carried onto your copy, else set aside, in the same cycle', async () => {
+ const local = await import('../src/core/store.ts');
+ const { api, ApiError } = await import('../src/core/api.ts');
+ const sync = await import('../src/core/sync.ts');
+ const user = p(); await local.open(user);
+ const own = `u:${user.id}`, sid = 'abcdefghij12';
+ await local.applyPage({ cursors: { [own]: 3 }, changes: [
+  { scope: own, kind: 'marks', row: { id: sid + ':a1', spaceId: sid, itemId: 'a1', notes: 'old', revision: 2, updatedAt: 10 } },
+  { scope: own, kind: 'marks', row: { id: sid + ':b1', spaceId: sid, itemId: 'b1', notes: 'old', revision: 2, updatedAt: 10 } },
+ ] });
+ for (const m of local.data.marks) await local.saveMark({ ...m, notes: 'new ' + m.itemId });
+ const notFound = async () => { throw new ApiError(404, { error: 'not_found' }); };
+ const saved = { put: api.put, get: api.get, syncV3: api.syncV3, me: api.me };
+ const pulled = [];
+ Object.assign(api, {
+  put: notFound, get: notFound,
+  /* you left keeping a copy of a1 only (b1 was removed from the class first); the copy arrives with the revocation */
+  syncV3: async () => {
+    pulled.push((await local.pending()).map((o) => o.key).sort());
+    return { cursors: { [own]: 9 }, scopes: [], more: false, reset: [], revoked: [WEB], changes: [
+      { scope: own, kind: 'items', row: { id: 'a1', title: 'Lab', courseId: 'web', notes: 'old\n\nClass notes:\nBring a laptop', revision: 1, updatedAt: 20 } },
+    ] };
+  },
+  me: async () => ({ ...user }),
+ });
+ try {
+  await sync.syncNow();
+  /* both waited through the push */
+  assert.deepEqual(pulled, [[`marks:${sid}:a1`, `marks:${sid}:b1`]]);
+  assert.equal(local.item('a1').notes, 'new a1\n\nClass notes:\nBring a laptop');
+  assert.deepEqual((await local.pending()).map((o) => o.key), ['items:a1']);
+  assert.deepEqual(local.conflicts.map((c) => [c.key, c.body.notes, c.reason]), [[`marks:${sid}:b1`, 'new b1', 'This item was removed from the class, or you left it.']]);
+ } finally {
+  sync.stop(); Object.assign(api, saved); await local.close();
+ }
+});

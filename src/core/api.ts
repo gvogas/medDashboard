@@ -239,6 +239,13 @@ export const api = {
     /* merge a course of yours into the class (spec §13): pairs are [your item's id, the class's item's id] */
     absorb: (sid: string, body: { courseId: string; pairs: [string, string][]; fromCourse: boolean }): Promise<{ paired: number; filed: number }> =>
       request('POST', `/api/spaces/${sid}/absorb`, body),
+    /* Stage 5 (spec §13): leaving, removing, archiving, deleting; Keep as mine; sharing one item */
+    leave: (sid: string, keepCopy: boolean) => empty(request('POST', `/api/spaces/${sid}/leave`, { keepCopy })),
+    remove: (sid: string, userId: string) => empty(request('DELETE', `/api/spaces/${sid}/members/${encodeURIComponent(userId)}`)),
+    archive: (sid: string, archived: boolean) => empty(request('POST', `/api/spaces/${sid}/archive`, { archived })),
+    del: (sid: string, keepCopy: boolean) => empty(request('DELETE', `/api/spaces/${sid}`, { keepCopy })),
+    keep: (sid: string, itemId: string) => empty(request('POST', `/api/spaces/${sid}/items/${encodeURIComponent(itemId)}/keep`)),
+    share: (sid: string, items: string[]): Promise<{ shared: number }> => request('POST', `/api/spaces/${sid}/absorb`, { items }),
   },
   invites: {
     list: (): Promise<{ invites: Invite[] }> => request('GET', '/api/invites'),
