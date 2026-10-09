@@ -11,6 +11,8 @@
 //
 // With a school calendar, classes repeat only within each semester, skip the days with
 // no classes (EXDATE), and run on the days that follow their weekday's timetable.
+//
+// Your classes come too, with your own layer on top (spec §9): see feedRows.
 
 import { HttpError } from './http.js';
 import { claimLimit, rateLimited } from './limits.js';
@@ -67,18 +69,31 @@ export async function stopFeed(env, userId) {
 export async function serveFeed(env, url, userId, token) {
   const gone = () => new HttpError(404, { error: 'not_found' });
   if (!/^[0-9a-f]{32}$/.test(token)) throw gone();
-  const user = await env.DB.prepare('SELECT feed_gen, term_start, types, school_calendar FROM users WHERE id = ?').bind(userId).first();
+  const user = await env.DB.prepare('SELECT feed_gen, term_start, types, school_calendar, hidden_sources FROM users WHERE id = ?').bind(userId).first();
   if (!user?.feed_gen || !sameString(await feedToken(userId, user.feed_gen, env.SESSION_SECRET), token)) throw gone();
   const wait = await claimLimit(env.DB, `feed:${userId}`, FEED_LIMIT, Date.now(), HOUR_MS);
   if (wait) throw rateLimited(wait);
 
-  const [courses, items] = await env.DB.batch([
-    env.DB.prepare('SELECT id, code, name, term, archived, meetings, created_at FROM courses WHERE scope = ? AND deleted_at IS NULL').bind(personal(userId)),
-    env.DB.prepare('SELECT id, type, title, course_id, date, start, end, location, status, weight, notes, recur, weekday, recur_until FROM items WHERE scope = ? AND deleted_at IS NULL ORDER BY date').bind(personal(userId)),
+  const me = personal(userId);
+  /* your live classes, read with your membership in the statement (spec §5); a removed class item is a tombstone, left out */
+  const IN = 'JOIN members AS m ON m.space_id = s.id AND m.user_id = ?1 AND m.deleted_at IS NULL';
+  const [courses, items, classCourses, classItems] = await env.DB.batch([
+    env.DB.prepare('SELECT id, code, name, term, archived, meetings, created_at FROM courses WHERE scope = ? AND deleted_at IS NULL').bind(me),
+    env.DB.prepare('SELECT id, type, title, course_id, class_id, date, start, end, location, status, weight, notes, recur, weekday, recur_until FROM items WHERE scope = ? AND deleted_at IS NULL').bind(me),
+    env.DB.prepare(`SELECT s.id AS sid, c.id, c.code, c.name, c.term, c.archived, c.meetings, c.created_at, p.term AS my_term, p.archived AS my_archived
+      FROM spaces AS s ${IN} JOIN courses AS c ON c.scope = 'c:' || s.id AND c.deleted_at IS NULL
+        LEFT JOIN space_prefs AS p ON p.user_id = ?1 AND p.id = s.id AND p.deleted_at IS NULL
+      WHERE s.kind = 'class' AND s.deleted_at IS NULL`).bind(userId),
+    env.DB.prepare(`SELECT s.id AS sid, i.id, i.type, i.title, i.course_id, i.date, i.start, i.end, i.location, i.status, i.weight, i.notes, i.recur, i.weekday, i.recur_until,
+        k.status AS m_status, k.weight AS m_weight, k.notes AS m_notes, k.hidden AS m_hidden
+      FROM spaces AS s ${IN} JOIN items AS i ON i.scope = 'c:' || s.id AND i.deleted_at IS NULL
+        LEFT JOIN marks AS k ON k.user_id = ?1 AND k.space_id = s.id AND k.item_id = i.id AND k.deleted_at IS NULL
+      WHERE s.kind = 'class' AND s.deleted_at IS NULL`).bind(userId),
   ]);
   const tz = url.searchParams.get('tz');
+  const rows = feedRows({ courses: courses.results, items: items.results, classCourses: classCourses.results, classItems: classItems.results, hidden: parseList(user.hidden_sources) });
   const body = buildCalendar({
-    courses: courses.results, items: items.results, termStart: user.term_start, school: parseSchool(user.school_calendar),
+    ...rows, termStart: user.term_start, school: parseSchool(user.school_calendar),
     types: parseList(user.types), tz: tz && TZ.test(tz) && tz.length <= 64 ? tz : null, now: Date.now(),
   });
   return new Response(body, {
@@ -98,6 +113,39 @@ function parseList(v) {
 }
 
 // ── building the file ────────────────────────────────────────────────────────
+
+/**
+ * The feed's rows (spec §9): your courses and items, and each class you are in with your layer
+ * on top, in buildCalendar's shape. A class's ids become '<space>-<id>', so its UIDs read
+ * item-<space>-<id> and class-<space>-<course>-<meeting> and never meet yours. Its course takes
+ * your semester; a class you archived in your sidebar is left out whole. Its items take your
+ * status and weight, your notes before the class's, and are left out when you hid them. Your
+ * items filed under a class show under its course; one whose class you left stays, without a
+ * course. Hidden sources (course:<id>, space:<sid>, personal) are left out, as in the Week.
+ * Pure, for tests.
+ */
+export function feedRows({ courses, items, classCourses = [], classItems = [], hidden = [] }) {
+  const off = new Set(hidden);
+  const shown = classCourses.filter((c) => c.my_archived !== 1 && !off.has('space:' + c.sid));
+  const inFeed = new Set(shown.map((c) => c.sid));
+  const courseOf = new Map(shown.map((c) => [c.sid, c.sid + '-' + c.id]));
+  const source = (it) => (it.class_id ? 'space:' + it.class_id : it.course_id ? 'course:' + it.course_id : 'personal');
+  return {
+    courses: [
+      ...courses.filter((c) => !off.has('course:' + c.id)),
+      ...shown.map((c) => ({ ...c, id: c.sid + '-' + c.id, term: c.my_term ?? c.term, archived: 0 })),
+    ],
+    items: [
+      ...items.filter((it) => !off.has(source(it)) && (!it.class_id || inFeed.has(it.class_id) || !classCourses.some((c) => c.sid === it.class_id)))
+        .map((it) => (it.class_id ? { ...it, course_id: courseOf.get(it.class_id) ?? null } : it)),
+      ...classItems.filter((it) => inFeed.has(it.sid) && it.m_hidden !== 1).map((it) => ({
+        ...it, id: it.sid + '-' + it.id, course_id: it.course_id ? it.sid + '-' + it.course_id : null,
+        status: it.m_status ?? 'todo', weight: it.m_weight ?? it.weight,
+        notes: [it.m_notes, it.notes].filter(Boolean).join('\n\n'),
+      })),
+    ].sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0)),
+  };
+}
 
 /** The calendar as text, CRLF lines folded at 75 octets. Pure, for tests. */
 export function buildCalendar({ courses, items, termStart = null, school = null, types = [], tz = null, now = Date.now() }) {
