@@ -232,6 +232,19 @@ describe('persisted operation synchronization', () => {
    await sync.syncNow();
    expect(store.rejectOperation).toHaveBeenCalledWith(stuck, { id: 'i1', title: 'Server', revision: 1 }, expect.stringContaining('kept failing'));
  });
+ it('does not set aside a failing mark edit the pull carried onto your copy', async () => {
+   const mark = { key: 'marks:abcdefghij12:a1', op: 'put', revision: 2, token: 'carried-1',
+     body: { id: 'abcdefghij12:a1', spaceId: 'abcdefghij12', itemId: 'a1', notes: 'new' }, base: { notes: 'old' } };
+   let waiting = [mark];
+   store.pending.mockImplementation(async () => waiting);
+   api.put.mockRejectedValue(new ApiError(500, { error: 'internal' }));
+   vi.spyOn(api, 'get').mockResolvedValue({ id: 'abcdefghij12:a1', notes: 'old', revision: 2 });
+   await sync.syncNow(); await sync.syncNow();
+   /* the third pull carries it */
+   store.applyRevoked.mockImplementationOnce(async () => { waiting = []; });
+   await sync.syncNow();
+   expect(store.rejectOperation).not.toHaveBeenCalled();
+ });
  it('does not count a failure while the server is down', async () => {
    const stuck = { ...op, token: 'stuck-2' };
    store.pending.mockResolvedValue([stuck]);

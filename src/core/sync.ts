@@ -132,7 +132,10 @@ async function pushAll(cycle: Cycle): Promise<boolean> {
 }
 /** Count a failed cycle against each held-back edit; set aside those out of tries. */
 async function holdBack(cycle: Cycle): Promise<void> {
+  /* an edit the pull settled (a mark carried onto your copy) is no longer held back */
+  const waiting = new Set((await store.pending()).map((op) => op.token));
   for (const op of cycle.failed) {
+    if (!waiting.has(op.token)) { tries.delete(op.token); continue; }
     const n = (tries.get(op.token) || 0) + 1;
     if (n < MAX_TRIES) { tries.set(op.token, n); continue; }
     tries.delete(op.token);

@@ -506,6 +506,7 @@ test('a mark upload refused as not found waits for the pull: carried onto your c
   assert.deepEqual((await local.pending()).map((o) => o.key), ['items:a1']);
   assert.deepEqual(local.conflicts.map((c) => [c.key, c.body.notes, c.reason]), [[`marks:${sid}:b1`, 'new b1', 'This item was removed from the class, or you left it.']]);
  } finally {
+  /* leaves sync paused for the rest of this process: a later test on the plain store must init() it again */
   sync.stop(); Object.assign(api, saved); await local.close();
  }
 });
