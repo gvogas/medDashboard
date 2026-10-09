@@ -55,7 +55,7 @@ export async function spaceSummary(db, userId, spaceId) {
 }
 
 /* A row's first revision: the change feed's next sequence value, as worker/db.js writes it. */
-const NEXT_ROW_REVISION = "COALESCE((SELECT seq FROM sqlite_sequence WHERE name = 'changes'), 0) + 1";
+export const NEXT_ROW_REVISION = "COALESCE((SELECT seq FROM sqlite_sequence WHERE name = 'changes'), 0) + 1";
 /* A live class this person owns whose course has the id bound second: an earlier convert of that course. */
 const MADE_FROM = `SELECT s.id FROM spaces AS s JOIN members AS m ON m.space_id = s.id
   WHERE m.user_id = ? AND m.role = 'owner' AND m.deleted_at IS NULL AND s.kind = 'class' AND s.deleted_at IS NULL
