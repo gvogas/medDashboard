@@ -148,6 +148,24 @@ describe('detach', () => {
     await detach(env.DB, member, s.id, { keepCopy: true, who: LEAVING, now: 50 });
     expect(await one("SELECT grade, deleted_at FROM items WHERE scope = 'u:' || ? AND id = 'a1'", member)).toEqual({ grade: 88, deleted_at: null });
   });
+
+  it('brings a removed item along when a session or achievement of yours points at it, so none points at nothing', async () => {
+    const { member, s } = await classWithLayer();
+    await sharedItem(s.scope, 'r1', { course_id: 'web', title: 'Removed lab', deleted_at: 9 });
+    await sharedItem(s.scope, 'r2', { course_id: 'web', title: 'Removed quiz', deleted_at: 9 });
+    await env.DB.prepare("UPDATE items SET deleted_at = 9 WHERE scope = ? AND id = 'q1'").bind(s.scope).run();
+    await ownItem(member, 'r2', { title: 'My own r2' });
+    await session(member, 's2', { course_id: 'web', item_id: 'r1', space_id: s.id });
+    await session(member, 's3', { course_id: 'web', item_id: 'q1', space_id: s.id });
+    await achievement(member, 'g2', { rule: 'grade', item_id: 'r2', space_id: s.id });
+    await detach(env.DB, member, s.id, { keepCopy: true, who: LEAVING, now: 50 });
+    const live = await rows("SELECT id, title FROM items WHERE scope = 'u:' || ? AND deleted_at IS NULL ORDER BY id", member);
+    expect(live.map((r) => r.id)).toEqual(['a1', 'f1', 'kr2', 'q1', 'q2', 'r1', 'r2']);
+    expect(await rows('SELECT id, item_id FROM study_sessions WHERE user_id = ? ORDER BY id', member))
+      .toEqual([{ id: 's1', item_id: 'a1' }, { id: 's2', item_id: 'r1' }, { id: 's3', item_id: 'q1' }]);
+    expect(await one("SELECT item_id FROM achievements WHERE user_id = ? AND id = 'g2'", member)).toEqual({ item_id: 'kr2' });
+    expect(live.find((r) => r.id === 'kr2').title).toBe('Removed quiz');
+  });
 });
 
 describe('leaving and removing, through the routes', () => {

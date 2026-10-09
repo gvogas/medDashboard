@@ -93,11 +93,12 @@ const itemCopy = (which, course, classId) => `INSERT INTO items (scope, id, type
     WHERE items.deleted_at IS NOT NULL`;
 
 /* What a copy takes (Decision 2): live items, except hidden ones holding nothing of yours that
-   nothing of yours points at; removed items holding something of yours. */
-const TAKEN = `((i.deleted_at IS NULL AND (COALESCE(m.hidden, 0) = 0 OR ${MEANINGFUL('m')}
-      OR EXISTS (SELECT 1 FROM study_sessions AS ss WHERE ss.user_id = ?1 AND ss.space_id = ?2 AND ss.item_id = i.id AND ss.deleted_at IS NULL)
-      OR EXISTS (SELECT 1 FROM achievements AS aa WHERE aa.user_id = ?1 AND aa.space_id = ?2 AND aa.item_id = i.id AND aa.deleted_at IS NULL)))
-  OR (i.deleted_at IS NOT NULL AND m.id IS NOT NULL AND ${MEANINGFUL('m')}))`;
+   nothing of yours points at; removed items holding something of yours or that something of
+   yours points at (a session or achievement of yours follows the item, so it must land). */
+const POINTED_AT = `(EXISTS (SELECT 1 FROM study_sessions AS ss WHERE ss.user_id = ?1 AND ss.space_id = ?2 AND ss.item_id = i.id AND ss.deleted_at IS NULL)
+      OR EXISTS (SELECT 1 FROM achievements AS aa WHERE aa.user_id = ?1 AND aa.space_id = ?2 AND aa.item_id = i.id AND aa.deleted_at IS NULL))`;
+const TAKEN = `((i.deleted_at IS NULL AND (COALESCE(m.hidden, 0) = 0 OR ${MEANINGFUL('m')} OR ${POINTED_AT}))
+  OR (i.deleted_at IS NOT NULL AND ((m.id IS NOT NULL AND ${MEANINGFUL('m')}) OR ${POINTED_AT})))`;
 
 /* Your layer in the space, deleted. */
 const layerGone = (live) => [
