@@ -389,8 +389,12 @@ export function applyPage(page: Page, reset: boolean | string[] = false): Promis
         for (const row of await a(s).all()) if (row.scope === scope && !(await a('pending').get(sharedKey(s, scope, row.id)))) await a(s).del([scope, row.id]);
       }
     }
+    const detached: Record<string, number> = {};
     for (const { scope = own, kind, row } of page.changes) {
       if (scope === own) {
+        /* the newest of your marks deleted in each space: a detach deletes them as it writes the copy (applyRevoked) */
+        const spaceId = (row as Partial<Mark>).spaceId;
+        if (kind === 'marks' && row.deletedAt && spaceId) detached[spaceId] = Math.max(detached[spaceId] ?? 0, row.updatedAt ?? 0);
         if (await a('pending').get(`${kind}:${row.id}`)) continue;
         const local = await a(kind).get(row.id);
         if (local && local.revision! > row.revision!) continue;
@@ -413,6 +417,11 @@ export function applyPage(page: Page, reset: boolean | string[] = false): Promis
     for (const space of page.scopes || []) {
       const held = await a('spaces').get(space.id);
       await a('spaces').put({ ...space, members: space.members ?? held?.members ?? [] });
+    }
+    if (Object.keys(detached).length) {
+      const held = (await a('meta').get('detached'))?.value as Record<string, number> | undefined;
+      for (const [id, at] of Object.entries(held ?? {})) detached[id] = Math.max(detached[id] ?? 0, at);
+      await a('meta').put({ key: 'detached', value: detached });
     }
     const changed = wipe.length > 0 || page.changes.length > 0 || (page.scopes?.length ?? 0) > 0;
     const cursors = (await a('meta').get('cursors'))?.value as Record<string, Cursor> | undefined;
@@ -450,9 +459,12 @@ function carryMark(copy: Item, mark: Mark, base: Record<string, unknown>, held: 
    than the class item held; and when the mark was on the server (`base`), only one written after
    it (a detach soft-deletes your mark as it writes the copy). A mark made here with no copy of it
    on the server needs the class item held and its facts, else a row of yours from an earlier leave
-   or a Stage 3 copy could take it. Of several, the newest written wins, then the one furthest along:
-   a detach takes the first id free, so the rows before it were already yours. */
-function copyOf(items: Map<string, Item>, id: string, held: SharedItem | undefined, base: Record<string, unknown> | null): Item | null {
+   or a Stage 3 copy could take it. And only one written at or after `detached`, the time the
+   pull's newest delete of your marks in the space says the detach ran (leaving without a copy
+   deletes them too, so an older copy of yours, even one edited since your mark, is never taken).
+   Of several, the newest written wins, then the one furthest along: a detach takes the first id
+   free, so the rows before it were already yours. */
+function copyOf(items: Map<string, Item>, id: string, held: SharedItem | undefined, base: Record<string, unknown> | null, detached: number): Item | null {
   const ids = [id, 'k' + id.slice(0, 23)];
   for (let n = 1; n <= items.size; n++) ids.push('k' + n + id.slice(0, 23 - String(n).length));
   const since = typeof base?.updatedAt === 'number' ? base.updatedAt : 0;
@@ -460,7 +472,7 @@ function copyOf(items: Map<string, Item>, id: string, held: SharedItem | undefin
   let best: Item | null = null, bestRank: number[] = [];
   for (const [at, candidate] of ids.entries()) {
     const r = items.get(candidate);
-    if (!r || r.classId) continue;
+    if (!r || r.classId || (r.updatedAt ?? 0) < detached) continue;
     if (held ? r.type !== held.type || r.title !== held.title || r.date !== held.date : !base) continue;
     if (base && (r.updatedAt ?? 0) <= since) continue;
     const k = rank(r, at), i = k.findIndex((v, j) => v !== bestRank[j]);
@@ -475,11 +487,17 @@ function copyOf(items: Map<string, Item>, id: string, held: SharedItem | undefin
  * their cursor, and your marks and prefs there. A mark edit still waiting is carried onto
  * your copy of the item when one came; any other pending edit stays queued and, refused
  * with 404, moves to the saved copies, so nothing is silently thrown away (spec §6 Revocation).
+ * Runs after every complete pull: it forgets the deletes of your marks the pull saw (`detached`).
  */
-export function applyRevoked(scopes: string[]): Promise<boolean> {
-  if (!scopes.length) return Promise.resolve(false);
+export async function applyRevoked(scopes: string[]): Promise<boolean> {
+  if (!scopes.length) {
+    if (await meta.get('detached')) await mutate((a) => a('meta').del('detached'), 'synced');
+    return false;
+  }
   return mutate(async (a) => {
     const lost = new Set(scopes.map((s) => s.slice(2)));
+    const detached = ((await a('meta').get('detached'))?.value ?? {}) as Record<string, number>;
+    await a('meta').del('detached');
     const items = new Map((await a('items').all()).map((r) => [r.id, r]));
     const classItems = new Map((await a('shared_items').all()).filter((r) => scopes.includes(r.scope)).map((r) => [`${r.scope.slice(2)}:${r.id}`, r]));
     for (const op of await a('pending').all()) {
@@ -490,7 +508,8 @@ export function applyRevoked(scopes: string[]): Promise<boolean> {
       /* an edit that changed nothing a copy holds ("not mine" alone) has nothing to carry */
       if (CARRIED.some(movedSince(mark, base ?? {}))) {
         const held = classItems.get(`${mark.spaceId}:${mark.itemId}`);
-        const copy = copyOf(items, mark.itemId, held, base);
+        /* no delete of your marks there in the pull: nothing says a copy was written now */
+        const copy = detached[mark.spaceId] === undefined ? null : copyOf(items, mark.itemId, held, base, detached[mark.spaceId]);
         if (!copy) continue;
         const moved = carryMark(copy, mark, base ?? {}, held);
         await a('items').put(moved);
