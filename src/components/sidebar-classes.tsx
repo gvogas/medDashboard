@@ -23,7 +23,7 @@ export function InvitesRow() {
 
 const ITEMS: readonly [string, string, () => void][] = [
     ["New course", "Only you", () => openCourse(null)],
-    ["New shared class", "Blank, or convert a course", openNewClass],
+    ["New shared class", "Blank, from a course, or an outline", openNewClass],
     ["Join with code", "8 characters from a classmate", () => openJoin()],
 ]
 

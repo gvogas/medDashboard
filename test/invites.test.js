@@ -112,6 +112,18 @@ describe('invites', () => {
     expect(await row(t, shut.id)).toMatchObject({ status: 'accepted' });
   });
 
+  it('are accepted by a plain account like anyone, who becomes a member', async () => {
+    const t = await makeSpace({ members: { [owner.id]: 'owner' } });
+    const sent = await invite(owner, 'iv-plain', null, t);
+    expect(sent.status).toBe(201);
+    const { userId } = await sent.json();
+    const res = await accept(plain, t);
+    expect(res.status).toBe(200);
+    expect((await res.json()).space).toMatchObject({ id: t.id, role: 'member' });
+    expect(await row(t, userId)).toMatchObject({ status: 'accepted' });
+    expect(await env.DB.prepare('SELECT role FROM members WHERE space_id = ? AND user_id = ? AND deleted_at IS NULL').bind(t.id, userId).first()).toEqual({ role: 'member' });
+  });
+
   it('stop at 20 spaces (409 limit) and 30 members (409 full); the invite stays pending', async () => {
     const busy = await signInAdmin('iv-busy');
     for (let i = 0; i < 20; i++) await makeSpace({ members: { [busy.id]: 'member' } });
