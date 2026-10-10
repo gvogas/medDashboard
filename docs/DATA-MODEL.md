@@ -4,7 +4,7 @@ Term's internal name is `rounds` (the Worker, the D1 databases, cookies and Inde
 Cloudflare D1 (SQLite), several users, every row stamped with its owner: a `scope` on
 courses and items (`u:<user id>` for a person's own; `c:<space id>` for a shared class,
 `p:<space id>` for a team project), a `user_id` on the rest. Shared classes are live
-(collaboration Stages 1–4) but admin-only until Stage 6.
+for everyone (collaboration Stages 1–6); projects stay closed until Stage 10.
 The browser never talks to the database. A Worker reads the session cookie, resolves
 the user, and every query it runs has `user_id = ?` (or the user's scope) in it.
 
@@ -134,7 +134,7 @@ exposes it as the **profile**, with the coat fields nested: `{coat: {name, role,
 color}, theme, bg, types, studyFlow, studyPrefs, schoolCalendar, hiddenSources,
 termStart, isAdmin, ...}`. `feed_gen`, `leaderboard` and `last_seen_day` are not in it.
 
-`hidden_sources`: what you have hidden from your Week and Month (and, from Stage 6, your calendar feed): `course:<id>`, `space:<sid>`, `personal`; at most 40. Sent and received as the profile's `hiddenSources`; a `PUT /api/me` without it keeps it.
+`hidden_sources`: what you have hidden from your Week, your Month and your calendar feed: `course:<id>`, `space:<sid>`, `personal`; at most 40. All items, grades and stats still count them. (Until Stage 6 the Week and Month applied them for admins only.) Sent and received as the profile's `hiddenSources`; a `PUT /api/me` without it keeps it.
 
 The twelve course colours; the first five are also the coat colours:
 
@@ -306,7 +306,8 @@ The school's academic calendar is `users.school_calendar`, JSON
 `follows` weekday's timetable) or `note` (a marker). Read from a PDF by
 `POST /api/school-calendar` and checked by the person before it is saved;
 `src/core/school.ts` works out each day for the views, the lecture reviews and the
-calendar feed.
+calendar feed. A class keeps a copy of its owner's in `spaces.school_calendar`, offered
+to people who join without one of their own.
 
 The goal and streak rules are `users.study_prefs`, JSON `{"goal":120,"dayMin":15,"rest":[0],"celebrate":true}`:
 a daily goal of 0–720 minutes (0 = none), 1–240 minutes to make a day count, up to six
@@ -353,7 +354,7 @@ reads it to call Spotify on the user's behalf.
 
 ## `spaces`
 
-A shared class (`kind = 'class'`, its rows in scope `c:<id>`) or team project (`'project'`, scope `p:<id>`). The id is 12 characters of `[a-z0-9]`, made by the Worker. A space has no name of its own: a class is named by its one course, a project by its `project` item. `archived` makes it read-only for everyone. `school_calendar` (class) is the owner's calendar offered to joiners; `parent_space`/`parent_item` (project) link it to a class assignment. `code_hash`/`code_expires`/`code_uses_left` hold the join code (Stage 3). `revision` moves on with every change to the space **or its members** (`worker/spaces.js`: above the change feed's head and above every other space's revision), so sync sends a member list only when it moved.
+A shared class (`kind = 'class'`, its rows in scope `c:<id>`) or team project (`'project'`, scope `p:<id>`). The id is 12 characters of `[a-z0-9]`, made by the Worker. A space has no name of its own: a class is named by its one course, a project by its `project` item. `archived` makes it read-only for everyone. `school_calendar` (class) is a snapshot of the owner's school calendar, offered to joiners who have none: copied when the class is made (only a calendar with at least one semester; else NULL), refreshed by the owner's `POST /api/spaces/:sid/school` (an owner with no usable calendar leaves the old snapshot as it was), and returned by `GET /api/spaces/:sid` as `schoolCalendar`. Taking it saves it as your own profile's calendar, and never over one you already have (`adoptSchool` in `src/data/school-edit.ts`); `parent_space`/`parent_item` (project) link it to a class assignment. `code_hash`/`code_expires`/`code_uses_left` hold the join code (Stage 3). `revision` moves on with every change to the space **or its members** (`worker/spaces.js`: above the change feed's head and above every other space's revision), so sync sends a member list only when it moved.
 
 ## `members`
 
@@ -459,13 +460,14 @@ All routes are under `/api`, speak JSON, and require the session cookie except
 | `PUT /api/study_sessions/:id` · `DELETE /api/study_sessions/:id` | `{courseId, itemId, startedAt, studyMinutes, roundsDone, note, manual}`, as above |
 | `PUT /api/achievements/:id` · `DELETE /api/achievements/:id` | `{name, sticker, rule, courseId, itemId, target}`, as above; `400 too_many` past 30. `classId` (items), `spaceId` (sessions, achievements) and `hiddenSources` (profile) left out of a body keep their stored values. |
 | `GET /api/calendar` · `POST /api/calendar` · `DELETE /api/calendar` | the calendar feed: → `{on, url}`; POST turns it on or makes a new link (the old one stops working); DELETE turns it off. See `worker/calendar.js`. |
-| `GET /api/calendar/:userId/:token.ics?tz=` | no session: the feed itself, `text/calendar`. The token is an HMAC of the user id and `users.feed_gen`; a wrong one is `404`. At most 60 fetches an hour per link. |
-| `POST /api/spaces` | `{kind:'class', course}` (blank) or `{kind:'class', convertCourseId, items:[id]}` → `201 {space}`; you become the owner, with prefs from the course. Admins only until Stage 6 (`403`). A convert **moves** your course and the items named into the class in class shape: your status, grade, checklist, notes and completion into marks, your colour, target, term and archive into prefs; your course and those items are soft-deleted, the course's other items filed under the class (`classId`), your sessions and achievements on them labelled with the space. Converting the same course again answers the class it made (`200`). `409 limit` past 20 spaces. |
-| `GET /api/spaces/:sid` | → `{id, scope, kind, role, archived, members, invites, code}`: the members for everyone in the space, its invites for the owner and editors, the join code's expiry and uses left for the owner. `404` outside it. |
-| `POST /api/spaces/:sid/invites` · `DELETE /api/spaces/:sid/invites/:userId` | `{username, role?}` → `201` the invite (30 days; a repeat refreshes it). The owner or an editor; only the owner gives a role other than the default. `404 no_user`, `409 member`, `409 not_admin` (until Stage 6); 20 an hour. DELETE withdraws it: whoever sent it, or the owner. |
-| `GET /api/invites` · `POST /api/invites/:sid/accept` · `POST /api/invites/:sid/decline` | your invites, expired ones marked; accept → `{space}` (admins only until Stage 6; `404` once withdrawn, `410 expired`, `403 archived` while the class is archived, `409 limit`/`full`; the invite stays pending); decline → `204`. |
+| `GET /api/calendar/:userId/:token.ics?tz=` | no session: the feed itself, `text/calendar`. The token is an HMAC of the user id and `users.feed_gen`; a wrong one is `404`. At most 60 fetches an hour per link. Carries your classes too: see The calendar feed below. |
+| `POST /api/spaces` | `{kind:'class', course}` (blank) or `{kind:'class', convertCourseId, items:[id]}` → `201 {space}`; you become the owner, with prefs from the course, and the class takes a copy of your school calendar (see `spaces`). Anyone signed in; `kind` other than `'class'` is `400` until projects open (Stage 10). There is no hourly limit on making classes, only the 20 live spaces. A convert **moves** your course and the items named into the class in class shape: your status, grade, checklist, notes and completion into marks, your colour, target, term and archive into prefs; your course and those items are soft-deleted, the course's other items filed under the class (`classId`), your sessions and achievements on them labelled with the space. Converting the same course again answers the class it made (`200`). `409 limit` past 20 spaces. |
+| `GET /api/spaces/:sid` | → `{id, scope, kind, role, archived, members, invites, code, schoolCalendar}`: the members and the class's school-calendar snapshot (or `null`) for everyone in the space, its invites for the owner and editors, the join code's expiry and uses left for the owner. `404` outside it. |
+| `POST /api/spaces/:sid/school` | the owner, archived or not: copy your school calendar into the class again → `{schoolCalendar}` (what the class now holds). With no calendar of yours that has a semester, the old snapshot stays. Classes only (`404` otherwise). The app syncs first and says so when your calendar has not reached the server yet. |
+| `POST /api/spaces/:sid/invites` · `DELETE /api/spaces/:sid/invites/:userId` | `{username, role?}` → `201` the invite (30 days; a repeat refreshes it). The owner or an editor; only the owner gives a role other than the default. `404 no_user`, `409 member`; 20 an hour. So anyone in a class can learn whether a username exists by inviting it, at most 20 names an hour. DELETE withdraws it: whoever sent it, or the owner. |
+| `GET /api/invites` · `POST /api/invites/:sid/accept` · `POST /api/invites/:sid/decline` | your invites, expired ones marked; accept → `{space}` (`404` once withdrawn, `410 expired`, `403 archived` while the class is archived, `409 limit`/`full`; the invite stays pending); decline → `204`. |
 | `POST /api/spaces/:sid/code` · `DELETE /api/spaces/:sid/code` | the owner: a new 8-character code → `201 {code, expires, usesLeft}` (7 days, 10 uses; only its SHA-256 is kept; a new one retires the old) · turn it off. |
-| `POST /api/join` | `{code}` → `{space}`. Admins only until Stage 6; 10 tries an hour; `404` unknown, `410 expired`, `403 archived` while the class is archived (no use spent), `409 limit`/`full`. A pending invite to that class is accepted with it, with its role. |
+| `POST /api/join` | `{code}` → `{space}`. 10 tries an hour; `404` unknown, `410 expired`, `403 archived` while the class is archived (no use spent), `409 limit`/`full`. A pending invite to that class is accepted with it, with its role. |
 | `PUT /api/spaces/:sid/members/:userId` · `POST /api/spaces/:sid/transfer` | the owner, archived or not: `{role: 'editor'\|'member'}` → `{userId, role}`; `{userId}` makes that member the owner and you an editor → `204`. |
 | `POST /api/spaces/:sid/leave` | `{keepCopy}` (true when left out, or with no body) → `204`: leave a class, with a copy of it as your own course or without (see `members`). The owner hands it on first: `403 owner`. Archived or not. |
 | `DELETE /api/spaces/:sid/members/:userId` | the owner, archived or not: remove a member, who always keeps a copy → `204`. Never yourself or the owner (`403`); `404` for someone not in it. |
@@ -483,6 +485,57 @@ All routes are under `/api`, speak JSON, and require the session cookie except
 
 Errors are `{error, field?}`: `400` bad shape (with the field), `401` no session,
 `404` a row that isn't yours, `413` body over 1 MB.
+
+### The calendar feed
+
+`serveFeed` (`worker/calendar.js`) reads, in one batch, your own courses and items and,
+for each live class you are a live member of (the membership checked inside each
+statement), its live course with your prefs and its live items with your mark;
+`feedRows` turns them into the feed's rows. A class's ids become `<space id>-<id>`, so
+its events' UIDs read `item-<space>-<id>@rounds` and `class-<space>-<course>-<meeting>…`
+and never meet your own (`item-<id>`, `class-<course>-<meeting>…`). A class course takes
+your semester (`space_prefs.term`, else the class's); a class item takes your status (✓
+when done, graded or submitted) and weight, and your notes come before the class's.
+Left out: a class item an editor removed (a tombstone, whatever your mark holds), one you
+hid (`marks.hidden`), a class you archived in your sidebar (`space_prefs.archived`), and
+every source in `hidden_sources` (`course:<id>`, `space:<sid>`, `personal`). A class its
+owner archived stays. Your items filed under a class (`class_id`) show under its course;
+one whose class you have left stays, with no course. Projects join the feed in Stage 10.
+
+### Outline imports into a class
+
+An outline read with AI (`POST /api/outline`) opens the import preview with a target
+(`src/data/class-import.ts`): **My courses** (as before), a class you own or edit, or a
+**new class**. Class targets are the live, unarchived classes where you are the owner or
+an editor and whose course has downloaded to this device; they are not offered while
+the admins have shared classes switched off (an admin keeps them, under a bar). Switching
+target plans the original outline again from scratch, keeping week 1.
+
+Against a class, every row goes under the class's one course, and the class's weekly
+meetings it already has (same weekday and start) start unticked. Each row is matched one
+to one against the class's live items, on type plus the title normalised to letters and
+digits of any script (case and punctuation aside; a title with none never matches): rows
+on the same day first, then any left, in order. A recurring row is the same occurrence by
+weekday and start, a one-off by date. A matched row is **Already there** (unticked) when
+nothing differs, else **Changed** (unticked), its `was` naming what the class has where
+the outline differs: the day, the time, the room, the weight. A time, room or weight the
+outline leaves blank is no change, and importing a Changed row keeps the class's value
+for it, its notes and status, and a recurring item's series unless the row recurs too.
+Unmatched rows are **New**, ticked when dated. Setting week 1 in the preview dates the
+week-numbered rows and matches them again (`setWeekOne`), so a row the class has goes
+back to unticked. Import writes the ticked rows as ordinary shared writes (the Worker
+lets an owner or editor make them): meetings onto the course (at most 12), New rows as
+the class's items, Changed rows onto the items they match.
+
+A **new class** (from the preview's target, or *New shared class → From a course
+outline*) is made only on Import: `POST /api/spaces` with the outline's course and its
+ticked meetings, in the semester picked in the preview (the picker shows for My courses
+and a new class; `''` is all year), then its ticked items once the class has downloaded.
+If it was made but hasn't downloaded yet (`NotDownloaded`), the sheet stays open, now
+targeting the class just made, and the next Import adds the items to it; any other
+failure keeps the preview open with the reason, to try again. The outline choice in New
+shared class is disabled while Import with AI is switched off or no AI reads are left.
+There is no `POST /api/spaces {outline}`: the class is made from the preview's rows.
 
 ### Maintenance mode
 

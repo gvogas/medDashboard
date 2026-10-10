@@ -20,15 +20,20 @@ the database, cookies and IndexedDB).
 - **Achievements and a leaderboard.**
 - **Music**: each person connects their own Spotify account.
 - **Import with AI**: course outlines, school calendars and schedule screenshots,
-  read by Workers AI and shown as a preview before anything is saved.
-- **Shared classes**: invites, join codes and roles, with your own layer (status,
-  grade, notes, colour) on top. Admin-only for now; shared projects come later.
+  read by Workers AI and shown as a preview before anything is saved. An outline can
+  go into your own courses, into a class you edit, or make a new class.
+- **Shared classes**: for everyone signed in. A class is one course with its items,
+  shared by the people in it. Join by an invite to your username or with a join code;
+  roles are owner, editor and member. You keep your own layer (status, grade, notes,
+  colour, semester) on top, and leaving keeps a copy of the class as your own course.
+  Shared projects come later.
 - **Admin page**: accounts, error log, audit log, announcement banner, and maintenance
   switches per feature.
 - **Themes**: Medicine, Computer Science, Law, Aviation, Sports and Engineering, each
   in light or dark.
 - **Local-first**: the app reads from IndexedDB, works offline, and syncs to D1. A
-  private calendar feed works with Google or Apple Calendar.
+  private calendar feed works with Google or Apple Calendar, and carries your classes
+  too.
 
 ## Quick start
 
