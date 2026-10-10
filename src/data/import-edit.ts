@@ -11,8 +11,9 @@ import { defaultTerm } from "@/core/school"
 import { schoolCal, termStart } from "@/data/query"
 import { parseIcs } from "@/core/importers/ics"
 import { parseCsv } from "@/core/importers/csv"
-import { planImport, planOutline } from "@/core/importers/plan"
+import { planImport } from "@/core/importers/plan"
 import type { Outline, Plan } from "@/core/importers/plan"
+import { planForClass, planMine } from "./class-import"
 import { api } from "@/core/api"
 import { readWithAi, type NoteKey } from "./ai-read"
 import { readContext } from "./ai-context"
@@ -47,8 +48,8 @@ export async function importFile(file: File): Promise<string> {
     return previewImport(await file.text(), file.name)
 }
 
-/** A course outline, read by the Worker with AI, then previewed. */
-export function readOutlineFile(file: File, note: NoteKey = "aiNote") {
+/** A course outline, read by the Worker with AI, then previewed: for your courses, or (`forNewClass`) for a class made from it. */
+export function readOutlineFile(file: File, note: NoteKey = "aiNote", { forNewClass = false } = {}) {
     return readWithAi(file, {
         what: "outline", title: "Reading your course outline",
         steps: ["Reading the document", "Finding dates and deadlines", "Matching it to your courses"],
@@ -60,10 +61,8 @@ export function readOutlineFile(file: File, note: NoteKey = "aiNote") {
         cache: ["outline", String(data.profile?.id ?? ""), today().slice(0, 7), termStart() || "", JSON.stringify(readContext())],
         call: (body, signal) => api.readOutline(body, { name: file.name, today: today(), termStart: termStart() || "", ...readContext() }, signal),
         done: (outline: Outline) => {
-            const plan = planOutline(outline, data, termStart() || "") as ImportPlan
-            const cal = schoolCal()
-            for (const c of plan.courses) if (c.isNew) c.term = defaultTerm(cal, c.term || "", today())
-            openSheet({ kind: "import", plan, name: file.name })
+            if (forNewClass) openSheet({ kind: "import", plan: planForClass(outline, null, []), name: file.name, target: { kind: "new-class" } })
+            else openSheet({ kind: "import", plan: planMine(outline), name: file.name })
         },
     })
 }

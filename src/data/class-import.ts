@@ -10,7 +10,7 @@ import { api } from "@/core/api"
 import { normalizeItem } from "@/core/model"
 import { shortDate, today } from "@/core/dates"
 import { defaultTerm } from "@/core/school"
-import { planOutline, type Outline, type Plan, type PlanItem, type PlanRow } from "@/core/importers/plan"
+import { planOutline, setWeek1, type Outline, type Plan, type PlanItem, type PlanRow } from "@/core/importers/plan"
 import type { Row } from "@/core/db"
 import { schoolCal, termStart } from "./query"
 import { download, freeColour, openClass } from "./classes"
@@ -22,6 +22,12 @@ export type Target = { kind: "mine" } | { kind: "class"; spaceId: string } | { k
 /** The classes an outline can go into: yours to edit, not archived. */
 export const importTargets = (spaces: Space[] = data.spaces ?? []): Space[] =>
     spaces.filter((s) => s.kind === "class" && s.role !== "member" && !s.archived)
+
+/** A class's course (null until it has downloaded) and its live items, to plan an outline against. */
+export function classRows(spaceId: string): { course: SharedCourse | null; items: SharedItem[] } {
+    const scope = "c:" + spaceId
+    return { course: (data.shared_courses ?? []).find((c) => c.scope === scope) ?? null, items: (data.shared_items ?? []).filter((x) => x.scope === scope) }
+}
 
 /* a title as matched: letters and digits of any script, case and punctuation aside */
 const norm = (s: string) => s.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim()
@@ -76,6 +82,16 @@ export function planForClass(outline: Outline, course: SharedCourse | null, item
         ...(course ? { code: course.code, name: course.name, color: course.color } : {}),
     }]
     for (const it of plan.items) it.row.courseId = id
+    match(plan, course, items)
+    return { ...plan, outline }
+}
+
+/* Each row onto the class's item it matches, if any. Run again once week 1 dates the rows: a
+   row that matches is unticked, one that no longer does is ticked when dated, the rest keep
+   their ticks. */
+function match(plan: Plan, course: SharedCourse | null, items: SharedItem[]) {
+    const had = new Set(plan.items.filter((it) => it.match))
+    for (const it of plan.items) { delete it.match; delete it.was; it.duplicate = false }
     const pool = course ? items.filter((x) => x.scope === course.scope && !x.deletedAt && key(x)) : []
     const twins = new Map<PlanItem, SharedItem>()
     for (const exact of [true, false]) for (const it of plan.items) {
@@ -84,14 +100,21 @@ export function planForClass(outline: Outline, course: SharedCourse | null, item
         const at = pool.findIndex((x) => key(x) === k && (!exact || sameWhen(it.row, x)))
         if (at >= 0) twins.set(it, pool.splice(at, 1)[0])
     }
-    for (const [it, twin] of twins) {
+    for (const it of plan.items) {
+        const twin = twins.get(it)
+        if (!twin) { if (had.has(it)) it.include = !!it.row.date; continue }
         it.match = twin.id
         it.include = false
         const was = changes(it.row, twin)
-        if (was.length) { it.duplicate = false; it.was = was.join(" · ") }
+        if (was.length) it.was = was.join(" · ")
         else it.duplicate = true
     }
-    return { ...plan, outline }
+}
+
+/** Week 1 set in the preview: the week-numbered rows dated from it and, against a class, matched again on their dates. */
+export function setWeekOne(plan: Plan, week1: string, target: Target) {
+    setWeek1(plan, week1)
+    if (target.kind === "class") { const { course, items } = classRows(target.spaceId); match(plan, course, items) }
 }
 
 /* A Changed row onto the item it matches: what the outline says, the rest as the class has it
@@ -143,7 +166,16 @@ export async function commitToClass(plan: Plan, spaceId: string): Promise<string
     return said[0].toUpperCase() + said.slice(1) + (added || classes > 0 ? " to " : " in ") + course.name + "."
 }
 
-/** A new class from the outline (spec §20): made on Import with the ticked meetings, then its ticked items written. Needs a connection. */
+/** A class made from an outline that hasn't reached this device yet: made, with its meetings, but not its items. */
+export class NotDownloaded extends Error {
+    spaceId: string
+    constructor(space: { id: string; name: string }) {
+        super(`${space.name} is made, but hasn't downloaded yet. Import again in a moment to add the items to it.`)
+        this.spaceId = space.id
+    }
+}
+
+/** A new class from the outline (spec §20): made on Import with the ticked meetings, then its ticked items written. Needs a connection; throws NotDownloaded when the class is made but not here yet. */
 export async function commitNewClass(plan: Plan): Promise<string> {
     const pc = plan.courses[0]
     const meetings = pc.meetings.filter((m) => m.include).map(({ include: _, ...m }) => m)
@@ -151,7 +183,7 @@ export async function commitNewClass(plan: Plan): Promise<string> {
         code: pc.code, name: pc.name, color: freeColour([...data.courses, ...(data.space_prefs ?? [])]),
         instructor: pc.instructor || "", term: defaultTerm(schoolCal(), pc.term || "", today()), meetings,
     } })
-    if (!(await download(space.id))) return `${space.name} is made, but hasn't downloaded yet. Import the outline into it once it has.`
+    if (!(await download(space.id))) throw new NotDownloaded(space)
     const scope = space.scope, course = (data.shared_courses ?? []).find((c) => c.scope === scope)
     let n = 0
     for (const it of plan.items) {

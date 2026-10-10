@@ -14,7 +14,7 @@ vi.mock("@/core/api", () => ({ api: { spaces: { create: fake.create } } }))
 vi.mock("@/data/query", () => ({ schoolCal: () => null, termStart: () => "" }))
 vi.mock("./classes", async (real) => ({ ...(await real<typeof import("./classes")>()), download: fake.download, openClass: fake.openClass }))
 
-import { commitNewClass, commitToClass, importTargets, planForClass } from "./class-import"
+import { commitNewClass, commitToClass, importTargets, NotDownloaded, planForClass, setWeekOne } from "./class-import"
 import type { Outline } from "@/core/importers/plan"
 
 const SID = "sp0000000007", SCOPE = "c:" + SID
@@ -103,6 +103,19 @@ describe("an outline planned against a class", () => {
         const office = (over: Record<string, unknown>) => shared({ type: "office", title: "Dr Lee — office hours", date: "2026-09-01", start: "14:00", end: "15:00", weight: null, recur: "weekly", weekday: 2, ...over })
         expect(planForClass(o, course as never, [office({ id: "o1" })] as never).items[0]).toMatchObject({ match: "o1", duplicate: true, include: false })
         expect(planForClass(o, course as never, [office({ id: "o1", weekday: 1, date: "2026-08-31" })] as never).items[0]).toMatchObject({ match: "o1", duplicate: false, was: "Mondays" })
+    })
+
+    it("week 1 dates the week-numbered rows, then matches them again: one the class has stays unticked", () => {
+        const o = only([quiz({ title: "Quiz 1", date: undefined, week: 4 }), quiz({ title: "Quiz 3", date: undefined, week: 5 })])
+        fake.data.shared_courses = [course]
+        fake.data.shared_items = [shared({ id: "q1", date: "2026-09-28" })]
+        const plan = planForClass(o, course as never, fake.data.shared_items as never)
+        expect(plan.items.map((i) => [i.include, i.match ?? null, i.was ?? null])).toEqual([[false, "q1", "Mon 28 Sep"], [false, null, null]])
+        setWeekOne(plan, "2026-09-07", { kind: "class", spaceId: SID })
+        expect(plan.items.map((i) => [i.row.date, i.include, i.match ?? null, i.duplicate, i.was ?? null])).toEqual([
+            ["2026-09-28", false, "q1", true, null],
+            ["2026-10-05", true, null, false, null],
+        ])
     })
 
     it("lists the classes you can import into: not a member's, an archived one or a project", () => {
@@ -200,7 +213,9 @@ describe("a new class from an outline", () => {
     it("writes nothing and opens nothing while the class hasn't downloaded", async () => {
         fake.create.mockResolvedValue({ id: SID, scope: SCOPE, kind: "class", name: "Web Services", role: "owner", members: 1 })
         fake.download.mockImplementation(async () => false)
-        expect(await commitNewClass(planForClass(outline, null, []))).toBe("Web Services is made, but hasn't downloaded yet. Import the outline into it once it has.")
+        const error = await commitNewClass(planForClass(outline, null, [])).catch((e: unknown) => e)
+        expect(error).toBeInstanceOf(NotDownloaded)
+        expect(error).toMatchObject({ spaceId: SID, message: "Web Services is made, but hasn't downloaded yet. Import again in a moment to add the items to it." })
         expect(fake.saveShared).not.toHaveBeenCalled()
         expect(fake.openClass).not.toHaveBeenCalled()
     })
