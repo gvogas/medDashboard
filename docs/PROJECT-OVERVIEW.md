@@ -243,7 +243,7 @@ Deploying, secrets, accounts and database moves: `docs/DEPLOYING.md`.
 6. **Oct 6:** Stages 3 and 4 (main `3bb488a`): shared classes (make, convert, invite,
    join codes, roles) and the personal layer (marks, space prefs, hidden sources,
    absorb), for admins at first.
-7. **Oct 9:** Stage 5 (main `d3df959`): leaving and removal. Stage 6 (`collab-6-feed`):
+7. **Oct 9:** Stage 5 (main `d3df959`): leaving and removal. Stage 6 (main `9dc8ea8`):
    classes in the calendar feed, outline imports into a class or a new class, the class's
    school calendar offered to joiners, and shared classes open to everyone. No migration.
 8. **Next** (`docs/superpowers/plans/2026-10-02-collaboration.md`): Stage 7 an inbox and
