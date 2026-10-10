@@ -1,11 +1,9 @@
 // The class routes (spec §11, §14): making a class, its members, its invites and its join
-// code. Until classes open to everyone (Stage 6), making or joining a space is for admins
-// only; the other routes act inside a space, which only admins can be in until then.
+// code. Anyone signed in may make or join a class (spec §22, opened in Stage 6).
 import { json, readJson, HttpError } from './http.js';
 import { requireUser } from './auth.js';
-import { requireAdmin } from './admin.js';
 import { validateSharedCourse } from './validate.js';
-import { ADMINS_ONLY, absorb, checkConvert, createClass, priorConvert, refreshSchool, setRole, spaceDetails, transfer } from './spaces.js';
+import { absorb, checkConvert, createClass, priorConvert, refreshSchool, setRole, spaceDetails, transfer } from './spaces.js';
 import { deleteClass, keep, leave, removeMember, setArchived, shareItems } from './leaving.js';
 import { acceptInvite, declineInvite, dropCode, invite, joinByCode, makeCode, myInvites, revokeInvite } from './invites.js';
 
@@ -14,9 +12,6 @@ const UID = '([^/]{1,64})';
 const route = (path) => new RegExp(`^/api/${path}$`);
 const done = () => new Response(null, { status: 204 });
 const bad = (field) => new HttpError(400, { error: 'invalid', field });
-
-/** Who may make or join a space: an admin while ADMINS_ONLY (spec §22), else anyone signed in. */
-const joiner = async (request, env) => (ADMINS_ONLY ? (await requireAdmin(request, env)).id : requireUser(request, env));
 
 /* An id as these routes take it: 1 to `max` characters, no control characters. */
 function idOf(v, field, max = 24) {
@@ -71,7 +66,7 @@ export function shareBody(body) {
 
 export const classRoutes = [
   ['POST', route('spaces'), async ({ request, env }) => {
-    const userId = await joiner(request, env);
+    const userId = await requireUser(request, env);
     const body = classBody(await readJson(request));
     if (body.convertCourseId) {
       /* a convert repeated after it moved your course: the course is gone, so answer the class first */
@@ -128,7 +123,7 @@ export const classRoutes = [
   }],
   ['GET', route('invites'), async ({ request, env }) => json({ invites: await myInvites(env.DB, await requireUser(request, env)) })],
   ['POST', route(`invites/${SID}/accept`), async ({ request, env, params: [sid] }) =>
-    json({ space: await acceptInvite(env.DB, await joiner(request, env), sid) })],
+    json({ space: await acceptInvite(env.DB, await requireUser(request, env), sid) })],
   ['POST', route(`invites/${SID}/decline`), async ({ request, env, params: [sid] }) => {
     await declineInvite(env.DB, await requireUser(request, env), sid);
     return done();
@@ -140,7 +135,7 @@ export const classRoutes = [
     return done();
   }],
   ['POST', route('join'), async ({ request, env }) => {
-    const userId = await joiner(request, env);
+    const userId = await requireUser(request, env);
     return json({ space: await joinByCode(env.DB, userId, (await readJson(request)).code) });
   }],
   ['POST', route(`spaces/${SID}/absorb`), async ({ request, env, params: [sid] }) => {

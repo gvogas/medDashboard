@@ -1,4 +1,4 @@
-// Spaces (migrations/0002_spaces.sql) and what the class routes share: the gate, the limits,
+// Spaces (migrations/0002_spaces.sql) and what the class routes share: the limits,
 // Worker-made ids, the space revision and a space's summary. Making a class, its details,
 // roles and transfer follow below; invites and join codes are in worker/invites.js.
 import { HttpError } from './http.js';
@@ -6,9 +6,6 @@ import { assertAllowed, assertKeeper, keeperGuard, memberGuard, scopeOf } from '
 import { REVIEW_ID } from '../src/core/shared.ts';
 import { COURSE_COLOURS } from './validate.js';
 
-/* Classes are open to admins only until Stage 6 (spec §22): the routes that make or join a
-   space refuse anyone else, and an invite to anyone else is refused. Stage 6 sets this false. */
-export const ADMINS_ONLY = true;
 /** The most live spaces a person holds, and the most live members a space holds (spec §3 Limits). */
 export const SPACE_LIMIT = 20;
 export const MEMBER_LIMIT = 30;

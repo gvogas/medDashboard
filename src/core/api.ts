@@ -226,7 +226,7 @@ export const api = {
       record(request('PUT', sharedPath(scope, kind, id), changed ? { ...row, changed } : row, match(row.revision)), id, row.revision),
     del: (scope: string, kind: string, id: string, revision = 0) => empty(request('DELETE', sharedPath(scope, kind, id), undefined, match(revision))),
   },
-  /* shared classes (admins only until Stage 6); `sid` is a space id */
+  /* shared classes; `sid` is a space id */
   spaces: {
     create: (body: { kind: 'class'; course?: Record<string, unknown>; convertCourseId?: string; items?: string[] }) => spaceOf(request('POST', '/api/spaces', body)),
     get: (sid: string): Promise<SpaceDetails> => request('GET', `/api/spaces/${sid}`),

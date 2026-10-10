@@ -1,4 +1,4 @@
-// Merging a course of yours into a class (spec §11, §13), for admins until Stage 6. Your
+// Merging a course of yours into a class (spec §11, §13). Your
 // items are paired with the class's; "Not the same item" undoes a pair, and an unsure pair
 // was never made. Merge moves your status, grades and notes onto the class's items and files
 // the rest under the class; Skip changes nothing, and the class sheet offers it again. While

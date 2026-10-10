@@ -26,14 +26,14 @@ const AiSheet = lazyNamed(() => import("./ai-sheet"), "AiSheet")
 const SchoolSheet = lazyNamed(() => import("./school-sheet"), "SchoolSheet")
 const SessionSheet = lazyNamed(() => import("./session-sheet"), "SessionSheet")
 const AchievementSheet = lazyNamed(() => import("./achievement-sheet"), "AchievementSheet")
-/* the class sheets: admins only until Stage 6, so nobody else downloads them (lib/lazy.ts) */
+/* the class sheets: not everyone has a class, so they download when first opened (lib/lazy.ts) */
 const ClassSheet = lazyNamed(() => import("./class-sheet"), "ClassSheet", { idle: false })
 const NewClassSheet = lazyNamed(() => import("./new-class-sheet"), "NewClassSheet", { idle: false })
 const ConvertSheet = lazyNamed(() => import("./convert-sheet"), "ConvertSheet", { idle: false })
 const JoinSheet = lazyNamed(() => import("./join-sheet"), "JoinSheet", { idle: false })
 const InvitesSheet = lazyNamed(() => import("./invites-sheet"), "InvitesSheet", { idle: false })
 const MergeSheet = lazyNamed(() => import("./merge-sheet"), "MergeSheet", { idle: false })
-/* a class's item, opened by its key: admins only until Stage 6, so nobody else downloads it */
+/* a class's item, opened by its key: downloaded when first opened, as the class sheets are */
 const ClassItemSheet = lazyNamed(() => import("./class-item-sheet"), "ClassItemSheet", { idle: false })
 
 /** What the dialog is called: the item's type, "New assignment", "Course". */

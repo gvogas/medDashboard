@@ -13,10 +13,10 @@ const classRows = async (scope) => (await env.DB.prepare(
 ).bind(scope).all()).results;
 
 describe('making a class', () => {
-  it('refuses anyone who is not an admin while classes are theirs alone', async () => {
+  it('lets anyone signed in make a class', async () => {
     const res = await make(plain, { kind: 'class', course });
-    expect(res.status).toBe(403);
-    expect(await res.json()).toEqual({ error: 'forbidden' });
+    expect(res.status).toBe(201);
+    expect((await res.json()).space).toMatchObject({ kind: 'class', role: 'owner' });
   });
 
   it('checks what it is given', async () => {

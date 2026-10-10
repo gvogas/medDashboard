@@ -46,7 +46,7 @@ describe('join codes', () => {
     expect((await (await owner(`/api/spaces/${s.id}`)).json()).code).toEqual({ expires: made.expires, usesLeft: 10 });
   });
 
-  it('let an admin join as the code is typed, as a member, once; a new code retires the old', async () => {
+  it('let someone join as the code is typed, as a member, once; a new code retires the old', async () => {
     const old = (await (await makeCode(owner)).json()).code;
     const { code } = await (await makeCode(owner)).json();
     expect((await join(joiner1, old)).status).toBe(404);
@@ -68,11 +68,10 @@ describe('join codes', () => {
     expect(await env.DB.prepare('SELECT status FROM invites WHERE space_id = ? AND user_id = ?').bind(s.id, joiner2.id).first()).toEqual({ status: 'accepted' });
   });
 
-  it('refuse: not an admin 403, malformed 400, unknown 404, expired or used up 410', async () => {
+  it('refuse: malformed 400, unknown 404, expired or used up 410', async () => {
     const t = await makeSpace({ members: { [owner.id]: 'owner' } });
     const { code } = await (await makeCode(owner, t)).json();
     const late = await signInAdmin('jc-late');
-    expect(await (await join(plain, code)).json()).toEqual({ error: 'forbidden' });
     expect(await (await join(late, 'ABC')).json()).toEqual({ error: 'invalid', field: 'code' });
     expect(await (await join(late, 12345678)).json()).toEqual({ error: 'invalid', field: 'code' });
     expect(await (await join(late, 'ZZZZZZZZ')).json()).toEqual({ error: 'not_found' });
@@ -81,6 +80,12 @@ describe('join codes', () => {
     await env.DB.prepare('UPDATE spaces SET code_expires = ?, code_uses_left = 0 WHERE id = ?').bind(Date.now() + 1e9, t.id).run();
     expect((await join(late, code)).status).toBe(410);
     expect((await env.DB.prepare('SELECT count(*) AS n FROM members WHERE space_id = ?').bind(t.id).first()).n).toBe(1);
+  });
+
+  it('let a plain account join with a fresh code', async () => {
+    const t = await makeSpace({ members: { [owner.id]: 'owner' } });
+    const { code } = await (await makeCode(owner, t)).json();
+    expect((await join(plain, code)).status).toBe(200);
   });
 
   it('stop at 30 members (409 full) and at 20 spaces (409 limit), using nothing', async () => {

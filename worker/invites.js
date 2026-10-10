@@ -6,7 +6,7 @@ import { claimLimit, rateLimited } from './limits.js';
 import { normalizeUsername } from './password.js';
 import { hex } from './auth.js';
 import { assertAllowed, assertOwner, editorGuard, ownerGuard } from './access.js';
-import { ADMINS_ONLY, LIVE_MEMBERS, MEMBER_LIMIT, MY_SPACES, NEXT_SPACE_REVISION, SPACE_LIMIT, joinPrefs, spaceSummary, touchSpace } from './spaces.js';
+import { LIVE_MEMBERS, MEMBER_LIMIT, MY_SPACES, NEXT_SPACE_REVISION, SPACE_LIMIT, joinPrefs, spaceSummary, touchSpace } from './spaces.js';
 import { normalizeCode } from '../src/core/shared.ts';
 
 const HOUR_MS = 60 * 60 * 1000;
@@ -29,9 +29,8 @@ const acceptedStmt = (db, spaceId, userId) => db.prepare(`UPDATE invites SET sta
 /**
  * Invite someone by username: the owner or an editor, with the space's default role (a
  * class's is member, a project's editor); only the owner gives the other. 404 no_user for
- * a name with no account, 409 member for someone already in, 409 not_admin for someone who
- * cannot join yet (ADMINS_ONLY). 20 an hour per inviter, counted before the name is looked
- * up, so unknown names count too.
+ * a name with no account, 409 member for someone already in. 20 an hour per inviter,
+ * counted before the name is looked up, so unknown names count too.
  */
 export async function invite(db, userId, spaceId, { username, role = null }, now = Date.now()) {
   const me = await assertAllowed(db, userId, spaceId, 'editor');
@@ -40,12 +39,11 @@ export async function invite(db, userId, spaceId, { username, role = null }, now
   const wait = await claimLimit(db, `invite:${userId}`, INVITE_LIMIT, now, HOUR_MS);
   if (wait) throw rateLimited(wait);
   const name = normalizeUsername(username);
-  const who = name && await db.prepare(`SELECT u.id, u.username, u.is_admin, ${NAME} AS name,
+  const who = name && await db.prepare(`SELECT u.id, u.username, ${NAME} AS name,
       EXISTS (SELECT 1 FROM members WHERE space_id = ? AND user_id = u.id AND deleted_at IS NULL) AS member
     FROM users AS u WHERE u.username = ?`).bind(spaceId, name).first();
   if (!who) throw new HttpError(404, { error: 'no_user' });
   if (who.member) throw new HttpError(409, { error: 'member' });
-  if (ADMINS_ONLY && who.is_admin !== 1) throw new HttpError(409, { error: 'not_admin' });
   const g = (other ? ownerGuard : editorGuard)(spaceId, userId), expires = now + INVITE_TTL_MS;
   const saved = await db.prepare(`INSERT INTO invites (space_id, user_id, invited_by, role, status, created_at, expires_at)
       SELECT ?, ?, ?, ?, 'pending', ?, ? WHERE ${g.sql}

@@ -1,4 +1,4 @@
-// The sidebar's shared-class parts, for admins until Stage 6 (spec §15): a row for the invites
+// The sidebar's shared-class parts (spec §15): a row for the invites
 // waiting, and + New as a menu: a course, a shared class, or joining with a code. The menu
 // follows the ARIA menu pattern. Classes themselves are rows of the course list (sidebar.tsx).
 

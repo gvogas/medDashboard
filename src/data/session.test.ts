@@ -62,7 +62,7 @@ describe("the AI answers kept on this device", () => {
 })
 
 describe("a join link", () => {
-    it("is read once and cleared; an admin gets the join sheet with its code, anyone else nothing", async () => {
+    it("is read once and cleared; anyone signed in gets the join sheet with its code, admin or not", async () => {
         localStorage.setItem("rounds.session", JSON.stringify({ id: "u1" }))
         history.replaceState(null, "", "/#join=7KQ2M9XD")
         fake.store.open.mockImplementationOnce(async () => { fake.data.profile = { id: "u1", isAdmin: true } })
@@ -77,7 +77,7 @@ describe("a join link", () => {
         fake.store.open.mockImplementationOnce(async () => { fake.data.profile = { id: "u1" } })
         await boot()
         expect(location.hash).toBe("")
-        expect(fake.classes.openJoin).not.toHaveBeenCalled()
-        expect(fake.classes.watchInvites).not.toHaveBeenCalled()
+        expect(fake.classes.openJoin).toHaveBeenCalledWith("7KQ2M9XD")
+        expect(fake.classes.watchInvites).toHaveBeenCalled()
     })
 })

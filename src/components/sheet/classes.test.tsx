@@ -268,10 +268,10 @@ describe("Share this course, in the course sheet", () => {
         expect(screen.getByText("Save your changes first.")).toBeTruthy()
     })
 
-    it("shows nothing to someone who is not an admin, also while classes are off", () => {
+    it("shows to someone who is not an admin, and nothing while classes are off", () => {
         fake.data.profile = { id: "u-me", isAdmin: false }
-        const first = render(<ShareCourse courseId="db" dirty={false} />)
-        expect(first.container.textContent).toBe("")
+        render(<ShareCourse courseId="db" dirty={false} />)
+        expect(screen.getByRole("button", { name: "Convert to shared class" })).toBeTruthy()
         cleanup()
         fake.data.profile = { id: "u-me", isAdmin: false, maintenance: { features: ["classes"], message: "" } }
         const again = render(<ShareCourse courseId="db" dirty={false} />)

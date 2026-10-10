@@ -1,4 +1,4 @@
-// Joining a class (spec §11, §20), for admins until Stage 6: with a code (a /#join= link
+// Joining a class (spec §11, §20): with a code (a /#join= link
 // fills it in), or straight after accepting an invite. The class downloads onto this device;
 // then you confirm your semester for it (with a school calendar) and your colour, and, when a
 // course of yours matches the class, go on to merge it. Someone with no school calendar is

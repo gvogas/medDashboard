@@ -1,9 +1,9 @@
 // A class's item in the card (spec §15). **Class**: the class's facts as everyone in it sees
 // them, changed by its owner and editors for everyone; members read them, with who changed
 // them last. **Yours**: what only you see: status, grade, your weight, exam prep's topics,
-// your notes, and "not mine". Opened by the item's key, '<scope>/<id>'; for admins until
-// Stage 6. Text saves once typing pauses; leaving the card saves what is waiting. An item an
-// editor removed opens its removed card instead (removed.tsx).
+// your notes, and "not mine". Opened by the item's key, '<scope>/<id>'. Text saves once
+// typing pauses; leaving the card saves what is waiting. An item an editor removed opens its
+// removed card instead (removed.tsx).
 
 import { useEffect, useId, useState } from "react"
 import { cn } from "@/lib/utils"

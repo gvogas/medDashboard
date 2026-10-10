@@ -1,5 +1,5 @@
-// What every view reads: your own courses and items and, for an admin until Stage 6, your
-// classes' and projects', with your layer on top (spec §7). A class course and a personal
+// What every view reads: your own courses and items and your classes' and projects', with
+// your layer on top (spec §7). A class course and a personal
 // course may share an id, so a shared row carries `key` '<scope>/<id>' and items name their
 // course by `courseKey`. A class course takes your prefs (colour, target, semester,
 // archived); a class item your mark (status, grade, weight, checklist, notes, completion),
@@ -26,10 +26,8 @@ export type EffectiveItem = Item & {
 
 /** Shared rows are in the views, with marks and the split item card. */
 export const SHARED_IN_VIEWS = true
-/** Classes are for admins until Stage 6 opens them to everyone (spec §22); Stage 6 removes this. */
-export const CLASSES_ADMIN_ONLY = true
-/** Whether this person's views show their classes and projects. */
-export const sharedShown = (): boolean => SHARED_IN_VIEWS && (!CLASSES_ADMIN_ONLY || !!data.profile?.isAdmin)
+/** Whether the views show your classes and projects. */
+export const sharedShown = (): boolean => SHARED_IN_VIEWS
 
 /** A row's key in the views: '<scope>/<id>' for a shared row, the id for your own. */
 export const keyOf = (r: { id: string; key?: string }): string => r.key ?? r.id

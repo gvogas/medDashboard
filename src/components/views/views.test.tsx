@@ -275,10 +275,10 @@ describe("the stat tiles", () => {
     })
 })
 
-describe("an admin's classes in the views", () => {
+describe("classes in the views, for anyone", () => {
     const WEB = "c:abcdefghij12", store = fake.data as Record<string, unknown>
     beforeEach(() => {
-        store.profile = { id: "u1", isAdmin: true, hiddenSources: [] }
+        store.profile = { id: "u1", hiddenSources: [] }
         store.spaces = [{ id: "abcdefghij12", scope: WEB, kind: "class", role: "member", archived: false, name: "Web Services", parent: null, revision: 1, members: [] }]
         store.shared_courses = [{ ...normalizeCourse({ id: "web", code: "WEB", name: "Web Services", color: "#17B3AE" }), scope: WEB }]
         store.shared_items = [{ ...item({ id: "a1", title: "REST API Project", courseId: "web" }), scope: WEB }]
@@ -298,7 +298,7 @@ describe("an admin's classes in the views", () => {
     })
 
     it("leave a hidden source off the week, and keep it on All items", () => {
-        store.profile = { id: "u1", isAdmin: true, hiddenSources: ["space:abcdefghij12"] }
+        store.profile = { id: "u1", isAdmin: false, hiddenSources: ["space:abcdefghij12"] }
         show(<Views />)
         expect(screen.queryByRole("button", { name: /REST API Project/ })).toBeNull()
         expect(screen.queryByRole("button", { name: /Extra quiz/ })).toBeNull()

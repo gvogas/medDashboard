@@ -1,4 +1,4 @@
-// New shared class (spec §15, §20), for admins until Stage 6: blank, from a course of yours
+// New shared class (spec §15, §20): blank, from a course of yours
 // (the item picker comes next), or from a course outline (read with AI, then the import
 // preview). You become its owner. While the admins have shared classes switched off, everyone
 // else gets the maintenance page instead.

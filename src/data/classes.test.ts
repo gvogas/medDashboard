@@ -90,14 +90,15 @@ describe("words and small rules", () => {
 })
 
 describe("your invites", () => {
-    it("are fetched for admins only, and the last list stays when a fetch fails", async () => {
+    it("are fetched for anyone signed in, and the last list stays when a fetch fails", async () => {
+        fake.data.profile = { id: "u-me" }
         fake.api.invites.list.mockResolvedValueOnce({ invites: [{ spaceId: SID, name: "Databases" }] })
         await refreshInvites()
         expect(getInvites()).toEqual([{ spaceId: SID, name: "Databases" }])
         fake.api.invites.list.mockRejectedValueOnce(new TypeError("offline"))
         await refreshInvites()
         expect(getInvites()).toHaveLength(1)
-        fake.data.profile = { id: "u-me" }
+        fake.data.profile = null
         await refreshInvites()
         expect(fake.api.invites.list).toHaveBeenCalledTimes(2)
     })

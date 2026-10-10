@@ -54,12 +54,10 @@ async function start(profile: ServerProfile) {
     preloadIdle()                                /* the other pages and the sheets */
     const back = spotifyReturn()
     if (back) { ui.spotifyNote = back; openSettings("spotifyGrp") }
-    /* shared classes are for admins until Stage 6: their invites, and a join link's code */
+    /* your invites, and a join link's code */
+    watchInvites()
     const join = joinReturn()
-    if (p.isAdmin) {
-        watchInvites()
-        if (join) openJoin(join)
-    }
+    if (join) openJoin(join)
 }
 
 /* Spotify's consent page sends the browser back to /#spotify=connected or =error. */
