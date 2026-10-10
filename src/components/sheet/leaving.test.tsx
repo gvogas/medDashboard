@@ -109,7 +109,7 @@ describe("leaving a class", () => {
         expect(screen.queryByRole("button", { name: "Share my school calendar with the class" })).toBeNull()
         cleanup()
         fake.data.profile = { id: "u-me", isAdmin: true, schoolCalendar: { name: "", terms: [{ name: "Fall 2026", start: "2026-09-08", end: "2026-12-18" }], days: [] } }
-        fake.api.spaces.school.mockResolvedValue({ schoolCalendar: {} })
+        fake.api.spaces.school.mockResolvedValue({ schoolCalendar: { ...CAL, terms: [...CAL.terms] } })
         render(<ClassSheet spaceId={SID} tab="details" />)
         fireEvent.click(screen.getByRole("button", { name: "Share my school calendar with the class" }))
         await waitFor(() => expect(fake.api.spaces.school).toHaveBeenCalledWith(SID))
@@ -121,6 +121,26 @@ describe("leaving a class", () => {
         fake.data.spaces = [space("owner")]
         fake.data.profile = { id: "u-me", isAdmin: true, schoolCalendar: CAL }
         fake.api.spaces.school.mockResolvedValue({ schoolCalendar: null })
+        render(<ClassSheet spaceId={SID} tab="details" />)
+        fireEvent.click(screen.getByRole("button", { name: "Share my school calendar with the class" }))
+        await waitFor(() => expect(fake.toast).toHaveBeenCalledWith(expect.stringMatching(/hasn't reached the server/)))
+        expect(fake.toast).not.toHaveBeenCalledWith(expect.stringMatching(/shared with/))
+    })
+
+    it("says so, and asks the server nothing, when the owner's calendar hasn't synced", async () => {
+        fake.data.spaces = [space("owner")]
+        fake.data.profile = { id: "u-me", isAdmin: true, schoolCalendar: CAL }
+        fake.syncNow.mockResolvedValueOnce(false)
+        render(<ClassSheet spaceId={SID} tab="details" />)
+        fireEvent.click(screen.getByRole("button", { name: "Share my school calendar with the class" }))
+        await waitFor(() => expect(fake.toast).toHaveBeenCalledWith(expect.stringMatching(/hasn't reached the server/)))
+        expect(fake.api.spaces.school).not.toHaveBeenCalled()
+    })
+
+    it("says so when the server shares an older calendar than the owner's", async () => {
+        fake.data.spaces = [space("owner")]
+        fake.data.profile = { id: "u-me", isAdmin: true, schoolCalendar: CAL }
+        fake.api.spaces.school.mockResolvedValue({ schoolCalendar: { ...CAL, terms: [{ name: "Fall 2026", start: "2026-09-01", end: "2026-12-18" }] } })
         render(<ClassSheet spaceId={SID} tab="details" />)
         fireEvent.click(screen.getByRole("button", { name: "Share my school calendar with the class" }))
         await waitFor(() => expect(fake.toast).toHaveBeenCalledWith(expect.stringMatching(/hasn't reached the server/)))

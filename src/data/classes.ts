@@ -12,6 +12,7 @@ import { HEXES } from "@/core/model"
 import { REVIEW_ID } from "@/core/shared"
 import { openSheet, type ClassTab } from "./overlay"
 import { toast } from "./toast"
+import { maintenanceState } from "./maintenance"
 import type { Course, Invite, Item, Space, SpacePref, SpaceSummary } from "./types"
 
 /* ── the sheets ── */
@@ -34,9 +35,9 @@ const subscribe = (fn: () => void) => { listeners.add(fn); return () => { listen
 export const useInvites = () => useSyncExternalStore(subscribe, () => invites)
 export const getInvites = () => invites
 
-/** Fetch your invites; offline, the last list stays. */
+/** Fetch your invites; offline, the last list stays. Not while classes are switched off for you. */
 export async function refreshInvites(): Promise<void> {
-    if (!data.profile) return
+    if (!data.profile || maintenanceState("classes") === "blocked") return
     try { invites = (await api.invites.list()).invites; emit() } catch { /* offline or signed out: keep the last list */ }
 }
 

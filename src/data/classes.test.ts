@@ -103,6 +103,16 @@ describe("your invites", () => {
         expect(fake.api.invites.list).toHaveBeenCalledTimes(2)
     })
 
+    it("are not fetched while classes are switched off for you, and are for an admin", async () => {
+        fake.data.profile = { id: "u-me", isAdmin: false, maintenance: { features: ["classes"], message: "" } }
+        await refreshInvites()
+        expect(fake.api.invites.list).not.toHaveBeenCalled()
+        fake.data.profile = { id: "u-me", isAdmin: true, maintenance: { features: ["classes"], message: "" } }
+        fake.api.invites.list.mockResolvedValueOnce({ invites: [] })
+        await refreshInvites()
+        expect(fake.api.invites.list).toHaveBeenCalledTimes(1)
+    })
+
     it("leave the list once answered", async () => {
         fake.api.invites.list.mockResolvedValueOnce({ invites: [{ spaceId: SID }, { spaceId: "sp0000000002" }, { spaceId: "sp0000000003" }] })
         await refreshInvites()
