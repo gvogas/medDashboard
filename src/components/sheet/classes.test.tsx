@@ -335,6 +335,40 @@ describe("joining with a code", () => {
         expect(screen.queryByRole("button", { name: "Use the class's school calendar" })).toBeNull()
     })
 
+    it("says so when taking the class's school calendar fails, and offers it again", async () => {
+        fake.api.spaces.get.mockResolvedValue({ ...details("member"), schoolCalendar: CAL })
+        fake.store.saveProfile.mockRejectedValueOnce(new Error("disk"))
+        joined()
+        render(<JoinSheet code="" space={summary} />)
+        fireEvent.click(await screen.findByRole("button", { name: "Use the class's school calendar" }))
+        expect(await screen.findByText("The school calendar didn't save. Try again.")).toBeTruthy()
+        expect((screen.getByRole("button", { name: "Use the class's school calendar" }) as HTMLButtonElement).disabled).toBe(false)
+        expect(screen.queryByRole("combobox", { name: "Your semester" })).toBeNull()
+    })
+
+    it("offers nothing when the class can't be asked, and the joined screen still works", async () => {
+        fake.api.spaces.get.mockRejectedValue(new ApiError(503, { error: "offline" }))
+        joined()
+        render(<JoinSheet code="" space={summary} />)
+        expect(await screen.findByText("You're in Web Services")).toBeTruthy()
+        await waitFor(() => expect(fake.api.spaces.get).toHaveBeenCalledWith(SID))
+        expect(screen.queryByRole("button", { name: "Use the class's school calendar" })).toBeNull()
+        fireEvent.click(screen.getByRole("button", { name: "Open the class" }))
+        await waitFor(() => expect(fake.overlay.openSheet).toHaveBeenCalledWith({ kind: "class", spaceId: SID, tab: "details" }))
+    })
+
+    it("keeps a school calendar that arrived while the offer was up", async () => {
+        fake.api.spaces.get.mockResolvedValue({ ...details("member"), schoolCalendar: CAL })
+        joined()
+        render(<JoinSheet code="" space={summary} />)
+        const use = await screen.findByRole("button", { name: "Use the class's school calendar" })
+        const mine = { name: "Mine", terms: [{ name: "Fall 2026", start: "2026-09-01", end: "2026-12-20" }], days: [] }
+        fake.data.profile = { id: "u-me", isAdmin: true, schoolCalendar: mine }
+        fireEvent.click(use)
+        expect(((await screen.findByRole("combobox", { name: "Your semester" })) as HTMLSelectElement).value).toBe("Fall 2026")
+        expect(fake.store.saveProfile).not.toHaveBeenCalled()
+    })
+
     it("offers nothing when the class has no school calendar", async () => {
         fake.api.spaces.get.mockResolvedValue({ ...details("member"), schoolCalendar: null })
         joined()

@@ -102,9 +102,10 @@ export async function saveSchool(s: SchoolDraft) {
     toast("School calendar saved")
 }
 
-/** Take a class's school calendar as your own when you have none (spec §11): saved like any other. */
+/** Take a class's school calendar as your own when you have none (spec §11): saved like any
+    other. One that arrived meanwhile (another tab, a sync) is kept. */
 export async function adoptSchool(cal: SchoolCalendar) {
-    await store.saveProfile({ schoolCalendar: cal })
+    if (!schoolCal()) await store.saveProfile({ schoolCalendar: cal })
     notify()
 }
 

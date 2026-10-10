@@ -2,8 +2,8 @@
 // fills it in), or straight after accepting an invite. The class downloads onto this device;
 // then you confirm your semester for it (with a school calendar) and your colour, and, when a
 // course of yours matches the class, go on to merge it. Someone with no school calendar is
-// offered the class's (its owner's snapshot), saved as their own. While the admins have shared classes switched off, everyone else gets the
-// maintenance page instead.
+// offered the class's (its owner's snapshot), saved as their own. While the admins have
+// shared classes switched off, everyone else gets the maintenance page instead.
 
 import { useEffect, useId, useState } from "react"
 import { normalizeCode } from "@/core/shared"
@@ -118,13 +118,15 @@ function Joined({ space: s, here, bar }: { space: SpaceSummary; here: boolean; b
         api.spaces.get(s.id).then((d) => { if (live) setOffer(normalizeSchool(d.schoolCalendar)) }, () => {})
         return () => { live = false }
     }, [s.id, cal])
+    const [taking, setTaking] = useState(false)
     const take = async (offered: SchoolCalendar) => {
+        setTaking(true)
         try {
             await adoptSchool(offered)
             const now = schoolCal()
             setCal(now); setOffer(null)
             setTerm(joinTerm(pref?.term ?? classTerm, now))
-        } catch (e) { setErr(messageFor(e)) }
+        } catch { setErr("The school calendar didn't save. Try again.") } finally { setTaking(false) }
     }
     const go = async (next: () => void) => {
         try { if (pref && (color !== pref.color || term !== pref.term)) await savePref(s.id, { color, term }) }
@@ -143,7 +145,7 @@ function Joined({ space: s, here, bar }: { space: SpaceSummary; here: boolean; b
                 {!cal && offer && (
                     <div role="note" className="flex flex-wrap items-center gap-2 rounded-lg bg-muted px-2.5 py-2 text-[12px]">
                         <span className="min-w-0 flex-1">{s.name} has a school calendar: semesters, breaks and days off. Use it as yours?</span>
-                        <Button variant="ghost" onClick={() => void take(offer)}>Use the class's school calendar</Button>
+                        <Button variant="ghost" disabled={taking} onClick={() => void take(offer)}>Use the class's school calendar</Button>
                     </div>
                 )}
                 {pref && (

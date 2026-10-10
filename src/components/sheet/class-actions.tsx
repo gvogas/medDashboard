@@ -9,6 +9,7 @@ import { messageFor } from "@/data/classes"
 import { schoolCal } from "@/data/query"
 import { toast } from "@/data/toast"
 import { api } from "@/core/api"
+import { syncNow } from "@/core/sync"
 import type { Space } from "@/data/types"
 import { Button, Note, Section } from "./fields"
 
@@ -61,8 +62,11 @@ export function ClassActions({ space, name }: { space: Space; name: string }) {
                     {!space.archived && <Button variant="ghost" disabled={busy} onClick={() => void run(() => setArchived(space.id, true))}>Archive the class</Button>}
                     {alone && <Button variant="ghost" onClick={() => ask("delete")}>Delete the class…</Button>}
                     {schoolCal() && <Button variant="ghost" disabled={busy} onClick={() => void run(async () => {
-                        await api.spaces.school(space.id)
-                        toast("Your school calendar is shared with " + name + ". People joining without one are offered it.")
+                        await syncNow()
+                        const { schoolCalendar } = await api.spaces.school(space.id)
+                        toast(schoolCalendar
+                            ? "Your school calendar is shared with " + name + ". People joining without one are offered it."
+                            : "Your school calendar hasn't reached the server yet. Try again once it has synced.")
                     })}>Share my school calendar with the class</Button>}
                 </span>
                 {!alone ? <Note>Hand the class on in Members to leave it. A class can be deleted once nobody else is in it.</Note>
