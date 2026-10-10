@@ -226,7 +226,7 @@ export const api = {
       record(request('PUT', sharedPath(scope, kind, id), changed ? { ...row, changed } : row, match(row.revision)), id, row.revision),
     del: (scope: string, kind: string, id: string, revision = 0) => empty(request('DELETE', sharedPath(scope, kind, id), undefined, match(revision))),
   },
-  /* shared classes (admins only until Stage 6); `sid` is a space id */
+  /* shared classes; `sid` is a space id */
   spaces: {
     create: (body: { kind: 'class'; course?: Record<string, unknown>; convertCourseId?: string; items?: string[] }) => spaceOf(request('POST', '/api/spaces', body)),
     get: (sid: string): Promise<SpaceDetails> => request('GET', `/api/spaces/${sid}`),
@@ -246,6 +246,8 @@ export const api = {
     del: (sid: string, keepCopy: boolean) => empty(request('DELETE', `/api/spaces/${sid}`, { keepCopy })),
     keep: (sid: string, itemId: string) => empty(request('POST', `/api/spaces/${sid}/items/${encodeURIComponent(itemId)}/keep`)),
     share: (sid: string, items: string[]): Promise<{ shared: number }> => request('POST', `/api/spaces/${sid}/absorb`, { items }),
+    /* the owner shares their school calendar with the class again (spec §8) */
+    school: (sid: string): Promise<{ schoolCalendar: unknown | null }> => request('POST', `/api/spaces/${sid}/school`),
   },
   invites: {
     list: (): Promise<{ invites: Invite[] }> => request('GET', '/api/invites'),

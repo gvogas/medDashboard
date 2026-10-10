@@ -1,9 +1,9 @@
-// "Share this course" in a course's sheet, for admins until Stage 6 (spec §13, §15): convert
-// it into a shared class; or, when a class you are in looks like it (one made from it by a
-// Stage 3 convert, or one you joined with the same code or name), merge it into that class.
-// It shows nothing to anyone else, also while the admins have shared classes switched off.
+// "Share this course" in a course's sheet, for everyone (spec §13, §15): convert it into a
+// shared class; or, when a class you are in looks like it (one made from it by a Stage 3
+// convert, or one you joined with the same code or name), merge it into that class. It
+// shows nothing while the admins have shared classes switched off.
 
-import { useCourses, useProfile, useSharedCourses, useSpaces } from "@/data/store"
+import { useCourses, useSharedCourses, useSpaces } from "@/data/store"
 import { classFrom, openClass, openConvert } from "@/data/classes"
 import { matchFor, openMerge } from "@/data/merge"
 import { useMaintenance } from "@/data/maintenance"
@@ -14,11 +14,10 @@ import { Button, Note, Section } from "./fields"
 export function ShareCourse({ courseId, dirty }: { courseId: string; dirty: boolean }) {
     const spaces = useSpaces(), shared = useSharedCourses()
     const own = (useCourses() as EffectiveCourse[]).filter((c) => !c.source)
-    const admin = !!useProfile()?.isAdmin
     const maintenance = useMaintenance("classes")
     const made = classFrom(courseId, spaces, shared)
     const into = made ?? spaces.find((s) => s.kind === "class" && matchFor(s.id, own, shared)?.id === courseId) ?? null
-    if (!admin || maintenance === "blocked") return null
+    if (maintenance === "blocked") return null
     return (
         <Section title={<><SharedGlyph /> Share this course</>}>
             {into ? <>

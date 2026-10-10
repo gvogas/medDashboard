@@ -9,6 +9,7 @@ import { useSyncExternalStore } from "react"
 import type { Item, SpaceSummary } from "./types"
 import type { SettingsTab } from "./settings"
 import type { ImportPlan } from "./import-edit"
+import type { Target } from "./class-import"
 import type { SchoolDraft } from "./school-edit"
 import type { SessionDraft } from "./session-edit"
 import type { AchievementDraft } from "./achievement-edit"
@@ -21,7 +22,7 @@ export type SheetState =
     | { kind: "new-item"; draft: Item }
     | { kind: "course"; id: string | null }
     | { kind: "settings"; tab: SettingsTab; focus: string | null }
-    | { kind: "import"; plan: ImportPlan; name: string }
+    | { kind: "import"; plan: ImportPlan; name: string; target?: Target }
     | { kind: "schedule"; plan: ImportPlan; name: string }
     | { kind: "ai" }
     | { kind: "school"; draft: SchoolDraft }

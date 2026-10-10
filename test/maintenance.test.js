@@ -116,6 +116,16 @@ describe('the guards', () => {
     expect((await read(person, '/api/outline')).status).toBe(400);
   });
 
+  it('answer non-admins 503 on making, joining and accepting a class while classes are off', async () => {
+    await setFeatures(['classes']);
+    const course = { code: 'OS', name: 'Operating Systems', color: '#4FBF8B', instructor: '', term: '', meetings: [] };
+    for (const [path, body] of [['/api/spaces', { kind: 'class', course }], ['/api/join', { code: '7KQ2M9XD' }], [`/api/invites/${space.id}/accept`, {}]]) {
+      const res = await person(path, { method: 'POST', body });
+      expect(res.status, path).toBe(503);
+      expect(await res.json()).toEqual({ error: 'maintenance', feature: 'classes' });
+    }
+  });
+
   it('block both with the whole app switch', async () => {
     await setFeatures(['app']);
     expect(await (await read(person, '/api/outline')).json()).toEqual({ error: 'maintenance', feature: 'app' });

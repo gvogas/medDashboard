@@ -33,10 +33,10 @@ a Spotify player and an admin page.
 | Semesters | A school calendar (1–4 semesters, special days: off, break, exams, swapped weekday) read from a PDF by AI. Courses belong to a semester. |
 | Study | A flip-clock timer that runs a flow of study and break steps you build. A focus screen. Sessions logged against a course or item. Streaks, a daily goal, a heatmap, history, spaced lecture reviews, exam prep pacing, built-in and custom achievements (with an uploaded sticker), and an opt-in leaderboard. |
 | Themes | Six: Medicine, Computer Science, Law, Aviation, Sports, Engineering. Each has its own accent colour, sidebar picture (lab coat, badge, suit, jacket, jersey, vest), next-exam animation, wording and quote. All of them work in light, dark or follow-the-device. |
-| Import | `.ics` calendars, CSV timetables, course outlines (PDF or Word), school calendars and class schedules (PDF or screenshot) read by Workers AI. A timetable PDF's days and times are read from its grid in the browser first, so the model only copies them; a room ending in a lone "L" (Omnivox's mark) is a lab. Everything goes through a preview where the person ticks what to keep. |
-| Calendar feed | A private `.ics` link that Google or Apple Calendar can subscribe to. |
+| Import | `.ics` calendars, CSV timetables, course outlines (PDF or Word), school calendars and class schedules (PDF or screenshot) read by Workers AI. A timetable PDF's days and times are read from its grid in the browser first, so the model only copies them; a room ending in a lone "L" (Omnivox's mark) is a lab. Everything goes through a preview where the person ticks what to keep. An outline's preview can go into **My courses**, into a class you own or edit (each row New, Changed, saying what it was, or Already there; Changed rows start unticked), or into a **new class** made from it on Import (`src/data/class-import.ts`). |
+| Calendar feed | A private `.ics` link that Google or Apple Calendar can subscribe to. It carries your classes with your layer on top, and leaves out whatever you hid with the sidebar's eye toggles. |
 | Spotify | Each person connects their own account. Now playing, controls, search, playlists, queue and volume. The tab itself can play music through the Web Playback SDK. |
-| Shared classes | A class is a shared space with its own courses and items. Make one blank or convert a course into it, invite by username or a join code, roles (owner, editor, member). Each person keeps a private layer on it: marks on its items (status, grade, weight, notes, checklist, hidden) and prefs (colour, target, term, archived). Leaving keeps a copy of the class as your own course by default. The owner removes members (they keep a copy), archives the class (read-only for everyone, members still managed) and deletes it once nobody else is in it. A class item an editor deletes stays with whoever has something on it, marked *Removed from … by …*, until they **Keep as mine** or **Dismiss** it (editors can **Restore** it for everyone). Editors share one of their own items filed under the class with it. Deleting an account hands its classes on. **Admin-only until Stage 6** (`CLASSES_ADMIN_ONLY` in `src/data/effective.ts`; the Worker gates it too). |
+| Shared classes | Open to everyone signed in. A class is a shared space with its own course and items. Make one blank, from a course outline, or by converting a course (all in the **+ New** menu, beside New course), invite by username or a join code, roles (owner, editor, member). Each person keeps a private layer on it: marks on its items (status, grade, weight, notes, checklist, hidden) and prefs (colour, target, term, archived). Leaving keeps a copy of the class as your own course by default. The owner removes members (they keep a copy), archives the class (read-only for everyone, members still managed) and deletes it once nobody else is in it. A class item an editor deletes stays with whoever has something on it, marked *Removed from … by …*, until they **Keep as mine** or **Dismiss** it (editors can **Restore** it for everyone). Editors share one of their own items filed under the class with it. Deleting an account hands its classes on. The sidebar's eye toggles hide a course, a class or *Personal items* from the Week, the Month and the calendar feed (All items, grades and stats still count them). A class keeps a copy of its owner's school calendar; someone joining without one is offered it. Projects stay closed until Stage 10 (the Worker refuses `kind: 'project'`). |
 | Admin | Overview (free-plan usage meters, traffic and health), Accounts, Errors, Audit log, a site-wide Announcement banner, and Maintenance. |
 | Maintenance mode | Admins switch a feature off while they work on it (week, month, all items, study, music, import with AI, shared classes and projects), with a message. Personal data and sync never stop. `worker/maintenance.js`. |
 | Offline / PWA | Local-first: an IndexedDB store (version 6). It can be installed to the home screen and works with no connection. |
@@ -129,7 +129,7 @@ view shows and can be tested on their own.
 | `http.js` | Small HTTP helpers shared by every handler (`json`, body reading, `HttpError`, revisions). |
 | `db.js`, `validate.js` | Row reads and writes by scope, revisions, the sync feed (v2 and v3), input validation. |
 | `access.js` | Who may do what in a shared space. Each guard is a SQL fragment run inside the statement that reads or writes. |
-| `spaces.js` | Spaces: the gate, limits, Worker-made ids, the space revision, making a class, its details, roles and transfer. |
+| `spaces.js` | Spaces: limits, Worker-made ids, the space revision, making a class, its details, its copy of the owner's school calendar, roles and transfer. |
 | `classes.js` | The class routes: making a class, members, invites, join codes, absorb, leaving and removal. |
 | `leaving.js` | Leaving and removal (spec §13): detach (a copy of the class into your own scope), leave, remove, archive, delete a class, Keep as mine, share an item, handing classes on, the purge's auto-keep. |
 | `invites.js` | Invites by username and join codes; the 20-spaces and 30-members limits ride in each statement. |
@@ -137,7 +137,7 @@ view shows and can be tested on their own.
 | `maintenance.js` | Maintenance mode: stored in `app_meta`, sent with `GET /api/me`, enforced (503) for AI reads and shared classes. |
 | `limits.js` | Per-user request rate limits. |
 | `ai.js`, `outline.js`, `school.js`, `schedule.js` | Workers AI reads. They return JSON and **never save**; the browser previews and saves. |
-| `calendar.js` | The private ICS feed (HMAC token). |
+| `calendar.js` | The private ICS feed (HMAC token): your courses and items, and your classes' with your layer (`feedRows`). |
 | `leaderboard.js` | Opt-in study leaderboard. |
 | `spotify.js`, `spotify/` | OAuth, encrypted refresh tokens (AES-GCM, `SPOTIFY_TOKEN_KEYS`), Spotify API proxy. |
 | `admin.js`, `accounts.js`, `analytics.js`, `errors.js` | Admin routes (`users.is_admin` checked on the server), what deleting an account removes, Cloudflare traffic analytics, the error log. |
@@ -149,7 +149,7 @@ view shows and can be tested on their own.
 - **Data:** `GET /sync`, and `GET|PUT|DELETE /{courses,items,quotes,study_sessions,achievements}/:id`.
 - **Shared classes:** `POST /spaces`, `GET /spaces/:sid`, `GET|PUT|DELETE /spaces/:sid/{courses,items}/:id`,
   `PUT /spaces/:sid/members/:uid`, `POST /spaces/:sid/transfer`, `POST|DELETE /spaces/:sid/invites…`,
-  `POST|DELETE /spaces/:sid/code`, `POST /spaces/:sid/absorb`, `POST /spaces/:sid/{leave,archive}`,
+  `POST|DELETE /spaces/:sid/code`, `POST /spaces/:sid/absorb`, `POST /spaces/:sid/{leave,archive,school}`,
   `DELETE /spaces/:sid`, `DELETE /spaces/:sid/members/:uid`, `POST /spaces/:sid/items/:id/keep`, `GET /invites`,
   `POST /invites/:sid/{accept,decline}`, `POST /join`.
 - **Your layer:** `GET|PUT|DELETE /marks/:sid/:itemId`, `GET|PUT|DELETE /space_prefs/:sid`.
@@ -242,10 +242,12 @@ Deploying, secrets, accounts and database moves: `docs/DEPLOYING.md`.
    Stage 2: spaces, members and sync v3.
 6. **Oct 6:** Stages 3 and 4 (main `3bb488a`): shared classes (make, convert, invite,
    join codes, roles) and the personal layer (marks, space prefs, hidden sources,
-   absorb). Admin-only until Stage 6.
-7. **Next** (`docs/superpowers/plans/2026-10-02-collaboration.md`): Stage 5 leaving and
-   removal; Stage 6 the feed and outline import into a class, and classes open to
-   everyone; Stage 7 an inbox and activity; Stages 8–10 projects.
+   absorb), for admins at first.
+7. **Oct 9:** Stage 5 (main `d3df959`): leaving and removal. Stage 6 (`collab-6-feed`):
+   classes in the calendar feed, outline imports into a class or a new class, the class's
+   school calendar offered to joiners, and shared classes open to everyone. No migration.
+8. **Next** (`docs/superpowers/plans/2026-10-02-collaboration.md`): Stage 7 an inbox and
+   activity; Stages 8–10 projects.
 
 ## Gotchas worth knowing
 

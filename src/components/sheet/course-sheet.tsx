@@ -9,7 +9,7 @@ import { cn } from "@/lib/utils"
 import { colourName, KINDS, PALETTE } from "@/core/model"
 import { dur, DOW } from "@/core/dates"
 import * as store from "@/core/store"
-import { useCourses, useItems, useProfile, useSharedCourses } from "@/data/store"
+import { useCourses, useItems, useSharedCourses } from "@/data/store"
 import { courseKeyOf, type EffectiveCourse } from "@/data/effective"
 import { isSharedKey, splitKey } from "@/data/refs"
 import type { Row } from "@/core/db"
@@ -49,7 +49,6 @@ export function CourseSheet({ id }: { id: string | null }) {
     const isNew = !stored
     const changed = courseChanged(draft, stored)
     const cal = schoolCal()
-    const admin = !!useProfile()?.isAdmin
 
     /* ✕, Escape and the scrim ask before throwing changes away; asked, they discard */
     useEffect(() => {
@@ -148,7 +147,7 @@ export function CourseSheet({ id }: { id: string | null }) {
                 </Section>
 
                 {!isNew && !shared && <Grades course={draft} items={mine} whatIf={whatIf} setWhatIf={setWhatIf} onTarget={(target) => edit({ target })} />}
-                {!isNew && !shared && admin && <ShareCourse courseId={draft.id} dirty={changed} />}
+                {!isNew && !shared && <ShareCourse courseId={draft.id} dirty={changed} />}
                 {!isNew && !shared && mine.length > 0 && (
                     <Warning>{mine.length} item{mine.length === 1 ? "" : "s"} {mine.length === 1 ? "is" : "are"} filed under this course. Deleting it leaves them without a course.</Warning>
                 )}

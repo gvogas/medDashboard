@@ -359,13 +359,10 @@ describe("the item sheet", () => {
 })
 
 describe("the course sheet", () => {
-    it("offers sharing the course to admins only", () => {
-        show()
-        open({ kind: "course", id: "anat" })
-        expect(screen.queryByRole("button", { name: "Convert to shared class" })).toBeNull()
-        act(() => closeSheet())
-        ;(fake.data as { profile: unknown }).profile = { id: "u1", isAdmin: true }
+    it("offers sharing the course to anyone", () => {
+        ;(fake.data as { profile: unknown }).profile = { id: "u1", isAdmin: false }
         try {
+            show()
             open({ kind: "course", id: "anat" })
             expect(screen.getByRole("button", { name: "Convert to shared class" })).toBeTruthy()
         } finally {

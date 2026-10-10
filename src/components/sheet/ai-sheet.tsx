@@ -7,7 +7,7 @@ import { useEffect, useState } from "react"
 import { cn } from "@/lib/utils"
 import { ui, useUi } from "@/data/ui"
 import { refreshReads } from "@/data/ai-read"
-import { importFile, previewImport, readOutlineFile } from "@/data/import-edit"
+import { OUTLINE_ACCEPT, importFile, previewImport, readOutlineFile } from "@/data/import-edit"
 import { readSchoolFile } from "@/data/school-edit"
 import { readScheduleFile } from "@/data/schedule-edit"
 import { beforeSheetClose, closeSheet } from "@/data/overlay"
@@ -27,7 +27,7 @@ const KINDS = [
         id: "outline", title: "Course outline", pick: "Choose a file", note: "PDF, Word or text · read by AI",
         blurb: "The syllabus from your professor. It pulls out every quiz, exam, assignment and lab with its date and weight, and the class times.",
         icon: "M7 3h7l4 4v14H7zM14 3v4h4M10 12h5M10 16h5",
-        accept: ".pdf,.docx,.doc,.txt,.md,.html,.odt,application/pdf",
+        accept: OUTLINE_ACCEPT,
         read: (f: File) => readOutlineFile(f, "aiNote"),
     },
     {

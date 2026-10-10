@@ -1,4 +1,4 @@
-// Converting a course of yours into a shared class (spec §13), for admins until Stage 6:
+// Converting a course of yours into a shared class (spec §13):
 // tick the items the class takes. Tasks start unticked; lecture reviews and items of your
 // own types cannot go. The course and the ticked items move into the class with your status,
 // grades and notes on top (your marks); the rest stay yours, filed under the class. While the admins have shared

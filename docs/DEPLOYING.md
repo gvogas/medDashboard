@@ -143,6 +143,10 @@ runs once per database.
 | `0003_invites.sql` | `invites`: invitations to a space by username |
 | `0004_marks.sql` | `marks` (your status, grade and notes on a shared item) and `space_prefs` (your colour, target and term for a space) |
 
+Collaboration Stages 5 (leaving and removal) and 6 (the feed, outline imports, classes
+open to everyone) added no migration: deploying them is a plain push of `main`. Stage 6
+uses `spaces.school_calendar`, which has been there since `0002_spaces.sql`.
+
 To change the database:
 
 1. Add a new file with the next number, `0005_something.sql`. Never edit a file that

@@ -15,6 +15,7 @@ const fake = vi.hoisted(() => ({
             create: vi.fn(), get: vi.fn(), invite: vi.fn(), revokeInvite: vi.fn(), setRole: vi.fn(), transfer: vi.fn(), makeCode: vi.fn(), dropCode: vi.fn(),
             leave: vi.fn(async () => undefined), remove: vi.fn(async () => undefined), archive: vi.fn(async () => undefined),
             del: vi.fn(async () => undefined), keep: vi.fn(async () => undefined), share: vi.fn(async () => undefined),
+            school: vi.fn(),
         },
         invites: { list: vi.fn(), accept: vi.fn(), decline: vi.fn() },
         join: vi.fn(),
@@ -54,6 +55,7 @@ const details = (role = "owner") => ({
     invites: [],
     code: null,
 })
+const CAL = { name: "", terms: [{ name: "Fall 2026", start: "2026-09-08", end: "2026-12-18" }], days: [] }
 const pref = { id: SID, spaceId: SID, color: "#17B3AE", target: null, term: "", archived: false, revision: 2 }
 const removed = (id: string, title: string) => ({ scope: SCOPE, id, type: "lab", title, courseId: "web", date: "2026-10-09", updatedBy: "u-sam", deletedAt: 5 })
 const mark = (itemId: string, patch: Record<string, unknown> = {}) => ({
@@ -99,6 +101,64 @@ describe("leaving a class", () => {
         expect(screen.queryByRole("button", { name: "Delete the class…" })).toBeNull()
         fireEvent.click(screen.getByRole("button", { name: "Archive the class" }))
         await waitFor(() => expect(fake.api.spaces.archive).toHaveBeenCalledWith(SID, true))
+    })
+
+    it("the owner shares their school calendar with the class, once they have one", async () => {
+        fake.data.spaces = [space("owner")]
+        render(<ClassSheet spaceId={SID} tab="details" />)
+        expect(screen.queryByRole("button", { name: "Share my school calendar with the class" })).toBeNull()
+        cleanup()
+        fake.data.profile = { id: "u-me", isAdmin: true, schoolCalendar: { name: "", terms: [{ name: "Fall 2026", start: "2026-09-08", end: "2026-12-18" }], days: [] } }
+        fake.api.spaces.school.mockResolvedValue({ schoolCalendar: { ...CAL, terms: [...CAL.terms] } })
+        render(<ClassSheet spaceId={SID} tab="details" />)
+        fireEvent.click(screen.getByRole("button", { name: "Share my school calendar with the class" }))
+        await waitFor(() => expect(fake.api.spaces.school).toHaveBeenCalledWith(SID))
+        expect(fake.syncNow.mock.invocationCallOrder[0]).toBeLessThan(fake.api.spaces.school.mock.invocationCallOrder[0])
+        await waitFor(() => expect(fake.toast).toHaveBeenCalledWith(expect.stringMatching(/shared with Web Services/)))
+    })
+
+    it("says so when the server has no school calendar of the owner's to share", async () => {
+        fake.data.spaces = [space("owner")]
+        fake.data.profile = { id: "u-me", isAdmin: true, schoolCalendar: CAL }
+        fake.api.spaces.school.mockResolvedValue({ schoolCalendar: null })
+        render(<ClassSheet spaceId={SID} tab="details" />)
+        fireEvent.click(screen.getByRole("button", { name: "Share my school calendar with the class" }))
+        await waitFor(() => expect(fake.toast).toHaveBeenCalledWith(expect.stringMatching(/hasn't reached the server/)))
+        expect(fake.toast).not.toHaveBeenCalledWith(expect.stringMatching(/shared with/))
+    })
+
+    it("says so, and asks the server nothing, when the owner's calendar hasn't synced", async () => {
+        fake.data.spaces = [space("owner")]
+        fake.data.profile = { id: "u-me", isAdmin: true, schoolCalendar: CAL }
+        fake.syncNow.mockResolvedValueOnce(false)
+        render(<ClassSheet spaceId={SID} tab="details" />)
+        fireEvent.click(screen.getByRole("button", { name: "Share my school calendar with the class" }))
+        await waitFor(() => expect(fake.toast).toHaveBeenCalledWith(expect.stringMatching(/hasn't reached the server/)))
+        expect(fake.api.spaces.school).not.toHaveBeenCalled()
+    })
+
+    it("says so when the server shares an older calendar than the owner's", async () => {
+        fake.data.spaces = [space("owner")]
+        fake.data.profile = { id: "u-me", isAdmin: true, schoolCalendar: CAL }
+        fake.api.spaces.school.mockResolvedValue({ schoolCalendar: { ...CAL, terms: [{ name: "Fall 2026", start: "2026-09-01", end: "2026-12-18" }] } })
+        render(<ClassSheet spaceId={SID} tab="details" />)
+        fireEvent.click(screen.getByRole("button", { name: "Share my school calendar with the class" }))
+        await waitFor(() => expect(fake.toast).toHaveBeenCalledWith(expect.stringMatching(/hasn't reached the server/)))
+        expect(fake.toast).not.toHaveBeenCalledWith(expect.stringMatching(/shared with/))
+    })
+
+    it("the owner can share their school calendar with an archived class", () => {
+        fake.data.spaces = [{ ...space("owner"), archived: true }]
+        fake.data.profile = { id: "u-me", isAdmin: true, schoolCalendar: CAL }
+        render(<ClassSheet spaceId={SID} tab="details" />)
+        expect(screen.getByRole("button", { name: "Share my school calendar with the class" })).toBeTruthy()
+    })
+
+    it("a member is not offered sharing a school calendar", () => {
+        fake.data.spaces = [space("member")]
+        fake.data.profile = { id: "u-me", isAdmin: true, schoolCalendar: { name: "", terms: [{ name: "Fall 2026", start: "2026-09-08", end: "2026-12-18" }], days: [] } }
+        render(<ClassSheet spaceId={SID} tab="details" />)
+        expect(screen.queryByRole("button", { name: "Share my school calendar with the class" })).toBeNull()
     })
 
     it("an archived class says so, and its owner unarchives it", async () => {

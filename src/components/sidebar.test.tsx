@@ -80,7 +80,7 @@ describe("the courses", () => {
         expect(coursesNav().queryByText("Old course")).toBeNull()
     })
 
-    it("filter by course, and open the course drawer from ✎ and + New course", () => {
+    it("filter by course, and open the course drawer from ✎ and + New → New course", () => {
         render(<Sidebar />)
         expect(coursesNav().getByRole("button", { name: "All courses" }).getAttribute("aria-pressed")).toBe("true")
         fireEvent.click(coursesNav().getByRole("button", { name: /^Course two/ }))
@@ -88,7 +88,8 @@ describe("the courses", () => {
         expect(coursesNav().getByRole("button", { name: /^Course two/ }).getAttribute("aria-pressed")).toBe("true")
         fireEvent.click(coursesNav().getByRole("button", { name: "Edit Course one" }))
         expect(openCourse).toHaveBeenCalledWith("c1")
-        fireEvent.click(coursesNav().getByRole("button", { name: "+ New course" }))
+        fireEvent.click(coursesNav().getByRole("button", { name: "+ New" }))
+        fireEvent.click(within(coursesNav().getByRole("menu", { name: "New" })).getByRole("menuitem", { name: /^New course/ }))
         expect(openCourse).toHaveBeenLastCalledWith(null)
     })
 })
@@ -193,9 +194,8 @@ describe("who this is", () => {
     })
 })
 
-describe("shared classes, for admins", () => {
+describe("shared classes, for everyone", () => {
     beforeEach(() => {
-        fake.data.profile = { ...(fake.data.profile as object), isAdmin: true }
         fake.data.spaces = [{
             id: "sp0000000001", scope: "c:sp0000000001", kind: "class", role: "owner", name: "Web Services", archived: false, parent: null, revision: 5,
             members: [{ userId: "p", name: "Dr Demo", role: "owner" }, { userId: "q", name: "Sam", role: "member" }],
@@ -240,25 +240,13 @@ describe("shared classes, for admins", () => {
     })
 })
 
-describe("shared classes, for everyone else", () => {
-    it("are not there: no class rows, no invites, + New course as before", () => {
-        fake.data.spaces = [{ id: "sp0000000001", scope: "c:sp0000000001", kind: "class", role: "owner", name: "Web Services", archived: false, parent: null, revision: 5, members: [] }]
-        fake.invites = [{ spaceId: "sp0000000002", expired: false }]
-        render(<Sidebar />)
-        expect(coursesNav().queryByRole("button", { name: /Web Services/ })).toBeNull()
-        expect(coursesNav().queryByRole("button", { name: /^Invites/ })).toBeNull()
-        expect(coursesNav().getByRole("button", { name: "+ New course" })).toBeTruthy()
-        expect(coursesNav().queryByRole("button", { name: "+ New" })).toBeNull()
-    })
-})
-
 describe("eye toggles", () => {
     beforeEach(() => {
         fake.data.courses = [{ id: "anat", code: "ANAT", name: "Anatomy", color: "#E4749B", term: "", archived: false, meetings: [] }]
     })
 
-    it("hide a course or Personal items from an admin's calendar, and show a hidden one again", () => {
-        fake.data.profile = { ...(fake.data.profile as object), isAdmin: true, hiddenSources: ["course:anat"] }
+    it("hide a course or Personal items from anyone's calendar, and show a hidden one again", () => {
+        fake.data.profile = { ...(fake.data.profile as object), isAdmin: false, hiddenSources: ["course:anat"] }
         render(<Sidebar />)
         const show = coursesNav().getByRole("button", { name: "Show Anatomy on your calendar" })
         expect(show.getAttribute("aria-pressed")).toBe("true")
@@ -268,9 +256,9 @@ describe("eye toggles", () => {
         expect(saveProfile).toHaveBeenLastCalledWith({ hiddenSources: ["course:anat", "personal"] })
     })
 
-    it("are not there for anyone else", () => {
+    it("are there with no admin flag at all", () => {
         render(<Sidebar />)
-        expect(coursesNav().queryByRole("button", { name: /on your calendar/ })).toBeNull()
-        expect(coursesNav().queryByText("Personal items")).toBeNull()
+        expect(coursesNav().getByRole("button", { name: "Hide Anatomy on your calendar" })).toBeTruthy()
+        expect(coursesNav().getByText("Personal items")).toBeTruthy()
     })
 })

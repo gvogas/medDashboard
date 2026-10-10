@@ -90,16 +90,27 @@ describe("words and small rules", () => {
 })
 
 describe("your invites", () => {
-    it("are fetched for admins only, and the last list stays when a fetch fails", async () => {
+    it("are fetched for anyone signed in, and the last list stays when a fetch fails", async () => {
+        fake.data.profile = { id: "u-me" }
         fake.api.invites.list.mockResolvedValueOnce({ invites: [{ spaceId: SID, name: "Databases" }] })
         await refreshInvites()
         expect(getInvites()).toEqual([{ spaceId: SID, name: "Databases" }])
         fake.api.invites.list.mockRejectedValueOnce(new TypeError("offline"))
         await refreshInvites()
         expect(getInvites()).toHaveLength(1)
-        fake.data.profile = { id: "u-me" }
+        fake.data.profile = null
         await refreshInvites()
         expect(fake.api.invites.list).toHaveBeenCalledTimes(2)
+    })
+
+    it("are not fetched while classes are switched off for you, and are for an admin", async () => {
+        fake.data.profile = { id: "u-me", isAdmin: false, maintenance: { features: ["classes"], message: "" } }
+        await refreshInvites()
+        expect(fake.api.invites.list).not.toHaveBeenCalled()
+        fake.data.profile = { id: "u-me", isAdmin: true, maintenance: { features: ["classes"], message: "" } }
+        fake.api.invites.list.mockResolvedValueOnce({ invites: [] })
+        await refreshInvites()
+        expect(fake.api.invites.list).toHaveBeenCalledTimes(1)
     })
 
     it("leave the list once answered", async () => {

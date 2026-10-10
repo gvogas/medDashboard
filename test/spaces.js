@@ -46,7 +46,7 @@ export function sharedItem(scope, id, cols = {}) {
 
 export const spaceRevision = async (id) => (await env.DB.prepare('SELECT revision FROM spaces WHERE id = ?').bind(id).first()).revision;
 
-/** Sign in as a new admin (classes are open to admins only until Stage 6). `api.id` is the user id. */
+/** Sign in as a new admin. `api.id` is the user id. */
 export async function signInAdmin(username) {
   const api = await signIn(username);
   await env.DB.prepare('UPDATE users SET is_admin = 1 WHERE username = ?').bind(username).run();

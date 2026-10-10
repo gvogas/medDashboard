@@ -32,13 +32,13 @@ describe('invites', () => {
     expect((await invite(guest3, 'iv-guest')).status).toBe(404);
   });
 
-  it('name what is wrong: no such account, already a member, not open to them yet, a bad body', async () => {
+  it('name what is wrong: no such account, already a member, a bad body; a plain account is invited like anyone', async () => {
     const nobody = await invite(owner, 'nobody-here');
     expect(nobody.status).toBe(404);
     expect(await nobody.json()).toEqual({ error: 'no_user' });
     expect(await (await invite(owner, 'x')).json()).toEqual({ error: 'no_user' });
     expect(await (await invite(owner, 'iv-member')).json()).toEqual({ error: 'member' });
-    expect(await (await invite(owner, 'iv-plain')).json()).toEqual({ error: 'not_admin' });
+    expect(await (await invite(owner, 'iv-plain')).json()).toMatchObject({ role: 'member' });
     expect(await (await post(owner, `/api/spaces/${s.id}/invites`, { username: 7 })).json()).toEqual({ error: 'invalid', field: 'username' });
     expect(await (await invite(owner, 'iv-guest3', 'owner')).json()).toEqual({ error: 'invalid', field: 'role' });
   });
@@ -70,8 +70,7 @@ describe('invites', () => {
     expect(await (await invite(owner, 'iv-guest')).json()).toEqual({ error: 'member' });
   });
 
-  it('refuse to be accepted by a non-admin, when withdrawn or missing, expired, or the class is gone', async () => {
-    expect(await (await accept(plain)).json()).toEqual({ error: 'forbidden' });
+  it('refuse to be accepted when withdrawn or missing, expired, or the class is gone', async () => {
     expect((await accept(guest3)).status).toBe(404);
     /* expired: 410, shown as expired, and still pending */
     expect((await invite(owner, 'iv-guest3')).status).toBe(201);
@@ -111,6 +110,18 @@ describe('invites', () => {
     await env.DB.prepare('UPDATE spaces SET archived = 0 WHERE id = ?').bind(t.id).run();
     expect((await accept(shut, t)).status).toBe(200);
     expect(await row(t, shut.id)).toMatchObject({ status: 'accepted' });
+  });
+
+  it('are accepted by a plain account like anyone, who becomes a member', async () => {
+    const t = await makeSpace({ members: { [owner.id]: 'owner' } });
+    const sent = await invite(owner, 'iv-plain', null, t);
+    expect(sent.status).toBe(201);
+    const { userId } = await sent.json();
+    const res = await accept(plain, t);
+    expect(res.status).toBe(200);
+    expect((await res.json()).space).toMatchObject({ id: t.id, role: 'member' });
+    expect(await row(t, userId)).toMatchObject({ status: 'accepted' });
+    expect(await env.DB.prepare('SELECT role FROM members WHERE space_id = ? AND user_id = ? AND deleted_at IS NULL').bind(t.id, userId).first()).toEqual({ role: 'member' });
   });
 
   it('stop at 20 spaces (409 limit) and 30 members (409 full); the invite stays pending', async () => {

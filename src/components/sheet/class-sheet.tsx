@@ -1,4 +1,4 @@
-// A shared class in the sheet (spec §15), for admins until Stage 6. **Details**: the class's
+// A shared class in the sheet (spec §15). **Details**: the class's
 // facts and its items (each opening in the item card), with Edit class details for the owner
 // and editors; **Yours**: your colour, semester and sidebar archive for it, your grade so far
 // over its items with your marks on top, and the items you hid, to show again; a banner while

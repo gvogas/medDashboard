@@ -16,11 +16,11 @@ const course = (row: Partial<Course> & { id: string }) => normalizeCourse({ code
 const ALL = { search: "", course: "all" }
 
 describe("the effective lists", () => {
-    it("are today's arrays themselves while no shared row is shown", () => {
+    it("are today's arrays themselves while there is no shared row", () => {
         const store = data as unknown as Record<string, unknown[]>
         store.items = [item({ id: "a" })]
         store.courses = [course({ id: "bio" })]
-        store.shared_items = [{ ...item({ id: "a" }), scope: WEB }]
+        store.shared_items = []
         expect(effectiveItems()).toBe(data.items)
         expect(effectiveCourses()).toBe(data.courses)
         expect(effectiveItems()).toBe(effectiveItems())
@@ -80,28 +80,27 @@ describe("your layer over a class", () => {
         expect(c).toMatchObject({ key: WEB + "/web", spaceId: SID, color: "#B8457E", target: 75, term: "Spring 2027", archived: true })
     })
 
-    it("shows shared rows only to an admin until classes open to everyone; anyone else gets the store's own arrays", () => {
+    it("shows shared rows to everyone, admin or not", () => {
         store.items = [item({ id: "a" })]
         store.courses = [course({ id: "bio" })]
         store.shared_items = [{ ...item({ id: "a1", courseId: "web" }), scope: WEB }]
         store.shared_courses = [{ ...course({ id: "web" }), scope: WEB }]
-        store.profile = { id: "u1", isAdmin: false }
-        expect(effectiveItems()).toBe(data.items)
-        expect(effectiveCourses()).toBe(data.courses)
-        store.profile = { id: "u1", isAdmin: true }
-        expect(effectiveItems().map(keyOf)).toEqual(["a", WEB + "/a1"])
-        expect(courseByKey(WEB + "/web")?.name).toBe("web")
-        expect(itemByKey(WEB + "/a1")?.id).toBe("a1")
-        expect(itemByKey("a")).toBe(data.items[0])
+        for (const profile of [{ id: "u1", isAdmin: false }, { id: "u1" }, { id: "u1", isAdmin: true }]) {
+            store.profile = profile
+            expect(effectiveItems().map(keyOf)).toEqual(["a", WEB + "/a1"])
+            expect(courseByKey(WEB + "/web")?.name).toBe("web")
+            expect(itemByKey(WEB + "/a1")?.id).toBe("a1")
+            expect(itemByKey("a")).toBe(data.items[0])
+        }
         store.profile = null
     })
 
-    it("gives anyone not an admin the store's own arrays and rows, and every keyed list back as it was, whatever the store holds", () => {
-        const own = [item({ id: "a", courseId: "bio" }), item({ id: "f", classId: SID })]
+    it("gives anyone without a class the store's own arrays and rows, and every keyed list back as it was", () => {
+        const own = [item({ id: "a", courseId: "bio" }), item({ id: "b" })]
         store.items = own
         store.courses = [course({ id: "bio" })]
-        store.shared_items = [{ ...item({ id: "a1", courseId: "web" }), scope: WEB }]
-        store.shared_courses = [{ ...course({ id: "web" }), scope: WEB }]
+        store.shared_items = []
+        store.shared_courses = []
         store.marks = [mark("a1", { status: "graded", grade: 90 })]
         store.space_prefs = [{ id: SID, spaceId: SID, color: "#B8457E", target: 75, term: "Spring 2027", archived: false }]
         const sessions = [{ id: "s", courseId: "bio", itemId: "a", startedAt: 1, studyMinutes: 30, roundsDone: 0, note: "", manual: false }] as StudySession[]

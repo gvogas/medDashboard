@@ -52,9 +52,7 @@ function CourseList() {
     /* the select shows with two semesters or more; a course goes under its own or every one */
     const picker = !!cal && cal.terms.length > 1
     const selected = useUi((ui) => ui.course)
-    /* shared classes, the eye toggles and Personal items are for admins until Stage 6 */
     const profile = useProfile()
-    const admin = !!profile?.isAdmin
     const hidden = profile?.hiddenSources ?? []
     const spaces = useSpaces()
     /* the course picked stays listed even when the semester shown leaves it out, so the
@@ -76,7 +74,7 @@ function CourseList() {
                     <span className="min-w-0 truncate">All courses</span>
                 </Row>
                 {courses.map((c) => {
-                    const key = keyOf(c), source = courseSource(c), off = admin && hidden.includes(source)
+                    const key = keyOf(c), source = courseSource(c), off = hidden.includes(source)
                     const space = c.spaceId ? spaces.find((s) => s.id === c.spaceId) ?? null : null
                     const members = space ? space.members.length + (space.members.length === 1 ? " member" : " members") : ""
                     return (
@@ -89,7 +87,7 @@ function CourseList() {
                                 {picker && !courseTerm(cal, c.term) && <span className="shrink-0 text-[11px] text-muted-foreground">{yearTag}</span>}
                                 <Count n={n[key] || 0} />
                             </Row>
-                            {admin && <Eye source={source} name={c.name} off={off} />}
+                            <Eye source={source} name={c.name} off={off} />
                             <button
                                 type="button"
                                 aria-label={"Edit " + c.name}
@@ -101,25 +99,15 @@ function CourseList() {
                         </div>
                     )
                 })}
-                {admin && (
-                    <div className="group flex items-center rounded-[9px] hover:bg-muted">
-                        <span className={cn("flex min-w-0 flex-1 items-center gap-2.5 px-2 py-1.5 text-[13px] font-medium", hidden.includes("personal") ? "text-muted-foreground" : "text-ink-2")}>
-                            <Pip color="var(--ink-3)" hollow />
-                            <span className="min-w-0 truncate">Personal items</span>
-                        </span>
-                        <Eye source="personal" name="Personal items" off={hidden.includes("personal")} />
-                    </div>
-                )}
-                {admin && <InvitesRow />}
-                {admin ? <NewMenu /> : (
-                    <button
-                        type="button"
-                        onClick={() => openCourse(null)}
-                        className="mt-1.5 w-full rounded-[9px] border border-dashed border-border bg-transparent px-2 py-1.5 text-left text-[12px] text-ink-2 hover:border-primary hover:text-primary"
-                    >
-                        + New course
-                    </button>
-                )}
+                <div className="group flex items-center rounded-[9px] hover:bg-muted">
+                    <span className={cn("flex min-w-0 flex-1 items-center gap-2.5 px-2 py-1.5 text-[13px] font-medium", hidden.includes("personal") ? "text-muted-foreground" : "text-ink-2")}>
+                        <Pip color="var(--ink-3)" hollow />
+                        <span className="min-w-0 truncate">Personal items</span>
+                    </span>
+                    <Eye source="personal" name="Personal items" off={hidden.includes("personal")} />
+                </div>
+                <InvitesRow />
+                <NewMenu />
             </div>
         </section>
     )

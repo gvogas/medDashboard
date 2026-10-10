@@ -1,7 +1,7 @@
 // Your eye toggles (spec §9): the sources you hid from your Week and Month, kept in the
 // profile's hiddenSources ('course:<id>', 'space:<sid>', 'personal') and synced with it.
-// All items, the stat tiles and grades still count them; the calendar feed honours them from
-// Stage 6.
+// All items, the stat tiles and grades still count them; the calendar feed leaves them out
+// too (worker/calendar.js).
 
 import * as store from "@/core/store"
 import { data } from "@/core/store"

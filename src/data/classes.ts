@@ -1,8 +1,7 @@
 // Shared classes on this device (spec §11, §13, §15): opening their sheets, your invites,
-// making a class, and the words for what went wrong. Shown to admins only until classes
-// open to everyone (Stage 6); the Worker refuses anyone else too. Every call needs a
-// connection; the class itself arrives by sync like everything else, and its rows join an
-// admin's views with your marks on top (effective.ts).
+// making a class, and the words for what went wrong. Every call needs a connection; the
+// class itself arrives by sync like everything else, and its rows join your views with your
+// marks on top (effective.ts).
 
 import { useSyncExternalStore } from "react"
 import { api, ApiError } from "@/core/api"
@@ -13,6 +12,7 @@ import { HEXES } from "@/core/model"
 import { REVIEW_ID } from "@/core/shared"
 import { openSheet, type ClassTab } from "./overlay"
 import { toast } from "./toast"
+import { maintenanceState } from "./maintenance"
 import type { Course, Invite, Item, Space, SpacePref, SpaceSummary } from "./types"
 
 /* ── the sheets ── */
@@ -35,9 +35,9 @@ const subscribe = (fn: () => void) => { listeners.add(fn); return () => { listen
 export const useInvites = () => useSyncExternalStore(subscribe, () => invites)
 export const getInvites = () => invites
 
-/** Fetch your invites; offline, the last list stays. Admins only until Stage 6. */
+/** Fetch your invites; offline, the last list stays. Not while classes are switched off for you. */
 export async function refreshInvites(): Promise<void> {
-    if (!data.profile?.isAdmin) return
+    if (!data.profile || maintenanceState("classes") === "blocked") return
     try { invites = (await api.invites.list()).invites; emit() } catch { /* offline or signed out: keep the last list */ }
 }
 
@@ -137,7 +137,6 @@ export function messageFor(e: unknown, name = ""): string {
     const code = e.body?.error
     if (code === "no_user") return `No Term account named '${name}'.`
     if (code === "member") return `${name} is already a member.`
-    if (code === "not_admin") return `${name} can't join shared classes yet: they're open to admins only for now.`
     if (code === "limit") return "You're in 20 classes and projects, the most anyone can be in."
     if (code === "full") return "This class is full: 30 people is the most it holds."
     if (code === "expired") return "That has expired. Ask for a new code or invite."
