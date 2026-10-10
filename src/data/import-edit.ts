@@ -48,6 +48,9 @@ export async function importFile(file: File): Promise<string> {
     return previewImport(await file.text(), file.name)
 }
 
+/** The files an outline picker takes (Import with AI, and New shared class). */
+export const OUTLINE_ACCEPT = ".pdf,.docx,.doc,.txt,.md,.html,.odt,application/pdf"
+
 /** A course outline, read by the Worker with AI, then previewed: for your courses, or (`forNewClass`) for a class made from it. */
 export function readOutlineFile(file: File, note: NoteKey = "aiNote", { forNewClass = false } = {}) {
     return readWithAi(file, {

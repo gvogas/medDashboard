@@ -22,6 +22,7 @@ const fakeImport = vi.hoisted(() => ({
     commitToClass: vi.fn(async (..._: unknown[]) => "Added 1 item to Web Services."),
     commitNewClass: vi.fn(async (..._: unknown[]) => "Made Web Services with 2 items. Invite people from Members."),
     commitImport: vi.fn(async (..._: unknown[]) => "Imported 0 classes and 2 items."),
+    readOutlineFile: vi.fn(async (..._: unknown[]) => {}),
 }))
 vi.mock("@/core/store", () => ({ data: fake.data, subscribe: () => () => {} }))
 vi.mock("@/core/api", () => {
@@ -36,12 +37,14 @@ vi.mock("@/core/sync", () => ({ syncNow: fake.syncNow }))
 vi.mock("@/data/overlay", () => fake.overlay)
 vi.mock("@/data/toast", () => ({ toast: fake.toast }))
 vi.mock("@/data/class-import", async (real) => ({ ...(await real<typeof import("@/data/class-import")>()), commitToClass: fakeImport.commitToClass, commitNewClass: fakeImport.commitNewClass }))
-vi.mock("@/data/import-edit", async (real) => ({ ...(await real<typeof import("@/data/import-edit")>()), commitImport: fakeImport.commitImport }))
+vi.mock("@/data/import-edit", async (real) => ({ ...(await real<typeof import("@/data/import-edit")>()), commitImport: fakeImport.commitImport, readOutlineFile: fakeImport.readOutlineFile }))
 
 import { ApiError } from "@/core/api"
 import { NotDownloaded, planForClass, planMine } from "@/data/class-import"
 import type { Outline } from "@/core/importers/plan"
 import { ImportSheet } from "./import-sheet"
+import { NewClassSheet } from "./new-class-sheet"
+import { ui } from "@/data/ui"
 
 const SID = "sp0000000001", SCOPE = "c:" + SID
 const space = (role = "owner") => ({
@@ -231,5 +234,24 @@ describe("importing an outline", () => {
         expect(fakeImport.commitToClass).not.toHaveBeenCalled()
         expect(fake.overlay.closeSheet).toHaveBeenCalled()
         expect(fake.toast).toHaveBeenCalledWith("Imported 0 classes and 2 items.", { error: false })
+    })
+})
+
+describe("a new class from an outline", () => {
+    it("reads the file picked with AI, for a new class", () => {
+        render(<NewClassSheet />)
+        fireEvent.click(screen.getByRole("radio", { name: /From a course outline/ }))
+        expect(screen.getByRole("button", { name: "Choose the outline…" })).toBeTruthy()
+        const file = new File(["%PDF"], "web.pdf", { type: "application/pdf" })
+        fireEvent.change(screen.getByLabelText("Course outline file"), { target: { files: [file] } })
+        expect(fakeImport.readOutlineFile).toHaveBeenCalledWith(file, "aiNote", { forNewClass: true })
+    })
+
+    it("says why a read failed", () => {
+        ui.aiNote = { text: "You seem to be offline. Reading outlines needs a connection.", error: true }
+        render(<NewClassSheet />)
+        fireEvent.click(screen.getByRole("radio", { name: /From a course outline/ }))
+        expect(screen.getByText(/Reading outlines needs a connection/)).toBeTruthy()
+        ui.aiNote = null
     })
 })
