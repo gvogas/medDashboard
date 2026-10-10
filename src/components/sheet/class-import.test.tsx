@@ -38,6 +38,7 @@ vi.mock("@/data/toast", () => ({ toast: fake.toast }))
 vi.mock("@/data/class-import", async (real) => ({ ...(await real<typeof import("@/data/class-import")>()), commitToClass: fakeImport.commitToClass, commitNewClass: fakeImport.commitNewClass }))
 vi.mock("@/data/import-edit", async (real) => ({ ...(await real<typeof import("@/data/import-edit")>()), commitImport: fakeImport.commitImport }))
 
+import { ApiError } from "@/core/api"
 import { NotDownloaded, planForClass, planMine } from "@/data/class-import"
 import type { Outline } from "@/core/importers/plan"
 import { ImportSheet } from "./import-sheet"
@@ -175,6 +176,60 @@ describe("importing an outline", () => {
         fireEvent.click(importButton())
         await waitFor(() => expect(fakeImport.commitToClass).toHaveBeenCalledWith(expect.anything(), SID))
         expect(fakeImport.commitNewClass).toHaveBeenCalledTimes(1)
+        /* its Members, as a class made in one go opens */
+        expect(fake.overlay.openSheet).toHaveBeenCalledWith({ kind: "class", spaceId: SID, tab: "members" })
+        expect(fake.overlay.closeSheet).not.toHaveBeenCalled()
+    })
+
+    it("keeps the preview when the new class can't be made, to try again", async () => {
+        fakeImport.commitNewClass.mockRejectedValueOnce(new ApiError(429, { error: "limit" }))
+        render(<ImportSheet plan={planForClass(outline, null, [])} name="web.pdf" target={{ kind: "new-class" }} />)
+        fireEvent.click(importButton())
+        expect(await screen.findByText("You're in 20 classes and projects, the most anyone can be in.")).toBeTruthy()
+        expect((importButton() as HTMLButtonElement).disabled).toBe(false)
+        expect(fake.overlay.closeSheet).not.toHaveBeenCalled()
+        fireEvent.click(importButton())
+        await waitFor(() => expect(fakeImport.commitNewClass).toHaveBeenCalledTimes(2))
+    })
+
+    it("shows the semester picker for a new class", () => {
+        fake.data.profile = { id: "u-me", isAdmin: true, schoolCalendar: CAL }
+        render(<ImportSheet plan={planForClass(outline, null, [])} name="web.pdf" target={{ kind: "new-class" }} />)
+        expect(screen.getByRole("group", { name: /Semester for/ })).toBeTruthy()
+    })
+
+    it("offers no class that hasn't downloaded yet", () => {
+        fake.data.spaces = [space("owner")]
+        render(<ImportSheet plan={planMine(outline)} name="web.pdf" />)
+        expect(screen.queryByRole("combobox", { name: "Import into" })).toBeNull()
+    })
+
+    it("says what went wrong importing into a class, and closes", async () => {
+        fake.data.spaces = [space("owner")]
+        fake.data.shared_courses = [course]
+        fakeImport.commitToClass.mockRejectedValueOnce(new Error("the class isn't on this device yet"))
+        render(<ImportSheet plan={planMine(outline)} name="web.pdf" />)
+        pick("class:" + SID)
+        fireEvent.click(importButton())
+        await waitFor(() => expect(fake.toast).toHaveBeenCalledWith("the class isn't on this device yet", { error: true }))
         expect(fake.overlay.closeSheet).toHaveBeenCalled()
+        cleanup()
+        fakeImport.commitToClass.mockRejectedValueOnce(new ApiError(403, { error: "forbidden" }))
+        render(<ImportSheet plan={planMine(outline)} name="web.pdf" />)
+        pick("class:" + SID)
+        fireEvent.click(importButton())
+        await waitFor(() => expect(fake.toast).toHaveBeenLastCalledWith("Only the class's owner can do that.", { error: true }))
+    })
+
+    it("My courses imports through commitImport", async () => {
+        fake.data.spaces = [space("owner")]
+        fake.data.shared_courses = [course]
+        const plan = planMine(outline)
+        render(<ImportSheet plan={plan} name="web.pdf" />)
+        fireEvent.click(importButton())
+        await waitFor(() => expect(fakeImport.commitImport).toHaveBeenCalledWith(plan))
+        expect(fakeImport.commitToClass).not.toHaveBeenCalled()
+        expect(fake.overlay.closeSheet).toHaveBeenCalled()
+        expect(fake.toast).toHaveBeenCalledWith("Imported 0 classes and 2 items.", { error: false })
     })
 })

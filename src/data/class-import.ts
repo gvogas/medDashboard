@@ -79,7 +79,7 @@ export function planForClass(outline: Outline, course: SharedCourse | null, item
     }))
     plan.courses = [{
         ...pc, id, isNew: !course, meetings, keep: !course,
-        ...(course ? { code: course.code, name: course.name, color: course.color } : {}),
+        ...(course ? { code: course.code, name: course.name, color: course.color } : { term: defaultTerm(schoolCal(), pc.term || "", today()) }),
     }]
     for (const it of plan.items) it.row.courseId = id
     match(plan, course, items)
@@ -114,6 +114,7 @@ function match(plan: Plan, course: SharedCourse | null, items: SharedItem[]) {
 /** Week 1 set in the preview: the week-numbered rows dated from it and, against a class, matched again on their dates. */
 export function setWeekOne(plan: Plan, week1: string, target: Target) {
     setWeek1(plan, week1)
+    /* setWeek1 ticks every row it dates; against a class, one the class has goes back to unticked */
     if (target.kind === "class") { const { course, items } = classRows(target.spaceId); match(plan, course, items) }
 }
 
@@ -181,7 +182,8 @@ export async function commitNewClass(plan: Plan): Promise<string> {
     const meetings = pc.meetings.filter((m) => m.include).map(({ include: _, ...m }) => m)
     const space = await api.spaces.create({ kind: "class", course: {
         code: pc.code, name: pc.name, color: freeColour([...data.courses, ...(data.space_prefs ?? [])]),
-        instructor: pc.instructor || "", term: defaultTerm(schoolCal(), pc.term || "", today()), meetings,
+        /* the semester picked in the preview ("" all year): the one its members start with */
+        instructor: pc.instructor || "", term: pc.term ?? "", meetings,
     } })
     if (!(await download(space.id))) throw new NotDownloaded(space)
     const scope = space.scope, course = (data.shared_courses ?? []).find((c) => c.scope === scope)

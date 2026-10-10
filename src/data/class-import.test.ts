@@ -8,14 +8,16 @@ const fake = vi.hoisted(() => ({
     create: vi.fn(),
     download: vi.fn(async (..._: unknown[]) => true),
     openClass: vi.fn(),
+    cal: null as unknown,
 }))
 vi.mock("@/core/store", () => ({ data: fake.data, subscribe: () => () => {}, saveShared: fake.saveShared }))
 vi.mock("@/core/api", () => ({ api: { spaces: { create: fake.create } } }))
-vi.mock("@/data/query", () => ({ schoolCal: () => null, termStart: () => "" }))
+vi.mock("@/data/query", () => ({ schoolCal: () => fake.cal, termStart: () => "" }))
 vi.mock("./classes", async (real) => ({ ...(await real<typeof import("./classes")>()), download: fake.download, openClass: fake.openClass }))
 
 import { commitNewClass, commitToClass, importTargets, NotDownloaded, planForClass, setWeekOne } from "./class-import"
 import type { Outline } from "@/core/importers/plan"
+import { normalizeSchool } from "@/core/school"
 
 const SID = "sp0000000007", SCOPE = "c:" + SID
 const course = { scope: SCOPE, id: "web", code: "WEB", name: "Web Services", color: "#17B3AE", instructor: "", term: "", archived: false, target: null, updatedBy: null,
@@ -39,6 +41,7 @@ beforeEach(() => {
     fake.data.shared_courses = []
     fake.data.shared_items = []
     fake.download.mockImplementation(async () => true)
+    fake.cal = null
 })
 afterEach(() => vi.clearAllMocks())
 
@@ -208,6 +211,17 @@ describe("a new class from an outline", () => {
         expect(log).toEqual(["create", "download", "write", "write", "write"])
         expect(saved().map((r) => [r.scope, r.courseId])).toEqual([[SCOPE, "web"], [SCOPE, "web"], [SCOPE, "web"]])
         expect(fake.openClass).toHaveBeenCalledWith(SID, "members")
+    })
+
+    it("starts in the semester the outline names, and is made in the one picked in the preview", async () => {
+        fake.cal = normalizeSchool({ name: "Uni", days: [], terms: [{ name: "Fall 2026", start: "2026-01-01", end: "2026-12-31" }, { name: "Winter 2027", start: "2027-01-11", end: "2027-04-23" }] })
+        fake.create.mockResolvedValue({ id: SID, scope: SCOPE, kind: "class", name: "Web Services", role: "owner", members: 1 })
+        fake.download.mockImplementation(async () => { fake.data.shared_courses = [course]; return true })
+        const plan = planForClass({ ...outline, term: "Winter 2027" }, null, [])
+        expect(plan.courses[0].term).toBe("Winter 2027")
+        plan.courses[0].term = ""
+        await commitNewClass(plan)
+        expect(fake.create).toHaveBeenCalledWith({ kind: "class", course: expect.objectContaining({ term: "" }) })
     })
 
     it("writes nothing and opens nothing while the class hasn't downloaded", async () => {

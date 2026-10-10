@@ -14,7 +14,8 @@ import { useUi } from "@/data/ui"
 import { effectiveItems } from "@/data/effective"
 import { commitImport, importCount, type ImportPlan, type PlanItem } from "@/data/import-edit"
 import { classRows, commitNewClass, commitToClass, importTargets, NotDownloaded, planForClass, planMine, setWeekOne, type Target } from "@/data/class-import"
-import { download, messageFor } from "@/data/classes"
+import { ApiError } from "@/core/api"
+import { download, messageFor, openClass } from "@/data/classes"
 import { useMaintenance } from "@/data/maintenance"
 import { closeSheet, openSheet } from "@/data/overlay"
 import { toast } from "@/data/toast"
@@ -36,10 +37,12 @@ export function ImportSheet({ plan: initial, name, target: given = { kind: "mine
     const bg = useUi((u) => u.bg)
     const types = typeList(bg, effectiveItems()) as { id: string; label: string; hidden: boolean }[]
     const n = importCount(plan)
-    /* an outline for your own courses gets a semester picker beside each, when there is a school calendar */
-    const cal = plan.kind === "outline" && target.kind === "mine" ? schoolCal() : null
-    /* only an outline for your courses picks a target; none while classes are switched off */
-    const targets = initial.outline && given.kind === "mine" && maintenance !== "blocked" ? importTargets() : []
+    /* an outline for your own courses, or a new class, gets a semester picker when there is a
+       school calendar; a class has its own semester already */
+    const cal = plan.kind === "outline" && target.kind !== "class" ? schoolCal() : null
+    /* only an outline for your courses picks a target: a class that has downloaded, and none
+       while classes are switched off */
+    const targets = initial.outline && given.kind === "mine" && maintenance !== "blocked" ? importTargets().filter((s) => classRows(s.id).course) : []
 
     /* a new target plans the outline afresh, keeping the week 1 picked */
     const retarget = (value: string) => {
@@ -79,11 +82,19 @@ export function ImportSheet({ plan: initial, name, target: given = { kind: "mine
                 setBusy(false)
                 return
             }
-            note = { text: target.kind === "mine" ? "The import stopped part-way: " + (error as Error).message : messageFor(error), error: true }
+            if (target.kind === "mine") note = { text: "The import stopped part-way: " + (error as Error).message, error: true }
+            else {
+                /* the server's refusal or no connection, said as the class sheets say them; else what went wrong */
+                const text = error instanceof ApiError || error instanceof TypeError ? messageFor(error) : (error as Error).message
+                /* a new class that wasn't made: keep the preview, to try again */
+                if (target.kind === "new-class") { setSaid(text); setBusy(false); return }
+                note = { text, error: true }
+            }
         }
         notify()
-        /* a new class has opened its own sheet */
-        if (target.kind !== "new-class") closeSheet()
+        /* a new class has opened its own sheet; one made here but downloaded late opens now */
+        if (made && !note.error) openClass(made.id, "members")
+        else if (target.kind !== "new-class") closeSheet()
         toast(note.text, { error: note.error })
     }
 
