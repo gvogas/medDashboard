@@ -11,7 +11,7 @@ const fake = vi.hoisted(() => ({
         spaces: [] as unknown[], shared_courses: [] as unknown[], shared_items: [] as unknown[], marks: [] as unknown[], space_prefs: [] as unknown[],
     },
     store: { saveSpacePref: vi.fn(async () => {}), saveMark: vi.fn(async () => {}), saveShared: vi.fn(async () => {}), saveCourse: vi.fn(async () => {}) },
-    api: { spaces: { absorb: vi.fn(async () => ({ paired: 1, filed: 1 })), get: vi.fn() }, invites: { list: vi.fn(async () => ({ invites: [] })) }, join: vi.fn() },
+    api: { spaces: { absorb: vi.fn(async () => ({ paired: 1, filed: 1 })), get: vi.fn(async () => ({ schoolCalendar: null })) }, invites: { list: vi.fn(async () => ({ invites: [] })) }, join: vi.fn() },
     syncNow: vi.fn(async () => true),
     overlay: { openSheet: vi.fn(), replaceSheet: vi.fn(), closeSheet: vi.fn(), onRequestClose: vi.fn(), beforeSheetClose: new Set<() => void>() },
     toast: vi.fn(),

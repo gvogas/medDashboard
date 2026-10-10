@@ -10,15 +10,16 @@ const fake = vi.hoisted(() => ({
         spaces: [] as unknown[], shared_courses: [] as unknown[], shared_items: [] as unknown[], marks: [] as unknown[], space_prefs: [] as unknown[],
     },
     api: {
-        spaces: { create: vi.fn(), get: vi.fn(), invite: vi.fn(), revokeInvite: vi.fn(), setRole: vi.fn(), transfer: vi.fn(), makeCode: vi.fn(), dropCode: vi.fn() },
+        spaces: { create: vi.fn(), get: vi.fn(), invite: vi.fn(), revokeInvite: vi.fn(), setRole: vi.fn(), transfer: vi.fn(), makeCode: vi.fn(), dropCode: vi.fn(), school: vi.fn() },
         invites: { list: vi.fn(), accept: vi.fn(), decline: vi.fn() },
         join: vi.fn(),
     },
+    store: { saveProfile: vi.fn(async (patch: Record<string, unknown>) => { Object.assign(fake.data.profile!, patch) }) },
     syncNow: vi.fn(async () => true),
     overlay: { openSheet: vi.fn(), replaceSheet: vi.fn(), closeSheet: vi.fn() },
     toast: vi.fn(),
 }))
-vi.mock("@/core/store", () => ({ data: fake.data, subscribe: () => () => {} }))
+vi.mock("@/core/store", () => ({ data: fake.data, subscribe: () => () => {}, ...fake.store }))
 vi.mock("@/core/api", () => {
     class ApiError extends Error {
         status: number
@@ -279,6 +280,8 @@ describe("Share this course, in the course sheet", () => {
 })
 
 describe("joining with a code", () => {
+    beforeEach(() => { fake.api.spaces.get.mockResolvedValue(details("member")) })
+
     it("checks the code, joins, shows the class downloading, then says you are in", async () => {
         fake.api.join.mockResolvedValue(summary)
         let arrive = () => {}
@@ -315,6 +318,39 @@ describe("joining with a code", () => {
         render(<JoinSheet code="" space={summary} />)
         expect(await screen.findByText("You're in Web Services")).toBeTruthy()
         expect(screen.queryByText(/hasn't finished downloading/)).toBeNull()
+    })
+
+    const CAL = { name: "Northfield", terms: [{ name: "Fall 2026", start: "2026-09-08", end: "2026-12-18" }], days: [] }
+    const joined = () => { fake.data.spaces = [space("member")]; fake.data.shared_courses = [course]; fake.data.space_prefs = [pref] }
+
+    it("offers the class's school calendar to someone with none, and saves it as theirs", async () => {
+        fake.api.spaces.get.mockResolvedValue({ ...details("member"), schoolCalendar: CAL })
+        joined()
+        render(<JoinSheet code="" space={summary} />)
+        expect(screen.queryByRole("combobox", { name: "Your semester" })).toBeNull()
+        fireEvent.click(await screen.findByRole("button", { name: "Use the class's school calendar" }))
+        await waitFor(() => expect(fake.store.saveProfile).toHaveBeenCalledWith({ schoolCalendar: CAL }))
+        expect(fake.api.spaces.get).toHaveBeenCalledWith(SID)
+        expect(((await screen.findByRole("combobox", { name: "Your semester" })) as HTMLSelectElement).value).toBe("Fall 2026")
+        expect(screen.queryByRole("button", { name: "Use the class's school calendar" })).toBeNull()
+    })
+
+    it("offers nothing when the class has no school calendar", async () => {
+        fake.api.spaces.get.mockResolvedValue({ ...details("member"), schoolCalendar: null })
+        joined()
+        render(<JoinSheet code="" space={summary} />)
+        expect(await screen.findByText("You're in Web Services")).toBeTruthy()
+        await waitFor(() => expect(fake.api.spaces.get).toHaveBeenCalled())
+        expect(screen.queryByRole("button", { name: "Use the class's school calendar" })).toBeNull()
+    })
+
+    it("offers nothing to someone who has a school calendar", async () => {
+        fake.data.profile = { id: "u-me", isAdmin: true, schoolCalendar: CAL }
+        joined()
+        render(<JoinSheet code="" space={summary} />)
+        expect(await screen.findByRole("combobox", { name: "Your semester" })).toBeTruthy()
+        expect(fake.api.spaces.get).not.toHaveBeenCalled()
+        expect(screen.queryByRole("button", { name: "Use the class's school calendar" })).toBeNull()
     })
 
     it("gives the maintenance page to someone who is not an admin while classes are off, and an admin the bar", () => {

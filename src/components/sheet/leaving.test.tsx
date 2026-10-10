@@ -15,6 +15,7 @@ const fake = vi.hoisted(() => ({
             create: vi.fn(), get: vi.fn(), invite: vi.fn(), revokeInvite: vi.fn(), setRole: vi.fn(), transfer: vi.fn(), makeCode: vi.fn(), dropCode: vi.fn(),
             leave: vi.fn(async () => undefined), remove: vi.fn(async () => undefined), archive: vi.fn(async () => undefined),
             del: vi.fn(async () => undefined), keep: vi.fn(async () => undefined), share: vi.fn(async () => undefined),
+            school: vi.fn(),
         },
         invites: { list: vi.fn(), accept: vi.fn(), decline: vi.fn() },
         join: vi.fn(),
@@ -99,6 +100,26 @@ describe("leaving a class", () => {
         expect(screen.queryByRole("button", { name: "Delete the class…" })).toBeNull()
         fireEvent.click(screen.getByRole("button", { name: "Archive the class" }))
         await waitFor(() => expect(fake.api.spaces.archive).toHaveBeenCalledWith(SID, true))
+    })
+
+    it("the owner shares their school calendar with the class, once they have one", async () => {
+        fake.data.spaces = [space("owner")]
+        render(<ClassSheet spaceId={SID} tab="details" />)
+        expect(screen.queryByRole("button", { name: "Share my school calendar with the class" })).toBeNull()
+        cleanup()
+        fake.data.profile = { id: "u-me", isAdmin: true, schoolCalendar: { name: "", terms: [{ name: "Fall 2026", start: "2026-09-08", end: "2026-12-18" }], days: [] } }
+        fake.api.spaces.school.mockResolvedValue({ schoolCalendar: {} })
+        render(<ClassSheet spaceId={SID} tab="details" />)
+        fireEvent.click(screen.getByRole("button", { name: "Share my school calendar with the class" }))
+        await waitFor(() => expect(fake.api.spaces.school).toHaveBeenCalledWith(SID))
+        await waitFor(() => expect(fake.toast).toHaveBeenCalledWith(expect.stringMatching(/shared with Web Services/)))
+    })
+
+    it("a member is not offered sharing a school calendar", () => {
+        fake.data.spaces = [space("member")]
+        fake.data.profile = { id: "u-me", isAdmin: true, schoolCalendar: { name: "", terms: [{ name: "Fall 2026", start: "2026-09-08", end: "2026-12-18" }], days: [] } }
+        render(<ClassSheet spaceId={SID} tab="details" />)
+        expect(screen.queryByRole("button", { name: "Share my school calendar with the class" })).toBeNull()
     })
 
     it("an archived class says so, and its owner unarchives it", async () => {

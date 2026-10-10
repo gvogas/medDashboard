@@ -1,10 +1,14 @@
 // A class's own controls at the foot of its Details (spec §13, §15): the archived banner;
 // Leave (anyone but the owner), with Keep a copy on; Archive / Unarchive (the owner); Delete
-// (the owner, while nobody else is in it), with Keep a copy on. Each asks once, inline.
+// (the owner, while nobody else is in it), with Keep a copy on. Each asks once, inline. The
+// owner with a school calendar of their own can share it: people joining without one are offered it.
 
 import { useId, useState } from "react"
 import { deleteClass, leaveClass, setArchived } from "@/data/leave"
 import { messageFor } from "@/data/classes"
+import { schoolCal } from "@/data/query"
+import { toast } from "@/data/toast"
+import { api } from "@/core/api"
 import type { Space } from "@/data/types"
 import { Button, Note, Section } from "./fields"
 
@@ -56,6 +60,10 @@ export function ClassActions({ space, name }: { space: Space; name: string }) {
                 <span className="flex flex-wrap gap-2">
                     {!space.archived && <Button variant="ghost" disabled={busy} onClick={() => void run(() => setArchived(space.id, true))}>Archive the class</Button>}
                     {alone && <Button variant="ghost" onClick={() => ask("delete")}>Delete the class…</Button>}
+                    {schoolCal() && <Button variant="ghost" disabled={busy} onClick={() => void run(async () => {
+                        await api.spaces.school(space.id)
+                        toast("Your school calendar is shared with " + name + ". People joining without one are offered it.")
+                    })}>Share my school calendar with the class</Button>}
                 </span>
                 {!alone ? <Note>Hand the class on in Members to leave it. A class can be deleted once nobody else is in it.</Note>
                     : !space.archived && <Note>Archiving makes it read-only for everyone until you unarchive it.</Note>}

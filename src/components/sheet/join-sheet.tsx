@@ -1,21 +1,23 @@
 // Joining a class (spec §11, §20), for admins until Stage 6: with a code (a /#join= link
 // fills it in), or straight after accepting an invite. The class downloads onto this device;
 // then you confirm your semester for it (with a school calendar) and your colour, and, when a
-// course of yours matches the class, go on to merge it. The school-calendar offer comes with
-// Stage 6. While the admins have shared classes switched off, everyone else gets the
+// course of yours matches the class, go on to merge it. Someone with no school calendar is
+// offered the class's (its owner's snapshot), saved as their own. While the admins have shared classes switched off, everyone else gets the
 // maintenance page instead.
 
 import { useEffect, useId, useState } from "react"
 import { normalizeCode } from "@/core/shared"
 import { PALETTE } from "@/core/model"
-import { currentTerm, type SchoolCalendar } from "@/core/school"
+import { currentTerm, normalizeSchool, type SchoolCalendar } from "@/core/school"
 import { today } from "@/core/dates"
 import { data } from "@/core/store"
+import { api } from "@/core/api"
 import { closeSheet } from "@/data/overlay"
 import { download, joinWithCode, joinMessageFor, messageFor, openClass, savePref } from "@/data/classes"
 import { matchFor, openMerge } from "@/data/merge"
 import { schoolCal } from "@/data/query"
 import { semesterOptions } from "@/data/course-edit"
+import { adoptSchool } from "@/data/school-edit"
 import { useMaintenance } from "@/data/maintenance"
 import { MaintenanceBar, MaintenancePage } from "@/components/maintenance"
 import type { SpaceSummary } from "@/data/types"
@@ -100,13 +102,30 @@ function Join({ given, space, bar }: { given: string; space: SpaceSummary | null
 /* In: your semester and colour for the class (your prefs, written by the Worker when you
    joined, adjusted here), then the class, or the merge sheet for a course of yours like it. */
 function Joined({ space: s, here, bar }: { space: SpaceSummary; here: boolean; bar: boolean }) {
-    const f = useId(), cal = schoolCal()
+    const f = useId()
+    const [cal, setCal] = useState(() => schoolCal())
     const pref = (data.space_prefs ?? []).find((p) => p.id === s.id) ?? null
     const classTerm = (data.shared_courses ?? []).find((c) => c.scope === s.scope)?.term ?? ""
     const [color, setColor] = useState(pref?.color ?? "")
     const [term, setTerm] = useState(() => joinTerm(pref?.term ?? classTerm, cal))
     const match = matchFor(s.id)
     const [err, setErr] = useState("")
+    /* with no school calendar of your own, the class's is offered */
+    const [offer, setOffer] = useState<SchoolCalendar | null>(null)
+    useEffect(() => {
+        if (cal) return
+        let live = true
+        api.spaces.get(s.id).then((d) => { if (live) setOffer(normalizeSchool(d.schoolCalendar)) }, () => {})
+        return () => { live = false }
+    }, [s.id, cal])
+    const take = async (offered: SchoolCalendar) => {
+        try {
+            await adoptSchool(offered)
+            const now = schoolCal()
+            setCal(now); setOffer(null)
+            setTerm(joinTerm(pref?.term ?? classTerm, now))
+        } catch (e) { setErr(messageFor(e)) }
+    }
     const go = async (next: () => void) => {
         try { if (pref && (color !== pref.color || term !== pref.term)) await savePref(s.id, { color, term }) }
         catch (e) { setErr(messageFor(e)); return }
@@ -121,6 +140,12 @@ function Joined({ space: s, here, bar }: { space: SpaceSummary; here: boolean; b
                 <h2 className={TITLE}>You're in {s.name}</h2>
                 <Note>{s.members} {s.members === 1 ? "member" : "members"} · you joined as {asRole(s.role)}.</Note>
                 {!here && <Note>It hasn't finished downloading. It arrives with the next sync.</Note>}
+                {!cal && offer && (
+                    <div role="note" className="flex flex-wrap items-center gap-2 rounded-lg bg-muted px-2.5 py-2 text-[12px]">
+                        <span className="min-w-0 flex-1">{s.name} has a school calendar: semesters, breaks and days off. Use it as yours?</span>
+                        <Button variant="ghost" onClick={() => void take(offer)}>Use the class's school calendar</Button>
+                    </div>
+                )}
                 {pref && (
                     <Fields>
                         {cal && <>

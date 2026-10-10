@@ -4,7 +4,7 @@
 
 import * as store from "@/core/store"
 import { today } from "@/core/dates"
-import { courseTerm, normalizeSchool, renamedTerms, validDate } from "@/core/school"
+import { courseTerm, normalizeSchool, renamedTerms, validDate, type SchoolCalendar } from "@/core/school"
 import { schoolCal } from "@/data/query"
 import { api } from "@/core/api"
 import { readWithAi, type NoteKey } from "./ai-read"
@@ -100,6 +100,12 @@ export async function saveSchool(s: SchoolDraft) {
     closeSheet()
     notify()
     toast("School calendar saved")
+}
+
+/** Take a class's school calendar as your own when you have none (spec §11): saved like any other. */
+export async function adoptSchool(cal: SchoolCalendar) {
+    await store.saveProfile({ schoolCalendar: cal })
+    notify()
 }
 
 /** Remove it: classes show every week again, and the term start goes back to the one set. */
