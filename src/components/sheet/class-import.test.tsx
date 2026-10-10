@@ -84,6 +84,27 @@ describe("importing an outline", () => {
         expect(fake.toast).toHaveBeenCalledWith("Added 1 item to Web Services.", { error: false })
     })
 
+    it("tags each row New, Changed or Already there beside its title against a class, and only duplicates for your courses", () => {
+        const long = { ...outline, assessments: [...outline.assessments, { type: "quiz", title: "Homework 1: Cells and membranes", date: "2026-10-05", start: "", end: "", weight: 5 }] } as Outline
+        fake.data.spaces = [space("owner")]
+        fake.data.shared_courses = [course]
+        fake.data.shared_items = [quiz1, { ...quiz1, id: "h1", title: "Homework 1: Cells and membranes", date: "2026-10-05", weight: 5 }]
+        render(<ImportSheet plan={planMine(long)} name="web.pdf" />)
+        expect(screen.queryByText("new")).toBeNull()
+        pick("class:" + SID)
+        const tag = (title: string) => screen.getByText(title).nextElementSibling?.textContent
+        expect(tag("Quiz 1")).toBe("changed · was Wed 30 Sep")
+        expect(tag("Midterm")).toBe("new")
+        expect(tag("Homework 1: Cells and membranes")).toBe("already there")
+    })
+
+    it("calls the course of a new class a new shared class", () => {
+        render(<ImportSheet plan={planForClass(outline, null, [])} name="web.pdf" target={{ kind: "new-class" }} />)
+        expect(screen.getByText("new shared class")).toBeTruthy()
+        expect(screen.queryByText("new course")).toBeNull()
+        expect(screen.getAllByText("new")).toHaveLength(2)
+    })
+
     it("plans again from the outline when the target changes", () => {
         fake.data.spaces = [space("owner")]
         fake.data.shared_courses = [course]

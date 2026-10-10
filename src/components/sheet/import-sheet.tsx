@@ -142,7 +142,7 @@ export function ImportSheet({ plan: initial, name, target: given = { kind: "mine
                     </Warning>
                 )}
                 {groups.map(({ c, items }) => (
-                    <Section key={c.id} title={<><i aria-hidden="true" style={accent(c.color)} className="inline-block size-2 rounded-full bg-[var(--c,var(--ink-3))]" />{c.code} · {c.name}</>} note={c.isNew ? "new course" : undefined}>
+                    <Section key={c.id} title={<><i aria-hidden="true" style={accent(c.color)} className="inline-block size-2 rounded-full bg-[var(--c,var(--ink-3))]" />{c.code} · {c.name}</>} note={c.isNew ? (target.kind === "new-class" ? "new shared class" : "new course") : undefined}>
                         <>
                             {cal && (
                                 <div className="flex flex-wrap items-center gap-2 text-[12px] text-muted-foreground">
@@ -160,12 +160,12 @@ export function ImportSheet({ plan: initial, name, target: given = { kind: "mine
                                         <span className={WHERE}>{m.room}</span>
                                     </label>
                                 ))}
-                                {items.map((x) => <ItemRow key={x.i} it={x.it} types={types} onChange={redraw} />)}
+                                {items.map((x) => <ItemRow key={x.i} it={x.it} types={types} onChange={redraw} toClass={target.kind !== "mine"} />)}
                             </div>
                         </>
                     </Section>
                 ))}
-                {loose.length > 0 && <Section title="No course"><div>{loose.map((x) => <ItemRow key={x.i} it={x.it} types={types} onChange={redraw} />)}</div></Section>}
+                {loose.length > 0 && <Section title="No course"><div>{loose.map((x) => <ItemRow key={x.i} it={x.it} types={types} onChange={redraw} toClass={target.kind !== "mine"} />)}</div></Section>}
             </SheetBody>
             <SheetFoot hint="Nothing is saved until you import">
                 <Button variant="ghost" onClick={cancel}>Cancel</Button>
@@ -178,7 +178,10 @@ export function ImportSheet({ plan: initial, name, target: given = { kind: "mine
 const ROW = "flex min-w-0 items-center gap-2 border-b border-line-2 py-1 text-[12.5px] last:border-b-0"
 const WHERE = "ml-auto max-w-[40%] flex-none truncate text-[11px] text-muted-foreground"
 
-function ItemRow({ it, types, onChange }: { it: PlanItem; types: { id: string; label: string; hidden: boolean }[]; onChange: () => void }) {
+/* a row's tag: against a class (or a new one) every row is New, Changed or Already there */
+const TAG = "max-w-[45%] flex-none truncate text-[10.5px]"
+
+function ItemRow({ it, types, onChange, toClass }: { it: PlanItem; types: { id: string; label: string; hidden: boolean }[]; onChange: () => void; toClass: boolean }) {
     const r = it.row
     const when = r.recur === "weekly" ? "every " + DOW[r.weekday ?? 0] : r.date ? shortDate(r.date) + (it.week ? " · wk " + it.week : "") : "week " + it.week
     return (
@@ -188,10 +191,11 @@ function ItemRow({ it, types, onChange }: { it: PlanItem; types: { id: string; l
                 className="max-w-[110px] flex-none rounded-md border border-transparent bg-muted px-1 py-0.5 font-[inherit] text-[12px] text-foreground hover:border-border">
                 {types.filter((t) => t.id === r.type || !t.hidden).map((t) => <option key={t.id} value={t.id}>{t.label}</option>)}
             </select>
-            <span className={cn("min-w-0 flex-1 truncate", it.duplicate ? "text-muted-foreground" : "text-foreground")}>
-                {r.title}{it.duplicate && <em className="ml-1 text-[10.5px] text-[var(--amber-ink)] not-italic">already there</em>}
-                {it.was && <em className="ml-1 text-[10.5px] text-[var(--amber-ink)] not-italic">changed · was {it.was}</em>}
-            </span>
+            <span className={cn("min-w-0 flex-1 truncate", it.duplicate ? "text-muted-foreground" : "text-foreground")}>{r.title}</span>
+            {/* outside the title, so a long title never hides it */}
+            {it.duplicate ? <span className={cn(TAG, "text-[var(--amber-ink)]")}>already there</span>
+                : it.was ? <span className={cn(TAG, "text-[var(--amber-ink)]")} title={"was " + it.was}>changed · was {it.was}</span>
+                : toClass && <span className={cn(TAG, "text-[var(--accent)]")}>new</span>}
             <span className={WHERE}>{when}{r.start ? " " + r.start : ""}</span>
         </div>
     )
