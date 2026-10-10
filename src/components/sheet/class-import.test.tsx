@@ -238,6 +238,8 @@ describe("importing an outline", () => {
 })
 
 describe("a new class from an outline", () => {
+    afterEach(() => { ui.aiNote = null; ui.aiLeft = null })
+
     it("reads the file picked with AI, for a new class", () => {
         render(<NewClassSheet />)
         fireEvent.click(screen.getByRole("radio", { name: /From a course outline/ }))
@@ -252,6 +254,26 @@ describe("a new class from an outline", () => {
         render(<NewClassSheet />)
         fireEvent.click(screen.getByRole("radio", { name: /From a course outline/ }))
         expect(screen.getByText(/Reading outlines needs a connection/)).toBeTruthy()
-        ui.aiNote = null
+    })
+
+    it("shows the read's note only under the outline choice", () => {
+        ui.aiNote = { text: "You seem to be offline. Reading outlines needs a connection.", error: true }
+        render(<NewClassSheet />)
+        expect(screen.queryByText(/Reading outlines needs a connection/)).toBeNull()
+    })
+
+    it("closes the outline choice when no AI reads are left today", () => {
+        ui.aiLeft = 0
+        render(<NewClassSheet />)
+        expect((screen.getByRole("radio", { name: /From a course outline/ }) as HTMLInputElement).disabled).toBe(true)
+        expect(screen.getByText(/No AI reads left today/)).toBeTruthy()
+    })
+
+    it("closes the outline choice while Import with AI is switched off for you", () => {
+        fake.data.profile = { id: "u-me", isAdmin: false, maintenance: { features: ["import"], message: "" } }
+        render(<NewClassSheet />)
+        expect((screen.getByRole("radio", { name: /From a course outline/ }) as HTMLInputElement).disabled).toBe(true)
+        expect(screen.getByText("Import with AI is being worked on.")).toBeTruthy()
+        expect((screen.getByRole("radio", { name: /Blank/ }) as HTMLInputElement).disabled).toBe(false)
     })
 })

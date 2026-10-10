@@ -43,6 +43,12 @@ function NewClass({ bar }: { bar: boolean }) {
     const file = useRef<HTMLInputElement>(null)
     /* why the last outline read failed (the read shares Import with AI's note) */
     const note = useUi((u) => u.aiNote)
+    /* the outline is read with AI: closed while the admins have Import with AI switched off
+       for you, or no reads are left today (the AI sheet's words) */
+    const imports = useMaintenance("import")
+    const left = useUi((u) => u.aiLeft)
+    const outlineOff = imports === "blocked" ? "Import with AI is being worked on."
+        : left === 0 ? "No AI reads left today. They come back within a day of the first one." : ""
     const f = useId()
 
     /* what it said goes when the sheet does */
@@ -65,15 +71,18 @@ function NewClass({ bar }: { bar: boolean }) {
                 <Note>You become its owner. Choose editors later; members read the class and keep their own layer.</Note>
                 <fieldset className="m-0 flex flex-col gap-2 border-0 p-0">
                     <legend className="sr-only">How to start</legend>
-                    {OPTIONS.map(([v, title, sub]) => (
-                        <label key={v} className={cn("flex cursor-pointer items-start gap-2.5 rounded-[10px] border border-border px-3 py-2.5", start === v && "border-[var(--accent)] bg-accent")}>
-                            <input type="radio" name={f + "start"} value={v} checked={start === v} onChange={() => { setStart(v); setErr("") }} className="mt-0.5 accent-[var(--accent)]" />
-                            <span className="flex flex-col gap-0.5">
-                                <span className="text-[13px] font-semibold">{title}</span>
-                                <span className="text-[11.5px] text-muted-foreground">{sub}</span>
-                            </span>
-                        </label>
-                    ))}
+                    {OPTIONS.map(([v, title, sub]) => {
+                        const off = v === "outline" ? outlineOff : ""
+                        return (
+                            <label key={v} className={cn("flex items-start gap-2.5 rounded-[10px] border border-border px-3 py-2.5", off ? "cursor-not-allowed opacity-60" : "cursor-pointer", start === v && "border-[var(--accent)] bg-accent")}>
+                                <input type="radio" name={f + "start"} value={v} checked={start === v} disabled={!!off} onChange={() => { setStart(v); setErr("") }} className="mt-0.5 accent-[var(--accent)]" />
+                                <span className="flex flex-col gap-0.5">
+                                    <span className="text-[13px] font-semibold">{title}</span>
+                                    <span className="text-[11.5px] text-muted-foreground">{off || sub}</span>
+                                </span>
+                            </label>
+                        )
+                    })}
                 </fieldset>
                 {start === "blank" ? (
                     <Fields>
@@ -98,7 +107,7 @@ function NewClass({ bar }: { bar: boolean }) {
             </SheetBody>
             <SheetFoot hint="Needs a connection">
                 <Button variant="ghost" onClick={closeSheet}>Cancel</Button>
-                <Button disabled={busy || (start === "convert" && !courseId)} onClick={() => void go()}>
+                <Button disabled={busy || (start === "convert" && !courseId) || (start === "outline" && !!outlineOff)} onClick={() => void go()}>
                     {busy ? "Making…" : start === "outline" ? "Choose the outline…" : "Continue"}
                 </Button>
             </SheetFoot>
