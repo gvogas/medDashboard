@@ -128,17 +128,19 @@ export function describe(r: ActivityRow, me: string): string {
     }
 }
 
-/* what a row opens: its item while it is on this device, else its space (a class's sheet; projects in Stage 9), else nothing */
-function target(r: ActivityRow): (() => void) | null {
+/* what a row opens: its item while it is on this device, else its space (a class's sheet; projects
+   in Stage 9), else nothing. `here` is the space whose sheet is already open (its Activity tab):
+   opening that again would go nowhere. */
+function target(r: ActivityRow, here = ""): (() => void) | null {
     const key = (r.kind === "project" ? "p:" : "c:") + r.spaceId + "/" + r.subject
     if (r.subject && itemByKey(key)) return () => openItem(key)
-    if (r.kind === "class" && data.spaces.some((s) => s.id === r.spaceId)) return () => openClass(r.spaceId)
+    if (r.kind === "class" && r.spaceId !== here && data.spaces.some((s) => s.id === r.spaceId)) return () => openClass(r.spaceId)
     return null
 }
-/** Whether openRow would open anything for this row. */
-export const openable = (r: ActivityRow): boolean => target(r) !== null
+/** Whether openRow would open anything for this row, seen from the sheet of space `here` if any. */
+export const openable = (r: ActivityRow, here?: string): boolean => target(r, here) !== null
 /** Open what a row is about: its item while it is on this device, else its space. */
-export function openRow(r: ActivityRow): void { target(r)?.() }
+export function openRow(r: ActivityRow, here?: string): void { target(r, here)?.() }
 
 /** A page of a space's Activity tab; null offline. */
 export async function loadActivity(spaceId: string, before?: number): Promise<{ items: ActivityRow[]; more: boolean } | null> {

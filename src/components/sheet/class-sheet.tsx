@@ -4,7 +4,8 @@
 // over its items with your marks on top, and the items you hid, to show again; a banner while
 // a course of yours looks like the class and is not merged, and one while the class is
 // archived; the items removed from it, and the class's own controls (leave, archive, delete).
-// **Members**: who is in it, invites, the join code, roles, removing someone.
+// **Members**: who is in it, invites, the join code, roles, removing someone. **Activity**:
+// what happened in the class (90 days).
 
 import { useId, useState } from "react"
 import { cn } from "@/lib/utils"
@@ -27,10 +28,11 @@ import { tabKeys } from "./radio-keys"
 import { Button, Checkbox, Fields, Label, Note, Section, Select, SheetBody, SheetFoot, SheetHead, Swatches } from "./fields"
 import { Grades } from "./grades"
 import { MembersTab } from "./members-tab"
+import { ActivityList } from "./activity-list"
 import { ArchivedBanner, ClassActions } from "./class-actions"
 import { RemovedList } from "./removed"
 
-const TABS: readonly [ClassTab, string][] = [["details", "Details"], ["members", "Members"]]
+const TABS: readonly [ClassTab, string][] = [["details", "Details"], ["members", "Members"], ["activity", "Activity"]]
 const TITLE = "m-0 text-[22px] leading-[1.22] font-[750] tracking-[-.02em] text-foreground"
 const KEY = "text-muted-foreground"
 const LIST = "m-0 flex list-none flex-col gap-1 p-0"
@@ -94,7 +96,7 @@ function ClassCard({ spaceId, tab, bar }: { spaceId: string; tab: ClassTab; bar:
             <SheetBody>
                 {bar && <MaintenanceBar className="mb-0" />}
                 <div role="tabpanel" id={f + "panel"} aria-labelledby={f + tab} className="flex flex-col gap-3.5">
-                    {tab === "details" ? <Details space={space} course={course} items={items} /> : <MembersTab spaceId={spaceId} />}
+                    {tab === "details" ? <Details space={space} course={course} items={items} /> : tab === "members" ? <MembersTab spaceId={spaceId} /> : <ActivityList spaceId={spaceId} />}
                 </div>
             </SheetBody>
             <SheetFoot hint={n + (n === 1 ? " member" : " members")}>

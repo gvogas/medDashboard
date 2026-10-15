@@ -10,7 +10,7 @@ const fake = vi.hoisted(() => ({
         spaces: [] as unknown[], shared_courses: [] as unknown[], shared_items: [] as unknown[], marks: [] as unknown[], space_prefs: [] as unknown[],
     },
     api: {
-        spaces: { create: vi.fn(), get: vi.fn(), invite: vi.fn(), revokeInvite: vi.fn(), setRole: vi.fn(), transfer: vi.fn(), makeCode: vi.fn(), dropCode: vi.fn(), school: vi.fn() },
+        spaces: { create: vi.fn(), get: vi.fn(), activity: vi.fn(), invite: vi.fn(), revokeInvite: vi.fn(), setRole: vi.fn(), transfer: vi.fn(), makeCode: vi.fn(), dropCode: vi.fn(), school: vi.fn() },
         invites: { accept: vi.fn(), decline: vi.fn() },
         inbox: { get: vi.fn(), seen: vi.fn() },
         join: vi.fn(),
@@ -103,6 +103,46 @@ describe("the class sheet", () => {
         render(<ClassSheet spaceId={SID} tab="details" />)
         expect(screen.getByText(/only admins see this/)).toBeTruthy()
         expect(screen.getByRole("list", { name: "Class items" })).toBeTruthy()
+    })
+})
+
+describe("the Activity tab", () => {
+    beforeEach(() => { fake.data.spaces = [space()]; fake.data.shared_courses = [course] })
+    const row = (seq: number, over: Record<string, unknown> = {}) => ({
+        seq, spaceId: SID, space: "Web Services", kind: "class", verb: "item.created", subject: "", actor: "u-gab", subjectUser: "",
+        about: false, old: null, new: null, detail: { by: "Gabriel", titles: ["Lab " + seq] }, n: 1, at: Date.now() - 60_000, ...over,
+    })
+
+    it("shows a class's activity a page at a time, and says when it needs a connection", async () => {
+        fake.api.spaces.activity
+            .mockResolvedValueOnce({ items: Array.from({ length: 30 }, (_, i) => row(40 - i)), more: true })
+            .mockResolvedValueOnce({ items: [row(10, { verb: "member.joined", actor: "u-sam", detail: { by: "Sam" } })], more: false })
+        const { rerender } = render(<ClassSheet spaceId={SID} tab="activity" />)
+        expect(await screen.findAllByText(/^Gabriel added Lab/)).toHaveLength(30)
+        expect(fake.api.spaces.activity).toHaveBeenLastCalledWith(SID, undefined)
+        /* a row about the class itself would only open this sheet again, so it only reads */
+        expect(within(screen.getByRole("list", { name: "Activity" })).queryByRole("button")).toBeNull()
+        fireEvent.click(screen.getByRole("button", { name: "Show older" }))
+        expect(await screen.findByText("Sam joined")).toBeTruthy()
+        expect(fake.api.spaces.activity).toHaveBeenLastCalledWith(SID, 11)
+        expect(screen.getAllByText(/^Gabriel added Lab/)).toHaveLength(30)
+        expect(screen.queryByRole("button", { name: "Show older" })).toBeNull()
+        fake.api.spaces.activity.mockRejectedValueOnce(new TypeError("Failed to fetch"))
+        rerender(<ClassSheet spaceId={SID} tab="details" />)
+        rerender(<ClassSheet spaceId={SID} tab="activity" />)
+        expect(await screen.findByText("Connect to see activity.")).toBeTruthy()
+    })
+
+    it("opens an item a row is about, and says when nothing has happened yet", async () => {
+        fake.data.shared_items = [{ scope: SCOPE, id: "a1", type: "assignment", title: "REST API Project", courseId: "web", date: "2026-10-15", weight: 20 }]
+        fake.api.spaces.activity.mockResolvedValueOnce({ items: [row(5, { verb: "item.date", subject: "a1", old: "2026-10-14", new: "2026-10-15", detail: { by: "Gabriel", title: "REST API Project" } })], more: false })
+        const { rerender } = render(<ClassSheet spaceId={SID} tab="activity" />)
+        fireEvent.click(await screen.findByRole("button", { name: /^Gabriel moved REST API Project/ }))
+        expect(fake.overlay.openSheet).toHaveBeenCalledWith({ kind: "item", id: SCOPE + "/a1" })
+        fake.api.spaces.activity.mockResolvedValueOnce({ items: [], more: false })
+        rerender(<ClassSheet spaceId={SID} tab="details" />)
+        rerender(<ClassSheet spaceId={SID} tab="activity" />)
+        expect(await screen.findByText("Nothing has happened here yet.")).toBeTruthy()
     })
 })
 
