@@ -21,7 +21,6 @@ export const openNewClass = () => openSheet({ kind: "new-class" })
 export const openConvert = (courseId: string) => openSheet({ kind: "convert", courseId })
 /** Join with a code (`code`, from a link, fills it in), or follow a class just joined (`space`) while it downloads. */
 export const openJoin = (code = "", space: SpaceSummary | null = null) => openSheet({ kind: "join", code, space })
-export const openInvites = () => openSheet({ kind: "invites" })
 
 /* ── answering invites (the list is the inbox's, inbox.ts) ── */
 

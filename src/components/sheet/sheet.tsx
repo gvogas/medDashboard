@@ -1,6 +1,6 @@
 // The sheet: a floating Texture panel on the right for an item, a course, Settings, an
-// import, a class schedule, the Import with AI card, the school calendar, a study session
-// or an achievement, over the blurred scrim
+// import, a class schedule, the Import with AI card, the school calendar, a study session,
+// an achievement, a shared class, or the inbox, over the blurred scrim
 // (<App>'s, shared with the phone sidebar). What it shows comes from
 // src/data/overlay.ts, which also makes the page behind inert while it is open. Escape
 // and the scrim close it, or ask first when the course has unsaved changes.
@@ -31,7 +31,7 @@ const ClassSheet = lazyNamed(() => import("./class-sheet"), "ClassSheet", { idle
 const NewClassSheet = lazyNamed(() => import("./new-class-sheet"), "NewClassSheet", { idle: false })
 const ConvertSheet = lazyNamed(() => import("./convert-sheet"), "ConvertSheet", { idle: false })
 const JoinSheet = lazyNamed(() => import("./join-sheet"), "JoinSheet", { idle: false })
-const InvitesSheet = lazyNamed(() => import("./invites-sheet"), "InvitesSheet", { idle: false })
+const InboxSheet = lazyNamed(() => import("./inbox-sheet"), "InboxSheet", { idle: false })
 const MergeSheet = lazyNamed(() => import("./merge-sheet"), "MergeSheet", { idle: false })
 /* a class's item, opened by its key: downloaded when first opened, as the class sheets are */
 const ClassItemSheet = lazyNamed(() => import("./class-item-sheet"), "ClassItemSheet", { idle: false })
@@ -51,7 +51,6 @@ export function sheetLabel(s: Exclude<SheetState, null>): string {
     if (s.kind === "new-class") return "New shared class"
     if (s.kind === "convert") return "Convert to shared class"
     if (s.kind === "join") return "Join a class"
-    if (s.kind === "invites") return "Invites"
     if (s.kind === "inbox") return "Inbox"
     if (s.kind === "merge") return "Merge into the class"
     const it = (itemByKey(s.id) ?? store.item(s.id)) as Item | null
@@ -118,7 +117,7 @@ export function Sheet() {
                 {shown?.kind === "new-class" && <NewClassSheet />}
                 {shown?.kind === "convert" && <ConvertSheet key={shown.courseId} courseId={shown.courseId} />}
                 {shown?.kind === "join" && <JoinSheet key={shown.space?.id ?? "code:" + shown.code} code={shown.code} space={shown.space} />}
-                {shown?.kind === "invites" && <InvitesSheet />}
+                {shown?.kind === "inbox" && <InboxSheet />}
                 {shown?.kind === "merge" && <MergeSheet key={shown.spaceId + shown.courseId} spaceId={shown.spaceId} courseId={shown.courseId} fromCourse={shown.fromCourse} />}
             </Suspense>
         </div>

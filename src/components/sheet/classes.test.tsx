@@ -39,7 +39,7 @@ import { NewClassSheet } from "./new-class-sheet"
 import { ConvertSheet } from "./convert-sheet"
 import { ShareCourse } from "./share-course"
 import { JoinSheet } from "./join-sheet"
-import { InvitesSheet } from "./invites-sheet"
+import { InboxSheet } from "./inbox-sheet"
 
 const SID = "sp0000000001", SCOPE = "c:" + SID
 const space = (role = "owner") => ({
@@ -401,7 +401,7 @@ describe("joining with a code", () => {
     })
 })
 
-describe("invites to you", () => {
+describe("invites to you, in the inbox", () => {
     const inv = (spaceId: string, over: Record<string, unknown> = {}) => ({
         spaceId, kind: "class", name: "Web Services", role: "member", from: "Gabriel",
         createdAt: Date.UTC(2026, 9, 1, 12), expiresAt: Date.UTC(2026, 9, 31), expired: false, ...over,
@@ -410,7 +410,7 @@ describe("invites to you", () => {
     it("are listed with who sent each; Decline drops one, Accept follows the class as it downloads", async () => {
         fake.api.inbox.get.mockResolvedValue({ invites: [inv(SID), inv("sp0000000002", { name: "Databases" }), inv("sp0000000003", { name: "Old class", expired: true })], items: [], seen: 0 })
         fake.api.invites.accept.mockResolvedValue(summary)
-        render(<InvitesSheet />)
+        render(<InboxSheet />)
         await screen.findByText("Databases")
         const row = (name: string) => within(screen.getByText(name).closest("li") as HTMLElement)
         expect(row("Web Services").getByText("Gabriel")).toBeTruthy()
@@ -424,19 +424,19 @@ describe("invites to you", () => {
     })
 
     it("say so when there are none", async () => {
-        render(<InvitesSheet />)
-        expect(await screen.findByText("Nothing new.")).toBeTruthy()
+        render(<InboxSheet />)
+        expect(await screen.findByText("Nothing new. News from your classes shows here.")).toBeTruthy()
     })
 
     it("give the maintenance page to someone who is not an admin while classes are off, and an admin the bar", async () => {
         fake.data.profile = { id: "u-me", isAdmin: false, maintenance: { features: ["classes"], message: "" } }
-        render(<InvitesSheet />)
+        render(<InboxSheet />)
         expect(screen.getByRole("heading", { name: /being worked on/ })).toBeTruthy()
-        expect(screen.queryByText("Nothing new.")).toBeNull()
+        expect(screen.queryByText(/Nothing new/)).toBeNull()
         cleanup()
         fake.data.profile = { id: "u-me", isAdmin: true, maintenance: { features: ["classes"], message: "" } }
-        render(<InvitesSheet />)
+        render(<InboxSheet />)
         expect(screen.getByText(/only admins see this/)).toBeTruthy()
-        expect(await screen.findByText("Nothing new.")).toBeTruthy()
+        expect(await screen.findByText("Nothing new. News from your classes shows here.")).toBeTruthy()
     })
 })

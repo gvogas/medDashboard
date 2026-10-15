@@ -22,7 +22,7 @@ import { SemesterMenu } from "./semester-menu"
 import { SideNav } from "./side-nav"
 import { SideFoot } from "./side-foot"
 import { SidebarPlayer } from "./spotify/sidebar-player"
-import { InvitesRow, NewMenu } from "./sidebar-classes"
+import { NewMenu } from "./sidebar-classes"
 
 export function Sidebar() {
     const bg = useUi((u) => u.bg)
@@ -106,7 +106,6 @@ function CourseList() {
                     </span>
                     <Eye source="personal" name="Personal items" off={hidden.includes("personal")} />
                 </div>
-                <InvitesRow />
                 <NewMenu />
             </div>
         </section>
