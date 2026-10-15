@@ -131,3 +131,17 @@ export function copyStatements(dump) {
   out.push(`UPDATE sync_state SET floor = ${literal(floor || 0)} WHERE id = 1`);
   return out;
 }
+
+/**
+ * The parts of a dump that differ after the copy, as a list of keys ([] when it matches).
+ * Rows and the change feed's floor and head must be the same. The activity counter may end
+ * higher: rows the triggers wrote while copying shared items, or a read marker above the
+ * newest kept row, move it on.
+ */
+export function differences(source, copied) {
+  return Object.keys(source).filter((k) => {
+    if (k !== 'state') return JSON.stringify(source[k]) !== JSON.stringify(copied[k]);
+    const a = source.state || {}, b = copied.state || {};
+    return a.floor !== b.floor || a.head !== b.head || !((b.activity_head ?? 0) >= (a.activity_head ?? 0));
+  });
+}

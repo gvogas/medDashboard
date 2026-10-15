@@ -2,7 +2,7 @@ import { applyD1Migrations, env } from 'cloudflare:test';
 import { expect, it } from 'vitest';
 import { upsertRow, syncPage } from '../worker/db.js';
 import { normalizeCourse } from '../src/core/model.ts';
-import { readQueries, copyStatements, COLUMNS_QUERY, uncopied } from '../scripts/lib/move-db.js';
+import { readQueries, copyStatements, COLUMNS_QUERY, uncopied, differences } from '../scripts/lib/move-db.js';
 
 const columns = async (db) => (await db.prepare(COLUMNS_QUERY).all()).results;
 async function dump(db) {
@@ -171,4 +171,14 @@ it('keeps activity numbering above every read marker, so a row written after the
   await to.prepare("INSERT INTO items (scope, id, type, title, course_id, date, status, updated_by, created_at, updated_at) VALUES ('c:mvact0000002', 'b1', 'lab', 'Lab 2', 'web', '2026-10-16', 'todo', 'u-mvdan', 9_000_000, 9_000_000)").run();
   const next = await to.prepare("SELECT seq FROM activity WHERE seq != 41").first();
   expect(next.seq).toBeGreaterThanOrEqual(61);
+});
+
+it('judges a copy by its rows and the feed\'s floor and head, letting only the activity counter end higher', () => {
+  const made = (state, items = [{ id: 'a' }]) => ({ items, state: { floor: 2, head: 90, activity_head: 41, ...state } });
+  expect(differences(made(), made())).toEqual([]);
+  expect(differences(made(), made({ activity_head: 60 }))).toEqual([]);
+  expect(differences(made(), made({ activity_head: 40 }))).toEqual(['state']);
+  expect(differences(made(), made({ head: 91 }))).toEqual(['state']);
+  expect(differences(made(), made({ floor: 3 }))).toEqual(['state']);
+  expect(differences(made(), made({}, [{ id: 'b' }]))).toEqual(['items']);
 });
