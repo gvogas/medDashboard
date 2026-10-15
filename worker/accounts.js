@@ -12,6 +12,16 @@
 export const NEXT_SPACE_REVISION =
   "(SELECT MAX(COALESCE((SELECT seq FROM sqlite_sequence WHERE name = 'changes'), 0), COALESCE((SELECT MAX(revision) FROM spaces), 0)) + 1)";
 
+/* Activity's buckets and names (worker/activity.js imports them from here, so the hand-on's row
+   below and the routes' rows read alike). `id` is SQL for a user id or a space id. */
+export const BUCKET_MS = 600_000;
+/* The bucket of the time `t` (SQL). D1 binds a JS number as a REAL, so it is made an integer first, or the division keeps its fraction and nothing coalesces. */
+export const BUCKET = (t) => `(CAST(${t} AS INTEGER) / ${BUCKET_MS})`;
+export const NAME = (id) => `(SELECT COALESCE(NULLIF(u.display_name, ''), u.username) FROM users AS u WHERE u.id = ${id})`;
+/** A space's name now: its class course's, or its project item's title. */
+export const SPACE_NAME = (id) => `(SELECT CASE s.kind WHEN 'class' THEN (SELECT name FROM courses WHERE scope = 'c:' || s.id AND deleted_at IS NULL LIMIT 1)
+  ELSE (SELECT title FROM items WHERE scope = 'p:' || s.id AND id = 'project') END FROM spaces AS s WHERE s.id = ${id})`;
+
 /* The live spaces ?1 owns, in SQL, with `extra` (an SQL condition on `ow.space_id`) also met. */
 const OWNED = (extra) => `(SELECT ow.space_id FROM members AS ow JOIN spaces AS os ON os.id = ow.space_id
   WHERE ow.user_id = ?1 AND ow.role = 'owner' AND ow.deleted_at IS NULL AND os.deleted_at IS NULL AND ${extra})`;
@@ -41,14 +51,11 @@ export const HAND_ON = [
       AND NOT EXISTS (SELECT 1 FROM members AS w WHERE w.space_id = h.space_id AND w.role = 'owner' AND w.deleted_at IS NULL)`,
   /* space.transferred (spec §12) in each space just handed on, about the heir, with ?1 as the
      actor: ?1 demoted and the heir promoted in this batch. Before the user row goes, so the
-     names still read; worker/activity.js noteStmt's row, set-based (its SPACE_NAME copied). */
+     names still read; worker/activity.js noteStmt's row, set-based. */
   `INSERT INTO activity (space_id, actor_id, verb, subject, subject_user, detail, bucket, at)
     SELECT h.space_id, ?1, 'space.transferred', '', h.user_id,
-      json_object('by', (SELECT COALESCE(NULLIF(u.display_name, ''), u.username) FROM users AS u WHERE u.id = ?1),
-        'whom', (SELECT COALESCE(NULLIF(u.display_name, ''), u.username) FROM users AS u WHERE u.id = h.user_id),
-        'space', (SELECT CASE s.kind WHEN 'class' THEN (SELECT name FROM courses WHERE scope = 'c:' || s.id AND deleted_at IS NULL LIMIT 1)
-          ELSE (SELECT title FROM items WHERE scope = 'p:' || s.id AND id = 'project') END FROM spaces AS s WHERE s.id = h.space_id)),
-      ?2 / 600000, ?2
+      json_object('by', ${NAME('?1')}, 'whom', ${NAME('h.user_id')}, 'space', ${SPACE_NAME('h.space_id')}),
+      ${BUCKET('?2')}, ?2
     FROM members AS h WHERE h.role = 'owner' AND h.deleted_at IS NULL AND h.updated_at = ?2 AND h.user_id != ?1
       AND EXISTS (SELECT 1 FROM members AS d WHERE d.space_id = h.space_id AND d.user_id = ?1 AND d.role = 'editor' AND d.deleted_at IS NULL AND d.updated_at = ?2)
     ON CONFLICT (space_id, actor_id, verb, subject, subject_user, bucket) DO UPDATE SET n = activity.n + 1, at = excluded.at, detail = excluded.detail`,

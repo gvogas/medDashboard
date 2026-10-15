@@ -57,6 +57,29 @@ describe('member and space activity (spec §12)', () => {
     ]);
   });
 
+  it('writes nothing for a role or an archive undone within the bucket', async () => {
+    const { owner, ed } = await people();
+    const s = await makeSpace({ members: { [owner.id]: 'owner', [ed.id]: 'member' } });
+    await owner(`/api/spaces/${s.id}/members/${ed.id}`, { method: 'PUT', body: { role: 'editor' } });
+    await owner(`/api/spaces/${s.id}/members/${ed.id}`, { method: 'PUT', body: { role: 'member' } });
+    await post(owner, `/api/spaces/${s.id}/archive`, { archived: true });
+    await post(owner, `/api/spaces/${s.id}/archive`, { archived: false });
+    expect(await verbs(s.id)).toEqual([]);
+    /* and a later change is recorded afresh */
+    await owner(`/api/spaces/${s.id}/members/${ed.id}`, { method: 'PUT', body: { role: 'editor' } });
+    expect((await verbs(s.id)).map((r) => [r.verb, r.old_value, r.new_value])).toEqual([['member.role', 'member', 'editor']]);
+  });
+
+  it('puts a removal and a role change in the inbox of the person they are about', async () => {
+    const { owner, ed, guest } = await people();
+    const s = await makeSpace({ members: { [owner.id]: 'owner', [ed.id]: 'member', [guest.id]: 'member' } });
+    await owner(`/api/spaces/${s.id}/members/${guest.id}`, { method: 'DELETE' });
+    await owner(`/api/spaces/${s.id}/members/${ed.id}`, { method: 'PUT', body: { role: 'editor' } });
+    const inbox = async (api) => (await (await api('/api/inbox')).json()).items.filter((r) => r.spaceId === s.id);
+    expect(await inbox(guest)).toEqual([expect.objectContaining({ verb: 'member.removed', about: true, actor: owner.id, space: 'Web Services' })]);
+    expect(await inbox(ed)).toEqual([expect.objectContaining({ verb: 'member.role', about: true, old: 'member', new: 'editor' })]);
+  });
+
   it('records the hand-on when an owner account is deleted, about the heir, with the old owner as actor', async () => {
     const admin = await signInAdmin('ar-admin');
     const { owner, ed, guest } = await people();
@@ -69,5 +92,7 @@ describe('member and space activity (spec §12)', () => {
       FROM activity WHERE space_id = ? AND verb = 'space.transferred'`).bind(kept.id).all();
     expect(rows.results).toEqual([{ actor_id: owner.id, subject_user: ed.id, by: name, space: 'Web Services' }]);
     for (const s of [alone, only]) expect(await verbs(s.id)).toEqual([]);
+    /* D1 binds numbers as REALs: every route-written bucket must still be a whole number, or nothing coalesces */
+    expect(await env.DB.prepare("SELECT count(*) AS n FROM activity WHERE typeof(bucket) != 'integer'").first()).toEqual({ n: 0 });
   });
 });

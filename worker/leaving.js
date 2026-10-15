@@ -13,7 +13,7 @@ import { assertAllowed, assertKeeper, keeperGuard, roleOf } from './access.js';
 import { LIVE_MEMBERS, NEXT_ROW_REVISION, NEXT_SPACE_REVISION, touchSpace } from './spaces.js';
 import { REVIEW_ID } from '../src/core/shared.ts';
 import { HAND_ON } from './accounts.js';
-import { noteStmt } from './activity.js';
+import { noteStmt, undoneStmt } from './activity.js';
 
 /** A mark holding anything of yours (spec §13): a status, grade, weight, notes, a checklist or a completion. `m` is its alias. */
 export const MEANINGFUL = (m) =>
@@ -196,8 +196,9 @@ export async function setArchived(db, userId, spaceId, archived, now = Date.now(
   await db.batch([
     db.prepare(`UPDATE spaces SET archived = ?, updated_at = ?, revision = ${NEXT_SPACE_REVISION} WHERE id = ? AND archived != ? AND ${g.sql}`)
       .bind(a, now, spaceId, a, ...g.binds),
-    noteStmt(db, { spaceId, actorId: userId, verb: 'space.archived', oldValue: String(1 - a), newValue: String(a), now,
-      when: 'EXISTS (SELECT 1 FROM spaces WHERE id = ?1 AND archived = CAST(?6 AS INTEGER) AND updated_at = ?8)' }),
+    /* the UPDATE just before changed the space */
+    noteStmt(db, { spaceId, actorId: userId, verb: 'space.archived', oldValue: String(1 - a), newValue: String(a), now, when: 'changes() > 0' }),
+    undoneStmt(db, { spaceId, actorId: userId, verb: 'space.archived', now }),
   ]);
 }
 

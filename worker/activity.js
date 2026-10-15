@@ -3,12 +3,9 @@
 // and a space's Activity tab. Nothing is fanned out: the inbox is a query over the spaces you
 // are in and the rows about you.
 import { memberGuard, assertAllowed } from './access.js';
+import { BUCKET, BUCKET_MS, NAME, SPACE_NAME } from './accounts.js';
 
-export const BUCKET_MS = 600_000;
-const NAME = (id) => `(SELECT COALESCE(NULLIF(u.display_name, ''), u.username) FROM users AS u WHERE u.id = ${id})`;
-/** A space's name now: its class course's, or its project item's title. `id` is SQL for the space id. */
-export const SPACE_NAME = (id) => `(SELECT CASE s.kind WHEN 'class' THEN (SELECT name FROM courses WHERE scope = 'c:' || s.id AND deleted_at IS NULL LIMIT 1)
-  ELSE (SELECT title FROM items WHERE scope = 'p:' || s.id AND id = 'project') END FROM spaces AS s WHERE s.id = ${id})`;
+export { BUCKET_MS, SPACE_NAME };
 
 /**
  * An activity row a route writes in its own batch (Decision 9): who did what in a space, about
@@ -18,12 +15,21 @@ export const SPACE_NAME = (id) => `(SELECT CASE s.kind WHEN 'class' THEN (SELECT
  */
 export function noteStmt(db, { spaceId, actorId, verb, subjectUser = '', oldValue = null, newValue = null, detail = {}, now, when = '1', binds = [] }) {
   return db.prepare(`INSERT INTO activity (space_id, actor_id, verb, subject, subject_user, old_value, new_value, detail, bucket, at)
-    SELECT ?1, ?2, ?3, '', ?4, ?5, ?6, json_set(?7, '$.by', ${NAME('?2')}, '$.whom', ${NAME('?4')}, '$.space', ${SPACE_NAME('?1')}), ?8 / ${BUCKET_MS}, ?8
+    SELECT ?1, ?2, ?3, '', ?4, ?5, ?6, json_set(?7, '$.by', ${NAME('?2')}, '$.whom', ${NAME('?4')}, '$.space', ${SPACE_NAME('?1')}), ${BUCKET('?8')}, ?8
     WHERE ${when}
     ON CONFLICT (space_id, actor_id, verb, subject, subject_user, bucket) DO UPDATE SET
       new_value = excluded.new_value, n = activity.n + 1, at = excluded.at, detail = excluded.detail`)
     .bind(spaceId, actorId, verb, subjectUser, oldValue, newValue, JSON.stringify(detail), now, ...binds);
 }
+
+/**
+ * For a route row that can be undone (a role, archiving; spec §12 "a change that returns to
+ * where it started deletes its row"): after noteStmt in the same batch, deletes the row its
+ * coalescing brought back to its first "from".
+ */
+export const undoneStmt = (db, { spaceId, actorId, verb, subjectUser = '', now }) => db.prepare(`DELETE FROM activity
+  WHERE space_id = ? AND actor_id = ? AND verb = ? AND subject = '' AND subject_user = ? AND bucket = ${BUCKET('?')}
+    AND old_value IS NOT NULL AND old_value = new_value`).bind(spaceId, actorId, verb, subjectUser, now);
 
 /* Verbs every member is told of; the rest reach someone only when they are about them (Decision 4). a = activity, ?1 you. */
 const CONCERNS = `(a.verb IN ('item.created', 'item.deleted', 'item.date', 'course.meetings', 'space.archived', 'space.linked')
