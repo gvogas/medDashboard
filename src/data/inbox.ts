@@ -6,6 +6,7 @@ import { useSyncExternalStore } from "react"
 import { api } from "@/core/api"
 import * as store from "@/core/store"
 import { data } from "@/core/store"
+import * as sync from "@/core/sync"
 import { dayMonth } from "@/core/dates"
 import { itemByKey } from "./effective"
 import { openItem } from "./actions"
@@ -27,6 +28,9 @@ export const useInbox = () => useSyncExternalStore(subscribe, () => box)
 export const useInboxOffline = () => useSyncExternalStore(subscribe, () => offline)
 /** Your pending invites, as the inbox last fetched them. */
 export const useInvites = (): Invite[] => useSyncExternalStore(subscribe, () => box?.invites ?? NONE)
+
+/* the list as it now stands, for offline reading; a failed write only leaves the older copy */
+const keep = (b: Inbox) => { void Promise.resolve().then(() => store.meta.set("inbox", b)).catch(() => {}) }
 
 /** The count sync brought (core/sync.ts onUnread). */
 export function setUnread(n: number): void { if (n !== unread) { unread = n; emit() } }
@@ -52,10 +56,18 @@ export async function refreshInbox(): Promise<void> {
 export async function markSeen(): Promise<void> {
     const top = box?.items[0]?.seq ?? 0
     if (!box || top <= box.seen) return
+    const before = box.seen
     box = { ...box, seen: top }
     setUnread(box.invites.filter((i) => !i.expired).length)
+    keep(box)
     emit()
-    try { await api.inbox.seen(top) } catch { /* offline: the next open sends it again */ }
+    try { await api.inbox.seen(top) } catch {
+        /* offline: not read as far as the server knows, so the next open sends it again */
+        if (box?.seen === top) { box = { ...box, seen: before }; keep(box); emit() }
+        return
+    }
+    /* a pull already under way may bring the count from before: the next one replaces it */
+    sync.syncNow().catch(() => {})
 }
 
 /** An invite answered (accepted, declined, or joined by code): it leaves the list and the count. */
@@ -64,14 +76,18 @@ export function dropInvite(spaceId: string): void {
     const had = box.invites.some((i) => i.spaceId === spaceId && !i.expired)
     box = { ...box, invites: box.invites.filter((i) => i.spaceId !== spaceId) }
     if (had) setUnread(Math.max(0, unread - 1))
+    keep(box)
     emit()
 }
 
 /* ── words ── */
 
+/* 'date|start|end': "18 Oct 09:00–10:30", "18 Oct 09:00", "18 Oct until 10:30", "18 Oct" */
 const when = (v: string | null) => {
-    const [date = "", start = ""] = (v ?? "").split("|")
-    return date ? dayMonth(date) + (start ? " " + start : "") : "no date"
+    const [date = "", start = "", end = ""] = (v ?? "").split("|")
+    if (!date) return "no date"
+    const time = start && end ? start + "–" + end : start || (end ? "until " + end : "")
+    return dayMonth(date) + (time ? " " + time : "")
 }
 const pct = (v: string | null) => (v === null ? "none" : Number(v) + "%")
 const role = (r: string | null) => (r === "editor" ? "an editor" : r === "owner" ? "the owner" : "a member")
@@ -96,7 +112,7 @@ export function describe(r: ActivityRow, me: string): string {
             if (r.new === "*") return `${by} gave ${title} to everyone`
             if (r.actor === r.subjectUser) return `${by} took ${title}`
             return r.about ? `${by} assigned you ${title}` : `${by} assigned ${title} to ${whom}`
-        case "task.unassigned": return `${title} has nobody on it now`
+        case "task.unassigned": return `${by} took everyone off ${title}`
         case "task.status": return `${by} ${r.new === "done" ? "completed" : "reopened"} ${title}`
         case "member.joined": return `${by} joined`
         case "member.left": return `${by} left`

@@ -179,7 +179,6 @@ async function changesV3(cursors: Record<string, Cursor>, sv: number): Promise<P
   const list = Object.entries(cursors).map(([scope, seq]) => `${scope}:${seq}`).join(',');
   const page = await request('GET', `/api/sync?v=3&cursors=${encodeURIComponent(list)}&sv=${sv}`);
   const valid = !!page && typeof page.more === 'boolean' && scopeList(page.reset) && scopeList(page.revoked)
-    && (page.unread === undefined || (Number.isSafeInteger(page.unread) && page.unread >= 0 && page.unread <= 99))
     && !!page.cursors && typeof page.cursors === 'object'
     && Object.entries(page.cursors).every(([s, n]) => SCOPE.test(s) && !Number.isNaN(cursorSeq(n)))
     && Array.isArray(page.scopes) && page.scopes.every((s: Space | null) => !!s && typeof s.id === 'string' && SCOPE.test(s.scope) && Number.isSafeInteger(s.revision))
@@ -187,6 +186,8 @@ async function changesV3(cursors: Record<string, Cursor>, sv: number): Promise<P
       !!c && typeof c.scope === 'string' && SCOPE.test(c.scope) && KINDS.includes(c.kind as string)
       && (c.scope.startsWith('u:') || c.kind === 'courses' || c.kind === 'items') && validRecord(c.row));
   if (!valid) throw invalidResponse();
+  /* the inbox's count (spec §12): one unreadable value must not fail a whole sync page */
+  if (!(Number.isSafeInteger(page.unread) && page.unread >= 0 && page.unread <= 99)) delete page.unread;
   /* a cursor never moves back, except to 0 for a scope that reset */
   for (const [scope, cursor] of Object.entries(page.cursors as Record<string, Cursor>)) {
     if (cursorSeq(cursor) < (cursorSeq(cursors[scope] ?? 0) || 0) && !page.reset.includes(scope)) throw invalidResponse();
