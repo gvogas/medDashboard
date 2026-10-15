@@ -13,6 +13,7 @@ import { assertAllowed, assertKeeper, keeperGuard, roleOf } from './access.js';
 import { LIVE_MEMBERS, NEXT_ROW_REVISION, NEXT_SPACE_REVISION, touchSpace } from './spaces.js';
 import { REVIEW_ID } from '../src/core/shared.ts';
 import { HAND_ON } from './accounts.js';
+import { noteStmt } from './activity.js';
 
 /** A mark holding anything of yours (spec §13): a status, grade, weight, notes, a checklist or a completion. `m` is its alias. */
 export const MEANINGFUL = (m) =>
@@ -137,9 +138,10 @@ const dropLayer = (live) => [
  * Detach `userId` from the class `spaceId` and end their membership, in one batch: a copy
  * (keepCopy) or only their layer dropped. `who` is the SQL the membership must still meet
  * (leaving, a removal by ?9, or closing the class); `closing` also deletes the space's
- * invites and, once nobody is left, the space. True when the membership ended now.
+ * invites and, once nobody is left, the space; `after` are statements run at the end of the
+ * batch (its activity row). True when the membership ended now.
  */
-export async function detach(db, userId, spaceId, { keepCopy, who, actor = null, closing = false, now = Date.now() }) {
+export async function detach(db, userId, spaceId, { keepCopy, who, actor = null, closing = false, after = [], now = Date.now() }) {
   const ids = keepCopy ? await copyIds(db, userId, spaceId) : { course: null, items: '[]' };
   const v = valuesOf({ userId, spaceId, now, items: ids.items, course: ids.course, actor });
   const live = `EXISTS (SELECT 1 FROM spaces AS ls WHERE ls.id = ?2 AND ls.deleted_at IS NULL) AND ${who}`;
@@ -154,20 +156,25 @@ export async function detach(db, userId, spaceId, { keepCopy, who, actor = null,
             AND EXISTS (SELECT 1 FROM members WHERE space_id = ?2 AND user_id = ?1 AND role = 'owner' AND deleted_at = ?5)`, v)
       : touchSpace(db, spaceId, now, { ifChanged: true }),
   );
+  const counted = stmts.length - 2;   // the SELECT changes() after the membership update
+  stmts.push(...after);
   const results = await db.batch(stmts);
-  return results[results.length - 2].results[0].n > 0;
+  return results[counted].results[0].n > 0;
 }
 
 /* Whom a statement may still detach: a live member who is not the owner (leaving, or removed by ?9, the live owner). */
 const LEAVING = "EXISTS (SELECT 1 FROM members AS lv WHERE lv.space_id = ?2 AND lv.user_id = ?1 AND lv.deleted_at IS NULL AND lv.role != 'owner')";
 const REMOVING = `${LEAVING} AND EXISTS (SELECT 1 FROM members AS ow WHERE ow.space_id = ?2 AND ow.user_id = ?9 AND ow.role = 'owner' AND ow.deleted_at IS NULL)`;
+/* For noteStmt (Decision 9): the membership of ?9 ended in this batch, so a retry writes no activity. */
+const ENDED = 'EXISTS (SELECT 1 FROM members WHERE space_id = ?1 AND user_id = ?9 AND deleted_at = ?8)';
 
 /** Leave a class (spec §13): with a copy (the default) or without one. The owner hands it on first: 403 owner. */
 export async function leave(db, userId, spaceId, keepCopy, now = Date.now()) {
   const me = await assertAllowed(db, userId, spaceId, 'read');
   if (me.kind !== 'class') throw new HttpError(404, { error: 'not_found' });
   if (me.role === 'owner') throw new HttpError(403, { error: 'owner' });
-  if (!(await detach(db, userId, spaceId, { keepCopy, who: LEAVING, now }))) throw new HttpError(404, { error: 'not_found' });
+  const after = [noteStmt(db, { spaceId, actorId: userId, verb: 'member.left', now, when: ENDED, binds: [userId] })];
+  if (!(await detach(db, userId, spaceId, { keepCopy, who: LEAVING, after, now }))) throw new HttpError(404, { error: 'not_found' });
 }
 
 /** The owner removes a member, who always keeps a copy (spec §13); never themselves or the owner. 404 when not a live member. */
@@ -175,18 +182,23 @@ export async function removeMember(db, userId, spaceId, targetId, now = Date.now
   const me = await assertKeeper(db, userId, spaceId);
   if (me.kind !== 'class') throw new HttpError(404, { error: 'not_found' });
   if (targetId === userId) throw new HttpError(403, { error: 'forbidden' });
-  if (await detach(db, targetId, spaceId, { keepCopy: true, who: REMOVING, actor: userId, now })) return;
+  const after = [noteStmt(db, { spaceId, actorId: userId, verb: 'member.removed', subjectUser: targetId, now, when: ENDED, binds: [targetId] })];
+  if (await detach(db, targetId, spaceId, { keepCopy: true, who: REMOVING, actor: userId, after, now })) return;
   const them = await roleOf(db, targetId, spaceId);
   throw them ? new HttpError(403, { error: 'forbidden' }) : new HttpError(404, { error: 'not_found' });
 }
 
-/** Archive or unarchive a class (spec §13), the owner only, archived or not; moves the revision when it changes. */
+/** Archive or unarchive a class (spec §13), the owner only, archived or not; moves the revision, and writes space.archived, when it changes. */
 export async function setArchived(db, userId, spaceId, archived, now = Date.now()) {
   const me = await assertKeeper(db, userId, spaceId);
   if (me.kind !== 'class') throw new HttpError(404, { error: 'not_found' });
   const g = keeperGuard(spaceId, userId), a = archived ? 1 : 0;
-  await db.prepare(`UPDATE spaces SET archived = ?, updated_at = ?, revision = ${NEXT_SPACE_REVISION} WHERE id = ? AND archived != ? AND ${g.sql}`)
-    .bind(a, now, spaceId, a, ...g.binds).run();
+  await db.batch([
+    db.prepare(`UPDATE spaces SET archived = ?, updated_at = ?, revision = ${NEXT_SPACE_REVISION} WHERE id = ? AND archived != ? AND ${g.sql}`)
+      .bind(a, now, spaceId, a, ...g.binds),
+    noteStmt(db, { spaceId, actorId: userId, verb: 'space.archived', oldValue: String(1 - a), newValue: String(a), now,
+      when: 'EXISTS (SELECT 1 FROM spaces WHERE id = ?1 AND archived = CAST(?6 AS INTEGER) AND updated_at = ?8)' }),
+  ]);
 }
 
 /* The owner, the space's only live member. */

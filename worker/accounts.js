@@ -39,6 +39,19 @@ export const HAND_ON = [
         ORDER BY o.role = 'member', o.joined_at, o.user_id LIMIT 1)
       AND EXISTS (SELECT 1 FROM members AS d JOIN spaces AS ds ON ds.id = d.space_id WHERE d.space_id = h.space_id AND d.user_id = ?1 AND d.deleted_at IS NULL AND ds.deleted_at IS NULL)
       AND NOT EXISTS (SELECT 1 FROM members AS w WHERE w.space_id = h.space_id AND w.role = 'owner' AND w.deleted_at IS NULL)`,
+  /* space.transferred (spec §12) in each space just handed on, about the heir, with ?1 as the
+     actor: ?1 demoted and the heir promoted in this batch. Before the user row goes, so the
+     names still read; worker/activity.js noteStmt's row, set-based (its SPACE_NAME copied). */
+  `INSERT INTO activity (space_id, actor_id, verb, subject, subject_user, detail, bucket, at)
+    SELECT h.space_id, ?1, 'space.transferred', '', h.user_id,
+      json_object('by', (SELECT COALESCE(NULLIF(u.display_name, ''), u.username) FROM users AS u WHERE u.id = ?1),
+        'whom', (SELECT COALESCE(NULLIF(u.display_name, ''), u.username) FROM users AS u WHERE u.id = h.user_id),
+        'space', (SELECT CASE s.kind WHEN 'class' THEN (SELECT name FROM courses WHERE scope = 'c:' || s.id AND deleted_at IS NULL LIMIT 1)
+          ELSE (SELECT title FROM items WHERE scope = 'p:' || s.id AND id = 'project') END FROM spaces AS s WHERE s.id = h.space_id)),
+      ?2 / 600000, ?2
+    FROM members AS h WHERE h.role = 'owner' AND h.deleted_at IS NULL AND h.updated_at = ?2 AND h.user_id != ?1
+      AND EXISTS (SELECT 1 FROM members AS d WHERE d.space_id = h.space_id AND d.user_id = ?1 AND d.role = 'editor' AND d.deleted_at IS NULL AND d.updated_at = ?2)
+    ON CONFLICT (space_id, actor_id, verb, subject, subject_user, bucket) DO UPDATE SET n = activity.n + 1, at = excluded.at, detail = excluded.detail`,
 ];
 
 export const ACCOUNT_TABLES = [

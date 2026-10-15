@@ -5,6 +5,7 @@ import { HttpError } from './http.js';
 import { assertAllowed, assertKeeper, keeperGuard, memberGuard, scopeOf } from './access.js';
 import { REVIEW_ID } from '../src/core/shared.ts';
 import { COURSE_COLOURS } from './validate.js';
+import { noteStmt } from './activity.js';
 
 /** The most live spaces a person holds, and the most live members a space holds (spec §3 Limits). */
 export const SPACE_LIMIT = 20;
@@ -264,6 +265,9 @@ export async function setRole(db, userId, spaceId, targetId, role, now = Date.no
       WHERE space_id = ? AND user_id = ? AND deleted_at IS NULL AND role NOT IN ('owner', ?) AND ${g.sql}`)
       .bind(role, now, spaceId, targetId, role, ...g.binds),
     touchSpace(db, spaceId, now, { ifChanged: true }),
+    /* a role write moves only between editor and member, so the old role is the other one; only when it moved in this batch */
+    noteStmt(db, { spaceId, actorId: userId, verb: 'member.role', subjectUser: targetId, oldValue: role === 'editor' ? 'member' : 'editor', newValue: role, now,
+      when: 'EXISTS (SELECT 1 FROM members WHERE space_id = ?1 AND user_id = ?4 AND role = ?6 AND updated_at = ?8 AND deleted_at IS NULL)' }),
   ]);
   const row = await db.prepare('SELECT role FROM members WHERE space_id = ? AND user_id = ? AND deleted_at IS NULL').bind(spaceId, targetId).first();
   if (!row) throw new HttpError(404, { error: 'not_found' });
@@ -288,6 +292,8 @@ export async function transfer(db, userId, spaceId, targetId, now = Date.now()) 
     db.prepare(`UPDATE members SET role = 'owner', updated_at = ?, revision = revision + 1
       WHERE space_id = ? AND user_id = ? AND deleted_at IS NULL AND changes() > 0`).bind(now, spaceId, targetId),
     touchSpace(db, spaceId, now, { ifChanged: true }),
+    noteStmt(db, { spaceId, actorId: userId, verb: 'space.transferred', subjectUser: targetId, now,
+      when: "EXISTS (SELECT 1 FROM members WHERE space_id = ?1 AND user_id = ?4 AND role = 'owner' AND updated_at = ?8 AND deleted_at IS NULL)" }),
   ]);
   if (!demoted.meta.changes) throw new HttpError(404, { error: 'not_found' });
 }
