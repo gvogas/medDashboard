@@ -132,3 +132,24 @@ it('reads marks and space prefs as empty from a database made before them, and c
   });
   expect(sql.filter((s) => s.startsWith('INSERT INTO ')).map((s) => s.split(' ')[2]).slice(0, 3)).toEqual(['users', 'marks', 'space_prefs']);
 });
+
+it('reads activity and inbox_seen as empty from a database made before them, and keeps the source activity, not the triggers\' copy', async () => {
+  const queries = new Map(readQueries(await columns(env.MIGRATION_DB)));
+  expect((await env.MIGRATION_DB.prepare(queries.get('activity')).all()).results).toEqual([]);
+  expect((await env.MIGRATION_DB.prepare(queries.get('inbox_seen')).all()).results).toEqual([]);
+  /* into today's schema (MOVE_DB already holds the first test's copy): the shared item's insert fires the activity trigger */
+  const to = env.DB;
+  await to.prepare("INSERT INTO users (id, username, password_hash, display_name, created_at, updated_at) VALUES ('u-mvcara', 'mvcara', 'h', 'Cara', 1, 1)").run();
+  const activity = [{ seq: 41, space_id: 'mvact0000001', actor_id: 'u-mvcara', verb: 'item.created', subject: '', subject_user: '', old_value: null, new_value: null, detail: '{"titles":["Lab"],"by":"Cara"}', n: 1, bucket: 5, at: 3_000_000 }];
+  const sql = copyStatements({
+    spaces: [{ id: 'mvact0000001', kind: 'class', archived: 0, created_at: 1, updated_at: 1, revision: 4 }],
+    courses: [{ scope: 'c:mvact0000001', id: 'web', code: 'WEB', name: 'Web', color: '#17B3AE', instructor: '', term: '', archived: 0, meetings: '[]', created_at: 1, updated_at: 1, revision: 1 }],
+    items: [{ scope: 'c:mvact0000001', id: 'a1', type: 'lab', title: 'Lab', course_id: 'web', date: '2026-10-15', start: '', end: '', location: '', status: 'todo', notes: '', checklist: '[]', links: '[]', dept: '', updated_by: 'u-mvcara', assignees: '[]', created_at: 3_000_000, updated_at: 3_000_000, revision: 1 }],
+    activity,
+    inbox_seen: [{ user_id: 'u-mvcara', seq: 41 }],
+  }).filter((s) => !/^(DELETE FROM changes|UPDATE sync_state)/.test(s));
+  await to.batch(sql.map((s) => to.prepare(s)));
+  expect((await to.prepare("SELECT * FROM activity WHERE space_id = 'mvact0000001'").all()).results).toEqual(activity);
+  expect(sql.filter((s) => s.includes('activity')).map((s) => s.split(' (')[0])).toEqual(['DELETE FROM activity', 'INSERT INTO activity']);
+  expect(await to.prepare("SELECT seq FROM inbox_seen WHERE user_id = 'u-mvcara'").first()).toEqual({ seq: 41 });
+});
