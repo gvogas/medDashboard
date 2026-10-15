@@ -2,7 +2,7 @@ import { env } from 'cloudflare:test';
 import { describe, expect, it } from 'vitest';
 import { signIn } from './helpers.js';
 import { makeSpace, sharedItem } from './spaces.js';
-import { unreadCount } from '../worker/activity.js';
+import { INBOX, KEEP_MS, unreadCount } from '../worker/activity.js';
 
 let n = 0;
 const at = (ms) => ({ updated_at: ms, created_at: ms });
@@ -51,6 +51,29 @@ describe('GET /api/inbox (spec §12)', () => {
     await env.DB.prepare("INSERT INTO invites (space_id, user_id, invited_by, role, created_at, expires_at) VALUES (?, ?, ?, 'member', ?, ?)")
       .bind(s.id, out.id, alex.id, Date.now(), Date.now() + 86_400_000).run();
     expect((await inbox(out)).invites).toEqual([expect.objectContaining({ spaceId: s.id, name: 'Web Services', expired: false })]);
+  });
+});
+
+describe('the 90 days activity is kept', () => {
+  it('leaves older rows out of the inbox, its count and the Activity tab, purged or not', async () => {
+    const { alex, sam, s } = await team();
+    const old = Date.now() - KEEP_MS - 60_000;
+    await sharedItem(s.scope, 'o1', { course_id: 'web', updated_by: alex.id, ...at(old) });
+    await env.DB.prepare(`INSERT INTO activity (space_id, actor_id, verb, subject_user, detail, bucket, at)
+      VALUES (?, ?, 'member.role', ?, '{}', 1, ?)`).bind(s.id, alex.id, sam.id, old).run();
+    expect((await inbox(sam)).items).toEqual([]);
+    expect(await unreadCount(env.DB, sam.id)).toBe(0);
+    expect((await (await sam(`/api/spaces/${s.id}/activity`)).json()).items).toEqual([]);
+    await sharedItem(s.scope, 'o2', { course_id: 'web', updated_by: alex.id, ...at(Date.now()) });
+    expect((await inbox(sam)).items.map((r) => r.detail.titles)).toEqual([['o2']]);
+    expect(await unreadCount(env.DB, sam.id)).toBe(1);
+  });
+});
+
+describe('the inbox query', () => {
+  it('reads rows about you through the partial index activity_about', async () => {
+    const { results } = await env.DB.prepare(`EXPLAIN QUERY PLAN ${INBOX('0', 50)}`).bind('u-x', Date.now()).all();
+    expect(results.map((r) => r.detail).join('\n')).toMatch(/activity_about/);
   });
 });
 

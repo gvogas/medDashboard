@@ -30,11 +30,22 @@ const CONCERNS = `(a.verb IN ('item.created', 'item.deleted', 'item.date', 'cour
   OR (a.verb = 'task.assigned' AND a.subject_user = '')
   OR (a.verb = 'task.status' AND EXISTS (SELECT 1 FROM json_each(a.detail, '$.assignees') AS j WHERE j.value IN (?1, '*'))))`;
 const COLS = 'a.seq, a.space_id, a.actor_id, a.verb, a.subject, a.subject_user, a.old_value, a.new_value, a.detail, a.n, a.at';
-/* The inbox's rows above `since` (SQL): about you anywhere, and what concerns you in your live spaces since you joined. */
-const INBOX = (since) => `SELECT ${COLS} FROM activity AS a WHERE a.subject_user = ?1 AND a.actor_id != ?1 AND a.seq > ${since}
+/** How long activity is kept (spec §12): the reads hold to it, so the window does not wait on the nightly purge. */
+export const KEEP_MS = 90 * 24 * 60 * 60 * 1000;
+/*
+ * The inbox's newest `limit` rows above `since` (SQL) from each branch: about you anywhere,
+ * and what concerns you in your live spaces since you joined; ?2 is now. The first branch
+ * repeats `subject_user != ''` (implied by `= ?1`, as a user id is never empty) so SQLite
+ * may use the partial index activity_about; with only the bound `= ?1` it cannot prove the
+ * index's WHERE and scans the table by seq.
+ */
+export const INBOX = (since, limit) => `SELECT * FROM (SELECT ${COLS} FROM activity AS a
+    WHERE a.subject_user = ?1 AND a.subject_user != '' AND a.actor_id != ?1 AND a.seq > ${since} AND a.at > ?2 - ${KEEP_MS}
+    ORDER BY a.seq DESC LIMIT ${limit})
   UNION ALL
-  SELECT ${COLS} FROM members AS m JOIN activity AS a ON a.space_id = m.space_id AND a.seq > ${since} AND a.at >= m.joined_at
-  WHERE m.user_id = ?1 AND m.deleted_at IS NULL AND a.actor_id != ?1 AND a.subject_user != ?1 AND ${CONCERNS}`;
+  SELECT * FROM (SELECT ${COLS} FROM members AS m JOIN activity AS a ON a.space_id = m.space_id AND a.seq > ${since} AND a.at >= m.joined_at
+    WHERE m.user_id = ?1 AND m.deleted_at IS NULL AND a.actor_id != ?1 AND a.subject_user != ?1 AND a.at > ?2 - ${KEEP_MS} AND ${CONCERNS}
+    ORDER BY a.seq DESC LIMIT ${limit})`;
 const SEEN = '(SELECT COALESCE(MAX(seq), 0) FROM inbox_seen WHERE user_id = ?1)';
 
 /** A row as the API answers it; `about` is whether it is about you. */
@@ -48,11 +59,11 @@ export function toApi(r, userId) {
 }
 
 /** Your inbox's newest 50 rows within the 90 days kept, and where you have read up to. */
-export async function inboxRows(db, userId) {
+export async function inboxRows(db, userId, now = Date.now()) {
   const [rows, seen] = await db.batch([
     db.prepare(`SELECT x.*, COALESCE(${SPACE_NAME('x.space_id')}, json_extract(x.detail, '$.space')) AS space,
         (SELECT kind FROM spaces WHERE id = x.space_id) AS kind
-      FROM (${INBOX('0')}) AS x ORDER BY x.seq DESC LIMIT 50`).bind(userId),
+      FROM (${INBOX('0', 50)}) AS x ORDER BY x.seq DESC LIMIT 50`).bind(userId, now),
     db.prepare(`SELECT ${SEEN} AS seq`).bind(userId),
   ]);
   return { items: rows.results.map((r) => toApi(r, userId)), seen: seen.results[0].seq };
@@ -63,7 +74,7 @@ export async function unreadCount(db, userId, now = Date.now()) {
   const r = await db.prepare(`SELECT MIN(99,
       (SELECT count(*) FROM invites AS i JOIN spaces AS s ON s.id = i.space_id AND s.deleted_at IS NULL
         WHERE i.user_id = ?1 AND i.status = 'pending' AND i.expires_at > ?2)
-      + (SELECT count(*) FROM (SELECT 1 FROM (${INBOX(SEEN)}) LIMIT 100))) AS n`).bind(userId, now).first();
+      + (SELECT count(*) FROM (SELECT 1 FROM (${INBOX(SEEN, 100)}) LIMIT 100))) AS n`).bind(userId, now).first();
   return r.n;
 }
 
@@ -74,11 +85,11 @@ export function markSeen(db, userId, seq) {
 }
 
 export const PAGE = 30;
-/** A space's Activity tab (Decision 7): 30 rows below `before` (all when null), newest first, for a live member. 404 outside it. */
-export async function spaceActivity(db, userId, spaceId, before = null) {
+/** A space's Activity tab (Decision 7): 30 rows below `before` (all when null) within the 90 days kept, newest first, for a live member. 404 outside it. */
+export async function spaceActivity(db, userId, spaceId, before = null, now = Date.now()) {
   const me = await assertAllowed(db, userId, spaceId, 'read');
   const g = memberGuard(spaceId, userId);
-  const { results } = await db.prepare(`SELECT ${COLS} FROM activity AS a WHERE a.space_id = ? AND a.seq < ? AND ${g.sql}
-    ORDER BY a.seq DESC LIMIT ?`).bind(spaceId, before ?? Number.MAX_SAFE_INTEGER, ...g.binds, PAGE + 1).all();
+  const { results } = await db.prepare(`SELECT ${COLS} FROM activity AS a WHERE a.space_id = ? AND a.seq < ? AND a.at > ? AND ${g.sql}
+    ORDER BY a.seq DESC LIMIT ?`).bind(spaceId, before ?? Number.MAX_SAFE_INTEGER, now - KEEP_MS, ...g.binds, PAGE + 1).all();
   return { items: results.slice(0, PAGE).map((r) => toApi({ ...r, kind: me.kind }, userId)), more: results.length > PAGE };
 }
