@@ -26,7 +26,8 @@ the database, cookies and IndexedDB).
   shared by the people in it. Join by an invite to your username or with a join code;
   roles are owner, editor and member. You keep your own layer (status, grade, notes,
   colour, semester) on top, and leaving keeps a copy of the class as your own course.
-  Shared projects come later.
+  A bell opens your inbox (invites and what others changed that concerns you), and
+  each class has an Activity tab. Shared projects come later.
 - **Admin page**: accounts, error log, audit log, announcement banner, and maintenance
   switches per feature.
 - **Themes**: Medicine, Computer Science, Law, Aviation, Sports and Engineering, each

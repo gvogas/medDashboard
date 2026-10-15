@@ -4,7 +4,7 @@ Term's internal name is `rounds` (the Worker, the D1 databases, cookies and Inde
 Cloudflare D1 (SQLite), several users, every row stamped with its owner: a `scope` on
 courses and items (`u:<user id>` for a person's own; `c:<space id>` for a shared class,
 `p:<space id>` for a team project), a `user_id` on the rest. Shared classes are live
-for everyone (collaboration Stages 1–6); projects stay closed until Stage 10.
+for everyone (collaboration Stages 1–7); projects stay closed until Stage 10.
 The browser never talks to the database. A Worker reads the session cookie, resolves
 the user, and every query it runs has `user_id = ?` (or the user's scope) in it.
 
@@ -19,6 +19,8 @@ spaces, members  shared classes and team projects, and who is in each
 invites          invitations to a space by username
 marks            your layer on a shared item: status, grade, notes, hidden
 space_prefs      your colour, target, term and archive for a space
+activity         what members did in a space: the inbox and each class's Activity tab
+inbox_seen       the last activity row each person has read
 ```
 
 The schema is [`migrations/0001_schema.sql`](../migrations/0001_schema.sql), in one
@@ -33,8 +35,9 @@ six, then `rounds-v5` into `rounds-v6`, adding the Admin page (`users.is_admin`,
 `rounds-v7`, giving courses, items and the change feed a scope. `rounds-v7` is the live
 database. The schema the last move copied from is kept as a test
 fixture in `test/fixtures/legacy-migrations/`. Later changes are new numbered files:
-`0002_spaces.sql` (`spaces`, `members`), `0003_invites.sql` (`invites`) and
-`0004_marks.sql` (`marks`, `space_prefs`). The next one is `0005`.
+`0002_spaces.sql` (`spaces`, `members`), `0003_invites.sql` (`invites`),
+`0004_marks.sql` (`marks`, `space_prefs`) and `0005_activity.sql` (`activity`,
+`inbox_seen` and the triggers that fill `activity`). The next one is `0006`.
 
 ## Structure at a glance
 
@@ -43,6 +46,7 @@ fixture in `test/fixtures/legacy-migrations/`. Later changes are new numbered fi
 | Account and tracker data | `users`, `courses`, `items`, `quotes`, `study_sessions`, `achievements` | Profiles and the records users edit |
 | Shared classes and projects | `spaces`, `members`, `invites` | Who is in which space, join codes and invitations |
 | Your layer on shared rows | `marks`, `space_prefs` | Your status, grade and notes on a shared item; your settings for a space |
+| Activity and the inbox | `activity`, `inbox_seen` | What members did in each space (90 days), and how far each person has read |
 | Synchronization | `changes`, `sync_state` | Latest record changes, ordered cursors per scope, and the retention floor |
 | Authentication and request control | `login_throttle`, `request_limits` | Temporary attempt counts and cooldowns |
 | Spotify connection | `spotify_tokens`, `spotify_oauth_states`, `spotify_refresh_locks` | Credentials, one-use consent attempts, and refresh leases |
@@ -65,6 +69,8 @@ erDiagram
     users ||--o{ invites : receives
     users ||--o{ marks : "marks shared items"
     users ||--o{ space_prefs : "sets per space"
+    spaces ||--o{ activity : "records (no foreign key)"
+    users ||--o| inbox_seen : "has read up to"
     users ||--o{ changes : "syncs (scope u:)"
     spaces ||--o{ changes : "syncs (scope c: or p:)"
     users ||--o| spotify_tokens : connects
@@ -358,7 +364,7 @@ A shared class (`kind = 'class'`, its rows in scope `c:<id>`) or team project (`
 
 ## `members`
 
-`(space_id, user_id)`, `role` `owner`|`editor`|`member`, `joined_at`, `deleted_at` (left or removed; a rejoin revives the row). Leaving or being removed runs one set-based batch in `worker/leaving.js` (*detach*) that ends the membership last, so a retry does nothing twice: with a copy, the class course and items are upserted into your own scope (reviving the tombstones a convert or merge left under the same ids; an id a live row of yours already holds becomes `'k' + id`, or `k1…`, `k2…`), each item taking your mark, your notes followed by `Class notes:` and the class's; your filed items, sessions and achievements move onto the copy (a copy for someone no longer in the class is filed under no class); your marks and prefs there are soft-deleted. Without a copy only your layer goes; sessions keep their minutes and the app labels them *A class you left*. Deleting an account hands each class it owns to its longest-standing editor, else its longest-standing member (`HAND_ON` in `worker/accounts.js`, also used by `scripts/add-user.mjs --delete`), and soft-deletes one with nobody else in it; memberships, invites, marks and prefs go by cascade. A partial unique index keeps exactly one live owner per space. Every shared read and write checks live membership of a live space inside its own statement (`worker/access.js`).
+`(space_id, user_id)`, `role` `owner`|`editor`|`member`, `joined_at`, `deleted_at` (left or removed; a rejoin revives the row). Leaving or being removed runs one set-based batch in `worker/leaving.js` (*detach*) that ends the membership last, so a retry does nothing twice: with a copy, the class course and items are upserted into your own scope (reviving the tombstones a convert or merge left under the same ids; an id a live row of yours already holds becomes `'k' + id`, or `k1…`, `k2…`), each item taking your mark, your notes followed by `Class notes:` and the class's; your filed items, sessions and achievements move onto the copy (a copy for someone no longer in the class is filed under no class); your marks and prefs there are soft-deleted. Without a copy only your layer goes; sessions keep their minutes and the app labels them *A class you left*. Deleting an account hands each class it owns to its longest-standing editor, else its longest-standing member (`HAND_ON` in `worker/accounts.js`, also used by `scripts/add-user.mjs --delete`), and soft-deletes one with nobody else in it (each hand-on also writes a `space.transferred` activity row); memberships, invites, marks, prefs and `inbox_seen` go by cascade, and the activity rows about the account are deleted. A partial unique index keeps exactly one live owner per space. Every shared read and write checks live membership of a live space inside its own statement (`worker/access.js`).
 
 ## `invites`
 
@@ -371,6 +377,22 @@ A shared class (`kind = 'class'`, its rows in scope `c:<id>`) or team project (`
 ## `space_prefs`
 
 `(user_id, id)`, `id = space_id`: your settings for one space: `color` (one of the twelve), `target`, `term` (your semester for a class; `''` is every semester), `archived` (in your sidebar), timestamps, `deleted_at`, `revision`. Written by the Worker when you make, convert, accept or join (the class's colour unless you use it, else the first free; its term), then through `/api/space_prefs/:sid` with whole-row `If-Match`. Its changes go into your own feed. Deleted with the account.
+
+## `activity`
+
+`seq` (autoincrement), `space_id` (12 characters; no foreign key, so rows about a person outlive the space), `actor_id` (who acted, `''` when unknown; no foreign key, so a row outlives the account), `verb`, `subject` (the item or course id; `''` for creations and member or space events), `subject_user` (whom it is about: an assignee, a removed member, a new owner; `''` for everyone, never NULL), `old_value`, `new_value`, `detail` (a JSON object: `by`, `title` or `titles`, `whom`, `space`, `assignees`, the names as they were, so a row still reads once the item, the account or the space is gone), `n` (how many changes it stands for), `bucket` (`at / 600000`, ten minutes), `at`. What members did in a space (spec §12), read by the inbox and each class's Activity tab; separate from `changes`, which keeps only a row's latest state for sync. **Kept 90 days.**
+
+The `verb` CHECK lists all eighteen verbs, so Stages 8–10 need no migration: `item.created`, `item.deleted` (`'0'`/`'1'`, so a restore reads "restored"), `item.date` (`date|start|end`), `item.weight`, `item.title`, `course.meetings`, `course.instructor`, `task.assigned` (one row per newly added assignee, `subject_user` the assignee or `''` for `*`), `task.unassigned` (a task left with nobody), `task.status` (`todo`/`done`, project tasks, `detail.assignees`), `member.joined`, `member.left`, `member.removed`, `member.role`, `space.archived`, `space.transferred`, and Stage 8's `space.linked` and `space.deleted`.
+
+Rows coalesce on the unique key `(space_id, actor_id, verb, subject, subject_user, bucket)`: a later change by the same person to the same thing in the same ten minutes updates the row in place (its `new_value`, `n`, `at`, `detail`), keeping the first row's `seq` and "from", so a row already read does not come back as unread. A change that returns to where it started deletes its row. Indexes: `activity_space (space_id, seq)` (a space's activity; the inbox per space you are in), `activity_about (subject_user, seq) WHERE subject_user != ''` (rows about a person), `activity_at (at)` (the purge).
+
+**Triggers** write the rows about shared items and courses (`activity_items_insert`, `activity_items_update`, `activity_courses_update`, in `migrations/0005_activity.sql`). They see `OLD` and `NEW`, so "from → to" is the real previous value, and the actor is `NEW.updated_by`. An insert writes one `item.created` per actor and bucket holding up to ten titles (an import is one row; the project's own `project` item is not news) and a `task.assigned` per starting assignee; an update writes one row per kind of change it makes, then deletes the rows it brought back to their start (and an assignee added and taken off again in the bucket); a class course's update writes `course.meetings` and `course.instructor`. Personal rows (`u:` scope) never write activity. Because of the triggers, `meta.changes` on a shared `items` or `courses` write counts their rows too: count your own with `SELECT changes()`.
+
+**Routes** write the member and space rows with `noteStmt` (`worker/activity.js`) inside their own batch, each with a condition that the act happened in that batch (a membership whose `joined_at` or `deleted_at` is now, a role whose `updated_at` is now, `changes() > 0` after the archive's update), so a retried request that changed nothing writes nothing: `member.joined` (accept, join by code), `member.left`, `member.removed`, `member.role`, `space.archived`, `space.transferred`. Their bucket is `CAST(now AS INTEGER) / 600000` (`BUCKET` in `worker/accounts.js`): D1 binds a JavaScript number as a REAL, and without the cast the division keeps its fraction and nothing coalesces. A role changed back, or a class unarchived, within the bucket leaves no row (`undoneStmt`). Deleting an account appends a set-based `space.transferred` statement to `HAND_ON` (`worker/accounts.js`): one row in each class just handed on, the deleted account as actor and the heir as `subject_user`, written before the user row goes so the names still read. `ACCOUNT_TABLES` deletes the rows about the account (`subject_user`); rows it acted in stay, with its name in `detail.by`.
+
+## `inbox_seen`
+
+`user_id` (primary key, `ON DELETE CASCADE`), `seq`: the last activity row you have read. Kept off `users`, so reading never moves the profile's revision. `PUT /api/inbox/seen` moves it forward only, and never past the newest activity row there is.
 
 ## Indexes
 
@@ -393,6 +415,9 @@ A shared class (`kind = 'class'`, its rows in scope `c:<id>`) or team project (`
 | `members (user_id)`, live only | my spaces, on every sync |
 | `invites (user_id)`, pending only | my invites |
 | `invites (created_at)` | the planned invite purge |
+| `activity (space_id, seq)` | a space's Activity tab; the inbox per space you are in |
+| `activity (subject_user, seq)`, rows about someone only | the inbox's rows about you, even after you left the space |
+| `activity (at)` | the nightly purge of activity over 90 days |
 | `error_log (at)`, `admin_log (at)` | the Admin page's lists and their nightly cleanup |
 
 Primary keys and unique constraints also provide indexes. Clients page through
@@ -427,6 +452,12 @@ npm run db:check -- --remote      # explicitly inspect production, read-only
 A change that would rebuild a table goes into a fresh database instead:
 `scripts/move-db.mjs` builds the new database from the squashed schema and copies the
 rows across with their revisions, tombstones and change feed, so cursors keep working.
+`activity` and `changes` are rebuilt (`REBUILT` in `scripts/lib/move-db.js`): the
+triggers write rows of their own as the shared items and courses go in, so each table is
+emptied and refilled from the source with its sequence numbers, and its counter is put
+back to the source's head (for `activity`, at least every `inbox_seen.seq`), so no row
+written after the move reuses a number someone has already read past. The comparison
+(`differences`) lets the activity counter end higher than the source's.
 Resolve reported data problems explicitly instead of deleting records to make a move
 pass. The previous database is kept as a backup.
 
@@ -450,7 +481,7 @@ All routes are under `/api`, speak JSON, and require the session cookie except
 | `PUT /api/me` | `{coat, theme, bg, termStart, displayName, types, studyFlow, studyPrefs, schoolCalendar, hiddenSources}` (`bg` optional, default `med`; `types`, `studyFlow`, `studyPrefs`, `schoolCalendar` and `hiddenSources` optional, kept when left out; `schoolCalendar: {}` removes it) → `{profile}` |
 | `POST /api/outline` · `POST /api/school-calendar` · `POST /api/ai/schedule` | the file (or a PDF's text; a timetable PDF's starts with one line per class read from its grid, `Mon 08:30-10:00 \| title \| code \| room`) as the body, `?name=&today=` (and `terms`, `codes`) → what Workers AI read: an outline, a school calendar `{name, terms, days, truncated}`, or a timetable. Nothing is saved. The three share ten reads a day per person (`429 outline_limit`); a failed read is `503 outline_unavailable`. |
 | `GET /api/ai/reads` | → `{left, limit}`: the AI reads left today. |
-| `GET /api/sync?v=3&cursors=<scope>:<seq>,…&sv=<n>` | the current protocol: a cursor per scope, your own rows (including `marks` and `space_prefs`) and those of your live spaces. See Sync v3 below. |
+| `GET /api/sync?v=3&cursors=<scope>:<seq>,…&sv=<n>` | the current protocol: a cursor per scope, your own rows (including `marks` and `space_prefs`) and those of your live spaces; the last page of a pull (`more: false`) also carries `unread`, the inbox's count. See Sync v3 below. |
 | `GET /api/sync?v=2&cursor=<seq>` | kept only for tabs on the old client: `{changes: [{kind, row}], cursor, more, reset}`, at most 100 changes of your own `courses`, `items`, `quotes`, `study_sessions`, `achievements` after `cursor`. |
 | `GET /api/{courses,items,quotes,study_sessions,achievements}/:id` | one live row of yours, or `404`. The client uses it to undo a rejected save. |
 | `PUT /api/courses/:id` | a course (with an optional `target`, a whole-number grade goal 1–100) → the stored course, with server `updatedAt`. Upsert. |
@@ -465,7 +496,10 @@ All routes are under `/api`, speak JSON, and require the session cookie except
 | `GET /api/spaces/:sid` | → `{id, scope, kind, role, archived, members, invites, code, schoolCalendar}`: the members and the class's school-calendar snapshot (or `null`) for everyone in the space, its invites for the owner and editors, the join code's expiry and uses left for the owner. `404` outside it. |
 | `POST /api/spaces/:sid/school` | the owner, archived or not: copy your school calendar into the class again → `{schoolCalendar}` (what the class now holds). With no calendar of yours that has a semester, the old snapshot stays. Classes only (`404` otherwise). The app syncs first and says so when your calendar has not reached the server yet. |
 | `POST /api/spaces/:sid/invites` · `DELETE /api/spaces/:sid/invites/:userId` | `{username, role?}` → `201` the invite (30 days; a repeat refreshes it). The owner or an editor; only the owner gives a role other than the default. `404 no_user`, `409 member`; 20 an hour. So anyone in a class can learn whether a username exists by inviting it, at most 20 names an hour. DELETE withdraws it: whoever sent it, or the owner. |
-| `GET /api/invites` · `POST /api/invites/:sid/accept` · `POST /api/invites/:sid/decline` | your invites, expired ones marked; accept → `{space}` (`404` once withdrawn, `410 expired`, `403 archived` while the class is archived, `409 limit`/`full`; the invite stays pending); decline → `204`. |
+| `GET /api/inbox` | → `{invites, items, seen}`: your invites (as `GET /api/invites`), the inbox's newest 50 rows within the 90 days, newest first, and your `inbox_seen.seq` (0 for none). Each row: `{seq, spaceId, space, kind, verb, subject, actor, subjectUser, about, old, new, detail, n, at}`, `space` the space's name now (or as it was, once gone), `about` whether it is about you. See The inbox and activity below. |
+| `PUT /api/inbox/seen` | `{seq}` → `204`: you have read up to `seq` (forward only, never past the newest row). `400 {field:'seq'}` for anything but a whole number ≥ 0. |
+| `GET /api/spaces/:sid/activity?before=<seq>` | → `{items, more}`: a space's Activity tab, 30 rows below `before` (the newest when left out) within the 90 days, newest first, in the inbox's row shape. Any live member, archived or not; `404` outside it; `400 {field:'before'}` for a bad `before`. |
+| `GET /api/invites` · `POST /api/invites/:sid/accept` · `POST /api/invites/:sid/decline` | your invites, expired ones marked (the list is for old clients only: the app reads invites from `GET /api/inbox`); accept → `{space}` (`404` once withdrawn, `410 expired`, `403 archived` while the class is archived, `409 limit`/`full`; the invite stays pending); decline → `204`. |
 | `POST /api/spaces/:sid/code` · `DELETE /api/spaces/:sid/code` | the owner: a new 8-character code → `201 {code, expires, usesLeft}` (7 days, 10 uses; only its SHA-256 is kept; a new one retires the old) · turn it off. |
 | `POST /api/join` | `{code}` → `{space}`. 10 tries an hour; `404` unknown, `410 expired`, `403 archived` while the class is archived (no use spent), `409 limit`/`full`. A pending invite to that class is accepted with it, with its role. |
 | `PUT /api/spaces/:sid/members/:userId` · `POST /api/spaces/:sid/transfer` | the owner, archived or not: `{role: 'editor'\|'member'}` → `{userId, role}`; `{userId}` makes that member the owner and you an editor → `204`. |
@@ -537,6 +571,46 @@ failure keeps the preview open with the reason, to try again. The outline choice
 shared class is disabled while Import with AI is switched off or no AI reads are left.
 There is no `POST /api/spaces {outline}`: the class is made from the preview's rows.
 
+### The inbox and activity
+
+Nothing is fanned out (spec §12): the inbox is a query (`INBOX` in `worker/activity.js`)
+over the `activity` rows **about you** (`subject_user` is you, by its partial index, even
+in a space you have left) plus, in each space you are a live member of, the rows **since
+you joined** whose verb concerns everyone: `item.created`, `item.deleted`, `item.date`,
+`course.meetings`, `space.archived`, `space.linked`, a task given to everyone, and a
+task's completion or reopening when it is assigned to you or to everyone. Your own
+actions are never in it, and every read holds to the 90 days (`KEEP_MS`) without waiting
+for the purge. `GET /api/inbox` answers the newest 50 with your pending invites.
+
+**Unread** is your pending, unexpired invites to live spaces plus the inbox rows above
+your `inbox_seen.seq`, at most `UNREAD_CAP` (99, `src/core/shared.ts`). The Worker counts
+it once per sync cycle, on the last v3 page (`unread`), so it costs one query per pull;
+the app takes it from a complete pull (`onUnread` in `src/core/sync.ts`) and drops a value
+that is not a whole number from 0 to 99 rather than failing the page. The bell in the top
+bar shows the count, or `99+` (read aloud as "99 or more unread"), and no count at all
+for someone not an admin while shared classes are switched off; their bell opens the
+maintenance page.
+
+**On the device** (`src/data/inbox.ts`): opening the inbox fetches it and keeps the list
+in IndexedDB's `meta` store under `inbox`, so offline it shows the copy from last time.
+It then marks everything read up to the newest row (`PUT /api/inbox/seen`), dropping the
+count to the invites still waiting; rows new on opening keep their dot while the sheet is
+open. Marking read does nothing while the inbox came from the offline copy, and a failed
+`PUT` puts the marker and the count back, so the next open sends it again; a success
+starts a sync, whose count replaces any older one a pull already under way brings back.
+Answering an invite takes it out of the list and the count. A row opens what it is about:
+its item while it is on this device, else its class's sheet; a row with nothing to open
+(a class you left, an item gone) is plain text.
+
+The **Activity tab** (`src/components/sheet/activity-list.tsx`) fetches
+`GET /api/spaces/:sid/activity` when it opens, 30 rows a page with **Show older** (focus
+moves to the first row it brought). Only a request that never reached the server reads
+"Connect to see activity" (or "…older activity"); an error answer says what it was, as
+the class sheet's other errors do (`messageFor`); **Try again** shows when the first page
+failed, **Show older** stays to retry a later one. An answer to an
+older request (another class, a closed tab) is dropped. Rows open their item while it is
+on this device; the class itself is not reopened from its own sheet.
+
 ### Maintenance mode
 
 The Admin page's Maintenance tab switches features off while an admin works on
@@ -555,7 +629,7 @@ off, and the message in the Import with AI sheet; admins keep the feature under 
 bar. The Worker enforces what is a feature of its own: for non-admins, with
 `import` or `app` on, `/api/outline`, `/api/school-calendar` and `/api/ai/*` answer
 `503 {error: 'maintenance', feature}`; with `classes` or `app` on, so does every
-`/api/spaces…`, `/api/invites…` and `/api/join` route. Personal
+`/api/spaces…`, `/api/invites…`, `/api/inbox…` and `/api/join` route. Personal
 rows, `/api/me` and `/api/sync` are never stopped. A shared edit refused this way
 stays pending on the device, with no try counted, and uploads once it is back.
 
@@ -613,13 +687,13 @@ supported incremental cursor.
 
 ### Sync v3 (a cursor per scope)
 
-The app pulls `GET /api/sync?v=3&cursors=u:<me>:812,c:<space id>:640&sv=905`. The Worker pages the person's own scope and their live spaces (at most 20), never a scope taken from the request; each scope's changes are read by its own statement, capped at 101 rows and guarded by live membership, all in one D1 batch (D1 refuses a compound SELECT of more than five terms). The answer is `{scopes, cursors, changes:[{scope, kind, row}], more, reset, revoked}`: `scopes` describes each space (with its members only when its revision is above `sv`), `reset` lists scopes whose cursor fell below the floor (each starts again from 0), and `revoked` lists scopes sent that the person may no longer read; the app removes them after the cycle's last page. A scope resyncing from 0 that is still below the floor carries a tagged cursor `r<seq>.<floor>` instead of a number; the app stores and sends it as it came, and the Worker answers a plain number once the scope is past the floor. Shared rows are written through `/api/spaces/<space id>/{courses,items}/<id>`: at the row's revision as a whole; otherwise the fields named in `changed` merge when each still holds its old or new value, else `409 {current, fields, by}`. `?v=2` remains for tabs on the old client and pages only the person's own scope.
+The app pulls `GET /api/sync?v=3&cursors=u:<me>:812,c:<space id>:640&sv=905`. The Worker pages the person's own scope and their live spaces (at most 20), never a scope taken from the request; each scope's changes are read by its own statement, capped at 101 rows and guarded by live membership, all in one D1 batch (D1 refuses a compound SELECT of more than five terms). The answer is `{scopes, cursors, changes:[{scope, kind, row}], more, reset, revoked}`, and on the last page (`more: false`) `unread` (see The inbox and activity; so every v3 sync reads `activity`): `scopes` describes each space (with its members only when its revision is above `sv`), `reset` lists scopes whose cursor fell below the floor (each starts again from 0), and `revoked` lists scopes sent that the person may no longer read; the app removes them after the cycle's last page. A scope resyncing from 0 that is still below the floor carries a tagged cursor `r<seq>.<floor>` instead of a number; the app stores and sends it as it came, and the Worker answers a plain number once the scope is past the floor. Shared rows are written through `/api/spaces/<space id>/{courses,items}/<id>`: at the row's revision as a whole; otherwise the fields named in `changed` merge when each still holds its old or new value, else `409 {current, fields, by}`. `?v=2` remains for tabs on the old client and pages only the person's own scope.
 
 On the device, IndexedDB version 6 holds shared rows in `shared_courses` and `shared_items` (keyed `[scope, id]`), the spaces in `spaces`, your `marks` and `space_prefs`, and `meta.cursors` (`{scope: seq}`, or the tagged string while a resync is under way); pending keys for shared rows are `shared_items:<scope>:<id>`. A class item an editor deletes stays in `shared_items` as a tombstone (with `deletedAt`); the app lists these apart (`removed_items`), keeps one in your views while your mark on it holds something (a status, grade, weight, notes, checklist or completion) and you have not hidden it, and drops a tombstone 30 days old unless such a mark still holds it. After a complete pull, `revoked` also drops your marks and prefs for a lost space; a mark edit still waiting to upload is carried onto your copy of the item when it has arrived (its notes replacing your part of the copy's notes), else it goes to Saved copies. A mark upload refused with `404` waits for that pull before it is set aside.
 
 ### The nightly purge
 
-`purgeTombstones` (`worker/db.js`) runs in this order: (1) soft-delete the bare marks (holding nothing) on shared items (a class's or a project's) whose tombstones expire, so the change feed carries it; (2) for each space deleted more than 30 days ago, its items, course, change feed, members, invites, marks and prefs, then the space; (3) the floor and the 30-day tombstones, now also `members`, never an expiring class item that a meaningful live mark still holds, and invites 90 days after `created_at`; (4) after that batch, **Keep as mine** on behalf of each person still holding something on an expiring class item, at most 3 (person, class) groups a night, each group's failure logged and skipped. The kept item's class row goes the next night. A project's item with a meaningful mark waits until Stage 8 gives it a keep.
+`purgeTombstones` (`worker/db.js`) runs in this order: (1) soft-delete the bare marks (holding nothing) on shared items (a class's or a project's) whose tombstones expire, so the change feed carries it; (2) for each space deleted more than 30 days ago, its items, course, change feed, members, invites, marks, prefs and activity (except the rows about a person, `subject_user != ''`, which stay in that person's inbox), then the space; (3) the floor and the 30-day tombstones, now also `members`, never an expiring class item that a meaningful live mark still holds, invites 90 days after `created_at`, and activity 90 days after `at` (`KEEP_MS` in `worker/activity.js`); (4) after that batch, **Keep as mine** on behalf of each person still holding something on an expiring class item, at most 3 (person, class) groups a night, each group's failure logged and skipped. The kept item's class row goes the next night. A project's item with a meaningful mark waits until Stage 8 gives it a keep.
 
 ---
 

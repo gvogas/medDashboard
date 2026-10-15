@@ -142,14 +142,23 @@ runs once per database.
 | `0002_spaces.sql` | Shared spaces (classes and projects) and their `members` |
 | `0003_invites.sql` | `invites`: invitations to a space by username |
 | `0004_marks.sql` | `marks` (your status, grade and notes on a shared item) and `space_prefs` (your colour, target and term for a space) |
+| `0005_activity.sql` | `activity` (what members did, from triggers on shared rows and from the member routes) and `inbox_seen` |
 
 Collaboration Stages 5 (leaving and removal) and 6 (the feed, outline imports, classes
 open to everyone) added no migration: deploying them is a plain push of `main`. Stage 6
 uses `spaces.school_calendar`, which has been there since `0002_spaces.sql`.
 
+> **Stage 7 (inbox and activity): apply `0005_activity.sql` to live first.** Run
+> `npm run db:remote`, then `npm run db:check -- --remote`, **before** merging the stage
+> into `main` and pushing. Every v3 sync now reads `activity` for the unread count, so
+> new code on a database without it fails every sync with 500s. Deleting an account
+> needs it too, from the Admin page and from `npm run user:add -- name --delete --remote`
+> (both delete the account's activity rows and write a hand-on row). The old code
+> ignores the new tables, so applying the migration early is safe.
+
 To change the database:
 
-1. Add a new file with the next number, `0005_something.sql`. Never edit a file that
+1. Add a new file with the next number, `0006_something.sql`. Never edit a file that
    has already run.
 2. Apply it locally with `npm run db:local`, then test.
 3. Apply it to live with `npm run db:remote` **before** pushing the code that needs
