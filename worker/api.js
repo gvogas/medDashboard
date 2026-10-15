@@ -17,6 +17,7 @@ import { adminRoutes, markSeen, readAnnouncement } from './admin.js';
 import { classRoutes } from './classes.js';
 import { layerRoutes } from './layer.js';
 import { inboxRoutes } from './inbox.js';
+import { unreadCount } from './activity.js';
 import { logError, messageOf } from './errors.js';
 import { guardMaintenance, publicMaintenance } from './maintenance.js';
 
@@ -283,7 +284,11 @@ const routes = [
   ['GET', /^\/api\/sync$/, async ({ request, env, url }) => {
     const userId = await requireUser(request, env);
     const q = url.searchParams;
-    if (q.get('v') === '3') return json(await syncPageV3(env.DB, userId, cursorsParam(q.get('cursors')), svParam(q.get('sv'))));
+    if (q.get('v') === '3') {
+      const page = await syncPageV3(env.DB, userId, cursorsParam(q.get('cursors')), svParam(q.get('sv')));
+      /* once per sync cycle: only the last page carries the inbox's count (spec §12, §18) */
+      return json(page.more ? page : { ...page, unread: await unreadCount(env.DB, userId) });
+    }
     // v=2, for tabs still on the old client: the person's own scope, one cursor (spec §16).
     const cursor = url.searchParams.get('cursor') || '0';
     if (!/^\d{1,16}$/.test(cursor) || !Number.isSafeInteger(Number(cursor))) throw new HttpError(400, { error: 'invalid', field: 'cursor' });

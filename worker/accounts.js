@@ -7,6 +7,8 @@
 // an order the foreign keys accept. Courses, items and the change feed belong to the scope
 // 'u:<id>', which no foreign key follows, so they are listed here. The user row's deletion
 // cascades to its Spotify attempts, memberships, invites, marks and space prefs.
+// Activity about the account goes; activity it took part in keeps its name in detail.by. Its
+// inbox_seen row goes by ON DELETE CASCADE.
 
 /* worker/spaces.js NEXT_SPACE_REVISION, copied (a test keeps them in step). */
 export const NEXT_SPACE_REVISION =
@@ -62,6 +64,7 @@ export const HAND_ON = [
 ];
 
 export const ACCOUNT_TABLES = [
+  ['activity', 'subject_user = ?1'],
   ['achievements', 'user_id = ?1'],
   ['study_sessions', 'user_id = ?1'],
   ['items', "scope = 'u:' || ?1"],

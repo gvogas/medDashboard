@@ -129,7 +129,14 @@ describe('accounts', () => {
     ]);
     const revisions = async () => (await env.DB.prepare("SELECT id, revision FROM spaces WHERE id GLOB 'ownsclass00*' ORDER BY id").all()).results;
     const before = await revisions();
+    await env.DB.batch([
+      env.DB.prepare("INSERT INTO activity (space_id, actor_id, verb, subject_user, bucket, at) VALUES ('ownsclass001', ?1, 'member.joined', '', 1, 1), ('ownsclass001', ?2, 'member.role', ?1, 2, 2)").bind(id, ed),
+      env.DB.prepare('INSERT INTO inbox_seen (user_id, seq) VALUES (?, 1)').bind(id),
+    ]);
     expect((await admin('/api/admin/accounts/u-owner9', { method: 'DELETE', body: { confirm: 'owner9' } })).status).toBe(204);
+    expect((await env.DB.prepare('SELECT verb FROM activity WHERE subject_user = ?').bind(id).all()).results).toEqual([]);
+    expect(await env.DB.prepare('SELECT count(*) AS n FROM inbox_seen WHERE user_id = ?').bind(id).first()).toEqual({ n: 0 });
+    expect(await env.DB.prepare("SELECT count(*) AS n FROM activity WHERE actor_id = ? AND verb = 'member.joined'").bind(id).first()).toEqual({ n: 1 });
     const roles = async (space) => (await env.DB.prepare('SELECT user_id, role FROM members WHERE space_id = ? ORDER BY user_id').bind(space).all()).results;
     /* the longest-standing editor, ahead of a member who joined earlier */
     expect(await roles('ownsclass001')).toEqual([{ user_id: ed, role: 'owner' }, { user_id: late, role: 'editor' }, { user_id: mem, role: 'member' }]);

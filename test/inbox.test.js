@@ -122,3 +122,17 @@ describe('GET /api/spaces/:sid/activity', () => {
     expect((await sam(`/api/spaces/${s.id}/activity?before=x`)).status).toBe(400);
   });
 });
+
+describe('the unread count on sync (Decision 5)', () => {
+  it('rides on the last v3 page: invites plus unread rows, and drops once seen', async () => {
+    const { alex, sam, s } = await team();
+    await sharedItem(s.scope, 'a1', { course_id: 'web', updated_by: alex.id, ...at(Date.now()) });
+    const page = async () => (await sam(`/api/sync?v=3&cursors=${encodeURIComponent('u:' + sam.id + ':0')}&sv=0`)).json();
+    const first = await page();
+    expect(first.more).toBe(false);
+    expect(first.unread).toBe(1);
+    const top = (await inbox(sam)).items[0].seq;
+    await sam('/api/inbox/seen', { method: 'PUT', body: { seq: top } });
+    expect((await page()).unread).toBe(0);
+  });
+});

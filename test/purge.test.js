@@ -108,4 +108,18 @@ describe('nightly purge of shared rows (spec §13)', () => {
     expect(await one('SELECT count(*) AS n FROM invites WHERE space_id = ?', s.id)).toEqual({ n: 0 });
     expect(await one('SELECT count(*) AS n FROM members WHERE space_id = ?', s.id)).toEqual({ n: 1 });
   });
+
+  it('deletes activity after 90 days, and a purged space\'s rows except those about a person', async () => {
+    const owner = await createUser('pga4');
+    const gone = await makeSpace({ members: { [owner]: 'owner' } }), kept = await makeSpace({ members: { [owner]: 'owner' } });
+    const row = (space, verb, who, at) => env.DB.prepare('INSERT INTO activity (space_id, verb, subject_user, bucket, at) VALUES (?, ?, ?, ?, ?)').bind(space, verb, who, at, at);
+    await env.DB.batch([
+      row(kept.id, 'item.created', '', Date.now() - 91 * DAY), row(kept.id, 'item.created', '', Date.now() - DAY),
+      row(gone.id, 'item.created', '', Date.now() - DAY), row(gone.id, 'member.removed', owner, Date.now() - DAY),
+      env.DB.prepare('UPDATE spaces SET deleted_at = ? WHERE id = ?').bind(Date.now() - 31 * DAY, gone.id),
+    ]);
+    await runNightly();
+    expect(await one('SELECT count(*) AS n FROM activity WHERE space_id = ?', kept.id)).toEqual({ n: 1 });
+    expect(await one('SELECT verb FROM activity WHERE space_id = ?', gone.id)).toEqual({ verb: 'member.removed' });
+  });
 });
