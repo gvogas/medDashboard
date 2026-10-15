@@ -4,6 +4,7 @@
 // are in and the rows about you.
 import { memberGuard, assertAllowed } from './access.js';
 import { BUCKET, BUCKET_MS, NAME, SPACE_NAME } from './accounts.js';
+import { UNREAD_CAP } from '../src/core/shared.ts';
 
 export { BUCKET_MS, SPACE_NAME };
 
@@ -75,12 +76,12 @@ export async function inboxRows(db, userId, now = Date.now()) {
   return { items: rows.results.map((r) => toApi(r, userId)), seen: seen.results[0].seq };
 }
 
-/** Unread (Decision 5): pending unexpired invites to live spaces plus inbox rows above what you read; at most 99. */
+/** Unread (Decision 5): pending unexpired invites to live spaces plus inbox rows above what you read; at most UNREAD_CAP (99). */
 export async function unreadCount(db, userId, now = Date.now()) {
-  const r = await db.prepare(`SELECT MIN(99,
+  const r = await db.prepare(`SELECT MIN(${UNREAD_CAP},
       (SELECT count(*) FROM invites AS i JOIN spaces AS s ON s.id = i.space_id AND s.deleted_at IS NULL
         WHERE i.user_id = ?1 AND i.status = 'pending' AND i.expires_at > ?2)
-      + (SELECT count(*) FROM (SELECT 1 FROM (${INBOX(SEEN, 100)}) LIMIT 100))) AS n`).bind(userId, now).first();
+      + (SELECT count(*) FROM (SELECT 1 FROM (${INBOX(SEEN, UNREAD_CAP + 1)}) LIMIT ${UNREAD_CAP + 1}))) AS n`).bind(userId, now).first();
   return r.n;
 }
 

@@ -1,6 +1,7 @@
 // The only file that knows the API's URLs. Same-origin, cookie session.
 
 import type { Row } from './db.ts';
+import { UNREAD_CAP } from './shared.ts';
 import type { Cursor, Page, ServerProfile } from './store.ts';
 import type { ActivityRow, Inbox, JoinCode, Space, SpaceDetails, SpaceInvite, SpaceSummary } from './types.ts';
 
@@ -187,7 +188,7 @@ async function changesV3(cursors: Record<string, Cursor>, sv: number): Promise<P
       && (c.scope.startsWith('u:') || c.kind === 'courses' || c.kind === 'items') && validRecord(c.row));
   if (!valid) throw invalidResponse();
   /* the inbox's count (spec §12): one unreadable value must not fail a whole sync page */
-  if (!(Number.isSafeInteger(page.unread) && page.unread >= 0 && page.unread <= 99)) delete page.unread;
+  if (!(Number.isSafeInteger(page.unread) && page.unread >= 0 && page.unread <= UNREAD_CAP)) delete page.unread;
   /* a cursor never moves back, except to 0 for a scope that reset */
   for (const [scope, cursor] of Object.entries(page.cursors as Record<string, Cursor>)) {
     if (cursorSeq(cursor) < (cursorSeq(cursors[scope] ?? 0) || 0) && !page.reset.includes(scope)) throw invalidResponse();

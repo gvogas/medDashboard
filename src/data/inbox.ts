@@ -13,7 +13,7 @@ import { openItem } from "./actions"
 import { openClass } from "./classes"
 import { openSheet } from "./overlay"
 import { maintenanceState } from "./maintenance"
-import type { ActivityRow, Inbox, Invite } from "./types"
+import type { ActivityRow, Inbox } from "./types"
 
 let unread = 0
 let box: Inbox | null = null
@@ -22,12 +22,9 @@ const listeners = new Set<() => void>()
 const emit = () => { for (const fn of listeners) fn() }
 const subscribe = (fn: () => void) => { listeners.add(fn); return () => { listeners.delete(fn) } }
 
-const NONE: Invite[] = []
 export const useUnread = () => useSyncExternalStore(subscribe, () => unread)
 export const useInbox = () => useSyncExternalStore(subscribe, () => box)
 export const useInboxOffline = () => useSyncExternalStore(subscribe, () => offline)
-/** Your pending invites, as the inbox last fetched them. */
-export const useInvites = (): Invite[] => useSyncExternalStore(subscribe, () => box?.invites ?? NONE)
 
 /* the list as it now stands, for offline reading; a failed write only leaves the older copy */
 const keep = (b: Inbox) => { void Promise.resolve().then(() => store.meta.set("inbox", b)).catch(() => {}) }
@@ -37,9 +34,13 @@ export function setUnread(n: number): void { if (n !== unread) { unread = n; emi
 
 export const openInbox = () => openSheet({ kind: "inbox" })
 
-/** Fetch the inbox; offline, the copy kept from last time. Not signed out, nor while classes are switched off for you. */
-export async function refreshInbox(): Promise<void> {
-    if (!data.profile || maintenanceState("classes") === "blocked") return
+/**
+ * Fetch the inbox; offline, the copy kept from last time. Not signed out, nor while classes are
+ * switched off for you. Resolves with how far it was read when it came (null when not fetched),
+ * so the sheet knows which rows were new before markSeen moves the marker.
+ */
+export async function refreshInbox(): Promise<number | null> {
+    if (!data.profile || maintenanceState("classes") === "blocked") return null
     try {
         box = await api.inbox.get()
         offline = false
@@ -50,20 +51,21 @@ export async function refreshInbox(): Promise<void> {
         box ??= { invites: [], items: [], seen: 0 }
     }
     emit()
+    return box.seen
 }
 
-/** Everything in the list is read: the count falls to the invites still waiting. */
+/** Everything in the list is read: the count falls to the invites still waiting. Not offline: the server would not hear. */
 export async function markSeen(): Promise<void> {
     const top = box?.items[0]?.seq ?? 0
-    if (!box || top <= box.seen) return
-    const before = box.seen
+    if (!box || offline || top <= box.seen) return
+    const before = box.seen, unreadBefore = unread
     box = { ...box, seen: top }
     setUnread(box.invites.filter((i) => !i.expired).length)
     keep(box)
     emit()
     try { await api.inbox.seen(top) } catch {
         /* offline: not read as far as the server knows, so the next open sends it again */
-        if (box?.seen === top) { box = { ...box, seen: before }; keep(box); emit() }
+        if (box?.seen === top) { box = { ...box, seen: before }; keep(box); setUnread(unreadBefore); emit() }
         return
     }
     /* a pull already under way may bring the count from before: the next one replaces it */
@@ -126,12 +128,17 @@ export function describe(r: ActivityRow, me: string): string {
     }
 }
 
-/** Open what a row is about: its item while it is on this device, else its space (a class's sheet; projects in Stage 9). */
-export function openRow(r: ActivityRow): void {
+/* what a row opens: its item while it is on this device, else its space (a class's sheet; projects in Stage 9), else nothing */
+function target(r: ActivityRow): (() => void) | null {
     const key = (r.kind === "project" ? "p:" : "c:") + r.spaceId + "/" + r.subject
-    if (r.subject && itemByKey(key)) { openItem(key); return }
-    if (r.kind === "class" && data.spaces.some((s) => s.id === r.spaceId)) openClass(r.spaceId)
+    if (r.subject && itemByKey(key)) return () => openItem(key)
+    if (r.kind === "class" && data.spaces.some((s) => s.id === r.spaceId)) return () => openClass(r.spaceId)
+    return null
 }
+/** Whether openRow would open anything for this row. */
+export const openable = (r: ActivityRow): boolean => target(r) !== null
+/** Open what a row is about: its item while it is on this device, else its space. */
+export function openRow(r: ActivityRow): void { target(r)?.() }
 
 /** A page of a space's Activity tab; null offline. */
 export async function loadActivity(spaceId: string, before?: number): Promise<{ items: ActivityRow[]; more: boolean } | null> {

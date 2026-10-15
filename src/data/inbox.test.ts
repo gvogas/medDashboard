@@ -36,7 +36,7 @@ const invite = (spaceId: string, o: Partial<Invite> = {}): Invite => ({
 /* a fresh module for each test: its list and count start empty, whatever ran before */
 let m: typeof import("./inbox")
 const say = (r: ActivityRow, me: string) => m.describe(r, me)
-const read = () => renderHook(() => ({ box: m.useInbox(), unread: m.useUnread(), invites: m.useInvites(), offline: m.useInboxOffline() })).result.current
+const read = () => renderHook(() => ({ box: m.useInbox(), unread: m.useUnread(), invites: m.useInbox()?.invites ?? [], offline: m.useInboxOffline() })).result.current
 /* the copy kept for offline, once the fire-and-forget write has landed */
 const kept = async () => { await new Promise((r) => setTimeout(r)); return fake.meta.get("inbox") as Inbox | undefined }
 
@@ -135,15 +135,30 @@ describe("the inbox list", () => {
 
     it("offline, marking read goes back on this device, so the next open sends it again", async () => {
         fake.api.inbox.get.mockResolvedValueOnce({ invites: [], items: [row({ seq: 9 })], seen: 2 })
-        await m.refreshInbox()
+        expect(await m.refreshInbox()).toBe(2)
+        m.setUnread(3)
         fake.api.inbox.seen.mockRejectedValueOnce(new TypeError("offline"))
         await m.markSeen()
         expect(read().box?.seen).toBe(2)
+        /* and the count with it: still unread */
+        expect(read().unread).toBe(3)
         expect((await kept())?.seen).toBe(2)
         expect(fake.syncNow).not.toHaveBeenCalled()
         await m.markSeen()
         expect(fake.api.inbox.seen).toHaveBeenCalledTimes(2)
         expect(read().box?.seen).toBe(9)
+    })
+
+    it("does not mark read on an offline open: the copy kept stays unread, and so does the count", async () => {
+        fake.api.inbox.get.mockResolvedValueOnce({ invites: [], items: [row({ seq: 9 })], seen: 2 })
+        await m.refreshInbox()
+        fake.api.inbox.get.mockRejectedValueOnce(new TypeError("offline"))
+        expect(await m.refreshInbox()).toBe(2)
+        m.setUnread(4)
+        await m.markSeen()
+        expect(fake.api.inbox.seen).not.toHaveBeenCalled()
+        expect(read()).toMatchObject({ unread: 4, offline: true })
+        expect(read().box?.seen).toBe(2)
     })
 
     it("drops an answered invite, and one from the count", async () => {
@@ -162,9 +177,13 @@ describe("opening a row", () => {
         fake.items.set("c:abcdefabcdef/a1", { id: "a1" })
         m.openRow(row({ subject: "a1" }))
         expect(fake.openItem).toHaveBeenCalledWith("c:abcdefabcdef/a1")
+        expect(m.openable(row({ subject: "a1" }))).toBe(true)
         m.openRow(row({ subject: "gone" }))
         expect(fake.openClass).not.toHaveBeenCalled()
+        expect(m.openable(row({ subject: "gone" }))).toBe(false)
+        expect(m.openable(row({ kind: "project", spaceId: "abcdefabcdef", subject: "gone" }))).toBe(false)
         fake.data.spaces = [{ id: "abcdefabcdef" }]
+        expect(m.openable(row({ subject: "gone" }))).toBe(true)
         m.openRow(row({ subject: "gone" }))
         expect(fake.openClass).toHaveBeenCalledWith("abcdefabcdef")
         m.openInbox()

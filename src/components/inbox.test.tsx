@@ -65,6 +65,7 @@ beforeAll(async () => {
 afterAll(() => { vi.useRealTimers() })
 beforeEach(() => {
     fake.data.profile = { id: "u-me", isAdmin: false }
+    fake.data.spaces = []
     news.at = Date.now() - 5 * 60e3
     fake.api.inbox.get.mockResolvedValue({ invites: [invite], items: [news], seen: 0 })
 })
@@ -77,8 +78,12 @@ describe("the bell and the inbox (spec §12, §15)", () => {
         expect(bell("Inbox").textContent).toBe("")
         act(() => setUnread(3))
         expect(bell("Inbox, 3 unread").textContent).toBe("3")
+        expect(bell("Inbox, 3 unread").getAttribute("aria-haspopup")).toBe("dialog")
+        act(() => setUnread(98))
+        expect(bell("Inbox, 98 unread").textContent).toBe("98")
+        /* the server counts no higher than 99: that means 99 or more */
         act(() => setUnread(99))
-        expect(bell("Inbox, 99 unread").textContent).toContain("99")
+        expect(bell("Inbox, 99 or more unread").textContent).toBe("99+")
     })
 
     it("lists invites and news, marks them read, and accepts an invite", async () => {
@@ -114,6 +119,38 @@ describe("the bell and the inbox (spec §12, §15)", () => {
         expect(await screen.findByText("You're offline. This is what the inbox held last time.")).toBeTruthy()
         expect(screen.getByText("Gabriel moved REST API: 15 Oct → 18 Oct")).toBeTruthy()
         expect((screen.getByRole("button", { name: "Accept the invite to Web Services" }) as HTMLButtonElement).disabled).toBe(true)
+    })
+
+    it("offline, marks nothing read: the bell keeps its count", async () => {
+        render(<><TopBar /><Sheet /></>)
+        /* a first open whose marking does not reach the server: the list stays unread, the count with it */
+        fake.api.inbox.seen.mockRejectedValueOnce(new TypeError("Failed to fetch"))
+        act(() => setUnread(2))
+        await act(async () => { fireEvent.click(bell("Inbox, 2 unread")) })
+        expect(await screen.findByText("Gabriel moved REST API: 15 Oct → 18 Oct")).toBeTruthy()
+        await waitFor(() => expect(fake.api.inbox.seen).toHaveBeenCalledWith(7))
+        await waitFor(() => expect(bell("Inbox, 2 unread")).toBeTruthy())
+        act(() => closeSheet())
+        fireEvent.transitionEnd(document.querySelector('[role="dialog"]')!)
+        /* then offline: the copy kept (read up to 0, one row) shows, and nothing is marked */
+        fake.api.inbox.get.mockRejectedValueOnce(new TypeError("Failed to fetch"))
+        await act(async () => { fireEvent.click(bell("Inbox, 2 unread")) })
+        expect(await screen.findByText("You're offline. This is what the inbox held last time.")).toBeTruthy()
+        expect(bell("Inbox, 2 unread")).toBeTruthy()
+        expect(fake.api.inbox.seen).toHaveBeenCalledTimes(1)
+    })
+
+    it("lets a row open what it is about only while that is here", async () => {
+        render(<><TopBar /><Sheet /></>)
+        await act(async () => { fireEvent.click(bell(/^Inbox/)) })
+        /* not in that class on this device, the item not here: the row only reads */
+        expect(await screen.findByText("Gabriel moved REST API: 15 Oct → 18 Oct")).toBeTruthy()
+        expect(screen.queryByRole("button", { name: /Gabriel moved REST API/ })).toBeNull()
+        act(() => closeSheet())
+        fireEvent.transitionEnd(document.querySelector('[role="dialog"]')!)
+        fake.data.spaces = [{ id: SID }]
+        await act(async () => { fireEvent.click(bell(/^Inbox/)) })
+        expect(await screen.findByRole("button", { name: /Gabriel moved REST API/ })).toBeTruthy()
     })
 
     it("while classes are switched off, shows no count and opens the maintenance page", async () => {

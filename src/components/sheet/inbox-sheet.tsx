@@ -3,12 +3,12 @@
 // read. Offline it shows the copy kept from last time. While the admins have shared classes
 // switched off, everyone else gets the maintenance page instead.
 
-import { useEffect, useRef, useState } from "react"
+import { useEffect, useState } from "react"
 import { ago, dayMonth, iso } from "@/core/dates"
 import { data } from "@/core/store"
 import { closeSheet } from "@/data/overlay"
 import { accept, decline, joinMessageFor, messageFor, openJoin } from "@/data/classes"
-import { describe, markSeen, openRow, refreshInbox, useInbox, useInboxOffline } from "@/data/inbox"
+import { describe, markSeen, openable, openRow, refreshInbox, useInbox, useInboxOffline } from "@/data/inbox"
 import { useMaintenance } from "@/data/maintenance"
 import { MaintenanceBar, MaintenancePage } from "@/components/maintenance"
 import type { ActivityRow, Invite } from "@/data/types"
@@ -34,10 +34,11 @@ function InboxCard({ bar }: { bar: boolean }) {
     const offline = useInboxOffline()
     const [busy, setBusy] = useState(false)
     const [err, setErr] = useState("")
-    useEffect(() => { void refreshInbox().then(markSeen) }, [])
-    /* what was read when the sheet first had the list, so rows new on opening keep their "New" while it is open */
-    const seenAtOpen = useRef<number | null>(null)
-    if (box && seenAtOpen.current === null) seenAtOpen.current = box.seen
+    /* how far it was read when the list came, so rows new on opening stay marked while the sheet is open */
+    const [seenAtOpen, setSeenAtOpen] = useState<number | null>(null)
+    useEffect(() => {
+        void refreshInbox().then((seen) => { if (seen !== null) setSeenAtOpen(seen); return markSeen() })
+    }, [])
     const me = data.profile?.id ?? ""
 
     const yes = async (inv: Invite) => {
@@ -77,7 +78,7 @@ function InboxCard({ bar }: { bar: boolean }) {
                         {box.items.length === 0 && box.invites.length === 0 && <Note>Nothing new. News from your classes shows here.</Note>}
                         {box.items.length > 0 && (
                             <ul aria-label="News" className={LIST}>
-                                {box.items.map((r) => <NewsRow key={r.seq} row={r} me={me} unread={r.seq > (seenAtOpen.current ?? box.seen)} />)}
+                                {box.items.map((r) => <NewsRow key={r.seq} row={r} me={me} unread={r.seq > (seenAtOpen ?? box.seen)} />)}
                             </ul>
                         )}
                     </>
@@ -92,11 +93,21 @@ function InboxCard({ bar }: { bar: boolean }) {
 }
 
 function NewsRow({ row, me, unread }: { row: ActivityRow; me: string; unread: boolean }) {
+    const body = (
+        <>
+            <span>
+                {unread && <><i aria-hidden="true" className="mr-1.5 inline-block size-2 rounded-full bg-primary align-middle" /><span className="sr-only">New: </span></>}
+                {describe(row, me)}
+            </span>
+            <span className="text-[11px] text-muted-foreground">{row.space} · {ago(row.at)}</span>
+        </>
+    )
+    /* a row about something no longer here (a class you left, an item gone) only reads */
+    if (!openable(row)) return <li className={ROW}>{body}</li>
     return (
         <li>
             <button type="button" onClick={() => openRow(row)} className={ROW + " w-full cursor-pointer border-0 text-left font-[inherit] text-foreground hover:bg-accent"}>
-                <span>{unread && <span className="sr-only">New: </span>}{describe(row, me)}</span>
-                <span className="text-[11px] text-muted-foreground">{row.space} · {ago(row.at)}</span>
+                {body}
             </button>
         </li>
     )
