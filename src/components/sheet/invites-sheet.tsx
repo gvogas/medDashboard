@@ -5,7 +5,8 @@
 import { useEffect, useState } from "react"
 import { dayMonth, iso } from "@/core/dates"
 import { closeSheet } from "@/data/overlay"
-import { accept, decline, joinMessageFor, messageFor, openJoin, refreshInvites, useInvites } from "@/data/classes"
+import { accept, decline, joinMessageFor, messageFor, openJoin } from "@/data/classes"
+import { refreshInbox, useInvites } from "@/data/inbox"
 import { useMaintenance } from "@/data/maintenance"
 import { MaintenanceBar, MaintenancePage } from "@/components/maintenance"
 import type { Invite } from "@/data/types"
@@ -26,7 +27,7 @@ function Invites({ bar }: { bar: boolean }) {
     const list = useInvites()
     const [busy, setBusy] = useState(false)
     const [err, setErr] = useState("")
-    useEffect(() => { void refreshInvites() }, [])
+    useEffect(() => { void refreshInbox() }, [])
 
     const yes = async (inv: Invite) => {
         setBusy(true); setErr("")

@@ -25,7 +25,8 @@ vi.mock("@/data/actions", async (importOriginal) => ({
     openSettings: vi.fn(),
 }))
 const classes = vi.hoisted(() => ({ openClass: vi.fn(), openInvites: vi.fn(), openJoin: vi.fn(), openNewClass: vi.fn() }))
-vi.mock("@/data/classes", () => ({ ...classes, useInvites: () => fake.invites }))
+vi.mock("@/data/classes", () => classes)
+vi.mock("@/data/inbox", () => ({ useInvites: () => fake.invites }))
 
 import { openCourse, openSettings } from "@/data/actions"
 import { saveProfile } from "@/core/store"

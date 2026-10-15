@@ -2,7 +2,7 @@
 
 import type { Row } from './db.ts';
 import type { Cursor, Page, ServerProfile } from './store.ts';
-import type { Invite, JoinCode, Space, SpaceDetails, SpaceInvite, SpaceSummary } from './types.ts';
+import type { ActivityRow, Inbox, JoinCode, Space, SpaceDetails, SpaceInvite, SpaceSummary } from './types.ts';
 
 /** An error's body as the Worker sends it: its code, and for some the server's copy or a wait. */
 export interface ErrorBody { error?: string; retryAfter?: unknown; current?: Row | null; [field: string]: unknown }
@@ -164,7 +164,7 @@ async function changes(cursor: number): Promise<Page & { reset: boolean; more: b
   return page;
 }
 /** A v3 page (spec §6): changes across your own scope and your spaces', a cursor per scope. */
-export interface PageV3 extends Page { cursors: Record<string, Cursor>; scopes: Space[]; more: boolean; reset: string[]; revoked: string[] }
+export interface PageV3 extends Page { cursors: Record<string, Cursor>; scopes: Space[]; more: boolean; reset: string[]; revoked: string[]; unread?: number }
 const SCOPE = /^(u:[^,]+|[cp]:[a-z0-9]{12})$/;
 /* a v3 page's kinds; marks and space prefs only ever in your own scope (checked below) */
 const KINDS = ['courses', 'items', 'quotes', 'study_sessions', 'achievements', 'marks', 'space_prefs'];
@@ -179,6 +179,7 @@ async function changesV3(cursors: Record<string, Cursor>, sv: number): Promise<P
   const list = Object.entries(cursors).map(([scope, seq]) => `${scope}:${seq}`).join(',');
   const page = await request('GET', `/api/sync?v=3&cursors=${encodeURIComponent(list)}&sv=${sv}`);
   const valid = !!page && typeof page.more === 'boolean' && scopeList(page.reset) && scopeList(page.revoked)
+    && (page.unread === undefined || (Number.isSafeInteger(page.unread) && page.unread >= 0 && page.unread <= 99))
     && !!page.cursors && typeof page.cursors === 'object'
     && Object.entries(page.cursors).every(([s, n]) => SCOPE.test(s) && !Number.isNaN(cursorSeq(n)))
     && Array.isArray(page.scopes) && page.scopes.every((s: Space | null) => !!s && typeof s.id === 'string' && SCOPE.test(s.scope) && Number.isSafeInteger(s.revision))
@@ -248,9 +249,16 @@ export const api = {
     share: (sid: string, items: string[]): Promise<{ shared: number }> => request('POST', `/api/spaces/${sid}/absorb`, { items }),
     /* the owner shares their school calendar with the class again (spec §8) */
     school: (sid: string): Promise<{ schoolCalendar: unknown | null }> => request('POST', `/api/spaces/${sid}/school`),
+    /* Stage 7 (spec §12): a page of the space's Activity tab, below `before` */
+    activity: (sid: string, before?: number): Promise<{ items: ActivityRow[]; more: boolean }> =>
+      request('GET', `/api/spaces/${sid}/activity` + (before ? `?before=${before}` : '')),
+  },
+  /* your invites and what others did that concerns you (spec §12) */
+  inbox: {
+    get: (): Promise<Inbox> => request('GET', '/api/inbox'),
+    seen: (seq: number) => empty(request('PUT', '/api/inbox/seen', { seq })),
   },
   invites: {
-    list: (): Promise<{ invites: Invite[] }> => request('GET', '/api/invites'),
     accept: (sid: string) => spaceOf(request('POST', `/api/invites/${sid}/accept`)),
     decline: (sid: string) => empty(request('POST', `/api/invites/${sid}/decline`)),
   },

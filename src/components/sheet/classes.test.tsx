@@ -11,7 +11,8 @@ const fake = vi.hoisted(() => ({
     },
     api: {
         spaces: { create: vi.fn(), get: vi.fn(), invite: vi.fn(), revokeInvite: vi.fn(), setRole: vi.fn(), transfer: vi.fn(), makeCode: vi.fn(), dropCode: vi.fn(), school: vi.fn() },
-        invites: { list: vi.fn(), accept: vi.fn(), decline: vi.fn() },
+        invites: { accept: vi.fn(), decline: vi.fn() },
+        inbox: { get: vi.fn(), seen: vi.fn() },
         join: vi.fn(),
     },
     store: { saveProfile: vi.fn(async (patch: Record<string, unknown>) => { Object.assign(fake.data.profile!, patch) }) },
@@ -58,7 +59,7 @@ const pref = { id: SID, spaceId: SID, color: "#17B3AE", target: null, term: "", 
 beforeEach(() => {
     Object.assign(fake.data, { profile: { id: "u-me", isAdmin: true }, courses: [], items: [], spaces: [], shared_courses: [], shared_items: [], marks: [], space_prefs: [] })
     fake.syncNow.mockImplementation(async () => true)
-    fake.api.invites.list.mockResolvedValue({ invites: [] })
+    fake.api.inbox.get.mockResolvedValue({ invites: [], items: [], seen: 0 })
 })
 afterEach(() => { cleanup(); vi.clearAllMocks() })
 
@@ -407,7 +408,7 @@ describe("invites to you", () => {
     })
 
     it("are listed with who sent each; Decline drops one, Accept follows the class as it downloads", async () => {
-        fake.api.invites.list.mockResolvedValue({ invites: [inv(SID), inv("sp0000000002", { name: "Databases" }), inv("sp0000000003", { name: "Old class", expired: true })] })
+        fake.api.inbox.get.mockResolvedValue({ invites: [inv(SID), inv("sp0000000002", { name: "Databases" }), inv("sp0000000003", { name: "Old class", expired: true })], items: [], seen: 0 })
         fake.api.invites.accept.mockResolvedValue(summary)
         render(<InvitesSheet />)
         await screen.findByText("Databases")

@@ -38,3 +38,12 @@ export function dur(a: string | null | undefined, b: string | null | undefined):
 export const dayMonth = (d: string | null | undefined): string => { const x = parse(d); return x.getDate() + ' ' + MON[x.getMonth()].slice(0, 3); };
 /** "Mon 14 Sep" */
 export const shortDate = (d: string | null | undefined): string => DOW[parse(d).getDay()] + ' ' + dayMonth(d);
+
+/** "5 min ago", "3 h ago", "2 days ago". */
+export function ago(ms: number, now = Date.now()): string {
+  const s = Math.max(0, Math.round((now - ms) / 1000));
+  if (s < 60) return 'just now';
+  if (s < 3600) return Math.round(s / 60) + ' min ago';
+  if (s < 86400) return Math.round(s / 3600) + ' h ago';
+  return Math.round(s / 86400) + ' days ago';
+}

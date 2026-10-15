@@ -33,6 +33,7 @@ export type SheetState =
     | { kind: "convert"; courseId: string }
     | { kind: "join"; code: string; space: SpaceSummary | null }
     | { kind: "invites" }
+    | { kind: "inbox" }
     | { kind: "merge"; spaceId: string; courseId: string; fromCourse: boolean }
     | null
 

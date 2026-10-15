@@ -1,9 +1,8 @@
-// Shared classes on this device (spec §11, §13, §15): opening their sheets, your invites,
+// Shared classes on this device (spec §11, §13, §15): opening their sheets, answering invites,
 // making a class, and the words for what went wrong. Every call needs a connection; the
 // class itself arrives by sync like everything else, and its rows join your views with your
 // marks on top (effective.ts).
 
-import { useSyncExternalStore } from "react"
 import { api, ApiError } from "@/core/api"
 import * as store from "@/core/store"
 import { data } from "@/core/store"
@@ -12,8 +11,8 @@ import { HEXES } from "@/core/model"
 import { REVIEW_ID } from "@/core/shared"
 import { openSheet, type ClassTab } from "./overlay"
 import { toast } from "./toast"
-import { maintenanceState } from "./maintenance"
-import type { Course, Invite, Item, Space, SpacePref, SpaceSummary } from "./types"
+import { dropInvite } from "./inbox"
+import type { Course, Item, Space, SpacePref, SpaceSummary } from "./types"
 
 /* ── the sheets ── */
 
@@ -24,48 +23,22 @@ export const openConvert = (courseId: string) => openSheet({ kind: "convert", co
 export const openJoin = (code = "", space: SpaceSummary | null = null) => openSheet({ kind: "join", code, space })
 export const openInvites = () => openSheet({ kind: "invites" })
 
-/* ── your invites ── */
-
-let invites: Invite[] = []
-const listeners = new Set<() => void>()
-const emit = () => { for (const fn of listeners) fn() }
-const subscribe = (fn: () => void) => { listeners.add(fn); return () => { listeners.delete(fn) } }
-
-/** Your invites as last fetched: pending ones, the expired marked. */
-export const useInvites = () => useSyncExternalStore(subscribe, () => invites)
-export const getInvites = () => invites
-
-/** Fetch your invites; offline, the last list stays. Not while classes are switched off for you. */
-export async function refreshInvites(): Promise<void> {
-    if (!data.profile || maintenanceState("classes") === "blocked") return
-    try { invites = (await api.invites.list()).invites; emit() } catch { /* offline or signed out: keep the last list */ }
-}
-
-let watching = false
-/** Fetch your invites now, and again whenever Term comes back into view. */
-export function watchInvites(): void {
-    void refreshInvites()
-    if (watching) return
-    watching = true
-    document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") void refreshInvites() })
-}
-
-const answered = (spaceId: string) => { invites = invites.filter((i) => i.spaceId !== spaceId); emit() }
+/* ── answering invites (the list is the inbox's, inbox.ts) ── */
 
 /** Accept an invite: the Worker makes you a member, and the class downloads with the next sync. */
 export async function accept(spaceId: string): Promise<SpaceSummary> {
     const space = await api.invites.accept(spaceId)
-    answered(spaceId)
+    dropInvite(spaceId)
     return space
 }
 export async function decline(spaceId: string): Promise<void> {
     await api.invites.decline(spaceId)
-    answered(spaceId)
+    dropInvite(spaceId)
 }
 /** Join with a code; a pending invite to the same class is accepted with it. */
 export async function joinWithCode(code: string): Promise<SpaceSummary> {
     const space = await api.join(code)
-    answered(space.id)
+    dropInvite(space.id)
     return space
 }
 

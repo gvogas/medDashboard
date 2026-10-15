@@ -3,7 +3,8 @@
 // follows the ARIA menu pattern. Classes themselves are rows of the course list (sidebar.tsx).
 
 import { useEffect, useRef, useState, type KeyboardEvent } from "react"
-import { openInvites, openJoin, openNewClass, useInvites } from "@/data/classes"
+import { openInvites, openJoin, openNewClass } from "@/data/classes"
+import { useInvites } from "@/data/inbox"
 import { openCourse } from "@/data/actions"
 import { Count } from "./sidebar-parts"
 

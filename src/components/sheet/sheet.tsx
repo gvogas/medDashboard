@@ -52,6 +52,7 @@ export function sheetLabel(s: Exclude<SheetState, null>): string {
     if (s.kind === "convert") return "Convert to shared class"
     if (s.kind === "join") return "Join a class"
     if (s.kind === "invites") return "Invites"
+    if (s.kind === "inbox") return "Inbox"
     if (s.kind === "merge") return "Merge into the class"
     const it = (itemByKey(s.id) ?? store.item(s.id)) as Item | null
     return it ? tmeta(it.type).label : "Item"

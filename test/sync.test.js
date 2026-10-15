@@ -43,6 +43,18 @@ describe('persisted operation synchronization', () => {
    expect(api.put).not.toHaveBeenCalled();
    expect(store.rejectOperation).toHaveBeenCalledWith(expect.objectContaining({ reviewRequired: true }), null, expect.stringContaining('before conflict protection'));
  });
+ it('hands on the unread count the last page of a complete pull carries, and none from an incomplete one', async () => {
+   const counts = [];
+   sync.onUnread((n) => counts.push(n));
+   const page = (over) => ({ changes: [], scopes: [], cursors: { 'u:u1': 2 }, more: false, reset: [], revoked: [], ...over });
+   api.syncV3.mockResolvedValueOnce(page({ more: true, unread: 9 })).mockResolvedValueOnce(page({ unread: 4 }));
+   await sync.syncNow();
+   expect(counts).toEqual([4]);
+   api.syncV3.mockResolvedValue(page({ more: true, unread: 7 }));
+   await sync.syncNow();
+   expect(counts).toEqual([4]);
+   sync.onUnread(() => {});
+ });
  it('acknowledges exactly the uploaded operation', async () => {
    await sync.syncNow();
    expect(store.settleOperation).toHaveBeenCalledWith(op, expect.objectContaining({ revision: 2 }));

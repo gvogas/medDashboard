@@ -9,10 +9,11 @@ const fake = vi.hoisted(() => ({
         shared_courses: [] as { scope: string; id: string }[],
         space_prefs: [] as { id: string }[],
     },
-    api: { invites: { list: vi.fn(), accept: vi.fn(), decline: vi.fn() }, spaces: { create: vi.fn() }, join: vi.fn() },
+    api: { invites: { accept: vi.fn(), decline: vi.fn() }, spaces: { create: vi.fn() }, join: vi.fn() },
     syncNow: vi.fn(async () => true),
     openSheet: vi.fn(),
     toast: vi.fn(),
+    dropInvite: vi.fn(),
 }))
 vi.mock("@/core/store", () => ({ data: fake.data }))
 vi.mock("@/core/api", () => {
@@ -26,10 +27,11 @@ vi.mock("@/core/api", () => {
 vi.mock("@/core/sync", () => ({ syncNow: fake.syncNow }))
 vi.mock("./overlay", () => ({ openSheet: fake.openSheet }))
 vi.mock("./toast", () => ({ toast: fake.toast }))
+vi.mock("./inbox", () => ({ dropInvite: fake.dropInvite }))
 
 import { ApiError } from "@/core/api"
 import {
-    accept, classFrom, convert, convertChoice, decline, download, formatCode, freeColour, getInvites, joinLink, joinMessageFor, joinWithCode, makeBlank, messageFor, refreshInvites,
+    accept, classFrom, convert, convertChoice, decline, download, formatCode, freeColour, joinLink, joinMessageFor, joinWithCode, makeBlank, messageFor,
 } from "./classes"
 
 const SID = "sp0000000001"
@@ -90,38 +92,14 @@ describe("words and small rules", () => {
 })
 
 describe("your invites", () => {
-    it("are fetched for anyone signed in, and the last list stays when a fetch fails", async () => {
-        fake.data.profile = { id: "u-me" }
-        fake.api.invites.list.mockResolvedValueOnce({ invites: [{ spaceId: SID, name: "Databases" }] })
-        await refreshInvites()
-        expect(getInvites()).toEqual([{ spaceId: SID, name: "Databases" }])
-        fake.api.invites.list.mockRejectedValueOnce(new TypeError("offline"))
-        await refreshInvites()
-        expect(getInvites()).toHaveLength(1)
-        fake.data.profile = null
-        await refreshInvites()
-        expect(fake.api.invites.list).toHaveBeenCalledTimes(2)
-    })
-
-    it("are not fetched while classes are switched off for you, and are for an admin", async () => {
-        fake.data.profile = { id: "u-me", isAdmin: false, maintenance: { features: ["classes"], message: "" } }
-        await refreshInvites()
-        expect(fake.api.invites.list).not.toHaveBeenCalled()
-        fake.data.profile = { id: "u-me", isAdmin: true, maintenance: { features: ["classes"], message: "" } }
-        fake.api.invites.list.mockResolvedValueOnce({ invites: [] })
-        await refreshInvites()
-        expect(fake.api.invites.list).toHaveBeenCalledTimes(1)
-    })
-
-    it("leave the list once answered", async () => {
-        fake.api.invites.list.mockResolvedValueOnce({ invites: [{ spaceId: SID }, { spaceId: "sp0000000002" }, { spaceId: "sp0000000003" }] })
-        await refreshInvites()
+    /* fetching them is the inbox's now (inbox.test.ts) */
+    it("leave the inbox once answered", async () => {
         fake.api.invites.accept.mockResolvedValueOnce(summary)
         expect(await accept(SID)).toEqual(summary)
         await decline("sp0000000002")
         fake.api.join.mockResolvedValueOnce({ ...summary, id: "sp0000000003" })
         await joinWithCode("7KQ2M9XD")
-        expect(getInvites()).toEqual([])
+        expect(fake.dropInvite.mock.calls).toEqual([[SID], ["sp0000000002"], ["sp0000000003"]])
     })
 })
 
