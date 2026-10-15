@@ -117,6 +117,10 @@ CREATE TRIGGER activity_items_update AFTER UPDATE ON items WHEN NEW.scope NOT GL
    NEW.updated_at / 600000, NEW.updated_at
  WHERE NEW.scope GLOB 'p:*' AND NEW.type = 'task' AND NEW.deleted_at IS NULL AND (OLD.completed_at IS NULL) != (NEW.completed_at IS NULL)
  ON CONFLICT (space_id, actor_id, verb, subject, subject_user, bucket) DO UPDATE SET new_value = excluded.new_value, n = activity.n + 1, at = excluded.at, detail = excluded.detail;
+ -- An assignee this person added in this bucket and has taken off again (new_value is the
+ -- id as stored in assignees, '*' for everyone).
+ DELETE FROM activity WHERE space_id = substr(NEW.scope, 3) AND actor_id = COALESCE(NEW.updated_by, '') AND bucket = NEW.updated_at / 600000
+   AND subject = NEW.id AND verb = 'task.assigned' AND new_value NOT IN (SELECT value FROM json_each(NEW.assignees));
  DELETE FROM activity WHERE space_id = substr(NEW.scope, 3) AND actor_id = COALESCE(NEW.updated_by, '') AND bucket = NEW.updated_at / 600000
    AND subject = NEW.id AND subject_user = '' AND verb IN ('item.deleted', 'item.date', 'item.weight', 'item.title', 'task.status') AND old_value IS new_value;
 END;

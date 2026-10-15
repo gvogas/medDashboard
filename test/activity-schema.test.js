@@ -21,7 +21,9 @@ describe('activity from shared rows (spec §12)', () => {
   it('records nothing for personal rows', async () => {
     const me = await createUser('acp' + ++n);
     await env.DB.prepare("INSERT INTO items (scope, id, type, title, date, status, created_at, updated_at) VALUES ('u:' || ?, 'x', 'task', 'Mine', '2026-10-15', 'todo', 1, 1)").bind(me).run();
-    expect((await env.DB.prepare('SELECT count(*) AS n FROM activity').first()).n).toBe(0);
+    await edit('u:' + me, 'x', "date = '2026-10-18', title = 'Mine 2'", me, T0);
+    /* a trigger would file it under the scope's id (and refuse it, not being 12 characters) */
+    expect((await env.DB.prepare('SELECT count(*) AS n FROM activity WHERE space_id = ? OR actor_id = ?').bind(me, me).first()).n).toBe(0);
   });
 
   it('coalesces creations by one person in ten minutes into one row with up to ten titles', async () => {
@@ -69,13 +71,26 @@ describe('activity from shared rows (spec §12)', () => {
     await sharedItem(s.scope, 't1', { title: 'Endpoint', assignees: JSON.stringify([sam]), updated_by: alex, updated_at: T0 });
     await edit(s.scope, 't1', 'assignees = ?', alex, T0 + MIN, JSON.stringify([sam, alex]));
     await edit(s.scope, 't1', "status = 'done', completed_at = ?, completed_by = ?", sam, T0 + 2 * MIN, T0 + 2 * MIN, sam);
-    await edit(s.scope, 't1', "assignees = '[]'", alex, T0 + 3 * MIN);
+    /* in the next bucket: taking them off within the same ten minutes would cancel the assignments */
+    await edit(s.scope, 't1', "assignees = '[]'", alex, T0 + 10 * MIN);
     const got = (await rows(s.id)).filter((r) => r.verb.startsWith('task.'));
     expect(got.map((r) => [r.actor_id, r.verb, r.subject_user, r.new_value])).toEqual([
       [alex, 'task.assigned', sam, sam], [alex, 'task.assigned', alex, alex], [sam, 'task.status', '', 'done'], [alex, 'task.unassigned', '', '[]'],
     ]);
     expect(got[2].detail.assignees).toEqual([sam, alex]);
     expect(got[0].detail.whom).toBe('acs' + n);
+  });
+
+  it('drops an assignment taken back in the same ten minutes, for a person and for everyone', async () => {
+    const { alex, sam, s } = await space('project');
+    await sharedItem(s.scope, 't3', { title: 'Review', updated_by: alex, updated_at: T0 - 30 * MIN });
+    await edit(s.scope, 't3', 'assignees = ?', alex, T0, JSON.stringify([sam, '*']));
+    await edit(s.scope, 't3', 'assignees = ?', alex, T0 + MIN, JSON.stringify([alex]));
+    const assigned = () => rows(s.id).then((all) => all.filter((r) => r.verb === 'task.assigned').map((r) => r.new_value));
+    expect(await assigned()).toEqual([alex]);
+    /* an assignment from an earlier bucket stays: it was news when it happened */
+    await edit(s.scope, 't3', "assignees = '[]'", alex, T0 + 20 * MIN);
+    expect(await assigned()).toEqual([alex]);
   });
 
   it('writes "everyone" as an empty subject_user', async () => {

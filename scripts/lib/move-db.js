@@ -78,7 +78,8 @@ export function readQueries(columns) {
     const list = cols.map((col) => (table === 'changes' && col === 'payload' && has.has('changes.user_id') ? PAYLOAD_FROM_USER : pick(table, col)));
     return [table, `SELECT ${list.join(', ')} FROM ${table} ORDER BY ${ORDER_BY[table] || 'user_id, id'}`];
   });
-  out.push(['state', "SELECT (SELECT floor FROM sync_state WHERE id = 1) AS floor, COALESCE((SELECT seq FROM sqlite_sequence WHERE name = 'changes'), 0) AS head"]);
+  out.push(['state', `SELECT (SELECT floor FROM sync_state WHERE id = 1) AS floor, COALESCE((SELECT seq FROM sqlite_sequence WHERE name = 'changes'), 0) AS head,
+    COALESCE((SELECT seq FROM sqlite_sequence WHERE name = 'activity'), 0) AS activity_head`]);
   return out;
 }
 
@@ -95,9 +96,10 @@ function literal(v) {
 /**
  * The statements that fill a fresh database from a dump ({table: rows, state}).
  * Rows go in first; their triggers write a change feed and activity of their own, which
- * are then replaced by the old ones with their sequence numbers, so every device's cursor
- * and every person's inbox read marker still point at the same place. The feed's counter is put back to the old head by
- * writing a row at that number and removing it.
+ * are then replaced by the old ones with their sequence numbers. Each counter is put back
+ * to the old head (for activity, at least every read marker) by writing a row at that
+ * number and removing it, so every device's cursor still points at the same place and no
+ * row written after the move reuses a number someone has already read past.
  */
 export function copyStatements(dump) {
   const out = [];
@@ -119,6 +121,12 @@ export function copyStatements(dump) {
   if (head > top && someone) {
     out.push(`INSERT INTO changes (seq, scope, kind, row_id, payload) VALUES (${literal(head)}, ${literal('u:' + someone.id)},'move', 'move', '{}')`);
     out.push("DELETE FROM changes WHERE kind = 'move' AND row_id = 'move'");
+  }
+  const activityHead = Math.max(dump.state?.activity_head || 0, ...(dump.inbox_seen || []).map((r) => r.seq));
+  const activityTop = Math.max(0, ...(dump.activity || []).map((a) => a.seq));
+  if (activityHead > activityTop) {
+    out.push(`INSERT INTO activity (seq, space_id, actor_id, verb, subject, bucket, at) VALUES (${literal(activityHead)}, 'move00000000', 'move', 'space.deleted', 'move', 0, 0)`);
+    out.push("DELETE FROM activity WHERE space_id = 'move00000000' AND actor_id = 'move' AND subject = 'move'");
   }
   out.push(`UPDATE sync_state SET floor = ${literal(floor || 0)} WHERE id = 1`);
   return out;

@@ -153,3 +153,22 @@ it('reads activity and inbox_seen as empty from a database made before them, and
   expect(sql.filter((s) => s.includes('activity')).map((s) => s.split(' (')[0])).toEqual(['DELETE FROM activity', 'INSERT INTO activity']);
   expect(await to.prepare("SELECT seq FROM inbox_seen WHERE user_id = 'u-mvcara'").first()).toEqual({ seq: 41 });
 });
+
+it('keeps activity numbering above every read marker, so a row written after the move is never already read', async () => {
+  const to = env.MOVE_DB;
+  await applyD1Migrations(to, env.TEST_MIGRATIONS);
+  /* the source's newest rows (up to 60) were purged; dan had read up to 60 */
+  await to.prepare("INSERT INTO users (id, username, password_hash, display_name, created_at, updated_at) VALUES ('u-mvdan', 'mvdan', 'h', 'Dan', 1, 1)").run();
+  const sql = copyStatements({
+    spaces: [{ id: 'mvact0000002', kind: 'class', archived: 0, created_at: 1, updated_at: 1, revision: 4 }],
+    courses: [{ scope: 'c:mvact0000002', id: 'web', code: 'WEB', name: 'Web', color: '#17B3AE', instructor: '', term: '', archived: 0, meetings: '[]', created_at: 1, updated_at: 1, revision: 1 }],
+    activity: [{ seq: 41, space_id: 'mvact0000002', actor_id: 'u-mvdan', verb: 'item.created', subject: '', subject_user: '', old_value: null, new_value: null, detail: '{"titles":["Lab"]}', n: 1, bucket: 5, at: 3_000_000 }],
+    inbox_seen: [{ user_id: 'u-mvdan', seq: 60 }],
+    state: { floor: 0, head: 0, activity_head: 60 },
+  }).filter((s) => !/^(DELETE FROM changes|UPDATE sync_state)/.test(s));
+  await to.batch(sql.map((s) => to.prepare(s)));
+  expect((await to.prepare('SELECT seq FROM activity').all()).results).toEqual([{ seq: 41 }]);
+  await to.prepare("INSERT INTO items (scope, id, type, title, course_id, date, status, updated_by, created_at, updated_at) VALUES ('c:mvact0000002', 'b1', 'lab', 'Lab 2', 'web', '2026-10-16', 'todo', 'u-mvdan', 9_000_000, 9_000_000)").run();
+  const next = await to.prepare("SELECT seq FROM activity WHERE seq != 41").first();
+  expect(next.seq).toBeGreaterThanOrEqual(61);
+});
