@@ -16,7 +16,14 @@ vi.mock("@/core/store", () => ({
     data: fake.data,
     meta: { get: async (k: string) => fake.meta.get(k), set: async (k: string, v: unknown) => { fake.meta.set(k, v) } },
 }))
-vi.mock("@/core/api", () => ({ api: fake.api }))
+vi.mock("@/core/api", () => {
+    class ApiError extends Error {
+        status: number
+        body: Record<string, unknown> | null
+        constructor(status: number, body: Record<string, unknown> | null) { super(String(body?.error ?? status)); this.status = status; this.body = body }
+    }
+    return { api: fake.api, ApiError }
+})
 vi.mock("@/core/sync", () => ({ syncNow: fake.syncNow }))
 vi.mock("./effective", () => ({ itemByKey: (k: string) => fake.items.get(k) ?? null }))
 vi.mock("./actions", () => ({ openItem: fake.openItem }))
@@ -196,5 +203,14 @@ describe("opening a row", () => {
         expect(fake.api.spaces.activity).toHaveBeenCalledWith("abcdefabcdef", 40)
         fake.api.spaces.activity.mockRejectedValueOnce(new TypeError("offline"))
         expect(await m.loadActivity("abcdefabcdef")).toBeNull()
+        fake.api.spaces.activity.mockRejectedValueOnce(new DOMException("The request timed out. Try again.", "TimeoutError"))
+        expect(await m.loadActivity("abcdefabcdef")).toBeNull()
+    })
+
+    it("throws an answer that is an error, for the tab to say what it was", async () => {
+        const { ApiError } = await import("@/core/api")
+        const e = new ApiError(500, { error: "server" })
+        fake.api.spaces.activity.mockRejectedValueOnce(e)
+        await expect(m.loadActivity("abcdefabcdef")).rejects.toBe(e)
     })
 })

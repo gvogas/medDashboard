@@ -3,7 +3,7 @@
 // opens and kept in IndexedDB's meta store, so it still reads offline. Nothing is pushed.
 
 import { useSyncExternalStore } from "react"
-import { api } from "@/core/api"
+import { api, ApiError } from "@/core/api"
 import * as store from "@/core/store"
 import { data } from "@/core/store"
 import * as sync from "@/core/sync"
@@ -142,7 +142,14 @@ export const openable = (r: ActivityRow, here?: string): boolean => target(r, he
 /** Open what a row is about: its item while it is on this device, else its space. */
 export function openRow(r: ActivityRow, here?: string): void { target(r, here)?.() }
 
-/** A page of a space's Activity tab; null offline. */
+/**
+ * A page of a space's Activity tab; null when the server could not be reached (offline, a
+ * timeout: anything that is not an answer, as classes.ts messageFor reads it). An answer that
+ * is an error (404, 429, 500…) is thrown, for the tab to say what it was.
+ */
 export async function loadActivity(spaceId: string, before?: number): Promise<{ items: ActivityRow[]; more: boolean } | null> {
-    try { return await api.spaces.activity(spaceId, before) } catch { return null }
+    try { return await api.spaces.activity(spaceId, before) } catch (e) {
+        if (e instanceof ApiError) throw e
+        return null
+    }
 }

@@ -40,6 +40,7 @@ import { ConvertSheet } from "./convert-sheet"
 import { ShareCourse } from "./share-course"
 import { JoinSheet } from "./join-sheet"
 import { InboxSheet } from "./inbox-sheet"
+import { ActivityList } from "./activity-list"
 
 const SID = "sp0000000001", SCOPE = "c:" + SID
 const space = (role = "owner") => ({
@@ -127,10 +128,61 @@ describe("the Activity tab", () => {
         expect(fake.api.spaces.activity).toHaveBeenLastCalledWith(SID, 11)
         expect(screen.getAllByText(/^Gabriel added Lab/)).toHaveLength(30)
         expect(screen.queryByRole("button", { name: "Show older" })).toBeNull()
+        /* the button went with the last page: focus moves on to the row it brought */
+        expect(document.activeElement).toBe(screen.getByText("Sam joined").closest("li"))
         fake.api.spaces.activity.mockRejectedValueOnce(new TypeError("Failed to fetch"))
         rerender(<ClassSheet spaceId={SID} tab="details" />)
         rerender(<ClassSheet spaceId={SID} tab="activity" />)
         expect(await screen.findByText("Connect to see activity.")).toBeTruthy()
+        expect(screen.getByText("Connect to see activity.").closest("[role=status]")).toBeTruthy()
+        fake.api.spaces.activity.mockResolvedValueOnce({ items: [row(3)], more: false })
+        fireEvent.click(screen.getByRole("button", { name: "Try again" }))
+        expect(await screen.findByText("Gabriel added Lab 3")).toBeTruthy()
+        expect(screen.queryByRole("button", { name: "Try again" })).toBeNull()
+    })
+
+    it("keeps the rows and Show older when an older page can't come", async () => {
+        fake.api.spaces.activity
+            .mockResolvedValueOnce({ items: [row(12), row(11)], more: true })
+            .mockRejectedValueOnce(new TypeError("Failed to fetch"))
+            .mockRejectedValueOnce(new ApiError(429, { error: "rate_limited" }))
+        render(<ClassSheet spaceId={SID} tab="activity" />)
+        fireEvent.click(await screen.findByRole("button", { name: "Show older" }))
+        expect(await screen.findByText("Connect to see older activity.")).toBeTruthy()
+        expect(screen.getAllByText(/^Gabriel added Lab/)).toHaveLength(2)
+        fireEvent.click(screen.getByRole("button", { name: "Show older" }))
+        expect(await screen.findByText("Too many tries. Wait a while, then try again.")).toBeTruthy()
+        expect(screen.getAllByText(/^Gabriel added Lab/)).toHaveLength(2)
+        expect((screen.getByRole("button", { name: "Show older" }) as HTMLButtonElement).disabled).toBe(false)
+    })
+
+    it("says what went wrong when the server answers with an error, not that you're offline", async () => {
+        fake.api.spaces.activity.mockRejectedValueOnce(new ApiError(500, { error: "server" }))
+        render(<ClassSheet spaceId={SID} tab="activity" />)
+        expect(await screen.findByText("That didn't work (server). Try again.")).toBeTruthy()
+        expect(screen.queryByText(/Connect to see/)).toBeNull()
+        expect(screen.getByRole("button", { name: "Try again" })).toBeTruthy()
+    })
+
+    it("drops an answer that comes after the tab moved on", async () => {
+        let late!: (v: unknown) => void
+        fake.api.spaces.activity
+            .mockReturnValueOnce(new Promise((res) => { late = res }))
+            .mockResolvedValueOnce({ items: [row(7, { spaceId: "sp0000000002", space: "Databases", detail: { by: "Gabriel", titles: ["Schema"] } })], more: false })
+        const { rerender, unmount } = render(<ActivityList spaceId={SID} />)
+        rerender(<ActivityList spaceId="sp0000000002" />)
+        expect(await screen.findByText("Gabriel added Schema")).toBeTruthy()
+        await act(async () => { late({ items: [row(40)], more: true }) })
+        expect(screen.queryByText("Gabriel added Lab 40")).toBeNull()
+        expect(screen.queryByRole("button", { name: "Show older" })).toBeNull()
+        /* and one that comes after the tab is gone */
+        const errors = vi.spyOn(console, "error").mockImplementation(() => {})
+        fake.api.spaces.activity.mockReturnValueOnce(new Promise((res) => { late = res }))
+        rerender(<ActivityList spaceId={SID} />)
+        unmount()
+        await act(async () => { late({ items: [row(41)], more: false }) })
+        expect(errors).not.toHaveBeenCalled()
+        errors.mockRestore()
     })
 
     it("opens an item a row is about, and says when nothing has happened yet", async () => {
