@@ -36,7 +36,8 @@ a Spotify player and an admin page.
 | Import | `.ics` calendars, CSV timetables, course outlines (PDF or Word), school calendars and class schedules (PDF or screenshot) read by Workers AI. A timetable PDF's days and times are read from its grid in the browser first, so the model only copies them; a room ending in a lone "L" (Omnivox's mark) is a lab. Everything goes through a preview where the person ticks what to keep. An outline's preview can go into **My courses**, into a class you own or edit (each row New, Changed, saying what it was, or Already there; Changed rows start unticked), or into a **new class** made from it on Import (`src/data/class-import.ts`). |
 | Calendar feed | A private `.ics` link that Google or Apple Calendar can subscribe to. It carries your classes with your layer on top, and leaves out whatever you hid with the sidebar's eye toggles. |
 | Spotify | Each person connects their own account. Now playing, controls, search, playlists, queue and volume. The tab itself can play music through the Web Playback SDK. |
-| Shared classes | Open to everyone signed in. A class is a shared space with its own course and items. Make one blank, from a course outline, or by converting a course (all in the **+ New** menu, beside New course), invite by username or a join code, roles (owner, editor, member). Each person keeps a private layer on it: marks on its items (status, grade, weight, notes, checklist, hidden) and prefs (colour, target, term, archived). Leaving keeps a copy of the class as your own course by default. The owner removes members (they keep a copy), archives the class (read-only for everyone, members still managed) and deletes it once nobody else is in it. A class item an editor deletes stays with whoever has something on it, marked *Removed from … by …*, until they **Keep as mine** or **Dismiss** it (editors can **Restore** it for everyone). Editors share one of their own items filed under the class with it. Deleting an account hands its classes on. The sidebar's eye toggles hide a course, a class or *Personal items* from the Week, the Month and the calendar feed (All items, grades and stats still count them). A class keeps a copy of its owner's school calendar; someone joining without one is offered it. Projects stay closed until Stage 10 (the Worker refuses `kind: 'project'`). |
+| Shared classes | Open to everyone signed in. A class is a shared space with its own course and items. Make one blank, from a course outline, or by converting a course (all in the **+ New** menu, beside New course), invite by username or a join code, roles (owner, editor, member). Each person keeps a private layer on it: marks on its items (status, grade, weight, notes, checklist, hidden) and prefs (colour, target, term, archived). Leaving keeps a copy of the class as your own course by default. The owner removes members (they keep a copy), archives the class (read-only for everyone, members still managed) and deletes it once nobody else is in it. A class item an editor deletes stays with whoever has something on it, marked *Removed from … by …*, until they **Keep as mine** or **Dismiss** it (editors can **Restore** it for everyone). Editors share one of their own items filed under the class with it. Deleting an account hands its classes on. The sidebar's eye toggles hide a course, a class or *Personal items* from the Week, the Month and the calendar feed (All items, grades and stats still count them). A class keeps a copy of its owner's school calendar; someone joining without one is offered it. |
+| Team projects | Admins only until Stage 10. **New team project** in **+ New** makes one, on its own or belonging to an item of a class you are in (its date follows the item's). Invitees join as editors. The project sheet has **Tasks** (owners and editors add, edit, assign and delete; members claim a task nobody has and complete what is theirs or everyone's), **Members** and **Activity**; the owner links or unlinks the assignment, archives, hands on, and deletes it by typing its name; anyone else leaves (their tasks become unassigned, their notes there go, nothing is copied). 200 live tasks per project. A **Projects** group in the sidebar lists them. Projects stay out of the Week, Month and other views until Stage 9 (`PROJECTS_IN_VIEWS`). |
 | Inbox and activity | A bell in the top bar, for everyone, with the unread count (`99+` past 99) opens the **inbox**: your invites, with Accept and Decline, then what others did that concerns you (new, deleted and moved items, class times, archiving, and anything about you, such as a role change or a removal), newest 50, readable offline from the last copy. Opening it marks everything read. A class sheet's **Activity** tab shows the class's whole history, 30 at a time with Show older. Activity is kept 90 days; the count comes with each sync, nothing is pushed. The inbox replaced the sidebar's Invites row and sheet. |
 | Admin | Overview (free-plan usage meters, traffic and health), Accounts, Errors, Audit log, a site-wide Announcement banner, and Maintenance. |
 | Maintenance mode | Admins switch a feature off while they work on it (week, month, all items, study, music, import with AI, shared classes and projects), with a message. Personal data and sync never stop. `worker/maintenance.js`. |
@@ -110,12 +111,14 @@ src/core/           framework-free logic: IndexedDB (db.ts), store, sync, api cl
 src/data/           state + hooks + controllers on top of core: views selectors, ui state,
                     session, themes, study timer, Spotify engine, item/course edits, keyboard,
                     the inbox (inbox.ts: the unread count, the list kept offline, what each
-                    activity row says and opens)
-src/components/     React UI: shell, sidebar, top bar (with inbox-bell.tsx), views/ (week,
-                    month, table, stats), sheet/ (side sheets for editing items, courses,
-                    settings, import, AI; inbox-sheet.tsx, and activity-list.tsx for a class's
-                    Activity tab), study/, focus/, spotify/, admin/, sidebar-picture/ (the
-                    six SVG pictures)
+                    activity row says and opens), team projects (projects.ts: tasks,
+                    permissions, make, link, leave, delete)
+src/components/     React UI: shell, sidebar (with sidebar-projects.tsx, the Projects group),
+                    top bar (with inbox-bell.tsx), views/ (week, month, table, stats), sheet/
+                    (side sheets for editing items, courses, settings, import, AI;
+                    inbox-sheet.tsx, activity-list.tsx for a space's Activity tab,
+                    new-project-sheet.tsx, project-sheet.tsx and task-row.tsx), study/,
+                    focus/, spotify/, admin/, sidebar-picture/ (the six SVG pictures)
 src/styles/         tokens.css (theme colours), base.css, shell.css
 ```
 
@@ -135,7 +138,8 @@ view shows and can be tested on their own.
 | `db.js`, `validate.js` | Row reads and writes by scope, revisions, the sync feed (v2 and v3), input validation. |
 | `access.js` | Who may do what in a shared space. Each guard is a SQL fragment run inside the statement that reads or writes. |
 | `spaces.js` | Spaces: limits, Worker-made ids, the space revision, making a class, its details, its copy of the owner's school calendar, roles and transfer. |
-| `classes.js` | The class routes: making a class, members, invites, join codes, absorb, leaving and removal. |
+| `classes.js` | The class routes: making a class, members, invites, join codes, absorb, leaving and removal; a project's making, link and deletion go through them to `projects.js`. |
+| `projects.js` | Team projects (spec §10), admins only for now: making one, linking it to a class item, leaving or removal (no copy: off every task's assignees), deleting it, the 200-task limit. |
 | `leaving.js` | Leaving and removal (spec §13): detach (a copy of the class into your own scope), leave, remove, archive, delete a class, Keep as mine, share an item, handing classes on, the purge's auto-keep. |
 | `invites.js` | Invites by username and join codes; the 20-spaces and 30-members limits ride in each statement. |
 | `layer.js` | Your layer on a space: marks on its items and your prefs for it, both yours alone. |
@@ -159,6 +163,8 @@ view shows and can be tested on their own.
   `POST|DELETE /spaces/:sid/code`, `POST /spaces/:sid/absorb`, `POST /spaces/:sid/{leave,archive,school}`,
   `DELETE /spaces/:sid`, `DELETE /spaces/:sid/members/:uid`, `POST /spaces/:sid/items/:id/keep`, `GET /invites`
   (old clients only), `POST /invites/:sid/{accept,decline}`, `POST /join`.
+- **Team projects:** the same space routes by kind: `POST /spaces {kind:'project'}`, `POST /spaces/:sid/link`,
+  `DELETE /spaces/:sid {confirm}`; tasks through `/spaces/:sid/items/:id`.
 - **Inbox and activity:** `GET /inbox`, `PUT /inbox/seen`, `GET /spaces/:sid/activity?before=`; the unread
   count rides on the last page of `GET /sync?v=3`.
 - **Your layer:** `GET|PUT|DELETE /marks/:sid/:itemId`, `GET|PUT|DELETE /space_prefs/:sid`.
@@ -261,7 +267,13 @@ Deploying, secrets, accounts and database moves: `docs/DEPLOYING.md`.
    `0005_activity.sql` (`activity`, filled by triggers on shared rows and by the member
    routes, and `inbox_seen`); the bell and inbox sheet replace the Invites row and sheet;
    a class's Activity tab; the unread count rides on each sync.
-9. **Next** (`docs/superpowers/plans/2026-10-02-collaboration.md`): Stages 8–10 projects.
+9. **Oct 18:** Stage 8 (`collab-8-projects`): team projects, for admins only. Making one
+   (on its own or under a class assignment), linking, tasks with claiming and
+   completing, the project sheet and the sidebar's Projects group, leaving, removal and
+   deleting; account deletion takes the account off its tasks. Out of the views until
+   Stage 9. No migration.
+10. **Next** (`docs/superpowers/plans/2026-10-02-collaboration.md`): Stage 9 projects in
+    the views; Stage 10 projects in the inbox's news and the calendar feed, open to everyone.
 
 ## Gotchas worth knowing
 

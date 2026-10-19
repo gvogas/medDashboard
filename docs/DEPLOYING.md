@@ -146,7 +146,9 @@ runs once per database.
 
 Collaboration Stages 5 (leaving and removal) and 6 (the feed, outline imports, classes
 open to everyone) added no migration: deploying them is a plain push of `main`. Stage 6
-uses `spaces.school_calendar`, which has been there since `0002_spaces.sql`.
+uses `spaces.school_calendar`, which has been there since `0002_spaces.sql`. Stage 8
+(team projects) adds none either: it uses Stage 1's `assignees` and `completed_by`
+columns and Stage 7's `space.linked` and `space.deleted` verbs.
 
 > **Stage 7 (inbox and activity): apply `0005_activity.sql` to live first.** Run
 > `npm run db:remote`, then `npm run db:check -- --remote`, **before** merging the stage
