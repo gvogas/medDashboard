@@ -9,7 +9,7 @@ import { mkdtempSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { readQueries, copyStatements, COLUMNS_QUERY, uncopied } from './lib/move-db.js';
+import { readQueries, copyStatements, COLUMNS_QUERY, uncopied, differences } from './lib/move-db.js';
 
 const args = process.argv.slice(2);
 const flag = (name) => { const i = args.indexOf(name); return i >= 0 ? args[i + 1] : null; };
@@ -70,10 +70,11 @@ try {
 
   console.log('Comparing…');
   const copied = dump(to);
-  const bad = Object.keys(source).filter((k) => JSON.stringify(source[k]) !== JSON.stringify(copied[k]));
+  const bad = differences(source, copied);
   console.table(Object.fromEntries(Object.keys(source).filter((k) => k !== 'state')
     .map((k) => [k, { [from]: source[k].length, [to]: copied[k].length }])));
-  console.log('Change feed', { floor: source.state.floor, head: source.state.head }, '→', { floor: copied.state.floor, head: copied.state.head });
+  const heads = ({ floor, head, activity_head }) => ({ floor, head, activityHead: activity_head });
+  console.log('Change feed', heads(source.state), '→', heads(copied.state));
   if (bad.length) throw new Error('These differ after the copy: ' + bad.join(', '));
   console.log(`Done: ${to} matches ${from}. ${from} was not changed.`);
 } catch (error) {

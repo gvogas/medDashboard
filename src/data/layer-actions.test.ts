@@ -16,7 +16,7 @@ vi.mock("@/data/ui", async () => (await import("@/data/fake-ui")).fakeUi(fake.ui
 vi.mock("@/data/sidebar", () => ({ setSide: vi.fn() }))
 vi.mock("@/data/study-controller", () => ({ setView: vi.fn(), deleteLater: vi.fn(), deleteWithUndo: vi.fn() }))
 vi.mock("@/data/overlay", async (importOriginal) => ({ ...(await importOriginal<typeof import("@/data/overlay")>()), openSheet: fake.openSheet }))
-vi.mock("@/data/classes", () => ({ openClass: fake.openClass, openJoin: vi.fn(), watchInvites: vi.fn() }))
+vi.mock("@/data/classes", () => ({ openClass: fake.openClass, openJoin: vi.fn() }))
 vi.mock("@/data/marks", () => ({ toggleClassTask: fake.toggleClassTask }))
 
 import { newItemOn, openCourse, quickAddTask, toggleTask } from "./actions"

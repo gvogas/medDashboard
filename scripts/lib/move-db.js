@@ -17,15 +17,19 @@ export const TABLES = {
   achievements: ['user_id', 'id', 'name', 'sticker', 'rule', 'course_id', 'item_id', 'space_id', 'target', 'created_at', 'updated_at', 'deleted_at', 'revision'],
   marks: ['user_id', 'id', 'space_id', 'item_id', 'status', 'grade', 'weight', 'notes', 'checklist', 'completed_at', 'hidden', 'created_at', 'updated_at', 'deleted_at', 'revision'],
   space_prefs: ['user_id', 'id', 'space_id', 'color', 'target', 'term', 'archived', 'created_at', 'updated_at', 'deleted_at', 'revision'],
+  activity: ['seq', 'space_id', 'actor_id', 'verb', 'subject', 'subject_user', 'old_value', 'new_value', 'detail', 'n', 'bucket', 'at'],
+  inbox_seen: ['user_id', 'seq'],
   spotify_tokens: ['user_id', 'refresh_token', 'access_token', 'expires_at', 'updated_at'],
   changes: ['seq', 'scope', 'kind', 'row_id', 'payload', 'deleted_at'],
   admin_log: ['id', 'at', 'admin', 'action', 'target', 'detail'],
 };
 
-/* Tables added after rounds-v7's first schema (0002_spaces.sql, 0003_invites.sql,
-   0004_marks.sql): a database made before them has none of their rows. */
-const ADDED_TABLES = new Set(['spaces', 'members', 'invites', 'marks', 'space_prefs']);
-const ORDER_BY = { users: 'id', spaces: 'id', members: 'space_id, user_id', invites: 'space_id, user_id', courses: 'scope, id', items: 'scope, id', changes: 'seq', spotify_tokens: 'user_id', admin_log: 'id' };
+/* Tables added after rounds-v7's first schema (0002_spaces.sql … 0005_activity.sql): a
+   database made before them has none of their rows. */
+const ADDED_TABLES = new Set(['spaces', 'members', 'invites', 'marks', 'space_prefs', 'activity', 'inbox_seen']);
+const ORDER_BY = { users: 'id', spaces: 'id', members: 'space_id, user_id', invites: 'space_id, user_id', courses: 'scope, id', items: 'scope, id', activity: 'seq', inbox_seen: 'user_id', changes: 'seq', spotify_tokens: 'user_id', admin_log: 'id' };
+/* Written by triggers as the rows above go in, then replaced by the source's own. */
+const REBUILT = ['activity', 'changes'];
 
 /* Reading rounds-v6 or older, whose courses, items and change feed name a user: the owner
    becomes the scope of that person's own rows, a course's or item's change names the
@@ -74,7 +78,8 @@ export function readQueries(columns) {
     const list = cols.map((col) => (table === 'changes' && col === 'payload' && has.has('changes.user_id') ? PAYLOAD_FROM_USER : pick(table, col)));
     return [table, `SELECT ${list.join(', ')} FROM ${table} ORDER BY ${ORDER_BY[table] || 'user_id, id'}`];
   });
-  out.push(['state', "SELECT (SELECT floor FROM sync_state WHERE id = 1) AS floor, COALESCE((SELECT seq FROM sqlite_sequence WHERE name = 'changes'), 0) AS head"]);
+  out.push(['state', `SELECT (SELECT floor FROM sync_state WHERE id = 1) AS floor, COALESCE((SELECT seq FROM sqlite_sequence WHERE name = 'changes'), 0) AS head,
+    COALESCE((SELECT seq FROM sqlite_sequence WHERE name = 'activity'), 0) AS activity_head`]);
   return out;
 }
 
@@ -90,22 +95,25 @@ function literal(v) {
 
 /**
  * The statements that fill a fresh database from a dump ({table: rows, state}).
- * Rows go in first; their triggers write a change feed of their own, which is then
- * replaced by the old one with its sequence numbers, so every device's cursor still
- * points at the same place. The feed's counter is put back to the old head by
- * writing a row at that number and removing it.
+ * Rows go in first; their triggers write a change feed and activity of their own, which
+ * are then replaced by the old ones with their sequence numbers. Each counter is put back
+ * to the old head (for activity, at least every read marker) by writing a row at that
+ * number and removing it, so every device's cursor still points at the same place and no
+ * row written after the move reuses a number someone has already read past.
  */
 export function copyStatements(dump) {
   const out = [];
   for (const [table, cols] of Object.entries(TABLES)) {
-    if (table === 'changes') continue;
+    if (REBUILT.includes(table)) continue;
     for (const row of dump[table] || []) {
       out.push(`INSERT INTO ${table} (${cols.map((c) => `"${c}"`).join(', ')}) VALUES (${cols.map((c) => literal(row[c])).join(', ')})`);
     }
   }
-  out.push('DELETE FROM changes');
-  for (const row of dump.changes || []) {
-    out.push(`INSERT INTO changes (${TABLES.changes.join(', ')}) VALUES (${TABLES.changes.map((c) => literal(row[c])).join(', ')})`);
+  for (const table of REBUILT) {
+    out.push(`DELETE FROM ${table}`);
+    for (const row of dump[table] || []) {
+      out.push(`INSERT INTO ${table} (${TABLES[table].map((c) => `"${c}"`).join(', ')}) VALUES (${TABLES[table].map((c) => literal(row[c])).join(', ')})`);
+    }
   }
   const { floor = 0, head = 0 } = dump.state || {};
   const top = Math.max(0, ...(dump.changes || []).map((c) => c.seq));
@@ -114,6 +122,26 @@ export function copyStatements(dump) {
     out.push(`INSERT INTO changes (seq, scope, kind, row_id, payload) VALUES (${literal(head)}, ${literal('u:' + someone.id)},'move', 'move', '{}')`);
     out.push("DELETE FROM changes WHERE kind = 'move' AND row_id = 'move'");
   }
+  const activityHead = Math.max(dump.state?.activity_head || 0, ...(dump.inbox_seen || []).map((r) => r.seq));
+  const activityTop = Math.max(0, ...(dump.activity || []).map((a) => a.seq));
+  if (activityHead > activityTop) {
+    out.push(`INSERT INTO activity (seq, space_id, actor_id, verb, subject, bucket, at) VALUES (${literal(activityHead)}, 'move00000000', 'move', 'space.deleted', 'move', 0, 0)`);
+    out.push("DELETE FROM activity WHERE space_id = 'move00000000' AND actor_id = 'move' AND subject = 'move'");
+  }
   out.push(`UPDATE sync_state SET floor = ${literal(floor || 0)} WHERE id = 1`);
   return out;
+}
+
+/**
+ * The parts of a dump that differ after the copy, as a list of keys ([] when it matches).
+ * Rows and the change feed's floor and head must be the same. The activity counter may end
+ * higher: rows the triggers wrote while copying shared items, or a read marker above the
+ * newest kept row, move it on.
+ */
+export function differences(source, copied) {
+  return Object.keys(source).filter((k) => {
+    if (k !== 'state') return JSON.stringify(source[k]) !== JSON.stringify(copied[k]);
+    const a = source.state || {}, b = copied.state || {};
+    return a.floor !== b.floor || a.head !== b.head || !((b.activity_head ?? 0) >= (a.activity_head ?? 0));
+  });
 }

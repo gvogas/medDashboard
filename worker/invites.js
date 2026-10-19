@@ -8,6 +8,7 @@ import { hex } from './auth.js';
 import { assertAllowed, assertOwner, editorGuard, ownerGuard } from './access.js';
 import { LIVE_MEMBERS, MEMBER_LIMIT, MY_SPACES, NEXT_SPACE_REVISION, SPACE_LIMIT, joinPrefs, spaceSummary, touchSpace } from './spaces.js';
 import { normalizeCode } from '../src/core/shared.ts';
+import { noteStmt } from './activity.js';
 
 const HOUR_MS = 60 * 60 * 1000;
 const DAY_MS = 24 * HOUR_MS;
@@ -21,6 +22,9 @@ const SPACE_NAME = `CASE s.kind WHEN 'class' THEN (SELECT name FROM courses WHER
 /* Make the membership, or revive one that was left (a rejoin); a live one is left as it is. */
 const REVIVE = `ON CONFLICT (space_id, user_id) DO UPDATE SET role = excluded.role, joined_at = excluded.joined_at,
     updated_at = excluded.updated_at, deleted_at = NULL, revision = revision + 1 WHERE members.deleted_at IS NOT NULL`;
+/* member.joined, only when the membership was made or revived in this batch (a retry writes nothing). */
+const joinedNote = (db, spaceId, userId, now) => noteStmt(db, { spaceId, actorId: userId, verb: 'member.joined', now,
+  when: 'EXISTS (SELECT 1 FROM members WHERE space_id = ?1 AND user_id = ?2 AND deleted_at IS NULL AND joined_at = ?8)' });
 /* The person's pending invite to the space, marked accepted once they are a live member. */
 const acceptedStmt = (db, spaceId, userId) => db.prepare(`UPDATE invites SET status = 'accepted'
     WHERE space_id = ? AND user_id = ? AND status = 'pending'
@@ -108,6 +112,7 @@ export async function acceptInvite(db, userId, spaceId, now = Date.now()) {
     acceptedStmt(db, spaceId, userId),
     /* last: touchSpace above reads changes() from the membership statement just before it */
     joinPrefs(db, userId, spaceId, now),
+    joinedNote(db, spaceId, userId, now),
   ]);
   const held = await spaceSummary(db, userId, spaceId);
   if (joined.meta.changes || held) return held;
@@ -189,6 +194,7 @@ export async function joinByCode(db, userId, raw, now = Date.now()) {
       .bind(now, space.id),
     acceptedStmt(db, space.id, userId),
     joinPrefs(db, userId, space.id, now),
+    joinedNote(db, space.id, userId, now),
   ]);
   const member = await spaceSummary(db, userId, space.id);
   if (joined.meta.changes || member) return member;

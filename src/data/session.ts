@@ -20,7 +20,8 @@ import { celebrateStudy, celebrateAchievements, finishDelete, commitUndo } from 
 import { refreshAfterSync } from "./sync-status"
 import { ui } from "./ui"
 import { preloadIdle } from "@/lib/lazy"
-import { openJoin, watchInvites } from "./classes"
+import { openJoin } from "./classes"
+import { setUnread } from "./inbox"
 
 function rememberedSession(): ServerProfile | null {
     try { return JSON.parse(localStorage.getItem("rounds.session") || "null") } catch { return null }
@@ -48,14 +49,14 @@ async function start(profile: ServerProfile) {
     notify()
     celebrateStudy()                             /* the first look only records where today stands */
     celebrateAchievements()
+    sync.onUnread(setUnread)
     sync.init()
     sync.syncNow()
     spotify.start()
     preloadIdle()                                /* the other pages and the sheets */
     const back = spotifyReturn()
     if (back) { ui.spotifyNote = back; openSettings("spotifyGrp") }
-    /* your invites, and a join link's code */
-    watchInvites()
+    /* a join link's code */
     const join = joinReturn()
     if (join) openJoin(join)
 }

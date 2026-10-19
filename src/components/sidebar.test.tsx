@@ -6,7 +6,6 @@ import { stubMatchMedia } from "./test-media"
    core/model.ts, data/query.ts and the actions are the real ones, so the filter logic is too. */
 const fake = vi.hoisted(() => ({
     data: { items: [] as unknown[], courses: [] as unknown[], quotes: [] as unknown[], study_sessions: [] as unknown[], profile: null as unknown, spaces: [] as unknown[], shared_courses: [] as unknown[] },
-    invites: [] as { spaceId: string; expired: boolean }[],
     ui: { view: "week", search: "", types: {} as Record<string, boolean>, course: "all", sem: null as string | null, bg: "med", anchor: "2026-09-28", settings: false },
 }))
 vi.mock("@/core/store", () => ({
@@ -24,8 +23,8 @@ vi.mock("@/data/actions", async (importOriginal) => ({
     openCourse: vi.fn(),
     openSettings: vi.fn(),
 }))
-const classes = vi.hoisted(() => ({ openClass: vi.fn(), openInvites: vi.fn(), openJoin: vi.fn(), openNewClass: vi.fn() }))
-vi.mock("@/data/classes", () => ({ ...classes, useInvites: () => fake.invites }))
+const classes = vi.hoisted(() => ({ openClass: vi.fn(), openJoin: vi.fn(), openNewClass: vi.fn() }))
+vi.mock("@/data/classes", () => classes)
 
 import { openCourse, openSettings } from "@/data/actions"
 import { saveProfile } from "@/core/store"
@@ -43,7 +42,6 @@ beforeEach(() => {
     fake.data.courses = []
     fake.data.spaces = []
     fake.data.shared_courses = []
-    fake.invites = []
     fake.data.profile = { id: "p", username: "demo", displayName: "Dr Demo", coat: { name: "", role: "MS2 · Block 3", color: "" }, types: [] }
     fake.ui.types = {}
     fake.ui.course = "all"
@@ -201,18 +199,15 @@ describe("shared classes, for everyone", () => {
             members: [{ userId: "p", name: "Dr Demo", role: "owner" }, { userId: "q", name: "Sam", role: "member" }],
         }]
         fake.data.shared_courses = [{ scope: "c:sp0000000001", id: "web", name: "Web Services", color: "#17B3AE" }]
-        fake.invites = [{ spaceId: "sp0000000002", expired: false }, { spaceId: "sp0000000003", expired: true }]
     })
 
-    it("list each class under the courses: the row filters the views, its ✎ opens the class; the invites waiting", () => {
+    it("list each class under the courses: the row filters the views, its ✎ opens the class; no Invites row (the inbox has them)", () => {
         render(<Sidebar />)
         fireEvent.click(coursesNav().getByRole("button", { name: /^Web Services, shared, 2 members/ }))
         expect(fake.ui.course).toBe("c:sp0000000001/web")
         fireEvent.click(coursesNav().getByRole("button", { name: "Edit Web Services" }))
         expect(openCourse).toHaveBeenCalledWith("c:sp0000000001/web")
-        expect(coursesNav().getByRole("button", { name: /^Invites/ }).textContent).toBe("Invites1")
-        fireEvent.click(coursesNav().getByRole("button", { name: /^Invites/ }))
-        expect(classes.openInvites).toHaveBeenCalled()
+        expect(screen.queryByRole("button", { name: /^Invites/ })).toBeNull()
     })
 
     it("turn + New course into a menu: a course, a shared class, or joining with a code", () => {

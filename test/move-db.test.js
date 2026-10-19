@@ -2,7 +2,7 @@ import { applyD1Migrations, env } from 'cloudflare:test';
 import { expect, it } from 'vitest';
 import { upsertRow, syncPage } from '../worker/db.js';
 import { normalizeCourse } from '../src/core/model.ts';
-import { readQueries, copyStatements, COLUMNS_QUERY, uncopied } from '../scripts/lib/move-db.js';
+import { readQueries, copyStatements, COLUMNS_QUERY, uncopied, differences } from '../scripts/lib/move-db.js';
 
 const columns = async (db) => (await db.prepare(COLUMNS_QUERY).all()).results;
 async function dump(db) {
@@ -131,4 +131,54 @@ it('reads marks and space prefs as empty from a database made before them, and c
     space_prefs: [{ user_id: 'ana', id: 'abcdefghij12', space_id: 'abcdefghij12', color: '#17B3AE', target: null, term: '', archived: 0, created_at: 1, updated_at: 1, deleted_at: null, revision: 4 }],
   });
   expect(sql.filter((s) => s.startsWith('INSERT INTO ')).map((s) => s.split(' ')[2]).slice(0, 3)).toEqual(['users', 'marks', 'space_prefs']);
+});
+
+it('reads activity and inbox_seen as empty from a database made before them, and keeps the source activity, not the triggers\' copy', async () => {
+  const queries = new Map(readQueries(await columns(env.MIGRATION_DB)));
+  expect((await env.MIGRATION_DB.prepare(queries.get('activity')).all()).results).toEqual([]);
+  expect((await env.MIGRATION_DB.prepare(queries.get('inbox_seen')).all()).results).toEqual([]);
+  /* into today's schema (MOVE_DB already holds the first test's copy): the shared item's insert fires the activity trigger */
+  const to = env.DB;
+  await to.prepare("INSERT INTO users (id, username, password_hash, display_name, created_at, updated_at) VALUES ('u-mvcara', 'mvcara', 'h', 'Cara', 1, 1)").run();
+  const activity = [{ seq: 41, space_id: 'mvact0000001', actor_id: 'u-mvcara', verb: 'item.created', subject: '', subject_user: '', old_value: null, new_value: null, detail: '{"titles":["Lab"],"by":"Cara"}', n: 1, bucket: 5, at: 3_000_000 }];
+  const sql = copyStatements({
+    spaces: [{ id: 'mvact0000001', kind: 'class', archived: 0, created_at: 1, updated_at: 1, revision: 4 }],
+    courses: [{ scope: 'c:mvact0000001', id: 'web', code: 'WEB', name: 'Web', color: '#17B3AE', instructor: '', term: '', archived: 0, meetings: '[]', created_at: 1, updated_at: 1, revision: 1 }],
+    items: [{ scope: 'c:mvact0000001', id: 'a1', type: 'lab', title: 'Lab', course_id: 'web', date: '2026-10-15', start: '', end: '', location: '', status: 'todo', notes: '', checklist: '[]', links: '[]', dept: '', updated_by: 'u-mvcara', assignees: '[]', created_at: 3_000_000, updated_at: 3_000_000, revision: 1 }],
+    activity,
+    inbox_seen: [{ user_id: 'u-mvcara', seq: 41 }],
+  }).filter((s) => !/^(DELETE FROM changes|UPDATE sync_state)/.test(s));
+  await to.batch(sql.map((s) => to.prepare(s)));
+  expect((await to.prepare("SELECT * FROM activity WHERE space_id = 'mvact0000001'").all()).results).toEqual(activity);
+  expect(sql.filter((s) => s.includes('activity')).map((s) => s.split(' (')[0])).toEqual(['DELETE FROM activity', 'INSERT INTO activity']);
+  expect(await to.prepare("SELECT seq FROM inbox_seen WHERE user_id = 'u-mvcara'").first()).toEqual({ seq: 41 });
+});
+
+it('keeps activity numbering above every read marker, so a row written after the move is never already read', async () => {
+  const to = env.MOVE_DB;
+  await applyD1Migrations(to, env.TEST_MIGRATIONS);
+  /* the source's newest rows (up to 60) were purged; dan had read up to 60 */
+  await to.prepare("INSERT INTO users (id, username, password_hash, display_name, created_at, updated_at) VALUES ('u-mvdan', 'mvdan', 'h', 'Dan', 1, 1)").run();
+  const sql = copyStatements({
+    spaces: [{ id: 'mvact0000002', kind: 'class', archived: 0, created_at: 1, updated_at: 1, revision: 4 }],
+    courses: [{ scope: 'c:mvact0000002', id: 'web', code: 'WEB', name: 'Web', color: '#17B3AE', instructor: '', term: '', archived: 0, meetings: '[]', created_at: 1, updated_at: 1, revision: 1 }],
+    activity: [{ seq: 41, space_id: 'mvact0000002', actor_id: 'u-mvdan', verb: 'item.created', subject: '', subject_user: '', old_value: null, new_value: null, detail: '{"titles":["Lab"]}', n: 1, bucket: 5, at: 3_000_000 }],
+    inbox_seen: [{ user_id: 'u-mvdan', seq: 60 }],
+    state: { floor: 0, head: 0, activity_head: 60 },
+  }).filter((s) => !/^(DELETE FROM changes|UPDATE sync_state)/.test(s));
+  await to.batch(sql.map((s) => to.prepare(s)));
+  expect((await to.prepare('SELECT seq FROM activity').all()).results).toEqual([{ seq: 41 }]);
+  await to.prepare("INSERT INTO items (scope, id, type, title, course_id, date, status, updated_by, created_at, updated_at) VALUES ('c:mvact0000002', 'b1', 'lab', 'Lab 2', 'web', '2026-10-16', 'todo', 'u-mvdan', 9_000_000, 9_000_000)").run();
+  const next = await to.prepare("SELECT seq FROM activity WHERE seq != 41").first();
+  expect(next.seq).toBeGreaterThanOrEqual(61);
+});
+
+it('judges a copy by its rows and the feed\'s floor and head, letting only the activity counter end higher', () => {
+  const made = (state, items = [{ id: 'a' }]) => ({ items, state: { floor: 2, head: 90, activity_head: 41, ...state } });
+  expect(differences(made(), made())).toEqual([]);
+  expect(differences(made(), made({ activity_head: 60 }))).toEqual([]);
+  expect(differences(made(), made({ activity_head: 40 }))).toEqual(['state']);
+  expect(differences(made(), made({ head: 91 }))).toEqual(['state']);
+  expect(differences(made(), made({ floor: 3 }))).toEqual(['state']);
+  expect(differences(made(), made({}, [{ id: 'b' }]))).toEqual(['items']);
 });

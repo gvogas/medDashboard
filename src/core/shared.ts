@@ -25,6 +25,9 @@ export function stable(v: unknown): string {
 /** What each field of a mark holds before you touch the item: what a first write merges against. */
 export const MARK_DEFAULTS: Record<string, unknown> = { status: 'todo', grade: null, weight: null, notes: '', checklist: [], completedAt: null, hidden: false }
 
+/** The most the inbox's unread count says (spec §12): the Worker counts no higher, the bell reads it as "99+". */
+export const UNREAD_CAP = 99
+
 /** How long a tombstone lasts before the nightly purge removes it (worker/index.js); the device drops a removed class item it holds after as long. */
 export const TOMBSTONE_TTL_MS = 30 * 24 * 60 * 60 * 1000
 

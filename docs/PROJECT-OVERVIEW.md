@@ -37,6 +37,7 @@ a Spotify player and an admin page.
 | Calendar feed | A private `.ics` link that Google or Apple Calendar can subscribe to. It carries your classes with your layer on top, and leaves out whatever you hid with the sidebar's eye toggles. |
 | Spotify | Each person connects their own account. Now playing, controls, search, playlists, queue and volume. The tab itself can play music through the Web Playback SDK. |
 | Shared classes | Open to everyone signed in. A class is a shared space with its own course and items. Make one blank, from a course outline, or by converting a course (all in the **+ New** menu, beside New course), invite by username or a join code, roles (owner, editor, member). Each person keeps a private layer on it: marks on its items (status, grade, weight, notes, checklist, hidden) and prefs (colour, target, term, archived). Leaving keeps a copy of the class as your own course by default. The owner removes members (they keep a copy), archives the class (read-only for everyone, members still managed) and deletes it once nobody else is in it. A class item an editor deletes stays with whoever has something on it, marked *Removed from … by …*, until they **Keep as mine** or **Dismiss** it (editors can **Restore** it for everyone). Editors share one of their own items filed under the class with it. Deleting an account hands its classes on. The sidebar's eye toggles hide a course, a class or *Personal items* from the Week, the Month and the calendar feed (All items, grades and stats still count them). A class keeps a copy of its owner's school calendar; someone joining without one is offered it. Projects stay closed until Stage 10 (the Worker refuses `kind: 'project'`). |
+| Inbox and activity | A bell in the top bar, for everyone, with the unread count (`99+` past 99) opens the **inbox**: your invites, with Accept and Decline, then what others did that concerns you (new, deleted and moved items, class times, archiving, and anything about you, such as a role change or a removal), newest 50, readable offline from the last copy. Opening it marks everything read. A class sheet's **Activity** tab shows the class's whole history, 30 at a time with Show older. Activity is kept 90 days; the count comes with each sync, nothing is pushed. The inbox replaced the sidebar's Invites row and sheet. |
 | Admin | Overview (free-plan usage meters, traffic and health), Accounts, Errors, Audit log, a site-wide Announcement banner, and Maintenance. |
 | Maintenance mode | Admins switch a feature off while they work on it (week, month, all items, study, music, import with AI, shared classes and projects), with a message. Personal data and sync never stop. `worker/maintenance.js`. |
 | Offline / PWA | Local-first: an IndexedDB store (version 6). It can be installed to the home screen and works with no connection. |
@@ -63,7 +64,7 @@ flowchart LR
 - **Back end:** plain JavaScript (ES modules) in `worker/`, with no framework. Routes are
   a regex table in `worker/api.js`.
 - **Database:** Cloudflare D1. The schema is `migrations/0001_schema.sql` (squashed)
-  plus `0002_spaces.sql`, `0003_invites.sql` and `0004_marks.sql`.
+  plus `0002_spaces.sql`, `0003_invites.sql`, `0004_marks.sql` and `0005_activity.sql`.
 - **AI:** Workers AI. `@cf/openai/gpt-oss-120b` reads text (outlines, calendars,
   schedules) and `@cf/meta/llama-4-scout-17b-16e-instruct` reads screenshots. Both
   share a limit of reads per person per day.
@@ -107,10 +108,14 @@ src/core/           framework-free logic: IndexedDB (db.ts), store, sync, api cl
                     achievements, importers (ics, csv, plan), PDF text extraction and
                     timetable grids (pdftext.ts, timetable-grid.ts)
 src/data/           state + hooks + controllers on top of core: views selectors, ui state,
-                    session, themes, study timer, Spotify engine, item/course edits, keyboard
-src/components/     React UI: shell, sidebar, top bar, views/ (week, month, table, stats),
-                    sheet/ (side sheets for editing items, courses, settings, import, AI),
-                    study/, focus/, spotify/, admin/, sidebar-picture/ (the six SVG pictures)
+                    session, themes, study timer, Spotify engine, item/course edits, keyboard,
+                    the inbox (inbox.ts: the unread count, the list kept offline, what each
+                    activity row says and opens)
+src/components/     React UI: shell, sidebar, top bar (with inbox-bell.tsx), views/ (week,
+                    month, table, stats), sheet/ (side sheets for editing items, courses,
+                    settings, import, AI; inbox-sheet.tsx, and activity-list.tsx for a class's
+                    Activity tab), study/, focus/, spotify/, admin/, sidebar-picture/ (the
+                    six SVG pictures)
 src/styles/         tokens.css (theme colours), base.css, shell.css
 ```
 
@@ -134,6 +139,8 @@ view shows and can be tested on their own.
 | `leaving.js` | Leaving and removal (spec §13): detach (a copy of the class into your own scope), leave, remove, archive, delete a class, Keep as mine, share an item, handing classes on, the purge's auto-keep. |
 | `invites.js` | Invites by username and join codes; the 20-spaces and 30-members limits ride in each statement. |
 | `layer.js` | Your layer on a space: marks on its items and your prefs for it, both yours alone. |
+| `activity.js` | Activity (spec §12): `noteStmt`, the row a member or space route writes in its own batch (the triggers in `0005_activity.sql` write the rest), and the reads: the inbox, its unread count, the read marker, a space's Activity tab. |
+| `inbox.js` | The inbox routes: `GET /inbox`, `PUT /inbox/seen`, `GET /spaces/:sid/activity`. |
 | `maintenance.js` | Maintenance mode: stored in `app_meta`, sent with `GET /api/me`, enforced (503) for AI reads and shared classes. |
 | `limits.js` | Per-user request rate limits. |
 | `ai.js`, `outline.js`, `school.js`, `schedule.js` | Workers AI reads. They return JSON and **never save**; the browser previews and saves. |
@@ -150,8 +157,10 @@ view shows and can be tested on their own.
 - **Shared classes:** `POST /spaces`, `GET /spaces/:sid`, `GET|PUT|DELETE /spaces/:sid/{courses,items}/:id`,
   `PUT /spaces/:sid/members/:uid`, `POST /spaces/:sid/transfer`, `POST|DELETE /spaces/:sid/invites…`,
   `POST|DELETE /spaces/:sid/code`, `POST /spaces/:sid/absorb`, `POST /spaces/:sid/{leave,archive,school}`,
-  `DELETE /spaces/:sid`, `DELETE /spaces/:sid/members/:uid`, `POST /spaces/:sid/items/:id/keep`, `GET /invites`,
-  `POST /invites/:sid/{accept,decline}`, `POST /join`.
+  `DELETE /spaces/:sid`, `DELETE /spaces/:sid/members/:uid`, `POST /spaces/:sid/items/:id/keep`, `GET /invites`
+  (old clients only), `POST /invites/:sid/{accept,decline}`, `POST /join`.
+- **Inbox and activity:** `GET /inbox`, `PUT /inbox/seen`, `GET /spaces/:sid/activity?before=`; the unread
+  count rides on the last page of `GET /sync?v=3`.
 - **Your layer:** `GET|PUT|DELETE /marks/:sid/:itemId`, `GET|PUT|DELETE /space_prefs/:sid`.
 - **AI reads:** `POST /outline`, `POST /school-calendar`, `POST /ai/schedule`, `GET /ai/reads`.
 - **Calendar feed:** `GET|POST|DELETE /calendar`, `GET /calendar/:userId/:token.ics` (no session).
@@ -165,6 +174,7 @@ view shows and can be tested on their own.
 | --- | --- |
 | User data | `users` (account and profile: theme, coat, study flow and prefs, school calendar, `hidden_sources`, `is_admin`), `courses` (meetings stored as a JSON column), `items`, `quotes`, `study_sessions`, `achievements` |
 | Sharing | `spaces`, `members`, `invites`, `marks` (your layer on a class item), `space_prefs` (your colour, target, term and archive per class) |
+| Activity | `activity` (what members did, from triggers on shared rows and from the member routes; 90 days), `inbox_seen` (how far each person has read) |
 | Sync | `changes`, `sync_state` |
 | Security | `login_throttle`, `request_limits` |
 | Spotify | `spotify_tokens`, `spotify_oauth_states`, `spotify_refresh_locks` |
@@ -203,7 +213,8 @@ The details (lockouts, sessions, rate limits) are in `docs/DATA-MODEL.md`; secre
 ```
 index.html, src/, public/   front end (public/ = _headers, sw.js, manifest, icons)
 worker/                     API Worker
-migrations/                 D1 schema: 0001_schema (squashed), 0002_spaces, 0003_invites, 0004_marks
+migrations/                 D1 schema: 0001_schema (squashed), 0002_spaces, 0003_invites, 0004_marks,
+                            0005_activity
 scripts/                    add-user, build, check-db, check-secrets, csp-hash, move-db, spotify-key
 test/                       Worker/API tests (vitest in the Workers runtime, local D1, fake Spotify)
 src/**/*.test.ts(x)         UI tests (vitest + jsdom + Testing Library)
@@ -246,13 +257,19 @@ Deploying, secrets, accounts and database moves: `docs/DEPLOYING.md`.
 7. **Oct 9:** Stage 5 (main `d3df959`): leaving and removal. Stage 6 (main `9dc8ea8`):
    classes in the calendar feed, outline imports into a class or a new class, the class's
    school calendar offered to joiners, and shared classes open to everyone. No migration.
-8. **Next** (`docs/superpowers/plans/2026-10-02-collaboration.md`): Stage 7 an inbox and
-   activity; Stages 8–10 projects.
+8. **Oct 15:** Stage 7 (`collab-7-inbox`): inbox and activity. Migration
+   `0005_activity.sql` (`activity`, filled by triggers on shared rows and by the member
+   routes, and `inbox_seen`); the bell and inbox sheet replace the Invites row and sheet;
+   a class's Activity tab; the unread count rides on each sync.
+9. **Next** (`docs/superpowers/plans/2026-10-02-collaboration.md`): Stages 8–10 projects.
 
 ## Gotchas worth knowing
 
 - **Remote migrations lag.** Git-triggered builds do not apply D1 migrations. A 500 on
   the live site usually means a migration has not been applied remotely.
+- **`meta.changes` counts trigger rows.** Writes to shared `items` and `courses` also
+  write `activity` (and `changes`) rows by trigger, so count a statement's own rows with
+  `SELECT changes()`, never D1's `meta.changes`.
 - **Line endings must stay LF.** CRLF changes the inline script's hash and breaks the CSP.
 - **Workers AI quota is shared** with the live site. Keep tests that hit real AI to a
   minimum; the automated tests use fakes.

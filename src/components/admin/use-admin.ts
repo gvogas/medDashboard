@@ -63,11 +63,5 @@ export function problem(e: unknown): string {
 export const when = (ms: number | null | undefined) =>
     ms ? new Date(ms).toLocaleString(undefined, { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : "never"
 
-/** "5 min ago", "3 h ago", "2 days ago". */
-export function ago(ms: number, now = Date.now()): string {
-    const s = Math.max(0, Math.round((now - ms) / 1000))
-    if (s < 60) return "just now"
-    if (s < 3600) return Math.round(s / 60) + " min ago"
-    if (s < 86400) return Math.round(s / 3600) + " h ago"
-    return Math.round(s / 86400) + " days ago"
-}
+/** "5 min ago", "3 h ago", "2 days ago" (core/dates.ts). */
+export { ago } from "@/core/dates"

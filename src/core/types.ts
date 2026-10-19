@@ -192,11 +192,20 @@ export interface SpaceDetails {
 }
 /** A join code just made: shown now and never again (only its hash is kept). */
 export interface JoinCode { code: string; expires: number; usesLeft: number }
-/** An invite to you (GET /api/invites). */
+/** An invite to you (GET /api/inbox, and /api/invites for older tabs). */
 export interface Invite {
     spaceId: string; kind: "class" | "project"; name: string; role: "editor" | "member"; from: string
     createdAt: number; expiresAt: number; expired: boolean
 }
+/** One row of the inbox or an Activity tab (spec §12): who did what in a space; `about` when it is about you. */
+export interface ActivityRow {
+    seq: number; spaceId: string; space: string; kind: "class" | "project" | null; verb: string; subject: string
+    actor: string; subjectUser: string; about: boolean; old: string | null; new: string | null
+    detail: { by?: string; title?: string; titles?: string[]; whom?: string; space?: string; assignees?: string[]; assignment?: string }
+    n: number; at: number
+}
+/** GET /api/inbox: your pending invites, the newest rows, and where you have read up to. */
+export interface Inbox { invites: Invite[]; items: ActivityRow[]; seen: number }
 
 /** Your layer on a shared item (spec §4): yours alone. Its id is '<space id>:<item id>'. */
 export interface Mark extends Synced {

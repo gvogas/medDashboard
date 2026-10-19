@@ -15,7 +15,7 @@ import type { SessionDraft } from "./session-edit"
 import type { AchievementDraft } from "./achievement-edit"
 
 /** The class sheet's tabs. */
-export type ClassTab = "details" | "members"
+export type ClassTab = "details" | "members" | "activity"
 
 export type SheetState =
     | { kind: "item"; id: string }
@@ -32,7 +32,7 @@ export type SheetState =
     | { kind: "new-class" }
     | { kind: "convert"; courseId: string }
     | { kind: "join"; code: string; space: SpaceSummary | null }
-    | { kind: "invites" }
+    | { kind: "inbox" }
     | { kind: "merge"; spaceId: string; courseId: string; fromCourse: boolean }
     | null
 

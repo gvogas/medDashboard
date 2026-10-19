@@ -16,6 +16,9 @@ let initialized = false, paused = false, running: Promise<boolean> | null = null
 let signedOut: () => void = () => {}, pulled: () => unknown = () => {};
 export const onStatus = (fn: (s: typeof status) => void) => listeners.add(fn);
 export const onPulled = (fn: () => unknown): void => { pulled = fn; };
+let unreadFn: (n: number) => void = () => {};
+/** The inbox's unread count, as the last page of each complete pull carries it (spec §12). */
+export const onUnread = (fn: (n: number) => void): void => { unreadFn = fn; };
 export const onUnauthenticated = (fn: () => void): void => { signedOut = fn; };
 function state(value: SyncState, message = '') {
   Object.assign(status, { state: value, message, pending: store.pendingCount() });
@@ -172,6 +175,7 @@ async function pullAll(cycle: Cycle): Promise<boolean> {
   /* a personal cursor of 0 or none while rows are held: wipe the clean ones and refill (as v2 did) */
   const own = 'u:' + cycle.account;
   let wipe: string[] = cursors[own] ? [] : [own], revoked: string[] = [], complete = false;
+  let unread: number | undefined;
   // Bound resets as well as ordinary pages, then yield the account's sync lock.
   for (let pages = 0; pages < 20 && active(cycle); pages++) {
     const page = await api.syncV3(cursors, sv);
@@ -180,7 +184,7 @@ async function pullAll(cycle: Cycle): Promise<boolean> {
        in the transaction that stores its cursor 0: a failed next request cannot leave the
        cursor at 0 with the old rows still held */
     await store.applyPage(page, [...new Set([...wipe, ...(page.reset || [])])]);
-    wipe = []; revoked = page.revoked || [];
+    wipe = []; revoked = page.revoked || []; unread = page.unread;
     cursors = { ...cursors, ...page.cursors };
     if (!page.more) { complete = true; break; }
   }
@@ -190,6 +194,7 @@ async function pullAll(cycle: Cycle): Promise<boolean> {
     await store.applyRevoked(revoked);
     if (!active(cycle)) return false;
     listsFor = cycle.account;
+    if (unread !== undefined) unreadFn(unread);
   }
   const profile = await api.me();
   if (!active(cycle)) return false;

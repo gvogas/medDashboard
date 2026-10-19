@@ -113,6 +113,8 @@ describe('the guards', () => {
     expect(await res.json()).toEqual({ error: 'maintenance', feature: 'classes' });
     const put = await person(`/api/spaces/${space.id}/items/x1`, { method: 'PUT', headers: { 'if-match': '"0"' }, body: { type: 'assignment', title: 'x', courseId: 'web', date: '2026-10-15', status: 'todo' } });
     expect(put.status).toBe(503);
+    for (const path of ['/api/inbox', `/api/spaces/${space.id}/activity`]) expect((await person(path)).status, path).toBe(503);
+    expect((await person('/api/inbox/seen', { method: 'PUT', body: { seq: 0 } })).status).toBe(503);
     expect((await read(person, '/api/outline')).status).toBe(400);
   });
 

@@ -5,6 +5,7 @@ import { HttpError } from './http.js';
 import { assertAllowed, editorGuard, memberGuard, parseScope, scopeOf, writerGuard } from './access.js';
 import { SPACE_LIMIT } from './spaces.js';
 import { MEANINGFUL, autoKeep } from './leaving.js';
+import { KEEP_MS } from './activity.js';
 import { MARK_DEFAULTS, stable } from '../src/core/shared.ts';
 
 const PROFILE_COLS =
@@ -219,9 +220,10 @@ const INVITE_DAYS = 90;
  * The nightly purge (spec §13), in order: the other marks on expiring shared items are deleted
  * (soft); each space deleted before `before` goes with everything in it; then the floor moves
  * and old tombstones go, items first so course rows go last (a class item still holding a
- * meaningful mark waits); invites go 90 days after they were made. Only then are removed class
- * items holding something of someone's kept for them (autoKeep, bounded), so the sweep never
- * waits on the keeps; their class rows go the next night. Every step acts only on what is
+ * meaningful mark waits); invites go 90 days after they were made, activity 90 days after it
+ * happened (a purged space's own rows with it, except those about a person). Only then are
+ * removed class items holding something of someone's kept for them (autoKeep, bounded), so the
+ * sweep never waits on the keeps; their class rows go the next night. Every step acts only on what is
  * already old, so a rerun finds nothing more to do.
  */
 export async function purgeTombstones(db, before, now = Date.now()) {
@@ -235,6 +237,8 @@ export async function purgeTombstones(db, before, now = Date.now()) {
     ...['items', 'courses', 'changes'].map((t) =>
       db.prepare(`DELETE FROM ${t} WHERE scope IN (SELECT 'c:' || id FROM ${GONE} UNION ALL SELECT 'p:' || id FROM ${GONE})`).bind(before, before)),
     ...['members', 'invites', 'marks', 'space_prefs'].map((t) => db.prepare(`DELETE FROM ${t} WHERE space_id IN ${GONE}`).bind(before)),
+    /* rows about a person stay with them (their inbox), ageing out like the rest */
+    db.prepare(`DELETE FROM activity WHERE subject_user = '' AND space_id IN ${GONE}`).bind(before),
     tombstones('spaces'),
     db.prepare('UPDATE sync_state SET floor = MAX(floor, COALESCE((SELECT MAX(seq) FROM changes WHERE deleted_at < ?), 0)) WHERE id = 1').bind(before),
     db.prepare('DELETE FROM changes WHERE deleted_at < ?').bind(before),
@@ -244,6 +248,7 @@ export async function purgeTombstones(db, before, now = Date.now()) {
     tombstones('quotes'),
     tombstones('courses'),
     db.prepare('DELETE FROM invites WHERE created_at < ?').bind(now - INVITE_DAYS * 24 * 60 * 60 * 1000),
+    db.prepare('DELETE FROM activity WHERE at < ?').bind(now - KEEP_MS),
   ]);
   await autoKeep(db, before, now);
 }

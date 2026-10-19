@@ -1,25 +1,10 @@
-// The sidebar's shared-class parts (spec §15): a row for the invites
-// waiting, and + New as a menu: a course, a shared class, or joining with a code. The menu
-// follows the ARIA menu pattern. Classes themselves are rows of the course list (sidebar.tsx).
+// The sidebar's shared-class parts (spec §15): + New as a menu: a course, a shared class, or
+// joining with a code. The menu follows the ARIA menu pattern. Classes themselves are rows of
+// the course list (sidebar.tsx); the invites are in the inbox, the top bar's bell.
 
 import { useEffect, useRef, useState, type KeyboardEvent } from "react"
-import { openInvites, openJoin, openNewClass, useInvites } from "@/data/classes"
+import { openJoin, openNewClass } from "@/data/classes"
 import { openCourse } from "@/data/actions"
-import { Count } from "./sidebar-parts"
-
-const ROW = "flex w-full min-w-0 items-center gap-2.5 rounded-[9px] border-0 bg-transparent px-2 py-1.5 text-left text-[13px] font-medium text-ink-2 hover:bg-muted hover:text-foreground"
-
-/** The invites waiting for you; with none, no row. */
-export function InvitesRow() {
-    const n = useInvites().filter((i) => !i.expired).length
-    if (!n) return null
-    return (
-        <button type="button" className={ROW} onClick={openInvites}>
-            <span className="min-w-0 truncate">Invites</span>
-            <Count n={n} />
-        </button>
-    )
-}
 
 const ITEMS: readonly [string, string, () => void][] = [
     ["New course", "Only you", () => openCourse(null)],

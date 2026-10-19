@@ -133,6 +133,14 @@ describe('browser API response contracts', () => {
     /* your marks and prefs come only in your own scope */
     respond({ ...next, changes: [{ scope: web.scope, kind: 'marks', row: saved }] });
     await expect(client.api.syncV3({}, 0)).rejects.toMatchObject({ status: 502 });
+    /* the last page's unread count (spec §12): a whole number up to 99; anything else is dropped, the page still syncs */
+    expect(next.unread).toBe(0);
+    respond({ ...next, unread: 100 });
+    expect((await client.api.syncV3({}, 0)).unread).toBeUndefined();
+    respond({ ...next, unread: 1.5 });
+    const odd = await client.api.syncV3({}, 0);
+    expect(odd.unread).toBeUndefined();
+    expect(odd.changes).toEqual(next.changes);
   });
 
   it('stops an AI read when its own signal is aborted, and sends a picture as it is', async () => {

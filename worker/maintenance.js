@@ -55,7 +55,7 @@ export function validateMaintenance(body, by, now = Date.now()) {
 const GUARDED = [
   [/^\/api\/(outline|school-calendar)$/, 'import'],
   [/^\/api\/ai\//, 'import'],
-  [/^\/api\/(spaces|invites|join)(\/|$)/, 'classes'],
+  [/^\/api\/(spaces|invites|join|inbox)(\/|$)/, 'classes'],
 ];
 
 /**
