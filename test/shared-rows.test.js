@@ -195,6 +195,32 @@ describe('a project member writing a task', () => {
     expect(left.assignees).toEqual([]);
   });
 
+  /* a claim and a completion made close together (or offline) reach the Worker as one write */
+  it('takes a claim with a completion, and an unclaim with a reopening, in one write', async () => {
+    const p = await space('mt-both', 'project');
+    await upsertShared(env.DB, 'items', p.scope, p.owner, 't', task());
+    const both = await memberTaskWrite(env.DB, p.scope, p.member, 't', task({ status: 'done', completedAt: 5, assignees: [p.member] }),
+      { changed: { assignees: [], status: 'todo', completedAt: null }, now: 7000 });
+    expect(both).toMatchObject({ assignees: [p.member], status: 'done', completedAt: 7000, completedBy: p.member });
+    /* someone else's task stays theirs, and so does its status */
+    await expect(memberTaskWrite(env.DB, p.scope, p.other, 't', task({ status: 'todo', assignees: [p.other] }), { changed: { assignees: [p.member], status: 'done', completedAt: 7000 } }))
+      .rejects.toMatchObject({ status: 403, body: { error: 'forbidden' } });
+    const back = await memberTaskWrite(env.DB, p.scope, p.member, 't', task({ status: 'todo', assignees: [] }),
+      { changed: { assignees: [p.member], status: 'done', completedAt: 7000 } });
+    expect(back).toMatchObject({ assignees: [], status: 'todo', completedAt: null, completedBy: null, revision: both.revision + 1 });
+    /* a claim beside any other field is still refused */
+    await expect(memberTaskWrite(env.DB, p.scope, p.member, 't', task({ title: 'Mine', assignees: [p.member] }), { changed: { assignees: [], title: 'Create incidents endpoint' } }))
+      .rejects.toMatchObject({ status: 403, body: { error: 'forbidden' } });
+  });
+
+  it('refuses a claim of a task assigned to someone else that comes with a completion', async () => {
+    const p = await space('mt-both-other', 'project');
+    const v1 = await upsertShared(env.DB, 'items', p.scope, p.owner, 't', task({ assignees: [p.other] }));
+    await expect(memberTaskWrite(env.DB, p.scope, p.member, 't', task({ status: 'done', completedAt: 5, assignees: [p.member] }), { changed: { assignees: [p.other], status: 'todo', completedAt: null } }))
+      .rejects.toMatchObject({ status: 403, body: { error: 'forbidden' } });
+    expect(await getShared(env.DB, 'items', p.scope, p.owner, 't')).toMatchObject({ status: 'todo', assignees: [p.other], revision: v1.revision });
+  });
+
   it('lets anyone complete a task for everyone, and an editor\'s later edit keeps who completed it', async () => {
     const p = await space('mt-all', 'project');
     await upsertShared(env.DB, 'items', p.scope, p.owner, 't', task({ assignees: ['*'] }));

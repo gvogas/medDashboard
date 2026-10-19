@@ -10,6 +10,7 @@ import { data } from "@/core/store"
 import * as sync from "@/core/sync"
 import { uid } from "@/core/model"
 import { download } from "./classes"
+import { once, spaceGone, uploadFirst } from "./leave"
 import { closeSheet, openSheet } from "./overlay"
 import { toast } from "./toast"
 import type { ParentRef, SharedItem, Space } from "./types"
@@ -95,15 +96,20 @@ export async function link(spaceId: string, parent: ParentRef | null): Promise<v
     await api.spaces.link(spaceId, parent)
     await sync.syncNow()
 }
+/* removeProject and leaveProject upload your edits first and take a repeat that answers not
+   found, the project being gone here too, as done (leave.ts) */
+
 /** The owner deletes the project, typing its title; it leaves every member's device with their next sync. */
 export async function removeProject(spaceId: string, confirm: string): Promise<void> {
-    await api.spaces.deleteProject(spaceId, confirm)
+    await uploadFirst()
+    await once(() => api.spaces.deleteProject(spaceId, confirm), spaceGone(spaceId))
     closeSheet()
     await sync.syncNow()
 }
 /** Leave the project: your tasks become unassigned and your notes there go. */
 export async function leaveProject(spaceId: string): Promise<void> {
-    await api.spaces.leave(spaceId, false)
+    await uploadFirst()
+    await once(() => api.spaces.leave(spaceId, false), spaceGone(spaceId))
     closeSheet()
     await sync.syncNow()
 }

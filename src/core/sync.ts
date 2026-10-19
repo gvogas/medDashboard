@@ -63,13 +63,13 @@ const refused = (op: PendingOp, e: ApiError) => REFUSED.includes(e.status)
   || (e.status === 403 && (!!parseKey(op.key).scope || e.body?.error === 'forbidden' || e.body?.error === 'archived'));
 /* 'shared_items' → 'items', for the shared routes. */
 const sharedKind = (store: string) => store.slice('shared_'.length);
-/* Why an edit was set aside, as Settings shows it. */
-function reasonFor(e: ApiError): string {
+/* Why an edit was set aside, as Settings shows it; `op` names the class or project it was for. */
+function reasonFor(e: ApiError, op: PendingOp): string {
   const body = e.body || {};
   if (body.error === 'legacy_edit') return 'This edit was saved before conflict protection. Review it before restoring.';
   if (body.error === 'conflict') return Array.isArray(body.fields) ? `Someone else changed ${(body.fields as string[]).join(', ')}.` : 'A newer version was saved on another device.';
   if (body.error === 'limit') return 'A project holds 200 tasks at most.';
-  if (body.error === 'archived') return 'This class is archived, so it is read-only.';
+  if (body.error === 'archived') return `This ${parseKey(op.key).scope?.startsWith('p:') ? 'project' : 'class'} is archived, so it is read-only.`;
   if (e.status === 403) return 'You no longer have permission to change this.';
   return 'The server could not accept this edit.';
 }
@@ -124,7 +124,7 @@ async function pushAll(cycle: Cycle): Promise<boolean> {
         if (!active(cycle)) return false;
         // A review step another device made first, or already deleted: its copy stands.
         if (e.status === 409 && untouchedReview(op)) { await store.rejectOperation(op, current, '', { quiet: true }); continue; }
-        await store.rejectOperation(op, current, reasonFor(e));
+        await store.rejectOperation(op, current, reasonFor(e, op));
       } else if (e instanceof ApiError && !STOPS.includes(e.status)) {
         cycle.failed.push(op);
         // Items after a new course may belong to it: they wait for it.

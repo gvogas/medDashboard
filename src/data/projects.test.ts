@@ -2,7 +2,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest"
 
 // A project's tasks and who may do what with them, with the store, the API, sync, the sheet and the toast as fakes.
 const fake = vi.hoisted(() => ({
-    data: { profile: { id: "u-me", isAdmin: true } as Record<string, unknown> | null, shared_items: [] as unknown[], spaces: [] as unknown[] },
+    data: { profile: { id: "u-me", isAdmin: true } as Record<string, unknown> | null, shared_items: [] as unknown[], spaces: [] as { id: string }[] },
+    pending: 0,
     saveShared: vi.fn(async (_s: string, row: unknown) => row),
     removeShared: vi.fn(async () => {}),
     api: { spaces: { create: vi.fn(), link: vi.fn(async () => null), deleteProject: vi.fn(async () => null), leave: vi.fn(async () => null) } },
@@ -12,12 +13,24 @@ const fake = vi.hoisted(() => ({
     closeSheet: vi.fn(),
     toast: vi.fn(),
 }))
-vi.mock("@/core/store", () => ({ data: fake.data, saveShared: fake.saveShared, removeShared: fake.removeShared }))
-vi.mock("@/core/api", () => ({ api: fake.api }))
+vi.mock("@/core/store", () => ({ data: fake.data, saveShared: fake.saveShared, removeShared: fake.removeShared, pendingCount: () => fake.pending }))
+vi.mock("@/core/api", () => {
+    class ApiError extends Error {
+        status: number
+        body: Record<string, unknown> | null
+        constructor(status: number, body: Record<string, unknown> | null) { super(String(body?.error ?? status)); this.status = status; this.body = body }
+    }
+    return { api: fake.api, ApiError }
+})
 vi.mock("@/core/sync", () => ({ syncNow: fake.syncNow }))
 vi.mock("./classes", () => ({ download: fake.download }))
 vi.mock("./overlay", () => ({ openSheet: fake.openSheet, closeSheet: fake.closeSheet }))
 vi.mock("./toast", () => ({ toast: fake.toast }))
+/* leave.ts's guards are the real ones; what else it imports is not needed here */
+vi.mock("./marks", () => ({ ago: () => "" }))
+vi.mock("./refs", () => ({ splitKey: () => ({}) }))
+
+import { ApiError } from "@/core/api"
 
 import {
     addTask, assigneeNames, canClaim, canEdit, canFinish, claim, leaveProject, link, linkable, makeProject, projectsShown, removeProject, setDone, tasksOf,
@@ -35,6 +48,8 @@ beforeEach(() => {
     vi.clearAllMocks()
     fake.data.profile = { id: "u-me", isAdmin: true }
     fake.data.shared_items = []
+    fake.data.spaces = []
+    fake.pending = 0
 })
 
 describe("who may do what with a task (spec §5)", () => {
@@ -116,14 +131,35 @@ describe("the project itself", () => {
         await makeProject("Water", "2026-11-01", null)
         expect(fake.api.spaces.create).toHaveBeenLastCalledWith({ kind: "project", title: "Water", date: "2026-11-01" })
     })
-    it("links, deletes and leaves, then syncs", async () => {
+    it("links, then syncs", async () => {
         await link("fire00000001", null)
         expect(fake.api.spaces.link).toHaveBeenCalledWith("fire00000001", null)
+        expect(fake.syncNow).toHaveBeenCalledTimes(1)
+    })
+    it("deletes and leaves after your edits upload, then syncs", async () => {
+        fake.pending = 1
         await removeProject("fire00000001", "Fire")
         expect(fake.api.spaces.deleteProject).toHaveBeenCalledWith("fire00000001", "Fire")
+        /* two syncs while an edit waits, the call, then one more */
+        expect(fake.syncNow).toHaveBeenCalledTimes(3)
+        expect(fake.syncNow.mock.invocationCallOrder[1]).toBeLessThan(fake.api.spaces.deleteProject.mock.invocationCallOrder[0])
+        fake.pending = 0
         await leaveProject("fire00000001")
         expect(fake.api.spaces.leave).toHaveBeenCalledWith("fire00000001", false)
         expect(fake.closeSheet).toHaveBeenCalledTimes(2)
-        expect(fake.syncNow).toHaveBeenCalledTimes(3)
+        expect(fake.syncNow).toHaveBeenCalledTimes(5)
+    })
+    it("takes a repeat that answers not found as done once the project is gone here, else says it changed", async () => {
+        fake.api.spaces.leave.mockRejectedValueOnce(new ApiError(404, { error: "not_found" }))
+        await expect(leaveProject("fire00000001")).resolves.toBeUndefined()
+        expect(fake.closeSheet).toHaveBeenCalledTimes(1)
+        fake.api.spaces.deleteProject.mockRejectedValueOnce(new ApiError(404, { error: "not_found" }))
+        await expect(removeProject("fire00000001", "Fire")).resolves.toBeUndefined()
+        fake.data.spaces = [{ id: "fire00000001" }]
+        fake.api.spaces.deleteProject.mockRejectedValueOnce(new ApiError(404, { error: "not_found" }))
+        await expect(removeProject("fire00000001", "Fire")).rejects.toMatchObject({ status: 404, body: { error: "changed" } })
+        fake.api.spaces.deleteProject.mockRejectedValueOnce(new ApiError(400, { error: "invalid", field: "confirm" }))
+        await expect(removeProject("fire00000001", "Fir")).rejects.toMatchObject({ status: 400 })
+        expect(fake.closeSheet).toHaveBeenCalledTimes(2)
     })
 })

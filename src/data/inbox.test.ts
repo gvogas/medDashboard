@@ -188,6 +188,10 @@ describe("a project's link", () => {
         expect(say(row({ verb: "space.linked", kind: "project", new: null, old: "a1", space: "Fire", detail: { by: "Gabriel" } }), "u-me"))
             .toBe("Gabriel unlinked Fire from its assignment")
     })
+    it("reads the date move a link makes beside it, on the project's own item", () => {
+        expect(say(row({ verb: "item.date", kind: "project", subject: "project", old: "2026-10-20||", new: "2026-11-02||", space: "Fire", detail: { by: "Gabriel", title: "Fire" } }), "u-me"))
+            .toBe("Gabriel moved Fire: 20 Oct → 2 Nov")
+    })
 })
 
 describe("opening a row", () => {

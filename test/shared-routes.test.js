@@ -71,6 +71,12 @@ describe('shared routes', () => {
       { ...task, status: 'done', completedAt: 5, changed: { status: 'todo', completedAt: null } }, claimed.revision)).json();
     expect(done).toMatchObject({ status: 'done', completedBy: uid('member'), assignees: [uid('member')] });
     expect(await (await put(as.member, path(proj, 'items', 't1'), { ...task, title: 'x', changed: { title: 'Create incidents endpoint' } }, done.revision)).json()).toEqual({ error: 'forbidden' });
+    /* a claim and a completion queued together go up as one write */
+    const t4 = await (await put(as.editor, path(proj, 'items', 't4'), task)).json();
+    const both = await put(as.member, path(proj, 'items', 't4'),
+      { ...task, status: 'done', completedAt: 5, assignees: [uid('member')], changed: { status: 'todo', completedAt: null, assignees: [] } }, t4.revision);
+    expect(both.status).toBe(200);
+    expect(await both.json()).toMatchObject({ status: 'done', assignees: [uid('member')], completedBy: uid('member') });
     expect(await (await put(as.member, path(proj, 'items', 't2'), task)).json()).toEqual({ error: 'forbidden' });
     expect(await (await put(as.editor, path(proj, 'items', 't3'), { ...task, assignees: [uid('outsider')] })).json()).toEqual({ error: 'invalid', field: 'assignees' });
     expect(await (await put(as.editor, path(proj, 'items', 't3'), { ...task, assignees: ['*', uid('member')] })).json()).toEqual({ error: 'invalid', field: 'assignees' });

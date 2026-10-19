@@ -89,6 +89,12 @@ describe("words and small rules", () => {
         expect(messageFor(new ApiError(403, { error: "not_admin" }))).toBe("Team projects are open to admins only for now.")
         expect(messageFor(new ApiError(400, { error: "invalid", field: "parent" }))).toBe("That assignment isn't in a class you're in.")
         expect(messageFor(new ApiError(400, { error: "invalid", field: "confirm" }))).toBe("Type the project's name exactly to delete it.")
+        /* a project's sheets name the project */
+        expect(messageFor(new ApiError(403, { error: "forbidden" }), "", "project")).toBe("Only the project's owner can do that.")
+        expect(messageFor(new ApiError(403, { error: "owner" }), "", "project")).toBe("Hand the project on to someone first: the owner can't leave.")
+        expect(messageFor(new ApiError(403, { error: "archived" }), "", "project")).toBe("This project is archived. Unarchive it first.")
+        expect(messageFor(new ApiError(404, { error: "changed" }), "", "project")).toBe("That may already be done, or the project changed. Look again in a moment.")
+        expect(messageFor(new ApiError(403, { error: "forbidden" }))).toBe("Only the class's owner can do that.")
         /* a leave, removal, delete or keep that answered not found and was not done after all */
         expect(messageFor(new ApiError(404, { error: "changed" }))).toBe("That may already be done, or the class changed. Look again in a moment.")
         /* joining an archived class: the one joining can't unarchive it */

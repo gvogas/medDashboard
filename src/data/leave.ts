@@ -17,7 +17,7 @@ import type { Item, SharedItem, Space } from "./types"
    running, which may have uploaded before your last edit was saved: an edit still waiting
    gets a second sync. If it is still waiting after that (offline, refused), the call goes
    ahead; an edit refused later goes to Saved copies, as any other. */
-async function uploadFirst(): Promise<void> {
+export async function uploadFirst(): Promise<void> {
     await syncNow()
     if (store.pendingCount()) await syncNow()
 }
@@ -25,7 +25,7 @@ async function uploadFirst(): Promise<void> {
 /* A call that already happened answers not found when it comes again (its answer was lost and
    the tap repeated, or another device did it first): sync, and when what it acted on is gone
    here too, it is done. Else it fails as "changed" (messageFor), not as a code that matched nothing. */
-async function once(call: () => Promise<unknown>, done: () => boolean): Promise<void> {
+export async function once(call: () => Promise<unknown>, done: () => boolean): Promise<void> {
     try {
         await call()
     } catch (e) {
@@ -34,7 +34,7 @@ async function once(call: () => Promise<unknown>, done: () => boolean): Promise<
         if (!done()) throw new ApiError(404, { error: "changed" })
     }
 }
-const spaceGone = (spaceId: string) => () => !store.data.spaces.some((s) => s.id === spaceId)
+export const spaceGone = (spaceId: string) => () => !store.data.spaces.some((s) => s.id === spaceId)
 
 /** Leave a class: your edits upload first, so the copy holds them. */
 export async function leaveClass(spaceId: string, keepCopy: boolean, name: string): Promise<void> {

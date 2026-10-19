@@ -460,20 +460,22 @@ export async function upsertShared(db, table, scope, userId, id, fields, { revis
 
 /**
  * A project member's write to a task (spec §5): never the body as a whole. `changed` names
- * only status/completedAt (complete or reopen a task assigned to you or to everyone) or
- * only assignees (claim an unassigned task, or unclaim yourself, computed from the current
- * list). A member sets only 'todo' or 'done'; the completion time is the Worker's: kept
- * when the task was already complete, now when it becomes so, cleared on reopening.
- * Checked against the current row, written at its revision, one retry; a write that
- * changes nothing is answered with the current row, its revision unmoved.
+ * only status/completedAt (complete or reopen a task assigned to you or to everyone),
+ * assignees (claim an unassigned task, or unclaim yourself, computed from the current list),
+ * or both: a claim and a completion queued together on a device go up as one write. Then
+ * the status needs you on the task before or after the claim, as the two writes made one
+ * after the other would. A member sets only 'todo' or 'done'; the completion time is the
+ * Worker's: kept when the task was already complete, now when it becomes so, cleared on
+ * reopening. Checked against the current row, written at its revision, one retry; a write
+ * that changes nothing is answered with the current row, its revision unmoved.
  */
 export async function memberTaskWrite(db, scope, userId, id, fields, { changed, now = Date.now() } = {}) {
   const { spaceId } = parseScope(scope);
   const keys = Object.keys(changed || {});
-  const kind = keys.length && keys.every((f) => f === 'status' || f === 'completedAt') ? 'status' : keys.length === 1 && keys[0] === 'assignees' ? 'claim' : null;
-  if (!kind) throw new HttpError(403, { error: 'forbidden' });
-  const guard = writerGuard(spaceId, userId);
   const forbidden = () => new HttpError(403, { error: 'forbidden' });
+  if (!keys.length || !keys.every((f) => f === 'status' || f === 'completedAt' || f === 'assignees')) throw forbidden();
+  const claims = keys.includes('assignees'), finishes = keys.some((f) => f !== 'assignees');
+  const guard = writerGuard(spaceId, userId);
   if (keys.includes('status') && fields.status !== 'todo' && fields.status !== 'done') throw forbidden();
   for (let attempt = 0; ; attempt++) {
     await assertAllowed(db, userId, spaceId, 'write');
@@ -481,27 +483,29 @@ export async function memberTaskWrite(db, scope, userId, id, fields, { changed, 
     if (!current) throw new HttpError(404, { error: 'not_found' });
     if (current.deletedAt) throw conflict(current, keys);
     if (current.type !== 'task') throw forbidden();
-    let set, binds;
-    if (kind === 'status') {
-      if (!current.assignees.includes(userId) && !current.assignees.includes('*')) throw forbidden();
-      /* only the status is the member's; a completion time sent alone changes nothing */
-      if (!keys.includes('status') || current.status === fields.status) return current;
-      if (current.status !== changed.status) throw conflict(current, ['status']);
-      const completedAt = fields.status === 'todo' ? null : current.completedAt ?? now;
-      set = 'status = ?, completed_at = ?, completed_by = CASE WHEN ? IS NULL THEN NULL WHEN completed_at IS NOT NULL THEN completed_by ELSE ? END';
-      binds = [fields.status, completedAt, completedAt, userId];
-    } else {
+    const sets = [], binds = [];
+    let next = current.assignees;
+    if (claims) {
       const mine = current.assignees.includes(userId), wants = (fields.assignees || []).includes(userId);
-      let next = current.assignees;
       if (wants && !mine) {
         if (current.assignees.length) throw forbidden();   // assigned to someone else
         next = [userId];
       } else if (!wants && mine) next = current.assignees.filter((u) => u !== userId);
-      if (next === current.assignees) return current;
-      set = 'assignees = ?';
-      binds = [JSON.stringify(next)];
+      if (next !== current.assignees) { sets.push('assignees = ?'); binds.push(JSON.stringify(next)); }
     }
-    const saved = await db.prepare(`UPDATE items SET ${set}, updated_by = ?, updated_at = ?, revision = revision + 1
+    if (finishes) {
+      const on = (list) => list.includes(userId) || list.includes('*');
+      if (!on(current.assignees) && !on(next)) throw forbidden();
+      /* only the status is the member's; a completion time sent alone changes nothing */
+      if (keys.includes('status') && current.status !== fields.status) {
+        if (current.status !== changed.status) throw conflict(current, ['status']);
+        const completedAt = fields.status === 'todo' ? null : current.completedAt ?? now;
+        sets.push('status = ?', 'completed_at = ?', 'completed_by = CASE WHEN ? IS NULL THEN NULL WHEN completed_at IS NOT NULL THEN completed_by ELSE ? END');
+        binds.push(fields.status, completedAt, completedAt, userId);
+      }
+    }
+    if (!sets.length) return current;
+    const saved = await db.prepare(`UPDATE items SET ${sets.join(', ')}, updated_by = ?, updated_at = ?, revision = revision + 1
       WHERE scope = ? AND id = ? AND revision = ? AND deleted_at IS NULL AND type = 'task' AND ${guard.sql} RETURNING ${sharedCols('items')}`)
       .bind(...binds, userId, now, scope, id, current.revision, ...guard.binds).first();
     if (saved) return sharedToApi('items', saved);
