@@ -34,6 +34,7 @@ import { ApiError } from "@/core/api"
 
 import {
     addTask, assigneeNames, canClaim, canEdit, canFinish, claim, leaveProject, link, linkable, makeProject, projectsShown, removeProject, setDone, tasksOf,
+    teamTaskTick, toggleTeamTask,
 } from "./projects"
 import type { SharedItem, Space } from "./types"
 
@@ -162,5 +163,28 @@ describe("the project itself", () => {
         fake.api.spaces.deleteProject.mockRejectedValueOnce(new ApiError(400, { error: "invalid", field: "confirm" }))
         await expect(removeProject("fire00000001", "Fir")).rejects.toMatchObject({ status: 400 })
         expect(fake.closeSheet).toHaveBeenCalledTimes(2)
+    })
+})
+
+describe("ticking a team task from the Week (Stage 9 plan, Decision 4)", () => {
+    it("completes or reopens what you may, and says why when you may not", () => {
+        expect(teamTaskTick(space({ role: "member" }), task({ assignees: ["u-me"] }), "u-me")).toEqual({ done: true })
+        expect(teamTaskTick(space({ role: "member" }), task({ assignees: ["*"] }), "u-me")).toEqual({ done: true })
+        expect(teamTaskTick(space({ role: "member" }), task({ assignees: ["u-me"], status: "done", completedAt: 5 }), "u-me")).toEqual({ done: false })
+        expect(teamTaskTick(space({ role: "member" }), task({ assignees: ["u-sam"] }), "u-me")).toEqual({ why: "Only its assignees and the project's editors can complete this task." })
+        expect(teamTaskTick(space({ role: "owner", archived: true }), task({}), "u-me")).toEqual({ why: "This project is archived, so it is read-only." })
+        expect(teamTaskTick(null, task({}), "u-me")).toEqual({ why: "This project isn't on this device any more." })
+    })
+    it("sets the team's status by key, or toasts why not", async () => {
+        fake.data.spaces = [space({ role: "member" })]
+        fake.data.shared_items = [task({ id: "t1", assignees: ["u-me"] }), task({ id: "t2", assignees: ["u-sam"] })]
+        await toggleTeamTask("p:fire00000001/t1")
+        expect(fake.saveShared).toHaveBeenCalledWith("shared_items", expect.objectContaining({ id: "t1", status: "done" }))
+        await toggleTeamTask("p:fire00000001/t2")
+        expect(fake.saveShared).toHaveBeenCalledTimes(1)
+        expect(fake.toast).toHaveBeenCalledWith("Only its assignees and the project's editors can complete this task.")
+        await toggleTeamTask("p:fire00000001/gone")
+        expect(fake.saveShared).toHaveBeenCalledTimes(1)
+        expect(fake.toast).toHaveBeenCalledTimes(1)
     })
 })

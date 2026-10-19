@@ -68,6 +68,23 @@ export const setDone = (t: SharedItem, done: boolean) => write({ ...t, status: d
 export const claim = (t: SharedItem, me: string, on: boolean) => write({ ...t, assignees: on ? [me] : t.assignees.filter((u) => u !== me) })
 export const deleteTask = (t: SharedItem) => store.removeShared("shared_items", t.scope, t.id)
 
+/** What ticking a team task does (Stage 9 plan, Decision 4): {done} to set, or {why} not. */
+export function teamTaskTick(s: Space | null | undefined, t: SharedItem, me: string): { done: boolean } | { why: string } {
+    if (!s) return { why: "This project isn't on this device any more." }
+    if (s.archived) return { why: "This project is archived, so it is read-only." }
+    if (!canFinish(s, t, me)) return { why: "Only its assignees and the project's editors can complete this task." }
+    return { done: t.status !== "done" }
+}
+/** Tick a team task from a view by its key, '<scope>/<id>'. */
+export async function toggleTeamTask(key: string): Promise<void> {
+    const at = key.indexOf("/"), scope = key.slice(0, at), id = key.slice(at + 1)
+    const t = data.shared_items.find((i) => i.scope === scope && i.id === id && !i.deletedAt)
+    if (!t) return
+    const r = teamTaskTick(data.spaces.find((s) => s.scope === scope), t, data.profile?.id ?? "")
+    if ("why" in r) { toast(r.why); return }
+    await setDone(t, r.done)
+}
+
 /** Who a task is with, in words: "Everyone", names, or "Nobody yet". */
 export function assigneeNames(t: SharedItem, s: Space | null | undefined, me: string): string {
     if (t.assignees.includes("*")) return "Everyone"
