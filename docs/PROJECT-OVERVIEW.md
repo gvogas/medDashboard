@@ -257,7 +257,7 @@ Deploying, secrets, accounts and database moves: `docs/DEPLOYING.md`.
 7. **Oct 9:** Stage 5 (main `d3df959`): leaving and removal. Stage 6 (main `9dc8ea8`):
    classes in the calendar feed, outline imports into a class or a new class, the class's
    school calendar offered to joiners, and shared classes open to everyone. No migration.
-8. **Oct 15:** Stage 7 (`collab-7-inbox`): inbox and activity. Migration
+8. **Oct 18:** Stage 7 (main `bafcd0c`): inbox and activity. Migration
    `0005_activity.sql` (`activity`, filled by triggers on shared rows and by the member
    routes, and `inbox_seen`); the bell and inbox sheet replace the Invites row and sheet;
    a class's Activity tab; the unread count rides on each sync.
