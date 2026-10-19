@@ -1,5 +1,6 @@
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest"
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react"
+import { StrictMode } from "react"
 
 // The bell in the top bar and the inbox sheet it opens, with the store, the API, sync and the
 // top bar's actions as fakes; the overlay, the inbox's data (data/inbox.ts) and the class
@@ -104,6 +105,20 @@ describe("the bell and the inbox (spec §12, §15)", () => {
         await waitFor(() => expect(getSheet()).toEqual({ kind: "join", code: "", space: summary }))
         expect(fake.api.invites.accept).toHaveBeenCalledWith(SID)
         expect(bell("Inbox")).toBeTruthy()
+    })
+
+    it("keeps the rows new on opening marked when the list comes twice (StrictMode)", async () => {
+        /* the second fetch can come back after the first one's read marker went up */
+        fake.api.inbox.get
+            .mockResolvedValueOnce({ invites: [], items: [news], seen: 0 })
+            .mockResolvedValue({ invites: [], items: [news], seen: 7 })
+        render(<StrictMode><TopBar /><Sheet /></StrictMode>)
+        act(() => setUnread(1))
+        await act(async () => { fireEvent.click(bell("Inbox, 1 unread")) })
+        expect(await screen.findByText("Gabriel moved REST API: 15 Oct → 18 Oct")).toBeTruthy()
+        await waitFor(() => expect(fake.api.inbox.get).toHaveBeenCalledTimes(2))
+        await act(async () => {})
+        expect(screen.getByText("New:")).toBeTruthy()
     })
 
     it("offline, shows the copy kept from last time and says so", async () => {

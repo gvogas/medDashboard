@@ -41,17 +41,19 @@ export const openInbox = () => openSheet({ kind: "inbox" })
  */
 export async function refreshInbox(): Promise<number | null> {
     if (!data.profile || maintenanceState("classes") === "blocked") return null
+    /* this call's own answer: another refresh may replace `box` while this one awaits */
+    let mine: Inbox
     try {
-        box = await api.inbox.get()
+        mine = box = await api.inbox.get()
         offline = false
-        try { await store.meta.set("inbox", box) } catch { /* not kept: the list still shows */ }
+        try { await store.meta.set("inbox", mine) } catch { /* not kept: the list still shows */ }
     } catch {
         offline = true
         if (!box) { try { box = (await store.meta.get("inbox")) as Inbox | null } catch { /* none kept */ } }
-        box ??= { invites: [], items: [], seen: 0 }
+        mine = box ??= { invites: [], items: [], seen: 0 }
     }
     emit()
-    return box.seen
+    return mine.seen
 }
 
 /** Everything in the list is read: the count falls to the invites still waiting. Not offline: the server would not hear. */

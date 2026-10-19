@@ -34,10 +34,11 @@ function InboxCard({ bar }: { bar: boolean }) {
     const offline = useInboxOffline()
     const [busy, setBusy] = useState(false)
     const [err, setErr] = useState("")
-    /* how far it was read when the list came, so rows new on opening stay marked while the sheet is open */
+    /* how far it was read when the list came, so rows new on opening stay marked while the sheet is open;
+       the first answer wins (a second, e.g. StrictMode's, can come after markSeen moved it) */
     const [seenAtOpen, setSeenAtOpen] = useState<number | null>(null)
     useEffect(() => {
-        void refreshInbox().then((seen) => { if (seen !== null) setSeenAtOpen(seen); return markSeen() })
+        void refreshInbox().then((seen) => { if (seen !== null) setSeenAtOpen((s) => s ?? seen); return markSeen() })
     }, [])
     const me = data.profile?.id ?? ""
 
