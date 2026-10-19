@@ -140,6 +140,7 @@ describe("the project itself", () => {
         fake.pending = 1
         await removeProject("fire00000001", "Fire")
         expect(fake.api.spaces.deleteProject).toHaveBeenCalledWith("fire00000001", "Fire")
+        expect(fake.toast).toHaveBeenCalledWith("Fire is deleted.")
         /* two syncs while an edit waits, the call, then one more */
         expect(fake.syncNow).toHaveBeenCalledTimes(3)
         expect(fake.syncNow.mock.invocationCallOrder[1]).toBeLessThan(fake.api.spaces.deleteProject.mock.invocationCallOrder[0])

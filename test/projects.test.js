@@ -54,7 +54,7 @@ describe('making a team project (spec §10, §20)', () => {
     const plain = await signIn('pjp' + ++n);
     const refused = await make(plain, { title: 'X', date: '2026-10-30' });
     expect(refused.status).toBe(403);
-    expect(await refused.json()).toEqual({ error: 'forbidden' });
+    expect(await refused.json()).toEqual({ error: 'not_admin' });
     const admin = await signInAdmin('pja' + n);
     const { space } = await (await make(admin, { title: 'Team', date: '2026-10-30' })).json();
     const invite = await post(admin, `/api/spaces/${space.id}/invites`, { username: 'pjp' + n });
@@ -69,6 +69,11 @@ describe('making a team project (spec §10, §20)', () => {
     const join = await post(plain, '/api/join', { code });
     expect(join.status).toBe(403);
     expect(await join.json()).toEqual({ error: 'not_admin' });
+    /* someone already in it who stops being an admin gets the project back from its code */
+    await env.DB.prepare('UPDATE users SET is_admin = 0 WHERE id = ?').bind(admin.id).run();
+    const again = await post(admin, '/api/join', { code });
+    expect(again.status).toBe(200);
+    expect((await again.json()).space).toMatchObject({ id: space.id });
   });
 
   it('an admin invited joins as an editor, with prefs', async () => {

@@ -404,16 +404,18 @@ function sharedFieldsStmt(db, table, scope, userId, id, fields, keys, now, revis
 }
 
 /* Why a guarded write wrote nothing when the revision is not the reason: access (404/403),
-   a course outside the class or an assignee outside the project (400). */
-async function assertWritable(db, table, scope, userId, fields, need) {
+   a course outside the class or an assignee outside the project (400), on the fields the
+   write names (all, when `keys` is absent): a queued write still naming someone who has
+   left merges its other fields. */
+async function assertWritable(db, table, scope, userId, fields, need, keys) {
   const { spaceId } = parseScope(scope);
   await assertAllowed(db, userId, spaceId, need);
   if (table !== 'items') return;
-  if (fields.courseId && !(await db.prepare('SELECT 1 AS x FROM courses WHERE scope = ? AND id = ? AND deleted_at IS NULL').bind(scope, fields.courseId).first())) {
+  if ((!keys || keys.includes('courseId')) && fields.courseId && !(await db.prepare('SELECT 1 AS x FROM courses WHERE scope = ? AND id = ? AND deleted_at IS NULL').bind(scope, fields.courseId).first())) {
     throw new HttpError(400, { error: 'invalid', field: 'courseId' });
   }
   const ids = [...new Set((fields.assignees || []).filter((u) => u !== '*'))];
-  if (scope.startsWith('p:') && ids.length) {
+  if (scope.startsWith('p:') && ids.length && (!keys || keys.includes('assignees'))) {
     const { n } = await db.prepare('SELECT count(*) AS n FROM members WHERE space_id = ? AND deleted_at IS NULL AND user_id IN (SELECT value FROM json_each(?))').bind(spaceId, JSON.stringify(ids)).first();
     if (n !== ids.length) throw new HttpError(400, { error: 'invalid', field: 'assignees' });
   }
@@ -430,7 +432,7 @@ export async function upsertShared(db, table, scope, userId, id, fields, { revis
   const guard = editorGuard(parseScope(scope).spaceId, userId);
   const saved = await sharedUpsertStmt(db, table, scope, userId, id, fields, now, revision, guard).first();
   if (saved) return sharedToApi(table, saved);
-  await assertWritable(db, table, scope, userId, fields, 'editor');
+  await assertWritable(db, table, scope, userId, fields, 'editor', changed && Object.keys(changed));
   /* a task not there or deleted is a new one for the limit (reviving a tombstone included) */
   const before = scope.startsWith('p:') && fields.type === 'task' ? await getShared(db, table, scope, userId, id) : undefined;
   if (before !== undefined && (!before || before.deletedAt)) {

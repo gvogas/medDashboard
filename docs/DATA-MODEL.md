@@ -494,7 +494,7 @@ All routes are under `/api`, speak JSON, and require the session cookie except
 | `GET /api/calendar` · `POST /api/calendar` · `DELETE /api/calendar` | the calendar feed: → `{on, url}`; POST turns it on or makes a new link (the old one stops working); DELETE turns it off. See `worker/calendar.js`. |
 | `GET /api/calendar/:userId/:token.ics?tz=` | no session: the feed itself, `text/calendar`. The token is an HMAC of the user id and `users.feed_gen`; a wrong one is `404`. At most 60 fetches an hour per link. Carries your classes too: see The calendar feed below. |
 | `POST /api/spaces` | `{kind:'class', course}` (blank) or `{kind:'class', convertCourseId, items:[id]}` → `201 {space}`; you become the owner, with prefs from the course, and the class takes a copy of your school calendar (see `spaces`). Anyone signed in; a `kind` other than `'class'` or `'project'` is `400`. There is no hourly limit on making classes, only the 20 live spaces. A convert **moves** your course and the items named into the class in class shape: your status, grade, checklist, notes and completion into marks, your colour, target, term and archive into prefs; your course and those items are soft-deleted, the course's other items filed under the class (`classId`), your sessions and achievements on them labelled with the space. Converting the same course again answers the class it made (`200`). `409 limit` past 20 spaces. |
-| `POST /api/spaces` (project) | `{kind:'project', title, date?, parent?: {space, item}}` → `201 {space}`: a team project with you as its owner, its `project` item (the title, trimmed, 1–140 characters, no NUL; the date given, else the parent's) and your prefs, in one batch. Admins only (`403 forbidden` for anyone else, as an admin route answers). `parent` is any live item of a class you are a live member of (`400 {field:'parent'}` otherwise); with no `parent`, `date` is required (`400 {field:'date'}`). `409 limit` past 20 spaces. See Team projects. |
+| `POST /api/spaces` (project) | `{kind:'project', title, date?, parent?: {space, item}}` → `201 {space}`: a team project with you as its owner, its `project` item (the title, trimmed, 1–140 characters, no NUL; the date given, else the parent's) and your prefs, in one batch. Admins only (`403 not_admin` for anyone else). `parent` is any live item of a class you are a live member of (`400 {field:'parent'}` otherwise); with no `parent`, `date` is required (`400 {field:'date'}`). `409 limit` past 20 spaces. See Team projects. |
 | `POST /api/spaces/:sid/link` | the owner of an unarchived project: `{parent: {space, item}}` links it to that class item and sets the project's date to the item's; `{parent: null}`, or no `parent` at all, unlinks it and keeps the date → `204`. `400 {field:'parent'}` for an item you can't see, `404` on a class. Writes `space.linked`. (The spec's `PATCH`.) |
 | `GET /api/spaces/:sid` | → `{id, scope, kind, role, archived, members, invites, code, schoolCalendar}`: the members and the class's school-calendar snapshot (or `null`) for everyone in the space, its invites for the owner and editors, the join code's expiry and uses left for the owner. `404` outside it. |
 | `POST /api/spaces/:sid/school` | the owner, archived or not: copy your school calendar into the class again → `{schoolCalendar}` (what the class now holds). With no calendar of yours that has a semester, the old snapshot stays. Classes only (`404` otherwise). The app syncs first and says so when your calendar has not reached the server yet. |
@@ -504,7 +504,7 @@ All routes are under `/api`, speak JSON, and require the session cookie except
 | `GET /api/spaces/:sid/activity?before=<seq>` | → `{items, more}`: a space's Activity tab, 30 rows below `before` (the newest when left out) within the 90 days, newest first, in the inbox's row shape. Any live member, archived or not; `404` outside it; `400 {field:'before'}` for a bad `before`. |
 | `GET /api/invites` · `POST /api/invites/:sid/accept` · `POST /api/invites/:sid/decline` | your invites, expired ones marked (the list is for old clients only: the app reads invites from `GET /api/inbox`); accept → `{space}` (`404` once withdrawn, `410 expired`, `403 archived` while the class is archived, `403 not_admin` for a project invite while you are not an admin, `409 limit`/`full`; the invite stays pending); decline → `204`. |
 | `POST /api/spaces/:sid/code` · `DELETE /api/spaces/:sid/code` | the owner: a new 8-character code → `201 {code, expires, usesLeft}` (7 days, 10 uses; only its SHA-256 is kept; a new one retires the old) · turn it off. |
-| `POST /api/join` | `{code}` → `{space}`. 10 tries an hour; `404` unknown, `410 expired`, `403 archived` while the class is archived (no use spent), `403 not_admin` for a project's code while you are not an admin, `409 limit`/`full`. A pending invite to that class is accepted with it, with its role. |
+| `POST /api/join` | `{code}` → `{space}`. 10 tries an hour; `404` unknown, `410 expired`, `403 archived` while the class is archived (no use spent), `403 not_admin` for a project's code while you are not an admin (one you are already in answers with it), `409 limit`/`full`. A pending invite to that class is accepted with it, with its role. |
 | `PUT /api/spaces/:sid/members/:userId` · `POST /api/spaces/:sid/transfer` | the owner, archived or not: `{role: 'editor'\|'member'}` → `{userId, role}`; `{userId}` makes that member the owner and you an editor → `204`. |
 | `POST /api/spaces/:sid/leave` | `{keepCopy}` (true when left out, or with no body) → `204`: leave a class, with a copy of it as your own course or without (see `members`); or a project, which copies nothing (`keepCopy` is checked but ignored; see Team projects). The owner hands it on first: `403 owner`. Archived or not. |
 | `DELETE /api/spaces/:sid/members/:userId` | the owner, archived or not: remove a member, who always keeps a copy of a class and nothing of a project → `204`. Never yourself or the owner (`403`); `404` for someone not in it. |
@@ -620,7 +620,7 @@ on this device; the class itself is not reopened from its own sheet.
 A team project (spec §10) is a space of `kind = 'project'`: one `project` item (its name,
 due date and description) and its tasks, all in scope `p:<id>`. It is made, linked, left
 and deleted in `worker/projects.js`; tasks are ordinary shared writes. **Admins only**
-until Stage 10 (`PROJECTS_ADMINS_ONLY`): making one is `403 forbidden` for anyone else,
+until Stage 10 (`PROJECTS_ADMINS_ONLY`): making one is `403 not_admin` for anyone else,
 inviting someone who is not an admin `409 not_admin`, and accepting a project invite or
 joining by a project's code `403 not_admin`. Someone already in a project who stops being
 an admin keeps working in it. Invites to a project give `editor` by default.
@@ -632,7 +632,10 @@ is any live item in a class you are a live member of; the project's date is the 
 else the parent's.
 
 **Tasks** are `PUT /api/spaces/:sid/items/:id` writes of `type: 'task'`. Owners and
-editors write whole rows or merged fields. A member's write (`memberTaskWrite` in
+editors write whole rows or merged fields; an assignee outside the project is `400
+{field:'assignees'}` only when the write names `assignees` (a whole-row write always
+does), so an editor's queued edit still naming someone who has left merges its other
+fields onto the task the Worker stripped. A member's write (`memberTaskWrite` in
 `worker/db.js`) names only `status`/`completedAt`, `assignees`, or both: a claim of an
 unassigned task (or stepping off one) and a completion queued together go up as one
 write, and the status then needs you (or `*`) on the task before or after the claim. A
@@ -655,7 +658,7 @@ soft-deletes your marks and prefs there, ends the membership last, and writes
 unarchiving and handing on work as for a class.
 
 **Deleting** (`DELETE /api/spaces/:sid {confirm}`): the owner, archived or not, typing the
-title. One batch writes `space.deleted` about each other live member (while the space and
+title (both trimmed). One batch writes `space.deleted` about each other live member (while the space and
 its name are live), soft-deletes every member's marks and prefs there and its invites,
 then the space. Sync revokes it everywhere; the inbox drops the space's other rows but
 still delivers `space.deleted` (a row about you); the nightly purge removes it 30 days on.

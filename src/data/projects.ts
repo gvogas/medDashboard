@@ -104,6 +104,7 @@ export async function removeProject(spaceId: string, confirm: string): Promise<v
     await uploadFirst()
     await once(() => api.spaces.deleteProject(spaceId, confirm), spaceGone(spaceId))
     closeSheet()
+    toast(`${confirm.trim()} is deleted.`)
     await sync.syncNow()
 }
 /** Leave the project: your tasks become unassigned and your notes there go. */

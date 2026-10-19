@@ -151,7 +151,7 @@ export async function deleteProject(db, userId, spaceId, confirm, now = Date.now
   const me = await assertKeeper(db, userId, spaceId);
   if (me.kind !== 'project') throw new HttpError(404, { error: 'not_found' });
   const row = await db.prepare("SELECT title FROM items WHERE scope = ? AND id = 'project'").bind('p:' + spaceId).first();
-  if (typeof confirm !== 'string' || confirm.trim() !== row?.title) throw bad('confirm');
+  if (typeof confirm !== 'string' || confirm.trim() !== row?.title?.trim()) throw bad('confirm');
   const g = keeperGuard(spaceId, userId);
   await db.batch([
     db.prepare(`INSERT INTO activity (space_id, actor_id, verb, subject, subject_user, detail, bucket, at)

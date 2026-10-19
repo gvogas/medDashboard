@@ -182,9 +182,10 @@ export async function joinByCode(db, userId, raw, now = Date.now()) {
   const hash = await hashCode(code);
   const space = await db.prepare('SELECT id, kind, code_expires, code_uses_left FROM spaces WHERE code_hash = ? AND deleted_at IS NULL').bind(hash).first();
   if (!space) throw new HttpError(404, { error: 'not_found' });
-  await assertProjectsOpen(db, userId, space.kind);
+  /* already in it answers first: someone who stops being an admin keeps their projects */
   const held = await spaceSummary(db, userId, space.id);
   if (held) return held;
+  await assertProjectsOpen(db, userId, space.kind);
   if (space.code_expires <= now || space.code_uses_left <= 0) throw new HttpError(410, { error: 'expired' });
   const standard = space.kind === 'class' ? 'member' : 'editor';
   const [joined] = await db.batch([

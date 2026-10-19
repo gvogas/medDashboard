@@ -139,7 +139,18 @@ function NewTask({ spaceId, input }: { spaceId: string; input: RefObject<HTMLInp
     const [title, setTitle] = useState("")
     const [date, setDate] = useState(today())
     const ready = !!title.trim() && !!date
-    const add = async () => { if (ready && (await addTask(spaceId, title, date))) setTitle("") }
+    /* the box clears as the save starts, so fast typing never joins two titles; Enter waits
+       for the save, and a task not saved gets its title back */
+    const saving = useRef(false)
+    const add = async () => {
+        if (!ready || saving.current) return
+        const taken = title
+        saving.current = true
+        setTitle("")
+        let ok = false
+        try { ok = await addTask(spaceId, taken, date) } catch { ok = false } finally { saving.current = false }
+        if (!ok) setTitle((t) => t || taken)
+    }
     return (
         <span className="flex gap-2">
             <TextInput ref={input} aria-label="New task" placeholder="Add a task" value={title} maxLength={140} className="min-w-0 flex-1" onChange={(e) => setTitle(e.target.value)}

@@ -20,7 +20,9 @@ export function TaskRow({ task, space, me, gone }: { task: SharedItem; space: Sp
     const back = useRef(false)
     const editor = canEdit(space)
     const done = task.status === "done"
-    const claimAct = canClaim(space, task, me)
+    /* claiming finished work reads oddly: Claim is for open tasks; stepping off stays */
+    const can = canClaim(space, task, me)
+    const claimAct = done && can === "claim" ? null : can
     useEffect(() => { if (!editor) setEditing(false) }, [editor])
     useEffect(() => { if (!editing && back.current) { back.current = false; edit.current?.focus() } }, [editing])
     const close = () => { back.current = true; setEditing(false) }

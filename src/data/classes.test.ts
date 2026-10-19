@@ -95,6 +95,8 @@ describe("words and small rules", () => {
         expect(messageFor(new ApiError(403, { error: "archived" }), "", "project")).toBe("This project is archived. Unarchive it first.")
         expect(messageFor(new ApiError(404, { error: "changed" }), "", "project")).toBe("That may already be done, or the project changed. Look again in a moment.")
         expect(messageFor(new ApiError(403, { error: "forbidden" }))).toBe("Only the class's owner can do that.")
+        expect(messageFor(new ApiError(404, { error: "not_found" }))).toBe("That doesn't match a class. The code or invite may have been withdrawn.")
+        expect(messageFor(new ApiError(404, { error: "not_found" }), "", "project")).toBe("That doesn't match a project. The code or invite may have been withdrawn.")
         /* a leave, removal, delete or keep that answered not found and was not done after all */
         expect(messageFor(new ApiError(404, { error: "changed" }))).toBe("That may already be done, or the class changed. Look again in a moment.")
         /* joining an archived class: the one joining can't unarchive it */

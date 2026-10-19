@@ -52,6 +52,7 @@ vi.mock("@/data/actions", () => ({ openCourse: vi.fn() }))
 vi.mock("@/data/effective", () => ({ itemByKey: () => null }))
 
 import { notify } from "@/bridge"
+import * as store from "@/core/store"
 import { closeSheet, getSheet, openSheet } from "@/data/overlay"
 import { NewMenu } from "../sidebar-classes"
 import { ProjectsGroup } from "../sidebar-projects"
@@ -236,6 +237,44 @@ describe("the project sheet (spec §10, §15)", () => {
         })
         await waitFor(() => expect(within(t1).queryByLabelText("Task")).toBeNull())
         expect(within(t1).queryByRole("button", { name: "Edit t1" })).toBeNull()
+    })
+
+    it("fast adds keep each title apart: the box clears at once and Enter waits for the save", async () => {
+        seed("editor")
+        let finish = () => {}
+        const save = vi.mocked(store.saveShared)
+        const real = save.getMockImplementation()!
+        save.mockImplementationOnce((...args) => new Promise((done) => { finish = () => done(real(...args)) }))
+        await show()
+        const box = (await screen.findByLabelText("New task")) as HTMLInputElement
+        fireEvent.change(box, { target: { value: "Write tests" } })
+        fireEvent.keyDown(box, { key: "Enter" })
+        expect(box.value).toBe("")
+        fireEvent.change(box, { target: { value: "Ship it" } })
+        fireEvent.keyDown(box, { key: "Enter" })
+        expect(box.value).toBe("Ship it")
+        await act(async () => { finish() })
+        expect(fake.saved.map((r) => r.title)).toEqual(["Write tests"])
+        await act(async () => { fireEvent.keyDown(box, { key: "Enter" }) })
+        expect(fake.saved.map((r) => r.title)).toEqual(["Write tests", "Ship it"])
+        expect(box.value).toBe("")
+    })
+
+    it("a task that is not saved gives its title back", async () => {
+        seed("editor")
+        vi.mocked(store.saveShared).mockRejectedValueOnce(new Error("quota"))
+        await show()
+        const box = (await screen.findByLabelText("New task")) as HTMLInputElement
+        fireEvent.change(box, { target: { value: "Write tests" } })
+        await act(async () => { fireEvent.keyDown(box, { key: "Enter" }) })
+        expect(box.value).toBe("Write tests")
+    })
+
+    it("a done task offers no Claim; an open one does", async () => {
+        seed("member", [task("t1", []), task("t4", [], { status: "done", completedAt: 1 })])
+        await show()
+        expect(within(await screen.findByRole("listitem", { name: /t1/ })).getByRole("button", { name: "Claim" })).toBeTruthy()
+        expect(within(screen.getByRole("listitem", { name: /t4/ })).queryByRole("button", { name: "Claim" })).toBeNull()
     })
 
     it("Add waits for a task's name", async () => {

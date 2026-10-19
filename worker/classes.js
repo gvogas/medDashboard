@@ -7,7 +7,7 @@ import { validateSharedCourse } from './validate.js';
 import { absorb, checkConvert, createClass, priorConvert, refreshSchool, setRole, spaceDetails, transfer } from './spaces.js';
 import { deleteClass, keep, leave, removeMember, setArchived, shareItems } from './leaving.js';
 import { acceptInvite, declineInvite, dropCode, invite, joinByCode, makeCode, myInvites, revokeInvite } from './invites.js';
-import { PROJECTS_ADMINS_ONLY, assertProjectsOpen, createProject, deleteProject, isAdmin, linkProject, parentOf, projectBody } from './projects.js';
+import { assertProjectsOpen, createProject, deleteProject, linkProject, parentOf, projectBody } from './projects.js';
 
 const SID = '([a-z0-9]{12})';
 const UID = '([^/]{1,64})';
@@ -71,8 +71,7 @@ export const classRoutes = [
     const userId = await requireUser(request, env);
     const raw = await readJson(request);
     if (raw.kind === 'project') {
-      /* 403 forbidden, as an admin route answers anyone else */
-      if (PROJECTS_ADMINS_ONLY && !(await isAdmin(env.DB, userId))) throw new HttpError(403, { error: 'forbidden' });
+      await assertProjectsOpen(env.DB, userId, 'project');
       return json({ space: await createProject(env.DB, userId, projectBody(raw)) }, 201);
     }
     const body = classBody(raw);

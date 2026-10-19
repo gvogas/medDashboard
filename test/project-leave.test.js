@@ -2,6 +2,8 @@ import { env } from 'cloudflare:test';
 import { describe, expect, it } from 'vitest';
 import { post, sharedItem, signInAdmin } from './spaces.js';
 
+const put = (api, path, body, revision) => api(path, { method: 'PUT', body, headers: { 'if-match': `"${revision}"` } });
+
 let n = 0;
 const one = (sql, ...binds) => env.DB.prepare(sql).bind(...binds).first();
 async function team() {
@@ -42,6 +44,20 @@ describe('leaving or being removed from a project (spec §10, §13)', () => {
     expect(await res.json()).toEqual({ error: 'owner' });
   });
 
+  it("an editor's queued write naming the leaver merges onto the stripped task", async () => {
+    const { sam, kim, space } = await team();
+    const { revision } = await one('SELECT revision FROM items WHERE scope = ? AND id = ?', space.scope, 't1');
+    expect((await post(sam, `/api/spaces/${space.id}/leave`, {})).status).toBe(204);
+    const task = { type: 'task', title: 'Endpoint', date: '2026-10-15', status: 'done', completedAt: 5, assignees: [sam.id] };
+    const res = await put(kim, `/api/spaces/${space.id}/items/t1`, { ...task, changed: { status: 'todo', completedAt: null } }, revision);
+    expect(res.status).toBe(200);
+    expect(await res.json()).toMatchObject({ status: 'done', assignees: [] });
+    /* a whole-row write naming someone outside the project is still refused */
+    const fresh = await put(kim, `/api/spaces/${space.id}/items/t9`, { ...task, status: 'todo', completedAt: null }, 0);
+    expect(fresh.status).toBe(400);
+    expect(await fresh.json()).toEqual({ error: 'invalid', field: 'assignees' });
+  });
+
   it('an editor cannot remove anyone', async () => {
     const { sam, kim, space } = await team();
     expect((await sam(`/api/spaces/${space.id}/members/${kim.id}`, { method: 'DELETE' })).status).toBe(403);
@@ -69,6 +85,12 @@ describe('deleting a project (spec §13)', () => {
     const box = await (await kim('/api/inbox')).json();
     expect(box.items).toEqual(expect.arrayContaining([expect.objectContaining({ verb: 'space.deleted', about: true, space: 'Fire Response API' })]));
     expect((await del(owner, 'Fire Response API')).status).toBe(404);
+  });
+
+  it('compares the typed title with the stored one, both trimmed', async () => {
+    const { owner, space } = await team();
+    await env.DB.prepare("UPDATE items SET title = 'Fire Response API ' WHERE scope = ? AND id = 'project'").bind(space.scope).run();
+    expect((await owner(`/api/spaces/${space.id}`, { method: 'DELETE', body: { confirm: 'Fire Response API' } })).status).toBe(204);
   });
 
   it('the owner deletes it while it is archived too', async () => {
