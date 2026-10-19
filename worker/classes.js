@@ -104,6 +104,7 @@ export const classRoutes = [
     await setArchived(env.DB, userId, sid, archived);
     return done();
   }],
+  /* {parent: {space, item}} links; parent null, or no parent at all, unlinks */
   ['POST', route(`spaces/${SID}/link`), async ({ request, env, params: [sid] }) => {
     const userId = await requireUser(request, env);
     await linkProject(env.DB, userId, sid, parentOf((await readJson(request)).parent));

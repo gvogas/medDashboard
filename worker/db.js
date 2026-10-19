@@ -367,9 +367,9 @@ function sharedUpsertStmt(db, table, scope, userId, id, fields, now, revision, g
     updates.push('assignees = excluded.assignees',
       'completed_by = CASE WHEN excluded.completed_at IS NULL THEN NULL WHEN items.completed_at IS NOT NULL THEN items.completed_by ELSE excluded.completed_by END');
     checks.push(...itemChecks(scope, fields));
-    /* a new task needs room in its project (spec §3); a row that is there already always may be written */
+    /* a new or revived task needs room in its project (spec §3); a live row always may be written */
     if (scope.startsWith('p:') && fields.type === 'task') {
-      checks.push({ sql: `(EXISTS (SELECT 1 FROM items WHERE scope = ? AND id = ?)
+      checks.push({ sql: `(EXISTS (SELECT 1 FROM items WHERE scope = ? AND id = ? AND deleted_at IS NULL)
         OR (SELECT count(*) FROM items WHERE scope = ? AND type = 'task' AND deleted_at IS NULL) < ${TASK_LIMIT})`, binds: [scope, id, scope] });
     }
   }
@@ -428,7 +428,9 @@ export async function upsertShared(db, table, scope, userId, id, fields, { revis
   const saved = await sharedUpsertStmt(db, table, scope, userId, id, fields, now, revision, guard).first();
   if (saved) return sharedToApi(table, saved);
   await assertWritable(db, table, scope, userId, fields, 'editor');
-  if (scope.startsWith('p:') && fields.type === 'task' && !(await getShared(db, table, scope, userId, id))) {
+  /* a task not there or deleted is a new one for the limit (reviving a tombstone included) */
+  const before = scope.startsWith('p:') && fields.type === 'task' ? await getShared(db, table, scope, userId, id) : undefined;
+  if (before !== undefined && (!before || before.deletedAt)) {
     const { n } = await db.prepare("SELECT count(*) AS n FROM items WHERE scope = ? AND type = 'task' AND deleted_at IS NULL").bind(scope).first();
     if (n >= TASK_LIMIT) throw new HttpError(409, { error: 'limit' });
   }

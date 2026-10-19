@@ -5,7 +5,7 @@
 import { HttpError } from './http.js';
 import { assertOwner, memberGuard, ownerGuard } from './access.js';
 import { MY_SPACES, NEXT_ROW_REVISION, NEXT_SPACE_REVISION, SPACE_LIMIT, joinPrefs, randomId, spaceSummary } from './spaces.js';
-import { noteStmt } from './activity.js';
+import { noteStmt, undoneStmt } from './activity.js';
 
 /** Projects are for admins until Stage 10 opens them (Stage 8 plan, Decision 1). */
 export const PROJECTS_ADMINS_ONLY = true;
@@ -71,8 +71,9 @@ export async function createProject(db, userId, { title, date = null, parent = n
 
 /**
  * The owner links an unarchived project to a class assignment they can see, taking its date,
- * or unlinks it (parent null), which keeps the date (Decision 4); writes space.linked.
- * 404 outside the project or on a class; 403 for anyone but the owner; 400 parent.
+ * or unlinks it (parent null; a body with no parent too), which keeps the date (Decision 4);
+ * writes space.linked, from the item it was linked to ('' for none), and deletes it when a
+ * relink or unlink brings it back there within its ten minutes (spec §12). 404 outside the project or on a class; 403 for anyone but the owner; 400 parent.
  */
 export async function linkProject(db, userId, spaceId, parent, now = Date.now()) {
   const me = await assertOwner(db, userId, spaceId);
@@ -84,6 +85,7 @@ export async function linkProject(db, userId, spaceId, parent, now = Date.now())
       .bind('c:' + parent.space, parent.item, ...g.binds).first();
     if (!assignment) throw bad('parent');
   }
+  const prior = (await db.prepare('SELECT parent_item FROM spaces WHERE id = ?').bind(spaceId).first())?.parent_item ?? '';
   const g = ownerGuard(spaceId, userId);
   await db.batch([
     db.prepare(`UPDATE spaces SET parent_space = ?, parent_item = ?, updated_at = ?, revision = ${NEXT_SPACE_REVISION}
@@ -92,7 +94,9 @@ export async function linkProject(db, userId, spaceId, parent, now = Date.now())
     ...(parent ? [db.prepare(`UPDATE items SET date = ?, updated_by = ?, updated_at = ?, revision = revision + 1
       WHERE scope = ? AND id = 'project' AND date != ? AND EXISTS (SELECT 1 FROM spaces WHERE id = ? AND parent_item = ? AND updated_at = ?)`)
       .bind(assignment.date, userId, now, 'p:' + spaceId, assignment.date, spaceId, parent.item, now)] : []),
-    noteStmt(db, { spaceId, actorId: userId, verb: 'space.linked', newValue: parent?.item ?? null, detail: parent ? { assignment: assignment.title } : {}, now,
+    /* old_value is never NULL, so the first "from" is kept and an undone link is found */
+    noteStmt(db, { spaceId, actorId: userId, verb: 'space.linked', oldValue: prior, newValue: parent?.item ?? null, detail: parent ? { assignment: assignment.title } : {}, now,
       when: 'EXISTS (SELECT 1 FROM spaces WHERE id = ?1 AND updated_at = ?8 AND parent_item IS ?6)' }),
+    undoneStmt(db, { spaceId, actorId: userId, verb: 'space.linked', now }),
   ]);
 }
