@@ -267,7 +267,7 @@ Deploying, secrets, accounts and database moves: `docs/DEPLOYING.md`.
    `0005_activity.sql` (`activity`, filled by triggers on shared rows and by the member
    routes, and `inbox_seen`); the bell and inbox sheet replace the Invites row and sheet;
    a class's Activity tab; the unread count rides on each sync.
-9. **Oct 18:** Stage 8 (`collab-8-projects`): team projects, for admins only. Making one
+9. **Oct 18:** Stage 8 (main `54ef5fa`): team projects, for admins only. Making one
    (on its own or under a class assignment), linking, tasks with claiming and
    completing, the project sheet and the sidebar's Projects group, leaving, removal and
    deleting; account deletion takes the account off its tasks. Out of the views until
