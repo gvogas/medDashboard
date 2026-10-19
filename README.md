@@ -28,10 +28,12 @@ the database, cookies and IndexedDB).
   colour, semester) on top, and leaving keeps a copy of the class as your own course.
   A bell opens your inbox (invites and what others changed that concerns you), and
   each class has an Activity tab.
-- **Team projects** (admins only for now): a project, on its own or belonging to a class
-  assignment, with tasks the team adds, assigns, claims and completes, in a project
-  sheet. The Week and the Month show each project's due date and your tasks there
-  (ticking one completes it for the team), All items filters by source, and the
+- **Team projects**: tasks shared with a small team, each with who has it, in your Week
+  and your calendar feed. For everyone signed in. A project, on its own or belonging to
+  a class assignment, has tasks the team adds, assigns, claims and completes, in a
+  project sheet. The Week and the Month show each project's due date and your tasks
+  there (ticking one completes it for the team), the calendar feed carries them too, the
+  inbox tells you about tasks given to you, All items filters by source, and the
   sidebar shows each project's progress.
 - **Admin page**: accounts, error log, audit log, announcement banner, and maintenance
   switches per feature.
