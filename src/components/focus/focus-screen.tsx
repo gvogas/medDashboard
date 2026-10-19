@@ -7,7 +7,7 @@
 // sheet on a phone); the stage re-centres in what is left. Space pauses, M opens or shuts
 // the music; Esc (data/keyboard.ts, escapeFocus) shuts the music, then leaves.
 
-import { useEffect, useLayoutEffect, useRef, type ReactNode } from "react"
+import { useEffect, useLayoutEffect, useMemo, useRef, type ReactNode } from "react"
 import { cn } from "@/lib/utils"
 import { duration } from "@/lib/time"
 import { isTyping } from "@/lib/dom"
@@ -53,7 +53,8 @@ function FocusScreen({ run }: { run: Run }) {
     const music = useUi((u) => u.focusMusic)
     const bg = useUi((u) => u.bg)
     const today = useToday(run)
-    const { courses, items } = withProjects(keyedCourses(useCourses()), keyedItems(useItems()), useProfile()?.id ?? "")
+    const own = keyedCourses(useCourses()), all = keyedItems(useItems()), me = useProfile()?.id ?? ""
+    const { courses, items } = useMemo(() => withProjects(own, all, me), [own, all, me])
     const root = useRef<HTMLDivElement>(null)
 
     /* Space, M and /, when no sheet, overlay or box has them (Esc is data/keyboard.ts's). */

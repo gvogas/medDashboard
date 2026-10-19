@@ -14,7 +14,7 @@ import { addDays, dayMonth, iso, parse, shortDate, today as todayIso, DOW, MON }
 import { duration } from "@/lib/time"
 import { useAchievements, useCourses, useItems, useProfile, useStudySessions } from "./store"
 import { rememberUi, ui } from "./ui"
-import { keyedAchievements, keyedCourses, keyedItems, keyedSessions, leftClass } from "./refs"
+import { keyedAchievements, keyedCourses, keyedItems, keyedSessions, leftSpaceLabel } from "./refs"
 import { forAchievements } from "./effective"
 import { withProjects } from "./projects"
 import type { Achievement, Badge, Course, HistTab, Item, SessionUndo, StudyPrefs, StudySession, StudyTab } from "./types"
@@ -99,7 +99,7 @@ export function todayOf(sessions: StudySession[], items: Item[], courses: Course
             const course = courses.find((c) => c.id === s.courseId)
             return {
                 id: s.id, at: clockTime(s.startedAt), courseId: s.courseId, color: course?.color,
-                what: items.find((x) => x.id === s.itemId)?.title || s.note || course?.name || (leftClass(s.courseId) ? "A class you left" : "No course"),
+                what: items.find((x) => x.id === s.itemId)?.title || s.note || course?.name || (leftSpaceLabel(s.courseId) ?? "No course"),
                 minutes: s.studyMinutes,
             }
         }),

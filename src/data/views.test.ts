@@ -7,11 +7,11 @@ vi.mock("@/data/query", () => ({ schoolCal: () => null }))
 import { normalizeCourse, normalizeItem } from "@/core/model"
 import { normalizeSchool } from "@/core/school"
 import {
-    cellLabel, classes, instances, monthCells, officeHours, pickedSource, quoteAt, stats, tableRows, tasks, timetable, typeCounts, weekDays,
+    cellLabel, classes, instances, monthCells, officeHours, pickedSource, quoteAt, stats, tableRows, tableView, tasks, timetable, typeCounts, weekDays,
     type Filters, type TableFilters, type ViewInput,
 } from "./views"
 import type { Course, Item, Schedule, StudySession } from "./types"
-import type { EffectiveItem } from "./effective"
+import { forStats, type EffectiveItem } from "./effective"
 
 /* Wednesday 23 September 2026; the week runs Mon 21 – Sun 27. */
 const TODAY = "2026-09-23"
@@ -273,6 +273,25 @@ describe("the table", () => {
         const sourced = [item({ id: "own", type: "lab" }), item({ id: "filed", type: "exam", classId: "webs00000001" })]
         expect(typeCounts(sourced, "all", "space:webs00000001")).toEqual({ exam: 1 })
         expect(typeCounts(sourced, "all", "personal")).toEqual({ lab: 1, exam: 1 })
+    })
+
+    it("lists, from a stat tile, only what Stats counts: your tasks, no project's own item", () => {
+        const P = "p:fire00000001/"
+        const rows = [
+            item({ id: "c", date: "2026-09-21" }),
+            { ...item({ id: "mine", type: "task", date: "2026-09-21" }), assignees: ["me"], key: P + "mine", spaceId: "fire00000001", source: "project" },
+            { ...item({ id: "theirs", type: "task", date: "2026-09-21" }), assignees: ["them"], key: P + "theirs", spaceId: "fire00000001", source: "project" },
+            { ...item({ id: "project", type: "project", date: "2026-09-22" }), key: P + "project", spaceId: "fire00000001", source: "project" },
+        ] as EffectiveItem[]
+        const f = { ...TABLE, show: "overdue" as const }, sort = { key: "date" as const, dir: 1 as const }
+        const tile = tableView(rows, [], f, sort, true, "me")
+        expect(tile.rows.map((r) => r.id)).toEqual(["c", "mine"])
+        expect(tile.overdue).toBe(2)
+        expect(tile.overdue).toBe(stats(forStats(rows, "me"), [], null, TODAY).overdue)
+        /* the table itself keeps every row */
+        const all = tableView(rows, [], f, sort, false, "me")
+        expect(all.rows).toHaveLength(4)
+        expect(all.overdue).toBe(4)
     })
 })
 

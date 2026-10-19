@@ -5,7 +5,7 @@ vi.mock("@/core/store", () => ({
     subscribe: () => () => {},
 }))
 
-import { classCourseKey, courseRefKey, isSharedKey, itemCourseKey, itemRefKey, keyedAchievements, keyedCourses, keyedItems, keyedSessions, placeCourse, refOf, splitKey } from "./refs"
+import { classCourseKey, courseRefKey, isSharedKey, itemCourseKey, itemRefKey, keyedAchievements, keyedCourses, keyedItems, keyedSessions, leftClass, leftSpaceLabel, placeCourse, refOf, splitKey } from "./refs"
 import type { Achievement, Course, Item, StudySession } from "./types"
 
 const WEB = "c:abcdefghij12"
@@ -33,6 +33,19 @@ describe("keys", () => {
         expect(refOf(PRJ + "/project", PRJ + "/t1")).toEqual({ courseId: "project", itemId: "t1", spaceId: "fire00000001" })
         const p = session({ courseId: "project", itemId: "t1", spaceId: "fire00000001" })
         expect([courseRefKey(p), itemRefKey(p)]).toEqual([PRJ + "/project", PRJ + "/t1"])
+    })
+
+    it("name a space you left: a project's sessions keep a project's key, and say so", () => {
+        const p = session({ courseId: "project", itemId: "t1", spaceId: "gone00000001" })
+        expect([courseRefKey(p), itemRefKey(p)]).toEqual(["p:gone00000001/project", "p:gone00000001/t1"])
+        const c = session({ courseId: "web", itemId: "a1", spaceId: "gone00000002" })
+        expect(courseRefKey(c)).toBe("c:gone00000002/web")
+        expect(leftClass(courseRefKey(p))).toBe(true)
+        expect(leftSpaceLabel(courseRefKey(p))).toBe("A project you left")
+        expect(leftSpaceLabel(courseRefKey(c))).toBe("A class you left")
+        expect(leftSpaceLabel(WEB + "/web")).toBeNull()
+        expect(leftSpaceLabel("bio")).toBeNull()
+        expect(leftSpaceLabel(null)).toBeNull()
     })
 
     it("file an item of yours under a class when a class course is picked", () => {

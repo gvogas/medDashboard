@@ -411,23 +411,33 @@ export const useMonth = () => {
     return useMemo(() => ({ month: monthCells(input), timetable: timetable(input.courses, input.filters, input.cal, input.anchor),schedule: input.schedule }), [input])
 }
 
+/**
+ * The table's rows, the Overdue chip's count and each type chip's open items. A stat tile's
+ * list (`tile`) keeps what Stats counts (forStats): of a project's rows, only your tasks.
+ */
+export function tableView(items: Item[], courses: Course[], f: TableFilters, sort: { key: SortKey; dir: 1 | -1 }, tile: boolean, me: string) {
+    const list = tile ? forStats(items as EffectiveItem[], me) : items
+    return {
+        rows: tableRows(list, courses, f, sort),
+        overdue: tableRows(list, courses, { ...f, show: "overdue" }, sort).length,
+        perType: typeCounts(list, f.course, f.source),
+    }
+}
+
 export const useTable = () => {
-    const input = useViewInput(), spaces = useSpaces()
+    const input = useViewInput(), spaces = useSpaces(), profile = useProfile()
     const sort = { key: ui.sort.key, dir: ui.sort.dir }
     return useMemo(() => {
         const f = tableFiltersOf(spaces)
         return {
-            rows: tableRows(input.items, input.courses, f, sort),
+            ...tableView(input.items, input.courses, f, sort, ui.listFrom === "tile", profile?.id ?? ""),
             total: input.items.length,
             sort,
             filters: f,
-            /* what the Overdue chip would show, and each type chip's open items */
-            overdue: tableRows(input.items, input.courses, { ...f, show: "overdue" }, sort).length,
-            perType: typeCounts(input.items, f.course, f.source),
         }
     },
         // eslint-disable-next-line react-hooks/exhaustive-deps -- the sort is part of the ui, keyed by `input`
-        [input, spaces])
+        [input, spaces, profile])
 }
 
 export const useStats = () => {
