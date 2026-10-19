@@ -29,8 +29,9 @@ describe('making a team project (spec §10, §20)', () => {
     expect(await one('SELECT parent_space, parent_item FROM spaces WHERE id = ?', space.id)).toEqual({ parent_space: cls.id, parent_item: 'a1' });
   });
 
-  it('refuses a parent you cannot see, a missing date, a bad title, and past 20 spaces', async () => {
-    const me = await signInAdmin('pjx' + ++n);
+  it('refuses a parent you cannot see, a missing date, a bad title, and past 20 spaces (not an admin)', async () => {
+    const me = await signIn('pjx' + ++n);
+    me.id = 'u-pjx' + n;
     const theirs = await makeSpace({ members: {} });
     await sharedItem(theirs.scope, 'a1', { course_id: 'web' });
     const mine = await makeSpace({ members: { [me.id]: 'member' } });
