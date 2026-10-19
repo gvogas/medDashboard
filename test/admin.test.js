@@ -162,12 +162,18 @@ describe('accounts', () => {
       env.DB.prepare(`INSERT INTO items (scope, id, type, title, date, status, assignees, created_at, updated_at) VALUES
         ('p:stripproj001', 't1', 'task', 'T', '2026-10-20', 'todo', ?1, 1, 1), ('p:stripproj001', 't2', 'task', 'U', '2026-10-20', 'todo', ?2, 1, 1)`)
         .bind(JSON.stringify([gone, stays]), JSON.stringify([stays])),
+      /* a deleted project waits for the purge untouched */
+      env.DB.prepare("INSERT INTO spaces (id, kind, created_at, updated_at, deleted_at) VALUES ('stripproj002', 'project', 1, 1, 5)"),
+      env.DB.prepare("INSERT INTO members (space_id, user_id, role, joined_at, updated_at) VALUES ('stripproj002', ?1, 'owner', 1, 1), ('stripproj002', ?2, 'editor', 2, 2)").bind(stays, gone),
+      env.DB.prepare("INSERT INTO items (scope, id, type, title, date, status, assignees, created_at, updated_at) VALUES ('p:stripproj002', 't1', 'task', 'T', '2026-10-20', 'todo', ?, 1, 1)")
+        .bind(JSON.stringify([gone])),
     ]);
     expect((await admin('/api/admin/accounts/u-strip1', { method: 'DELETE', body: { confirm: 'strip1' } })).status).toBe(204);
     const rows = (await env.DB.prepare("SELECT id, assignees, revision FROM items WHERE scope = 'p:stripproj001' ORDER BY id").all()).results;
     expect(rows.map((r) => [r.id, JSON.parse(r.assignees)])).toEqual([['t1', [stays]], ['t2', [stays]]]);
     /* a task it was not on is left alone */
     expect(rows[1].revision).toBe(1);
+    expect(await env.DB.prepare("SELECT assignees, revision FROM items WHERE scope = 'p:stripproj002'").first()).toEqual({ assignees: JSON.stringify([gone]), revision: 1 });
   });
 
   it("shows an invite from a deleted account as from 'A former member'", async () => {

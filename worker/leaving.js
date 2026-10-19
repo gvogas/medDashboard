@@ -176,6 +176,7 @@ const ENDED = 'EXISTS (SELECT 1 FROM members WHERE space_id = ?1 AND user_id = ?
 export async function leave(db, userId, spaceId, keepCopy, now = Date.now()) {
   const me = await assertAllowed(db, userId, spaceId, 'read');
   if (me.role === 'owner') throw new HttpError(403, { error: 'owner' });
+  /* keepCopy was checked by the route but means nothing here: a project's rows are the team's */
   if (me.kind === 'project') {
     if (!(await leaveProject(db, userId, spaceId, userId, now))) throw new HttpError(404, { error: 'not_found' });
     return;
@@ -200,10 +201,9 @@ export async function removeMember(db, userId, spaceId, targetId, now = Date.now
   throw them ? new HttpError(403, { error: 'forbidden' }) : new HttpError(404, { error: 'not_found' });
 }
 
-/** Archive or unarchive a class (spec §13), the owner only, archived or not; moves the revision, and writes space.archived, when it changes. */
+/** Archive or unarchive a class or a project (spec §13), the owner only, archived or not; moves the revision, and writes space.archived, when it changes. */
 export async function setArchived(db, userId, spaceId, archived, now = Date.now()) {
-  const me = await assertKeeper(db, userId, spaceId);
-  if (me.kind !== 'class') throw new HttpError(404, { error: 'not_found' });
+  await assertKeeper(db, userId, spaceId);
   const g = keeperGuard(spaceId, userId), a = archived ? 1 : 0;
   await db.batch([
     db.prepare(`UPDATE spaces SET archived = ?, updated_at = ?, revision = ${NEXT_SPACE_REVISION} WHERE id = ? AND archived != ? AND ${g.sql}`)

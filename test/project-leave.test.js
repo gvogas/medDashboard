@@ -66,6 +66,15 @@ describe('deleting a project (spec §13)', () => {
     expect(told).toEqual([{ subject_user: kim.id, space: 'Fire Response API' }, { subject_user: sam.id, space: 'Fire Response API' }]);
     const page = await (await sam(`/api/sync?v=3&cursors=${encodeURIComponent(`u:${sam.id}:0,${space.scope}:0`)}&sv=0`)).json();
     expect(page.revoked).toEqual([space.scope]);
+    const box = await (await kim('/api/inbox')).json();
+    expect(box.items).toEqual(expect.arrayContaining([expect.objectContaining({ verb: 'space.deleted', about: true, space: 'Fire Response API' })]));
     expect((await del(owner, 'Fire Response API')).status).toBe(404);
+  });
+
+  it('the owner deletes it while it is archived too', async () => {
+    const { owner, space } = await team();
+    expect((await post(owner, `/api/spaces/${space.id}/archive`, { archived: true })).status).toBe(204);
+    expect((await owner(`/api/spaces/${space.id}`, { method: 'DELETE', body: { confirm: 'Fire Response API' } })).status).toBe(204);
+    expect(await one('SELECT deleted_at IS NOT NULL AS gone FROM spaces WHERE id = ?', space.id)).toEqual({ gone: 1 });
   });
 });

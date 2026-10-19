@@ -2,7 +2,8 @@
 // worker/leaving.js handOnStmts) and scripts/add-user.mjs, so no imports: the script runs it
 // under Node. Both run HAND_ON, then the ACCOUNT_TABLES deletes, then the user row's.
 //
-// HAND_ON passes the spaces the account owns on (spec §13); ?1 is the user id, ?2 now.
+// HAND_ON takes the account off its live projects' tasks and passes the spaces it owns on
+// (spec §13); ?1 is the user id, ?2 now.
 // ACCOUNT_TABLES lists each table with how its rows name their owner (?1 is the user id), in
 // an order the foreign keys accept. Courses, items and the change feed belong to the scope
 // 'u:<id>', which no foreign key follows, so they are listed here. The user row's deletion
@@ -38,10 +39,12 @@ const OTHERS = 'EXISTS (SELECT 1 FROM members AS oo WHERE oo.space_id = ow.space
  * without an owner. Only ?1 and ?2 appear, nowhere inside a string literal.
  */
 export const HAND_ON = [
-  /* Out of every task's assignees in the projects ?1 is in (spec §13), first, while the memberships are live; a task left with nobody is unassigned (the trigger says so). */
+  /* Off every task's assignees in the live projects ?1 is in (spec §13), first, while the
+     memberships are live; a task left with nobody is unassigned (the trigger says so). */
   `UPDATE items SET assignees = (SELECT json_group_array(a.value) FROM json_each(items.assignees) AS a WHERE a.value != ?1),
       updated_by = ?1, updated_at = ?2, revision = revision + 1
-    WHERE scope IN (SELECT 'p:' || space_id FROM members WHERE user_id = ?1 AND deleted_at IS NULL) AND deleted_at IS NULL
+    WHERE scope IN (SELECT 'p:' || pm.space_id FROM members AS pm JOIN spaces AS ps ON ps.id = pm.space_id AND ps.deleted_at IS NULL
+        WHERE pm.user_id = ?1 AND pm.deleted_at IS NULL) AND deleted_at IS NULL
       AND EXISTS (SELECT 1 FROM json_each(items.assignees) AS a WHERE a.value = ?1)`,
   `UPDATE spaces SET revision = ${NEXT_SPACE_REVISION}, updated_at = ?2
     WHERE deleted_at IS NULL AND id IN (SELECT space_id FROM members WHERE user_id = ?1 AND deleted_at IS NULL)`,

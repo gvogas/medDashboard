@@ -218,13 +218,14 @@ export async function upsertRow(db, table, userId, id, fields, now = Date.now(),
 const INVITE_DAYS = 90;
 
 /**
- * The nightly purge (spec §13), in order: the other marks on expiring shared items are deleted
- * (soft); each space deleted before `before` goes with everything in it; then the floor moves
- * and old tombstones go, items first so course rows go last (a class item still holding a
- * meaningful mark waits; a project task never does, its marks having gone in the first step); invites go 90 days after they were made, activity 90 days after it
- * happened (a purged space's own rows with it, except those about a person). Only then are
- * removed class items holding something of someone's kept for them (autoKeep, bounded), so the
- * sweep never waits on the keeps; their class rows go the next night. Every step acts only on what is
+ * The nightly purge (spec §13), in order: the marks on expiring shared items are deleted (soft):
+ * every mark on a project task, and on a class item those holding nothing; each space deleted
+ * before `before` goes with everything in it; then the floor moves and old tombstones go, items
+ * first so course rows go last (a class item still holding a meaningful mark waits; a project
+ * task never does); invites go 90 days after they were made, activity 90 days after it happened
+ * (a purged space's own rows with it, except those about a person). Only then are removed class
+ * items holding something of someone's kept for them (autoKeep, bounded), so the sweep never
+ * waits on the keeps; their class rows go the next night. Every step acts only on what is
  * already old, so a rerun finds nothing more to do.
  */
 export async function purgeTombstones(db, before, now = Date.now()) {
@@ -236,7 +237,7 @@ export async function purgeTombstones(db, before, now = Date.now()) {
     db.prepare(`UPDATE marks SET deleted_at = ?, updated_at = ?, revision = revision + 1 WHERE deleted_at IS NULL AND EXISTS (SELECT 1 FROM items AS i
       WHERE i.id = marks.item_id AND i.deleted_at IS NOT NULL AND i.deleted_at < ?
         AND (i.scope = 'p:' || marks.space_id OR (i.scope = 'c:' || marks.space_id AND NOT ${MEANINGFUL('marks')})))`).bind(now, now, before),
-    /* a gone space's rows go whatever marks they hold: every way a space is deleted (deleteClass, account deletion) leaves no meaningful live mark in it */
+    /* a gone space's rows go whatever marks they hold: every way a space is deleted (deleteClass, deleteProject, account deletion) leaves no meaningful live mark in it */
     ...['items', 'courses', 'changes'].map((t) =>
       db.prepare(`DELETE FROM ${t} WHERE scope IN (SELECT 'c:' || id FROM ${GONE} UNION ALL SELECT 'p:' || id FROM ${GONE})`).bind(before, before)),
     ...['members', 'invites', 'marks', 'space_prefs'].map((t) => db.prepare(`DELETE FROM ${t} WHERE space_id IN ${GONE}`).bind(before)),

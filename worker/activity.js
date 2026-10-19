@@ -50,7 +50,8 @@ export const INBOX = (since, limit) => `SELECT * FROM (SELECT ${COLS} FROM activ
     WHERE a.subject_user = ?1 AND a.subject_user != '' AND a.actor_id != ?1 AND a.seq > ${since} AND a.at > ?2 - ${KEEP_MS}
     ORDER BY a.seq DESC LIMIT ${limit})
   UNION ALL
-  SELECT * FROM (SELECT ${COLS} FROM members AS m JOIN activity AS a ON a.space_id = m.space_id AND a.seq > ${since} AND a.at >= m.joined_at
+  SELECT * FROM (SELECT ${COLS} FROM members AS m JOIN spaces AS sp ON sp.id = m.space_id AND sp.deleted_at IS NULL
+      JOIN activity AS a ON a.space_id = m.space_id AND a.seq > ${since} AND a.at >= m.joined_at
     WHERE m.user_id = ?1 AND m.deleted_at IS NULL AND a.actor_id != ?1 AND a.subject_user != ?1 AND a.at > ?2 - ${KEEP_MS} AND ${CONCERNS}
     ORDER BY a.seq DESC LIMIT ${limit})`;
 const SEEN = '(SELECT COALESCE(MAX(seq), 0) FROM inbox_seen WHERE user_id = ?1)';
