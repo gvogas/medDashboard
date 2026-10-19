@@ -8,12 +8,13 @@ import { api } from "@/core/api"
 import * as store from "@/core/store"
 import { data } from "@/core/store"
 import * as sync from "@/core/sync"
+import { addDays, iso, parse } from "@/core/dates"
 import { uid } from "@/core/model"
 import { download } from "./classes"
 import { once, spaceGone, uploadFirst } from "./leave"
 import { closeSheet, openSheet } from "./overlay"
 import { toast } from "./toast"
-import type { ParentRef, SharedItem, Space } from "./types"
+import type { ParentRef, SharedItem, Space, SpacePref } from "./types"
 
 /** Projects are for admins until Stage 10 (Stage 8 plan, Decision 1). */
 export const PROJECTS_ADMIN_ONLY = true
@@ -93,6 +94,49 @@ export function assigneeNames(t: SharedItem, s: Space | null | undefined, me: st
     if (t.assignees.includes("*")) return "Everyone"
     if (!t.assignees.length) return "Nobody yet"
     return t.assignees.map((u) => (u === me ? "You" : s?.members.find((m) => m.userId === u)?.name ?? "A former member")).join(", ")
+}
+
+/* ── progress, workload, the linked assignment (spec §10) ── */
+
+/** Done over live tasks (spec §10): "12 / 18 · 67%". */
+export function progress(tasks: SharedItem[]): { done: number; total: number; label: string; frac: number } {
+    const total = tasks.length, done = tasks.filter((t) => t.status === "done").length
+    return { done, total, frac: total ? done / total : 0, label: total ? `${done} / ${total} · ${Math.round((done / total) * 100)}%` : "No tasks yet" }
+}
+
+/** Each member's open tasks dated today to 14 days ahead (spec §10); a task for everyone counts for each. */
+export function workload(tasks: SharedItem[], members: string[], today: string): Map<string, number> {
+    const end = iso(addDays(parse(today), 14))
+    const out = new Map(members.map((m) => [m, 0]))
+    for (const t of tasks) {
+        if (t.status === "done" || !t.date || t.date < today || t.date > end) continue
+        for (const m of members) if (assignedTo(t, m)) out.set(m, out.get(m)! + 1)
+    }
+    return out
+}
+
+export type Assignment = { state: "none" } | { state: "removed" } | { state: "same" | "drift"; label: string; date: string }
+/**
+ * The class assignment a project belongs to, as this person may see it (spec §10): nothing
+ * unless they hold that class; "removed" when they do but the assignment is no longer live
+ * on this device; else its label and date, and whether the project's date has drifted from it.
+ */
+export function assignmentOf(s: Pick<Space, "parent">, project: Pick<SharedItem, "date">, items: SharedItem[] = data.shared_items,
+    spaces: Pick<Space, "id" | "name">[] = data.spaces): Assignment {
+    const p = s.parent
+    const cls = p && spaces.find((x) => x.id === p.space)
+    if (!p || !cls) return { state: "none" }
+    const a = items.find((i) => i.scope === "c:" + p.space && i.id === p.item && !i.deletedAt)
+    if (!a) return { state: "removed" }
+    return { state: a.date === project.date ? "same" : "drift", label: cls.name + " · " + a.title, date: a.date }
+}
+
+/** Use this date (spec §10): the project's due date becomes the assignment's; an ordinary editor write. */
+export const takeAssignmentDate = (project: SharedItem, date: string) => saveTask(project, { date })
+
+/** A project's colour (spec §9): its linked class's, when you hold it, else your own for the project. */
+export function projectColour(s: Pick<Space, "id" | "parent">, prefs: Pick<SpacePref, "spaceId" | "color">[] = data.space_prefs ?? []): string | null {
+    return (s.parent && prefs.find((p) => p.spaceId === s.parent!.space)?.color) || prefs.find((p) => p.spaceId === s.id)?.color || null
 }
 
 /* ── the project itself ── */
