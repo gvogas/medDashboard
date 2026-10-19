@@ -37,7 +37,7 @@
 | 7 | Inbox and activity (triggers, coalescing, inbox, activity tab) | `collab-7-inbox` (main `bafcd0c`) | `0005_activity.sql` | `docs/superpowers/plans/2026-10-07-collab-stage-7-inbox.md` (**built** 2026-10-15, live 2026-10-18) |
 | 8 | Projects core: project spaces, project item, tasks, assignees, member task rules, link to an assignment; a working project sheet; admin-only, out of the views | `collab-8-projects` (main `54ef5fa`) | none (columns exist from Stage 1) | `docs/superpowers/plans/2026-10-07-collab-stage-8-projects.md` (**built** 2026-10-18) |
 | 9 | Projects in the views: assigned-to-me, chip folding, the task card, progress, workload, Use this date | `collab-9-project-views` (main `8ca434f`) | none | `docs/superpowers/plans/2026-10-07-collab-stage-9-project-views.md` (**built** 2026-10-19) |
-| 10 | Project events in the inbox and the ICS feed; **opens projects to everyone** | `collab-10-project-feed` | none | `docs/superpowers/plans/2026-10-07-collab-stage-10-project-feed.md` (**built** 2026-10-19) |
+| 10 | Project events in the inbox and the ICS feed; **opens projects to everyone** | `collab-10-project-feed` (main `3bd6e6f`) | none | `docs/superpowers/plans/2026-10-07-collab-stage-10-project-feed.md` (**built** 2026-10-19) |
 
 All ten stages shipped. Later (spec §22): suggested changes, comments, milestones and dependencies, personal date overrides, reminders, class leaderboards, meeting-level merge, `.ics`/CSV/schedule import into classes, templates, meeting conflict detection.
 

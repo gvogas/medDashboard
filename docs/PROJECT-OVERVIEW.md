@@ -280,7 +280,7 @@ Deploying, secrets, accounts and database moves: `docs/DEPLOYING.md`.
     the Study pickers, All items' Source filter, the task card, progress, workload, the
     linked assignment with **Use this date**, and the sidebar's ring and eye. No migration,
     no Worker change.
-11. **Oct 19:** Stage 10 (`collab-10-project-feed`; project events, projects in the feed,
+11. **Oct 19:** Stage 10 (main `3bd6e6f`; project events, projects in the feed,
     projects for everyone): collaboration complete. The calendar feed carries each team
     project's due date and your tasks and everyone's; the inbox's project events are
     checked through the routes (no code needed); team projects open to everyone; a task's
