@@ -16,11 +16,11 @@ import { dayMonth, today } from "@/core/dates"
 import { useMarks, useProfile, useSharedItems, useSpaces } from "@/data/store"
 import { hiddenIn, setHidden } from "@/data/marks"
 import { closeSheet, replaceSheet } from "@/data/overlay"
-import { addTask, assignmentOf, canEdit, leaveProject, link, linkable, progress, projectItem, projectsShown, removeProject, takeAssignmentDate, tasksOf, workload, type ProjectTab } from "@/data/projects"
+import { addTask, assignmentOf, canEdit, leaveProject, link, linkable, progress, projectItem, projectsShown, removeProject, takeAssignmentDate, tasksOf, workload, type Assignment, type ProjectTab } from "@/data/projects"
 import { messageFor } from "@/data/classes"
 import { setArchived } from "@/data/leave"
 import { useMaintenance } from "@/data/maintenance"
-import type { Space } from "@/data/types"
+import type { SharedItem, Space } from "@/data/types"
 import { TeamGlyph } from "@/components/shared-glyph"
 import { MaintenanceBar, MaintenancePage } from "@/components/maintenance"
 import { tabKeys } from "./radio-keys"
@@ -74,14 +74,7 @@ function ProjectCard({ spaceId, tab, bar }: { spaceId: string; tab: ProjectTab; 
             </div>
             <div className="flex flex-col gap-1 px-[18px] pt-1 text-[12.5px] text-ink-2">
                 <span>Due {dayMonth(project.date)} · {p.label}</span>
-                {a.state === "same" && <span className="text-muted-foreground">For {a.label}</span>}
-                {a.state === "drift" && (
-                    <span className="flex flex-wrap items-center gap-x-2 text-muted-foreground">
-                        For {a.label} · Assignment due {dayMonth(a.date)}
-                        {canEdit(space) && <Button variant="ghost" className="px-2.5 py-1" onClick={() => void takeAssignmentDate(project, a.date)}>Use this date</Button>}
-                    </span>
-                )}
-                {a.state === "removed" && <span className="text-muted-foreground">Linked assignment removed{space.role === "owner" && !space.archived ? ". Relink it below." : ""}</span>}
+                <AssignmentLine a={a} space={space} project={project} />
             </div>
             <div role="tablist" aria-label="Project" onKeyDown={tabKeys} className="flex gap-1 border-b border-border px-3">
                 {TABS.map(([id, label]) => (
@@ -107,7 +100,7 @@ function ProjectCard({ spaceId, tab, bar }: { spaceId: string; tab: ProjectTab; 
                 {bar && <MaintenanceBar className="mb-0" />}
                 {!projectsShown() && <Note>Team projects are open to admins only for now, so this one isn't in your sidebar. You're still in it: work in it or leave it here.</Note>}
                 <div role="tabpanel" id={f + "panel"} aria-labelledby={f + tab} className="flex flex-col gap-3.5">
-                    {tab === "tasks" ? <Tasks space={space} title={project.title} me={me} /> : tab === "members" ? <MembersTab spaceId={spaceId} kind="project" /> : <ActivityList spaceId={spaceId} />}
+                    {tab === "tasks" ? <Tasks space={space} title={project.title} me={me} removed={a.state === "removed"} /> : tab === "members" ? <MembersTab spaceId={spaceId} kind="project" /> : <ActivityList spaceId={spaceId} />}
                 </div>
             </SheetBody>
             <SheetFoot hint={n + (n === 1 ? " member" : " members")}>
@@ -117,7 +110,7 @@ function ProjectCard({ spaceId, tab, bar }: { spaceId: string; tab: ProjectTab; 
     )
 }
 
-function Tasks({ space, title, me }: { space: Space; title: string; me: string }) {
+function Tasks({ space, title, me, removed }: { space: Space; title: string; me: string; removed: boolean }) {
     const tasks = tasksOf(space.id, useSharedItems())
     /* the tasks you hid from your views ("Not mine" on the card); the team's list keeps them */
     const hidden = hiddenIn(space.scope, tasks, useMarks())
@@ -148,7 +141,7 @@ function Tasks({ space, title, me }: { space: Space; title: string; me: string }
                     </ul>
                 </Section>
             )}
-            <ProjectActions space={space} title={title} />
+            <ProjectActions space={space} title={title} removed={removed} />
         </>
     )
 }
@@ -191,8 +184,28 @@ function NewTask({ spaceId, input }: { spaceId: string; input: RefObject<HTMLInp
     )
 }
 
-/* The owner's link, archive and delete; anyone else's Leave. Each needs a connection. */
-function ProjectActions({ space, title }: { space: Space; title: string }) {
+/* The linked assignment under the title. Use this date goes once it is used: the keyboard
+   moves to the line it changed. */
+function AssignmentLine({ a, space, project }: { a: Assignment; space: Space; project: SharedItem }) {
+    const line = useRef<HTMLSpanElement>(null)
+    const taken = useRef(false)
+    useEffect(() => { if (taken.current && a.state === "same") { taken.current = false; line.current?.focus() } }, [a.state])
+    if (a.state === "same") return <span ref={line} tabIndex={-1} className="text-muted-foreground outline-none">For {a.label}</span>
+    if (a.state === "drift") return (
+        <span className="flex flex-wrap items-center gap-x-2 text-muted-foreground">
+            For {a.label} · Assignment due {dayMonth(a.date)}
+            {canEdit(space) && <Button variant="ghost" className="px-2.5 py-1 pointer-coarse:min-h-10"
+                onClick={() => { taken.current = true; void takeAssignmentDate(project, a.date) }}>Use this date</Button>}
+        </span>
+    )
+    if (a.state === "removed") return <span className="text-muted-foreground">Linked assignment removed{space.role === "owner" && !space.archived ? ". Relink it below." : ""}</span>
+    return null
+}
+
+/* The owner's link, archive and delete; anyone else's Leave. Each needs a connection. The
+   select offers no archived class's assignments; a link to one, or to an assignment that went,
+   reads as removed, as the line under the title says. */
+function ProjectActions({ space, title, removed }: { space: Space; title: string; removed: boolean }) {
     const options = linkable(useSharedItems(), useSpaces())
     const [asking, setAsking] = useState(false)
     const [typed, setTyped] = useState("")
@@ -235,7 +248,7 @@ function ProjectActions({ space, title }: { space: Space; title: string }) {
                 }}>
                     <option value="">No class assignment</option>
                     {options.map((o) => <option key={o.space + "/" + o.item} value={o.space + "/" + o.item}>{o.label}</option>)}
-                    {linked && !options.some((o) => o.space + "/" + o.item === linked) && <option value={linked}>An assignment you can't see</option>}
+                    {linked && !options.some((o) => o.space + "/" + o.item === linked) && <option value={linked}>{removed ? "Removed assignment" : "An assignment you can't see"}</option>}
                 </Select>
                 <Note>Linking sets the due date to the assignment's.</Note>
             </>}

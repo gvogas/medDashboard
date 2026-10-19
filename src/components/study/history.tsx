@@ -10,7 +10,8 @@ import { duration } from "@/lib/time"
 import { dayOf } from "@/core/history"
 import { shortDate, DOW } from "@/core/dates"
 /* History's sessions are in key space (study.ts): their course and item are found by key */
-import { courseByKey as courseOf, itemByKey as itemOf } from "@/data/effective"
+import { courseByKey, itemByKey as itemOf } from "@/data/effective"
+import { projectCourse } from "@/data/projects"
 import { leftClass } from "@/data/refs"
 import { accent, Panel } from "@/components/views/bits"
 import { Segmented } from "@/components/sheet/fields"
@@ -23,6 +24,8 @@ import type { Course, HistTab, Item, SessionUndo, StudySession } from "@/data/ty
 
 const TABS = [["week", "Week"], ["month", "Month"], ["term", "Term"]] as const
 
+/* a session's course: yours, a class's, or a team project's (projects.ts withProjects) */
+const courseOf = (id: string | null) => courseByKey(id) ?? projectCourse(id)
 /* A course's colour for --c; sessions with none, or a course since deleted, are grey. */
 const courseColour = (id: string | null): CSSProperties | undefined => accent((courseOf(id) as Course | null)?.color) ?? accent(NO_COURSE)
 const courseCode = (id: string | null) => (courseOf(id) as Course | null)?.code || (leftClass(id) ? "A class you left" : "No course")

@@ -35,7 +35,7 @@ export function TaskRow({ task, space, me, load, gone }: { task: SharedItem; spa
                 <input type="checkbox" aria-label={"Done: " + task.title} checked={done} disabled={!canFinish(space, task, me)}
                     onChange={(e) => void setDone(task, e.target.checked)} className={BOX} />
                 <button type="button" onClick={() => openItem(task.scope + "/" + task.id)}
-                    className={cn("min-w-0 flex-1 cursor-pointer truncate border-0 bg-transparent p-0 text-left font-[inherit] text-[inherit] text-foreground hover:underline", done && "text-muted-foreground line-through")}>{task.title}</button>
+                    className={cn("min-w-0 flex-1 cursor-pointer truncate border-0 bg-transparent p-0 text-left font-[inherit] text-[inherit] text-foreground outline-none hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)]", done && "text-muted-foreground line-through")}>{task.title}</button>
                 <span className="shrink-0 text-[11px] text-muted-foreground">{dayMonth(task.date)}</span>
             </span>
             <span className="flex items-center gap-2 pl-[22px] text-[11px] text-muted-foreground">
@@ -69,7 +69,8 @@ function TaskEditor({ task, space, load, close, remove }: { task: SharedItem; sp
                 </label>
                 {space.members.map((m) => (
                     <label key={m.userId} htmlFor={f + m.userId} className="flex cursor-pointer items-center gap-1.5">
-                        <input id={f + m.userId} type="checkbox" checked={!everyone && who.includes(m.userId)} disabled={everyone} onChange={() => toggle(m.userId)} className={BOX} />{m.name}<span className="text-muted-foreground"> · {load.get(m.userId) ?? 0} in the next 2 weeks</span>
+                        <input id={f + m.userId} type="checkbox" aria-labelledby={f + m.userId + "n"} aria-describedby={f + m.userId + "w"} checked={!everyone && who.includes(m.userId)} disabled={everyone} onChange={() => toggle(m.userId)} className={BOX} />
+                        <span id={f + m.userId + "n"}>{m.name}</span><span id={f + m.userId + "w"} className="text-muted-foreground"> · {load.get(m.userId) ?? 0} in the next 2 weeks</span>
                     </label>
                 ))}
             </fieldset>

@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest"
 
 vi.mock("@/core/store", () => ({
-    data: { spaces: [{ id: "abcdefghij12", scope: "c:abcdefghij12" }], shared_courses: [{ scope: "c:abcdefghij12", id: "web" }] },
+    data: { spaces: [{ id: "abcdefghij12", scope: "c:abcdefghij12" }, { id: "fire00000001", scope: "p:fire00000001" }], shared_courses: [{ scope: "c:abcdefghij12", id: "web" }] },
     subscribe: () => () => {},
 }))
 
@@ -28,6 +28,11 @@ describe("keys", () => {
         expect(refOf("bio", null)).toEqual({ courseId: "bio", itemId: null, spaceId: null })
         // an item of yours filed under the class, picked with the class course: the item wins
         expect(refOf(WEB + "/web", "rv1")).toEqual({ courseId: null, itemId: "rv1", spaceId: null })
+        // a team project in the pickers (projects.ts withProjects): its own row is the course, a task the item
+        const PRJ = "p:fire00000001"
+        expect(refOf(PRJ + "/project", PRJ + "/t1")).toEqual({ courseId: "project", itemId: "t1", spaceId: "fire00000001" })
+        const p = session({ courseId: "project", itemId: "t1", spaceId: "fire00000001" })
+        expect([courseRefKey(p), itemRefKey(p)]).toEqual([PRJ + "/project", PRJ + "/t1"])
     })
 
     it("file an item of yours under a class when a class course is picked", () => {

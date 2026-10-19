@@ -16,6 +16,7 @@ import { useAchievements, useCourses, useItems, useProfile, useStudySessions } f
 import { rememberUi, ui } from "./ui"
 import { keyedAchievements, keyedCourses, keyedItems, keyedSessions, leftClass } from "./refs"
 import { forAchievements } from "./effective"
+import { withProjects } from "./projects"
 import type { Achievement, Badge, Course, HistTab, Item, SessionUndo, StudyPrefs, StudySession, StudyTab } from "./types"
 
 /* A course split is [courseId, minutes] pairs, most first, with "" for no course. */
@@ -328,8 +329,11 @@ export const useBadges = () => {
 
 /** The Timer tab's Today card. */
 export const useTodayStudy = () => {
-    const input = useStudyInput(), items = useItems(), courses = useCourses()
-    return useMemo(() => todayOf(input.sessions, keyedItems(items), keyedCourses(courses), input.prefs.goal, input.today), [input, items, courses])
+    const input = useStudyInput(), items = useItems(), courses = useCourses(), me = useProfile()?.id ?? ""
+    return useMemo(() => {
+        const l = withProjects(keyedCourses(courses), keyedItems(items), me)
+        return todayOf(input.sessions, l.items, l.courses, input.prefs.goal, input.today)
+    }, [input, items, courses, me])
 }
 
 /* ── the History card's actions: each changes the ui and redraws ── */

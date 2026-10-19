@@ -19,6 +19,7 @@ import { shownSessions } from "./study"
 import { ui, useUi } from "./ui"
 import { effectiveCourses, effectiveItems } from "./effective"
 import { keyedCourses, keyedItems } from "./refs"
+import { withProjects } from "./projects"
 import { THEMES, type Bg } from "./themes"
 import type { Course, Flow, Item, StepKind, StudySession } from "./types"
 
@@ -133,18 +134,19 @@ export function pickFor(courses: Course[], items: Item[], study: { courseId: str
     first), and what the next run is logged against. */
 export function useStudyPick() {
     /* the pickers work in keys: a class's course and items sit beside yours (refs.ts) */
-    const courses = keyedCourses(useCourses()), items = keyedItems(useItems())
+    const courses = keyedCourses(useCourses()), items = keyedItems(useItems()), me = useProfile()?.id ?? ""
     const study = useUi((u) => u.study)
     return useMemo(() => {
-        const pick = pickFor(courses, items, study)
+        /* and a course per team project you are in, of your tasks there (projects.ts) */
+        const lists = withProjects(courses, items, me), pick = pickFor(lists.courses, lists.items, study)
         return {
             ...pick,
-            courses: courses.filter((c) => !c.archived),
-            items: items.filter((it) => it.courseId === pick.courseId && isOpen(it)).sort((a, b) => a.date.localeCompare(b.date)),
+            courses: lists.courses.filter((c) => !c.archived),
+            items: lists.items.filter((it) => it.courseId === pick.courseId && isOpen(it)).sort((a, b) => a.date.localeCompare(b.date)),
         }
         /* ui.study is changed in place: its two ids are the dependency */
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [courses, items, study.courseId, study.itemId])
+    }, [courses, items, me, study.courseId, study.itemId])
 }
 
 /** Pick the course for the next run; its item goes back to none. */
@@ -160,15 +162,20 @@ export function pickItem(id: string | null) {
     notify()
 }
 
+const studyLists = (): [Course[], Item[]] => {
+    const l = withProjects(keyedCourses(effectiveCourses()), keyedItems(effectiveItems()), data.profile?.id ?? "")
+    return [l.courses, l.items]
+}
+
 /** Start a run on the saved flow. Call it inside the click, so full screen and sound are allowed. */
 export async function startRun(): Promise<boolean> {
     if (focus.active()) return false
-    if (!pickFor(keyedCourses(effectiveCourses()), keyedItems(effectiveItems()), ui.study).courseId) return false
+    if (!pickFor(...studyLists(), ui.study).courseId) return false
     focus.prime()      /* inside the click: a wait below could lose the browser's permission */
     /* a step's minutes typed and then Start clicked: the box saves as it loses focus, just before */
     await flowSaving
     if (focus.active()) return false
-    const { courseId, itemId } = pickFor(keyedCourses(effectiveCourses()), keyedItems(effectiveItems()), ui.study)
+    const { courseId, itemId } = pickFor(...studyLists(), ui.study)
     ui.study.courseId = courseId
     ui.study.itemId = itemId
     if (!courseId) return false

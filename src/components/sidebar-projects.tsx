@@ -26,8 +26,9 @@ export function ProjectsGroup() {
                         <div key={p.id} className="group flex items-center rounded-[9px] hover:bg-muted">
                             <button type="button" onClick={() => openProject(p.id)}
                                 className={cn("flex min-w-0 flex-1 items-center gap-2.5 border-0 bg-transparent px-2 py-1.5 text-left text-[13px] font-medium hover:text-foreground", off ? "text-muted-foreground" : "text-ink-2")}>
-                                <ProgressRing frac={prog.frac} color={projectColour(p, prefs, spaces)} label={`${prog.done} of ${prog.total} tasks done`} />
+                                <ProgressRing frac={prog.frac} color={projectColour(p, prefs, spaces)} />
                                 <span className="min-w-0 truncate">{p.name}</span>
+                                <span className="sr-only">, {prog.done} of {prog.total} tasks done</span>
                                 <span aria-hidden="true" className="text-muted-foreground"><TeamGlyph /></span>
                                 {p.archived && <span className="shrink-0 text-[11px] text-muted-foreground">Archived</span>}
                             </button>

@@ -4,9 +4,9 @@
 // unclaims, and reads the rest), with who changed it last. **Yours**: your notes and "not
 // mine", which only you see. Opened by the task's key, '<scope>/<id>'. Text saves once typing
 // pauses; leaving the card saves what is waiting. A project's own item opens the project sheet
-// instead (actions.ts openItem).
+// instead (actions.ts openItem). Delete for everyone asks first, in the foot.
 
-import { useEffect, useId } from "react"
+import { useEffect, useId, useState } from "react"
 import { cn } from "@/lib/utils"
 import { httpUrl, tmeta } from "@/core/model"
 import { shortDate } from "@/core/dates"
@@ -53,6 +53,8 @@ function TaskCard({ itemKey, bar }: { itemKey: string; bar: boolean }) {
     const items = useItems()
     const me = useProfile()?.id ?? ""
     const f = useId()
+    /* Delete for everyone asks first, in the foot (as a class item's card does) */
+    const [asking, setAsking] = useState(false)
 
     /* closing, or switching to another item, saves what is being typed */
     useEffect(() => {
@@ -123,7 +125,7 @@ function TaskCard({ itemKey, bar }: { itemKey: string; bar: boolean }) {
                             </>
                         ) : (
                             <Prop icon={ICONS.date} label="When">
-                                <span>{shortDate(t.date)}{t.start ? " · " + t.start + (t.end ? "–" + t.end : "") : ""}</span>
+                                <span>{t.date ? shortDate(t.date) : "No date"}{t.start ? " · " + t.start + (t.end ? "–" + t.end : "") : ""}</span>
                             </Prop>
                         )}
                         <Prop icon={ICONS.course} label="Who">
@@ -141,7 +143,7 @@ function TaskCard({ itemKey, bar }: { itemKey: string; bar: boolean }) {
                                 onChange={(e) => typeRow(itemKey, { notes: e.target.value })} onBlur={() => void flushTyping()} />
                             <Links item={t as Item} onChange={(links) => void editRow(itemKey, { links })} />
                         </>
-                    ) : <TeamFacts t={t} />}
+                    ) : <TeamFacts t={t} archived={space.archived} />}
                 </Section>
 
                 <Section title="Yours" note="Only you see these">
@@ -151,23 +153,32 @@ function TaskCard({ itemKey, bar }: { itemKey: string; bar: boolean }) {
                 </Section>
             </SheetBody>
 
-            <SheetFoot hint="Edits save as you type">
-                {editor && <Button variant="ghost" aria-label="Delete task" onClick={remove}>Delete for everyone</Button>}
-                <Button onClick={closeSheet}>Done</Button>
-            </SheetFoot>
+            {asking && editor ? (
+                <SheetFoot hint={"Delete it for everyone in " + space.name + "?"}>
+                    <Button variant="ghost" onClick={() => setAsking(false)}>Keep it</Button>
+                    <Button variant="danger" onClick={remove}>Delete it</Button>
+                </SheetFoot>
+            ) : (
+                <SheetFoot hint="Edits save as you type">
+                    {editor && <Button variant="ghost" aria-label="Delete task" onClick={() => setAsking(true)}>Delete for everyone</Button>}
+                    <Button onClick={closeSheet}>Done</Button>
+                </SheetFoot>
+            )}
         </>
     )
 }
 
-/* The task's checklist, notes and links, for a member: read-only. */
-function TeamFacts({ t }: { t: SharedItem }) {
+/* The task's checklist, notes and links, for a member (or anyone, the project archived): read-only. */
+function TeamFacts({ t, archived }: { t: SharedItem; archived: boolean }) {
     const list = t.checklist || [], links = t.links || []
     return (
         <>
             {list.length > 0 && (
                 <ul aria-label="Checklist" className="m-0 flex list-none flex-col gap-0.5 p-0 text-[12.5px]">
                     {list.map((s) => (
-                        <li key={s.id} className={cn(s.done && "text-muted-foreground line-through")}>{s.done ? "✓ " : "○ "}{s.text}</li>
+                        <li key={s.id} className={cn(s.done && "text-muted-foreground line-through")}>
+                            <span aria-hidden="true">{s.done ? "✓ " : "○ "}</span><span className="sr-only">{s.done ? "done: " : "to do: "}</span>{s.text}
+                        </li>
                     ))}
                 </ul>
             )}
@@ -184,7 +195,7 @@ function TeamFacts({ t }: { t: SharedItem }) {
                     ))}
                 </ul>
             )}
-            <Note>The project's owner and editors keep these.</Note>
+            <Note>{archived ? "This project is archived, so it is read-only." : "The project's owner and editors keep these."}</Note>
         </>
     )
 }

@@ -36,7 +36,7 @@ import { ApiError } from "@/core/api"
 
 import {
     addTask, assigneeNames, assignmentOf, canClaim, canEdit, canFinish, claim, leaveProject, link, linkable, makeProject, progress, projectColour, projectsShown,
-    removeProject, setDone, takeAssignmentDate, tasksOf, teamTaskTick, toggleTeamTask, workload,
+    removeProject, setDone, takeAssignmentDate, tasksOf, teamTaskTick, toggleTeamTask, withProjects, workload,
 } from "./projects"
 import type { SharedItem, Space } from "./types"
 
@@ -83,6 +83,8 @@ describe("who may do what with a task (spec §5)", () => {
         expect(linkable(items, [{ scope: "c:webs00000001", name: "Web Services" }])).toEqual([
             { space: "webs00000001", item: "a1", label: "Web Services · REST API", date: "2026-10-20" },
         ])
+        /* an archived class's assignments are not offered: the project would read as unlinked */
+        expect(linkable(items, [{ scope: "c:webs00000001", name: "Web Services", archived: true }])).toEqual([])
     })
     it("names who a task is with", () => {
         const s = space({ members: [{ userId: "u-x", name: "Alex", role: "editor" }] })
@@ -123,6 +125,14 @@ describe("writing tasks", () => {
         expect(fake.saveShared).toHaveBeenLastCalledWith("shared_items", expect.objectContaining({ assignees: ["u-me"] }))
         await claim(task({ assignees: ["u-me", "u-x"] }), "u-me", false)
         expect(fake.saveShared).toHaveBeenLastCalledWith("shared_items", expect.objectContaining({ assignees: ["u-x"] }))
+    })
+    it("ticks and claims over the stored row, not a stale one a view drew", async () => {
+        const stale = task({ title: "Old title", notes: "" })
+        fake.data.shared_items = [{ ...stale, title: "New title", notes: "Just typed", revision: 2 }]
+        await setDone(stale, true)
+        expect(fake.saveShared).toHaveBeenLastCalledWith("shared_items", expect.objectContaining({ title: "New title", notes: "Just typed", status: "done" }))
+        await claim(stale, "u-me", true)
+        expect(fake.saveShared).toHaveBeenLastCalledWith("shared_items", expect.objectContaining({ title: "New title", notes: "Just typed", assignees: ["u-me"] }))
     })
 })
 
@@ -250,5 +260,27 @@ describe("progress, workload and the linked assignment (spec §10)", () => {
         const s = space({ parent: { space: "webs00000001", item: "a1" } })
         expect(projectColour(s, prefs, [])).toBe("#36c")
         expect(projectColour(s, prefs, [{ id: "webs00000001" }])).toBe("#e66")
+    })
+})
+
+describe("team projects in the study pickers (Stage 9 plan, Decision 1)", () => {
+    const P = "p:fire00000001"
+    const course = { id: "bio", code: "BIO", name: "Biology", color: "#e66", instructor: "", term: "", archived: false, target: null, meetings: [] }
+    it("gives each project you are in a course of your tasks there, keyed by the project's own row", () => {
+        const lab = task({ id: "l1", scope: undefined, type: "lab", courseId: "bio" })
+        const items = [lab, task({ id: P + "/t1", assignees: ["u-me"] }), task({ id: P + "/t2", assignees: ["*"] }), task({ id: P + "/t3", assignees: ["u-sam"] }),
+            task({ id: P + "/project", type: "project", title: "Fire Response API" })]
+        const out = withProjects([course], items, "u-me", [space({ name: "Fire Response API" }), space({ id: "webs00000001", scope: "c:webs00000001", kind: "class" })],
+            [{ spaceId: "fire00000001", color: "#36c" }])
+        expect(out.courses).toEqual([course, expect.objectContaining({ id: P + "/project", code: "Team", name: "Fire Response API", color: "#36c", archived: false })])
+        expect(out.items.filter((i) => i.courseId === P + "/project").map((i) => i.id)).toEqual([P + "/t1", P + "/t2"])
+        expect(out.items.find((i) => i.id === P + "/t3")?.courseId).toBeNull()
+        expect(out.items[0]).toBe(lab)
+    })
+    it("leaves the lists themselves when you are in no project", () => {
+        const courses = [course], items = [task({ id: "l1", courseId: "bio" })]
+        const out = withProjects(courses, items, "u-me", [])
+        expect(out.courses).toBe(courses)
+        expect(out.items).toBe(items)
     })
 })
