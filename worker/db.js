@@ -488,7 +488,8 @@ export async function memberTaskWrite(db, scope, userId, id, fields, { changed, 
     if (claims) {
       const mine = current.assignees.includes(userId), wants = (fields.assignees || []).includes(userId);
       if (wants && !mine) {
-        if (current.assignees.length) throw forbidden();   // assigned to someone else
+        /* taken since you claimed it is a lost race; taken before, it was never yours to claim */
+        if (current.assignees.length) throw Array.isArray(changed.assignees) && !changed.assignees.length ? conflict(current, ['assignees']) : forbidden();
         next = [userId];
       } else if (!wants && mine) next = current.assignees.filter((u) => u !== userId);
       if (next !== current.assignees) { sets.push('assignees = ?'); binds.push(JSON.stringify(next)); }
