@@ -11,6 +11,7 @@ import * as sync from "@/core/sync"
 import { addDays, iso, parse } from "@/core/dates"
 import { uid } from "@/core/model"
 import { download } from "./classes"
+import { celebrate } from "./item-edit"
 import { once, spaceGone, uploadFirst } from "./leave"
 import { closeSheet, openSheet } from "./overlay"
 import { toast } from "./toast"
@@ -64,9 +65,10 @@ export async function addTask(spaceId: string, title: string, date: string): Pro
 /** An editor's change to a task: title, date, times, notes, assignees. */
 export const saveTask = (t: SharedItem, patch: Partial<SharedItem>) => write({ ...t, ...patch })
 /** Done or not done, for the whole team (spec §10); whoever completes it is named by the Worker,
- *  and here too until it syncs, so achievements count it at once. */
+ *  and here too until it syncs, so achievements count it at once. Done again keeps who finished it first. */
 export const setDone = (t: SharedItem, done: boolean) => write({
-    ...t, status: done ? "done" : "todo", completedAt: done ? t.completedAt ?? Date.now() : null, completedBy: done ? data.profile?.id ?? null : null,
+    ...t, status: done ? "done" : "todo", completedAt: done ? t.completedAt ?? Date.now() : null,
+    completedBy: done ? (t.completedAt != null ? t.completedBy : data.profile?.id ?? null) : null,
 })
 /** Take an unassigned task, or step off one. */
 export const claim = (t: SharedItem, me: string, on: boolean) => write({ ...t, assignees: on ? [me] : t.assignees.filter((u) => u !== me) })
@@ -79,13 +81,14 @@ export function teamTaskTick(s: Space | null | undefined, t: SharedItem, me: str
     if (!canFinish(s, t, me)) return { why: "Only its assignees and the project's editors can complete this task." }
     return { done: t.status !== "done" }
 }
-/** Tick a team task from a view by its key, '<scope>/<id>'. */
-export async function toggleTeamTask(key: string): Promise<void> {
+/** Tick a team task from a view by its key, '<scope>/<id>'; finishing it celebrates from `from`. */
+export async function toggleTeamTask(key: string, from?: Element): Promise<void> {
     const at = key.indexOf("/"), scope = key.slice(0, at), id = key.slice(at + 1)
     const t = data.shared_items.find((i) => i.scope === scope && i.id === id && !i.deletedAt)
     if (!t) return
     const r = teamTaskTick(data.spaces.find((s) => s.scope === scope), t, data.profile?.id ?? "")
     if ("why" in r) { toast(r.why); return }
+    if (r.done && from) celebrate(from)
     await setDone(t, r.done)
 }
 

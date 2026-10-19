@@ -8,12 +8,13 @@
 // gates only making, inviting and joining. Under the title: the due date and progress, and,
 // for someone who holds the linked class, the assignment: its date when the two drift apart,
 // with Use this date for owners and editors, or that it was removed. The assignee picker
-// shows each member's workload.
+// shows each member's workload. Below the tasks, the ones you hid from your views, with Show again.
 
 import { useEffect, useId, useRef, useState, type RefObject } from "react"
 import { cn } from "@/lib/utils"
 import { dayMonth, today } from "@/core/dates"
-import { useProfile, useSharedItems, useSpaces } from "@/data/store"
+import { useMarks, useProfile, useSharedItems, useSpaces } from "@/data/store"
+import { hiddenIn, setHidden } from "@/data/marks"
 import { closeSheet, replaceSheet } from "@/data/overlay"
 import { addTask, assignmentOf, canEdit, leaveProject, link, linkable, progress, projectItem, projectsShown, removeProject, takeAssignmentDate, tasksOf, workload, type ProjectTab } from "@/data/projects"
 import { messageFor } from "@/data/classes"
@@ -118,6 +119,8 @@ function ProjectCard({ spaceId, tab, bar }: { spaceId: string; tab: ProjectTab; 
 
 function Tasks({ space, title, me }: { space: Space; title: string; me: string }) {
     const tasks = tasksOf(space.id, useSharedItems())
+    /* the tasks you hid from your views ("Not mine" on the card); the team's list keeps them */
+    const hidden = hiddenIn(space.scope, tasks, useMarks())
     const editor = canEdit(space)
     const load = workload(tasks, space.members.map((m) => m.userId), today())
     /* a task deleted here takes the keyboard with it: it goes to the new task's box, else the list */
@@ -133,6 +136,18 @@ function Tasks({ space, title, me }: { space: Space; title: string; me: string }
                     ? <ul ref={list} tabIndex={-1} aria-label="Tasks" className="m-0 flex list-none flex-col gap-1 p-0 outline-none">{tasks.map((t) => <TaskRow key={t.id} task={t} space={space} me={me} load={load} gone={gone} />)}</ul>
                     : <Note>No tasks yet.{editor ? " Add the first above." : ""}</Note>}
             </Section>
+            {hidden.length > 0 && (
+                <Section title="Hidden from you" note={String(hidden.length)}>
+                    <ul aria-label="Hidden from you" className="m-0 flex list-none flex-col gap-1 p-0">
+                        {hidden.map((t) => (
+                            <li key={t.id} className="flex items-center gap-2 rounded-lg bg-muted px-2.5 py-1.5 text-[12.5px]">
+                                <span className="min-w-0 flex-1 truncate text-muted-foreground">{t.title}</span>
+                                <Button variant="ghost" aria-label={"Show " + t.title + " again"} onClick={() => void setHidden(t.scope + "/" + t.id, false)}>Show again</Button>
+                            </li>
+                        ))}
+                    </ul>
+                </Section>
+            )}
             <ProjectActions space={space} title={title} />
         </>
     )

@@ -43,8 +43,9 @@ describe("the views act on keys", () => {
 
     it("tick a project's task for the team, and open a project's own item as its sheet (Stage 9)", async () => {
         const FIRE = "p:fire00000001"
-        await toggleTask(FIRE + "/t1")
-        expect(fake.toggleTeamTask).toHaveBeenCalledWith(FIRE + "/t1")
+        const el = {} as Element
+        await toggleTask(FIRE + "/t1", el)
+        expect(fake.toggleTeamTask).toHaveBeenCalledWith(FIRE + "/t1", el)
         expect(fake.toggleClassTask).not.toHaveBeenCalled()
         openItem(FIRE + "/project")
         expect(fake.openProject).toHaveBeenCalledWith("fire00000001")

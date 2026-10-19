@@ -352,7 +352,7 @@ export function sortTable(key: SortKey) {
 /** Tick a task off or back on, by its key: a class's task in your mark, a project's for the team. Finishing one celebrates from `from` and books its next review.
  *  A class task an editor removed opens its card instead: your layer on it is read-only (the Worker refuses the mark). */
 export async function toggleTask(key: string, from?: Element) {
-    if (isSharedKey(key) && key.startsWith("p:")) { await toggleTeamTask(key); notify(); return }
+    if (isSharedKey(key) && key.startsWith("p:")) { await toggleTeamTask(key, from); notify(); return }
     if (isSharedKey(key) && itemByKey(key)?.removed) { openItem(key); return }
     if (isSharedKey(key)) { await toggleClassTask(key, from); notify(); return }
     const it = store.item(key) as Item | null

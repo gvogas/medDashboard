@@ -1,4 +1,4 @@
-// One task in the project sheet (spec §10, §15): done, title, date, who has it, and Claim;
+// One task in the project sheet (spec §10, §15): done, title (it opens the task's card), date, who has it, and Claim;
 // owners and editors edit it in place (title, date, assignees, each with their open tasks in
 // the next two weeks, Delete). A write the Worker turns down later lands in Saved copies, as
 // any shared row's does. The editor takes the keyboard when it opens and gives it back to
@@ -9,6 +9,7 @@ import { useEffect, useId, useRef, useState } from "react"
 import { cn } from "@/lib/utils"
 import { dayMonth } from "@/core/dates"
 import { assigneeNames, canClaim, canEdit, canFinish, claim, deleteTask, saveTask, setDone } from "@/data/projects"
+import { openItem } from "@/data/actions"
 import type { SharedItem, Space } from "@/data/types"
 import { Button, DateInput, TextInput } from "./fields"
 
@@ -33,7 +34,8 @@ export function TaskRow({ task, space, me, load, gone }: { task: SharedItem; spa
             <span className="flex items-center gap-2">
                 <input type="checkbox" aria-label={"Done: " + task.title} checked={done} disabled={!canFinish(space, task, me)}
                     onChange={(e) => void setDone(task, e.target.checked)} className={BOX} />
-                <span className={cn("min-w-0 flex-1 truncate", done && "text-muted-foreground line-through")}>{task.title}</span>
+                <button type="button" onClick={() => openItem(task.scope + "/" + task.id)}
+                    className={cn("min-w-0 flex-1 cursor-pointer truncate border-0 bg-transparent p-0 text-left font-[inherit] text-[inherit] text-foreground hover:underline", done && "text-muted-foreground line-through")}>{task.title}</button>
                 <span className="shrink-0 text-[11px] text-muted-foreground">{dayMonth(task.date)}</span>
             </span>
             <span className="flex items-center gap-2 pl-[22px] text-[11px] text-muted-foreground">

@@ -12,6 +12,7 @@ const fake = vi.hoisted(() => ({
     openSheet: vi.fn(),
     closeSheet: vi.fn(),
     toast: vi.fn(),
+    celebrate: vi.fn(),
 }))
 vi.mock("@/core/store", () => ({ data: fake.data, saveShared: fake.saveShared, removeShared: fake.removeShared, pendingCount: () => fake.pending }))
 vi.mock("@/core/api", () => {
@@ -26,6 +27,7 @@ vi.mock("@/core/sync", () => ({ syncNow: fake.syncNow }))
 vi.mock("./classes", () => ({ download: fake.download }))
 vi.mock("./overlay", () => ({ openSheet: fake.openSheet, closeSheet: fake.closeSheet }))
 vi.mock("./toast", () => ({ toast: fake.toast }))
+vi.mock("./item-edit", () => ({ celebrate: fake.celebrate }))
 /* leave.ts's guards are the real ones; what else it imports is not needed here */
 vi.mock("./marks", () => ({ ago: () => "" }))
 vi.mock("./refs", () => ({ splitKey: () => ({}) }))
@@ -114,6 +116,9 @@ describe("writing tasks", () => {
         expect(fake.saveShared).toHaveBeenLastCalledWith("shared_items", expect.objectContaining({ status: "done", completedAt: expect.any(Number), completedBy: "u-me" }))
         await setDone(task({ status: "done", completedAt: 5, completedBy: "u-me" }), false)
         expect(fake.saveShared).toHaveBeenLastCalledWith("shared_items", expect.objectContaining({ status: "todo", completedAt: null, completedBy: null }))
+        /* completing it again keeps whoever finished it first */
+        await setDone(task({ status: "done", completedAt: 5, completedBy: "u-sam" }), true)
+        expect(fake.saveShared).toHaveBeenLastCalledWith("shared_items", expect.objectContaining({ status: "done", completedAt: 5, completedBy: "u-sam" }))
         await claim(task({}), "u-me", true)
         expect(fake.saveShared).toHaveBeenLastCalledWith("shared_items", expect.objectContaining({ assignees: ["u-me"] }))
         await claim(task({ assignees: ["u-me", "u-x"] }), "u-me", false)
@@ -186,6 +191,15 @@ describe("ticking a team task from the Week (Stage 9 plan, Decision 4)", () => {
         await toggleTeamTask("p:fire00000001/gone")
         expect(fake.saveShared).toHaveBeenCalledTimes(1)
         expect(fake.toast).toHaveBeenCalledTimes(1)
+    })
+    it("celebrates from where it was ticked when the task becomes done, not when it reopens", async () => {
+        fake.data.spaces = [space({ role: "member" })]
+        fake.data.shared_items = [task({ id: "t1", assignees: ["u-me"] }), task({ id: "t2", assignees: ["u-me"], status: "done", completedAt: 5 })]
+        const el = {} as Element
+        await toggleTeamTask("p:fire00000001/t1", el)
+        expect(fake.celebrate).toHaveBeenCalledWith(el)
+        await toggleTeamTask("p:fire00000001/t2", el)
+        expect(fake.celebrate).toHaveBeenCalledTimes(1)
     })
 })
 

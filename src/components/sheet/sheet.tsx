@@ -1,6 +1,6 @@
 // The sheet: a floating Texture panel on the right for an item, a course, Settings, an
 // import, a class schedule, the Import with AI card, the school calendar, a study session,
-// an achievement, a shared class, a team project or a new one, or the inbox, over the blurred scrim
+// an achievement, a shared class, a team project or a new one, a project's task, or the inbox, over the blurred scrim
 // (<App>'s, shared with the phone sidebar). What it shows comes from
 // src/data/overlay.ts, which also makes the page behind inert while it is open. Escape
 // and the scrim close it, or ask first when the course has unsaved changes.
@@ -38,6 +38,8 @@ const NewProjectSheet = lazyNamed(() => import("./new-project-sheet"), "NewProje
 const ProjectSheet = lazyNamed(() => import("./project-sheet"), "ProjectSheet", { idle: false })
 /* a class's item, opened by its key: downloaded when first opened, as the class sheets are */
 const ClassItemSheet = lazyNamed(() => import("./class-item-sheet"), "ClassItemSheet", { idle: false })
+/* a project's task, opened by its key: admins only until Stage 10, so downloaded when first opened */
+const TaskSheet = lazyNamed(() => import("./task-sheet"), "TaskSheet", { idle: false })
 
 /** What the dialog is called: the item's type, "New assignment", "Course". */
 export function sheetLabel(s: Exclude<SheetState, null>): string {
@@ -58,6 +60,7 @@ export function sheetLabel(s: Exclude<SheetState, null>): string {
     if (s.kind === "merge") return "Merge into the class"
     if (s.kind === "project") return "Project"
     if (s.kind === "new-project") return "New team project"
+    if (s.id.startsWith("p:")) return "Team task"
     const it = (itemByKey(s.id) ?? store.item(s.id)) as Item | null
     return it ? tmeta(it.type).label : "Item"
 }
@@ -107,7 +110,7 @@ export function Sheet() {
         >
             <Suspense fallback={null}>
                 {shown?.kind === "item" && (isSharedKey(shown.id)
-                    ? <ClassItemSheet key={shown.id} itemKey={shown.id} />
+                    ? (shown.id.startsWith("p:") ? <TaskSheet key={shown.id} itemKey={shown.id} /> : <ClassItemSheet key={shown.id} itemKey={shown.id} />)
                     : <ItemSheet key={shown.id} id={shown.id} />)}
                 {shown?.kind === "new-item" && <ItemSheet key={shown.draft.id} draft={shown.draft} />}
                 {shown?.kind === "course" && <CourseSheet key={shown.id ?? "new"} id={shown.id} />}
