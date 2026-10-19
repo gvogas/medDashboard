@@ -1,6 +1,6 @@
 // The sheet: a floating Texture panel on the right for an item, a course, Settings, an
 // import, a class schedule, the Import with AI card, the school calendar, a study session,
-// an achievement, a shared class, a new team project, or the inbox, over the blurred scrim
+// an achievement, a shared class, a team project or a new one, or the inbox, over the blurred scrim
 // (<App>'s, shared with the phone sidebar). What it shows comes from
 // src/data/overlay.ts, which also makes the page behind inert while it is open. Escape
 // and the scrim close it, or ask first when the course has unsaved changes.
@@ -35,6 +35,7 @@ const InboxSheet = lazyNamed(() => import("./inbox-sheet"), "InboxSheet", { idle
 const MergeSheet = lazyNamed(() => import("./merge-sheet"), "MergeSheet", { idle: false })
 /* the project sheets: admins only until Stage 10, so they download when first opened too */
 const NewProjectSheet = lazyNamed(() => import("./new-project-sheet"), "NewProjectSheet", { idle: false })
+const ProjectSheet = lazyNamed(() => import("./project-sheet"), "ProjectSheet", { idle: false })
 /* a class's item, opened by its key: downloaded when first opened, as the class sheets are */
 const ClassItemSheet = lazyNamed(() => import("./class-item-sheet"), "ClassItemSheet", { idle: false })
 
@@ -124,6 +125,7 @@ export function Sheet() {
                 {shown?.kind === "inbox" && <InboxSheet />}
                 {shown?.kind === "merge" && <MergeSheet key={shown.spaceId + shown.courseId} spaceId={shown.spaceId} courseId={shown.courseId} fromCourse={shown.fromCourse} />}
                 {shown?.kind === "new-project" && <NewProjectSheet key={shown.parent ? shown.parent.space + "/" + shown.parent.item : "new"} parent={shown.parent} />}
+                {shown?.kind === "project" && <ProjectSheet key={shown.spaceId} spaceId={shown.spaceId} tab={shown.tab} />}
             </Suspense>
         </div>
     )

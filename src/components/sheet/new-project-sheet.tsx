@@ -53,7 +53,9 @@ function NewProject({ parent, bar }: { parent: ParentRef | null; bar: boolean })
                 <Note>You become its owner. Teammates you invite join as editors; anyone can claim a task nobody has.</Note>
                 <Fields>
                     <Label htmlFor={f + "name"}>Name</Label>
-                    <TextInput id={f + "name"} value={title} maxLength={140} placeholder="Fire Response API" autoFocus onChange={(e) => { setTitle(e.target.value); setErr("") }} />
+                    <TextInput id={f + "name"} value={title} maxLength={140} placeholder="Fire Response API" autoFocus
+                        onChange={(e) => { setTitle(e.target.value); setErr("") }}
+                        onKeyDown={(e) => { if (e.key === "Enter" && !busy) { e.preventDefault(); void go() } }} />
                     <Label htmlFor={f + "of"}>Belongs to</Label>
                     <Select id={f + "of"} value={of} onChange={(e) => {
                         setOf(e.target.value)
