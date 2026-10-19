@@ -13,8 +13,8 @@ import { schoolCal } from "@/data/query"
 import { minutesByDay, streak } from "@/core/history"
 
 import { prepPace } from "@/core/prep"
-import { useCourses, useItems, useProfile, useQuotes, useStudySessions } from "./store"
-import { courseKeyOf, keyOf, onCalendar } from "./effective"
+import { useCourses, useItems, useProfile, useQuotes, useSpaces, useStudySessions } from "./store"
+import { courseKeyOf, forCalendar, forStats, keyOf, onCalendar } from "./effective"
 import { ui } from "./ui"
 import type { Course, Item, Meeting, Quote, Schedule, Show, SortKey, StudySession } from "./types"
 
@@ -367,19 +367,20 @@ export const tableFiltersOf = (): TableFilters => {
  * The live input for the views. The `ui` object is changed in place, so the version the
  * bridge bumps on every redraw is part of the key; the collections are new arrays when
  * the store reloads. The Week and the Month (`calendar`) leave out what you hid with an eye
- * toggle (spec §9); All items does not.
+ * toggle (spec §9), and of a project's rows keep only your tasks, folding a project into its
+ * assignment on the same day (forCalendar); All items does not.
  */
 function useViewInput(calendar = false): ViewInput {
-    const items = useItems(), courses = useCourses(), profile = useProfile()
+    const items = useItems(), courses = useCourses(), profile = useProfile(), spaces = useSpaces()
     const version = useSyncExternalStore(subscribe, getVersion)
     return useMemo(
         () => {
             const hidden = profile?.hiddenSources ?? []
             const shown = calendar ? onCalendar(items, courses, hidden) : { items, courses }
-            return { items: shown.items, courses: shown.courses, total: items.length, filters: filtersOf(), schedule: ui.schedule, anchor: ui.anchor, today: todayIso(), cal: schoolCal() }
+            return { items: calendar ? forCalendar(shown.items, profile?.id ?? "", spaces) : shown.items, courses: shown.courses, total: items.length, filters: filtersOf(), schedule: ui.schedule, anchor: ui.anchor, today: todayIso(), cal: schoolCal() }
         },
         // eslint-disable-next-line react-hooks/exhaustive-deps -- `version` stands for the ui
-        [items, courses, profile, version, calendar],
+        [items, courses, profile, spaces, version, calendar],
     )
 }
 
@@ -421,7 +422,8 @@ export const useTable = () => {
 export const useStats = () => {
     const items = useItems(), sessions = useStudySessions(), profile = useProfile(), quotes = useQuotes()
     const version = useSyncExternalStore(subscribe, getVersion)
-    const numbers = useMemo(() => stats(items, sessions, profile?.studyPrefs, todayIso()),
+    /* of a project's rows, only your tasks count (forStats) */
+    const numbers = useMemo(() => stats(forStats(items, profile?.id ?? ""), sessions, profile?.studyPrefs, todayIso()),
         // eslint-disable-next-line react-hooks/exhaustive-deps -- `version` catches the day rolling over on a redraw
         [items, sessions, profile, version])
     return { ...numbers, quote: quoteAt(quotes, ui.quoteIx), quoteCount: quotes.length }

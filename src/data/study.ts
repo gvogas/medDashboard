@@ -15,6 +15,7 @@ import { duration } from "@/lib/time"
 import { useAchievements, useCourses, useItems, useProfile, useStudySessions } from "./store"
 import { rememberUi, ui } from "./ui"
 import { keyedAchievements, keyedCourses, keyedItems, keyedSessions, leftClass } from "./refs"
+import { forAchievements } from "./effective"
 import type { Achievement, Badge, Course, HistTab, Item, SessionUndo, StudyPrefs, StudySession, StudyTab } from "./types"
 
 /* A course split is [courseId, minutes] pairs, most first, with "" for no course. */
@@ -320,8 +321,9 @@ export const useHistory = () => {
 }
 
 export const useBadges = () => {
-    const input = useStudyInput(), items = useItems(), own = useAchievements(), courses = useCourses()
-    return useMemo(() => badges(input.sessions, keyedItems(items), input.prefs, input.today, keyedAchievements(own), keyedCourses(courses)), [input, items, own, courses])
+    const input = useStudyInput(), items = useItems(), own = useAchievements(), courses = useCourses(), profile = useProfile()
+    /* a project row counts only when you completed it (forAchievements) */
+    return useMemo(() => badges(input.sessions, keyedItems(forAchievements(items, profile?.id ?? "")), input.prefs, input.today, keyedAchievements(own), keyedCourses(courses)), [input, items, own, courses, profile])
 }
 
 /** The Timer tab's Today card. */

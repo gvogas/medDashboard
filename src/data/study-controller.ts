@@ -15,7 +15,7 @@ import * as run from "./run"
 import { openFocus } from "./study-timer"
 import { toast } from "./toast"
 import { ui, rememberUi } from "./ui"
-import { effectiveCourses, effectiveItems } from "./effective"
+import { effectiveCourses, effectiveItems, forAchievements } from "./effective"
 import { keyedAchievements, keyedCourses, keyedItems, keyedSessions } from "./refs"
 import type { StudyPrefs, View } from "./types"
 
@@ -100,8 +100,8 @@ export function celebrateStudy() {
    The first look, and anything synced from elsewhere, only records what is earned. */
 let earned: Set<string> | null = null
 export function celebrateAchievements({ quiet = false }: { quiet?: boolean } = {}) {
-    /* class items count by your mark (spec §8), in key space like the Study page */
-    const sessions = keyedSessions(data.study_sessions), items = keyedItems(effectiveItems())
+    /* class items count by your mark (spec §8), a project row only when you completed it, in key space like the Study page */
+    const sessions = keyedSessions(data.study_sessions), items = keyedItems(forAchievements(effectiveItems(), data.profile?.id ?? ""))
     const list = [...achievements(sessions, items, studyPrefs(), today()),
         ...ownAchievements(keyedAchievements(data.achievements), sessions, items, keyedCourses(effectiveCourses()))]
     const was = earned
