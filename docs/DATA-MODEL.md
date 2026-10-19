@@ -4,8 +4,8 @@ Term's internal name is `rounds` (the Worker, the D1 databases, cookies and Inde
 Cloudflare D1 (SQLite), several users, every row stamped with its owner: a `scope` on
 courses and items (`u:<user id>` for a person's own; `c:<space id>` for a shared class,
 `p:<space id>` for a team project), a `user_id` on the rest. Shared classes are live
-for everyone (collaboration Stages 1–7). Team projects (Stage 8) are for admins only
-and stay out of the Week, Month and other views until Stages 9 and 10.
+for everyone (collaboration Stages 1–7). Team projects (Stage 8, in the views since
+Stage 9) are for admins only until Stage 10, which also adds them to the calendar feed.
 The browser never talks to the database. A Worker reads the session cookie, resolves
 the user, and every query it runs has `user_id = ?` (or the user's scope) in it.
 
@@ -300,7 +300,7 @@ progress lives in the browser's IndexedDB on that device and does not sync.
 | `rounds_done` | int | 0–12, rounds whose every step finished |
 | `note` | text | up to 200 characters: what was covered |
 | `manual` | int | 1 when logged by hand, 0 when the timer recorded it |
-| `space_id` | text, nullable | the shared space `course_id` or `item_id` belongs to, when it is a class's or a project's |
+| `space_id` | text, nullable | the shared space `course_id` or `item_id` belongs to, when it is a class's or a project's (a session on a team project has `course_id` `project`, the project's own item, and `item_id` the task, when one is picked) |
 | `created_at`, `updated_at`, `deleted_at` | int | |
 
 The flow itself is `users.study_flow`, JSON `{"steps":[["study",25],["break",5]],"rounds":4}`:
@@ -537,7 +537,8 @@ Left out: a class item an editor removed (a tombstone, whatever your mark holds)
 hid (`marks.hidden`), a class you archived in your sidebar (`space_prefs.archived`), and
 every source in `hidden_sources` (`course:<id>`, `space:<sid>`, `personal`). A class its
 owner archived stays. Your items filed under a class (`class_id`) show under its course;
-one whose class you have left stays, with no course. Projects join the feed in Stage 10.
+one whose class you have left stays, with no course. Projects join the feed in Stage 10
+(until then the feed leaves out every `p:` row).
 
 ### Outline imports into a class
 
@@ -666,9 +667,7 @@ still delivers `space.deleted` (a row about you); the nightly purge removes it 3
 **On the device** (`src/data/projects.ts`): tasks are read straight from
 `data.shared_items` and written with `store.saveShared`, so pending edits, field merge
 and Saved copies work as for a class's items; a refused create reads "A project holds 200
-tasks at most." `PROJECTS_IN_VIEWS = false` (`src/data/effective.ts`) keeps every `p:`
-row, removed ones included, out of `mergeItems`, so the Week, Month, All items, stats,
-grades and achievements are untouched until Stage 9. Leaving and deleting upload your
+tasks at most." Leaving and deleting upload your
 edits first and take a repeat that answers not found, the project being gone here too,
 as done (`uploadFirst`, `once`, `spaceGone` from `src/data/leave.ts`). `messageFor` and
 `joinMessageFor` take the space's kind, so a project's errors say "project". Admins see
@@ -678,6 +677,56 @@ the owner links, archives, unarchives and deletes by typing the name; anyone els
 after a confirm), **Members** and **Activity**. Until its rows arrive the sheet says it is
 on its way; an archived project is read-only. Joining a project by invite or code offers
 **Open the project** (no semester, colour or merge step).
+
+**In the views** (Stage 9; worked out on the device, no Worker change):
+`PROJECTS_IN_VIEWS = true` (`src/data/effective.ts`) lets `p:` rows into `mergeItems`
+with `source: "project"`, their `assignees` and `completedBy`. A deleted task never stays
+for a note of yours on it (no **Keep as mine** for a project's tombstones). Each view
+filters them with a pure function:
+
+- **Week and Month** (`forCalendar`): a project's own item (its due date), and of its tasks
+  only those assigned to you or to everyone. A project's own item is left out when its
+  linked assignment is on your calendar on the same date (not removed, the project dated);
+  the assignment then carries `team: [{spaceId, name}]`, its chip shows the team glyph
+  ("Team · Fire Response API"), and the search finds it by the project's name. Different
+  dates show both. The sidebar's eye on a project writes `space:<sid>` to
+  `hidden_sources`, as a class's does.
+- **Ticking** a team task there (`toggleTask` → `toggleTeamTask` in `src/data/projects.ts`)
+  sets the team's status with `setDone`, for a task assigned to you or to everyone (or as
+  an owner or editor), and celebrates; otherwise, or while the project is archived, a toast
+  says why. `setDone` names you as `completedBy` on the device until the sync brings the
+  Worker's, and a task done again keeps who finished it first. Ticking and claiming write
+  over the row as stored, so a title just typed is kept.
+- **Stats** (`forStats`): your tasks only; a project's own item is not counted.
+  **Achievements** (`forAchievements`): a project row only when you completed it. Grades:
+  nothing (project rows carry no weight).
+- **Study pickers** (`withProjects`): one course per project you are in, "Team · <name>",
+  keyed by the project's own row (`p:<sid>/project`), whose items are your open tasks
+  there. A session on one is saved with `courseId: "project"` and the project's
+  `spaceId`; History names it the same way (`projectCourse`).
+- **All items**: every project row, and a project's task says who has it. The **Source**
+  select (`ui.source`: `all`, `personal` or `space:<id>`; not remembered across reloads)
+  groups classes and projects; a class's source also lists your items filed under it.
+  Picking one ends a stat tile's list; a source naming a space you are no longer in reads
+  as all (`pickedSource`). The type chips' counts and the empty table's "Hidden by …"
+  follow it.
+- **The task card** (`task-sheet.tsx`, opened by a task's key; `openItem` opens a project's
+  own item as the project sheet): **Team** (done, date, times, who has it, checklist, notes,
+  links, "Edited by …"), written by owners and editors; a member ticks done on their own or
+  everyone's tasks, claims or unclaims, and reads the rest. **Yours**: your notes and
+  **Not mine · hide it** (your mark's `hidden`). **Delete for everyone** asks first.
+- **The project sheet**: progress, live tasks done over live tasks ("12 / 18 · 67%", "No
+  tasks yet"); each member's workload in the assignee picker (open tasks dated today to 14
+  days ahead; a task for everyone counts for each: "Sam · 3 in the next 2 weeks"); and,
+  for someone who holds the linked class (`assignmentOf`), "For Web Services · REST API
+  Project" when the dates agree (an undated assignment always agrees), else "Assignment
+  due 18 Oct" with **Use this date** for owners and editors (`takeAssignmentDate`, an
+  ordinary write of the project item's date). An assignment no longer live on this device,
+  or one in a class that is archived, reads "Linked assignment removed"; the link select
+  leaves archived classes out. Below the tasks, **Hidden from you** with **Show again**.
+- **The sidebar**: each project's ring (`progress-ring.tsx`) in its colour (`projectColour`:
+  the linked class's while you hold it, else your own for the project), and the eye
+  (`Eye` in `sidebar-parts.tsx`); a hidden project stays listed, dimmed.
 
 ### Maintenance mode
 
