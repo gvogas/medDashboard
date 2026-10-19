@@ -1,11 +1,9 @@
-// A team project in the sheet (spec §10, §15), for admins until Stage 10. **Tasks**: add (owners
+// A team project in the sheet (spec §10, §15). **Tasks**: add (owners
 // and editors), done, claim, edit in place; below them the owner links the project to a class
 // assignment, archives it or deletes it (typing its name), and anyone else leaves it.
 // **Members**: who is in it, invites (they join as editors), the code, roles, removing, handing
 // it on. **Activity**: what happened. Until the project's rows arrive (it was just made or
-// joined) the sheet says it is on its way. Someone who is no longer an admin but still in a
-// project sees it as before, with a line saying why it is not in their sidebar: the Worker
-// gates only making, inviting and joining. Under the title: the due date and progress, and,
+// joined) the sheet says it is on its way. Under the title: the due date and progress, and,
 // for someone who holds the linked class, the assignment: its date when the two drift apart,
 // with Use this date for owners and editors, or that it was removed. The assignee picker
 // shows each member's workload. Below the tasks, the ones you hid from your views, with Show again.
@@ -16,7 +14,7 @@ import { dayMonth, today } from "@/core/dates"
 import { useMarks, useProfile, useSharedItems, useSpaces } from "@/data/store"
 import { hiddenIn, setHidden } from "@/data/marks"
 import { closeSheet, replaceSheet } from "@/data/overlay"
-import { addTask, assignmentOf, canEdit, leaveProject, link, linkable, progress, projectItem, projectsShown, removeProject, takeAssignmentDate, tasksOf, workload, type Assignment, type ProjectTab } from "@/data/projects"
+import { addTask, assignmentOf, canEdit, leaveProject, link, linkable, progress, projectItem, removeProject, takeAssignmentDate, tasksOf, workload, type Assignment, type ProjectTab } from "@/data/projects"
 import { messageFor } from "@/data/classes"
 import { setArchived } from "@/data/leave"
 import { useMaintenance } from "@/data/maintenance"
@@ -98,7 +96,6 @@ function ProjectCard({ spaceId, tab, bar }: { spaceId: string; tab: ProjectTab; 
             </div>
             <SheetBody>
                 {bar && <MaintenanceBar className="mb-0" />}
-                {!projectsShown() && <Note>Team projects are open to admins only for now, so this one isn't in your sidebar. You're still in it: work in it or leave it here.</Note>}
                 <div role="tabpanel" id={f + "panel"} aria-labelledby={f + tab} className="flex flex-col gap-3.5">
                     {tab === "tasks" ? <Tasks space={space} title={project.title} me={me} removed={a.state === "removed"} /> : tab === "members" ? <MembersTab spaceId={spaceId} kind="project" /> : <ActivityList spaceId={spaceId} />}
                 </div>

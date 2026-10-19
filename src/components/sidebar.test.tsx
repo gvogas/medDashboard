@@ -235,7 +235,7 @@ describe("shared classes, for everyone", () => {
     })
 })
 
-describe("team projects, for admins until Stage 10", () => {
+describe("team projects", () => {
     beforeEach(() => {
         fake.data.spaces = [
             { id: "zz0000000002", scope: "p:zz0000000002", kind: "project", role: "editor", name: "Zebra Launch", archived: true, parent: null, revision: 2, members: [] },
@@ -252,7 +252,14 @@ describe("team projects, for admins until Stage 10", () => {
         expect(coursesNav().queryByText("Fire Response API")).toBeNull()
     })
 
-    it("show nothing of them to someone who is not an admin", () => {
+    it("show them to someone who is not an admin too", () => {
+        fake.data.profile = { ...(fake.data.profile as object), isAdmin: false }
+        render(<Sidebar />)
+        expect(within(screen.getByRole("region", { name: "Projects" })).getByText("Fire Response API")).toBeTruthy()
+    })
+
+    it("show no Projects group to someone in no project", () => {
+        fake.data.spaces = []
         render(<Sidebar />)
         expect(screen.queryByRole("region", { name: "Projects" })).toBeNull()
     })

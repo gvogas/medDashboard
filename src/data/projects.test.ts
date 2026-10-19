@@ -35,7 +35,7 @@ vi.mock("./refs", () => ({ splitKey: () => ({}) }))
 import { ApiError } from "@/core/api"
 
 import {
-    addTask, assigneeNames, assignmentOf, canClaim, canEdit, canFinish, claim, leaveProject, link, linkable, makeProject, progress, projectColour, projectsShown,
+    addTask, assigneeNames, assignmentOf, canClaim, canEdit, canFinish, claim, leaveProject, link, linkable, makeProject, progress, projectColour,
     removeProject, setDone, takeAssignmentDate, tasksOf, teamTaskTick, toggleTeamTask, withProjects, workload,
 } from "./projects"
 import type { SharedItem, Space } from "./types"
@@ -91,13 +91,6 @@ describe("who may do what with a task (spec §5)", () => {
         expect(assigneeNames(task({ assignees: ["*"] }), s, "u-me")).toBe("Everyone")
         expect(assigneeNames(task({}), s, "u-me")).toBe("Nobody yet")
         expect(assigneeNames(task({ assignees: ["u-me", "u-x", "u-gone"] }), s, "u-me")).toBe("You, Alex, A former member")
-    })
-    it("shows projects to admins only (Decision 1)", () => {
-        expect(projectsShown()).toBe(true)
-        fake.data.profile = { id: "u-me", isAdmin: false }
-        expect(projectsShown()).toBe(false)
-        fake.data.profile = null
-        expect(projectsShown()).toBe(false)
     })
 })
 

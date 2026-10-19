@@ -1,7 +1,8 @@
 # Collaboration: shared classes and team projects — design
 
 Agreed in brainstorming 2026-10-02; this document is the source of truth for the
-architecture. Not built yet. It answers `TERM-COLLABORATION-PLANNING-PROMPT.md`.
+architecture. Built in ten stages, 2026-10-05 to 2026-10-19; see the master plan
+(`docs/superpowers/plans/2026-10-02-collaboration.md`). It answers `TERM-COLLABORATION-PLANNING-PROMPT.md`.
 v1 builds **shared classes**; **team projects** are v2 on the same foundation and are
 fully designed here so the foundation does not need to change for them.
 

@@ -5,7 +5,7 @@ Cloudflare D1 (SQLite), several users, every row stamped with its owner: a `scop
 courses and items (`u:<user id>` for a person's own; `c:<space id>` for a shared class,
 `p:<space id>` for a team project), a `user_id` on the rest. Shared classes are live
 for everyone (collaboration Stages 1–7). Team projects (Stage 8, in the views since
-Stage 9) are for admins only until Stage 10, which also adds them to the calendar feed.
+Stage 9) are open to everyone and in the calendar feed since Stage 10.
 The browser never talks to the database. A Worker reads the session cookie, resolves
 the user, and every query it runs has `user_id = ?` (or the user's scope) in it.
 
@@ -492,19 +492,19 @@ All routes are under `/api`, speak JSON, and require the session cookie except
 | `PUT /api/study_sessions/:id` · `DELETE /api/study_sessions/:id` | `{courseId, itemId, startedAt, studyMinutes, roundsDone, note, manual}`, as above |
 | `PUT /api/achievements/:id` · `DELETE /api/achievements/:id` | `{name, sticker, rule, courseId, itemId, target}`, as above; `400 too_many` past 30. `classId` (items), `spaceId` (sessions, achievements) and `hiddenSources` (profile) left out of a body keep their stored values. |
 | `GET /api/calendar` · `POST /api/calendar` · `DELETE /api/calendar` | the calendar feed: → `{on, url}`; POST turns it on or makes a new link (the old one stops working); DELETE turns it off. See `worker/calendar.js`. |
-| `GET /api/calendar/:userId/:token.ics?tz=` | no session: the feed itself, `text/calendar`. The token is an HMAC of the user id and `users.feed_gen`; a wrong one is `404`. At most 60 fetches an hour per link. Carries your classes too: see The calendar feed below. |
+| `GET /api/calendar/:userId/:token.ics?tz=` | no session: the feed itself, `text/calendar`. The token is an HMAC of the user id and `users.feed_gen`; a wrong one is `404`. At most 60 fetches an hour per link. Carries your classes and team projects too: see The calendar feed below. |
 | `POST /api/spaces` | `{kind:'class', course}` (blank) or `{kind:'class', convertCourseId, items:[id]}` → `201 {space}`; you become the owner, with prefs from the course, and the class takes a copy of your school calendar (see `spaces`). Anyone signed in; a `kind` other than `'class'` or `'project'` is `400`. There is no hourly limit on making classes, only the 20 live spaces. A convert **moves** your course and the items named into the class in class shape: your status, grade, checklist, notes and completion into marks, your colour, target, term and archive into prefs; your course and those items are soft-deleted, the course's other items filed under the class (`classId`), your sessions and achievements on them labelled with the space. Converting the same course again answers the class it made (`200`). `409 limit` past 20 spaces. |
-| `POST /api/spaces` (project) | `{kind:'project', title, date?, parent?: {space, item}}` → `201 {space}`: a team project with you as its owner, its `project` item (the title, trimmed, 1–140 characters, no NUL; the date given, else the parent's) and your prefs, in one batch. Admins only (`403 not_admin` for anyone else). `parent` is any live item of a class you are a live member of (`400 {field:'parent'}` otherwise); with no `parent`, `date` is required (`400 {field:'date'}`). `409 limit` past 20 spaces. See Team projects. |
+| `POST /api/spaces` (project) | `{kind:'project', title, date?, parent?: {space, item}}` → `201 {space}`: a team project with you as its owner, its `project` item (the title, trimmed, 1–140 characters, no NUL; the date given, else the parent's) and your prefs, in one batch. Anyone signed in. `parent` is any live item of a class you are a live member of (`400 {field:'parent'}` otherwise); with no `parent`, `date` is required (`400 {field:'date'}`). `409 limit` past 20 spaces. See Team projects. |
 | `POST /api/spaces/:sid/link` | the owner of an unarchived project: `{parent: {space, item}}` links it to that class item and sets the project's date to the item's; `{parent: null}`, or no `parent` at all, unlinks it and keeps the date → `204`. `400 {field:'parent'}` for an item you can't see, `404` on a class. Writes `space.linked`. (The spec's `PATCH`.) |
 | `GET /api/spaces/:sid` | → `{id, scope, kind, role, archived, members, invites, code, schoolCalendar}`: the members and the class's school-calendar snapshot (or `null`) for everyone in the space, its invites for the owner and editors, the join code's expiry and uses left for the owner. `404` outside it. |
 | `POST /api/spaces/:sid/school` | the owner, archived or not: copy your school calendar into the class again → `{schoolCalendar}` (what the class now holds). With no calendar of yours that has a semester, the old snapshot stays. Classes only (`404` otherwise). The app syncs first and says so when your calendar has not reached the server yet. |
-| `POST /api/spaces/:sid/invites` · `DELETE /api/spaces/:sid/invites/:userId` | `{username, role?}` → `201` the invite (30 days; a repeat refreshes it). The owner or an editor; only the owner gives a role other than the default. `404 no_user`, `409 member`, `409 not_admin` for a project invite to someone who is not an admin (until Stage 10); 20 an hour. So anyone in a class can learn whether a username exists by inviting it, at most 20 names an hour. DELETE withdraws it: whoever sent it, or the owner. |
+| `POST /api/spaces/:sid/invites` · `DELETE /api/spaces/:sid/invites/:userId` | `{username, role?}` → `201` the invite (30 days; a repeat refreshes it). The owner or an editor; only the owner gives a role other than the default. `404 no_user`, `409 member`; 20 an hour. So anyone in a class can learn whether a username exists by inviting it, at most 20 names an hour. DELETE withdraws it: whoever sent it, or the owner. |
 | `GET /api/inbox` | → `{invites, items, seen}`: your invites (as `GET /api/invites`), the inbox's newest 50 rows within the 90 days, newest first, and your `inbox_seen.seq` (0 for none). Each row: `{seq, spaceId, space, kind, verb, subject, actor, subjectUser, about, old, new, detail, n, at}`, `space` the space's name now (or as it was, once gone), `about` whether it is about you. See The inbox and activity below. |
 | `PUT /api/inbox/seen` | `{seq}` → `204`: you have read up to `seq` (forward only, never past the newest row). `400 {field:'seq'}` for anything but a whole number ≥ 0. |
 | `GET /api/spaces/:sid/activity?before=<seq>` | → `{items, more}`: a space's Activity tab, 30 rows below `before` (the newest when left out) within the 90 days, newest first, in the inbox's row shape. Any live member, archived or not; `404` outside it; `400 {field:'before'}` for a bad `before`. |
-| `GET /api/invites` · `POST /api/invites/:sid/accept` · `POST /api/invites/:sid/decline` | your invites, expired ones marked (the list is for old clients only: the app reads invites from `GET /api/inbox`); accept → `{space}` (`404` once withdrawn, `410 expired`, `403 archived` while the class is archived, `403 not_admin` for a project invite while you are not an admin, `409 limit`/`full`; the invite stays pending); decline → `204`. |
+| `GET /api/invites` · `POST /api/invites/:sid/accept` · `POST /api/invites/:sid/decline` | your invites, expired ones marked (the list is for old clients only: the app reads invites from `GET /api/inbox`); accept → `{space}` (`404` once withdrawn, `410 expired`, `403 archived` while the class is archived, `409 limit`/`full`; the invite stays pending); decline → `204`. |
 | `POST /api/spaces/:sid/code` · `DELETE /api/spaces/:sid/code` | the owner: a new 8-character code → `201 {code, expires, usesLeft}` (7 days, 10 uses; only its SHA-256 is kept; a new one retires the old) · turn it off. |
-| `POST /api/join` | `{code}` → `{space}`. 10 tries an hour; `404` unknown, `410 expired`, `403 archived` while the class is archived (no use spent), `403 not_admin` for a project's code while you are not an admin (one you are already in answers with it), `409 limit`/`full`. A pending invite to that class is accepted with it, with its role. |
+| `POST /api/join` | `{code}` → `{space}`. 10 tries an hour; `404` unknown, `410 expired`, `403 archived` while the class is archived (no use spent), `409 limit`/`full`; a space you are already in answers with it. A pending invite to that class is accepted with it, with its role. |
 | `PUT /api/spaces/:sid/members/:userId` · `POST /api/spaces/:sid/transfer` | the owner, archived or not: `{role: 'editor'\|'member'}` → `{userId, role}`; `{userId}` makes that member the owner and you an editor → `204`. |
 | `POST /api/spaces/:sid/leave` | `{keepCopy}` (true when left out, or with no body) → `204`: leave a class, with a copy of it as your own course or without (see `members`); or a project, which copies nothing (`keepCopy` is checked but ignored; see Team projects). The owner hands it on first: `403 owner`. Archived or not. |
 | `DELETE /api/spaces/:sid/members/:userId` | the owner, archived or not: remove a member, who always keeps a copy of a class and nothing of a project → `204`. Never yourself or the owner (`403`); `404` for someone not in it. |
@@ -537,8 +537,19 @@ Left out: a class item an editor removed (a tombstone, whatever your mark holds)
 hid (`marks.hidden`), a class you archived in your sidebar (`space_prefs.archived`), and
 every source in `hidden_sources` (`course:<id>`, `space:<sid>`, `personal`). A class its
 owner archived stays. Your items filed under a class (`class_id`) show under its course;
-one whose class you have left stays, with no course. Projects join the feed in Stage 10
-(until then the feed leaves out every `p:` row).
+one whose class you have left stays, with no course.
+
+**Team projects** (Stage 10): the same batch reads `PROJECT_ROWS`, for each live project
+you are a live member of, its live `project` item and those of its live tasks assigned to
+you or to everyone (`json_each(assignees)` holding you or `*`, so others' tasks never leave
+D1; `feedRows` checks again with `mineOrAll`), with your mark and your prefs. Ids become
+`<space id>-<id>` as a class's do, so UIDs read `item-<space>-<id>@rounds`. A project's own
+item reads `Team · <project>`, a task `<project> · <task>` ("Team project" when the
+project item has no title); neither has a course, so no course code is added. Status is
+the team's (✓ when done, whoever completed it), and your notes come before the team's.
+Left out: a row you hid (`marks.hidden`), a project in `hidden_sources` (`space:<sid>`)
+and one archived in your sidebar; one its owner archived stays. The feed does not fold a
+project into its linked assignment: a calendar app has no chips, so both show.
 
 ### Outline imports into a class
 
@@ -585,6 +596,9 @@ you joined** whose verb concerns everyone: `item.created`, `item.deleted`, `item
 task's completion or reopening when it is assigned to you or to everyone. Your own
 actions are never in it, and every read holds to the 90 days (`KEEP_MS`) without waiting
 for the purge. `GET /api/inbox` answers the newest 50 with your pending invites.
+A project's events need nothing more: `task.assigned` reaches the assignee (or everyone,
+for `*`), a completion its assignees, `member.removed` and `space.deleted` the person
+they are about (`test/project-inbox.test.js`, Stage 10).
 
 **Unread** is your pending, unexpired invites to live spaces plus the inbox rows above
 your `inbox_seen.seq`, at most `UNREAD_CAP` (99, `src/core/shared.ts`). The Worker counts
@@ -620,11 +634,10 @@ on this device; the class itself is not reopened from its own sheet.
 
 A team project (spec §10) is a space of `kind = 'project'`: one `project` item (its name,
 due date and description) and its tasks, all in scope `p:<id>`. It is made, linked, left
-and deleted in `worker/projects.js`; tasks are ordinary shared writes. **Admins only**
-until Stage 10 (`PROJECTS_ADMINS_ONLY`): making one is `403 not_admin` for anyone else,
-inviting someone who is not an admin `409 not_admin`, and accepting a project invite or
-joining by a project's code `403 not_admin`. Someone already in a project who stops being
-an admin keeps working in it. Invites to a project give `editor` by default.
+and deleted in `worker/projects.js`; tasks are ordinary shared writes. Open to everyone
+signed in since Stage 10 (Stage 8 kept them to admins), with the limits a class has: 20
+spaces a person, 30 members a space, invites 20 an hour, join attempts 10 an hour.
+Invites to a project give `editor` by default.
 
 **Making** (`POST /api/spaces {kind:'project'}`): one batch writes the space (with
 `parent_space`/`parent_item` when it belongs to a class item), your owner membership, the
@@ -670,9 +683,9 @@ and Saved copies work as for a class's items; a refused create reads "A project 
 tasks at most." Leaving and deleting upload your
 edits first and take a repeat that answers not found, the project being gone here too,
 as done (`uploadFirst`, `once`, `spaceGone` from `src/data/leave.ts`). `messageFor` and
-`joinMessageFor` take the space's kind, so a project's errors say "project". Admins see
+`joinMessageFor` take the space's kind, so a project's errors say "project". Everyone sees
 **New team project** in **+ New**, a **Projects** group in the sidebar, and the project
-sheet (`project-sheet.tsx`): **Tasks** (add, done, claim, edit inline in `task-row.tsx`;
+sheet (`project-sheet.tsx`): **Tasks** (add, done, claim, edit inline in `task-row.tsx`, whose Delete asks first;
 the owner links, archives, unarchives and deletes by typing the name; anyone else leaves
 after a confirm), **Members** and **Activity**. Until its rows arrive the sheet says it is
 on its way; an archived project is read-only. Joining a project by invite or code offers

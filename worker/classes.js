@@ -1,13 +1,13 @@
 // The class routes (spec §11, §14): making a class, its members, its invites and its join
 // code. Anyone signed in may make or join a class (spec §22, opened in Stage 6). A team
-// project is made through the same POST /api/spaces (worker/projects.js), by admins only.
+// project is made through the same POST /api/spaces (worker/projects.js), by anyone too (Stage 10).
 import { json, readJson, HttpError } from './http.js';
 import { requireUser } from './auth.js';
 import { validateSharedCourse } from './validate.js';
 import { absorb, checkConvert, createClass, priorConvert, refreshSchool, setRole, spaceDetails, transfer } from './spaces.js';
 import { deleteClass, keep, leave, removeMember, setArchived, shareItems } from './leaving.js';
 import { acceptInvite, declineInvite, dropCode, invite, joinByCode, makeCode, myInvites, revokeInvite } from './invites.js';
-import { assertProjectsOpen, createProject, deleteProject, linkProject, parentOf, projectBody } from './projects.js';
+import { createProject, deleteProject, linkProject, parentOf, projectBody } from './projects.js';
 
 const SID = '([a-z0-9]{12})';
 const UID = '([^/]{1,64})';
@@ -70,10 +70,7 @@ export const classRoutes = [
   ['POST', route('spaces'), async ({ request, env }) => {
     const userId = await requireUser(request, env);
     const raw = await readJson(request);
-    if (raw.kind === 'project') {
-      await assertProjectsOpen(env.DB, userId, 'project');
-      return json({ space: await createProject(env.DB, userId, projectBody(raw)) }, 201);
-    }
+    if (raw.kind === 'project') return json({ space: await createProject(env.DB, userId, projectBody(raw)) }, 201);
     const body = classBody(raw);
     if (body.convertCourseId) {
       /* a convert repeated after it moved your course: the course is gone, so answer the class first */
@@ -140,10 +137,7 @@ export const classRoutes = [
   }],
   ['GET', route('invites'), async ({ request, env }) => json({ invites: await myInvites(env.DB, await requireUser(request, env)) })],
   ['POST', route(`invites/${SID}/accept`), async ({ request, env, params: [sid] }) => {
-    const userId = await requireUser(request, env);
-    const kind = (await env.DB.prepare('SELECT kind FROM spaces WHERE id = ?').bind(sid).first())?.kind;
-    await assertProjectsOpen(env.DB, userId, kind);
-    return json({ space: await acceptInvite(env.DB, userId, sid) });
+    return json({ space: await acceptInvite(env.DB, await requireUser(request, env), sid) });
   }],
   ['POST', route(`invites/${SID}/decline`), async ({ request, env, params: [sid] }) => {
     await declineInvite(env.DB, await requireUser(request, env), sid);

@@ -33,12 +33,12 @@ const ConvertSheet = lazyNamed(() => import("./convert-sheet"), "ConvertSheet", 
 const JoinSheet = lazyNamed(() => import("./join-sheet"), "JoinSheet", { idle: false })
 const InboxSheet = lazyNamed(() => import("./inbox-sheet"), "InboxSheet", { idle: false })
 const MergeSheet = lazyNamed(() => import("./merge-sheet"), "MergeSheet", { idle: false })
-/* the project sheets: admins only until Stage 10, so they download when first opened too */
+/* the project sheets: downloaded when first opened, as the class sheets are */
 const NewProjectSheet = lazyNamed(() => import("./new-project-sheet"), "NewProjectSheet", { idle: false })
 const ProjectSheet = lazyNamed(() => import("./project-sheet"), "ProjectSheet", { idle: false })
 /* a class's item, opened by its key: downloaded when first opened, as the class sheets are */
 const ClassItemSheet = lazyNamed(() => import("./class-item-sheet"), "ClassItemSheet", { idle: false })
-/* a project's task, opened by its key: admins only until Stage 10, so downloaded when first opened */
+/* a project's task, opened by its key: downloaded when first opened, as a class's item is */
 const TaskSheet = lazyNamed(() => import("./task-sheet"), "TaskSheet", { idle: false })
 
 /** What the dialog is called: the item's type, "New assignment", "Course". */

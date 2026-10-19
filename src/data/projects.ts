@@ -1,4 +1,4 @@
-// Team projects on this device (spec §10, §15), for admins until Stage 10: making one, its
+// Team projects on this device (spec §10, §15), for everyone since Stage 10: making one, its
 // tasks (add, edit, assign, claim, complete, delete), linking it to a class assignment,
 // leaving and deleting it. Its rows arrive and leave by sync like a class's, and its tasks
 // are written with store.saveShared, so pending edits, field merge and Saved copies work as
@@ -17,9 +17,6 @@ import { closeSheet, openSheet } from "./overlay"
 import { toast } from "./toast"
 import type { Course, Item, ParentRef, SharedItem, Space, SpacePref } from "./types"
 
-/** Projects are for admins until Stage 10 (Stage 8 plan, Decision 1). */
-export const PROJECTS_ADMIN_ONLY = true
-export const projectsShown = (): boolean => !PROJECTS_ADMIN_ONLY || !!data.profile?.isAdmin
 /** The most live tasks a project holds (spec §3); the Worker refuses the 201st too. */
 export const TASK_LIMIT = 200
 

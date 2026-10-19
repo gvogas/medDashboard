@@ -128,14 +128,14 @@ describe("team projects (spec §10, §15)", () => {
         expect(fake.api.spaces.create).not.toHaveBeenCalled()
     })
 
-    it("hides it all from someone who is not an admin", () => {
+    it("offers New team project to everyone", () => {
         fake.data.profile = { id: "u-me", isAdmin: false }
         fake.data.spaces = [klass, project]
         render(<><NewMenu /><ProjectsGroup /></>)
         fireEvent.click(screen.getByRole("button", { name: "+ New" }))
         expect(screen.getByRole("menuitem", { name: /New shared class/ })).toBeTruthy()
-        expect(screen.queryByRole("menuitem", { name: /New team project/ })).toBeNull()
-        expect(screen.queryByRole("region", { name: "Projects" })).toBeNull()
+        expect(screen.getByRole("menuitem", { name: /New team project/ })).toBeTruthy()
+        expect(screen.getByRole("region", { name: "Projects" })).toBeTruthy()
     })
 
     it("joining a project downloads it and offers to open it, with no semester or colour", async () => {
@@ -238,6 +238,25 @@ describe("the project sheet (spec §10, §15)", () => {
         await waitFor(() => expect(document.activeElement).toBe(within(t1).getByRole("button", { name: "Edit t1" })))
     })
 
+    it("the editor's Delete asks first, as the task card's does", async () => {
+        seed("editor", [task("t1", [])])
+        await show()
+        const t1 = await screen.findByRole("listitem", { name: /t1/ })
+        fireEvent.click(within(t1).getByRole("button", { name: "Edit t1" }))
+        fireEvent.click(within(t1).getByRole("button", { name: "Delete" }))
+        expect(within(t1).getByText("Delete it for everyone in Fire Response API?")).toBeTruthy()
+        expect(store.removeShared).not.toHaveBeenCalled()
+        /* Keep it goes back to the editor, the keyboard on Delete */
+        fireEvent.click(within(t1).getByRole("button", { name: "Keep it" }))
+        expect(within(t1).queryByText(/Delete it for everyone/)).toBeNull()
+        expect(document.activeElement).toBe(within(t1).getByRole("button", { name: "Delete" }))
+        expect(store.removeShared).not.toHaveBeenCalled()
+        fireEvent.click(within(t1).getByRole("button", { name: "Delete" }))
+        await act(async () => { fireEvent.click(within(t1).getByRole("button", { name: "Delete it" })) })
+        expect(store.removeShared).toHaveBeenCalledWith("shared_items", "p:" + PID, "t1")
+        await waitFor(() => expect(screen.queryByRole("listitem", { name: /t1/ })).toBeNull())
+    })
+
     it("the editor goes when the project is archived under it", async () => {
         seed("editor", [task("t1", [])])
         await show()
@@ -322,13 +341,31 @@ describe("the project sheet (spec §10, §15)", () => {
         expect(await screen.findByText("Only the project's owner can do that.")).toBeTruthy()
     })
 
-    it("opens for a member who is no longer an admin, and says why it isn't in the sidebar", async () => {
+    it("opens for a member who is not an admin, with no note about admins", async () => {
         fake.data.profile = { id: "u-me", isAdmin: false }
         seed("editor", [task("t1", [])])
         await show()
         expect(await screen.findByRole("heading", { name: "Fire Response API" })).toBeTruthy()
-        expect(screen.getByText(/open to admins only for now/)).toBeTruthy()
+        expect(screen.queryByText(/admins only/)).toBeNull()
         expect(screen.getByLabelText("New task")).toBeTruthy()
+    })
+
+    it("while classes are off, someone who is not an admin gets the maintenance page in every project sheet; an admin works on", async () => {
+        const off = { features: ["classes"], message: "" }
+        fake.data.profile = { id: "u-me", isAdmin: false, maintenance: off }
+        seed("editor", [task("t1", ["u-me"])])
+        for (const sheet of [{ kind: "project", spaceId: PID, tab: "tasks" }, { kind: "new-project", parent: null }, { kind: "item", id: "p:" + PID + "/t1" }] as const) {
+            render(<Sheet />)
+            await act(async () => { openSheet(sheet) })
+            expect(await screen.findByRole("heading", { name: /being worked on/ })).toBeTruthy()
+            expect(screen.queryByLabelText("New task")).toBeNull()
+            act(() => closeSheet())
+            cleanup()
+        }
+        fake.data.profile = { id: "u-me", isAdmin: true, maintenance: off }
+        await show()
+        expect(await screen.findByLabelText("New task")).toBeTruthy()
+        expect(screen.getByText(/only admins see this/)).toBeTruthy()
     })
 
     it("an archived project is read-only", async () => {
