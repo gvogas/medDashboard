@@ -12,6 +12,7 @@ const fake = vi.hoisted(() => ({
     openSheet: vi.fn(),
     closeSheet: vi.fn(),
     toast: vi.fn(),
+    celebrate: vi.fn(),
 }))
 vi.mock("@/core/store", () => ({ data: fake.data, saveShared: fake.saveShared, removeShared: fake.removeShared, pendingCount: () => fake.pending }))
 vi.mock("@/core/api", () => {
@@ -26,6 +27,7 @@ vi.mock("@/core/sync", () => ({ syncNow: fake.syncNow }))
 vi.mock("./classes", () => ({ download: fake.download }))
 vi.mock("./overlay", () => ({ openSheet: fake.openSheet, closeSheet: fake.closeSheet }))
 vi.mock("./toast", () => ({ toast: fake.toast }))
+vi.mock("./item-edit", () => ({ celebrate: fake.celebrate }))
 /* leave.ts's guards are the real ones; what else it imports is not needed here */
 vi.mock("./marks", () => ({ ago: () => "" }))
 vi.mock("./refs", () => ({ splitKey: () => ({}) }))
@@ -33,7 +35,8 @@ vi.mock("./refs", () => ({ splitKey: () => ({}) }))
 import { ApiError } from "@/core/api"
 
 import {
-    addTask, assigneeNames, canClaim, canEdit, canFinish, claim, leaveProject, link, linkable, makeProject, projectsShown, removeProject, setDone, tasksOf,
+    addTask, assigneeNames, assignmentOf, canClaim, canEdit, canFinish, claim, leaveProject, link, linkable, makeProject, progress, projectColour, projectsShown,
+    removeProject, setDone, takeAssignmentDate, tasksOf, teamTaskTick, toggleTeamTask, withProjects, workload,
 } from "./projects"
 import type { SharedItem, Space } from "./types"
 
@@ -80,6 +83,8 @@ describe("who may do what with a task (spec §5)", () => {
         expect(linkable(items, [{ scope: "c:webs00000001", name: "Web Services" }])).toEqual([
             { space: "webs00000001", item: "a1", label: "Web Services · REST API", date: "2026-10-20" },
         ])
+        /* an archived class's assignments are not offered: the project would read as unlinked */
+        expect(linkable(items, [{ scope: "c:webs00000001", name: "Web Services", archived: true }])).toEqual([])
     })
     it("names who a task is with", () => {
         const s = space({ members: [{ userId: "u-x", name: "Alex", role: "editor" }] })
@@ -110,13 +115,24 @@ describe("writing tasks", () => {
     })
     it("completes and reopens, claims and unclaims", async () => {
         await setDone(task({}), true)
-        expect(fake.saveShared).toHaveBeenLastCalledWith("shared_items", expect.objectContaining({ status: "done", completedAt: expect.any(Number) }))
-        await setDone(task({ status: "done", completedAt: 5 }), false)
-        expect(fake.saveShared).toHaveBeenLastCalledWith("shared_items", expect.objectContaining({ status: "todo", completedAt: null }))
+        expect(fake.saveShared).toHaveBeenLastCalledWith("shared_items", expect.objectContaining({ status: "done", completedAt: expect.any(Number), completedBy: "u-me" }))
+        await setDone(task({ status: "done", completedAt: 5, completedBy: "u-me" }), false)
+        expect(fake.saveShared).toHaveBeenLastCalledWith("shared_items", expect.objectContaining({ status: "todo", completedAt: null, completedBy: null }))
+        /* completing it again keeps whoever finished it first */
+        await setDone(task({ status: "done", completedAt: 5, completedBy: "u-sam" }), true)
+        expect(fake.saveShared).toHaveBeenLastCalledWith("shared_items", expect.objectContaining({ status: "done", completedAt: 5, completedBy: "u-sam" }))
         await claim(task({}), "u-me", true)
         expect(fake.saveShared).toHaveBeenLastCalledWith("shared_items", expect.objectContaining({ assignees: ["u-me"] }))
         await claim(task({ assignees: ["u-me", "u-x"] }), "u-me", false)
         expect(fake.saveShared).toHaveBeenLastCalledWith("shared_items", expect.objectContaining({ assignees: ["u-x"] }))
+    })
+    it("ticks and claims over the stored row, not a stale one a view drew", async () => {
+        const stale = task({ title: "Old title", notes: "" })
+        fake.data.shared_items = [{ ...stale, title: "New title", notes: "Just typed", revision: 2 }]
+        await setDone(stale, true)
+        expect(fake.saveShared).toHaveBeenLastCalledWith("shared_items", expect.objectContaining({ title: "New title", notes: "Just typed", status: "done" }))
+        await claim(stale, "u-me", true)
+        expect(fake.saveShared).toHaveBeenLastCalledWith("shared_items", expect.objectContaining({ title: "New title", notes: "Just typed", assignees: ["u-me"] }))
     })
 })
 
@@ -162,5 +178,109 @@ describe("the project itself", () => {
         fake.api.spaces.deleteProject.mockRejectedValueOnce(new ApiError(400, { error: "invalid", field: "confirm" }))
         await expect(removeProject("fire00000001", "Fir")).rejects.toMatchObject({ status: 400 })
         expect(fake.closeSheet).toHaveBeenCalledTimes(2)
+    })
+})
+
+describe("ticking a team task from the Week (Stage 9 plan, Decision 4)", () => {
+    it("completes or reopens what you may, and says why when you may not", () => {
+        expect(teamTaskTick(space({ role: "member" }), task({ assignees: ["u-me"] }), "u-me")).toEqual({ done: true })
+        expect(teamTaskTick(space({ role: "member" }), task({ assignees: ["*"] }), "u-me")).toEqual({ done: true })
+        expect(teamTaskTick(space({ role: "member" }), task({ assignees: ["u-me"], status: "done", completedAt: 5 }), "u-me")).toEqual({ done: false })
+        expect(teamTaskTick(space({ role: "member" }), task({ assignees: ["u-sam"] }), "u-me")).toEqual({ why: "Only its assignees and the project's editors can complete this task." })
+        expect(teamTaskTick(space({ role: "owner", archived: true }), task({}), "u-me")).toEqual({ why: "This project is archived, so it is read-only." })
+        expect(teamTaskTick(null, task({}), "u-me")).toEqual({ why: "This project isn't on this device any more." })
+    })
+    it("sets the team's status by key, or toasts why not", async () => {
+        fake.data.spaces = [space({ role: "member" })]
+        fake.data.shared_items = [task({ id: "t1", assignees: ["u-me"] }), task({ id: "t2", assignees: ["u-sam"] })]
+        await toggleTeamTask("p:fire00000001/t1")
+        expect(fake.saveShared).toHaveBeenCalledWith("shared_items", expect.objectContaining({ id: "t1", status: "done" }))
+        await toggleTeamTask("p:fire00000001/t2")
+        expect(fake.saveShared).toHaveBeenCalledTimes(1)
+        expect(fake.toast).toHaveBeenCalledWith("Only its assignees and the project's editors can complete this task.")
+        await toggleTeamTask("p:fire00000001/gone")
+        expect(fake.saveShared).toHaveBeenCalledTimes(1)
+        expect(fake.toast).toHaveBeenCalledTimes(1)
+    })
+    it("celebrates from where it was ticked when the task becomes done, not when it reopens", async () => {
+        fake.data.spaces = [space({ role: "member" })]
+        fake.data.shared_items = [task({ id: "t1", assignees: ["u-me"] }), task({ id: "t2", assignees: ["u-me"], status: "done", completedAt: 5 })]
+        const el = {} as Element
+        await toggleTeamTask("p:fire00000001/t1", el)
+        expect(fake.celebrate).toHaveBeenCalledWith(el)
+        await toggleTeamTask("p:fire00000001/t2", el)
+        expect(fake.celebrate).toHaveBeenCalledTimes(1)
+    })
+})
+
+describe("progress, workload and the linked assignment (spec §10)", () => {
+    it("counts done tasks over live ones", () => {
+        expect(progress([task({ status: "done" }), task({}), task({ status: "done" })])).toEqual({ done: 2, total: 3, label: "2 / 3 · 67%", frac: 2 / 3 })
+        expect(progress([])).toEqual({ done: 0, total: 0, label: "No tasks yet", frac: 0 })
+    })
+    it("counts each member's open tasks in the next 14 days, everyone's for each", () => {
+        const ts = [task({ assignees: ["u-a"], date: "2026-10-10" }), task({ assignees: ["u-a", "u-b"], date: "2026-10-23" }), task({ assignees: ["*"], date: "2026-10-12" }),
+            task({ assignees: ["u-a"], date: "2026-10-25" }), task({ assignees: ["u-a"], date: "2026-10-11", status: "done" }), task({ assignees: ["u-b"], date: "2026-10-09" }),
+            task({ assignees: ["u-a"], date: "" })]
+        expect(workload(ts, ["u-a", "u-b"], "2026-10-10")).toEqual(new Map([["u-a", 3], ["u-b", 2]]))
+    })
+    it("shows the assignment only to someone holding its class; flags drift and removal", () => {
+        const s = space({ parent: { space: "webs00000001", item: "a1" } })
+        const project = task({ id: "project", type: "project", date: "2026-10-15" })
+        const a1 = task({ id: "a1", scope: "c:webs00000001", type: "assignment", title: "REST API Project", date: "2026-10-18" })
+        const cls = { id: "webs00000001", name: "Web Services" }
+        expect(assignmentOf(s, project, [a1], [cls])).toEqual({ state: "drift", label: "Web Services · REST API Project", date: "2026-10-18" })
+        expect(assignmentOf(s, { ...project, date: "2026-10-18" }, [a1], [cls])).toMatchObject({ state: "same" })
+        expect(assignmentOf(s, project, [], [cls])).toEqual({ state: "removed" })
+        expect(assignmentOf(s, project, [{ ...a1, deletedAt: 5 } as SharedItem], [cls])).toEqual({ state: "removed" })
+        expect(assignmentOf(s, project, [a1], [])).toEqual({ state: "none" })
+        expect(assignmentOf(space(), project, [a1], [cls])).toEqual({ state: "none" })
+    })
+    it("never calls an undated assignment drift, and an archived class's assignment is removed", () => {
+        const s = space({ parent: { space: "webs00000001", item: "a1" } })
+        const project = task({ id: "project", type: "project", date: "2026-10-15" })
+        const a1 = task({ id: "a1", scope: "c:webs00000001", type: "assignment", title: "REST API Project", date: "" })
+        expect(assignmentOf(s, project, [a1], [{ id: "webs00000001", name: "Web Services" }])).toEqual({ state: "same", label: "Web Services · REST API Project", date: "" })
+        expect(assignmentOf(s, project, [{ ...a1, date: "2026-10-18" }], [{ id: "webs00000001", name: "Web Services", archived: true }])).toEqual({ state: "removed" })
+    })
+    it("Use this date writes the assignment's date onto the project", async () => {
+        const project = task({ id: "project", type: "project", date: "2026-10-15" })
+        await takeAssignmentDate(project, "2026-10-18")
+        expect(fake.saveShared).toHaveBeenCalledWith("shared_items", expect.objectContaining({ id: "project", date: "2026-10-18" }))
+    })
+    it("colours a project by its linked class when you hold it, else by your own pref", () => {
+        const prefs = [{ spaceId: "webs00000001", color: "#e66" }, { spaceId: "fire00000001", color: "#36c" }] as Parameters<typeof projectColour>[1]
+        expect(projectColour(space({ parent: { space: "webs00000001", item: "a1" } }), prefs, [{ id: "webs00000001" }])).toBe("#e66")
+        expect(projectColour(space({ parent: { space: "gone00000001", item: "a1" } }), prefs)).toBe("#36c")
+        expect(projectColour(space(), prefs)).toBe("#36c")
+        expect(projectColour(space(), [])).toBeNull()
+    })
+    it("ignores the class's colour once you no longer hold the class", () => {
+        const prefs = [{ spaceId: "webs00000001", color: "#e66" }, { spaceId: "fire00000001", color: "#36c" }] as Parameters<typeof projectColour>[1]
+        const s = space({ parent: { space: "webs00000001", item: "a1" } })
+        expect(projectColour(s, prefs, [])).toBe("#36c")
+        expect(projectColour(s, prefs, [{ id: "webs00000001" }])).toBe("#e66")
+    })
+})
+
+describe("team projects in the study pickers (Stage 9 plan, Decision 1)", () => {
+    const P = "p:fire00000001"
+    const course = { id: "bio", code: "BIO", name: "Biology", color: "#e66", instructor: "", term: "", archived: false, target: null, meetings: [] }
+    it("gives each project you are in a course of your tasks there, keyed by the project's own row", () => {
+        const lab = task({ id: "l1", scope: undefined, type: "lab", courseId: "bio" })
+        const items = [lab, task({ id: P + "/t1", assignees: ["u-me"] }), task({ id: P + "/t2", assignees: ["*"] }), task({ id: P + "/t3", assignees: ["u-sam"] }),
+            task({ id: P + "/project", type: "project", title: "Fire Response API" })]
+        const out = withProjects([course], items, "u-me", [space({ name: "Fire Response API" }), space({ id: "webs00000001", scope: "c:webs00000001", kind: "class" })],
+            [{ spaceId: "fire00000001", color: "#36c" }])
+        expect(out.courses).toEqual([course, expect.objectContaining({ id: P + "/project", code: "Team", name: "Fire Response API", color: "#36c", archived: false })])
+        expect(out.items.filter((i) => i.courseId === P + "/project").map((i) => i.id)).toEqual([P + "/t1", P + "/t2"])
+        expect(out.items.find((i) => i.id === P + "/t3")?.courseId).toBeNull()
+        expect(out.items[0]).toBe(lab)
+    })
+    it("leaves the lists themselves when you are in no project", () => {
+        const courses = [course], items = [task({ id: "l1", courseId: "bio" })]
+        const out = withProjects(courses, items, "u-me", [])
+        expect(out.courses).toBe(courses)
+        expect(out.items).toBe(items)
     })
 })

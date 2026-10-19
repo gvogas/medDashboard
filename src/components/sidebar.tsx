@@ -7,7 +7,6 @@
 import { MotionConfig } from "framer-motion"
 import { useCourses, useItems, useProfile, useSpaces } from "@/data/store"
 import { courseKeyOf, courseSource, keyOf } from "@/data/effective"
-import { toggleSource } from "@/data/sources"
 import { cn } from "@/lib/utils"
 import { SharedGlyph } from "./shared-glyph"
 import { useUi } from "@/data/ui"
@@ -17,7 +16,7 @@ import { today } from "@/core/dates"
 import { courseTerm, inTerm, pickedTerm } from "@/core/school"
 import { schoolCal } from "@/data/query"
 import { SidebarWho } from "./sidebar-who"
-import { Count, counts, Heading, Pip, Row } from "./sidebar-parts"
+import { Count, counts, Eye, Heading, Pip, Row } from "./sidebar-parts"
 import { SemesterMenu } from "./semester-menu"
 import { SideNav } from "./side-nav"
 import { SideFoot } from "./side-foot"
@@ -111,28 +110,5 @@ function CourseList() {
                 <NewMenu />
             </div>
         </section>
-    )
-}
-
-/** A row's eye (spec §9): hide its items and classes from your Week and Month, or show them again. A hidden row stays listed, dimmed. */
-function Eye({ source, name, off }: { source: string; name: string; off: boolean }) {
-    return (
-        <button
-            type="button"
-            aria-pressed={off}
-            aria-label={(off ? "Show " : "Hide ") + name + " on your calendar"}
-            title={off ? "Hidden from your Week and Month" : "Hide from your Week and Month"}
-            onClick={() => void toggleSource(source)}
-            className={cn(
-                "shrink-0 rounded-md border-0 bg-transparent px-1.5 py-1 text-muted-foreground hover:text-primary pointer-coarse:min-h-10 pointer-coarse:min-w-10",
-                off ? "opacity-100" : "opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100 [@media(hover:none)]:opacity-100",
-            )}
-        >
-            <svg aria-hidden="true" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" className="size-3.5">
-                {off
-                    ? <path d="M2 2l12 12M6.6 6.7a2 2 0 0 0 2.7 2.7M4.2 4.6C2.9 5.5 2 7 2 7s2.2 4 6 4c1 0 1.9-.3 2.7-.7M7 3.1c.3 0 .7-.1 1-.1 3.8 0 6 4 6 4s-.5 1-1.5 2" />
-                    : <><path d="M2 8s2.2-4 6-4 6 4 6 4-2.2 4-6 4-6-4-6-4z" /><circle cx="8" cy="8" r="1.8" /></>}
-            </svg>
-        </button>
     )
 }

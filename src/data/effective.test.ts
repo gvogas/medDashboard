@@ -5,10 +5,10 @@ vi.mock("@/data/query", () => ({ schoolCal: () => null }))
 
 import { data } from "@/core/store"
 import { normalizeCourse, normalizeItem } from "@/core/model"
-import { courseByKey, courseKeyOf, effectiveCourses, effectiveItems, itemByKey, keyOf, mergeCourses, mergeItems, onCalendar } from "./effective"
+import { courseByKey, courseKeyOf, effectiveCourses, effectiveItems, forAchievements, forCalendar, forStats, itemByKey, keyOf, mergeCourses, mergeItems, onCalendar, type EffectiveItem } from "./effective"
 import { keyedAchievements, keyedCourses, keyedItems, keyedSessions } from "./refs"
 import { instances, tableRows, typeCounts, weekDays } from "./views"
-import type { Achievement, Course, Item, Mark, SpacePref, StudySession } from "./types"
+import type { Achievement, Course, Item, Mark, Space, SpacePref, StudySession } from "./types"
 
 const WEB = "c:abcdefghij12"
 const item = (row: Partial<Item> & { id: string }) => normalizeItem({ type: "assignment", title: row.id, date: "2026-09-23", status: "todo", ...row }) as Item
@@ -34,11 +34,12 @@ describe("the effective lists", () => {
         expect(both.map((it) => it.source ?? "personal")).toEqual(["personal", "class"])
     })
 
-    it("keeps project rows out of the views until Stage 9 (PROJECTS_IN_VIEWS)", () => {
+    it("lets project rows into the views (Stage 9), but never a deleted task (spec §13: no Keep as mine)", () => {
         const task = { ...item({ id: "t1", type: "task" }), scope: "p:fire00000001" }
-        expect(mergeItems([], [task], true)).toEqual([])
+        const [t] = mergeItems([], [task], true)
+        expect(t).toMatchObject({ key: "p:fire00000001/t1", source: "project", spaceId: "fire00000001" })
         const own = [item({ id: "a" })]
-        expect(mergeItems(own, [task], true, { removed: [{ ...task, deletedAt: 5 }], marks: new Map([["fire00000001:t1", { notes: "mine" } as Mark]]) })).toEqual(own)
+        expect(mergeItems(own, [], true, { removed: [{ ...task, deletedAt: 5 }], marks: new Map([["fire00000001:t1", { notes: "mine" } as Mark]]) })).toEqual(own)
     })
 
     it("keep a class course and a personal course with the same id apart in every view", () => {
@@ -50,7 +51,7 @@ describe("the effective lists", () => {
         expect(ids("bio")).toEqual(["mine"])
         expect(ids(WEB + "/bio")).toEqual(["theirs"])
         expect(instances(items, courses, { ...ALL, search: "(class)" }, "2026-09-21", "2026-09-27").map((x) => x.item.id)).toEqual(["theirs"])
-        expect(tableRows(items, courses, { ...ALL, types: {}, show: "all" }, { key: "course", dir: -1 }).map((it) => it.id)).toEqual(["theirs", "mine"])
+        expect(tableRows(items, courses, { ...ALL, types: {}, show: "all", source: "all" }, { key: "course", dir: -1 }).map((it) => it.id)).toEqual(["theirs", "mine"])
         expect(typeCounts(items, WEB + "/bio")).toEqual({ assignment: 1 })
         const day = weekDays({ items, courses, filters: ALL, schedule: "deadlines", anchor: "2026-09-23", today: "2026-09-23", cal: null }).days[2]
         expect(day.entries.map((e) => e.key)).toEqual(["imine", "i" + WEB + "/theirs"])
@@ -139,5 +140,60 @@ describe("your layer over a class", () => {
         expect(shown.items.map((it) => it.id)).toEqual(["b"])
         expect(shown.courses.map(keyOf)).toEqual(["bio"])
         expect(onCalendar(items, courses, ["course:bio"]).items.map((it) => it.id)).toEqual(["p", "f", "a1"])
+    })
+})
+
+const P = "p:fire00000001", C = "c:webs00000001"
+const row = (o: Partial<EffectiveItem>): EffectiveItem => ({
+    id: "x", type: "task", title: "T", courseId: null, date: "2026-10-20", start: "", end: "", where: "", status: "todo", grade: null, weight: null,
+    notes: "", checklist: [], links: [], recur: null, weekday: null, recurUntil: null, dept: "", completedAt: null, classId: null, revision: 1, ...o,
+} as EffectiveItem)
+const team = (o: Partial<EffectiveItem>) => row({ scope: P, key: P + "/" + (o.id ?? "x"), source: "project", spaceId: "fire00000001", assignees: [], ...o } as Partial<EffectiveItem>)
+const spaces = [{ id: "fire00000001", scope: P, kind: "project", name: "Fire Response API", parent: { space: "webs00000001", item: "a1" } }] as Space[]
+
+describe("project rows in the views (Stage 9 plan, Decisions 1-2)", () => {
+    it("lets project rows into the effective list, with only your notes as your layer", () => {
+        const shared = [{ ...team({ id: "t1", status: "done", notes: "team notes" }), scope: P }] as (Item & { scope: string })[]
+        const [t] = mergeItems([], shared, true)
+        expect(t).toMatchObject({ key: P + "/t1", source: "project", status: "done", notes: "", classNotes: "team notes" })
+    })
+
+    it("keeps on the calendar only the tasks assigned to you or to everyone", () => {
+        const items = [team({ id: "mine", assignees: ["u-me"] }), team({ id: "all", assignees: ["*"] }), team({ id: "theirs", assignees: ["u-sam"] }), team({ id: "nobody" }), row({ id: "own" })]
+        expect(forCalendar(items, "u-me", spaces).map((i) => i.id)).toEqual(["mine", "all", "own"])
+    })
+
+    it("folds a project into its assignment on the same date, and shows both on different dates", () => {
+        const a1 = row({ id: "a1", type: "assignment", scope: C, key: C + "/a1", source: "class", spaceId: "webs00000001", date: "2026-10-15" } as Partial<EffectiveItem>)
+        const same = team({ id: "project", type: "project", date: "2026-10-15" })
+        const folded = forCalendar([a1, same], "u-me", spaces)
+        expect(folded.map((i) => i.id)).toEqual(["a1"])
+        expect(folded[0].team).toEqual([{ spaceId: "fire00000001", name: "Fire Response API" }])
+        expect(forCalendar([a1, { ...same, date: "2026-10-30" }], "u-me", spaces).map((i) => i.id)).toEqual(["a1", "project"])
+    })
+
+    it("does not fold into an assignment an editor removed, nor a project with no date", () => {
+        const a1 = row({ id: "a1", type: "assignment", scope: C, key: C + "/a1", source: "class", spaceId: "webs00000001", date: "2026-10-15" } as Partial<EffectiveItem>)
+        const gone = { ...a1, removed: { by: "u-sam", at: 5 } }
+        expect(forCalendar([gone, team({ id: "project", type: "project", date: "2026-10-15" })], "u-me", spaces).map((i) => i.id)).toEqual(["a1", "project"])
+        const undated = { ...a1, date: "" }
+        expect(forCalendar([undated, team({ id: "project", type: "project", date: "" })], "u-me", spaces).map((i) => i.id)).toEqual(["a1", "project"])
+    })
+
+    it("returns the list itself when it holds no project row", () => {
+        const items = [row({ id: "own" })]
+        expect(forCalendar(items, "u-me", spaces)).toBe(items)
+        expect(forStats(items, "u-me")).toBe(items)
+        expect(forAchievements(items, "u-me")).toBe(items)
+    })
+
+    it("counts in Stats only your tasks, never the project's own item", () => {
+        const items = [team({ id: "mine", assignees: ["u-me"] }), team({ id: "theirs", assignees: ["u-sam"] }), team({ id: "project", type: "project" }), row({ id: "own" })]
+        expect(forStats(items, "u-me").map((i) => i.id)).toEqual(["mine", "own"])
+    })
+
+    it("counts towards achievements only what you completed yourself", () => {
+        const items = [team({ id: "byme", status: "done", completedBy: "u-me" } as Partial<EffectiveItem>), team({ id: "bysam", status: "done", completedBy: "u-sam" } as Partial<EffectiveItem>), row({ id: "own", status: "done" })]
+        expect(forAchievements(items, "u-me").map((i) => i.id)).toEqual(["byme", "own"])
     })
 })

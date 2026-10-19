@@ -7,7 +7,7 @@
 // sheet on a phone); the stage re-centres in what is left. Space pauses, M opens or shuts
 // the music; Esc (data/keyboard.ts, escapeFocus) shuts the music, then leaves.
 
-import { useEffect, useLayoutEffect, useRef, type ReactNode } from "react"
+import { useEffect, useLayoutEffect, useMemo, useRef, type ReactNode } from "react"
 import { cn } from "@/lib/utils"
 import { duration } from "@/lib/time"
 import { isTyping } from "@/lib/dom"
@@ -15,8 +15,9 @@ import { accent } from "@/components/views/bits"
 import { FlipClock } from "@/components/study/flip-clock"
 import { GoalRing } from "@/components/study/tiles"
 import { BackIcon, PauseIcon, PhaseLabel, PlayIcon, RoundStrip, SkipIcon, StopIcon } from "@/components/study/timer-bits"
-import { useCourses, useItems } from "@/data/store"
+import { useCourses, useItems, useProfile } from "@/data/store"
 import { keyedCourses, keyedItems } from "@/data/refs"
+import { withProjects } from "@/data/projects"
 import { useUi } from "@/data/ui"
 import { THEMES } from "@/data/themes"
 import { getSheet } from "@/data/overlay"
@@ -52,7 +53,8 @@ function FocusScreen({ run }: { run: Run }) {
     const music = useUi((u) => u.focusMusic)
     const bg = useUi((u) => u.bg)
     const today = useToday(run)
-    const courses = keyedCourses(useCourses()), items = keyedItems(useItems())
+    const own = keyedCourses(useCourses()), all = keyedItems(useItems()), me = useProfile()?.id ?? ""
+    const { courses, items } = useMemo(() => withProjects(own, all, me), [own, all, me])
     const root = useRef<HTMLDivElement>(null)
 
     /* Space, M and /, when no sheet, overlay or box has them (Esc is data/keyboard.ts's). */

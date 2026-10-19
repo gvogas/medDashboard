@@ -8,7 +8,7 @@ import { stubMatchMedia } from "@/components/test-media"
 const fake = vi.hoisted(() => ({
     data: { items: [] as unknown[], courses: [] as unknown[], quotes: [] as unknown[], study_sessions: [] as unknown[], profile: null as unknown },
     ui: {
-        view: "table", search: "", types: {} as Record<string, boolean>, show: "all", listFrom: null as string | null, course: "all",
+        view: "table", search: "", types: {} as Record<string, boolean>, show: "all", source: "all", listFrom: null as string | null, course: "all",
         bg: "med", anchor: "2026-09-23", schedule: "all", sort: { key: "title", dir: -1 } as { key: string; dir: 1 | -1 }, quoteIx: 0, focus: false,
     },
 }))
@@ -31,7 +31,7 @@ vi.mock("@/data/actions", async (importOriginal) => ({
 
 import { notify } from "@/bridge"
 import { normalizeItem, useTypePrefs } from "@/core/model"
-import { reorderTypes, setCourse, setSearch } from "@/data/actions"
+import { reorderTypes, setCourse, setSearch, setSource } from "@/data/actions"
 import { saveProfile } from "@/core/store"
 import { TableView } from "./table"
 import { Stats } from "./stats"
@@ -61,7 +61,8 @@ beforeEach(() => {
     fake.data.items = []
     fake.data.courses = []
     fake.data.profile = { id: "p", username: "demo", displayName: "Dr Demo", types: [] }
-    Object.assign(fake.ui, { view: "table", types: {}, show: "all", listFrom: null, course: "all", search: "", bg: "med", sort: { key: "date", dir: 1 } })
+    ;(fake.data as Record<string, unknown>).spaces = []
+    Object.assign(fake.ui, { view: "table", types: {}, show: "all", source: "all", listFrom: null, course: "all", search: "", bg: "med", sort: { key: "date", dir: 1 } })
 })
 afterEach(() => { cleanup(); vi.clearAllMocks() })
 
@@ -170,6 +171,68 @@ describe("the stat tiles", () => {
         expect(rowIds()).toEqual([])                 /* course two, and still searching "late" */
         act(() => { setSearch(""); notify() })
         expect(rowIds()).toEqual(["soon"])
+    })
+})
+
+describe("the Source select", () => {
+    const WEB = "web000000001", FIRE = "fire00000001", OLD = "old000000001"
+    const space = (id: string, kind: "class" | "project", name: string, archived = false) =>
+        ({ id, scope: (kind === "class" ? "c:" : "p:") + id, kind, role: "member", archived, name, parent: null, revision: 1, members: [] })
+    const source = () => screen.getByRole("combobox", { name: "Source" }) as HTMLSelectElement
+    beforeEach(() => {
+        ;(fake.data as Record<string, unknown>).spaces = [space(WEB, "class", "Web Services"), space(OLD, "class", "Old Class", true), space(FIRE, "project", "Fire Response API")]
+        fake.data.items = [item("mine", "exam", "todo"), { ...item("filed", "lab", "todo"), classId: WEB }]
+    })
+
+    it("groups classes and projects, leaving out an archived space unless it is picked", () => {
+        render(<TableView />)
+        const groups = [...source().querySelectorAll("optgroup")].map((g) => [g.label, [...g.querySelectorAll("option")].map((o) => o.textContent)])
+        expect(groups).toEqual([["Classes", ["Web Services"]], ["Projects", ["Fire Response API"]]])
+        cleanup()
+        fake.ui.source = "space:" + OLD
+        render(<TableView />)
+        expect([...source().options].map((o) => o.textContent)).toContain("Old Class")
+        expect(source().value).toBe("space:" + OLD)
+    })
+
+    it("fits a phone: the select may shrink", () => {
+        render(<TableView />)
+        expect(source().className).toMatch(/min-w-0/)
+        expect(source().className).toMatch(/max-w-full/)
+        expect(source().closest("label")!.className).toMatch(/min-w-0 max-w-full/)
+    })
+
+    it("a space you are no longer in shows every row, and the select says Everything", () => {
+        fake.ui.source = "space:gone00000001"
+        render(<TableView />)
+        expect(rowIds()).toEqual(["mine", "filed"])
+        expect(source().value).toBe("all")
+    })
+
+    it("the type chips follow it, and the empty table names it", () => {
+        fake.ui.source = "space:" + WEB
+        render(<TableView />)
+        expect(rowIds()).toEqual(["filed"])
+        expect(typeChips().getByRole("button", { name: /Exams/ }).textContent).toBe("Exams0")
+        expect(typeChips().getByRole("button", { name: /Labs/ }).textContent).toBe("Labs1")
+        fireEvent.click(typeChips().getByRole("button", { name: /Exams/ }))
+        expect(screen.getByText("Hidden by 6 types off, Web Services.")).toBeTruthy()
+        act(() => setSource("personal"))
+        fireEvent.click(showChips().getByRole("button", { name: /Overdue/ }))
+        expect(screen.getByText("Hidden by Overdue, 6 types off, Personal.")).toBeTruthy()
+    })
+
+    it("a stat tile's list sets it aside, and picking a source ends the list", () => {
+        fake.data.items = [item("late", "assignment", "todo", null, null, "2026-09-20"), { ...item("late lab", "lab", "todo", null, null, "2026-09-21"), classId: WEB }]
+        fake.ui.source = "personal"
+        render(<><Stats /><TableView /></>)
+        fireEvent.click(screen.getByTitle("Show overdue items"))
+        expect(rowIds()).toEqual(["late", "late lab"])
+        expect(screen.getByText("Every source, as on the tile.")).toBeTruthy()
+        expect(screen.getByRole("button", { name: "Use the source filter" })).toBeTruthy()
+        fireEvent.change(source(), { target: { value: "space:" + WEB } })
+        expect(fake.ui.listFrom).toBeNull()
+        expect(rowIds()).toEqual(["late lab"])
     })
 })
 

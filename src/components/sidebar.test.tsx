@@ -247,7 +247,8 @@ describe("team projects, for admins until Stage 10", () => {
         fake.data.profile = { ...(fake.data.profile as object), isAdmin: true }
         render(<Sidebar />)
         const group = within(screen.getByRole("region", { name: "Projects" }))
-        expect(group.getAllByRole("button").map((b) => b.textContent)).toEqual(["Fire Response API", "Zebra LaunchArchived"])
+        /* each row is the project and its eye */
+        expect(group.getAllByRole("button").filter((b) => !b.hasAttribute("aria-pressed")).map((b) => b.textContent)).toEqual(["Fire Response API, 0 of 0 tasks done", "Zebra Launch, 0 of 0 tasks doneArchived"])
         expect(coursesNav().queryByText("Fire Response API")).toBeNull()
     })
 

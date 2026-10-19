@@ -9,6 +9,7 @@ import { today } from "@/core/dates"
 import { duration } from "@/lib/time"
 import { useCourses, useItems, useProfile, useStudySessions } from "@/data/store"
 import { keyedCourses, keyedItems } from "@/data/refs"
+import { withProjects } from "@/data/projects"
 import { closeSheet, replaceSheet } from "@/data/overlay"
 import { impact, MAX_MINUTES, QUICK, saveSession, validSession, type SessionDraft } from "@/data/session-edit"
 import { deleteSession } from "@/data/actions"
@@ -18,10 +19,11 @@ import { TimeField } from "./time-field"
 
 export function SessionSheet({ draft: d }: { draft: SessionDraft }) {
     /* the draft holds keys (refs.ts): a class's course and items sit beside yours */
-    const courses = keyedCourses(useCourses())
-    const items = keyedItems(useItems())
-    const sessions = useStudySessions()
     const profile = useProfile()
+    const own = keyedCourses(useCourses()), all = keyedItems(useItems()), me = profile?.id ?? ""
+    /* and a course per team project you are in, of your tasks there (projects.ts) */
+    const { courses, items } = useMemo(() => withProjects(own, all, me), [own, all, me])
+    const sessions = useStudySessions()
     const f = useId()
     const edit = (change: Partial<SessionDraft>) => replaceSheet({ kind: "session", draft: { ...d, ...change } })
     const now = today()

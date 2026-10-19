@@ -11,7 +11,7 @@
 
 import { data } from "@/core/store"
 import { meaningfulMark } from "@/core/shared"
-import type { Course, Item, Mark, SharedCourse, SpacePref } from "./types"
+import type { Course, Item, Mark, SharedCourse, Space, SpacePref } from "./types"
 
 /** Where a row comes from; a personal row has none. */
 export type Source = "class" | "project"
@@ -22,14 +22,18 @@ export type EffectiveItem = Item & {
     mark?: Mark | null; classWeight?: number | null; classNotes?: string
     /** a class item an editor removed, kept while your mark holds something (spec §13) */
     removed?: { by: string | null; at: number | null }
+    /** a class assignment that a project of yours folds into on the calendar (spec §9) */
+    team?: { spaceId: string; name: string }[]
+    /** a project row's: its assignees and who completed it (the team's) */
+    assignees?: string[]; completedBy?: string | null
 }
 
 /** Shared rows are in the views, with marks and the split item card. */
 export const SHARED_IN_VIEWS = true
 /** Whether the views show your classes and projects. */
 export const sharedShown = (): boolean => SHARED_IN_VIEWS
-/** Project rows join the views in Stage 9; until then only the project sheet shows them. */
-export const PROJECTS_IN_VIEWS = false
+/** Project rows are in the views (Stage 9): the calendar keeps only your tasks (forCalendar). */
+export const PROJECTS_IN_VIEWS = true
 
 /** A row's key in the views: '<scope>/<id>' for a shared row, the id for your own. */
 export const keyOf = (r: { id: string; key?: string }): string => r.key ?? r.id
@@ -86,7 +90,8 @@ export function mergeItems(own: Item[], shared: (Item & { scope: string })[], sh
         if (!mark?.hidden) theirs.push(withMark(it, mark))
     }
     for (const it of layer.removed ?? []) {
-        if (!PROJECTS_IN_VIEWS && it.scope.startsWith("p:")) continue
+        /* a deleted task is not kept for your note on it (spec §13) */
+        if (it.scope.startsWith("p:")) continue
         const mark = layer.marks?.get(it.scope.slice(2) + ":" + it.id) ?? null
         if (mark && !mark.hidden && meaningful(mark)) theirs.push({ ...withMark(it, mark), removed: { by: it.updatedBy ?? null, at: it.deletedAt ?? null } })
     }
@@ -150,4 +155,42 @@ export function onCalendar<I extends EffectiveItem, C extends EffectiveCourse>(i
     if (!hidden.length) return { items, courses }
     const off = new Set(hidden)
     return { items: items.filter((it) => !off.has(itemSource(it))), courses: courses.filter((c) => !off.has(courseSource(c))) }
+}
+
+const yours = (it: EffectiveItem, me: string) => (it.assignees ?? []).includes(me) || (it.assignees ?? []).includes("*")
+const isProjectRow = (it: EffectiveItem) => it.source === "project"
+
+/**
+ * The Week's and the Month's rows (Stage 9 plan, Decisions 1-2): a project's tasks only when
+ * they are yours or everyone's; a project's own item folded into its linked assignment when
+ * that is on the calendar the same day, the assignment then naming the team. With no
+ * project row, the list itself.
+ */
+export function forCalendar<I extends EffectiveItem>(items: I[], me: string, spaces: Pick<Space, "id" | "name" | "parent">[]): I[] {
+    if (!items.some(isProjectRow)) return items
+    const kept = items.filter((it) => !isProjectRow(it) || it.type !== "task" || yours(it, me))
+    const byKey = new Map(kept.map((it) => [keyOf(it), it]))
+    const folds = new Map<string, { spaceId: string; name: string }[]>()
+    const out: I[] = []
+    for (const it of kept) {
+        if (isProjectRow(it) && it.type === "project") {
+            const s = spaces.find((x) => x.id === it.spaceId), p = s?.parent
+            const a = p ? byKey.get("c:" + p.space + "/" + p.item) : undefined
+            if (s && a && !a.removed && !!it.date && a.date === it.date) { folds.set(keyOf(a), [...(folds.get(keyOf(a)) ?? []), { spaceId: s.id, name: s.name }]); continue }
+        }
+        out.push(it)
+    }
+    return folds.size ? out.map((it) => (folds.has(keyOf(it)) ? { ...it, team: folds.get(keyOf(it)) } : it)) : out
+}
+
+/** Stats' rows (Decision 1): your tasks only; a project's own item is not counted. With no project row, the list itself. */
+export function forStats<I extends EffectiveItem>(items: I[], me: string): I[] {
+    if (!items.some(isProjectRow)) return items
+    return items.filter((it) => !isProjectRow(it) || (it.type === "task" && yours(it, me)))
+}
+
+/** Achievements' rows (spec §8): a project row counts only when you completed it. With no project row, the list itself. */
+export function forAchievements<I extends EffectiveItem>(items: I[], me: string): I[] {
+    if (!items.some(isProjectRow)) return items
+    return items.filter((it) => !isProjectRow(it) || it.completedBy === me)
 }

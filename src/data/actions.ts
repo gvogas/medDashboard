@@ -13,6 +13,7 @@ import { setSide } from "./sidebar"
 import { effectiveCourses, effectiveItems, itemByKey, keyOf } from "./effective"
 import { isSharedKey, keyedCourses, placeCourse, splitKey } from "./refs"
 import { openClass } from "./classes"
+import { openProject, toggleTeamTask } from "./projects"
 import { toggleClassTask } from "./marks"
 import { openKeys } from "./keys"
 import { api } from "@/core/api"
@@ -93,6 +94,13 @@ export function setSem(name: string) {
 /** The table's status chips: All, Open or Overdue. */
 export function setShow(show: Show) {
     ui.show = show
+    notify()
+}
+
+/** All items' Source select: 'all', 'personal' or 'space:<id>'. */
+export function setSource(source: string) {
+    ui.source = source
+    ui.listFrom = null                         /* picking a source ends a stat tile's list */
     notify()
 }
 
@@ -185,7 +193,12 @@ export function newItemOn(date: string, type = "assignment") {
     openSheet({ kind: "new-item", draft: normalizeItem({ id: uid(), type, title: "", ...placeCourse(ui.course === "all" ? null : ui.course), date, status: "todo" }) as Item })
 }
 export const newItem = () => newItemOn(ui.anchor)
-export const openItem = (id: string) => openSheet({ kind: "item", id })
+/** Open an item's card; a project's own item opens the project's sheet. */
+export const openItem = (id: string) => {
+    const m = /^p:([a-z0-9]{12})\/project$/.exec(id)
+    if (m) { openProject(m[1]); return }
+    openSheet({ kind: "item", id })
+}
 
 /** Delete now; the toast's Undo brings it back for a few seconds. */
 export async function deleteItem(id: string) {
@@ -336,9 +349,10 @@ export function sortTable(key: SortKey) {
     notify()
 }
 
-/** Tick a task off or back on, by its key: a class's task in your mark. Finishing one celebrates from `from` and books its next review.
+/** Tick a task off or back on, by its key: a class's task in your mark, a project's for the team. Finishing one celebrates from `from` and books its next review.
  *  A class task an editor removed opens its card instead: your layer on it is read-only (the Worker refuses the mark). */
 export async function toggleTask(key: string, from?: Element) {
+    if (isSharedKey(key) && key.startsWith("p:")) { await toggleTeamTask(key, from); notify(); return }
     if (isSharedKey(key) && itemByKey(key)?.removed) { openItem(key); return }
     if (isSharedKey(key)) { await toggleClassTask(key, from); notify(); return }
     const it = store.item(key) as Item | null

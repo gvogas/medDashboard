@@ -37,7 +37,7 @@ a Spotify player and an admin page.
 | Calendar feed | A private `.ics` link that Google or Apple Calendar can subscribe to. It carries your classes with your layer on top, and leaves out whatever you hid with the sidebar's eye toggles. |
 | Spotify | Each person connects their own account. Now playing, controls, search, playlists, queue and volume. The tab itself can play music through the Web Playback SDK. |
 | Shared classes | Open to everyone signed in. A class is a shared space with its own course and items. Make one blank, from a course outline, or by converting a course (all in the **+ New** menu, beside New course), invite by username or a join code, roles (owner, editor, member). Each person keeps a private layer on it: marks on its items (status, grade, weight, notes, checklist, hidden) and prefs (colour, target, term, archived). Leaving keeps a copy of the class as your own course by default. The owner removes members (they keep a copy), archives the class (read-only for everyone, members still managed) and deletes it once nobody else is in it. A class item an editor deletes stays with whoever has something on it, marked *Removed from … by …*, until they **Keep as mine** or **Dismiss** it (editors can **Restore** it for everyone). Editors share one of their own items filed under the class with it. Deleting an account hands its classes on. The sidebar's eye toggles hide a course, a class or *Personal items* from the Week, the Month and the calendar feed (All items, grades and stats still count them). A class keeps a copy of its owner's school calendar; someone joining without one is offered it. |
-| Team projects | Admins only until Stage 10. **New team project** in **+ New** makes one, on its own or belonging to an item of a class you are in (its date follows the item's). Invitees join as editors. The project sheet has **Tasks** (owners and editors add, edit, assign and delete; members claim a task nobody has and complete what is theirs or everyone's), **Members** and **Activity**; the owner links or unlinks the assignment, archives, hands on, and deletes it by typing its name; anyone else leaves (their tasks become unassigned, their notes there go, nothing is copied). 200 live tasks per project. A **Projects** group in the sidebar lists them. Projects stay out of the Week, Month and other views until Stage 9 (`PROJECTS_IN_VIEWS`). |
+| Team projects | Admins only until Stage 10. **New team project** in **+ New** makes one, on its own or belonging to an item of a class you are in (its date follows the item's). Invitees join as editors. The project sheet has **Tasks** (owners and editors add, edit, assign and delete; members claim a task nobody has and complete what is theirs or everyone's), **Members** and **Activity**; the owner links or unlinks the assignment, archives, hands on, and deletes it by typing its name; anyone else leaves (their tasks become unassigned, their notes there go, nothing is copied). 200 live tasks per project. A **Projects** group in the sidebar lists them, each with a progress ring and an eye that hides it from the Week and Month. In the views (Stage 9): the Week and the Month show a project's due date and only the tasks assigned to you or to everyone; a project linked to a class assignment due the same day folds into the assignment's chip ("Team · …"). Ticking a team task there completes it for the team (or a toast says why not). Stats count your open and overdue tasks, achievements the tasks you completed, and the Study pickers offer a "Team · <name>" course per project, of your tasks. All items has a **Source** filter (Personal, a class, a project) and says who has each task. A task opens in its own card (**Team** and **Yours**). The project sheet shows progress ("12 / 18 · 67%"), each member's workload in the assignee picker, the linked assignment for those who hold its class (with **Use this date** when the dates drift, or "Linked assignment removed"), and the tasks you hid. |
 | Inbox and activity | A bell in the top bar, for everyone, with the unread count (`99+` past 99) opens the **inbox**: your invites, with Accept and Decline, then what others did that concerns you (new, deleted and moved items, class times, archiving, and anything about you, such as a role change or a removal), newest 50, readable offline from the last copy. Opening it marks everything read. A class sheet's **Activity** tab shows the class's whole history, 30 at a time with Show older. Activity is kept 90 days; the count comes with each sync, nothing is pushed. The inbox replaced the sidebar's Invites row and sheet. |
 | Admin | Overview (free-plan usage meters, traffic and health), Accounts, Errors, Audit log, a site-wide Announcement banner, and Maintenance. |
 | Maintenance mode | Admins switch a feature off while they work on it (week, month, all items, study, music, import with AI, shared classes and projects), with a message. Personal data and sync never stop. `worker/maintenance.js`. |
@@ -117,8 +117,10 @@ src/components/     React UI: shell, sidebar (with sidebar-projects.tsx, the Pro
                     top bar (with inbox-bell.tsx), views/ (week, month, table, stats), sheet/
                     (side sheets for editing items, courses, settings, import, AI;
                     inbox-sheet.tsx, activity-list.tsx for a space's Activity tab,
-                    new-project-sheet.tsx, project-sheet.tsx and task-row.tsx), study/,
-                    focus/, spotify/, admin/, sidebar-picture/ (the six SVG pictures)
+                    new-project-sheet.tsx, project-sheet.tsx, task-row.tsx and
+                    task-sheet.tsx, a team task's card), progress-ring.tsx (a project's
+                    ring), study/, focus/, spotify/, admin/, sidebar-picture/ (the six SVG
+                    pictures)
 src/styles/         tokens.css (theme colours), base.css, shell.css
 ```
 
@@ -272,8 +274,14 @@ Deploying, secrets, accounts and database moves: `docs/DEPLOYING.md`.
    completing, the project sheet and the sidebar's Projects group, leaving, removal and
    deleting; account deletion takes the account off its tasks. Out of the views until
    Stage 9. No migration.
-10. **Next** (`docs/superpowers/plans/2026-10-02-collaboration.md`): Stage 9 projects in
-    the views; Stage 10 projects in the inbox's news and the calendar feed, open to everyone.
+10. **Oct 19:** Stage 9 (`collab-9-project-views`): projects in the views, admins only.
+    Your tasks and each project's date on the Week and Month (a project folds into its
+    assignment's chip on the same day), ticking a team task there, Stats, achievements and
+    the Study pickers, All items' Source filter, the task card, progress, workload, the
+    linked assignment with **Use this date**, and the sidebar's ring and eye. No migration,
+    no Worker change.
+11. **Next** (`docs/superpowers/plans/2026-10-02-collaboration.md`): Stage 10 projects in
+    the inbox's news and the calendar feed, open to everyone.
 
 ## Gotchas worth knowing
 

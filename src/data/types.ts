@@ -46,6 +46,8 @@ export interface Ui {
     /* the All items table's filters: the type chips and the status chips */
     types: Record<string, boolean>
     show: Show
+    /* the All items table's Source filter: 'all', 'personal' or 'space:<id>' */
+    source: string
     course: string
     /* the sidebar's semester: a school calendar semester's name, or null for the current one */
     sem: string | null

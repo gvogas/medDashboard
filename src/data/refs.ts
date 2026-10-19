@@ -18,13 +18,16 @@ export function splitKey(key: string): { scope: string | null; spaceId: string |
     const m = SHARED_KEY.exec(key)
     return m ? { scope: m[1], spaceId: m[1].slice(2), id: m[2] } : { scope: null, spaceId: null, id: key }
 }
-/** A space's scope as this device knows it; a class's while the space is not here yet. */
-export const scopeOfSpace = (spaceId: string): string => (data.spaces ?? []).find((s) => s.id === spaceId)?.scope ?? "c:" + spaceId
-const refKey = (spaceId: string | null | undefined, id: string | null): string | null => (id && spaceId ? scopeOfSpace(spaceId) + "/" + id : id)
+/** A space's scope as this device knows it. While the space is not here (not yet, or one you
+ *  left), a class's, or a project's for a row on a project's own item (courseId 'project'). */
+export const scopeOfSpace = (spaceId: string, project = false): string =>
+    (data.spaces ?? []).find((s) => s.id === spaceId)?.scope ?? (project ? "p:" : "c:") + spaceId
+const refKey = (r: { courseId?: string | null; spaceId?: string | null }, id: string | null): string | null =>
+    (id && r.spaceId ? scopeOfSpace(r.spaceId, r.courseId === "project") + "/" + id : id)
 /** The key of the course a session or an achievement is on. */
-export const courseRefKey = (r: { courseId: string | null; spaceId?: string | null }): string | null => refKey(r.spaceId, r.courseId)
+export const courseRefKey = (r: { courseId: string | null; spaceId?: string | null }): string | null => refKey(r, r.courseId)
 /** The key of the item a session or an achievement is on. */
-export const itemRefKey = (r: { itemId: string | null; spaceId?: string | null }): string | null => refKey(r.spaceId, r.itemId)
+export const itemRefKey = (r: { itemId: string | null; courseId?: string | null; spaceId?: string | null }): string | null => refKey(r, r.itemId)
 /** What a session or an achievement stores for the keys picked: the ids, and the space they are in.
  *  An item of yours wins over a class course picked with it (one filed under the class): the row
  *  keeps the item and drops the course link, since one space can't hold a personal item. */
@@ -37,6 +40,9 @@ export function refOf(courseKey: string | null, itemKey: string | null): { cours
 /** A session's or an achievement's class key whose class this device no longer holds: one you left (spec §13). */
 export const leftClass = (key: string | null | undefined): boolean =>
     isSharedKey(key) && !(data.spaces ?? []).some((s) => s.scope === splitKey(key).scope)
+/** What a session or an achievement on a space you left says in place of its course; null for any other key. */
+export const leftSpaceLabel = (key: string | null | undefined): string | null =>
+    (key && leftClass(key) ? (key.startsWith("p:") ? "A project you left" : "A class you left") : null)
 
 /** The key of a class's course, from its space id. */
 export function classCourseKey(spaceId: string): string | null {

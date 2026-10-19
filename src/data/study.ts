@@ -14,7 +14,9 @@ import { addDays, dayMonth, iso, parse, shortDate, today as todayIso, DOW, MON }
 import { duration } from "@/lib/time"
 import { useAchievements, useCourses, useItems, useProfile, useStudySessions } from "./store"
 import { rememberUi, ui } from "./ui"
-import { keyedAchievements, keyedCourses, keyedItems, keyedSessions, leftClass } from "./refs"
+import { keyedAchievements, keyedCourses, keyedItems, keyedSessions, leftSpaceLabel } from "./refs"
+import { forAchievements } from "./effective"
+import { withProjects } from "./projects"
 import type { Achievement, Badge, Course, HistTab, Item, SessionUndo, StudyPrefs, StudySession, StudyTab } from "./types"
 
 /* A course split is [courseId, minutes] pairs, most first, with "" for no course. */
@@ -97,7 +99,7 @@ export function todayOf(sessions: StudySession[], items: Item[], courses: Course
             const course = courses.find((c) => c.id === s.courseId)
             return {
                 id: s.id, at: clockTime(s.startedAt), courseId: s.courseId, color: course?.color,
-                what: items.find((x) => x.id === s.itemId)?.title || s.note || course?.name || (leftClass(s.courseId) ? "A class you left" : "No course"),
+                what: items.find((x) => x.id === s.itemId)?.title || s.note || course?.name || (leftSpaceLabel(s.courseId) ?? "No course"),
                 minutes: s.studyMinutes,
             }
         }),
@@ -320,14 +322,18 @@ export const useHistory = () => {
 }
 
 export const useBadges = () => {
-    const input = useStudyInput(), items = useItems(), own = useAchievements(), courses = useCourses()
-    return useMemo(() => badges(input.sessions, keyedItems(items), input.prefs, input.today, keyedAchievements(own), keyedCourses(courses)), [input, items, own, courses])
+    const input = useStudyInput(), items = useItems(), own = useAchievements(), courses = useCourses(), profile = useProfile()
+    /* a project row counts only when you completed it (forAchievements) */
+    return useMemo(() => badges(input.sessions, keyedItems(forAchievements(items, profile?.id ?? "")), input.prefs, input.today, keyedAchievements(own), keyedCourses(courses)), [input, items, own, courses, profile])
 }
 
 /** The Timer tab's Today card. */
 export const useTodayStudy = () => {
-    const input = useStudyInput(), items = useItems(), courses = useCourses()
-    return useMemo(() => todayOf(input.sessions, keyedItems(items), keyedCourses(courses), input.prefs.goal, input.today), [input, items, courses])
+    const input = useStudyInput(), items = useItems(), courses = useCourses(), me = useProfile()?.id ?? ""
+    return useMemo(() => {
+        const l = withProjects(keyedCourses(courses), keyedItems(items), me)
+        return todayOf(input.sessions, l.items, l.courses, input.prefs.goal, input.today)
+    }, [input, items, courses, me])
 }
 
 /* ── the History card's actions: each changes the ui and redraws ── */

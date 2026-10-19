@@ -7,10 +7,11 @@ vi.mock("@/data/query", () => ({ schoolCal: () => null }))
 import { normalizeCourse, normalizeItem } from "@/core/model"
 import { normalizeSchool } from "@/core/school"
 import {
-    cellLabel, classes, instances, monthCells, officeHours, quoteAt, stats, tableRows, tasks, timetable, typeCounts, weekDays,
+    cellLabel, classes, instances, monthCells, officeHours, pickedSource, quoteAt, stats, tableRows, tableView, tasks, timetable, typeCounts, weekDays,
     type Filters, type TableFilters, type ViewInput,
 } from "./views"
 import type { Course, Item, Schedule, StudySession } from "./types"
+import { forStats, type EffectiveItem } from "./effective"
 
 /* Wednesday 23 September 2026; the week runs Mon 21 – Sun 27. */
 const TODAY = "2026-09-23"
@@ -22,7 +23,7 @@ const course = (row: Partial<Course> & { id: string }, i = 0): Course => normali
 const mtg = (id: string, weekday: number, start: string, end: string, room = "") => ({ id, kind: "Lecture", weekday, start, end, room })
 
 const ALL: Filters = { search: "", course: "all" }
-const TABLE: TableFilters = { ...ALL, types: {}, show: "all" }
+const TABLE: TableFilters = { ...ALL, types: {}, show: "all", source: "all" }
 const input = (items: Item[], courses: Course[], over: Partial<ViewInput> = {}): ViewInput =>
     ({ items, courses, filters: ALL, schedule: "all", anchor: TODAY, today: TODAY, cal: null, ...over })
 
@@ -43,6 +44,12 @@ describe("filters", () => {
         expect(ids({ ...ALL, course: "phys" })).toEqual(["b"])
         expect(ids({ ...ALL, search: "renal" })).toEqual(["c"])
         expect(ids({ ...ALL, search: "PHYS" })).toEqual(["b"])   /* the course's name counts */
+    })
+
+    it("find an assignment a project folds into by the project's name", () => {
+        const folded = { ...item({ id: "a1", title: "REST API Project" }), team: [{ spaceId: "fire00000001", name: "Fire Response API" }] } as EffectiveItem
+        const ids = (f: Filters) => instances([folded, item({ id: "b" })], [], f, "2026-09-21", "2026-09-27").map((x) => x.item.id)
+        expect(ids({ ...ALL, search: "fire response" })).toEqual(["a1"])
     })
 
     it("list classes Monday first, then by start, leaving out archived courses", () => {
@@ -237,10 +244,54 @@ describe("the table", () => {
         expect(tableRows([...list, weekly], [], { ...TABLE, show: "overdue" }, { key: "date", dir: 1 }).map((x) => x.id)).toEqual(["c"])
     })
 
+    it("filters by source: personal, a class (with your items under it), a project", () => {
+        const rows = [
+            item({ id: "own" }),
+            item({ id: "filed", classId: "webs00000001" }),
+            { ...item({ id: "a1" }), key: "c:webs00000001/a1", spaceId: "webs00000001", source: "class" },
+            { ...item({ id: "t1", type: "task" }), key: "p:fire00000001/t1", spaceId: "fire00000001", source: "project" },
+        ] as EffectiveItem[]
+        const ids = (source: string) => tableRows(rows, [], { ...TABLE, source }, { key: "title", dir: 1 }).map((r) => r.id)
+        expect(ids("personal")).toEqual(["filed", "own"])
+        expect(ids("space:webs00000001")).toEqual(["a1", "filed"])
+        expect(ids("space:fire00000001")).toEqual(["t1"])
+        expect(ids("all")).toHaveLength(4)
+        /* a space you are no longer in (left, removed, deleted) goes back to everything */
+        const mine = [{ id: "webs00000001" }, { id: "fire00000001" }]
+        expect(pickedSource("space:gone00000001", mine)).toBe("all")
+        expect(ids(pickedSource("space:gone00000001", mine))).toHaveLength(4)
+        expect(pickedSource("space:fire00000001", mine)).toBe("space:fire00000001")
+        expect(pickedSource("personal", [])).toBe("personal")
+        expect(pickedSource(undefined, mine)).toBe("all")
+    })
+
     it("counts each type's open and weekly items in the course, for the type chips", () => {
         const more = [...list, item({ id: "w", type: "lab", status: "done", recur: "weekly", weekday: 1, courseId: "phys" })]
         expect(typeCounts(more, "all")).toEqual({ lab: 2, assignment: 1 })
         expect(typeCounts(more, "anat")).toEqual({})
+        /* and the Source filter, as the rows do */
+        const sourced = [item({ id: "own", type: "lab" }), item({ id: "filed", type: "exam", classId: "webs00000001" })]
+        expect(typeCounts(sourced, "all", "space:webs00000001")).toEqual({ exam: 1 })
+        expect(typeCounts(sourced, "all", "personal")).toEqual({ lab: 1, exam: 1 })
+    })
+
+    it("lists, from a stat tile, only what Stats counts: your tasks, no project's own item", () => {
+        const P = "p:fire00000001/"
+        const rows = [
+            item({ id: "c", date: "2026-09-21" }),
+            { ...item({ id: "mine", type: "task", date: "2026-09-21" }), assignees: ["me"], key: P + "mine", spaceId: "fire00000001", source: "project" },
+            { ...item({ id: "theirs", type: "task", date: "2026-09-21" }), assignees: ["them"], key: P + "theirs", spaceId: "fire00000001", source: "project" },
+            { ...item({ id: "project", type: "project", date: "2026-09-22" }), key: P + "project", spaceId: "fire00000001", source: "project" },
+        ] as EffectiveItem[]
+        const f = { ...TABLE, show: "overdue" as const }, sort = { key: "date" as const, dir: 1 as const }
+        const tile = tableView(rows, [], f, sort, true, "me")
+        expect(tile.rows.map((r) => r.id)).toEqual(["c", "mine"])
+        expect(tile.overdue).toBe(2)
+        expect(tile.overdue).toBe(stats(forStats(rows, "me"), [], null, TODAY).overdue)
+        /* the table itself keeps every row */
+        const all = tableView(rows, [], f, sort, false, "me")
+        expect(all.rows).toHaveLength(4)
+        expect(all.overdue).toBe(4)
     })
 })
 

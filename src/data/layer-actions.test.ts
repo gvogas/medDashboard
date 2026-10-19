@@ -9,6 +9,8 @@ const fake = vi.hoisted(() => ({
     openSheet: vi.fn(),
     openClass: vi.fn(),
     toggleClassTask: vi.fn(async () => {}),
+    toggleTeamTask: vi.fn(async () => {}),
+    openProject: vi.fn(),
 }))
 vi.mock("@/core/store", () => ({ data: fake.data, saveItem: fake.saveItem, subscribe: () => () => {}, item: () => null, course: () => null }))
 vi.mock("@/core/sync", () => ({ status: { state: "idle", pending: 0, message: "" }, onStatus: () => {}, syncNow: vi.fn() }))
@@ -18,8 +20,9 @@ vi.mock("@/data/study-controller", () => ({ setView: vi.fn(), deleteLater: vi.fn
 vi.mock("@/data/overlay", async (importOriginal) => ({ ...(await importOriginal<typeof import("@/data/overlay")>()), openSheet: fake.openSheet }))
 vi.mock("@/data/classes", () => ({ openClass: fake.openClass, openJoin: vi.fn() }))
 vi.mock("@/data/marks", () => ({ toggleClassTask: fake.toggleClassTask }))
+vi.mock("@/data/projects", () => ({ toggleTeamTask: fake.toggleTeamTask, openProject: fake.openProject }))
 
-import { newItemOn, openCourse, quickAddTask, toggleTask } from "./actions"
+import { newItemOn, openCourse, openItem, quickAddTask, toggleTask } from "./actions"
 
 const SID = "abcdefghij12", WEB = "c:" + SID
 beforeEach(() => { fake.ui.course = "all" })
@@ -36,6 +39,18 @@ describe("the views act on keys", () => {
     it("tick a class's task in your mark", async () => {
         await toggleTask(WEB + "/t1")
         expect(fake.toggleClassTask).toHaveBeenCalledWith(WEB + "/t1", undefined)
+    })
+
+    it("tick a project's task for the team, and open a project's own item as its sheet (Stage 9)", async () => {
+        const FIRE = "p:fire00000001"
+        const el = {} as Element
+        await toggleTask(FIRE + "/t1", el)
+        expect(fake.toggleTeamTask).toHaveBeenCalledWith(FIRE + "/t1", el)
+        expect(fake.toggleClassTask).not.toHaveBeenCalled()
+        openItem(FIRE + "/project")
+        expect(fake.openProject).toHaveBeenCalledWith("fire00000001")
+        openItem(FIRE + "/t1")
+        expect(fake.openSheet).toHaveBeenCalledWith({ kind: "item", id: FIRE + "/t1" })
     })
 
     it("open a removed class task's card instead of ticking it: your layer on it is read-only", async () => {

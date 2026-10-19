@@ -13,8 +13,8 @@ import { schoolCal } from "@/data/query"
 import { minutesByDay, streak } from "@/core/history"
 
 import { prepPace } from "@/core/prep"
-import { useCourses, useItems, useProfile, useQuotes, useStudySessions } from "./store"
-import { courseKeyOf, keyOf, onCalendar } from "./effective"
+import { useCourses, useItems, useProfile, useQuotes, useSpaces, useStudySessions } from "./store"
+import { courseKeyOf, forCalendar, forStats, keyOf, onCalendar, type EffectiveItem } from "./effective"
 import { ui } from "./ui"
 import type { Course, Item, Meeting, Quote, Schedule, Show, SortKey, StudySession } from "./types"
 
@@ -22,8 +22,8 @@ import type { Course, Item, Meeting, Quote, Schedule, Show, SortKey, StudySessio
 
 export interface Filters { search: string; course: string }
 
-/** The All items table's filters: the course and search, the type chips and the status chips. */
-export interface TableFilters extends Filters { types: Record<string, boolean>; show: Show }
+/** The All items table's filters: the course and search, the type chips, the status chips and the Source select. */
+export interface TableFilters extends Filters { types: Record<string, boolean>; show: Show; source: string }
 
 /** A type is on unless it was switched off; new types start on. */
 export const typeOn = (f: TableFilters, type: string) => f.types[type] !== false
@@ -31,13 +31,23 @@ export const typeOn = (f: TableFilters, type: string) => f.types[type] !== false
 /** Open, overdue, or anything, as the table's status chips ask. */
 export const passShow = (it: Item, show: Show) => (show === "open" ? isOpen(it) : show === "overdue" ? isOverdue(it) : true)
 
+/** The Source filter (Stage 9 plan): your rows (also those under a class), a class's (and yours under it), a project's. */
+export const fromSource = (it: EffectiveItem, source: string) =>
+    source === "all" ? true : source === "personal" ? !it.spaceId : it.spaceId === source.slice(6) || it.classId === source.slice(6)
+
+/** The Source filter as picked, or 'all' when it names a space you are no longer in (left, removed, deleted). */
+export const pickedSource = (source: string | null | undefined, spaces: { id: string }[]) =>
+    !source || (source.startsWith("space:") && !spaces.some((s) => "space:" + s.id === source)) ? "all" : source
+
 /* Courses by key: a class course and a personal one may share an id (effective.ts). */
 const courseMap = (courses: Course[]) => new Map(courses.map((c) => [keyOf(c), c]))
 
 export function matchSearch(it: Item, byId: Map<string, Course>, search: string): boolean {
     if (!search) return true
     const key = courseKeyOf(it), c = key ? byId.get(key) : undefined
-    const hay = (it.title + " " + (it.where || "") + " " + (it.notes || "") + " " + (c ? c.name + " " + c.code : "") + " " + tmeta(it.type).label).toLowerCase()
+    /* an assignment a project folds into (forCalendar) is found by the project's name too */
+    const team = (it as EffectiveItem).team?.map((t) => t.name).join(" ") ?? ""
+    const hay = (it.title + " " + (it.where || "") + " " + (it.notes || "") + " " + (c ? c.name + " " + c.code : "") + " " + tmeta(it.type).label + " " + team).toLowerCase()
     return hay.includes(search.toLowerCase())
 }
 
@@ -292,17 +302,18 @@ export function tableRows(items: Item[], courses: Course[], f: TableFilters, sor
             default: return it.date
         }
     }
-    return items.filter((it) => typeOn(f, it.type) && passShow(it, f.show) && passFilters(it, f, byId)).sort((a, b) => cmp(value(a), value(b)) * sort.dir)
+    return items.filter((it) => fromSource(it, f.source) && typeOn(f, it.type) && passShow(it, f.show) && passFilters(it, f, byId)).sort((a, b) => cmp(value(a), value(b)) * sort.dir)
 }
 
 /**
  * Each type chip's count: its open items, and weekly ones that are always on the board,
  * in the course picked. The search, the status and the other chips leave it alone.
  */
-export function typeCounts(items: Item[], course: string): Record<string, number> {
+export function typeCounts(items: Item[], course: string, source = "all"): Record<string, number> {
     const n: Record<string, number> = {}
     for (const it of items) {
         if (course !== "all" && courseKeyOf(it) !== course) continue
+        if (!fromSource(it, source)) continue
         if (it.recur === "weekly" || isOpen(it)) n[it.type] = (n[it.type] || 0) + 1
     }
     return n
@@ -357,29 +368,30 @@ export function quoteAt(quotes: Quote[], ix: number): { quote: Quote; ix: number
 
 const filtersOf = (): Filters => ({ search: ui.search, course: ui.course })
 
-/** The table's filters. A stat tile's list leaves out the course and the search, as the tile does. */
-export const tableFiltersOf = (): TableFilters => {
+/** The table's filters. A stat tile's list leaves out the course, the search and the source, as the tile does. */
+export const tableFiltersOf = (spaces: { id: string }[]): TableFilters => {
     const tile = ui.listFrom === "tile"
-    return { search: tile ? "" : ui.search, course: tile ? "all" : ui.course, types: { ...ui.types }, show: ui.show || "all" }
+    return { search: tile ? "" : ui.search, course: tile ? "all" : ui.course, types: { ...ui.types }, show: ui.show || "all", source: tile ? "all" : pickedSource(ui.source, spaces) }
 }
 
 /**
  * The live input for the views. The `ui` object is changed in place, so the version the
  * bridge bumps on every redraw is part of the key; the collections are new arrays when
  * the store reloads. The Week and the Month (`calendar`) leave out what you hid with an eye
- * toggle (spec §9); All items does not.
+ * toggle (spec §9), and of a project's rows keep only your tasks, folding a project into its
+ * assignment on the same day (forCalendar); All items does not.
  */
 function useViewInput(calendar = false): ViewInput {
-    const items = useItems(), courses = useCourses(), profile = useProfile()
+    const items = useItems(), courses = useCourses(), profile = useProfile(), spaces = useSpaces()
     const version = useSyncExternalStore(subscribe, getVersion)
     return useMemo(
         () => {
             const hidden = profile?.hiddenSources ?? []
             const shown = calendar ? onCalendar(items, courses, hidden) : { items, courses }
-            return { items: shown.items, courses: shown.courses, total: items.length, filters: filtersOf(), schedule: ui.schedule, anchor: ui.anchor, today: todayIso(), cal: schoolCal() }
+            return { items: calendar ? forCalendar(shown.items, profile?.id ?? "", spaces) : shown.items, courses: shown.courses, total: items.length, filters: filtersOf(), schedule: ui.schedule, anchor: ui.anchor, today: todayIso(), cal: schoolCal() }
         },
         // eslint-disable-next-line react-hooks/exhaustive-deps -- `version` stands for the ui
-        [items, courses, profile, version, calendar],
+        [items, courses, profile, spaces, version, calendar],
     )
 }
 
@@ -399,29 +411,40 @@ export const useMonth = () => {
     return useMemo(() => ({ month: monthCells(input), timetable: timetable(input.courses, input.filters, input.cal, input.anchor),schedule: input.schedule }), [input])
 }
 
+/**
+ * The table's rows, the Overdue chip's count and each type chip's open items. A stat tile's
+ * list (`tile`) keeps what Stats counts (forStats): of a project's rows, only your tasks.
+ */
+export function tableView(items: Item[], courses: Course[], f: TableFilters, sort: { key: SortKey; dir: 1 | -1 }, tile: boolean, me: string) {
+    const list = tile ? forStats(items as EffectiveItem[], me) : items
+    return {
+        rows: tableRows(list, courses, f, sort),
+        overdue: tableRows(list, courses, { ...f, show: "overdue" }, sort).length,
+        perType: typeCounts(list, f.course, f.source),
+    }
+}
+
 export const useTable = () => {
-    const input = useViewInput()
+    const input = useViewInput(), spaces = useSpaces(), profile = useProfile()
     const sort = { key: ui.sort.key, dir: ui.sort.dir }
     return useMemo(() => {
-        const f = tableFiltersOf()
+        const f = tableFiltersOf(spaces)
         return {
-            rows: tableRows(input.items, input.courses, f, sort),
+            ...tableView(input.items, input.courses, f, sort, ui.listFrom === "tile", profile?.id ?? ""),
             total: input.items.length,
             sort,
             filters: f,
-            /* what the Overdue chip would show, and each type chip's open items */
-            overdue: tableRows(input.items, input.courses, { ...f, show: "overdue" }, sort).length,
-            perType: typeCounts(input.items, f.course),
         }
     },
         // eslint-disable-next-line react-hooks/exhaustive-deps -- the sort is part of the ui, keyed by `input`
-        [input])
+        [input, spaces, profile])
 }
 
 export const useStats = () => {
     const items = useItems(), sessions = useStudySessions(), profile = useProfile(), quotes = useQuotes()
     const version = useSyncExternalStore(subscribe, getVersion)
-    const numbers = useMemo(() => stats(items, sessions, profile?.studyPrefs, todayIso()),
+    /* of a project's rows, only your tasks count (forStats) */
+    const numbers = useMemo(() => stats(forStats(items, profile?.id ?? ""), sessions, profile?.studyPrefs, todayIso()),
         // eslint-disable-next-line react-hooks/exhaustive-deps -- `version` catches the day rolling over on a redraw
         [items, sessions, profile, version])
     return { ...numbers, quote: quoteAt(quotes, ui.quoteIx), quoteCount: quotes.length }

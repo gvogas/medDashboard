@@ -33,6 +33,14 @@ vi.mock("@/core/store", async () => {
             notify()
             return row
         }),
+        saveProfile: vi.fn(async (patch: Row) => {
+            fake.data.profile = { ...fake.data.profile, ...patch }
+            notify()
+        }),
+        saveMark: vi.fn(async (mark: Row) => {
+            fake.data.marks = [...fake.data.marks.filter((m) => (m as Row).id !== mark.id), mark]
+            notify()
+        }),
         removeShared: vi.fn(async (_store: string, scope: string, id: string) => {
             fake.data.shared_items = fake.data.shared_items.filter(other(scope, id))
             notify()
@@ -48,11 +56,15 @@ vi.mock("@/core/api", () => {
     return { api: fake.api, ApiError }
 })
 vi.mock("@/core/sync", () => ({ syncNow: fake.syncNow, status: { state: "idle", pending: 0, message: "" }, onStatus: () => {} }))
-vi.mock("@/data/actions", () => ({ openCourse: vi.fn() }))
-vi.mock("@/data/effective", () => ({ itemByKey: () => null }))
+vi.mock("@/data/actions", async () => {
+    const { openSheet } = await import("@/data/overlay")
+    return { openCourse: vi.fn(), openItem: (id: string) => openSheet({ kind: "item", id }) }
+})
+vi.mock("@/data/effective", async (importOriginal) => ({ ...(await importOriginal<typeof import("@/data/effective")>()), itemByKey: () => null }))
 
 import { notify } from "@/bridge"
 import * as store from "@/core/store"
+import { addDays, iso } from "@/core/dates"
 import { closeSheet, getSheet, openSheet } from "@/data/overlay"
 import { NewMenu } from "../sidebar-classes"
 import { ProjectsGroup } from "../sidebar-projects"
@@ -77,6 +89,7 @@ beforeAll(async () => {
     await import("./new-project-sheet")
     await import("./join-sheet")
     await import("./project-sheet")
+    await import("./task-sheet")
 })
 beforeEach(() => {
     Object.assign(fake.data, {
@@ -102,7 +115,7 @@ describe("team projects (spec §10, §15)", () => {
         expect(fake.api.spaces.create).toHaveBeenCalledWith({ kind: "project", title: "Fire Response API", date: "2026-10-15", parent: { space: CID, item: "a1" } })
         await waitFor(() => expect(getSheet()).toEqual({ kind: "project", spaceId: PID, tab: "tasks" }))
         expect(await screen.findByRole("heading", { name: "Fire Response API" })).toBeTruthy()
-        expect(within(screen.getByRole("region", { name: "Projects" })).getByRole("button", { name: /Fire Response API/ })).toBeTruthy()
+        expect(within(screen.getByRole("region", { name: "Projects" })).getByRole("button", { name: /^Fire Response API.*tasks done/ })).toBeTruthy()
     })
 
     it("asks for a name, and starts on the assignment it was opened from", async () => {
@@ -327,6 +340,69 @@ describe("the project sheet (spec §10, §15)", () => {
         expect(screen.queryByLabelText("New task")).toBeNull()
     })
 
+    it("shows progress, the assignment's drift with Use this date, and workload in the picker", async () => {
+        const soon = iso(addDays(new Date(), 3))
+        seed("editor", [task("t1", ["u-me"], { status: "done", completedAt: 1 }), task("t2", ["u-sam"], { date: soon }), task("t3", [])])
+        fake.data.shared_items = fake.data.shared_items.map((i) => ((i as { id: string }).id === "a1" ? { ...(i as object), date: "2026-10-18" } : i))
+        await show()
+        expect(await screen.findByText(/1 \/ 3 · 33%/)).toBeTruthy()
+        expect(screen.getByText(/Assignment due 18 Oct/)).toBeTruthy()
+        await act(async () => { fireEvent.click(screen.getByRole("button", { name: "Use this date" })) })
+        expect(fake.saved.at(-1)).toMatchObject({ id: "project", date: "2026-10-18", title: "Fire Response API" })
+        const line = await screen.findByText(/For Web Services · REST API Project/)
+        expect(screen.queryByRole("button", { name: "Use this date" })).toBeNull()
+        /* the button went: the keyboard lands on the line it changed */
+        expect(document.activeElement).toBe(line)
+        fireEvent.click(screen.getAllByRole("button", { name: /^Edit / })[0])
+        /* the name is the member's; the workload is its description */
+        const said = (box: HTMLElement) => document.getElementById(box.getAttribute("aria-describedby") ?? "")?.textContent?.trim()
+        expect(said(screen.getByRole("checkbox", { name: "Sam" }))).toBe("· 1 in the next 2 weeks")
+        expect(said(screen.getByRole("checkbox", { name: "You" }))).toBe("· 0 in the next 2 weeks")
+    })
+
+    it("an archived class's assignment reads as removed, everywhere the owner looks", async () => {
+        seed("owner")
+        fake.data.spaces = fake.data.spaces.map((s) => ((s as { id: string }).id === CID ? { ...(s as object), archived: true } : s))
+        fake.data.shared_items = [...fake.data.shared_items, { scope: "c:" + CID, id: "a2", type: "assignment", title: "Second Project", courseId: "web", date: "2026-10-20" }]
+        await show()
+        expect(await screen.findByText(/Linked assignment removed/)).toBeTruthy()
+        const select = screen.getByLabelText("Belongs to") as HTMLSelectElement
+        expect([...select.options].map((o) => o.text)).toEqual(["No class assignment", "Removed assignment"])
+        expect(select.selectedOptions[0].text).toBe("Removed assignment")
+    })
+
+    it("offers Use this date only to those who can edit", async () => {
+        seed("member")
+        fake.data.shared_items = fake.data.shared_items.map((i) => ((i as { id: string }).id === "a1" ? { ...(i as object), date: "2026-10-18" } : i))
+        await show()
+        expect(await screen.findByText(/Assignment due 18 Oct/)).toBeTruthy()
+        expect(screen.queryByRole("button", { name: "Use this date" })).toBeNull()
+    })
+
+    it("says when the linked assignment is gone, and says nothing to someone without the class", async () => {
+        seed("owner")
+        fake.data.shared_items = fake.data.shared_items.filter((i) => (i as { id: string }).id !== "a1")
+        await show()
+        expect(await screen.findByText(/Linked assignment removed/)).toBeTruthy()
+        cleanup()
+        act(() => closeSheet())
+        fake.data.spaces = fake.data.spaces.filter((s) => (s as { id: string }).id !== CID)
+        await show()
+        expect(await screen.findByRole("heading", { name: "Fire Response API" })).toBeTruthy()
+        expect(screen.queryByText(/Linked assignment|For Web Services|Assignment due/)).toBeNull()
+    })
+
+    it("puts a ring and an eye on the sidebar's project row", async () => {
+        seed("editor", [task("t1", ["u-me"], { status: "done", completedAt: 1 }), task("t2", ["u-sam"]), task("t3", [])])
+        render(<ProjectsGroup />)
+        const group = screen.getByRole("region", { name: "Projects" })
+        expect(within(group).getByRole("button", { name: /^Fire Response API, 1 of 3 tasks done/ })).toBeTruthy()
+        expect(within(group).queryByRole("img")).toBeNull()
+        await act(async () => { fireEvent.click(within(group).getByRole("button", { name: "Hide Fire Response API on your calendar" })) })
+        expect(fake.data.profile?.hiddenSources).toEqual(["space:" + PID])
+        expect(within(group).getByRole("button", { name: "Show Fire Response API on your calendar" })).toBeTruthy()
+    })
+
     it("removing a member from a project says nothing is copied", async () => {
         seed("owner")
         fake.api.spaces.get.mockResolvedValue({
@@ -338,5 +414,121 @@ describe("the project sheet (spec §10, §15)", () => {
         expect(screen.getByText(/Their tasks become unassigned; nothing is copied/)).toBeTruthy()
         expect(screen.getByRole("button", { name: "Remove Sam from the project" })).toBeTruthy()
         expect(screen.getByRole("heading", { name: "Hand the project on" })).toBeTruthy()
+    })
+
+    it("a task's title opens it in the card", async () => {
+        seed("member", [task("t1", ["u-me"])])
+        await show()
+        fireEvent.click(await screen.findByRole("button", { name: "t1" }))
+        expect(getSheet()).toEqual({ kind: "item", id: "p:" + PID + "/t1" })
+        expect(await screen.findByRole("dialog", { name: "Team task" })).toBeTruthy()
+    })
+})
+
+/* ── a task in the item card ── */
+
+const card = async (key: string) => {
+    render(<Sheet />)
+    await act(async () => { openSheet({ kind: "item", id: key }) })
+}
+
+describe("a team task in the card (spec §15)", () => {
+    beforeEach(() => { fake.syncNow.mockImplementation(async () => true) })
+    const t1 = (more: Record<string, unknown> = {}) =>
+        task("t1", ["u-me"], { title: "Create incidents endpoint", updatedBy: "u-sam", updatedAt: Date.now() - 2 * 3600_000, notes: "Use the v2 schema", checklist: [], links: [], ...more })
+
+    it("opens a team task in the card: Team for the team, Yours for you", async () => {
+        seed("member", [t1()])
+        await card("p:" + PID + "/t1")
+        expect(await screen.findByRole("heading", { name: "Create incidents endpoint" })).toBeTruthy()
+        expect(screen.getByRole("dialog", { name: "Team task" })).toBeTruthy()
+        expect(screen.getByText(/Edited by Sam · 2h ago/)).toBeTruthy()
+        expect(screen.getByText("Use the v2 schema")).toBeTruthy()
+        /* a member reads the team's facts */
+        expect(screen.queryByRole("textbox", { name: "Title" })).toBeNull()
+        expect(screen.queryByRole("textbox", { name: "Team notes" })).toBeNull()
+        expect(screen.queryByRole("button", { name: "Delete task" })).toBeNull()
+        /* but completes their own task */
+        await act(async () => { fireEvent.click(screen.getByRole("checkbox", { name: "Done" })) })
+        expect(fake.saved.at(-1)).toMatchObject({ id: "t1", status: "done", completedBy: "u-me" })
+        expect(typeof fake.saved.at(-1)!.completedAt).toBe("number")
+        const notes = screen.getByRole("textbox", { name: "Your notes" })
+        fireEvent.change(notes, { target: { value: "ask Sam about auth" } })
+        await act(async () => { fireEvent.blur(notes) })
+        expect(fake.data.marks).toEqual([expect.objectContaining({ id: PID + ":t1", spaceId: PID, itemId: "t1", notes: "ask Sam about auth" })])
+    })
+
+    it("a member cannot complete someone else's task, and claims an unassigned one", async () => {
+        seed("member", [t1({ assignees: [] })])
+        await card("p:" + PID + "/t1")
+        expect(await screen.findByRole("checkbox", { name: "Done" })).toHaveProperty("disabled", true)
+        expect(screen.getByText("Nobody yet")).toBeTruthy()
+        await act(async () => { fireEvent.click(screen.getByRole("button", { name: "Claim" })) })
+        expect(fake.saved.at(-1)).toMatchObject({ id: "t1", assignees: ["u-me"] })
+        expect(screen.getByRole("checkbox", { name: "Done" })).toHaveProperty("disabled", false)
+    })
+
+    it("lets an editor change the team's facts and delete the task", async () => {
+        seed("editor", [t1()])
+        await card("p:" + PID + "/t1")
+        const title = await screen.findByRole("textbox", { name: "Title" })
+        fireEvent.change(title, { target: { value: "Incidents endpoint" } })
+        await act(async () => { fireEvent.blur(title) })
+        expect(fake.saved.at(-1)).toMatchObject({ id: "t1", title: "Incidents endpoint" })
+        const notes = screen.getByRole("textbox", { name: "Team notes" })
+        fireEvent.change(notes, { target: { value: "Use the v3 schema" } })
+        await act(async () => { fireEvent.blur(notes) })
+        expect(fake.saved.at(-1)).toMatchObject({ id: "t1", notes: "Use the v3 schema" })
+        /* Delete asks first; Keep it goes back */
+        fireEvent.click(screen.getByRole("button", { name: "Delete task" }))
+        expect(screen.getByText("Delete it for everyone in Fire Response API?")).toBeTruthy()
+        fireEvent.click(screen.getByRole("button", { name: "Keep it" }))
+        expect(store.removeShared).not.toHaveBeenCalled()
+        fireEvent.click(screen.getByRole("button", { name: "Delete task" }))
+        await act(async () => { fireEvent.click(screen.getByRole("button", { name: "Delete it" })) })
+        expect(store.removeShared).toHaveBeenCalledWith("shared_items", "p:" + PID, "t1")
+        expect(fake.data.shared_items.some((i) => (i as { id: string }).id === "t1")).toBe(false)
+        await waitFor(() => expect(getSheet()).toBeNull())
+    })
+
+    it("hides it for you, and the project sheet shows it again", async () => {
+        seed("member", [t1()])
+        await card("p:" + PID + "/t1")
+        await act(async () => { fireEvent.click(await screen.findByRole("button", { name: /Not mine/ })) })
+        expect(fake.data.marks).toEqual([expect.objectContaining({ id: PID + ":t1", hidden: true })])
+        await waitFor(() => expect(getSheet()).toBeNull())
+        cleanup()
+        await show()
+        const hidden = await screen.findByRole("list", { name: "Hidden from you" })
+        await act(async () => { fireEvent.click(within(hidden).getByRole("button", { name: "Show Create incidents endpoint again" })) })
+        expect(fake.data.marks).toEqual([expect.objectContaining({ id: PID + ":t1", hidden: false })])
+    })
+
+    it("reads a member's checklist aloud as done or to do, says No date, and says an archived project is read-only", async () => {
+        seed("member", [t1({ date: "", checklist: [{ id: "c1", text: "Write schema", done: true }, { id: "c2", text: "Add tests", done: false }] })])
+        await card("p:" + PID + "/t1")
+        const list = await screen.findByRole("list", { name: "Checklist" })
+        /* the glyphs are hidden; the words say it */
+        list.querySelectorAll("[aria-hidden=true]").forEach((g) => g.remove())
+        expect(within(list).getAllByRole("listitem").map((li) => li.textContent)).toEqual(["done: Write schema", "to do: Add tests"])
+        expect(screen.getByText("No date")).toBeTruthy()
+        expect(screen.getByText("The project's owner and editors keep these.")).toBeTruthy()
+        cleanup()
+        act(() => closeSheet())
+        fake.data.spaces = fake.data.spaces.map((s) => ((s as { id: string }).id === PID ? { ...(s as object), archived: true, role: "editor" } : s))
+        await card("p:" + PID + "/t1")
+        expect(await screen.findByText("This project is archived, so it is read-only.")).toBeTruthy()
+        expect(screen.queryByText("The project's owner and editors keep these.")).toBeNull()
+    })
+
+    it("closes when the task is deleted under it", async () => {
+        seed("member", [t1()])
+        await card("p:" + PID + "/t1")
+        expect(await screen.findByRole("heading", { name: "Create incidents endpoint" })).toBeTruthy()
+        act(() => {
+            fake.data.shared_items = fake.data.shared_items.filter((i) => (i as { id: string }).id !== "t1")
+            notify()
+        })
+        await waitFor(() => expect(getSheet()).toBeNull())
     })
 })

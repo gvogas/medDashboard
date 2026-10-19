@@ -30,7 +30,9 @@ the database, cookies and IndexedDB).
   each class has an Activity tab.
 - **Team projects** (admins only for now): a project, on its own or belonging to a class
   assignment, with tasks the team adds, assigns, claims and completes, in a project
-  sheet. They join the Week and the other views later.
+  sheet. The Week and the Month show each project's due date and your tasks there
+  (ticking one completes it for the team), All items filters by source, and the
+  sidebar shows each project's progress.
 - **Admin page**: accounts, error log, audit log, announcement banner, and maintenance
   switches per feature.
 - **Themes**: Medicine, Computer Science, Law, Aviation, Sports and Engineering, each

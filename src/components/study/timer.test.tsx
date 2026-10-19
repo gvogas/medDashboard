@@ -172,6 +172,34 @@ describe("the Ready card", () => {
         expect(document.documentElement.requestFullscreen).toHaveBeenCalledTimes(2)
     })
 
+    it("offers a team project you are in, with your tasks there, and logs the run in the project's space", async () => {
+        const P = "p:fire00000001", task = (id: string, assignees: string[], status = "todo") =>
+            ({ ...normalizeItem({ id, type: "task", title: "Task " + id, date: "2026-10-05", status }), scope: P, assignees })
+        Object.assign(fake.data, {
+            spaces: [{ id: "fire00000001", scope: P, kind: "project", role: "editor", name: "Fire Response API", archived: false, parent: null, revision: 1, members: [] }],
+            shared_items: [task("t1", ["me"]), task("t2", ["*"]), task("t3", ["sam"]), task("t4", ["me"], "done"),
+                { ...normalizeItem({ id: "project", type: "project", title: "Fire Response API", date: "2026-10-20" }), scope: P, assignees: [] }],
+        })
+        try {
+            cards()
+            const ready = within(region("Ready"))
+            const course = ready.getByRole("combobox", { name: "Course" }) as HTMLSelectElement
+            expect([...course.options].map((o) => o.text)).toContain("Team · Fire Response API")
+            fireEvent.change(course, { target: { value: P + "/project" } })
+            const item = ready.getByRole("combobox", { name: "Item (optional)" }) as HTMLSelectElement
+            /* yours and everyone's, open: not Sam's, not one done */
+            expect([...item.options].map((o) => o.text)).toEqual(["No item", "Task t1", "Task t2"])
+            fireEvent.change(item, { target: { value: P + "/t1" } })
+            await start()
+            await tickFor(10 * MIN)
+            await act(() => focus.stop())
+            await settle()
+            expect(fake.data.study_sessions.at(-1)).toMatchObject({ courseId: "project", itemId: "t1", spaceId: "fire00000001", studyMinutes: 10 })
+        } finally {
+            Object.assign(fake.data, { spaces: [], shared_items: [] })
+        }
+    })
+
     it("starts on minutes typed a moment before Start, saved as the box lost focus", async () => {
         cards()
         const box = screen.getByRole("spinbutton", { name: "Minutes for step 1" })
