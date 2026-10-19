@@ -65,6 +65,18 @@ export async function stopFeed(env, userId) {
   await env.DB.prepare('UPDATE users SET feed_gen = NULL WHERE id = ?').bind(userId).run();
 }
 
+/* Your live projects (?1 = you): their own item and their live tasks assigned to you or to everyone,
+   with your mark and your prefs. Others' tasks stay in D1; feedRows checks again. */
+export const PROJECT_ROWS = `SELECT s.id AS sid, (SELECT title FROM items WHERE scope = 'p:' || s.id AND id = 'project') AS project,
+    i.id, i.type, i.title, i.course_id, i.date, i.start, i.end, i.location, i.status, i.weight, i.notes, i.recur, i.weekday, i.recur_until, i.assignees,
+    COALESCE(p.archived, 0) AS my_archived, k.notes AS m_notes, k.hidden AS m_hidden
+  FROM spaces AS s JOIN members AS m ON m.space_id = s.id AND m.user_id = ?1 AND m.deleted_at IS NULL
+    JOIN items AS i ON i.scope = 'p:' || s.id AND i.deleted_at IS NULL
+      AND (i.type = 'project' OR EXISTS (SELECT 1 FROM json_each(i.assignees) AS a WHERE a.value IN (?1, '*')))
+    LEFT JOIN marks AS k ON k.user_id = ?1 AND k.space_id = s.id AND k.item_id = i.id AND k.deleted_at IS NULL
+    LEFT JOIN space_prefs AS p ON p.user_id = ?1 AND p.id = s.id AND p.deleted_at IS NULL
+  WHERE s.kind = 'project' AND s.deleted_at IS NULL`;
+
 /** The public fetch. Any mismatch is a plain 404, so a link reveals nothing about others. */
 export async function serveFeed(env, url, userId, token) {
   const gone = () => new HttpError(404, { error: 'not_found' });
@@ -89,14 +101,7 @@ export async function serveFeed(env, url, userId, token) {
       FROM spaces AS s ${IN} JOIN items AS i ON i.scope = 'c:' || s.id AND i.deleted_at IS NULL
         LEFT JOIN marks AS k ON k.user_id = ?1 AND k.space_id = s.id AND k.item_id = i.id AND k.deleted_at IS NULL
       WHERE s.kind = 'class' AND s.deleted_at IS NULL`).bind(userId),
-    /* your live projects: their own item and their live tasks, with your mark and your prefs (feedRows keeps your tasks and everyone's) */
-    env.DB.prepare(`SELECT s.id AS sid, (SELECT title FROM items WHERE scope = 'p:' || s.id AND id = 'project') AS project,
-        i.id, i.type, i.title, i.course_id, i.date, i.start, i.end, i.location, i.status, i.weight, i.notes, i.recur, i.weekday, i.recur_until, i.assignees,
-        COALESCE(p.archived, 0) AS my_archived, k.notes AS m_notes, k.hidden AS m_hidden
-      FROM spaces AS s ${IN} JOIN items AS i ON i.scope = 'p:' || s.id AND i.deleted_at IS NULL
-        LEFT JOIN marks AS k ON k.user_id = ?1 AND k.space_id = s.id AND k.item_id = i.id AND k.deleted_at IS NULL
-        LEFT JOIN space_prefs AS p ON p.user_id = ?1 AND p.id = s.id AND p.deleted_at IS NULL
-      WHERE s.kind = 'project' AND s.deleted_at IS NULL`).bind(userId),
+    env.DB.prepare(PROJECT_ROWS).bind(userId),
   ]);
   const tz = url.searchParams.get('tz');
   const rows = feedRows({ courses: courses.results, items: items.results, classCourses: classCourses.results, classItems: classItems.results,
@@ -165,7 +170,7 @@ export function feedRows({ courses, items, classCourses = [], classItems = [], p
           && (it.type === 'project' || mineOrAll(it.assignees, me)))
         .map((it) => ({
           ...it, id: it.sid + '-' + it.id, course_id: null,
-          title: it.type === 'project' ? 'Team · ' + it.project : it.project + ' · ' + it.title,
+          title: it.type === 'project' ? 'Team · ' + (it.project ?? 'Team project') : (it.project ?? 'Team project') + ' · ' + it.title,
           notes: [it.m_notes, it.notes].filter(Boolean).join('\n\n'),
         })),
     ].sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0)),

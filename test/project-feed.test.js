@@ -1,6 +1,6 @@
 import { SELF, env } from 'cloudflare:test';
 import { describe, expect, it } from 'vitest';
-import { buildCalendar, feedRows } from '../worker/calendar.js';
+import { PROJECT_ROWS, buildCalendar, feedRows } from '../worker/calendar.js';
 import { unfold } from './helpers.js';
 import { makeSpace, mark, pref, sharedItem, signInAdmin } from './spaces.js';
 
@@ -34,6 +34,18 @@ describe('feedRows with projects (Stage 10 plan, Decisions 1-3)', () => {
   it('marks a finished task ✓ whoever finished it', () => {
     const ics = unfold(buildCalendar(feedRows({ courses: [], items: [], projectItems: [pItem({ status: 'done' })], me: 'u-me' })));
     expect(ics).toContain('SUMMARY:✓ Fire Response API · Create incidents endpoint');
+  });
+
+  it("escapes a project's name in SUMMARY, times a timed task, and names a project with no title", () => {
+    const ics = unfold(buildCalendar(feedRows({ courses: [], items: [], me: 'u-me', projectItems: [
+      pItem({ project: 'Fire, Response; API' }),
+      pItem({ id: 't2', title: 'Stand-up', start: '09:30', end: '10:00' }),
+      pItem({ id: 't3', title: 'Orphan', project: null }),
+    ] })));
+    expect(ics).toContain('SUMMARY:Fire\\, Response\\; API · Create incidents endpoint');
+    expect(ics).toContain('DTSTART:20261020T093000');
+    expect(ics).toContain('DTEND:20261020T100000');
+    expect(ics).toContain('SUMMARY:Team project · Orphan');
   });
 });
 
@@ -70,5 +82,28 @@ describe('the feed, served, with projects', () => {
     const { url } = await (await me('/api/calendar', { method: 'POST' })).json();
     const ics = unfold(await (await SELF.fetch(url)).text());
     expect(ics).not.toContain('Fire Response API');
+  });
+
+  it('leaves out a project you hid (space:<sid> in your hidden sources)', async () => {
+    const me = await signInAdmin('pfhide');
+    const s = await makeSpace({ kind: 'project', members: { [me.id]: 'owner' } });
+    await sharedItem(s.scope, 't1', { title: 'Hidden task', assignees: JSON.stringify([me.id]) });
+    const { url } = await (await me('/api/calendar', { method: 'POST' })).json();
+    expect(unfold(await (await SELF.fetch(url)).text())).toContain('Hidden task');
+    await env.DB.prepare('UPDATE users SET hidden_sources = ? WHERE id = ?').bind(JSON.stringify(['space:' + s.id]), me.id).run();
+    const ics = unfold(await (await SELF.fetch(url)).text());
+    expect(ics).not.toContain('Hidden task');
+    expect(ics).not.toContain('Fire Response API');
+  });
+
+  it("reads others' tasks out in the statement, so they never leave D1", async () => {
+    const me = await signInAdmin('pfsql'), sam = await signInAdmin('pfsqlsam');
+    const s = await makeSpace({ kind: 'project', members: { [me.id]: 'editor', [sam.id]: 'owner' } });
+    await sharedItem(s.scope, 't1', { title: 'Mine', assignees: JSON.stringify([me.id]) });
+    await sharedItem(s.scope, 't2', { title: 'Sam alone', assignees: JSON.stringify([sam.id]) });
+    await sharedItem(s.scope, 't3', { title: 'Nobody yet', assignees: '[]' });
+    await sharedItem(s.scope, 't4', { title: 'For all', assignees: '["*"]' });
+    const { results } = await env.DB.prepare(PROJECT_ROWS).bind(me.id).all();
+    expect(results.map((r) => r.id).sort()).toEqual(['project', 't1', 't4']);
   });
 });
