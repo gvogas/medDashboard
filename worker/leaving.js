@@ -14,6 +14,7 @@ import { LIVE_MEMBERS, NEXT_ROW_REVISION, NEXT_SPACE_REVISION, touchSpace } from
 import { REVIEW_ID } from '../src/core/shared.ts';
 import { HAND_ON } from './accounts.js';
 import { noteStmt, undoneStmt } from './activity.js';
+import { leaveProject } from './projects.js';
 
 /** A mark holding anything of yours (spec §13): a status, grade, weight, notes, a checklist or a completion. `m` is its alias. */
 export const MEANINGFUL = (m) =>
@@ -168,22 +169,33 @@ const REMOVING = `${LEAVING} AND EXISTS (SELECT 1 FROM members AS ow WHERE ow.sp
 /* For noteStmt (Decision 9): the membership of ?9 ended in this batch, so a retry writes no activity. */
 const ENDED = 'EXISTS (SELECT 1 FROM members WHERE space_id = ?1 AND user_id = ?9 AND deleted_at = ?8)';
 
-/** Leave a class (spec §13): with a copy (the default) or without one. The owner hands it on first: 403 owner. */
+/**
+ * Leave a class (spec §13): with a copy (the default) or without one; or a project, which
+ * copies nothing (leaveProject). The owner hands it on first: 403 owner.
+ */
 export async function leave(db, userId, spaceId, keepCopy, now = Date.now()) {
   const me = await assertAllowed(db, userId, spaceId, 'read');
-  if (me.kind !== 'class') throw new HttpError(404, { error: 'not_found' });
   if (me.role === 'owner') throw new HttpError(403, { error: 'owner' });
+  if (me.kind === 'project') {
+    if (!(await leaveProject(db, userId, spaceId, userId, now))) throw new HttpError(404, { error: 'not_found' });
+    return;
+  }
   const after = [noteStmt(db, { spaceId, actorId: userId, verb: 'member.left', now, when: ENDED, binds: [userId] })];
   if (!(await detach(db, userId, spaceId, { keepCopy, who: LEAVING, after, now }))) throw new HttpError(404, { error: 'not_found' });
 }
 
-/** The owner removes a member, who always keeps a copy (spec §13); never themselves or the owner. 404 when not a live member. */
+/**
+ * The owner removes a member, who always keeps a copy of a class (spec §13) and none of a
+ * project (leaveProject); never themselves or the owner. 404 when not a live member.
+ */
 export async function removeMember(db, userId, spaceId, targetId, now = Date.now()) {
   const me = await assertKeeper(db, userId, spaceId);
-  if (me.kind !== 'class') throw new HttpError(404, { error: 'not_found' });
   if (targetId === userId) throw new HttpError(403, { error: 'forbidden' });
-  const after = [noteStmt(db, { spaceId, actorId: userId, verb: 'member.removed', subjectUser: targetId, now, when: ENDED, binds: [targetId] })];
-  if (await detach(db, targetId, spaceId, { keepCopy: true, who: REMOVING, actor: userId, after, now })) return;
+  const ended = me.kind === 'project'
+    ? await leaveProject(db, targetId, spaceId, userId, now)
+    : await detach(db, targetId, spaceId, { keepCopy: true, who: REMOVING, actor: userId, now,
+      after: [noteStmt(db, { spaceId, actorId: userId, verb: 'member.removed', subjectUser: targetId, now, when: ENDED, binds: [targetId] })] });
+  if (ended) return;
   const them = await roleOf(db, targetId, spaceId);
   throw them ? new HttpError(403, { error: 'forbidden' }) : new HttpError(404, { error: 'not_found' });
 }

@@ -122,4 +122,17 @@ describe('nightly purge of shared rows (spec §13)', () => {
     expect(await one('SELECT count(*) AS n FROM activity WHERE space_id = ?', kept.id)).toEqual({ n: 1 });
     expect(await one('SELECT verb FROM activity WHERE space_id = ?', gone.id)).toEqual({ verb: 'member.removed' });
   });
+
+  it("takes a deleted task's marks with it, notes and all, the same night", async () => {
+    const owner = await createUser('pgp5');
+    const s = await makeSpace({ kind: 'project', members: { [owner]: 'owner' } });
+    await sharedItem(s.scope, 't1', { deleted_at: Date.now() - 31 * DAY });
+    await mark(owner, s.id, 't1', { notes: 'kept?' });
+    await runNightly();
+    /* soft, so the change feed carries it; nothing is kept as yours */
+    expect(await one('SELECT count(*) AS n FROM marks WHERE space_id = ? AND deleted_at IS NULL', s.id)).toEqual({ n: 0 });
+    expect(await one("SELECT deleted_at IS NOT NULL AS d FROM changes WHERE scope = 'u:' || ? AND kind = 'marks' AND row_id = ?", owner, s.id + ':t1')).toEqual({ d: 1 });
+    expect(await one("SELECT count(*) AS n FROM items WHERE scope = ? AND id = 't1'", s.scope)).toEqual({ n: 0 });
+    expect(await one("SELECT count(*) AS n FROM items WHERE scope = 'u:' || ?", owner)).toEqual({ n: 0 });
+  });
 });

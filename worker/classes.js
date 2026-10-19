@@ -7,7 +7,7 @@ import { validateSharedCourse } from './validate.js';
 import { absorb, checkConvert, createClass, priorConvert, refreshSchool, setRole, spaceDetails, transfer } from './spaces.js';
 import { deleteClass, keep, leave, removeMember, setArchived, shareItems } from './leaving.js';
 import { acceptInvite, declineInvite, dropCode, invite, joinByCode, makeCode, myInvites, revokeInvite } from './invites.js';
-import { PROJECTS_ADMINS_ONLY, assertProjectsOpen, createProject, isAdmin, linkProject, parentOf, projectBody } from './projects.js';
+import { PROJECTS_ADMINS_ONLY, assertProjectsOpen, createProject, deleteProject, isAdmin, linkProject, parentOf, projectBody } from './projects.js';
 
 const SID = '([a-z0-9]{12})';
 const UID = '([^/]{1,64})';
@@ -112,7 +112,11 @@ export const classRoutes = [
   }],
   ['DELETE', route(`spaces/${SID}`), async ({ request, env, params: [sid] }) => {
     const userId = await requireUser(request, env);
-    await deleteClass(env.DB, userId, sid, keepOf((await optionalJson(request)).keepCopy));
+    const body = await optionalJson(request);
+    const kind = (await env.DB.prepare('SELECT kind FROM spaces WHERE id = ? AND deleted_at IS NULL').bind(sid).first())?.kind;
+    /* a project needs its title typed ({confirm}); a class takes keepCopy. Anyone outside either is 404 */
+    if (kind === 'project') await deleteProject(env.DB, userId, sid, body.confirm);
+    else await deleteClass(env.DB, userId, sid, keepOf(body.keepCopy));
     return done();
   }],
   ['POST', route(`spaces/${SID}/leave`), async ({ request, env, params: [sid] }) => {

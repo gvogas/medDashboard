@@ -87,10 +87,10 @@ describe('deleting a class', () => {
     expect(await one("SELECT count(*) AS n FROM courses WHERE scope = 'u:' || ?", owner.id)).toEqual({ n: 0 });
   });
 
-  it('a project is not deleted here; a bad keepCopy is refused', async () => {
+  it('a project needs its title typed instead (Stage 8); a bad keepCopy is refused', async () => {
     const tag = ++n, owner = await signInAdmin('dpo' + tag);
     const p = await makeSpace({ kind: 'project', members: { [owner.id]: 'owner' } });
-    expect((await owner(`/api/spaces/${p.id}`, { method: 'DELETE', body: {} })).status).toBe(404);
+    expect(await (await owner(`/api/spaces/${p.id}`, { method: 'DELETE', body: {} })).json()).toEqual({ error: 'invalid', field: 'confirm' });
     const s = await makeSpace({ members: { [owner.id]: 'owner' } });
     expect(await (await owner(`/api/spaces/${s.id}`, { method: 'DELETE', body: { keepCopy: 'no' } })).json()).toEqual({ error: 'invalid', field: 'keepCopy' });
   });

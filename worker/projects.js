@@ -3,9 +3,10 @@
 // team's), and deleting it. Tasks themselves are ordinary shared writes (worker/db.js), whose
 // member rules have been there since Stage 2. Admins only until Stage 10.
 import { HttpError } from './http.js';
-import { assertOwner, memberGuard, ownerGuard } from './access.js';
-import { MY_SPACES, NEXT_ROW_REVISION, NEXT_SPACE_REVISION, SPACE_LIMIT, joinPrefs, randomId, spaceSummary } from './spaces.js';
-import { noteStmt, undoneStmt } from './activity.js';
+import { assertKeeper, assertOwner, keeperGuard, memberGuard, ownerGuard } from './access.js';
+import { MY_SPACES, NEXT_ROW_REVISION, NEXT_SPACE_REVISION, SPACE_LIMIT, joinPrefs, randomId, spaceSummary, touchSpace } from './spaces.js';
+import { BUCKET, NAME } from './accounts.js';
+import { SPACE_NAME, noteStmt, undoneStmt } from './activity.js';
 
 /** Projects are for admins until Stage 10 opens them (Stage 8 plan, Decision 1). */
 export const PROJECTS_ADMINS_ONLY = true;
@@ -98,5 +99,70 @@ export async function linkProject(db, userId, spaceId, parent, now = Date.now())
     noteStmt(db, { spaceId, actorId: userId, verb: 'space.linked', oldValue: prior, newValue: parent?.item ?? null, detail: parent ? { assignment: assignment.title } : {}, now,
       when: 'EXISTS (SELECT 1 FROM spaces WHERE id = ?1 AND updated_at = ?8 AND parent_item IS ?6)' }),
     undoneStmt(db, { spaceId, actorId: userId, verb: 'space.linked', now }),
+  ]);
+}
+
+/* ?1 the person, ?2 the space, ?3 who acts, ?4 now. A live member of the live space who is not the owner; and ?3 its live owner. */
+const LIVE_MEMBER = `EXISTS (SELECT 1 FROM spaces AS ls WHERE ls.id = ?2 AND ls.deleted_at IS NULL)
+  AND EXISTS (SELECT 1 FROM members AS lv WHERE lv.space_id = ?2 AND lv.user_id = ?1 AND lv.deleted_at IS NULL AND lv.role != 'owner')`;
+const ACTOR_OWNS = "EXISTS (SELECT 1 FROM members AS ow WHERE ow.space_id = ?2 AND ow.user_id = ?3 AND ow.role = 'owner' AND ow.deleted_at IS NULL)";
+
+/** ?1 taken out of every live task's assignees in the project ?2 (a task left with nobody is unassigned; the trigger says so). */
+const STRIP = (live) => `UPDATE items SET assignees = (SELECT json_group_array(a.value) FROM json_each(items.assignees) AS a WHERE a.value != ?1),
+    updated_by = ?3, updated_at = ?4, revision = revision + 1
+  WHERE scope = 'p:' || ?2 AND deleted_at IS NULL AND EXISTS (SELECT 1 FROM json_each(items.assignees) AS a WHERE a.value = ?1) AND ${live}`;
+
+/**
+ * `userId` leaves the project, or is removed by its owner `actorId` (Decision 6), in one
+ * batch: stripped from the assignees, their marks and prefs there soft-deleted, the
+ * membership ended (the batch's last guarded write, so a retry does nothing), member.left or
+ * member.removed. Nothing is copied: the rows are the team's. True when it ended now.
+ */
+export async function leaveProject(db, userId, spaceId, actorId = userId, now = Date.now()) {
+  const leaving = actorId === userId;
+  const live = leaving ? LIVE_MEMBER : `${LIVE_MEMBER} AND ${ACTOR_OWNS}`;
+  const v = [userId, spaceId, actorId, now];
+  const results = await db.batch([
+    db.prepare(STRIP(live)).bind(...v),
+    ...['marks', 'space_prefs'].map((t) => db.prepare(`UPDATE ${t} SET deleted_at = ?4, updated_at = ?4, revision = revision + 1
+      WHERE user_id = ?1 AND space_id = ?2 AND deleted_at IS NULL AND ${live}`).bind(...v)),
+    db.prepare(`UPDATE members SET deleted_at = ?4, updated_at = ?4, revision = revision + 1 WHERE space_id = ?2 AND user_id = ?1 AND ${live}`).bind(...v),
+    db.prepare('SELECT changes() AS n'),
+    touchSpace(db, spaceId, now, { ifChanged: true }),
+    /* the membership of ?9 ended in this batch (worker/leaving.js ENDED) */
+    noteStmt(db, { spaceId, actorId, verb: leaving ? 'member.left' : 'member.removed', subjectUser: leaving ? '' : userId, now,
+      when: 'EXISTS (SELECT 1 FROM members WHERE space_id = ?1 AND user_id = ?9 AND deleted_at = ?8)', binds: [userId] }),
+  ]);
+  return results[4].results[0].n > 0;
+}
+
+/* keeperGuard's SQL with the space and the owner numbered ?1 and ?2 (a plain ? beside numbered ones would be numbered past them). */
+const OWNER_HERE = `EXISTS (SELECT 1 FROM members AS gm JOIN spaces AS gs ON gs.id = gm.space_id
+  WHERE gm.space_id = ?1 AND gm.user_id = ?2 AND gm.deleted_at IS NULL AND gs.deleted_at IS NULL AND gm.role = 'owner')`;
+
+/**
+ * The owner deletes the project (Decision 7), archived or not, with its title typed as
+ * `confirm`, in one batch: space.deleted about each other live member (first, while the space
+ * and its name are live, so it reaches them after the space is gone), every member's marks and
+ * prefs there, its invites, then the space. Sync revokes it; the nightly purge removes it.
+ * 404 outside it or on a class; 403 for anyone but the owner; 400 confirm.
+ */
+export async function deleteProject(db, userId, spaceId, confirm, now = Date.now()) {
+  const me = await assertKeeper(db, userId, spaceId);
+  if (me.kind !== 'project') throw new HttpError(404, { error: 'not_found' });
+  const row = await db.prepare("SELECT title FROM items WHERE scope = ? AND id = 'project'").bind('p:' + spaceId).first();
+  if (typeof confirm !== 'string' || confirm.trim() !== row?.title) throw bad('confirm');
+  const g = keeperGuard(spaceId, userId);
+  await db.batch([
+    db.prepare(`INSERT INTO activity (space_id, actor_id, verb, subject, subject_user, detail, bucket, at)
+      SELECT ?1, ?2, 'space.deleted', '', m.user_id, json_object('by', ${NAME('?2')}, 'whom', ${NAME('m.user_id')}, 'space', ${SPACE_NAME('?1')}), ${BUCKET('?3')}, ?3
+      FROM members AS m WHERE m.space_id = ?1 AND m.user_id != ?2 AND m.deleted_at IS NULL AND ${OWNER_HERE}
+      ON CONFLICT (space_id, actor_id, verb, subject, subject_user, bucket) DO UPDATE SET at = excluded.at, detail = excluded.detail`)
+      .bind(spaceId, userId, now),
+    ...['marks', 'space_prefs'].map((t) => db.prepare(`UPDATE ${t} SET deleted_at = ?, updated_at = ?, revision = revision + 1
+      WHERE space_id = ? AND deleted_at IS NULL AND ${g.sql}`).bind(now, now, spaceId, ...g.binds)),
+    db.prepare(`DELETE FROM invites WHERE space_id = ? AND ${g.sql}`).bind(spaceId, ...g.binds),
+    db.prepare(`UPDATE spaces SET deleted_at = ?, updated_at = ?, revision = ${NEXT_SPACE_REVISION} WHERE id = ? AND deleted_at IS NULL AND ${g.sql}`)
+      .bind(now, now, spaceId, ...g.binds),
   ]);
 }

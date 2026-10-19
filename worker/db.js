@@ -221,7 +221,7 @@ const INVITE_DAYS = 90;
  * The nightly purge (spec §13), in order: the other marks on expiring shared items are deleted
  * (soft); each space deleted before `before` goes with everything in it; then the floor moves
  * and old tombstones go, items first so course rows go last (a class item still holding a
- * meaningful mark waits); invites go 90 days after they were made, activity 90 days after it
+ * meaningful mark waits; a project task never does, its marks having gone in the first step); invites go 90 days after they were made, activity 90 days after it
  * happened (a purged space's own rows with it, except those about a person). Only then are
  * removed class items holding something of someone's kept for them (autoKeep, bounded), so the
  * sweep never waits on the keeps; their class rows go the next night. Every step acts only on what is
@@ -231,9 +231,11 @@ export async function purgeTombstones(db, before, now = Date.now()) {
   const GONE = '(SELECT id FROM spaces WHERE deleted_at IS NOT NULL AND deleted_at < ?)';
   const tombstones = (table) => db.prepare(`DELETE FROM ${table} WHERE deleted_at IS NOT NULL AND deleted_at < ?`).bind(before);
   await db.batch([
-    /* soft, so the change feed carries the deletion; the tombstone goes with a later night's sweep */
-    db.prepare(`UPDATE marks SET deleted_at = ?, updated_at = ?, revision = revision + 1 WHERE deleted_at IS NULL AND NOT ${MEANINGFUL('marks')} AND EXISTS (SELECT 1 FROM items AS i
-      WHERE i.scope IN ('c:' || marks.space_id, 'p:' || marks.space_id) AND i.id = marks.item_id AND i.deleted_at IS NOT NULL AND i.deleted_at < ?)`).bind(now, now, before),
+    /* soft, so the change feed carries the deletion; the tombstone goes with a later night's sweep. A project task's
+       marks go whatever they hold (your note goes with it, spec §13); a class item's only when they hold nothing */
+    db.prepare(`UPDATE marks SET deleted_at = ?, updated_at = ?, revision = revision + 1 WHERE deleted_at IS NULL AND EXISTS (SELECT 1 FROM items AS i
+      WHERE i.id = marks.item_id AND i.deleted_at IS NOT NULL AND i.deleted_at < ?
+        AND (i.scope = 'p:' || marks.space_id OR (i.scope = 'c:' || marks.space_id AND NOT ${MEANINGFUL('marks')})))`).bind(now, now, before),
     /* a gone space's rows go whatever marks they hold: every way a space is deleted (deleteClass, account deletion) leaves no meaningful live mark in it */
     ...['items', 'courses', 'changes'].map((t) =>
       db.prepare(`DELETE FROM ${t} WHERE scope IN (SELECT 'c:' || id FROM ${GONE} UNION ALL SELECT 'p:' || id FROM ${GONE})`).bind(before, before)),
@@ -244,7 +246,7 @@ export async function purgeTombstones(db, before, now = Date.now()) {
     db.prepare('UPDATE sync_state SET floor = MAX(floor, COALESCE((SELECT MAX(seq) FROM changes WHERE deleted_at < ?), 0)) WHERE id = 1').bind(before),
     db.prepare('DELETE FROM changes WHERE deleted_at < ?').bind(before),
     ...['marks', 'space_prefs', 'members', 'achievements', 'study_sessions'].map(tombstones),
-    db.prepare(`DELETE FROM items WHERE deleted_at IS NOT NULL AND deleted_at < ? AND (scope GLOB 'u:*' OR NOT EXISTS (SELECT 1 FROM marks AS m
+    db.prepare(`DELETE FROM items WHERE deleted_at IS NOT NULL AND deleted_at < ? AND (scope NOT GLOB 'c:*' OR NOT EXISTS (SELECT 1 FROM marks AS m
       WHERE m.space_id = substr(items.scope, 3) AND m.item_id = items.id AND m.deleted_at IS NULL AND ${MEANINGFUL('m')}))`).bind(before),
     tombstones('quotes'),
     tombstones('courses'),
