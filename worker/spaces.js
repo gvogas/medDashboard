@@ -70,7 +70,8 @@ const USED = `(SELECT u.color FROM courses AS u WHERE u.scope = 'u:' || ?1 AND u
 /**
  * The joiner's prefs (spec §9, §11), in the batch that makes the membership: the class
  * course's colour unless they use it, else the first of the twelve they do not use; the
- * class's term. Only for a live member of a class; a live prefs row is left as it is (an
+ * class's term. Only for a live member of a live space (a project has no course, so it gets
+ * the first colour you do not use and no term); a live prefs row is left as it is (an
  * accept retried), a deleted one revived with these defaults (a rejoin).
  */
 export const joinPrefs = (db, userId, spaceId, now = Date.now()) => db.prepare(`INSERT INTO space_prefs (user_id, id, space_id, color, target, term, archived, created_at, updated_at, revision)
@@ -81,7 +82,7 @@ export const joinPrefs = (db, userId, spaceId, now = Date.now()) => db.prepare(`
       '#17B3AE'),
     NULL, COALESCE((SELECT c.term FROM courses AS c WHERE c.scope = 'c:' || ?2 AND c.deleted_at IS NULL LIMIT 1), ''), 0, ?4, ?4, ${NEXT_ROW_REVISION}
   WHERE EXISTS (SELECT 1 FROM members WHERE space_id = ?2 AND user_id = ?1 AND deleted_at IS NULL)
-    AND EXISTS (SELECT 1 FROM spaces WHERE id = ?2 AND kind = 'class' AND deleted_at IS NULL)
+    AND EXISTS (SELECT 1 FROM spaces WHERE id = ?2 AND deleted_at IS NULL)
   ON CONFLICT (user_id, id) DO UPDATE SET color = excluded.color, target = NULL, term = excluded.term, archived = 0,
     updated_at = excluded.updated_at, deleted_at = NULL, revision = space_prefs.revision + 1
     WHERE space_prefs.deleted_at IS NOT NULL`).bind(userId, spaceId, PALETTE, now);

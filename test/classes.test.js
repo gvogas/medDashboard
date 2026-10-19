@@ -20,7 +20,7 @@ describe('making a class', () => {
   });
 
   it('checks what it is given', async () => {
-    expect(await (await make(owner, { kind: 'project', title: 'x' })).json()).toEqual({ error: 'invalid', field: 'kind' });
+    expect(await (await make(owner, { kind: 'room', title: 'x' })).json()).toEqual({ error: 'invalid', field: 'kind' });
     expect(await (await make(owner, { kind: 'class' })).json()).toEqual({ error: 'invalid', field: 'course' });
     expect(await (await make(owner, { kind: 'class', course: { ...course, name: '' } })).json()).toEqual({ error: 'invalid', field: 'name' });
     expect(await (await make(owner, { kind: 'class', convertCourseId: 'nope', items: [] })).json()).toEqual({ error: 'invalid', field: 'convertCourseId' });
