@@ -1,6 +1,6 @@
-// The sidebar: the name, the pages, the courses, the theme's picture and goal, the
-// Spotify player, and the foot (quote, name, sync, Settings). The type filters are
-// chips on All items (views/table-filters.tsx).
+// The sidebar: the name, the pages, the courses, the team projects (admins, for now), the
+// theme's picture and goal, the Spotify player, and the foot (quote, name, sync, Settings).
+// The type filters are chips on All items (views/table-filters.tsx).
 // It renders inside <App>'s <aside id="side">, whose .on and inert come from
 // data/sidebar.ts.
 
@@ -23,6 +23,7 @@ import { SideNav } from "./side-nav"
 import { SideFoot } from "./side-foot"
 import { SidebarPlayer } from "./spotify/sidebar-player"
 import { NewMenu } from "./sidebar-classes"
+import { ProjectsGroup } from "./sidebar-projects"
 
 export function Sidebar() {
     const bg = useUi((u) => u.bg)
@@ -35,6 +36,7 @@ export function Sidebar() {
                 </div>
                 <SideNav />
                 <CourseList />
+                <ProjectsGroup />
                 <div className="mt-auto flex flex-col gap-3.5 pt-2">
                     <SidebarWho />
                     <SidebarPlayer />

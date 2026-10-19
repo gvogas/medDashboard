@@ -1,19 +1,27 @@
-// The sidebar's shared-class parts (spec §15): + New as a menu: a course, a shared class, or
-// joining with a code. The menu follows the ARIA menu pattern. Classes themselves are rows of
-// the course list (sidebar.tsx); the invites are in the inbox, the top bar's bell.
+// The sidebar's shared-class parts (spec §15): + New as a menu: a course, a shared class, a
+// team project (admins, until Stage 10), or joining with a code. The menu follows the ARIA
+// menu pattern. Classes themselves are rows of the course list (sidebar.tsx), projects are
+// the Projects group (sidebar-projects.tsx); the invites are in the inbox, the top bar's bell.
 
 import { useEffect, useRef, useState, type KeyboardEvent } from "react"
 import { openJoin, openNewClass } from "@/data/classes"
 import { openCourse } from "@/data/actions"
+import { openNewProject, projectsShown } from "@/data/projects"
+import { useProfile } from "@/data/store"
 
-const ITEMS: readonly [string, string, () => void][] = [
+type Entry = [string, string, () => void]
+const items = (projects: boolean): readonly Entry[] => [
     ["New course", "Only you", () => openCourse(null)],
     ["New shared class", "Blank, from a course, or an outline", openNewClass],
+    ...(projects ? [["New team project", "Tasks shared with a team", () => openNewProject()] as Entry] : []),
     ["Join with code", "8 characters from a classmate", () => openJoin()],
 ]
 
-/** + New: a course, a shared class, or joining with a code. */
+/** + New: a course, a shared class, a team project, or joining with a code. */
 export function NewMenu() {
+    /* redraws when the profile arrives, which says whether you are an admin */
+    useProfile()
+    const list = items(projectsShown())
     const [open, setOpen] = useState(false)
     const wrap = useRef<HTMLDivElement>(null)
     const button = useRef<HTMLButtonElement>(null)
@@ -54,7 +62,7 @@ export function NewMenu() {
             {open && (
                 <div ref={menu} role="menu" aria-label="New" onKeyDown={keys}
                     className="absolute bottom-full left-0 z-50 mb-1 w-[230px] rounded-[10px] border border-border bg-card p-1 shadow-[var(--shadow-2)]">
-                    {ITEMS.map(([label, sub, act]) => (
+                    {list.map(([label, sub, act]) => (
                         <button
                             key={label}
                             type="button"

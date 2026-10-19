@@ -235,6 +235,28 @@ describe("shared classes, for everyone", () => {
     })
 })
 
+describe("team projects, for admins until Stage 10", () => {
+    beforeEach(() => {
+        fake.data.spaces = [
+            { id: "zz0000000002", scope: "p:zz0000000002", kind: "project", role: "editor", name: "Zebra Launch", archived: true, parent: null, revision: 2, members: [] },
+            { id: "fire00000001", scope: "p:fire00000001", kind: "project", role: "owner", name: "Fire Response API", archived: false, parent: null, revision: 4, members: [] },
+        ]
+    })
+
+    it("list each project under the courses, by name, archived ones marked", () => {
+        fake.data.profile = { ...(fake.data.profile as object), isAdmin: true }
+        render(<Sidebar />)
+        const group = within(screen.getByRole("region", { name: "Projects" }))
+        expect(group.getAllByRole("button").map((b) => b.textContent)).toEqual(["Fire Response API", "Zebra LaunchArchived"])
+        expect(coursesNav().queryByText("Fire Response API")).toBeNull()
+    })
+
+    it("show nothing of them to someone who is not an admin", () => {
+        render(<Sidebar />)
+        expect(screen.queryByRole("region", { name: "Projects" })).toBeNull()
+    })
+})
+
 describe("eye toggles", () => {
     beforeEach(() => {
         fake.data.courses = [{ id: "anat", code: "ANAT", name: "Anatomy", color: "#E4749B", term: "", archived: false, meetings: [] }]
