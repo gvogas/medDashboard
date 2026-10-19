@@ -32,7 +32,7 @@ export function parentOf(v) {
 /** POST /api/spaces for a project: {title, date?, parent?}; a date unless it belongs to an assignment. */
 export function projectBody(body) {
   const title = typeof body.title === 'string' ? body.title.trim() : '';
-  if (title.length < 1 || title.length > 140) throw bad('title');
+  if (title.length < 1 || title.length > 140 || title.includes('\0')) throw bad('title');
   const parent = parentOf(body.parent);
   const date = body.date == null ? null : body.date;
   if (date !== null && (typeof date !== 'string' || !DATE.test(date))) throw bad('date');

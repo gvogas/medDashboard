@@ -33,10 +33,18 @@ describe('making a team project (spec §10, §20)', () => {
     const me = await signInAdmin('pjx' + ++n);
     const theirs = await makeSpace({ members: {} });
     await sharedItem(theirs.scope, 'a1', { course_id: 'web' });
+    const mine = await makeSpace({ members: { [me.id]: 'member' } });
+    await sharedItem(mine.scope, 'gone', { course_id: 'web', deleted_at: 5 });
+    const team = await makeSpace({ kind: 'project', members: { [me.id]: 'owner' } });
+    await sharedItem(team.scope, 't1');
+    for (const parent of [{ space: mine.id, item: 'nope' }, { space: mine.id, item: 'gone' }, { space: team.id, item: 't1' }, { space: team.id, item: 'project' }]) {
+      expect(await (await make(me, { title: 'X', parent })).json()).toEqual({ error: 'invalid', field: 'parent' });
+    }
     expect(await (await make(me, { title: 'X', parent: { space: theirs.id, item: 'a1' } })).json()).toEqual({ error: 'invalid', field: 'parent' });
     expect(await (await make(me, { title: 'X' })).json()).toEqual({ error: 'invalid', field: 'date' });
     expect(await (await make(me, { title: '', date: '2026-10-30' })).json()).toEqual({ error: 'invalid', field: 'title' });
-    for (let i = 0; i < 20; i++) await makeSpace({ members: { [me.id]: 'member' } });
+    expect(await (await make(me, { title: 'A\0B', date: '2026-10-30' })).json()).toEqual({ error: 'invalid', field: 'title' });
+    for (let i = 0; i < 18; i++) await makeSpace({ members: { [me.id]: 'member' } });
     const full = await make(me, { title: 'One more', date: '2026-10-30' });
     expect(full.status).toBe(409);
     expect(await full.json()).toEqual({ error: 'limit' });
@@ -44,7 +52,9 @@ describe('making a team project (spec §10, §20)', () => {
 
   it('is for admins only until Stage 10: making, inviting, accepting, joining', async () => {
     const plain = await signIn('pjp' + ++n);
-    expect((await make(plain, { title: 'X', date: '2026-10-30' })).status).toBe(403);
+    const refused = await make(plain, { title: 'X', date: '2026-10-30' });
+    expect(refused.status).toBe(403);
+    expect(await refused.json()).toEqual({ error: 'forbidden' });
     const admin = await signInAdmin('pja' + n);
     const { space } = await (await make(admin, { title: 'Team', date: '2026-10-30' })).json();
     const invite = await post(admin, `/api/spaces/${space.id}/invites`, { username: 'pjp' + n });
@@ -52,9 +62,13 @@ describe('making a team project (spec §10, §20)', () => {
     expect(await invite.json()).toEqual({ error: 'not_admin' });
     await env.DB.prepare("INSERT INTO invites (space_id, user_id, invited_by, role, created_at, expires_at) VALUES (?, ?, ?, 'editor', ?, ?)")
       .bind(space.id, 'u-pjp' + n, admin.id, Date.now(), Date.now() + 86_400_000).run();
-    expect((await post(plain, `/api/invites/${space.id}/accept`)).status).toBe(403);
+    const accept = await post(plain, `/api/invites/${space.id}/accept`);
+    expect(accept.status).toBe(403);
+    expect(await accept.json()).toEqual({ error: 'not_admin' });
     const { code } = await (await post(admin, `/api/spaces/${space.id}/code`)).json();
-    expect((await post(plain, '/api/join', { code })).status).toBe(403);
+    const join = await post(plain, '/api/join', { code });
+    expect(join.status).toBe(403);
+    expect(await join.json()).toEqual({ error: 'not_admin' });
   });
 
   it('an admin invited joins as an editor, with prefs', async () => {
