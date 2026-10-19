@@ -111,9 +111,9 @@ describe("writing tasks", () => {
     })
     it("completes and reopens, claims and unclaims", async () => {
         await setDone(task({}), true)
-        expect(fake.saveShared).toHaveBeenLastCalledWith("shared_items", expect.objectContaining({ status: "done", completedAt: expect.any(Number) }))
-        await setDone(task({ status: "done", completedAt: 5 }), false)
-        expect(fake.saveShared).toHaveBeenLastCalledWith("shared_items", expect.objectContaining({ status: "todo", completedAt: null }))
+        expect(fake.saveShared).toHaveBeenLastCalledWith("shared_items", expect.objectContaining({ status: "done", completedAt: expect.any(Number), completedBy: "u-me" }))
+        await setDone(task({ status: "done", completedAt: 5, completedBy: "u-me" }), false)
+        expect(fake.saveShared).toHaveBeenLastCalledWith("shared_items", expect.objectContaining({ status: "todo", completedAt: null, completedBy: null }))
         await claim(task({}), "u-me", true)
         expect(fake.saveShared).toHaveBeenLastCalledWith("shared_items", expect.objectContaining({ assignees: ["u-me"] }))
         await claim(task({ assignees: ["u-me", "u-x"] }), "u-me", false)

@@ -172,6 +172,14 @@ describe("project rows in the views (Stage 9 plan, Decisions 1-2)", () => {
         expect(forCalendar([a1, { ...same, date: "2026-10-30" }], "u-me", spaces).map((i) => i.id)).toEqual(["a1", "project"])
     })
 
+    it("does not fold into an assignment an editor removed, nor a project with no date", () => {
+        const a1 = row({ id: "a1", type: "assignment", scope: C, key: C + "/a1", source: "class", spaceId: "webs00000001", date: "2026-10-15" } as Partial<EffectiveItem>)
+        const gone = { ...a1, removed: { by: "u-sam", at: 5 } }
+        expect(forCalendar([gone, team({ id: "project", type: "project", date: "2026-10-15" })], "u-me", spaces).map((i) => i.id)).toEqual(["a1", "project"])
+        const undated = { ...a1, date: "" }
+        expect(forCalendar([undated, team({ id: "project", type: "project", date: "" })], "u-me", spaces).map((i) => i.id)).toEqual(["a1", "project"])
+    })
+
     it("returns the list itself when it holds no project row", () => {
         const items = [row({ id: "own" })]
         expect(forCalendar(items, "u-me", spaces)).toBe(items)

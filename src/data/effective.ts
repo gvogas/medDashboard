@@ -176,7 +176,7 @@ export function forCalendar<I extends EffectiveItem>(items: I[], me: string, spa
         if (isProjectRow(it) && it.type === "project") {
             const s = spaces.find((x) => x.id === it.spaceId), p = s?.parent
             const a = p ? byKey.get("c:" + p.space + "/" + p.item) : undefined
-            if (s && a && a.date === it.date) { folds.set(keyOf(a), [...(folds.get(keyOf(a)) ?? []), { spaceId: s.id, name: s.name }]); continue }
+            if (s && a && !a.removed && !!it.date && a.date === it.date) { folds.set(keyOf(a), [...(folds.get(keyOf(a)) ?? []), { spaceId: s.id, name: s.name }]); continue }
         }
         out.push(it)
     }

@@ -62,8 +62,11 @@ export async function addTask(spaceId: string, title: string, date: string): Pro
 }
 /** An editor's change to a task: title, date, times, notes, assignees. */
 export const saveTask = (t: SharedItem, patch: Partial<SharedItem>) => write({ ...t, ...patch })
-/** Done or not done, for the whole team (spec §10); whoever completes it is named by the Worker. */
-export const setDone = (t: SharedItem, done: boolean) => write({ ...t, status: done ? "done" : "todo", completedAt: done ? t.completedAt ?? Date.now() : null })
+/** Done or not done, for the whole team (spec §10); whoever completes it is named by the Worker,
+ *  and here too until it syncs, so achievements count it at once. */
+export const setDone = (t: SharedItem, done: boolean) => write({
+    ...t, status: done ? "done" : "todo", completedAt: done ? t.completedAt ?? Date.now() : null, completedBy: done ? data.profile?.id ?? null : null,
+})
 /** Take an unassigned task, or step off one. */
 export const claim = (t: SharedItem, me: string, on: boolean) => write({ ...t, assignees: on ? [me] : t.assignees.filter((u) => u !== me) })
 export const deleteTask = (t: SharedItem) => store.removeShared("shared_items", t.scope, t.id)
