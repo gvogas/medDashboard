@@ -274,7 +274,7 @@ Deploying, secrets, accounts and database moves: `docs/DEPLOYING.md`.
    completing, the project sheet and the sidebar's Projects group, leaving, removal and
    deleting; account deletion takes the account off its tasks. Out of the views until
    Stage 9. No migration.
-10. **Oct 19:** Stage 9 (`collab-9-project-views`): projects in the views, admins only.
+10. **Oct 19:** Stage 9 (main `8ca434f`): projects in the views, admins only.
     Your tasks and each project's date on the Week and Month (a project folds into its
     assignment's chip on the same day), ticking a team task there, Stats, achievements and
     the Study pickers, All items' Source filter, the task card, progress, workload, the
