@@ -3,8 +3,9 @@
 // team's), and deleting it. Tasks themselves are ordinary shared writes (worker/db.js), whose
 // member rules have been there since Stage 2. Admins only until Stage 10.
 import { HttpError } from './http.js';
-import { memberGuard } from './access.js';
+import { assertOwner, memberGuard, ownerGuard } from './access.js';
 import { MY_SPACES, NEXT_ROW_REVISION, NEXT_SPACE_REVISION, SPACE_LIMIT, joinPrefs, randomId, spaceSummary } from './spaces.js';
+import { noteStmt } from './activity.js';
 
 /** Projects are for admins until Stage 10 opens them (Stage 8 plan, Decision 1). */
 export const PROJECTS_ADMINS_ONLY = true;
@@ -66,4 +67,32 @@ export async function createProject(db, userId, { title, date = null, parent = n
   const { n } = await db.prepare(`SELECT ${MY_SPACES} AS n`).bind(userId).first();
   if (n >= SPACE_LIMIT) throw new HttpError(409, { error: 'limit' });
   throw bad('parent');
+}
+
+/**
+ * The owner links an unarchived project to a class assignment they can see, taking its date,
+ * or unlinks it (parent null), which keeps the date (Decision 4); writes space.linked.
+ * 404 outside the project or on a class; 403 for anyone but the owner; 400 parent.
+ */
+export async function linkProject(db, userId, spaceId, parent, now = Date.now()) {
+  const me = await assertOwner(db, userId, spaceId);
+  if (me.kind !== 'project') throw new HttpError(404, { error: 'not_found' });
+  let assignment = null;
+  if (parent) {
+    const g = memberGuard(parent.space, userId);
+    assignment = await db.prepare(`SELECT title, date FROM items WHERE scope = ? AND id = ? AND deleted_at IS NULL AND ${g.sql}`)
+      .bind('c:' + parent.space, parent.item, ...g.binds).first();
+    if (!assignment) throw bad('parent');
+  }
+  const g = ownerGuard(spaceId, userId);
+  await db.batch([
+    db.prepare(`UPDATE spaces SET parent_space = ?, parent_item = ?, updated_at = ?, revision = ${NEXT_SPACE_REVISION}
+      WHERE id = ? AND (parent_space IS NOT ? OR parent_item IS NOT ?) AND ${g.sql}`)
+      .bind(parent?.space ?? null, parent?.item ?? null, now, spaceId, parent?.space ?? null, parent?.item ?? null, ...g.binds),
+    ...(parent ? [db.prepare(`UPDATE items SET date = ?, updated_by = ?, updated_at = ?, revision = revision + 1
+      WHERE scope = ? AND id = 'project' AND date != ? AND EXISTS (SELECT 1 FROM spaces WHERE id = ? AND parent_item = ? AND updated_at = ?)`)
+      .bind(assignment.date, userId, now, 'p:' + spaceId, assignment.date, spaceId, parent.item, now)] : []),
+    noteStmt(db, { spaceId, actorId: userId, verb: 'space.linked', newValue: parent?.item ?? null, detail: parent ? { assignment: assignment.title } : {}, now,
+      when: 'EXISTS (SELECT 1 FROM spaces WHERE id = ?1 AND updated_at = ?8 AND parent_item IS ?6)' }),
+  ]);
 }

@@ -7,7 +7,7 @@ import { validateSharedCourse } from './validate.js';
 import { absorb, checkConvert, createClass, priorConvert, refreshSchool, setRole, spaceDetails, transfer } from './spaces.js';
 import { deleteClass, keep, leave, removeMember, setArchived, shareItems } from './leaving.js';
 import { acceptInvite, declineInvite, dropCode, invite, joinByCode, makeCode, myInvites, revokeInvite } from './invites.js';
-import { PROJECTS_ADMINS_ONLY, assertProjectsOpen, createProject, isAdmin, projectBody } from './projects.js';
+import { PROJECTS_ADMINS_ONLY, assertProjectsOpen, createProject, isAdmin, linkProject, parentOf, projectBody } from './projects.js';
 
 const SID = '([a-z0-9]{12})';
 const UID = '([^/]{1,64})';
@@ -102,6 +102,11 @@ export const classRoutes = [
     const { archived } = await readJson(request);
     if (typeof archived !== 'boolean') throw bad('archived');
     await setArchived(env.DB, userId, sid, archived);
+    return done();
+  }],
+  ['POST', route(`spaces/${SID}/link`), async ({ request, env, params: [sid] }) => {
+    const userId = await requireUser(request, env);
+    await linkProject(env.DB, userId, sid, parentOf((await readJson(request)).parent));
     return done();
   }],
   ['DELETE', route(`spaces/${SID}`), async ({ request, env, params: [sid] }) => {

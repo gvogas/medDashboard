@@ -6,6 +6,7 @@ import { assertAllowed, editorGuard, memberGuard, parseScope, scopeOf, writerGua
 import { SPACE_LIMIT } from './spaces.js';
 import { MEANINGFUL, autoKeep } from './leaving.js';
 import { KEEP_MS } from './activity.js';
+import { TASK_LIMIT } from './projects.js';
 import { MARK_DEFAULTS, stable } from '../src/core/shared.ts';
 
 const PROFILE_COLS =
@@ -366,6 +367,11 @@ function sharedUpsertStmt(db, table, scope, userId, id, fields, now, revision, g
     updates.push('assignees = excluded.assignees',
       'completed_by = CASE WHEN excluded.completed_at IS NULL THEN NULL WHEN items.completed_at IS NOT NULL THEN items.completed_by ELSE excluded.completed_by END');
     checks.push(...itemChecks(scope, fields));
+    /* a new task needs room in its project (spec §3); a row that is there already always may be written */
+    if (scope.startsWith('p:') && fields.type === 'task') {
+      checks.push({ sql: `(EXISTS (SELECT 1 FROM items WHERE scope = ? AND id = ?)
+        OR (SELECT count(*) FROM items WHERE scope = ? AND type = 'task' AND deleted_at IS NULL) < ${TASK_LIMIT})`, binds: [scope, id, scope] });
+    }
   }
   return db.prepare(
     `INSERT INTO ${table} (${names.join(', ')}, revision) SELECT ${names.map(() => '?').join(', ')}, COALESCE((SELECT seq FROM sqlite_sequence WHERE name = 'changes'), 0) + 1
@@ -422,6 +428,10 @@ export async function upsertShared(db, table, scope, userId, id, fields, { revis
   const saved = await sharedUpsertStmt(db, table, scope, userId, id, fields, now, revision, guard).first();
   if (saved) return sharedToApi(table, saved);
   await assertWritable(db, table, scope, userId, fields, 'editor');
+  if (scope.startsWith('p:') && fields.type === 'task' && !(await getShared(db, table, scope, userId, id))) {
+    const { n } = await db.prepare("SELECT count(*) AS n FROM items WHERE scope = ? AND type = 'task' AND deleted_at IS NULL").bind(scope).first();
+    if (n >= TASK_LIMIT) throw new HttpError(409, { error: 'limit' });
+  }
   /* access lost since assertWritable answers as the routes do (404, 403), never as a conflict */
   const refused = async (current, fields) => {
     await assertAllowed(db, userId, parseScope(scope).spaceId, 'editor');
