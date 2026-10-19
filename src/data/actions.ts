@@ -97,6 +97,12 @@ export function setShow(show: Show) {
     notify()
 }
 
+/** All items' Source select: 'all', 'personal' or 'space:<id>'. */
+export function setSource(source: string) {
+    ui.source = source
+    notify()
+}
+
 /**
  * A stat tile's list on All items, matching the tile's number: every overdue item, or
  * the open assignments, soonest first. The tiles count your whole work, so the list

@@ -51,7 +51,7 @@ describe("the effective lists", () => {
         expect(ids("bio")).toEqual(["mine"])
         expect(ids(WEB + "/bio")).toEqual(["theirs"])
         expect(instances(items, courses, { ...ALL, search: "(class)" }, "2026-09-21", "2026-09-27").map((x) => x.item.id)).toEqual(["theirs"])
-        expect(tableRows(items, courses, { ...ALL, types: {}, show: "all" }, { key: "course", dir: -1 }).map((it) => it.id)).toEqual(["theirs", "mine"])
+        expect(tableRows(items, courses, { ...ALL, types: {}, show: "all", source: "all" }, { key: "course", dir: -1 }).map((it) => it.id)).toEqual(["theirs", "mine"])
         expect(typeCounts(items, WEB + "/bio")).toEqual({ assignment: 1 })
         const day = weekDays({ items, courses, filters: ALL, schedule: "deadlines", anchor: "2026-09-23", today: "2026-09-23", cal: null }).days[2]
         expect(day.entries.map((e) => e.key)).toEqual(["imine", "i" + WEB + "/theirs"])

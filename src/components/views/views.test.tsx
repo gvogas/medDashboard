@@ -6,7 +6,7 @@ import { act, cleanup, fireEvent, render, screen, within } from "@testing-librar
 const fake = vi.hoisted(() => ({
     data: { items: [] as unknown[], courses: [] as unknown[], quotes: [] as unknown[], study_sessions: [] as unknown[], profile: null as unknown },
     ui: {
-        view: "week", anchor: "2026-09-23", search: "", types: {} as Record<string, boolean>, show: "all", listFrom: null, course: "all",
+        view: "week", anchor: "2026-09-23", search: "", types: {} as Record<string, boolean>, show: "all", source: "all", listFrom: null, course: "all",
         focus: false, bg: "med", schedule: "all", sort: { key: "date", dir: 1 }, quoteIx: 0,
     },
 }))
@@ -14,7 +14,7 @@ const actions = vi.hoisted(() => ({
     openItem: vi.fn(), newItemOn: vi.fn(), toggleTask: vi.fn(), quickAddTask: vi.fn(), setSchedule: vi.fn(),
     goToDay: vi.fn(), openCourse: vi.fn(), sortTable: vi.fn(), openStudy: vi.fn(), showTileList: vi.fn(),
     /* All items' chips (their own tests are in table-filters.test.tsx) */
-    itemTypes: vi.fn(() => []), isTypeOn: vi.fn(() => true), toggleType: vi.fn(), setShow: vi.fn(), endTileList: vi.fn(),
+    itemTypes: vi.fn(() => []), isTypeOn: vi.fn(() => true), toggleType: vi.fn(), setShow: vi.fn(), setSource: vi.fn(), endTileList: vi.fn(),
 }))
 vi.mock("@/data/actions", () => actions)
 vi.mock("@/data/ui", async () => (await import("@/data/fake-ui")).fakeUi(fake.ui))
@@ -52,7 +52,7 @@ beforeEach(() => {
 afterEach(() => {
     cleanup()
     Object.values(actions).forEach((fn) => fn.mockClear())
-    Object.assign(fake.ui, { view: "week", search: "", types: {}, schedule: "all", sort: { key: "date", dir: 1 }, quoteIx: 0, focus: false })
+    Object.assign(fake.ui, { view: "week", search: "", types: {}, source: "all", schedule: "all", sort: { key: "date", dir: 1 }, quoteIx: 0, focus: false })
 })
 
 const set = (patch: Partial<typeof fake.ui>) => { Object.assign(fake.ui, patch); act(() => notify()) }
@@ -304,5 +304,48 @@ describe("classes in the views, for anyone", () => {
         expect(screen.queryByRole("button", { name: /Extra quiz/ })).toBeNull()
         set({ view: "table" })
         expect(screen.getByRole("row", { name: /REST API Project/ })).toBeTruthy()
+    })
+})
+
+describe("projects in the views", () => {
+    const WEB = "c:abcdefghij12", FIRE = "p:fire00000001", store = fake.data as Record<string, unknown>
+    const team = (row: Record<string, unknown>, assignees: string[] = []) => ({ ...item(row), scope: FIRE, updatedBy: null, assignees, completedBy: null })
+    beforeEach(() => {
+        store.profile = { id: "u1", hiddenSources: [] }
+        store.spaces = [
+            { id: "abcdefghij12", scope: WEB, kind: "class", role: "member", archived: false, name: "Web Services", parent: null, revision: 1, members: [] },
+            { id: "fire00000001", scope: FIRE, kind: "project", role: "member", archived: false, name: "Fire Response API", parent: { space: "abcdefghij12", item: "a1" }, revision: 1,
+                members: [{ userId: "u1", name: "George", role: "member" }, { userId: "u2", name: "Sam", role: "owner" }] },
+        ]
+        store.shared_courses = [{ ...normalizeCourse({ id: "web", code: "WEB", name: "Web Services", color: "#17B3AE" }), scope: WEB }]
+        store.shared_items = [
+            { ...item({ id: "a1", title: "REST API Project", courseId: "web" }), scope: WEB },
+            team({ id: "project", type: "project", title: "Fire Response API" }),
+            team({ id: "t1", type: "task", title: "Write the endpoints" }, ["u1", "u2"]),
+            team({ id: "t2", type: "task", title: "Draw the diagram" }, ["u2"]),
+        ]
+        store.marks = []
+        store.space_prefs = []
+    })
+    afterEach(() => { for (const k of ["spaces", "shared_courses", "shared_items", "marks", "space_prefs"]) store[k] = [] })
+
+    it("mark a team task and the assignment a project folds into on the week", () => {
+        show(<Views />)
+        expect(within(screen.getAllByRole("button", { name: /Write the endpoints/ })[0]).getByRole("img", { name: "Team task · assigned to you" })).toBeTruthy()
+        expect(within(screen.getByRole("button", { name: /REST API Project/ })).getByRole("img", { name: "Team · Fire Response API" })).toBeTruthy()
+        expect(screen.queryByRole("button", { name: /Draw the diagram/ })).toBeNull()
+        set({ search: "fire response" })
+        expect(screen.getByRole("button", { name: /REST API Project/ })).toBeTruthy()
+    })
+
+    it("list every team task on All items with who has it, and pick a source", () => {
+        set({ view: "table" })
+        show(<Views />)
+        expect(within(screen.getByRole("row", { name: /Write the endpoints/ })).getByText(/You, Sam/)).toBeTruthy()
+        expect(within(screen.getByRole("row", { name: /Draw the diagram/ })).getByRole("img", { name: "Team task" })).toBeTruthy()
+        const source = screen.getByRole("combobox", { name: "Source" }) as HTMLSelectElement
+        expect([...source.options].map((o) => o.textContent)).toEqual(["Everything", "Personal", "Web Services", "Fire Response API"])
+        fireEvent.change(source, { target: { value: "space:fire00000001" } })
+        expect(actions.setSource).toHaveBeenCalledWith("space:fire00000001")
     })
 })

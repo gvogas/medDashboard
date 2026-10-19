@@ -14,7 +14,7 @@ import { minutesByDay, streak } from "@/core/history"
 
 import { prepPace } from "@/core/prep"
 import { useCourses, useItems, useProfile, useQuotes, useSpaces, useStudySessions } from "./store"
-import { courseKeyOf, forCalendar, forStats, keyOf, onCalendar } from "./effective"
+import { courseKeyOf, forCalendar, forStats, keyOf, onCalendar, type EffectiveItem } from "./effective"
 import { ui } from "./ui"
 import type { Course, Item, Meeting, Quote, Schedule, Show, SortKey, StudySession } from "./types"
 
@@ -22,8 +22,8 @@ import type { Course, Item, Meeting, Quote, Schedule, Show, SortKey, StudySessio
 
 export interface Filters { search: string; course: string }
 
-/** The All items table's filters: the course and search, the type chips and the status chips. */
-export interface TableFilters extends Filters { types: Record<string, boolean>; show: Show }
+/** The All items table's filters: the course and search, the type chips, the status chips and the Source select. */
+export interface TableFilters extends Filters { types: Record<string, boolean>; show: Show; source: string }
 
 /** A type is on unless it was switched off; new types start on. */
 export const typeOn = (f: TableFilters, type: string) => f.types[type] !== false
@@ -31,13 +31,19 @@ export const typeOn = (f: TableFilters, type: string) => f.types[type] !== false
 /** Open, overdue, or anything, as the table's status chips ask. */
 export const passShow = (it: Item, show: Show) => (show === "open" ? isOpen(it) : show === "overdue" ? isOverdue(it) : true)
 
+/** The Source filter (Stage 9 plan): your rows (also those under a class), a class's (and yours under it), a project's. */
+export const fromSource = (it: EffectiveItem, source: string) =>
+    source === "all" ? true : source === "personal" ? !it.spaceId : it.spaceId === source.slice(6) || it.classId === source.slice(6)
+
 /* Courses by key: a class course and a personal one may share an id (effective.ts). */
 const courseMap = (courses: Course[]) => new Map(courses.map((c) => [keyOf(c), c]))
 
 export function matchSearch(it: Item, byId: Map<string, Course>, search: string): boolean {
     if (!search) return true
     const key = courseKeyOf(it), c = key ? byId.get(key) : undefined
-    const hay = (it.title + " " + (it.where || "") + " " + (it.notes || "") + " " + (c ? c.name + " " + c.code : "") + " " + tmeta(it.type).label).toLowerCase()
+    /* an assignment a project folds into (forCalendar) is found by the project's name too */
+    const team = (it as EffectiveItem).team?.map((t) => t.name).join(" ") ?? ""
+    const hay = (it.title + " " + (it.where || "") + " " + (it.notes || "") + " " + (c ? c.name + " " + c.code : "") + " " + tmeta(it.type).label + " " + team).toLowerCase()
     return hay.includes(search.toLowerCase())
 }
 
@@ -292,7 +298,7 @@ export function tableRows(items: Item[], courses: Course[], f: TableFilters, sor
             default: return it.date
         }
     }
-    return items.filter((it) => typeOn(f, it.type) && passShow(it, f.show) && passFilters(it, f, byId)).sort((a, b) => cmp(value(a), value(b)) * sort.dir)
+    return items.filter((it) => fromSource(it, f.source) && typeOn(f, it.type) && passShow(it, f.show) && passFilters(it, f, byId)).sort((a, b) => cmp(value(a), value(b)) * sort.dir)
 }
 
 /**
@@ -357,10 +363,10 @@ export function quoteAt(quotes: Quote[], ix: number): { quote: Quote; ix: number
 
 const filtersOf = (): Filters => ({ search: ui.search, course: ui.course })
 
-/** The table's filters. A stat tile's list leaves out the course and the search, as the tile does. */
+/** The table's filters. A stat tile's list leaves out the course, the search and the source, as the tile does. */
 export const tableFiltersOf = (): TableFilters => {
     const tile = ui.listFrom === "tile"
-    return { search: tile ? "" : ui.search, course: tile ? "all" : ui.course, types: { ...ui.types }, show: ui.show || "all" }
+    return { search: tile ? "" : ui.search, course: tile ? "all" : ui.course, types: { ...ui.types }, show: ui.show || "all", source: tile ? "all" : ui.source || "all" }
 }
 
 /**

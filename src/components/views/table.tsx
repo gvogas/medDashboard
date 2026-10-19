@@ -5,12 +5,14 @@
 import { cn } from "@/lib/utils"
 import { isComplete } from "@/core/model"
 import { hhmm, parse, DOW, MON } from "@/core/dates"
-import { courseByKey, courseKeyOf, keyOf } from "@/data/effective"
+import { courseByKey, courseKeyOf, keyOf, type EffectiveItem } from "@/data/effective"
+import { assigneeNames } from "@/data/projects"
+import { useProfile, useSpaces } from "@/data/store"
 import { SourceMark } from "./source-mark"
 import { useTable } from "@/data/views"
 import { openItem, sortTable } from "@/data/actions"
 import { TableFilters } from "./table-filters"
-import type { Course, Item, SortKey } from "@/data/types"
+import type { Course, Item, SharedItem, SortKey } from "@/data/types"
 import type { TableFilters as Filters } from "@/data/views"
 import { itemTypes } from "@/data/actions"
 import { accent, Empty, HeadNote, onActivate, Panel, StatusChip, Steps, TypeChip } from "./bits"
@@ -37,6 +39,7 @@ const time = (it: Item) => (it.start ? hhmm(it.start) + (it.end ? "–" + hhmm(i
 
 export function TableView() {
     const { rows, total, sort, filters, overdue, perType } = useTable()
+    const spaces = useSpaces(), me = useProfile()?.id ?? ""   /* who has a project's task */
     const why = hiddenBy(filters)
 
     const Head = ({ k, label }: { k: SortKey; label: string }) => {
@@ -79,6 +82,8 @@ export function TableView() {
                         )}
                         {rows.map((it) => {
                             const c = courseByKey(courseKeyOf(it))
+                            /* a project's task, which says who has it */
+                            const team = (it as EffectiveItem).source === "project" && it.type === "task" ? it as SharedItem & EffectiveItem : null
                             return (
                                 <tr
                                     key={keyOf(it)}
@@ -94,6 +99,7 @@ export function TableView() {
                                     <td className={td}>
                                         <b className={cn("font-semibold", isComplete(it) ? "text-[var(--done-ink)]" : "text-foreground")}>{it.title}</b>{" "}
                                         <SourceMark item={it} course={c} />
+                                        {team && <span className="text-[11px] text-muted-foreground"> · {assigneeNames(team, spaces.find((s) => s.id === team.spaceId), me)}</span>}
                                         <Steps item={it} className="mt-1" />
                                     </td>
                                     <td className={cn(td, "max-[640px]:text-right")}><TypeChip type={it.type} /></td>

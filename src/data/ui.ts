@@ -17,6 +17,7 @@ export const ui: Ui = {
     view: "week", anchor: today(), search: "", course: "all",
     sem: null,               /* the sidebar's semester; null follows the current one */
     types: {}, show: "all",  /* the All items table's type and status chips */
+    source: "all",           /* the All items table's Source filter: 'all', 'personal' or 'space:<id>' */
     listFrom: null,          /* 'tile' while the table shows a stat tile's list, course and search aside */
     settingsTab: "you",      /* the Settings tab last shown */
     sort: { key: "date", dir: 1 },
