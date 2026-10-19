@@ -98,7 +98,7 @@ export function assigneeNames(t: SharedItem, s: Space | null | undefined, me: st
 
 /* ── progress, workload, the linked assignment (spec §10) ── */
 
-/** Done over live tasks (spec §10): "12 / 18 · 67%". */
+/** Done over live tasks (spec §10): "12 / 18 · 67%". Pass tasksOf(id). */
 export function progress(tasks: SharedItem[]): { done: number; total: number; label: string; frac: number } {
     const total = tasks.length, done = tasks.filter((t) => t.status === "done").length
     return { done, total, frac: total ? done / total : 0, label: total ? `${done} / ${total} · ${Math.round((done / total) * 100)}%` : "No tasks yet" }
@@ -119,24 +119,27 @@ export type Assignment = { state: "none" } | { state: "removed" } | { state: "sa
 /**
  * The class assignment a project belongs to, as this person may see it (spec §10): nothing
  * unless they hold that class; "removed" when they do but the assignment is no longer live
- * on this device; else its label and date, and whether the project's date has drifted from it.
+ * on this device or the class is archived; else its label and date, and whether the project's
+ * date has drifted from it. An undated assignment never drifts: there is no date to take.
  */
 export function assignmentOf(s: Pick<Space, "parent">, project: Pick<SharedItem, "date">, items: SharedItem[] = data.shared_items,
-    spaces: Pick<Space, "id" | "name">[] = data.spaces): Assignment {
+    spaces: (Pick<Space, "id" | "name"> & Partial<Pick<Space, "archived">>)[] = data.spaces): Assignment {
     const p = s.parent
     const cls = p && spaces.find((x) => x.id === p.space)
     if (!p || !cls) return { state: "none" }
-    const a = items.find((i) => i.scope === "c:" + p.space && i.id === p.item && !i.deletedAt)
+    const a = !cls.archived && items.find((i) => i.scope === "c:" + p.space && i.id === p.item && !i.deletedAt)
     if (!a) return { state: "removed" }
-    return { state: a.date === project.date ? "same" : "drift", label: cls.name + " · " + a.title, date: a.date }
+    return { state: !a.date || a.date === project.date ? "same" : "drift", label: cls.name + " · " + a.title, date: a.date }
 }
 
 /** Use this date (spec §10): the project's due date becomes the assignment's; an ordinary editor write. */
 export const takeAssignmentDate = (project: SharedItem, date: string) => saveTask(project, { date })
 
 /** A project's colour (spec §9): its linked class's, when you hold it, else your own for the project. */
-export function projectColour(s: Pick<Space, "id" | "parent">, prefs: Pick<SpacePref, "spaceId" | "color">[] = data.space_prefs ?? []): string | null {
-    return (s.parent && prefs.find((p) => p.spaceId === s.parent!.space)?.color) || prefs.find((p) => p.spaceId === s.id)?.color || null
+export function projectColour(s: Pick<Space, "id" | "parent">, prefs: Pick<SpacePref, "spaceId" | "color">[] = data.space_prefs ?? [],
+    spaces: Pick<Space, "id">[] = data.spaces): string | null {
+    const cls = s.parent && spaces.some((x) => x.id === s.parent!.space) ? s.parent.space : null
+    return (cls && prefs.find((p) => p.spaceId === cls)?.color) || prefs.find((p) => p.spaceId === s.id)?.color || null
 }
 
 /* ── the project itself ── */

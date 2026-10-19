@@ -1,8 +1,9 @@
 // One task in the project sheet (spec §10, §15): done, title, date, who has it, and Claim;
-// owners and editors edit it in place (title, date, assignees, Delete). A write the Worker
-// turns down later lands in Saved copies, as any shared row's does. The editor takes the
-// keyboard when it opens and gives it back to Edit when it closes; it closes by itself when
-// you can no longer edit (the project archived, your role changed).
+// owners and editors edit it in place (title, date, assignees, each with their open tasks in
+// the next two weeks, Delete). A write the Worker turns down later lands in Saved copies, as
+// any shared row's does. The editor takes the keyboard when it opens and gives it back to
+// Edit when it closes; it closes by itself when you can no longer edit (the project archived,
+// your role changed).
 
 import { useEffect, useId, useRef, useState } from "react"
 import { cn } from "@/lib/utils"
@@ -13,8 +14,9 @@ import { Button, DateInput, TextInput } from "./fields"
 
 const BOX = "size-3.5 shrink-0 accent-[var(--accent)]"
 
-/** `gone` is called when the task is deleted here, to put the keyboard somewhere that stays. */
-export function TaskRow({ task, space, me, gone }: { task: SharedItem; space: Space; me: string; gone: () => void }) {
+/** `load` is each member's workload (projects.ts workload); `gone` is called when the task is
+ *  deleted here, to put the keyboard somewhere that stays. */
+export function TaskRow({ task, space, me, load, gone }: { task: SharedItem; space: Space; me: string; load: Map<string, number>; gone: () => void }) {
     const [editing, setEditing] = useState(false)
     const edit = useRef<HTMLButtonElement>(null)
     const back = useRef(false)
@@ -39,12 +41,12 @@ export function TaskRow({ task, space, me, gone }: { task: SharedItem; space: Sp
                 {claimAct && <Button variant="ghost" className="px-2.5 py-1" onClick={() => void claim(task, me, claimAct === "claim")}>{claimAct === "claim" ? "Claim" : "Unclaim"}</Button>}
                 {editor && !editing && <Button ref={edit} variant="ghost" className="px-2.5 py-1" aria-label={"Edit " + task.title} onClick={() => setEditing(true)}>Edit</Button>}
             </span>
-            {editing && editor && <TaskEditor task={task} space={space} close={close} remove={() => { void deleteTask(task); gone() }} />}
+            {editing && editor && <TaskEditor task={task} space={space} load={load} close={close} remove={() => { void deleteTask(task); gone() }} />}
         </li>
     )
 }
 
-function TaskEditor({ task, space, close, remove }: { task: SharedItem; space: Space; close: () => void; remove: () => void }) {
+function TaskEditor({ task, space, load, close, remove }: { task: SharedItem; space: Space; load: Map<string, number>; close: () => void; remove: () => void }) {
     const [title, setTitle] = useState(task.title)
     const [date, setDate] = useState(task.date)
     /* everyone, or the people still in the project: someone who left is not offered again */
@@ -65,7 +67,7 @@ function TaskEditor({ task, space, close, remove }: { task: SharedItem; space: S
                 </label>
                 {space.members.map((m) => (
                     <label key={m.userId} htmlFor={f + m.userId} className="flex cursor-pointer items-center gap-1.5">
-                        <input id={f + m.userId} type="checkbox" checked={!everyone && who.includes(m.userId)} disabled={everyone} onChange={() => toggle(m.userId)} className={BOX} />{m.name}
+                        <input id={f + m.userId} type="checkbox" checked={!everyone && who.includes(m.userId)} disabled={everyone} onChange={() => toggle(m.userId)} className={BOX} />{m.name}<span className="text-muted-foreground"> · {load.get(m.userId) ?? 0} in the next 2 weeks</span>
                     </label>
                 ))}
             </fieldset>

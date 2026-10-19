@@ -33,6 +33,10 @@ vi.mock("@/core/store", async () => {
             notify()
             return row
         }),
+        saveProfile: vi.fn(async (patch: Row) => {
+            fake.data.profile = { ...fake.data.profile, ...patch }
+            notify()
+        }),
         removeShared: vi.fn(async (_store: string, scope: string, id: string) => {
             fake.data.shared_items = fake.data.shared_items.filter(other(scope, id))
             notify()
@@ -53,6 +57,7 @@ vi.mock("@/data/effective", () => ({ itemByKey: () => null }))
 
 import { notify } from "@/bridge"
 import * as store from "@/core/store"
+import { addDays, iso } from "@/core/dates"
 import { closeSheet, getSheet, openSheet } from "@/data/overlay"
 import { NewMenu } from "../sidebar-classes"
 import { ProjectsGroup } from "../sidebar-projects"
@@ -102,7 +107,7 @@ describe("team projects (spec §10, §15)", () => {
         expect(fake.api.spaces.create).toHaveBeenCalledWith({ kind: "project", title: "Fire Response API", date: "2026-10-15", parent: { space: CID, item: "a1" } })
         await waitFor(() => expect(getSheet()).toEqual({ kind: "project", spaceId: PID, tab: "tasks" }))
         expect(await screen.findByRole("heading", { name: "Fire Response API" })).toBeTruthy()
-        expect(within(screen.getByRole("region", { name: "Projects" })).getByRole("button", { name: /Fire Response API/ })).toBeTruthy()
+        expect(within(screen.getByRole("region", { name: "Projects" })).getByRole("button", { name: /tasks done.*Fire Response API/ })).toBeTruthy()
     })
 
     it("asks for a name, and starts on the assignment it was opened from", async () => {
@@ -178,7 +183,7 @@ describe("the project sheet (spec §10, §15)", () => {
         expect(within(row).getByText("Nobody yet")).toBeTruthy()
         expect((screen.getByLabelText("New task") as HTMLInputElement).value).toBe("")
         fireEvent.click(within(row).getByRole("button", { name: "Edit Create incidents endpoint" }))
-        fireEvent.click(within(row).getByRole("checkbox", { name: "Sam" }))
+        fireEvent.click(within(row).getByRole("checkbox", { name: /^Sam\b/ }))
         await act(async () => { fireEvent.click(within(row).getByRole("button", { name: "Save" })) })
         expect(await within(row).findByText("Sam")).toBeTruthy()
         await act(async () => { fireEvent.click(within(row).getByRole("checkbox", { name: "Done: Create incidents endpoint" })) })
@@ -325,6 +330,53 @@ describe("the project sheet (spec §10, §15)", () => {
         expect(within(t1).getByRole("checkbox")).toHaveProperty("disabled", true)
         expect(within(t1).queryByRole("button", { name: "Claim" })).toBeNull()
         expect(screen.queryByLabelText("New task")).toBeNull()
+    })
+
+    it("shows progress, the assignment's drift with Use this date, and workload in the picker", async () => {
+        const soon = iso(addDays(new Date(), 3))
+        seed("editor", [task("t1", ["u-me"], { status: "done", completedAt: 1 }), task("t2", ["u-sam"], { date: soon }), task("t3", [])])
+        fake.data.shared_items = fake.data.shared_items.map((i) => ((i as { id: string }).id === "a1" ? { ...(i as object), date: "2026-10-18" } : i))
+        await show()
+        expect(await screen.findByText(/1 \/ 3 · 33%/)).toBeTruthy()
+        expect(screen.getByText(/Assignment due 18 Oct/)).toBeTruthy()
+        await act(async () => { fireEvent.click(screen.getByRole("button", { name: "Use this date" })) })
+        expect(fake.saved.at(-1)).toMatchObject({ id: "project", date: "2026-10-18", title: "Fire Response API" })
+        expect(await screen.findByText(/For Web Services · REST API Project/)).toBeTruthy()
+        expect(screen.queryByRole("button", { name: "Use this date" })).toBeNull()
+        fireEvent.click(screen.getAllByRole("button", { name: /^Edit / })[0])
+        expect(screen.getByRole("checkbox", { name: /^Sam ?· 1 in the next 2 weeks$/ })).toBeTruthy()
+        expect(screen.getByRole("checkbox", { name: /^You ?· 0 in the next 2 weeks$/ })).toBeTruthy()
+    })
+
+    it("offers Use this date only to those who can edit", async () => {
+        seed("member")
+        fake.data.shared_items = fake.data.shared_items.map((i) => ((i as { id: string }).id === "a1" ? { ...(i as object), date: "2026-10-18" } : i))
+        await show()
+        expect(await screen.findByText(/Assignment due 18 Oct/)).toBeTruthy()
+        expect(screen.queryByRole("button", { name: "Use this date" })).toBeNull()
+    })
+
+    it("says when the linked assignment is gone, and says nothing to someone without the class", async () => {
+        seed("owner")
+        fake.data.shared_items = fake.data.shared_items.filter((i) => (i as { id: string }).id !== "a1")
+        await show()
+        expect(await screen.findByText(/Linked assignment removed/)).toBeTruthy()
+        cleanup()
+        act(() => closeSheet())
+        fake.data.spaces = fake.data.spaces.filter((s) => (s as { id: string }).id !== CID)
+        await show()
+        expect(await screen.findByRole("heading", { name: "Fire Response API" })).toBeTruthy()
+        expect(screen.queryByText(/Linked assignment|For Web Services|Assignment due/)).toBeNull()
+    })
+
+    it("puts a ring and an eye on the sidebar's project row", async () => {
+        seed("editor", [task("t1", ["u-me"], { status: "done", completedAt: 1 }), task("t2", ["u-sam"]), task("t3", [])])
+        render(<ProjectsGroup />)
+        const group = screen.getByRole("region", { name: "Projects" })
+        expect(within(group).getByRole("img", { name: "1 of 3 tasks done" })).toBeTruthy()
+        await act(async () => { fireEvent.click(within(group).getByRole("button", { name: "Hide Fire Response API on your calendar" })) })
+        expect(fake.data.profile?.hiddenSources).toEqual(["space:" + PID])
+        expect(within(group).getByRole("button", { name: "Show Fire Response API on your calendar" })).toBeTruthy()
     })
 
     it("removing a member from a project says nothing is copied", async () => {

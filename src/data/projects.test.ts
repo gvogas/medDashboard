@@ -212,6 +212,13 @@ describe("progress, workload and the linked assignment (spec §10)", () => {
         expect(assignmentOf(s, project, [a1], [])).toEqual({ state: "none" })
         expect(assignmentOf(space(), project, [a1], [cls])).toEqual({ state: "none" })
     })
+    it("never calls an undated assignment drift, and an archived class's assignment is removed", () => {
+        const s = space({ parent: { space: "webs00000001", item: "a1" } })
+        const project = task({ id: "project", type: "project", date: "2026-10-15" })
+        const a1 = task({ id: "a1", scope: "c:webs00000001", type: "assignment", title: "REST API Project", date: "" })
+        expect(assignmentOf(s, project, [a1], [{ id: "webs00000001", name: "Web Services" }])).toEqual({ state: "same", label: "Web Services · REST API Project", date: "" })
+        expect(assignmentOf(s, project, [{ ...a1, date: "2026-10-18" }], [{ id: "webs00000001", name: "Web Services", archived: true }])).toEqual({ state: "removed" })
+    })
     it("Use this date writes the assignment's date onto the project", async () => {
         const project = task({ id: "project", type: "project", date: "2026-10-15" })
         await takeAssignmentDate(project, "2026-10-18")
@@ -219,9 +226,15 @@ describe("progress, workload and the linked assignment (spec §10)", () => {
     })
     it("colours a project by its linked class when you hold it, else by your own pref", () => {
         const prefs = [{ spaceId: "webs00000001", color: "#e66" }, { spaceId: "fire00000001", color: "#36c" }] as Parameters<typeof projectColour>[1]
-        expect(projectColour(space({ parent: { space: "webs00000001", item: "a1" } }), prefs)).toBe("#e66")
+        expect(projectColour(space({ parent: { space: "webs00000001", item: "a1" } }), prefs, [{ id: "webs00000001" }])).toBe("#e66")
         expect(projectColour(space({ parent: { space: "gone00000001", item: "a1" } }), prefs)).toBe("#36c")
         expect(projectColour(space(), prefs)).toBe("#36c")
         expect(projectColour(space(), [])).toBeNull()
+    })
+    it("ignores the class's colour once you no longer hold the class", () => {
+        const prefs = [{ spaceId: "webs00000001", color: "#e66" }, { spaceId: "fire00000001", color: "#36c" }] as Parameters<typeof projectColour>[1]
+        const s = space({ parent: { space: "webs00000001", item: "a1" } })
+        expect(projectColour(s, prefs, [])).toBe("#36c")
+        expect(projectColour(s, prefs, [{ id: "webs00000001" }])).toBe("#e66")
     })
 })
