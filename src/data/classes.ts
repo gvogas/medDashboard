@@ -126,7 +126,6 @@ export function messageFor(e: unknown, name = "", kind: "class" | "project" = "c
     if (code === "exists") return "The class already has an item with this id."
     if (code === "archived") return `This ${kind} is archived. Unarchive it first.`
     if (code === "rate_limited") return "Too many tries. Wait a while, then try again."
-    if (code === "not_admin") return name ? `${name} can't join team projects yet: they're open to admins only for now.` : "Team projects are open to admins only for now."
     if (code === "invalid" && e.body?.field === "parent") return "That assignment isn't in a class you're in."
     if (code === "invalid" && e.body?.field === "confirm") return "Type the project's name exactly to delete it."
     if (code === "invalid") return e.body?.field === "code" ? "A code is 8 characters." : "Something in that isn't valid."

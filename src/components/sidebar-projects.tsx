@@ -1,10 +1,10 @@
-// The sidebar's Projects group (spec §15), for admins until Stage 10: a row per team project
+// The sidebar's Projects group (spec §15): a row per team project
 // you are in, opening its sheet. Its ring shows the tasks done, in the project's colour; its
 // eye hides the project from your Week and Month (spec §9), the row staying listed, dimmed.
 
 import { cn } from "@/lib/utils"
 import { useProfile, useSharedItems, useSpacePrefs, useSpaces } from "@/data/store"
-import { openProject, progress, projectColour, projectsShown, tasksOf } from "@/data/projects"
+import { openProject, progress, projectColour, tasksOf } from "@/data/projects"
 import { TeamGlyph } from "./shared-glyph"
 import { ProgressRing } from "./progress-ring"
 import { Eye, Heading } from "./sidebar-parts"
@@ -15,7 +15,7 @@ export function ProjectsGroup() {
     const prefs = useSpacePrefs()
     const spaces = useSpaces()
     const projects = spaces.filter((s) => s.kind === "project").sort((a, b) => a.name.localeCompare(b.name))
-    if (!projectsShown() || !projects.length) return null
+    if (!projects.length) return null
     return (
         <section aria-label="Projects">
             <Heading>Projects</Heading>

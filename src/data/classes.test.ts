@@ -84,9 +84,6 @@ describe("words and small rules", () => {
         expect(messageFor(new ApiError(400, { error: "invalid", field: "code" }))).toBe("A code is 8 characters.")
         expect(messageFor(new ApiError(429, { error: "rate_limited" }))).toBe("Too many tries. Wait a while, then try again.")
         expect(messageFor(new TypeError("Failed to fetch"))).toBe("You seem to be offline. This needs a connection.")
-        /* team projects, admins only for now (Stage 8) */
-        expect(messageFor(new ApiError(409, { error: "not_admin" }), "sam")).toBe("sam can't join team projects yet: they're open to admins only for now.")
-        expect(messageFor(new ApiError(403, { error: "not_admin" }))).toBe("Team projects are open to admins only for now.")
         expect(messageFor(new ApiError(400, { error: "invalid", field: "parent" }))).toBe("That assignment isn't in a class you're in.")
         expect(messageFor(new ApiError(400, { error: "invalid", field: "confirm" }))).toBe("Type the project's name exactly to delete it.")
         /* a project's sheets name the project */

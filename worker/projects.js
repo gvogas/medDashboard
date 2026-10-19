@@ -1,27 +1,19 @@
 // Team projects (spec §10): one 'project' item and its tasks in a 'p:' scope. Making one,
 // linking it to a class assignment, leaving it or being removed (no copy: the rows are the
 // team's), and deleting it. Tasks themselves are ordinary shared writes (worker/db.js), whose
-// member rules have been there since Stage 2. Admins only until Stage 10.
+// member rules have been there since Stage 2. Open to everyone since Stage 10.
 import { HttpError } from './http.js';
 import { assertKeeper, assertOwner, keeperGuard, memberGuard, ownerGuard } from './access.js';
 import { MY_SPACES, NEXT_ROW_REVISION, NEXT_SPACE_REVISION, SPACE_LIMIT, joinPrefs, randomId, spaceSummary, touchSpace } from './spaces.js';
 import { BUCKET, NAME } from './accounts.js';
 import { SPACE_NAME, noteStmt, undoneStmt } from './activity.js';
 
-/** Projects are for admins until Stage 10 opens them (Stage 8 plan, Decision 1). */
-export const PROJECTS_ADMINS_ONLY = true;
 /** The most live tasks a project holds (spec §3 Limits). */
 export const TASK_LIMIT = 200;
 
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
 const SPACE_ID = /^[a-z0-9]{12}$/;
 const bad = (field) => new HttpError(400, { error: 'invalid', field });
-
-export const isAdmin = async (db, userId) => (await db.prepare('SELECT is_admin FROM users WHERE id = ?').bind(userId).first())?.is_admin === 1;
-/** 403 not_admin for a project while they are admins only; `kind` is the space's. */
-export async function assertProjectsOpen(db, userId, kind) {
-  if (kind === 'project' && PROJECTS_ADMINS_ONLY && !(await isAdmin(db, userId))) throw new HttpError(403, { error: 'not_admin' });
-}
 
 /** {space, item} of a class assignment, or null; anything else is a 400 on `parent`. */
 export function parentOf(v) {

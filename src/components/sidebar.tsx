@@ -1,4 +1,4 @@
-// The sidebar: the name, the pages, the courses, the team projects (admins, for now), the
+// The sidebar: the name, the pages, the courses, the team projects, the
 // theme's picture and goal, the Spotify player, and the foot (quote, name, sync, Settings).
 // The type filters are chips on All items (views/table-filters.tsx).
 // It renders inside <App>'s <aside id="side">, whose .on and inert come from

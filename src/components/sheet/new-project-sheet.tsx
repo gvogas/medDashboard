@@ -1,4 +1,4 @@
-// New team project (spec §10, §15, §20), for admins until Stage 10: a name, a due date, and
+// New team project (spec §10, §15, §20): a name, a due date, and
 // optionally the class assignment it belongs to (its date fills in the due date). You become
 // its owner; teammates you invite join as editors. While the admins have shared classes
 // switched off, everyone else gets the maintenance page instead.

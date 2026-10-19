@@ -50,30 +50,18 @@ describe('making a team project (spec §10, §20)', () => {
     expect(await full.json()).toEqual({ error: 'limit' });
   });
 
-  it('is for admins only until Stage 10: making, inviting, accepting, joining', async () => {
-    const plain = await signIn('pjp' + ++n);
-    const refused = await make(plain, { title: 'X', date: '2026-10-30' });
-    expect(refused.status).toBe(403);
-    expect(await refused.json()).toEqual({ error: 'not_admin' });
-    const admin = await signInAdmin('pja' + n);
-    const { space } = await (await make(admin, { title: 'Team', date: '2026-10-30' })).json();
-    const invite = await post(admin, `/api/spaces/${space.id}/invites`, { username: 'pjp' + n });
-    expect(invite.status).toBe(409);
-    expect(await invite.json()).toEqual({ error: 'not_admin' });
-    await env.DB.prepare("INSERT INTO invites (space_id, user_id, invited_by, role, created_at, expires_at) VALUES (?, ?, ?, 'editor', ?, ?)")
-      .bind(space.id, 'u-pjp' + n, admin.id, Date.now(), Date.now() + 86_400_000).run();
-    const accept = await post(plain, `/api/invites/${space.id}/accept`);
-    expect(accept.status).toBe(403);
-    expect(await accept.json()).toEqual({ error: 'not_admin' });
-    const { code } = await (await post(admin, `/api/spaces/${space.id}/code`)).json();
-    const join = await post(plain, '/api/join', { code });
-    expect(join.status).toBe(403);
-    expect(await join.json()).toEqual({ error: 'not_admin' });
-    /* someone already in it who stops being an admin gets the project back from its code */
-    await env.DB.prepare('UPDATE users SET is_admin = 0 WHERE id = ?').bind(admin.id).run();
-    const again = await post(admin, '/api/join', { code });
-    expect(again.status).toBe(200);
-    expect((await again.json()).space).toMatchObject({ id: space.id });
+  it('is open to everyone: making, inviting, accepting, joining by code', async () => {
+    const tag = ++n;
+    const plain = await signIn('pjp' + tag), other = await signIn('pjq' + tag);
+    plain.id = 'u-pjp' + tag; other.id = 'u-pjq' + tag;
+    const made = await make(plain, { title: 'Team', date: '2026-10-30' });
+    expect(made.status).toBe(201);
+    const { space } = await made.json();
+    expect((await post(plain, `/api/spaces/${space.id}/invites`, { username: 'pjq' + tag })).status).toBe(201);
+    expect((await post(other, `/api/invites/${space.id}/accept`)).status).toBe(200);
+    const third = await signIn('pjr' + tag);
+    const { code } = await (await post(plain, `/api/spaces/${space.id}/code`)).json();
+    expect((await post(third, '/api/join', { code })).status).toBe(200);
   });
 
   it('an admin invited joins as an editor, with prefs', async () => {

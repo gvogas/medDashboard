@@ -1,6 +1,6 @@
 // One task in the project sheet (spec §10, §15): done, title (it opens the task's card), date, who has it, and Claim;
 // owners and editors edit it in place (title, date, assignees, each with their open tasks in
-// the next two weeks, Delete). A write the Worker turns down later lands in Saved copies, as
+// the next two weeks, Delete, which asks first as the task card's does). A write the Worker turns down later lands in Saved copies, as
 // any shared row's does. The editor takes the keyboard when it opens and gives it back to
 // Edit when it closes; it closes by itself when you can no longer edit (the project archived,
 // your role changed).
@@ -53,6 +53,11 @@ function TaskEditor({ task, space, load, close, remove }: { task: SharedItem; sp
     const [date, setDate] = useState(task.date)
     /* everyone, or the people still in the project: someone who left is not offered again */
     const [who, setWho] = useState<string[]>(() => task.assignees.filter((u) => u === "*" || space.members.some((m) => m.userId === u)))
+    /* Delete asks first; Keep it gives the keyboard back to Delete */
+    const [asking, setAsking] = useState(false)
+    const del = useRef<HTMLButtonElement>(null)
+    const kept = useRef(false)
+    useEffect(() => { if (!asking && kept.current) { kept.current = false; del.current?.focus() } }, [asking])
     const f = useId()
     const everyone = who.includes("*")
     const toggle = (id: string) => setWho((w) => (w.includes(id) ? w.filter((x) => x !== id) : [...w.filter((x) => x !== "*"), id]))
@@ -74,12 +79,20 @@ function TaskEditor({ task, space, load, close, remove }: { task: SharedItem; sp
                     </label>
                 ))}
             </fieldset>
-            <span className="flex gap-2">
-                <Button variant="danger" onClick={remove}>Delete</Button>
-                <span className="flex-1" />
-                <Button variant="ghost" onClick={close}>Cancel</Button>
-                <Button onClick={save}>Save</Button>
-            </span>
+            {asking ? (
+                <span className="flex items-center gap-2">
+                    <span className="min-w-0 flex-1 text-[11px] text-muted-foreground">Delete it for everyone in {space.name}?</span>
+                    <Button variant="ghost" autoFocus onClick={() => { kept.current = true; setAsking(false) }}>Keep it</Button>
+                    <Button variant="danger" onClick={remove}>Delete it</Button>
+                </span>
+            ) : (
+                <span className="flex gap-2">
+                    <Button ref={del} variant="danger" onClick={() => setAsking(true)}>Delete</Button>
+                    <span className="flex-1" />
+                    <Button variant="ghost" onClick={close}>Cancel</Button>
+                    <Button onClick={save}>Save</Button>
+                </span>
+            )}
         </div>
     )
 }
