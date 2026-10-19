@@ -7,7 +7,7 @@
 // project sees it as before, with a line saying why it is not in their sidebar: the Worker
 // gates only making, inviting and joining. Progress, workload and the assignment's date come in Stage 9.
 
-import { useId, useState } from "react"
+import { useEffect, useId, useRef, useState, type RefObject } from "react"
 import { cn } from "@/lib/utils"
 import { dayMonth, today } from "@/core/dates"
 import { useProfile, useSharedItems, useSpaces } from "@/data/store"
@@ -105,13 +105,17 @@ function ProjectCard({ spaceId, tab, bar }: { spaceId: string; tab: ProjectTab; 
 function Tasks({ space, title, me }: { space: Space; title: string; me: string }) {
     const tasks = tasksOf(space.id, useSharedItems())
     const editor = canEdit(space)
+    /* a task deleted here takes the keyboard with it: it goes to the new task's box, else the list */
+    const add = useRef<HTMLInputElement>(null)
+    const list = useRef<HTMLUListElement>(null)
+    const gone = () => (add.current ?? list.current)?.focus()
     return (
         <>
             <Archived space={space} />
-            {editor && <NewTask spaceId={space.id} />}
+            {editor && <NewTask spaceId={space.id} input={add} />}
             <Section title="Tasks" note={String(tasks.length)}>
                 {tasks.length
-                    ? <ul aria-label="Tasks" className="m-0 flex list-none flex-col gap-1 p-0">{tasks.map((t) => <TaskRow key={t.id} task={t} space={space} me={me} />)}</ul>
+                    ? <ul ref={list} tabIndex={-1} aria-label="Tasks" className="m-0 flex list-none flex-col gap-1 p-0 outline-none">{tasks.map((t) => <TaskRow key={t.id} task={t} space={space} me={me} gone={gone} />)}</ul>
                     : <Note>No tasks yet.{editor ? " Add the first above." : ""}</Note>}
             </Section>
             <ProjectActions space={space} title={title} />
@@ -131,16 +135,17 @@ function Archived({ space }: { space: Space }) {
     )
 }
 
-function NewTask({ spaceId }: { spaceId: string }) {
+function NewTask({ spaceId, input }: { spaceId: string; input: RefObject<HTMLInputElement | null> }) {
     const [title, setTitle] = useState("")
     const [date, setDate] = useState(today())
-    const add = async () => { if (title.trim() && date && (await addTask(spaceId, title, date))) setTitle("") }
+    const ready = !!title.trim() && !!date
+    const add = async () => { if (ready && (await addTask(spaceId, title, date))) setTitle("") }
     return (
         <span className="flex gap-2">
-            <TextInput aria-label="New task" placeholder="Add a task" value={title} maxLength={140} className="min-w-0 flex-1" onChange={(e) => setTitle(e.target.value)}
+            <TextInput ref={input} aria-label="New task" placeholder="Add a task" value={title} maxLength={140} className="min-w-0 flex-1" onChange={(e) => setTitle(e.target.value)}
                 onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); void add() } }} />
             <DateInput aria-label="New task's date" value={date} onChange={(e) => setDate(e.target.value)} className="w-[140px] flex-none" />
-            <Button onClick={() => void add()}>Add</Button>
+            <Button disabled={!ready} onClick={() => void add()}>Add</Button>
         </span>
     )
 }
@@ -158,15 +163,20 @@ function ProjectActions({ space, title }: { space: Space; title: string }) {
         try { await act(); setErr("") } catch (e) { setErr(messageFor(e, "", "project")) } finally { setBusy(false) }
     }
     const ask = () => { setTyped(""); setErr(""); setAsking(true) }
+    /* Cancel gives the keyboard back to the button that asked */
+    const opener = useRef<HTMLButtonElement>(null)
+    const back = useRef(false)
+    const cancel = () => { back.current = true; setAsking(false) }
+    useEffect(() => { if (!asking && back.current) { back.current = false; opener.current?.focus() } }, [asking])
     const linked = space.parent ? space.parent.space + "/" + space.parent.item : ""
 
     if (space.role !== "owner") return (
         <Section title="This project">
-            {!asking ? <Button variant="ghost" className="self-start" onClick={ask}>Leave the project…</Button> : (
+            {!asking ? <Button ref={opener} variant="ghost" className="self-start" onClick={ask}>Leave the project…</Button> : (
                 <div className="flex flex-col gap-2 rounded-lg bg-muted px-2.5 py-2">
                     <Note>Your tasks become unassigned and your notes here go. Nothing is copied: the project is the team's.</Note>
                     <span className="flex flex-wrap gap-2">
-                        <Button variant="ghost" onClick={() => setAsking(false)}>Cancel</Button>
+                        <Button variant="ghost" autoFocus onClick={cancel}>Cancel</Button>
                         <Button variant="danger" disabled={busy} onClick={() => void run(() => leaveProject(space.id))}>Leave {title}</Button>
                     </span>
                 </div>
@@ -190,16 +200,16 @@ function ProjectActions({ space, title }: { space: Space; title: string }) {
             </>}
             <span className="flex flex-wrap gap-2">
                 {!space.archived && <Button variant="ghost" disabled={busy} onClick={() => void run(() => setArchived(space.id, true))}>Archive the project</Button>}
-                <Button variant="ghost" onClick={ask}>Delete the project…</Button>
+                <Button ref={opener} variant="ghost" onClick={ask}>Delete the project…</Button>
             </span>
             {space.members.length > 1 ? <Note>Hand the project on in Members to leave it.</Note>
                 : !space.archived && <Note>Archiving makes it read-only for everyone until you unarchive it.</Note>}
             {asking && (
                 <div className="flex flex-col gap-2 rounded-lg bg-muted px-2.5 py-2">
                     <Note>Deletes it for everyone: its tasks, and everyone's notes on them. Members are told.</Note>
-                    <TextInput aria-label={"Type " + title + " to confirm"} placeholder={title} value={typed} autoComplete="off" onChange={(e) => setTyped(e.target.value)} />
+                    <TextInput aria-label={"Type " + title + " to confirm"} placeholder={title} value={typed} autoComplete="off" autoFocus onChange={(e) => setTyped(e.target.value)} />
                     <span className="flex flex-wrap gap-2">
-                        <Button variant="ghost" onClick={() => setAsking(false)}>Cancel</Button>
+                        <Button variant="ghost" onClick={cancel}>Cancel</Button>
                         <Button variant="danger" disabled={busy || typed.trim() !== title.trim()} onClick={() => void run(() => removeProject(space.id, typed.trim()))}>Delete for everyone</Button>
                     </span>
                 </div>

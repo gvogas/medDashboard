@@ -116,7 +116,7 @@ export function messageFor(e: unknown, name = "", kind: "class" | "project" = "c
     if (code === "no_user") return `No Term account named '${name}'.`
     if (code === "member") return `${name} is already a member.`
     if (code === "limit") return "You're in 20 classes and projects, the most anyone can be in."
-    if (code === "full") return "This class is full: 30 people is the most it holds."
+    if (code === "full") return `This ${kind} is full: 30 people is the most it holds.`
     if (code === "expired") return "That has expired. Ask for a new code or invite."
     if (code === "changed") return `That may already be done, or the ${kind} changed. Look again in a moment.`
     if (code === "not_found") return "That doesn't match a class or project. The code or invite may have been withdrawn."
@@ -133,8 +133,8 @@ export function messageFor(e: unknown, name = "", kind: "class" | "project" = "c
     return "That didn't work (" + (code || e.status) + "). Try again."
 }
 
-/** What a failed join or accept says: an archived class is one only its owner can open again. */
-export function joinMessageFor(e: unknown): string {
-    if (e instanceof ApiError && e.body?.error === "archived") return "This class is archived: it can't take new members until its owner unarchives it."
-    return messageFor(e)
+/** What a failed join or accept says: an archived class or project is one only its owner can open again. */
+export function joinMessageFor(e: unknown, kind: "class" | "project" = "class"): string {
+    if (e instanceof ApiError && e.body?.error === "archived") return `This ${kind} is archived: it can't take new members until its owner unarchives it.`
+    return messageFor(e, "", kind)
 }

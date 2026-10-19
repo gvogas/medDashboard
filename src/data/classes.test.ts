@@ -100,6 +100,9 @@ describe("words and small rules", () => {
         /* joining an archived class: the one joining can't unarchive it */
         expect(joinMessageFor(new ApiError(403, { error: "archived" }))).toBe("This class is archived: it can't take new members until its owner unarchives it.")
         expect(joinMessageFor(new ApiError(410, { error: "expired" }))).toBe("That has expired. Ask for a new code or invite.")
+        expect(joinMessageFor(new ApiError(403, { error: "archived" }), "project")).toBe("This project is archived: it can't take new members until its owner unarchives it.")
+        expect(joinMessageFor(new ApiError(409, { error: "full" }), "project")).toBe("This project is full: 30 people is the most it holds.")
+        expect(messageFor(new ApiError(409, { error: "full" }))).toBe("This class is full: 30 people is the most it holds.")
     })
 })
 

@@ -25,15 +25,17 @@ const day = (ms: number) => dayMonth(iso(new Date(ms)))
 const LIST = "m-0 flex list-none flex-col gap-1 p-0"
 const ROW = "flex items-center gap-2 rounded-lg bg-muted px-2.5 py-1.5 text-[12.5px]"
 
-export function MembersTab({ spaceId, kind = "class" }: { spaceId: string; kind?: Kind }) {
+/** `kind` words what it says until the space's details arrive; then the details' own kind rules. */
+export function MembersTab({ spaceId, kind: hint = "class" }: { spaceId: string; kind?: Kind }) {
     const me = useProfile()?.id ?? ""
     const [info, setInfo] = useState<SpaceDetails | null>(null)
     const [error, setError] = useState("")
     const load = useCallback(async () => {
-        try { setInfo(await api.spaces.get(spaceId)); setError("") } catch (e) { setError(messageFor(e, "", kind)) }
-    }, [spaceId, kind])
+        try { setInfo(await api.spaces.get(spaceId)); setError("") } catch (e) { setError(messageFor(e, "", hint)) }
+    }, [spaceId, hint])
     useEffect(() => { void load() }, [load])
 
+    const kind = info?.kind ?? hint
     if (!info) return error ? <Note tone="bad">{error}</Note> : <Note>Loading the members…</Note>
     const owner = info.role === "owner", editor = info.role !== "member"
     const ownerName = info.members.find((m) => m.role === "owner")?.name ?? "the owner"

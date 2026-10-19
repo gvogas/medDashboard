@@ -214,6 +214,53 @@ describe("the project sheet (spec §10, §15)", () => {
         await waitFor(() => expect(getSheet()).toBeNull())
     })
 
+    it("an editor's Edit takes the keyboard to the task and Cancel gives it back", async () => {
+        seed("editor", [task("t1", [])])
+        await show()
+        const t1 = await screen.findByRole("listitem", { name: /t1/ })
+        fireEvent.click(within(t1).getByRole("button", { name: "Edit t1" }))
+        expect(document.activeElement).toBe(within(t1).getByLabelText("Task"))
+        fireEvent.click(within(t1).getByRole("button", { name: "Cancel" }))
+        await waitFor(() => expect(document.activeElement).toBe(within(t1).getByRole("button", { name: "Edit t1" })))
+    })
+
+    it("the editor goes when the project is archived under it", async () => {
+        seed("editor", [task("t1", [])])
+        await show()
+        const t1 = await screen.findByRole("listitem", { name: /t1/ })
+        fireEvent.click(within(t1).getByRole("button", { name: "Edit t1" }))
+        expect(within(t1).getByLabelText("Task")).toBeTruthy()
+        act(() => {
+            fake.data.spaces = fake.data.spaces.map((s) => ((s as { id: string }).id === PID ? { ...(s as object), archived: true } : s))
+            notify()
+        })
+        await waitFor(() => expect(within(t1).queryByLabelText("Task")).toBeNull())
+        expect(within(t1).queryByRole("button", { name: "Edit t1" })).toBeNull()
+    })
+
+    it("Add waits for a task's name", async () => {
+        seed("editor")
+        await show()
+        expect(await screen.findByRole("button", { name: "Add" })).toHaveProperty("disabled", true)
+        fireEvent.change(screen.getByLabelText("New task"), { target: { value: "Write tests" } })
+        expect(screen.getByRole("button", { name: "Add" })).toHaveProperty("disabled", false)
+    })
+
+    it("a delete the Worker refuses says why, and the sheet stays", async () => {
+        seed("owner")
+        const { ApiError } = await import("@/core/api")
+        fake.api.spaces.deleteProject.mockRejectedValue(new ApiError(400, { error: "invalid", field: "confirm" }))
+        await show()
+        fireEvent.click(await screen.findByRole("button", { name: "Delete the project…" }))
+        expect(document.activeElement).toBe(screen.getByLabelText("Type Fire Response API to confirm"))
+        fireEvent.change(screen.getByLabelText("Type Fire Response API to confirm"), { target: { value: "Fire Response API" } })
+        await act(async () => { fireEvent.click(screen.getByRole("button", { name: "Delete for everyone" })) })
+        expect(await screen.findByText("Type the project's name exactly to delete it.")).toBeTruthy()
+        expect(getSheet()).toEqual({ kind: "project", spaceId: PID, tab: "tasks" })
+        fireEvent.click(screen.getByRole("button", { name: "Cancel" }))
+        await waitFor(() => expect(document.activeElement).toBe(screen.getByRole("button", { name: "Delete the project…" })))
+    })
+
     it("says what a refused change means for a project", async () => {
         seed("owner")
         const { ApiError } = await import("@/core/api")
