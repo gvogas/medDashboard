@@ -11,6 +11,7 @@ import { dayMonth } from "@/core/dates"
 import { itemByKey } from "./effective"
 import { openItem } from "./actions"
 import { openClass } from "./classes"
+import { openProject } from "./projects"
 import { openSheet } from "./overlay"
 import { maintenanceState } from "./maintenance"
 import type { ActivityRow, Inbox } from "./types"
@@ -123,20 +124,22 @@ export function describe(r: ActivityRow, me: string): string {
         case "member.removed": return r.about ? `${by} removed you from ${r.space}` : `${by} removed ${whom}`
         case "member.role": return `${by} made ${whom} ${role(r.new)}`
         case "space.archived": return `${by} ${r.new === "1" ? "archived" : "unarchived"} ${r.space}`
-        case "space.linked": return `${by} linked ${r.space} to ${r.detail.assignment || "an assignment"}`
+        case "space.linked": return r.new === null ? `${by} unlinked ${r.space} from its assignment` : `${by} linked ${r.space} to ${r.detail.assignment || "an assignment"}`
         case "space.transferred": return r.about ? `${by} made you the owner of ${r.space}` : `${by} handed ${r.space} to ${whom}`
         case "space.deleted": return `${by} deleted ${r.space}`
         default: return `${by} changed ${r.space}`
     }
 }
 
-/* what a row opens: its item while it is on this device, else its space (a class's sheet; projects
-   in Stage 9), else nothing. `here` is the space whose sheet is already open (its Activity tab):
+/* what a row opens: its item while it is on this device (a project's tasks are not in the views
+   until Stage 9), else its space's sheet, else nothing. `here` is the space whose sheet is already open (its Activity tab):
    opening that again would go nowhere. */
 function target(r: ActivityRow, here = ""): (() => void) | null {
     const key = (r.kind === "project" ? "p:" : "c:") + r.spaceId + "/" + r.subject
     if (r.subject && itemByKey(key)) return () => openItem(key)
-    if (r.kind === "class" && r.spaceId !== here && data.spaces.some((s) => s.id === r.spaceId)) return () => openClass(r.spaceId)
+    if (r.spaceId === here || !data.spaces.some((s) => s.id === r.spaceId)) return null
+    if (r.kind === "project") return () => openProject(r.spaceId)
+    if (r.kind === "class") return () => openClass(r.spaceId)
     return null
 }
 /** Whether openRow would open anything for this row, seen from the sheet of space `here` if any. */

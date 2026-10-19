@@ -43,9 +43,15 @@ export async function joinWithCode(code: string): Promise<SpaceSummary> {
 
 /* ── a class arriving on this device ── */
 
-/** The class, its course and your prefs for it are on this device (the prefs come in your own scope, in the same sync). */
-export const landed = (id: string): boolean =>
-    data.spaces.some((s) => s.id === id) && data.shared_courses.some((c) => c.scope === "c:" + id) && (data.space_prefs ?? []).some((p) => p.id === id)
+/** The space, its course (a class) or its project item (a project), and your prefs for it are on this
+    device (the prefs come in your own scope, in the same sync). */
+export const landed = (id: string): boolean => {
+    const s = data.spaces.find((x) => x.id === id)
+    if (!s || !(data.space_prefs ?? []).some((p) => p.id === id)) return false
+    return s.kind === "project"
+        ? data.shared_items.some((i) => i.scope === "p:" + id && i.id === "project")
+        : data.shared_courses.some((c) => c.scope === "c:" + id)
+}
 
 /** Sync until a class just made or joined is here, a few times at most: false if it has not
     come (offline); it then arrives with a later sync. */
@@ -120,6 +126,9 @@ export function messageFor(e: unknown, name = ""): string {
     if (code === "exists") return "The class already has an item with this id."
     if (code === "archived") return "This class is archived. Unarchive it first."
     if (code === "rate_limited") return "Too many tries. Wait a while, then try again."
+    if (code === "not_admin") return name ? `${name} can't join team projects yet: they're open to admins only for now.` : "Team projects are open to admins only for now."
+    if (code === "invalid" && e.body?.field === "parent") return "That assignment isn't in a class you're in."
+    if (code === "invalid" && e.body?.field === "confirm") return "Type the project's name exactly to delete it."
     if (code === "invalid") return e.body?.field === "code" ? "A code is 8 characters." : "Something in that isn't valid."
     return "That didn't work (" + (code || e.status) + "). Try again."
 }

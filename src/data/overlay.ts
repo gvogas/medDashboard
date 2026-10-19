@@ -6,7 +6,8 @@
 // useSheet() and useCovered().
 
 import { useSyncExternalStore } from "react"
-import type { Item, SpaceSummary } from "./types"
+import type { Item, ParentRef, SpaceSummary } from "./types"
+import type { ProjectTab } from "./projects"
 import type { SettingsTab } from "./settings"
 import type { ImportPlan } from "./import-edit"
 import type { Target } from "./class-import"
@@ -34,6 +35,8 @@ export type SheetState =
     | { kind: "join"; code: string; space: SpaceSummary | null }
     | { kind: "inbox" }
     | { kind: "merge"; spaceId: string; courseId: string; fromCourse: boolean }
+    | { kind: "project"; spaceId: string; tab: ProjectTab }
+    | { kind: "new-project"; parent: ParentRef | null }
     | null
 
 let sheet: SheetState = null

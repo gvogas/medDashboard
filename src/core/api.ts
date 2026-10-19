@@ -3,7 +3,7 @@
 import type { Row } from './db.ts';
 import { UNREAD_CAP } from './shared.ts';
 import type { Cursor, Page, ServerProfile } from './store.ts';
-import type { ActivityRow, Inbox, JoinCode, Space, SpaceDetails, SpaceInvite, SpaceSummary } from './types.ts';
+import type { ActivityRow, Inbox, JoinCode, ParentRef, Space, SpaceDetails, SpaceInvite, SpaceSummary } from './types.ts';
 
 /** An error's body as the Worker sends it: its code, and for some the server's copy or a wait. */
 export interface ErrorBody { error?: string; retryAfter?: unknown; current?: Row | null; [field: string]: unknown }
@@ -231,7 +231,8 @@ export const api = {
   },
   /* shared classes; `sid` is a space id */
   spaces: {
-    create: (body: { kind: 'class'; course?: Record<string, unknown>; convertCourseId?: string; items?: string[] }) => spaceOf(request('POST', '/api/spaces', body)),
+    create: (body: { kind: 'class'; course?: Record<string, unknown>; convertCourseId?: string; items?: string[] } | { kind: 'project'; title: string; date?: string; parent?: ParentRef }) =>
+      spaceOf(request('POST', '/api/spaces', body)),
     get: (sid: string): Promise<SpaceDetails> => request('GET', `/api/spaces/${sid}`),
     invite: (sid: string, username: string, role?: string): Promise<SpaceInvite> => request('POST', `/api/spaces/${sid}/invites`, role ? { username, role } : { username }),
     revokeInvite: (sid: string, userId: string) => empty(request('DELETE', `/api/spaces/${sid}/invites/${encodeURIComponent(userId)}`)),
@@ -247,6 +248,10 @@ export const api = {
     remove: (sid: string, userId: string) => empty(request('DELETE', `/api/spaces/${sid}/members/${encodeURIComponent(userId)}`)),
     archive: (sid: string, archived: boolean) => empty(request('POST', `/api/spaces/${sid}/archive`, { archived })),
     del: (sid: string, keepCopy: boolean) => empty(request('DELETE', `/api/spaces/${sid}`, { keepCopy })),
+    /** The owner deletes a project, typing its title (Stage 8). */
+    deleteProject: (sid: string, confirm: string) => empty(request('DELETE', `/api/spaces/${sid}`, { confirm })),
+    /** The owner links a project to a class assignment, or unlinks it (null). */
+    link: (sid: string, parent: ParentRef | null) => empty(request('POST', `/api/spaces/${sid}/link`, { parent })),
     keep: (sid: string, itemId: string) => empty(request('POST', `/api/spaces/${sid}/items/${encodeURIComponent(itemId)}/keep`)),
     share: (sid: string, items: string[]): Promise<{ shared: number }> => request('POST', `/api/spaces/${sid}/absorb`, { items }),
     /* the owner shares their school calendar with the class again (spec §8) */
