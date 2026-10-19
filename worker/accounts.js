@@ -2,7 +2,8 @@
 // worker/leaving.js handOnStmts) and scripts/add-user.mjs, so no imports: the script runs it
 // under Node. Both run HAND_ON, then the ACCOUNT_TABLES deletes, then the user row's.
 //
-// HAND_ON passes the spaces the account owns on (spec §13); ?1 is the user id, ?2 now.
+// HAND_ON takes the account off its live projects' tasks and passes the spaces it owns on
+// (spec §13); ?1 is the user id, ?2 now.
 // ACCOUNT_TABLES lists each table with how its rows name their owner (?1 is the user id), in
 // an order the foreign keys accept. Courses, items and the change feed belong to the scope
 // 'u:<id>', which no foreign key follows, so they are listed here. The user row's deletion
@@ -30,14 +31,21 @@ const OWNED = (extra) => `(SELECT ow.space_id FROM members AS ow JOIN spaces AS 
 const OTHERS = 'EXISTS (SELECT 1 FROM members AS oo WHERE oo.space_id = ow.space_id AND oo.user_id != ?1 AND oo.deleted_at IS NULL)';
 
 /**
- * Before an account is deleted, in the same transaction: each space it owns passes to its
- * longest-standing editor, else its longest-standing member (demoted before promoted, for the
- * one-owner index); one with nobody else in it is soft-deleted with its invites. Every space
+ * Before an account is deleted, in the same transaction: it is taken off its projects' tasks;
+ * each space it owns passes to its longest-standing editor, else its longest-standing member
+ * (demoted before promoted, for the one-owner index); one with nobody else in it is soft-deleted with its invites. Every space
  * it is in moves its revision on, so the others' member lists refresh. Set-based, with the
  * heir chosen inside the batch, so nobody leaving or joining in between can leave a class
  * without an owner. Only ?1 and ?2 appear, nowhere inside a string literal.
  */
 export const HAND_ON = [
+  /* Off every task's assignees in the live projects ?1 is in (spec §13), first, while the
+     memberships are live; a task left with nobody is unassigned (the trigger says so). */
+  `UPDATE items SET assignees = (SELECT json_group_array(a.value) FROM json_each(items.assignees) AS a WHERE a.value != ?1),
+      updated_by = ?1, updated_at = ?2, revision = revision + 1
+    WHERE scope IN (SELECT 'p:' || pm.space_id FROM members AS pm JOIN spaces AS ps ON ps.id = pm.space_id AND ps.deleted_at IS NULL
+        WHERE pm.user_id = ?1 AND pm.deleted_at IS NULL) AND deleted_at IS NULL
+      AND EXISTS (SELECT 1 FROM json_each(items.assignees) AS a WHERE a.value = ?1)`,
   `UPDATE spaces SET revision = ${NEXT_SPACE_REVISION}, updated_at = ?2
     WHERE deleted_at IS NULL AND id IN (SELECT space_id FROM members WHERE user_id = ?1 AND deleted_at IS NULL)`,
   `DELETE FROM invites WHERE space_id IN ${OWNED(`NOT ${OTHERS}`)}`,

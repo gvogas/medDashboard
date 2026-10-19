@@ -28,6 +28,8 @@ export type EffectiveItem = Item & {
 export const SHARED_IN_VIEWS = true
 /** Whether the views show your classes and projects. */
 export const sharedShown = (): boolean => SHARED_IN_VIEWS
+/** Project rows join the views in Stage 9; until then only the project sheet shows them. */
+export const PROJECTS_IN_VIEWS = false
 
 /** A row's key in the views: '<scope>/<id>' for a shared row, the id for your own. */
 export const keyOf = (r: { id: string; key?: string }): string => r.key ?? r.id
@@ -79,10 +81,12 @@ export function mergeItems(own: Item[], shared: (Item & { scope: string })[], sh
     const mine: EffectiveItem[] = filed ? own.map((it) => (it.classId ? { ...it, courseKey: layer.classCourse?.get(it.classId) ?? null } : it)) : own
     const theirs: EffectiveItem[] = []
     for (const it of shared) {
+        if (!PROJECTS_IN_VIEWS && it.scope.startsWith("p:")) continue
         const mark = layer.marks?.get(it.scope.slice(2) + ":" + it.id) ?? null
         if (!mark?.hidden) theirs.push(withMark(it, mark))
     }
     for (const it of layer.removed ?? []) {
+        if (!PROJECTS_IN_VIEWS && it.scope.startsWith("p:")) continue
         const mark = layer.marks?.get(it.scope.slice(2) + ":" + it.id) ?? null
         if (mark && !mark.hidden && meaningful(mark)) theirs.push({ ...withMark(it, mark), removed: { by: it.updatedBy ?? null, at: it.deletedAt ?? null } })
     }

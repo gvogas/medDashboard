@@ -6,6 +6,7 @@ import { assertAllowed, editorGuard, memberGuard, parseScope, scopeOf, writerGua
 import { SPACE_LIMIT } from './spaces.js';
 import { MEANINGFUL, autoKeep } from './leaving.js';
 import { KEEP_MS } from './activity.js';
+import { TASK_LIMIT } from './projects.js';
 import { MARK_DEFAULTS, stable } from '../src/core/shared.ts';
 
 const PROFILE_COLS =
@@ -217,23 +218,26 @@ export async function upsertRow(db, table, userId, id, fields, now = Date.now(),
 const INVITE_DAYS = 90;
 
 /**
- * The nightly purge (spec §13), in order: the other marks on expiring shared items are deleted
- * (soft); each space deleted before `before` goes with everything in it; then the floor moves
- * and old tombstones go, items first so course rows go last (a class item still holding a
- * meaningful mark waits); invites go 90 days after they were made, activity 90 days after it
- * happened (a purged space's own rows with it, except those about a person). Only then are
- * removed class items holding something of someone's kept for them (autoKeep, bounded), so the
- * sweep never waits on the keeps; their class rows go the next night. Every step acts only on what is
+ * The nightly purge (spec §13), in order: the marks on expiring shared items are deleted (soft):
+ * every mark on a project task, and on a class item those holding nothing; each space deleted
+ * before `before` goes with everything in it; then the floor moves and old tombstones go, items
+ * first so course rows go last (a class item still holding a meaningful mark waits; a project
+ * task never does); invites go 90 days after they were made, activity 90 days after it happened
+ * (a purged space's own rows with it, except those about a person). Only then are removed class
+ * items holding something of someone's kept for them (autoKeep, bounded), so the sweep never
+ * waits on the keeps; their class rows go the next night. Every step acts only on what is
  * already old, so a rerun finds nothing more to do.
  */
 export async function purgeTombstones(db, before, now = Date.now()) {
   const GONE = '(SELECT id FROM spaces WHERE deleted_at IS NOT NULL AND deleted_at < ?)';
   const tombstones = (table) => db.prepare(`DELETE FROM ${table} WHERE deleted_at IS NOT NULL AND deleted_at < ?`).bind(before);
   await db.batch([
-    /* soft, so the change feed carries the deletion; the tombstone goes with a later night's sweep */
-    db.prepare(`UPDATE marks SET deleted_at = ?, updated_at = ?, revision = revision + 1 WHERE deleted_at IS NULL AND NOT ${MEANINGFUL('marks')} AND EXISTS (SELECT 1 FROM items AS i
-      WHERE i.scope IN ('c:' || marks.space_id, 'p:' || marks.space_id) AND i.id = marks.item_id AND i.deleted_at IS NOT NULL AND i.deleted_at < ?)`).bind(now, now, before),
-    /* a gone space's rows go whatever marks they hold: every way a space is deleted (deleteClass, account deletion) leaves no meaningful live mark in it */
+    /* soft, so the change feed carries the deletion; the tombstone goes with a later night's sweep. A project task's
+       marks go whatever they hold (your note goes with it, spec §13); a class item's only when they hold nothing */
+    db.prepare(`UPDATE marks SET deleted_at = ?, updated_at = ?, revision = revision + 1 WHERE deleted_at IS NULL AND EXISTS (SELECT 1 FROM items AS i
+      WHERE i.id = marks.item_id AND i.deleted_at IS NOT NULL AND i.deleted_at < ?
+        AND (i.scope = 'p:' || marks.space_id OR (i.scope = 'c:' || marks.space_id AND NOT ${MEANINGFUL('marks')})))`).bind(now, now, before),
+    /* a gone space's rows go whatever marks they hold: every way a space is deleted (deleteClass, deleteProject, account deletion) leaves no meaningful live mark in it */
     ...['items', 'courses', 'changes'].map((t) =>
       db.prepare(`DELETE FROM ${t} WHERE scope IN (SELECT 'c:' || id FROM ${GONE} UNION ALL SELECT 'p:' || id FROM ${GONE})`).bind(before, before)),
     ...['members', 'invites', 'marks', 'space_prefs'].map((t) => db.prepare(`DELETE FROM ${t} WHERE space_id IN ${GONE}`).bind(before)),
@@ -243,7 +247,7 @@ export async function purgeTombstones(db, before, now = Date.now()) {
     db.prepare('UPDATE sync_state SET floor = MAX(floor, COALESCE((SELECT MAX(seq) FROM changes WHERE deleted_at < ?), 0)) WHERE id = 1').bind(before),
     db.prepare('DELETE FROM changes WHERE deleted_at < ?').bind(before),
     ...['marks', 'space_prefs', 'members', 'achievements', 'study_sessions'].map(tombstones),
-    db.prepare(`DELETE FROM items WHERE deleted_at IS NOT NULL AND deleted_at < ? AND (scope GLOB 'u:*' OR NOT EXISTS (SELECT 1 FROM marks AS m
+    db.prepare(`DELETE FROM items WHERE deleted_at IS NOT NULL AND deleted_at < ? AND (scope NOT GLOB 'c:*' OR NOT EXISTS (SELECT 1 FROM marks AS m
       WHERE m.space_id = substr(items.scope, 3) AND m.item_id = items.id AND m.deleted_at IS NULL AND ${MEANINGFUL('m')}))`).bind(before),
     tombstones('quotes'),
     tombstones('courses'),
@@ -366,6 +370,11 @@ function sharedUpsertStmt(db, table, scope, userId, id, fields, now, revision, g
     updates.push('assignees = excluded.assignees',
       'completed_by = CASE WHEN excluded.completed_at IS NULL THEN NULL WHEN items.completed_at IS NOT NULL THEN items.completed_by ELSE excluded.completed_by END');
     checks.push(...itemChecks(scope, fields));
+    /* a new or revived task needs room in its project (spec §3); a live row always may be written */
+    if (scope.startsWith('p:') && fields.type === 'task') {
+      checks.push({ sql: `(EXISTS (SELECT 1 FROM items WHERE scope = ? AND id = ? AND deleted_at IS NULL)
+        OR (SELECT count(*) FROM items WHERE scope = ? AND type = 'task' AND deleted_at IS NULL) < ${TASK_LIMIT})`, binds: [scope, id, scope] });
+    }
   }
   return db.prepare(
     `INSERT INTO ${table} (${names.join(', ')}, revision) SELECT ${names.map(() => '?').join(', ')}, COALESCE((SELECT seq FROM sqlite_sequence WHERE name = 'changes'), 0) + 1
@@ -395,16 +404,18 @@ function sharedFieldsStmt(db, table, scope, userId, id, fields, keys, now, revis
 }
 
 /* Why a guarded write wrote nothing when the revision is not the reason: access (404/403),
-   a course outside the class or an assignee outside the project (400). */
-async function assertWritable(db, table, scope, userId, fields, need) {
+   a course outside the class or an assignee outside the project (400), on the fields the
+   write names (all, when `keys` is absent): a queued write still naming someone who has
+   left merges its other fields. */
+async function assertWritable(db, table, scope, userId, fields, need, keys) {
   const { spaceId } = parseScope(scope);
   await assertAllowed(db, userId, spaceId, need);
   if (table !== 'items') return;
-  if (fields.courseId && !(await db.prepare('SELECT 1 AS x FROM courses WHERE scope = ? AND id = ? AND deleted_at IS NULL').bind(scope, fields.courseId).first())) {
+  if ((!keys || keys.includes('courseId')) && fields.courseId && !(await db.prepare('SELECT 1 AS x FROM courses WHERE scope = ? AND id = ? AND deleted_at IS NULL').bind(scope, fields.courseId).first())) {
     throw new HttpError(400, { error: 'invalid', field: 'courseId' });
   }
   const ids = [...new Set((fields.assignees || []).filter((u) => u !== '*'))];
-  if (scope.startsWith('p:') && ids.length) {
+  if (scope.startsWith('p:') && ids.length && (!keys || keys.includes('assignees'))) {
     const { n } = await db.prepare('SELECT count(*) AS n FROM members WHERE space_id = ? AND deleted_at IS NULL AND user_id IN (SELECT value FROM json_each(?))').bind(spaceId, JSON.stringify(ids)).first();
     if (n !== ids.length) throw new HttpError(400, { error: 'invalid', field: 'assignees' });
   }
@@ -421,7 +432,13 @@ export async function upsertShared(db, table, scope, userId, id, fields, { revis
   const guard = editorGuard(parseScope(scope).spaceId, userId);
   const saved = await sharedUpsertStmt(db, table, scope, userId, id, fields, now, revision, guard).first();
   if (saved) return sharedToApi(table, saved);
-  await assertWritable(db, table, scope, userId, fields, 'editor');
+  await assertWritable(db, table, scope, userId, fields, 'editor', changed && Object.keys(changed));
+  /* a task not there or deleted is a new one for the limit (reviving a tombstone included) */
+  const before = scope.startsWith('p:') && fields.type === 'task' ? await getShared(db, table, scope, userId, id) : undefined;
+  if (before !== undefined && (!before || before.deletedAt)) {
+    const { n } = await db.prepare("SELECT count(*) AS n FROM items WHERE scope = ? AND type = 'task' AND deleted_at IS NULL").bind(scope).first();
+    if (n >= TASK_LIMIT) throw new HttpError(409, { error: 'limit' });
+  }
   /* access lost since assertWritable answers as the routes do (404, 403), never as a conflict */
   const refused = async (current, fields) => {
     await assertAllowed(db, userId, parseScope(scope).spaceId, 'editor');
@@ -445,20 +462,22 @@ export async function upsertShared(db, table, scope, userId, id, fields, { revis
 
 /**
  * A project member's write to a task (spec §5): never the body as a whole. `changed` names
- * only status/completedAt (complete or reopen a task assigned to you or to everyone) or
- * only assignees (claim an unassigned task, or unclaim yourself, computed from the current
- * list). A member sets only 'todo' or 'done'; the completion time is the Worker's: kept
- * when the task was already complete, now when it becomes so, cleared on reopening.
- * Checked against the current row, written at its revision, one retry; a write that
- * changes nothing is answered with the current row, its revision unmoved.
+ * only status/completedAt (complete or reopen a task assigned to you or to everyone),
+ * assignees (claim an unassigned task, or unclaim yourself, computed from the current list),
+ * or both: a claim and a completion queued together on a device go up as one write. Then
+ * the status needs you on the task before or after the claim, as the two writes made one
+ * after the other would. A member sets only 'todo' or 'done'; the completion time is the
+ * Worker's: kept when the task was already complete, now when it becomes so, cleared on
+ * reopening. Checked against the current row, written at its revision, one retry; a write
+ * that changes nothing is answered with the current row, its revision unmoved.
  */
 export async function memberTaskWrite(db, scope, userId, id, fields, { changed, now = Date.now() } = {}) {
   const { spaceId } = parseScope(scope);
   const keys = Object.keys(changed || {});
-  const kind = keys.length && keys.every((f) => f === 'status' || f === 'completedAt') ? 'status' : keys.length === 1 && keys[0] === 'assignees' ? 'claim' : null;
-  if (!kind) throw new HttpError(403, { error: 'forbidden' });
-  const guard = writerGuard(spaceId, userId);
   const forbidden = () => new HttpError(403, { error: 'forbidden' });
+  if (!keys.length || !keys.every((f) => f === 'status' || f === 'completedAt' || f === 'assignees')) throw forbidden();
+  const claims = keys.includes('assignees'), finishes = keys.some((f) => f !== 'assignees');
+  const guard = writerGuard(spaceId, userId);
   if (keys.includes('status') && fields.status !== 'todo' && fields.status !== 'done') throw forbidden();
   for (let attempt = 0; ; attempt++) {
     await assertAllowed(db, userId, spaceId, 'write');
@@ -466,27 +485,30 @@ export async function memberTaskWrite(db, scope, userId, id, fields, { changed, 
     if (!current) throw new HttpError(404, { error: 'not_found' });
     if (current.deletedAt) throw conflict(current, keys);
     if (current.type !== 'task') throw forbidden();
-    let set, binds;
-    if (kind === 'status') {
-      if (!current.assignees.includes(userId) && !current.assignees.includes('*')) throw forbidden();
-      /* only the status is the member's; a completion time sent alone changes nothing */
-      if (!keys.includes('status') || current.status === fields.status) return current;
-      if (current.status !== changed.status) throw conflict(current, ['status']);
-      const completedAt = fields.status === 'todo' ? null : current.completedAt ?? now;
-      set = 'status = ?, completed_at = ?, completed_by = CASE WHEN ? IS NULL THEN NULL WHEN completed_at IS NOT NULL THEN completed_by ELSE ? END';
-      binds = [fields.status, completedAt, completedAt, userId];
-    } else {
+    const sets = [], binds = [];
+    let next = current.assignees;
+    if (claims) {
       const mine = current.assignees.includes(userId), wants = (fields.assignees || []).includes(userId);
-      let next = current.assignees;
       if (wants && !mine) {
-        if (current.assignees.length) throw forbidden();   // assigned to someone else
+        /* taken since you claimed it is a lost race; taken before, it was never yours to claim */
+        if (current.assignees.length) throw Array.isArray(changed.assignees) && !changed.assignees.length ? conflict(current, ['assignees']) : forbidden();
         next = [userId];
       } else if (!wants && mine) next = current.assignees.filter((u) => u !== userId);
-      if (next === current.assignees) return current;
-      set = 'assignees = ?';
-      binds = [JSON.stringify(next)];
+      if (next !== current.assignees) { sets.push('assignees = ?'); binds.push(JSON.stringify(next)); }
     }
-    const saved = await db.prepare(`UPDATE items SET ${set}, updated_by = ?, updated_at = ?, revision = revision + 1
+    if (finishes) {
+      const on = (list) => list.includes(userId) || list.includes('*');
+      if (!on(current.assignees) && !on(next)) throw forbidden();
+      /* only the status is the member's; a completion time sent alone changes nothing */
+      if (keys.includes('status') && current.status !== fields.status) {
+        if (current.status !== changed.status) throw conflict(current, ['status']);
+        const completedAt = fields.status === 'todo' ? null : current.completedAt ?? now;
+        sets.push('status = ?', 'completed_at = ?', 'completed_by = CASE WHEN ? IS NULL THEN NULL WHEN completed_at IS NOT NULL THEN completed_by ELSE ? END');
+        binds.push(fields.status, completedAt, completedAt, userId);
+      }
+    }
+    if (!sets.length) return current;
+    const saved = await db.prepare(`UPDATE items SET ${sets.join(', ')}, updated_by = ?, updated_at = ?, revision = revision + 1
       WHERE scope = ? AND id = ? AND revision = ? AND deleted_at IS NULL AND type = 'task' AND ${guard.sql} RETURNING ${sharedCols('items')}`)
       .bind(...binds, userId, now, scope, id, current.revision, ...guard.binds).first();
     if (saved) return sharedToApi('items', saved);

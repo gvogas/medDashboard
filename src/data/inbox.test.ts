@@ -9,6 +9,7 @@ const fake = vi.hoisted(() => ({
     items: new Map<string, unknown>(),
     openItem: vi.fn(),
     openClass: vi.fn(),
+    openProject: vi.fn(),
     openSheet: vi.fn(),
     syncNow: vi.fn(async () => true),
 }))
@@ -28,6 +29,7 @@ vi.mock("@/core/sync", () => ({ syncNow: fake.syncNow }))
 vi.mock("./effective", () => ({ itemByKey: (k: string) => fake.items.get(k) ?? null }))
 vi.mock("./actions", () => ({ openItem: fake.openItem }))
 vi.mock("./classes", () => ({ openClass: fake.openClass }))
+vi.mock("./projects", () => ({ openProject: fake.openProject }))
 vi.mock("./overlay", () => ({ openSheet: fake.openSheet }))
 
 import { renderHook } from "@testing-library/react"
@@ -179,6 +181,19 @@ describe("the inbox list", () => {
     })
 })
 
+describe("a project's link", () => {
+    it("reads a link and an unlink", () => {
+        expect(say(row({ verb: "space.linked", kind: "project", new: "a1", old: "", space: "Fire", detail: { by: "Gabriel", assignment: "REST API" } }), "u-me"))
+            .toBe("Gabriel linked Fire to REST API")
+        expect(say(row({ verb: "space.linked", kind: "project", new: null, old: "a1", space: "Fire", detail: { by: "Gabriel" } }), "u-me"))
+            .toBe("Gabriel unlinked Fire from its assignment")
+    })
+    it("reads the date move a link makes beside it, on the project's own item", () => {
+        expect(say(row({ verb: "item.date", kind: "project", subject: "project", old: "2026-10-20||", new: "2026-11-02||", space: "Fire", detail: { by: "Gabriel", title: "Fire" } }), "u-me"))
+            .toBe("Gabriel moved Fire: 20 Oct → 2 Nov")
+    })
+})
+
 describe("opening a row", () => {
     it("opens the item while it is here, else the class, else nothing", () => {
         fake.items.set("c:abcdefabcdef/a1", { id: "a1" })
@@ -195,6 +210,17 @@ describe("opening a row", () => {
         expect(fake.openClass).toHaveBeenCalledWith("abcdefabcdef")
         m.openInbox()
         expect(fake.openSheet).toHaveBeenCalledWith({ kind: "inbox" })
+    })
+
+    it("opens a project's sheet while it is here, unless that sheet is already open", () => {
+        const r = row({ kind: "project", spaceId: "fire00000001", subject: "t1" })
+        expect(m.openable(r)).toBe(false)
+        fake.data.spaces = [{ id: "fire00000001" }]
+        expect(m.openable(r)).toBe(true)
+        expect(m.openable(r, "fire00000001")).toBe(false)
+        m.openRow(r)
+        expect(fake.openProject).toHaveBeenCalledWith("fire00000001")
+        expect(fake.openClass).not.toHaveBeenCalled()
     })
 
     it("loads a page of a class's activity; offline, null", async () => {

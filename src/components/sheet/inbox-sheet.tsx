@@ -44,7 +44,7 @@ function InboxCard({ bar }: { bar: boolean }) {
 
     const yes = async (inv: Invite) => {
         setBusy(true); setErr("")
-        try { openJoin("", await accept(inv.spaceId)) } catch (e) { setErr(joinMessageFor(e)); setBusy(false) }
+        try { openJoin("", await accept(inv.spaceId)) } catch (e) { setErr(joinMessageFor(e, inv.kind)); setBusy(false) }
     }
     const no = async (inv: Invite) => {
         setBusy(true); setErr("")

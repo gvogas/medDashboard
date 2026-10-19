@@ -1,8 +1,9 @@
-// A class's Members tab (spec §11, §15): who is in it, invites by username, the join code,
-// roles, removing someone, and handing the class on. Owners and editors invite. Only the owner
-// gives another role, makes a code, changes roles, removes someone (who keeps a copy) and hands
-// the class on. While the class is archived roles, removing and handing on still work; inviting,
-// the code and withdrawing an invite do not, so the tab leaves them out. Leaving is in Details.
+// A class's or a project's Members tab (spec §11, §15): who is in it, invites by username, the
+// join code, roles, removing someone, and handing it on. Owners and editors invite. Only the owner
+// gives another role, makes a code, changes roles, removes someone (who keeps a copy of a class;
+// of a project, nothing: their tasks become unassigned) and hands it on. While it is archived
+// roles, removing and handing on still work; inviting, the code and withdrawing an invite do not,
+// so the tab leaves them out. Leaving is in a class's Details and a project's Tasks.
 // Everything here needs a connection.
 
 import { useCallback, useEffect, useState } from "react"
@@ -13,25 +14,28 @@ import { useProfile } from "@/data/store"
 import { formatCode, joinLink, messageFor } from "@/data/classes"
 import { toast } from "@/data/toast"
 import { removeMember } from "@/data/leave"
-import type { JoinCode, SpaceDetails, SpaceInvite, SpaceMember } from "@/data/types"
+import type { JoinCode, Space, SpaceDetails, SpaceInvite, SpaceMember } from "@/data/types"
 import { Button, Note, Section, Select, TextInput } from "./fields"
 
 type Reload = () => Promise<void>
+type Kind = Space["kind"]
 const ROLE: Record<SpaceMember["role"], string> = { owner: "Owner", editor: "Editor", member: "Member" }
 const STATUS: Record<SpaceInvite["status"], string> = { pending: "Pending", declined: "Declined", expired: "Expired" }
 const day = (ms: number) => dayMonth(iso(new Date(ms)))
 const LIST = "m-0 flex list-none flex-col gap-1 p-0"
 const ROW = "flex items-center gap-2 rounded-lg bg-muted px-2.5 py-1.5 text-[12.5px]"
 
-export function MembersTab({ spaceId }: { spaceId: string }) {
+/** `kind` words what it says until the space's details arrive; then the details' own kind rules. */
+export function MembersTab({ spaceId, kind: hint = "class" }: { spaceId: string; kind?: Kind }) {
     const me = useProfile()?.id ?? ""
     const [info, setInfo] = useState<SpaceDetails | null>(null)
     const [error, setError] = useState("")
     const load = useCallback(async () => {
-        try { setInfo(await api.spaces.get(spaceId)); setError("") } catch (e) { setError(messageFor(e)) }
-    }, [spaceId])
+        try { setInfo(await api.spaces.get(spaceId)); setError("") } catch (e) { setError(messageFor(e, "", hint)) }
+    }, [spaceId, hint])
     useEffect(() => { void load() }, [load])
 
+    const kind = info?.kind ?? hint
     if (!info) return error ? <Note tone="bad">{error}</Note> : <Note>Loading the members…</Note>
     const owner = info.role === "owner", editor = info.role !== "member"
     const ownerName = info.members.find((m) => m.role === "owner")?.name ?? "the owner"
@@ -40,20 +44,20 @@ export function MembersTab({ spaceId }: { spaceId: string }) {
         <>
             {/* the Worker refuses invites, codes, withdrawing, joining and accepting while the class is archived */}
             {info.archived
-                ? <Note>The class is archived: nobody can join it, by invite or code. {owner ? "Unarchive it" : ownerName + " can unarchive it"} to invite people or make a join code.</Note>
+                ? <Note>The {kind} is archived: nobody can join it, by invite or code. {owner ? "Unarchive it" : ownerName + " can unarchive it"} to invite people or make a join code.</Note>
                 : editor
-                    ? <InviteBox spaceId={spaceId} owner={owner} standard={info.kind === "class" ? "member" : "editor"} reload={load} />
+                    ? <InviteBox spaceId={spaceId} owner={owner} standard={kind === "class" ? "member" : "editor"} kind={kind} reload={load} />
                     : <Note>Owners and editors invite people. Ask {ownerName} for a join code.</Note>}
-            {editor && info.invites.length > 0 && <InviteList spaceId={spaceId} invites={info.invites} owner={owner} me={me} archived={info.archived} reload={load} />}
-            {owner && !info.archived && <CodeBox spaceId={spaceId} code={info.code} reload={load} />}
-            <MemberList spaceId={spaceId} members={info.members} owner={owner} me={me} reload={load} />
-            {owner && others.length > 0 && <HandOn spaceId={spaceId} members={others} reload={load} />}
+            {editor && info.invites.length > 0 && <InviteList spaceId={spaceId} invites={info.invites} owner={owner} me={me} archived={info.archived} kind={kind} reload={load} />}
+            {owner && !info.archived && <CodeBox spaceId={spaceId} code={info.code} kind={kind} reload={load} />}
+            <MemberList spaceId={spaceId} members={info.members} owner={owner} me={me} kind={kind} reload={load} />
+            {owner && others.length > 0 && <HandOn spaceId={spaceId} members={others} kind={kind} reload={load} />}
             {error && <Note tone="bad">{error}</Note>}
         </>
     )
 }
 
-function InviteBox({ spaceId, owner, standard, reload }: { spaceId: string; owner: boolean; standard: "member" | "editor"; reload: Reload }) {
+function InviteBox({ spaceId, owner, standard, kind, reload }: { spaceId: string; owner: boolean; standard: "member" | "editor"; kind: Kind; reload: Reload }) {
     const [name, setName] = useState("")
     const [role, setRole] = useState<"member" | "editor">(standard)
     const [said, setSaid] = useState<{ ok: boolean; text: string } | null>(null)
@@ -67,7 +71,7 @@ function InviteBox({ spaceId, owner, standard, reload }: { spaceId: string; owne
             setSaid({ ok: true, text: "Invited " + sent.name + ". They'll see it under Invites in Term." })
             setName("")
             await reload()
-        } catch (e) { setSaid({ ok: false, text: messageFor(e, username) }) }
+        } catch (e) { setSaid({ ok: false, text: messageFor(e, username, kind) }) }
         finally { setBusy(false) }
     }
     return (
@@ -89,10 +93,10 @@ function InviteBox({ spaceId, owner, standard, reload }: { spaceId: string; owne
     )
 }
 
-function InviteList({ spaceId, invites, owner, me, archived, reload }: { spaceId: string; invites: SpaceInvite[]; owner: boolean; me: string; archived: boolean; reload: Reload }) {
+function InviteList({ spaceId, invites, owner, me, archived, kind, reload }: { spaceId: string; invites: SpaceInvite[]; owner: boolean; me: string; archived: boolean; kind: Kind; reload: Reload }) {
     const [err, setErr] = useState("")
     const withdraw = async (userId: string) => {
-        try { await api.spaces.revokeInvite(spaceId, userId); setErr(""); await reload() } catch (e) { setErr(messageFor(e)) }
+        try { await api.spaces.revokeInvite(spaceId, userId); setErr(""); await reload() } catch (e) { setErr(messageFor(e, "", kind)) }
     }
     return (
         <Section title="Invited">
@@ -115,14 +119,14 @@ function InviteList({ spaceId, invites, owner, me, archived, reload }: { spaceId
     )
 }
 
-function CodeBox({ spaceId, code, reload }: { spaceId: string; code: SpaceDetails["code"]; reload: Reload }) {
+function CodeBox({ spaceId, code, kind, reload }: { spaceId: string; code: SpaceDetails["code"]; kind: Kind; reload: Reload }) {
     const [made, setMade] = useState<JoinCode | null>(null)
     const [err, setErr] = useState("")
     const make = async () => {
-        try { setMade(await api.spaces.makeCode(spaceId)); setErr(""); await reload() } catch (e) { setErr(messageFor(e)) }
+        try { setMade(await api.spaces.makeCode(spaceId)); setErr(""); await reload() } catch (e) { setErr(messageFor(e, "", kind)) }
     }
     const drop = async () => {
-        try { await api.spaces.dropCode(spaceId); setMade(null); setErr(""); await reload() } catch (e) { setErr(messageFor(e)) }
+        try { await api.spaces.dropCode(spaceId); setMade(null); setErr(""); await reload() } catch (e) { setErr(messageFor(e, "", kind)) }
     }
     const copy = (text: string) => {
         void navigator.clipboard?.writeText(text).then(() => toast("Copied."), () => toast("Copying failed: select it instead."))
@@ -146,7 +150,7 @@ function CodeBox({ spaceId, code, reload }: { spaceId: string; code: SpaceDetail
                     <Button variant="ghost" onClick={() => void drop()}>Turn off</Button>
                 </div>
             </> : <>
-                <Note>Anyone with the code can join as a member for 7 days. A new code retires the old one.</Note>
+                <Note>Anyone with the code can join as {kind === "class" ? "a member" : "an editor"} for 7 days. A new code retires the old one.</Note>
                 <Button variant="ghost" className="self-start" onClick={() => void make()}>Make a join code</Button>
             </>}
             {err && <Note tone="bad">{err}</Note>}
@@ -154,16 +158,16 @@ function CodeBox({ spaceId, code, reload }: { spaceId: string; code: SpaceDetail
     )
 }
 
-function MemberList({ spaceId, members, owner, me, reload }: { spaceId: string; members: SpaceMember[]; owner: boolean; me: string; reload: Reload }) {
+function MemberList({ spaceId, members, owner, me, kind, reload }: { spaceId: string; members: SpaceMember[]; owner: boolean; me: string; kind: Kind; reload: Reload }) {
     const [err, setErr] = useState("")
     const [removing, setRemoving] = useState<SpaceMember | null>(null)
     const [busy, setBusy] = useState(false)
     const remove = async (m: SpaceMember) => {
         setBusy(true)
-        try { await removeMember(spaceId, m.userId); setRemoving(null); setErr(""); await reload() } catch (e) { setErr(messageFor(e)) } finally { setBusy(false) }
+        try { await removeMember(spaceId, m.userId); setRemoving(null); setErr(""); await reload() } catch (e) { setErr(messageFor(e, "", kind)) } finally { setBusy(false) }
     }
     const change = async (userId: string, role: string) => {
-        try { await api.spaces.setRole(spaceId, userId, role); setErr(""); await reload(); void syncNow() } catch (e) { setErr(messageFor(e)) }
+        try { await api.spaces.setRole(spaceId, userId, role); setErr(""); await reload(); void syncNow() } catch (e) { setErr(messageFor(e, "", kind)) }
     }
     return (
         <Section title="Members" note={String(members.length)}>
@@ -185,9 +189,9 @@ function MemberList({ spaceId, members, owner, me, reload }: { spaceId: string; 
             </ul>
             {removing && (
                 <div className="flex flex-wrap items-center gap-2">
-                    <Note>Remove {removing.name}? They keep a copy of the class as their own course.</Note>
+                    <Note>Remove {removing.name}? {kind === "project" ? "They lose access. Their tasks become unassigned; nothing is copied." : "They keep a copy of the class as their own course."}</Note>
                     <Button variant="ghost" onClick={() => setRemoving(null)}>Cancel</Button>
-                    <Button variant="danger" disabled={busy} onClick={() => void remove(removing)}>Remove {removing.name} from the class</Button>
+                    <Button variant="danger" disabled={busy} onClick={() => void remove(removing)}>Remove {removing.name} from the {kind}</Button>
                 </div>
             )}
             {err && <Note tone="bad">{err}</Note>}
@@ -195,16 +199,16 @@ function MemberList({ spaceId, members, owner, me, reload }: { spaceId: string; 
     )
 }
 
-function HandOn({ spaceId, members, reload }: { spaceId: string; members: SpaceMember[]; reload: Reload }) {
+function HandOn({ spaceId, members, kind, reload }: { spaceId: string; members: SpaceMember[]; kind: Kind; reload: Reload }) {
     const [to, setTo] = useState("")
     const [asking, setAsking] = useState(false)
     const [err, setErr] = useState("")
     const who = members.find((m) => m.userId === to)
     const go = async () => {
-        try { await api.spaces.transfer(spaceId, to); setAsking(false); setErr(""); await reload(); void syncNow() } catch (e) { setErr(messageFor(e)) }
+        try { await api.spaces.transfer(spaceId, to); setAsking(false); setErr(""); await reload(); void syncNow() } catch (e) { setErr(messageFor(e, "", kind)) }
     }
     return (
-        <Section title="Hand the class on">
+        <Section title={"Hand the " + kind + " on"}>
             <div className="flex gap-2">
                 <Select aria-label="New owner" value={to} className="min-w-0 flex-1" onChange={(e) => { setTo(e.target.value); setAsking(false) }}>
                     <option value="">Choose a member…</option>

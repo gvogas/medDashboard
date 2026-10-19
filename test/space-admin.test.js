@@ -51,11 +51,19 @@ describe('archiving a class', () => {
     expect(await inv.json()).toEqual({ error: 'archived' });
   });
 
-  it('a project cannot be archived here, and an outsider gets 404', async () => {
-    const tag = ++n, owner = await signInAdmin('apo' + tag), outsider = await signInAdmin('apx' + tag);
-    const p = await makeSpace({ kind: 'project', members: { [owner.id]: 'owner' } });
-    expect((await post(owner, `/api/spaces/${p.id}/archive`, { archived: true })).status).toBe(404);
+  it('a project archives the same way (Stage 8, Decision 8); it can be handed on and unarchived; an outsider gets 404', async () => {
+    const tag = ++n, owner = await signInAdmin('apo' + tag), ed = await signInAdmin('ape' + tag), outsider = await signInAdmin('apx' + tag);
+    const p = await makeSpace({ kind: 'project', members: { [owner.id]: 'owner', [ed.id]: 'editor' } });
+    await sharedItem(p.scope, 't1');
+    expect((await post(owner, `/api/spaces/${p.id}/archive`, { archived: true })).status).toBe(204);
+    expect(await one('SELECT archived FROM spaces WHERE id = ?', p.id)).toEqual({ archived: 1 });
+    expect(await one("SELECT new_value FROM activity WHERE space_id = ? AND verb = 'space.archived'", p.id)).toEqual({ new_value: '1' });
+    const edit = await ed(`/api/spaces/${p.id}/items/t1`, { method: 'DELETE', headers: { 'if-match': '"1"' } });
+    expect(await edit.json()).toEqual({ error: 'archived' });
+    expect((await post(owner, `/api/spaces/${p.id}/transfer`, { userId: ed.id })).status).toBe(204);
+    expect((await post(ed, `/api/spaces/${p.id}/archive`, { archived: false })).status).toBe(204);
     expect(await one('SELECT archived FROM spaces WHERE id = ?', p.id)).toEqual({ archived: 0 });
+    expect((await post(outsider, `/api/spaces/${p.id}/archive`, { archived: true })).status).toBe(404);
     const { s } = await pair();
     expect((await post(outsider, `/api/spaces/${s.id}/archive`, { archived: true })).status).toBe(404);
   });
@@ -87,10 +95,10 @@ describe('deleting a class', () => {
     expect(await one("SELECT count(*) AS n FROM courses WHERE scope = 'u:' || ?", owner.id)).toEqual({ n: 0 });
   });
 
-  it('a project is not deleted here; a bad keepCopy is refused', async () => {
+  it('a project needs its title typed instead (Stage 8); a bad keepCopy is refused', async () => {
     const tag = ++n, owner = await signInAdmin('dpo' + tag);
     const p = await makeSpace({ kind: 'project', members: { [owner.id]: 'owner' } });
-    expect((await owner(`/api/spaces/${p.id}`, { method: 'DELETE', body: {} })).status).toBe(404);
+    expect(await (await owner(`/api/spaces/${p.id}`, { method: 'DELETE', body: {} })).json()).toEqual({ error: 'invalid', field: 'confirm' });
     const s = await makeSpace({ members: { [owner.id]: 'owner' } });
     expect(await (await owner(`/api/spaces/${s.id}`, { method: 'DELETE', body: { keepCopy: 'no' } })).json()).toEqual({ error: 'invalid', field: 'keepCopy' });
   });

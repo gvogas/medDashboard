@@ -43,9 +43,15 @@ export async function joinWithCode(code: string): Promise<SpaceSummary> {
 
 /* ── a class arriving on this device ── */
 
-/** The class, its course and your prefs for it are on this device (the prefs come in your own scope, in the same sync). */
-export const landed = (id: string): boolean =>
-    data.spaces.some((s) => s.id === id) && data.shared_courses.some((c) => c.scope === "c:" + id) && (data.space_prefs ?? []).some((p) => p.id === id)
+/** The space, its course (a class) or its project item (a project), and your prefs for it are on this
+    device (the prefs come in your own scope, in the same sync). */
+export const landed = (id: string): boolean => {
+    const s = data.spaces.find((x) => x.id === id)
+    if (!s || !(data.space_prefs ?? []).some((p) => p.id === id)) return false
+    return s.kind === "project"
+        ? data.shared_items.some((i) => i.scope === "p:" + id && i.id === "project")
+        : data.shared_courses.some((c) => c.scope === "c:" + id)
+}
 
 /** Sync until a class just made or joined is here, a few times at most: false if it has not
     come (offline); it then arrives with a later sync. */
@@ -103,29 +109,32 @@ export async function convert(courseId: string, items: string[]): Promise<void> 
 export const formatCode = (code: string) => code.slice(0, 4) + " " + code.slice(4)
 export const joinLink = (code: string) => location.origin + "/#join=" + code
 
-/** What a failed class call says; `name` is the username it was about. */
-export function messageFor(e: unknown, name = ""): string {
+/** What a failed class or project call says; `name` is the username it was about, `kind` what the sheet is for. */
+export function messageFor(e: unknown, name = "", kind: "class" | "project" = "class"): string {
     if (!(e instanceof ApiError)) return "You seem to be offline. This needs a connection."
     const code = e.body?.error
     if (code === "no_user") return `No Term account named '${name}'.`
     if (code === "member") return `${name} is already a member.`
     if (code === "limit") return "You're in 20 classes and projects, the most anyone can be in."
-    if (code === "full") return "This class is full: 30 people is the most it holds."
+    if (code === "full") return `This ${kind} is full: 30 people is the most it holds.`
     if (code === "expired") return "That has expired. Ask for a new code or invite."
-    if (code === "changed") return "That may already be done, or the class changed. Look again in a moment."
-    if (code === "not_found") return "That doesn't match a class. The code or invite may have been withdrawn."
-    if (code === "forbidden") return "Only the class's owner can do that."
-    if (code === "owner") return "Hand the class on to someone first: the owner can't leave."
+    if (code === "changed") return `That may already be done, or the ${kind} changed. Look again in a moment.`
+    if (code === "not_found") return `That doesn't match a ${kind}. The code or invite may have been withdrawn.`
+    if (code === "forbidden") return `Only the ${kind}'s owner can do that.`
+    if (code === "owner") return `Hand the ${kind} on to someone first: the owner can't leave.`
     if (code === "members") return "Only a class with nobody else in it can be deleted. Remove the others or hand it on."
     if (code === "exists") return "The class already has an item with this id."
-    if (code === "archived") return "This class is archived. Unarchive it first."
+    if (code === "archived") return `This ${kind} is archived. Unarchive it first.`
     if (code === "rate_limited") return "Too many tries. Wait a while, then try again."
+    if (code === "not_admin") return name ? `${name} can't join team projects yet: they're open to admins only for now.` : "Team projects are open to admins only for now."
+    if (code === "invalid" && e.body?.field === "parent") return "That assignment isn't in a class you're in."
+    if (code === "invalid" && e.body?.field === "confirm") return "Type the project's name exactly to delete it."
     if (code === "invalid") return e.body?.field === "code" ? "A code is 8 characters." : "Something in that isn't valid."
     return "That didn't work (" + (code || e.status) + "). Try again."
 }
 
-/** What a failed join or accept says: an archived class is one only its owner can open again. */
-export function joinMessageFor(e: unknown): string {
-    if (e instanceof ApiError && e.body?.error === "archived") return "This class is archived: it can't take new members until its owner unarchives it."
-    return messageFor(e)
+/** What a failed join or accept says: an archived class or project is one only its owner can open again. */
+export function joinMessageFor(e: unknown, kind: "class" | "project" = "class"): string {
+    if (e instanceof ApiError && e.body?.error === "archived") return `This ${kind} is archived: it can't take new members until its owner unarchives it.`
+    return messageFor(e, "", kind)
 }

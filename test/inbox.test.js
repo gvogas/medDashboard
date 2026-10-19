@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { signIn } from './helpers.js';
 import { makeSpace, sharedItem } from './spaces.js';
 import { INBOX, KEEP_MS, unreadCount } from '../worker/activity.js';
+import { deleteProject } from '../worker/projects.js';
 
 let n = 0;
 const at = (ms) => ({ updated_at: ms, created_at: ms });
@@ -44,6 +45,19 @@ describe('GET /api/inbox (spec §12)', () => {
     await sharedItem(s.scope, 'a3', { course_id: 'web', updated_by: alex.id, ...at(Date.now() + 1000) });
     const box = await inbox(sam);
     expect(box.items.map((r) => [r.verb, r.about, r.space])).toEqual([['member.removed', true, 'Web Services']]);
+  });
+
+  it("drops a deleted space's news from the inbox and its count, but tells you it was deleted", async () => {
+    const tag = ++n, alex = await signIn('ind' + tag), sam = await signIn('ine' + tag);
+    alex.id = 'u-ind' + tag; sam.id = 'u-ine' + tag;
+    const p = await makeSpace({ kind: 'project', members: { [alex.id]: 'owner', [sam.id]: 'editor' } });
+    await sharedItem(p.scope, 't1', { title: 'Slides', updated_by: alex.id, ...at(Date.now()) });
+    expect((await inbox(sam)).items.map((r) => r.verb)).toEqual(['item.created']);
+    expect(await unreadCount(env.DB, sam.id)).toBe(1);
+    await deleteProject(env.DB, alex.id, p.id, 'Fire Response API');
+    const box = await inbox(sam);
+    expect(box.items.map((r) => [r.verb, r.about, r.space])).toEqual([['space.deleted', true, 'Fire Response API']]);
+    expect(await unreadCount(env.DB, sam.id)).toBe(1);
   });
 
   it('lists your pending invites', async () => {

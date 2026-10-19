@@ -32,7 +32,13 @@ describe("the effective lists", () => {
         const both = mergeItems(own, shared, true)
         expect(both.map(keyOf)).toEqual(["a", WEB + "/a"])
         expect(both.map((it) => it.source ?? "personal")).toEqual(["personal", "class"])
-        expect(mergeItems(own, [{ ...item({ id: "t", type: "task" }), scope: "p:abcdefghij12" }], true)[1].source).toBe("project")
+    })
+
+    it("keeps project rows out of the views until Stage 9 (PROJECTS_IN_VIEWS)", () => {
+        const task = { ...item({ id: "t1", type: "task" }), scope: "p:fire00000001" }
+        expect(mergeItems([], [task], true)).toEqual([])
+        const own = [item({ id: "a" })]
+        expect(mergeItems(own, [task], true, { removed: [{ ...task, deletedAt: 5 }], marks: new Map([["fire00000001:t1", { notes: "mine" } as Mark]]) })).toEqual(own)
     })
 
     it("keep a class course and a personal course with the same id apart in every view", () => {

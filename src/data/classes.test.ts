@@ -7,6 +7,7 @@ const fake = vi.hoisted(() => ({
         courses: [] as { color: string }[],
         spaces: [] as { id: string }[],
         shared_courses: [] as { scope: string; id: string }[],
+        shared_items: [] as { scope: string; id: string }[],
         space_prefs: [] as { id: string }[],
     },
     api: { invites: { accept: vi.fn(), decline: vi.fn() }, spaces: { create: vi.fn() }, join: vi.fn() },
@@ -83,11 +84,27 @@ describe("words and small rules", () => {
         expect(messageFor(new ApiError(400, { error: "invalid", field: "code" }))).toBe("A code is 8 characters.")
         expect(messageFor(new ApiError(429, { error: "rate_limited" }))).toBe("Too many tries. Wait a while, then try again.")
         expect(messageFor(new TypeError("Failed to fetch"))).toBe("You seem to be offline. This needs a connection.")
+        /* team projects, admins only for now (Stage 8) */
+        expect(messageFor(new ApiError(409, { error: "not_admin" }), "sam")).toBe("sam can't join team projects yet: they're open to admins only for now.")
+        expect(messageFor(new ApiError(403, { error: "not_admin" }))).toBe("Team projects are open to admins only for now.")
+        expect(messageFor(new ApiError(400, { error: "invalid", field: "parent" }))).toBe("That assignment isn't in a class you're in.")
+        expect(messageFor(new ApiError(400, { error: "invalid", field: "confirm" }))).toBe("Type the project's name exactly to delete it.")
+        /* a project's sheets name the project */
+        expect(messageFor(new ApiError(403, { error: "forbidden" }), "", "project")).toBe("Only the project's owner can do that.")
+        expect(messageFor(new ApiError(403, { error: "owner" }), "", "project")).toBe("Hand the project on to someone first: the owner can't leave.")
+        expect(messageFor(new ApiError(403, { error: "archived" }), "", "project")).toBe("This project is archived. Unarchive it first.")
+        expect(messageFor(new ApiError(404, { error: "changed" }), "", "project")).toBe("That may already be done, or the project changed. Look again in a moment.")
+        expect(messageFor(new ApiError(403, { error: "forbidden" }))).toBe("Only the class's owner can do that.")
+        expect(messageFor(new ApiError(404, { error: "not_found" }))).toBe("That doesn't match a class. The code or invite may have been withdrawn.")
+        expect(messageFor(new ApiError(404, { error: "not_found" }), "", "project")).toBe("That doesn't match a project. The code or invite may have been withdrawn.")
         /* a leave, removal, delete or keep that answered not found and was not done after all */
         expect(messageFor(new ApiError(404, { error: "changed" }))).toBe("That may already be done, or the class changed. Look again in a moment.")
         /* joining an archived class: the one joining can't unarchive it */
         expect(joinMessageFor(new ApiError(403, { error: "archived" }))).toBe("This class is archived: it can't take new members until its owner unarchives it.")
         expect(joinMessageFor(new ApiError(410, { error: "expired" }))).toBe("That has expired. Ask for a new code or invite.")
+        expect(joinMessageFor(new ApiError(403, { error: "archived" }), "project")).toBe("This project is archived: it can't take new members until its owner unarchives it.")
+        expect(joinMessageFor(new ApiError(409, { error: "full" }), "project")).toBe("This project is full: 30 people is the most it holds.")
+        expect(messageFor(new ApiError(409, { error: "full" }))).toBe("This class is full: 30 people is the most it holds.")
     })
 })
 
@@ -113,6 +130,18 @@ describe("a class arriving", () => {
         fake.syncNow.mockImplementation(async () => false)
         expect(await download(SID)).toBe(false)
         expect(fake.syncNow).toHaveBeenCalledTimes(6)
+    })
+
+    it("knows a project has landed by its project item, not a course", async () => {
+        const PID = "sp0000000009"
+        fake.data.spaces = [{ id: PID, kind: "project", scope: "p:" + PID } as { id: string }]
+        fake.data.space_prefs = [{ id: PID }]
+        fake.data.shared_courses = []
+        fake.data.shared_items = [{ scope: "p:" + PID, id: "t1" }]
+        fake.syncNow.mockImplementation(async () => false)
+        expect(await download(PID, 1)).toBe(false)
+        fake.data.shared_items = [{ scope: "p:" + PID, id: "project" }]
+        expect(await download(PID, 1)).toBe(true)
     })
 
     it("makes a blank class with a free colour, or one from a course, then opens its Members", async () => {

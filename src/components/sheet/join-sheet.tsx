@@ -2,7 +2,8 @@
 // fills it in), or straight after accepting an invite. The class downloads onto this device;
 // then you confirm your semester for it (with a school calendar) and your colour, and, when a
 // course of yours matches the class, go on to merge it. Someone with no school calendar is
-// offered the class's (its owner's snapshot), saved as their own. While the admins have
+// offered the class's (its owner's snapshot), saved as their own. A team project downloads
+// the same way and then just opens (Stage 8 plan, Decision 12). While the admins have
 // shared classes switched off, everyone else gets the maintenance page instead.
 
 import { useEffect, useId, useState } from "react"
@@ -15,6 +16,7 @@ import { api } from "@/core/api"
 import { closeSheet } from "@/data/overlay"
 import { download, joinWithCode, joinMessageFor, messageFor, openClass, savePref } from "@/data/classes"
 import { matchFor, openMerge } from "@/data/merge"
+import { openProject } from "@/data/projects"
 import { schoolCal } from "@/data/query"
 import { semesterOptions } from "@/data/course-edit"
 import { adoptSchool } from "@/data/school-edit"
@@ -73,7 +75,7 @@ function Join({ given, space, bar }: { given: string; space: SpaceSummary | null
             <SheetBody>
                 {maintenanceBar}
                 <div role="status"><h2 className={TITLE}>Downloading {stage.space.name}…</h2></div>
-                <Note>The class's course and items land on this device, so they work offline.</Note>
+                <Note>The {stage.space.kind === "project" ? "project's tasks land" : "class's course and items land"} on this device, so they work offline.</Note>
             </SheetBody>
         </>
     )
@@ -84,7 +86,7 @@ function Join({ given, space, bar }: { given: string; space: SpaceSummary | null
             <SheetBody>
                 {maintenanceBar}
                 <h2 className={TITLE}>Join with a code</h2>
-                <Note>Eight characters from the class's owner. A link with #join= in it fills this in for you.</Note>
+                <Note>Eight characters from the owner of a class or project. A link with #join= in it fills this in for you.</Note>
                 <TextInput aria-label="Join code" value={code} maxLength={9} placeholder="7KQ2 M9XD" autoFocus spellCheck={false} autoComplete="off"
                     className="h-[46px] font-mono text-[18px] tracking-[.12em] uppercase"
                     onChange={(e) => { setCode(e.target.value); setErr("") }}
@@ -102,6 +104,30 @@ function Join({ given, space, bar }: { given: string; space: SpaceSummary | null
 /* In: your semester and colour for the class (your prefs, written by the Worker when you
    joined, adjusted here), then the class, or the merge sheet for a course of yours like it. */
 function Joined({ space: s, here, bar }: { space: SpaceSummary; here: boolean; bar: boolean }) {
+    if (s.kind === "project") return <JoinedProject space={s} here={here} bar={bar} />
+    return <JoinedClass space={s} here={here} bar={bar} />
+}
+
+/* A project has no semester, colour or merge step: it opens. */
+function JoinedProject({ space: s, here, bar }: { space: SpaceSummary; here: boolean; bar: boolean }) {
+    return (
+        <>
+            <SheetHead kind="Joined" onClose={closeSheet} />
+            <SheetBody>
+                {bar && <MaintenanceBar className="mb-0" />}
+                <h2 className={TITLE}>You're in {s.name}</h2>
+                <Note>{s.members} {s.members === 1 ? "member" : "members"} · you joined as {asRole(s.role)}.</Note>
+                {!here && <Note>It hasn't finished downloading. It arrives with the next sync.</Note>}
+            </SheetBody>
+            <SheetFoot hint="">
+                <Button variant="ghost" onClick={closeSheet}>Done</Button>
+                <Button onClick={() => openProject(s.id)}>Open the project</Button>
+            </SheetFoot>
+        </>
+    )
+}
+
+function JoinedClass({ space: s, here, bar }: { space: SpaceSummary; here: boolean; bar: boolean }) {
     const f = useId()
     const [cal, setCal] = useState(() => schoolCal())
     const pref = (data.space_prefs ?? []).find((p) => p.id === s.id) ?? null

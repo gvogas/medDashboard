@@ -26,11 +26,11 @@ export function noteStmt(db, { spaceId, actorId, verb, subjectUser = '', oldValu
 /**
  * For a route row that can be undone (a role, archiving; spec §12 "a change that returns to
  * where it started deletes its row"): after noteStmt in the same batch, deletes the row its
- * coalescing brought back to its first "from".
+ * coalescing brought back to its first "from". A "from" of '' matches a NULL "to" (an unlink).
  */
 export const undoneStmt = (db, { spaceId, actorId, verb, subjectUser = '', now }) => db.prepare(`DELETE FROM activity
   WHERE space_id = ? AND actor_id = ? AND verb = ? AND subject = '' AND subject_user = ? AND bucket = ${BUCKET('?')}
-    AND old_value IS NOT NULL AND old_value = new_value`).bind(spaceId, actorId, verb, subjectUser, now);
+    AND old_value IS NOT NULL AND old_value = COALESCE(new_value, '')`).bind(spaceId, actorId, verb, subjectUser, now);
 
 /* Verbs every member is told of; the rest reach someone only when they are about them (Decision 4). a = activity, ?1 you. */
 const CONCERNS = `(a.verb IN ('item.created', 'item.deleted', 'item.date', 'course.meetings', 'space.archived', 'space.linked')
@@ -50,7 +50,8 @@ export const INBOX = (since, limit) => `SELECT * FROM (SELECT ${COLS} FROM activ
     WHERE a.subject_user = ?1 AND a.subject_user != '' AND a.actor_id != ?1 AND a.seq > ${since} AND a.at > ?2 - ${KEEP_MS}
     ORDER BY a.seq DESC LIMIT ${limit})
   UNION ALL
-  SELECT * FROM (SELECT ${COLS} FROM members AS m JOIN activity AS a ON a.space_id = m.space_id AND a.seq > ${since} AND a.at >= m.joined_at
+  SELECT * FROM (SELECT ${COLS} FROM members AS m JOIN spaces AS sp ON sp.id = m.space_id AND sp.deleted_at IS NULL
+      JOIN activity AS a ON a.space_id = m.space_id AND a.seq > ${since} AND a.at >= m.joined_at
     WHERE m.user_id = ?1 AND m.deleted_at IS NULL AND a.actor_id != ?1 AND a.subject_user != ?1 AND a.at > ?2 - ${KEEP_MS} AND ${CONCERNS}
     ORDER BY a.seq DESC LIMIT ${limit})`;
 const SEEN = '(SELECT COALESCE(MAX(seq), 0) FROM inbox_seen WHERE user_id = ?1)';

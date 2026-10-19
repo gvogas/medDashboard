@@ -137,6 +137,21 @@ describe('persisted operation synchronization', () => {
    await sync.syncNow();
    expect(store.rejectOperation).toHaveBeenCalledWith(shared, { id: 'x', title: 'Old', revision: 4 }, 'You no longer have permission to change this.');
  });
+ it('names a class or a project when its archive or the task limit refuses an edit', async () => {
+   const edit = (scope, token) => ({ key: `shared_items:${scope}:x`, op: 'put', body: { id: 'x', title: 'New', revision: 4 }, base: { id: 'x', title: 'Old', revision: 4 }, revision: 4, token });
+   const cls = edit('c:abcdefghij12', 'ca'), proj = edit('p:abcdefghij12', 'pa');
+   vi.spyOn(api.shared, 'get').mockResolvedValue({ id: 'x', title: 'Old', revision: 4 });
+   vi.spyOn(api.shared, 'put').mockRejectedValue(new ApiError(403, { error: 'archived' }));
+   store.pending.mockResolvedValue([cls, proj]);
+   await sync.syncNow();
+   expect(store.rejectOperation).toHaveBeenCalledWith(cls, expect.anything(), 'This class is archived, so it is read-only.');
+   expect(store.rejectOperation).toHaveBeenCalledWith(proj, expect.anything(), 'This project is archived, so it is read-only.');
+   const task = edit('p:abcdefghij12', 'pl');
+   api.shared.put.mockRejectedValue(new ApiError(409, { error: 'limit' }));
+   store.pending.mockResolvedValue([task]);
+   await sync.syncNow();
+   expect(store.rejectOperation).toHaveBeenCalledWith(task, expect.anything(), 'A project holds 200 tasks at most.');
+ });
  it('keeps a shared edit pending while classes are in maintenance, and still uploads and downloads the rest', async () => {
    const shared = { key: 'shared_items:c:abcdefghij12:x', op: 'put', body: { id: 'x', title: 'New', revision: 4 }, base: { id: 'x', title: 'Old', revision: 4 }, revision: 4, token: 'm' };
    store.pending.mockResolvedValue([shared, op]);

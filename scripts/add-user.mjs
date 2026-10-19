@@ -74,8 +74,9 @@ if (admin) {
 } else if (remove) {
   const typed = await ask(`This deletes ${username} and every course, item, quote, study session and achievement it owns. Type the username to confirm: `);
   if (typed.trim().toLowerCase() !== username) { console.error('Not deleted.'); process.exit(1); }
-  // Its classes pass on first (HAND_ON), as the Admin page's deletion does. ?N becomes the
-  // Nth value, whole numbers only (so ?10 is never read as ?1 and a 0); any other is an error.
+  // It comes off its projects' tasks and its spaces pass on first (HAND_ON), as the Admin
+  // page's deletion does. ?N becomes the Nth value, whole numbers only (so ?10 is never read
+  // as ?1 and a 0); any other is an error.
   const values = [`(SELECT id FROM users WHERE username = '${username}')`, String(Date.now())];
   const bind = (text) => text.replace(/\?(\d+)/g, (_, n) => {
     if (values[n - 1] === undefined) throw new Error(`No value for ?${n}`);

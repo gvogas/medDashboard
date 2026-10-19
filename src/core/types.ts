@@ -177,6 +177,8 @@ export type SharedCourse = Course & { scope: string; updatedBy: string | null }
 /** A class's item (its facts), or a project's item or task (the team's). */
 export type SharedItem = Item & { scope: string; updatedBy: string | null; assignees: string[]; completedBy: string | null; deletedAt?: number | null }
 
+/** A class assignment a project belongs to: its space and item ids (spec §10). */
+export interface ParentRef { space: string; item: string }
 /** A space as the class routes answer it: enough to download and open it. */
 export interface SpaceSummary { id: string; scope: string; kind: "class" | "project"; name: string; role: "owner" | "editor" | "member"; members: number }
 export interface SpaceMember { userId: string; username: string; name: string; role: "owner" | "editor" | "member"; joinedAt: number }

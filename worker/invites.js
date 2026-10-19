@@ -9,6 +9,7 @@ import { assertAllowed, assertOwner, editorGuard, ownerGuard } from './access.js
 import { LIVE_MEMBERS, MEMBER_LIMIT, MY_SPACES, NEXT_SPACE_REVISION, SPACE_LIMIT, joinPrefs, spaceSummary, touchSpace } from './spaces.js';
 import { normalizeCode } from '../src/core/shared.ts';
 import { noteStmt } from './activity.js';
+import { PROJECTS_ADMINS_ONLY, assertProjectsOpen } from './projects.js';
 
 const HOUR_MS = 60 * 60 * 1000;
 const DAY_MS = 24 * HOUR_MS;
@@ -43,11 +44,12 @@ export async function invite(db, userId, spaceId, { username, role = null }, now
   const wait = await claimLimit(db, `invite:${userId}`, INVITE_LIMIT, now, HOUR_MS);
   if (wait) throw rateLimited(wait);
   const name = normalizeUsername(username);
-  const who = name && await db.prepare(`SELECT u.id, u.username, ${NAME} AS name,
+  const who = name && await db.prepare(`SELECT u.id, u.username, u.is_admin, ${NAME} AS name,
       EXISTS (SELECT 1 FROM members WHERE space_id = ? AND user_id = u.id AND deleted_at IS NULL) AS member
     FROM users AS u WHERE u.username = ?`).bind(spaceId, name).first();
   if (!who) throw new HttpError(404, { error: 'no_user' });
   if (who.member) throw new HttpError(409, { error: 'member' });
+  if (me.kind === 'project' && PROJECTS_ADMINS_ONLY && who.is_admin !== 1) throw new HttpError(409, { error: 'not_admin' });
   const g = (other ? ownerGuard : editorGuard)(spaceId, userId), expires = now + INVITE_TTL_MS;
   const saved = await db.prepare(`INSERT INTO invites (space_id, user_id, invited_by, role, status, created_at, expires_at)
       SELECT ?, ?, ?, ?, 'pending', ?, ? WHERE ${g.sql}
@@ -180,8 +182,10 @@ export async function joinByCode(db, userId, raw, now = Date.now()) {
   const hash = await hashCode(code);
   const space = await db.prepare('SELECT id, kind, code_expires, code_uses_left FROM spaces WHERE code_hash = ? AND deleted_at IS NULL').bind(hash).first();
   if (!space) throw new HttpError(404, { error: 'not_found' });
+  /* already in it answers first: someone who stops being an admin keeps their projects */
   const held = await spaceSummary(db, userId, space.id);
   if (held) return held;
+  await assertProjectsOpen(db, userId, space.kind);
   if (space.code_expires <= now || space.code_uses_left <= 0) throw new HttpError(410, { error: 'expired' });
   const standard = space.kind === 'class' ? 'member' : 'editor';
   const [joined] = await db.batch([

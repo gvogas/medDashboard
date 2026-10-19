@@ -4,7 +4,8 @@ Term's internal name is `rounds` (the Worker, the D1 databases, cookies and Inde
 Cloudflare D1 (SQLite), several users, every row stamped with its owner: a `scope` on
 courses and items (`u:<user id>` for a person's own; `c:<space id>` for a shared class,
 `p:<space id>` for a team project), a `user_id` on the rest. Shared classes are live
-for everyone (collaboration Stages 1–7); projects stay closed until Stage 10.
+for everyone (collaboration Stages 1–7). Team projects (Stage 8) are for admins only
+and stay out of the Week, Month and other views until Stages 9 and 10.
 The browser never talks to the database. A Worker reads the session cookie, resolves
 the user, and every query it runs has `user_id = ?` (or the user's scope) in it.
 
@@ -364,7 +365,7 @@ A shared class (`kind = 'class'`, its rows in scope `c:<id>`) or team project (`
 
 ## `members`
 
-`(space_id, user_id)`, `role` `owner`|`editor`|`member`, `joined_at`, `deleted_at` (left or removed; a rejoin revives the row). Leaving or being removed runs one set-based batch in `worker/leaving.js` (*detach*) that ends the membership last, so a retry does nothing twice: with a copy, the class course and items are upserted into your own scope (reviving the tombstones a convert or merge left under the same ids; an id a live row of yours already holds becomes `'k' + id`, or `k1…`, `k2…`), each item taking your mark, your notes followed by `Class notes:` and the class's; your filed items, sessions and achievements move onto the copy (a copy for someone no longer in the class is filed under no class); your marks and prefs there are soft-deleted. Without a copy only your layer goes; sessions keep their minutes and the app labels them *A class you left*. Deleting an account hands each class it owns to its longest-standing editor, else its longest-standing member (`HAND_ON` in `worker/accounts.js`, also used by `scripts/add-user.mjs --delete`), and soft-deletes one with nobody else in it (each hand-on also writes a `space.transferred` activity row); memberships, invites, marks, prefs and `inbox_seen` go by cascade, and the activity rows about the account are deleted. A partial unique index keeps exactly one live owner per space. Every shared read and write checks live membership of a live space inside its own statement (`worker/access.js`).
+`(space_id, user_id)`, `role` `owner`|`editor`|`member`, `joined_at`, `deleted_at` (left or removed; a rejoin revives the row). Leaving or being removed runs one set-based batch in `worker/leaving.js` (*detach*) that ends the membership last, so a retry does nothing twice: with a copy, the class course and items are upserted into your own scope (reviving the tombstones a convert or merge left under the same ids; an id a live row of yours already holds becomes `'k' + id`, or `k1…`, `k2…`), each item taking your mark, your notes followed by `Class notes:` and the class's; your filed items, sessions and achievements move onto the copy (a copy for someone no longer in the class is filed under no class); your marks and prefs there are soft-deleted. Without a copy only your layer goes; sessions keep their minutes and the app labels them *A class you left*. Deleting an account hands each class it owns to its longest-standing editor, else its longest-standing member (`HAND_ON` in `worker/accounts.js`, also used by `scripts/add-user.mjs --delete`), and soft-deletes one with nobody else in it (each hand-on also writes a `space.transferred` activity row); memberships, invites, marks, prefs and `inbox_seen` go by cascade, and the activity rows about the account are deleted. Before any of that, `HAND_ON` takes the account off the `assignees` of every task in the live projects it is in (a task left with nobody becomes unassigned). Leaving or being removed from a **project** is not a detach: nothing is copied (see Team projects). A partial unique index keeps exactly one live owner per space. Every shared read and write checks live membership of a live space inside its own statement (`worker/access.js`).
 
 ## `invites`
 
@@ -376,7 +377,7 @@ A shared class (`kind = 'class'`, its rows in scope `c:<id>`) or team project (`
 
 ## `space_prefs`
 
-`(user_id, id)`, `id = space_id`: your settings for one space: `color` (one of the twelve), `target`, `term` (your semester for a class; `''` is every semester), `archived` (in your sidebar), timestamps, `deleted_at`, `revision`. Written by the Worker when you make, convert, accept or join (the class's colour unless you use it, else the first free; its term), then through `/api/space_prefs/:sid` with whole-row `If-Match`. Its changes go into your own feed. Deleted with the account.
+`(user_id, id)`, `id = space_id`: your settings for one space: `color` (one of the twelve), `target`, `term` (your semester for a class; `''` is every semester), `archived` (in your sidebar), timestamps, `deleted_at`, `revision`. Written by the Worker when you make, convert, accept or join (the class's colour unless you use it, else the first free; its term; for a project, which has no course, the first free colour and no term), then through `/api/space_prefs/:sid` with whole-row `If-Match`. Its changes go into your own feed. Deleted with the account.
 
 ## `activity`
 
@@ -492,21 +493,23 @@ All routes are under `/api`, speak JSON, and require the session cookie except
 | `PUT /api/achievements/:id` · `DELETE /api/achievements/:id` | `{name, sticker, rule, courseId, itemId, target}`, as above; `400 too_many` past 30. `classId` (items), `spaceId` (sessions, achievements) and `hiddenSources` (profile) left out of a body keep their stored values. |
 | `GET /api/calendar` · `POST /api/calendar` · `DELETE /api/calendar` | the calendar feed: → `{on, url}`; POST turns it on or makes a new link (the old one stops working); DELETE turns it off. See `worker/calendar.js`. |
 | `GET /api/calendar/:userId/:token.ics?tz=` | no session: the feed itself, `text/calendar`. The token is an HMAC of the user id and `users.feed_gen`; a wrong one is `404`. At most 60 fetches an hour per link. Carries your classes too: see The calendar feed below. |
-| `POST /api/spaces` | `{kind:'class', course}` (blank) or `{kind:'class', convertCourseId, items:[id]}` → `201 {space}`; you become the owner, with prefs from the course, and the class takes a copy of your school calendar (see `spaces`). Anyone signed in; `kind` other than `'class'` is `400` until projects open (Stage 10). There is no hourly limit on making classes, only the 20 live spaces. A convert **moves** your course and the items named into the class in class shape: your status, grade, checklist, notes and completion into marks, your colour, target, term and archive into prefs; your course and those items are soft-deleted, the course's other items filed under the class (`classId`), your sessions and achievements on them labelled with the space. Converting the same course again answers the class it made (`200`). `409 limit` past 20 spaces. |
+| `POST /api/spaces` | `{kind:'class', course}` (blank) or `{kind:'class', convertCourseId, items:[id]}` → `201 {space}`; you become the owner, with prefs from the course, and the class takes a copy of your school calendar (see `spaces`). Anyone signed in; a `kind` other than `'class'` or `'project'` is `400`. There is no hourly limit on making classes, only the 20 live spaces. A convert **moves** your course and the items named into the class in class shape: your status, grade, checklist, notes and completion into marks, your colour, target, term and archive into prefs; your course and those items are soft-deleted, the course's other items filed under the class (`classId`), your sessions and achievements on them labelled with the space. Converting the same course again answers the class it made (`200`). `409 limit` past 20 spaces. |
+| `POST /api/spaces` (project) | `{kind:'project', title, date?, parent?: {space, item}}` → `201 {space}`: a team project with you as its owner, its `project` item (the title, trimmed, 1–140 characters, no NUL; the date given, else the parent's) and your prefs, in one batch. Admins only (`403 not_admin` for anyone else). `parent` is any live item of a class you are a live member of (`400 {field:'parent'}` otherwise); with no `parent`, `date` is required (`400 {field:'date'}`). `409 limit` past 20 spaces. See Team projects. |
+| `POST /api/spaces/:sid/link` | the owner of an unarchived project: `{parent: {space, item}}` links it to that class item and sets the project's date to the item's; `{parent: null}`, or no `parent` at all, unlinks it and keeps the date → `204`. `400 {field:'parent'}` for an item you can't see, `404` on a class. Writes `space.linked`. (The spec's `PATCH`.) |
 | `GET /api/spaces/:sid` | → `{id, scope, kind, role, archived, members, invites, code, schoolCalendar}`: the members and the class's school-calendar snapshot (or `null`) for everyone in the space, its invites for the owner and editors, the join code's expiry and uses left for the owner. `404` outside it. |
 | `POST /api/spaces/:sid/school` | the owner, archived or not: copy your school calendar into the class again → `{schoolCalendar}` (what the class now holds). With no calendar of yours that has a semester, the old snapshot stays. Classes only (`404` otherwise). The app syncs first and says so when your calendar has not reached the server yet. |
-| `POST /api/spaces/:sid/invites` · `DELETE /api/spaces/:sid/invites/:userId` | `{username, role?}` → `201` the invite (30 days; a repeat refreshes it). The owner or an editor; only the owner gives a role other than the default. `404 no_user`, `409 member`; 20 an hour. So anyone in a class can learn whether a username exists by inviting it, at most 20 names an hour. DELETE withdraws it: whoever sent it, or the owner. |
+| `POST /api/spaces/:sid/invites` · `DELETE /api/spaces/:sid/invites/:userId` | `{username, role?}` → `201` the invite (30 days; a repeat refreshes it). The owner or an editor; only the owner gives a role other than the default. `404 no_user`, `409 member`, `409 not_admin` for a project invite to someone who is not an admin (until Stage 10); 20 an hour. So anyone in a class can learn whether a username exists by inviting it, at most 20 names an hour. DELETE withdraws it: whoever sent it, or the owner. |
 | `GET /api/inbox` | → `{invites, items, seen}`: your invites (as `GET /api/invites`), the inbox's newest 50 rows within the 90 days, newest first, and your `inbox_seen.seq` (0 for none). Each row: `{seq, spaceId, space, kind, verb, subject, actor, subjectUser, about, old, new, detail, n, at}`, `space` the space's name now (or as it was, once gone), `about` whether it is about you. See The inbox and activity below. |
 | `PUT /api/inbox/seen` | `{seq}` → `204`: you have read up to `seq` (forward only, never past the newest row). `400 {field:'seq'}` for anything but a whole number ≥ 0. |
 | `GET /api/spaces/:sid/activity?before=<seq>` | → `{items, more}`: a space's Activity tab, 30 rows below `before` (the newest when left out) within the 90 days, newest first, in the inbox's row shape. Any live member, archived or not; `404` outside it; `400 {field:'before'}` for a bad `before`. |
-| `GET /api/invites` · `POST /api/invites/:sid/accept` · `POST /api/invites/:sid/decline` | your invites, expired ones marked (the list is for old clients only: the app reads invites from `GET /api/inbox`); accept → `{space}` (`404` once withdrawn, `410 expired`, `403 archived` while the class is archived, `409 limit`/`full`; the invite stays pending); decline → `204`. |
+| `GET /api/invites` · `POST /api/invites/:sid/accept` · `POST /api/invites/:sid/decline` | your invites, expired ones marked (the list is for old clients only: the app reads invites from `GET /api/inbox`); accept → `{space}` (`404` once withdrawn, `410 expired`, `403 archived` while the class is archived, `403 not_admin` for a project invite while you are not an admin, `409 limit`/`full`; the invite stays pending); decline → `204`. |
 | `POST /api/spaces/:sid/code` · `DELETE /api/spaces/:sid/code` | the owner: a new 8-character code → `201 {code, expires, usesLeft}` (7 days, 10 uses; only its SHA-256 is kept; a new one retires the old) · turn it off. |
-| `POST /api/join` | `{code}` → `{space}`. 10 tries an hour; `404` unknown, `410 expired`, `403 archived` while the class is archived (no use spent), `409 limit`/`full`. A pending invite to that class is accepted with it, with its role. |
+| `POST /api/join` | `{code}` → `{space}`. 10 tries an hour; `404` unknown, `410 expired`, `403 archived` while the class is archived (no use spent), `403 not_admin` for a project's code while you are not an admin (one you are already in answers with it), `409 limit`/`full`. A pending invite to that class is accepted with it, with its role. |
 | `PUT /api/spaces/:sid/members/:userId` · `POST /api/spaces/:sid/transfer` | the owner, archived or not: `{role: 'editor'\|'member'}` → `{userId, role}`; `{userId}` makes that member the owner and you an editor → `204`. |
-| `POST /api/spaces/:sid/leave` | `{keepCopy}` (true when left out, or with no body) → `204`: leave a class, with a copy of it as your own course or without (see `members`). The owner hands it on first: `403 owner`. Archived or not. |
-| `DELETE /api/spaces/:sid/members/:userId` | the owner, archived or not: remove a member, who always keeps a copy → `204`. Never yourself or the owner (`403`); `404` for someone not in it. |
-| `POST /api/spaces/:sid/archive` | the owner: `{archived}` → `204`. Archived is read-only for everyone (shared edits, invites, codes, joining and accepting an invite `403 archived`); roles, transfer, remove and unarchiving still work. Classes only. (The spec's `PATCH /api/spaces/:sid`.) |
-| `DELETE /api/spaces/:sid` | the owner, only while nobody else is in it (`409 members`, also when someone joins meanwhile): `{keepCopy}` (true when left out) → `204`; the class is soft-deleted and purged 30 days later. |
+| `POST /api/spaces/:sid/leave` | `{keepCopy}` (true when left out, or with no body) → `204`: leave a class, with a copy of it as your own course or without (see `members`); or a project, which copies nothing (`keepCopy` is checked but ignored; see Team projects). The owner hands it on first: `403 owner`. Archived or not. |
+| `DELETE /api/spaces/:sid/members/:userId` | the owner, archived or not: remove a member, who always keeps a copy of a class and nothing of a project → `204`. Never yourself or the owner (`403`); `404` for someone not in it. |
+| `POST /api/spaces/:sid/archive` | the owner: `{archived}` → `204`. Archived is read-only for everyone (shared edits, invites, codes, joining and accepting an invite `403 archived`); roles, transfer, remove and unarchiving still work. Classes and projects. (The spec's `PATCH /api/spaces/:sid`.) |
+| `DELETE /api/spaces/:sid` | a class: the owner, only while nobody else is in it (`409 members`, also when someone joins meanwhile): `{keepCopy}` (true when left out) → `204`; the class is soft-deleted and purged 30 days later. A project: the owner, archived or not, with `{confirm}` its title (trimmed; `400 {field:'confirm'}` otherwise) → `204`, whoever else is in it; see Team projects. |
 | `POST /api/spaces/:sid/items/:id/keep` | **Keep as mine**: a class item an editor removed, that your mark holds something on, becomes your own item filed under the class, with your layer folded in → `204`. Archived or not; `404` otherwise. |
 | `POST /api/spaces/:sid/absorb` (`{items}`) | the owner or an editor: `{items:[id]}` (1 to 50) → `{shared}`: share items of yours filed under the class with it. The class item takes the facts, your status, grade, checklist, notes and completion go into your mark, your sessions and grade achievements on it get the space. `400 {field:'items'}` for one not yours under the class or a lecture review, `400 {field:'type'}` for a custom type, `409 exists` for an id the class has live or when nothing was shared; `403 archived`. |
 | `POST /api/spaces/:sid/absorb` | `{courseId, pairs:[[yourItemId, classItemId]], fromCourse?}` → `{paired, filed}`: merge a course of yours into a class you are in. Marks from your paired items, sessions and achievements moved to the class's ids, your other items filed under the class, your course soft-deleted; your target (and, with `fromCourse`, colour, term and archive) into your prefs. Writes no shared row. A custom-typed item is refused (`400 {field:'pairs'}`); a course already gone answers `{paired: 0, filed: 0}`. |
@@ -575,7 +578,7 @@ There is no `POST /api/spaces {outline}`: the class is made from the preview's r
 
 Nothing is fanned out (spec §12): the inbox is a query (`INBOX` in `worker/activity.js`)
 over the `activity` rows **about you** (`subject_user` is you, by its partial index, even
-in a space you have left) plus, in each space you are a live member of, the rows **since
+in a space you have left, or one deleted) plus, in each live space you are a live member of, the rows **since
 you joined** whose verb concerns everyone: `item.created`, `item.deleted`, `item.date`,
 `course.meetings`, `space.archived`, `space.linked`, a task given to everyone, and a
 task's completion or reopening when it is assigned to you or to everyone. Your own
@@ -599,8 +602,9 @@ open. Marking read does nothing while the inbox came from the offline copy, and 
 `PUT` puts the marker and the count back, so the next open sends it again; a success
 starts a sync, whose count replaces any older one a pull already under way brings back.
 Answering an invite takes it out of the list and the count. A row opens what it is about:
-its item while it is on this device, else its class's sheet; a row with nothing to open
-(a class you left, an item gone) is plain text.
+its item while it is on this device, else its class's or project's sheet; a row with nothing to open
+(a class you left, an item gone) is plain text. An unlinked project (`space.linked` with
+no `new`) reads "… unlinked … from its assignment".
 
 The **Activity tab** (`src/components/sheet/activity-list.tsx`) fetches
 `GET /api/spaces/:sid/activity` when it opens, 30 rows a page with **Show older** (focus
@@ -610,6 +614,70 @@ the class sheet's other errors do (`messageFor`); **Try again** shows when the f
 failed, **Show older** stays to retry a later one. An answer to an
 older request (another class, a closed tab) is dropped. Rows open their item while it is
 on this device; the class itself is not reopened from its own sheet.
+
+### Team projects
+
+A team project (spec §10) is a space of `kind = 'project'`: one `project` item (its name,
+due date and description) and its tasks, all in scope `p:<id>`. It is made, linked, left
+and deleted in `worker/projects.js`; tasks are ordinary shared writes. **Admins only**
+until Stage 10 (`PROJECTS_ADMINS_ONLY`): making one is `403 not_admin` for anyone else,
+inviting someone who is not an admin `409 not_admin`, and accepting a project invite or
+joining by a project's code `403 not_admin`. Someone already in a project who stops being
+an admin keeps working in it. Invites to a project give `editor` by default.
+
+**Making** (`POST /api/spaces {kind:'project'}`): one batch writes the space (with
+`parent_space`/`parent_item` when it belongs to a class item), your owner membership, the
+`project` item and your prefs (`joinPrefs`, the first colour you do not use). The parent
+is any live item in a class you are a live member of; the project's date is the one given,
+else the parent's.
+
+**Tasks** are `PUT /api/spaces/:sid/items/:id` writes of `type: 'task'`. Owners and
+editors write whole rows or merged fields; an assignee outside the project is `400
+{field:'assignees'}` only when the write names `assignees` (a whole-row write always
+does), so an editor's queued edit still naming someone who has left merges its other
+fields onto the task the Worker stripped. A member's write (`memberTaskWrite` in
+`worker/db.js`) names only `status`/`completedAt`, `assignees`, or both: a claim of an
+unassigned task (or stepping off one) and a completion queued together go up as one
+write, and the status then needs you (or `*`) on the task before or after the claim. A
+claim of a task someone else took since you claimed it is `409 conflict` with
+`fields: ['assignees']`; one already taken when you queued it is `403`. A project holds
+**200 live tasks** at most (`TASK_LIMIT`): a new task, or a deleted one being revived,
+past that is `409 limit`, checked inside the write; a live task is never refused for it.
+
+**Linking** (`POST /api/spaces/:sid/link`): the owner of an unarchived project links it
+to a class item (the project's date becomes the item's, which also writes an `item.date`
+row) or unlinks it (the date stays). `space.linked` has `old_value` the item it was linked
+to (`''` for none) and `new_value` the new item, or NULL for an unlink;
+`detail.assignment` the item's title. A link undone within its ten minutes leaves no row
+(`undoneStmt` matches a `''` "from" to a NULL "to").
+
+**Leaving and removal** (`leaveProject`): one batch takes you off every live task's
+`assignees` (a task left with nobody is unassigned: the trigger writes `task.unassigned`),
+soft-deletes your marks and prefs there, ends the membership last, and writes
+`member.left` or `member.removed`. Nothing is copied: the rows are the team's. Archiving,
+unarchiving and handing on work as for a class.
+
+**Deleting** (`DELETE /api/spaces/:sid {confirm}`): the owner, archived or not, typing the
+title (both trimmed). One batch writes `space.deleted` about each other live member (while the space and
+its name are live), soft-deletes every member's marks and prefs there and its invites,
+then the space. Sync revokes it everywhere; the inbox drops the space's other rows but
+still delivers `space.deleted` (a row about you); the nightly purge removes it 30 days on.
+
+**On the device** (`src/data/projects.ts`): tasks are read straight from
+`data.shared_items` and written with `store.saveShared`, so pending edits, field merge
+and Saved copies work as for a class's items; a refused create reads "A project holds 200
+tasks at most." `PROJECTS_IN_VIEWS = false` (`src/data/effective.ts`) keeps every `p:`
+row, removed ones included, out of `mergeItems`, so the Week, Month, All items, stats,
+grades and achievements are untouched until Stage 9. Leaving and deleting upload your
+edits first and take a repeat that answers not found, the project being gone here too,
+as done (`uploadFirst`, `once`, `spaceGone` from `src/data/leave.ts`). `messageFor` and
+`joinMessageFor` take the space's kind, so a project's errors say "project". Admins see
+**New team project** in **+ New**, a **Projects** group in the sidebar, and the project
+sheet (`project-sheet.tsx`): **Tasks** (add, done, claim, edit inline in `task-row.tsx`;
+the owner links, archives, unarchives and deletes by typing the name; anyone else leaves
+after a confirm), **Members** and **Activity**. Until its rows arrive the sheet says it is
+on its way; an archived project is read-only. Joining a project by invite or code offers
+**Open the project** (no semester, colour or merge step).
 
 ### Maintenance mode
 
@@ -693,7 +761,7 @@ On the device, IndexedDB version 6 holds shared rows in `shared_courses` and `sh
 
 ### The nightly purge
 
-`purgeTombstones` (`worker/db.js`) runs in this order: (1) soft-delete the bare marks (holding nothing) on shared items (a class's or a project's) whose tombstones expire, so the change feed carries it; (2) for each space deleted more than 30 days ago, its items, course, change feed, members, invites, marks, prefs and activity (except the rows about a person, `subject_user != ''`, which stay in that person's inbox), then the space; (3) the floor and the 30-day tombstones, now also `members`, never an expiring class item that a meaningful live mark still holds, invites 90 days after `created_at`, and activity 90 days after `at` (`KEEP_MS` in `worker/activity.js`); (4) after that batch, **Keep as mine** on behalf of each person still holding something on an expiring class item, at most 3 (person, class) groups a night, each group's failure logged and skipped. The kept item's class row goes the next night. A project's item with a meaningful mark waits until Stage 8 gives it a keep.
+`purgeTombstones` (`worker/db.js`) runs in this order: (1) soft-delete the marks on shared items whose tombstones expire, so the change feed carries it: every mark on a project task (your note goes with it, spec §13), only the bare ones (holding nothing) on a class item; (2) for each space deleted more than 30 days ago, its items, course, change feed, members, invites, marks, prefs and activity (except the rows about a person, `subject_user != ''`, which stay in that person's inbox), then the space; (3) the floor and the 30-day tombstones, now also `members`, never an expiring class item that a meaningful live mark still holds, invites 90 days after `created_at`, and activity 90 days after `at` (`KEEP_MS` in `worker/activity.js`); (4) after that batch, **Keep as mine** on behalf of each person still holding something on an expiring class item, at most 3 (person, class) groups a night, each group's failure logged and skipped. The kept item's class row goes the next night. A project's rows are never held back by a mark: only class items (`c:`) wait.
 
 ---
 
