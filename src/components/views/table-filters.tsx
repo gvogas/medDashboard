@@ -2,11 +2,12 @@
 // (Personal, a class or a project) when you are in any, and a chip per shown
 // item type with its open items, which were the sidebar's "Open items" filters. Edit
 // types opens the type editor under them. A stat tile's list says so here, with a way to
-// put the course and the search back.
+// put the course, the search and the source back.
 
 import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from "react"
 import { useProfile, useSpaces } from "@/data/store"
 import { useUi } from "@/data/ui"
+import { pickedSource } from "@/data/views"
 import { endTileList, isTypeOn, itemTypes, setShow, setSource, toggleType } from "@/data/actions"
 import type { Show } from "@/data/types"
 import { cn } from "@/lib/utils"
@@ -40,6 +41,9 @@ const Count = ({ n, className }: { n: number; className?: string }) => (
 
 const SHOW: [Show, string][] = [["all", "All"], ["open", "Open"], ["overdue", "Overdue"]]
 
+/* "a and b", "a, b and c" */
+const and = (parts: string[]) => parts.length < 3 ? parts.join(" and ") : parts.slice(0, -1).join(", ") + " and " + parts.at(-1)
+
 interface Props {
     /** How many items the Overdue chip would show. */
     overdue: number
@@ -50,15 +54,20 @@ interface Props {
 export function TableFilters({ overdue, perType }: Props) {
     useProfile()                               // the type list lives on the profile
     const show = useUi((u) => u.show || "all")
-    const source = useUi((u) => u.source || "all"), spaces = useSpaces()
+    const spaces = useSpaces(), source = useUi((u) => pickedSource(u.source, spaces))
     /* a stat tile's list, and what it leaves out that you had picked */
     const tile = useUi((u) => u.listFrom === "tile")
     const course = useUi((u) => u.course !== "all"), searching = useUi((u) => u.search !== "")
-    const aside = !tile ? null
-        : course && searching ? ["Every course and no search, as on the tile.", "Use the course and search"]
-        : course ? ["Every course, as on the tile.", "Use the course filter"]
-        : searching ? ["No search, as on the tile.", "Use the search"]
-        : null
+    const set = [course && "course", source !== "all" && "source", searching && "search"].filter((x): x is string => !!x)
+    const said = and(set.map((x) => (x === "search" ? "no search" : "every " + x)))
+    const aside = !tile || !set.length ? null
+        : [said[0].toUpperCase() + said.slice(1) + ", as on the tile.", set.length === 1 && set[0] !== "search" ? "Use the " + set[0] + " filter" : "Use the " + and(set)]
+    /* the Source select: classes, then projects; an archived space only while it is picked */
+    const listed = spaces.filter((s) => !s.archived || source === "space:" + s.id)
+    const group = (kind: "class" | "project", label: string) => {
+        const of = listed.filter((s) => s.kind === kind)
+        return of.length > 0 && <optgroup label={label}>{of.map((s) => <option key={s.id} value={"space:" + s.id}>{s.name}</option>)}</optgroup>
+    }
     const [editing, setEditing] = useState(false)
     const pen = useRef<HTMLButtonElement>(null)
     const back = useRef(false)
@@ -87,12 +96,13 @@ export function TableFilters({ overdue, perType }: Props) {
                     ))}
                 </div>
                 {spaces.length > 0 && (
-                    <label className="flex items-center gap-1.5 text-[12px] text-muted-foreground">
+                    <label className="flex min-w-0 max-w-full items-center gap-1.5 text-[12px] text-muted-foreground">
                         Source
-                        <Select value={source} onChange={(e) => setSource(e.target.value)} aria-label="Source" className="w-auto">
+                        <Select value={source} onChange={(e) => setSource(e.target.value)} aria-label="Source" className="w-auto min-w-0 max-w-full">
                             <option value="all">Everything</option>
                             <option value="personal">Personal</option>
-                            {spaces.map((s) => <option key={s.id} value={"space:" + s.id}>{s.name}</option>)}
+                            {group("class", "Classes")}
+                            {group("project", "Projects")}
                         </Select>
                     </label>
                 )}

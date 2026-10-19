@@ -7,7 +7,7 @@ vi.mock("@/data/query", () => ({ schoolCal: () => null }))
 import { normalizeCourse, normalizeItem } from "@/core/model"
 import { normalizeSchool } from "@/core/school"
 import {
-    cellLabel, classes, instances, monthCells, officeHours, quoteAt, stats, tableRows, tasks, timetable, typeCounts, weekDays,
+    cellLabel, classes, instances, monthCells, officeHours, pickedSource, quoteAt, stats, tableRows, tasks, timetable, typeCounts, weekDays,
     type Filters, type TableFilters, type ViewInput,
 } from "./views"
 import type { Course, Item, Schedule, StudySession } from "./types"
@@ -256,12 +256,23 @@ describe("the table", () => {
         expect(ids("space:webs00000001")).toEqual(["a1", "filed"])
         expect(ids("space:fire00000001")).toEqual(["t1"])
         expect(ids("all")).toHaveLength(4)
+        /* a space you are no longer in (left, removed, deleted) goes back to everything */
+        const mine = [{ id: "webs00000001" }, { id: "fire00000001" }]
+        expect(pickedSource("space:gone00000001", mine)).toBe("all")
+        expect(ids(pickedSource("space:gone00000001", mine))).toHaveLength(4)
+        expect(pickedSource("space:fire00000001", mine)).toBe("space:fire00000001")
+        expect(pickedSource("personal", [])).toBe("personal")
+        expect(pickedSource(undefined, mine)).toBe("all")
     })
 
     it("counts each type's open and weekly items in the course, for the type chips", () => {
         const more = [...list, item({ id: "w", type: "lab", status: "done", recur: "weekly", weekday: 1, courseId: "phys" })]
         expect(typeCounts(more, "all")).toEqual({ lab: 2, assignment: 1 })
         expect(typeCounts(more, "anat")).toEqual({})
+        /* and the Source filter, as the rows do */
+        const sourced = [item({ id: "own", type: "lab" }), item({ id: "filed", type: "exam", classId: "webs00000001" })]
+        expect(typeCounts(sourced, "all", "space:webs00000001")).toEqual({ exam: 1 })
+        expect(typeCounts(sourced, "all", "personal")).toEqual({ lab: 1, exam: 1 })
     })
 })
 

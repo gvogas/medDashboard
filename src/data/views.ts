@@ -35,6 +35,10 @@ export const passShow = (it: Item, show: Show) => (show === "open" ? isOpen(it) 
 export const fromSource = (it: EffectiveItem, source: string) =>
     source === "all" ? true : source === "personal" ? !it.spaceId : it.spaceId === source.slice(6) || it.classId === source.slice(6)
 
+/** The Source filter as picked, or 'all' when it names a space you are no longer in (left, removed, deleted). */
+export const pickedSource = (source: string | null | undefined, spaces: { id: string }[]) =>
+    !source || (source.startsWith("space:") && !spaces.some((s) => "space:" + s.id === source)) ? "all" : source
+
 /* Courses by key: a class course and a personal one may share an id (effective.ts). */
 const courseMap = (courses: Course[]) => new Map(courses.map((c) => [keyOf(c), c]))
 
@@ -305,10 +309,11 @@ export function tableRows(items: Item[], courses: Course[], f: TableFilters, sor
  * Each type chip's count: its open items, and weekly ones that are always on the board,
  * in the course picked. The search, the status and the other chips leave it alone.
  */
-export function typeCounts(items: Item[], course: string): Record<string, number> {
+export function typeCounts(items: Item[], course: string, source = "all"): Record<string, number> {
     const n: Record<string, number> = {}
     for (const it of items) {
         if (course !== "all" && courseKeyOf(it) !== course) continue
+        if (!fromSource(it, source)) continue
         if (it.recur === "weekly" || isOpen(it)) n[it.type] = (n[it.type] || 0) + 1
     }
     return n
@@ -364,9 +369,9 @@ export function quoteAt(quotes: Quote[], ix: number): { quote: Quote; ix: number
 const filtersOf = (): Filters => ({ search: ui.search, course: ui.course })
 
 /** The table's filters. A stat tile's list leaves out the course, the search and the source, as the tile does. */
-export const tableFiltersOf = (): TableFilters => {
+export const tableFiltersOf = (spaces: { id: string }[]): TableFilters => {
     const tile = ui.listFrom === "tile"
-    return { search: tile ? "" : ui.search, course: tile ? "all" : ui.course, types: { ...ui.types }, show: ui.show || "all", source: tile ? "all" : ui.source || "all" }
+    return { search: tile ? "" : ui.search, course: tile ? "all" : ui.course, types: { ...ui.types }, show: ui.show || "all", source: tile ? "all" : pickedSource(ui.source, spaces) }
 }
 
 /**
@@ -407,10 +412,10 @@ export const useMonth = () => {
 }
 
 export const useTable = () => {
-    const input = useViewInput()
+    const input = useViewInput(), spaces = useSpaces()
     const sort = { key: ui.sort.key, dir: ui.sort.dir }
     return useMemo(() => {
-        const f = tableFiltersOf()
+        const f = tableFiltersOf(spaces)
         return {
             rows: tableRows(input.items, input.courses, f, sort),
             total: input.items.length,
@@ -418,11 +423,11 @@ export const useTable = () => {
             filters: f,
             /* what the Overdue chip would show, and each type chip's open items */
             overdue: tableRows(input.items, input.courses, { ...f, show: "overdue" }, sort).length,
-            perType: typeCounts(input.items, f.course),
+            perType: typeCounts(input.items, f.course, f.source),
         }
     },
         // eslint-disable-next-line react-hooks/exhaustive-deps -- the sort is part of the ui, keyed by `input`
-        [input])
+        [input, spaces])
 }
 
 export const useStats = () => {

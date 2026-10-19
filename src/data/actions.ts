@@ -100,6 +100,7 @@ export function setShow(show: Show) {
 /** All items' Source select: 'all', 'personal' or 'space:<id>'. */
 export function setSource(source: string) {
     ui.source = source
+    ui.listFrom = null                         /* picking a source ends a stat tile's list */
     notify()
 }
 
