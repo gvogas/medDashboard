@@ -13,10 +13,13 @@ import type { Course, Item } from "@/data/types"
 import { accent, classTitle, Empty, hasSchoolTags, HeadNote, Panel, ScheduleTabs, SchoolTags, statusText, Steps, TINT } from "./bits"
 import { useWeekLayout } from "@/data/agenda"
 import { AgendaView, LayoutTabs } from "./agenda"
+import { useNeedsSetup } from "@/data/setup"
+import { Setup } from "./setup"
 
 export function WeekView() {
     const { week, officeHours, tasks, empty, schedule } = useWeek()
     const layout = useWeekLayout()
+    const setup = useNeedsSetup()
     const n = week.count
     const side = (
         <div className="grid min-w-0 gap-[13px]">
@@ -26,6 +29,8 @@ export function WeekView() {
     )
 
     /* on a phone, the Agenda by default; office hours and tasks follow it */
+    /* a new account: the setup in place of an empty board */
+    if (setup) return <div className="grid max-w-[720px] gap-[13px]"><Setup /></div>
     if (layout === "agenda") return <div className="grid gap-[13px]"><AgendaView />{side}</div>
 
     return (
