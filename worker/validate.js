@@ -241,7 +241,8 @@ export function studyPrefs(v) {
     dayMin: int(v.dayMin ?? 15, 'studyPrefs.dayMin', 1, 240),
     rest: [...rest].sort((a, b) => a - b),
     celebrate: bool(v.celebrate ?? true, 'studyPrefs.celebrate'),
-    alarms: bool(v.alarms ?? true, 'studyPrefs.alarms'),
+    /* left out (a tab from before alarms), the stored choice stays (worker/db.js PREFS_SQL); none stored is on */
+    ...(v.alarms !== undefined && { alarms: bool(v.alarms, 'studyPrefs.alarms') }),
     ...(v.reviews !== undefined && { reviews: optDate(v.reviews, 'studyPrefs.reviews') }),
     ...(bool(v.setupDone ?? false, 'studyPrefs.setupDone') ? { setupDone: true } : {}),
   };

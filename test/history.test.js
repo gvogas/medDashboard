@@ -107,7 +107,7 @@ describe('study prefs', () => {
 
   it('are checked by the Worker', () => {
     expect(studyPrefs({ goal: 120, dayMin: 20, rest: [6, 0], celebrate: false, alarms: false })).toEqual({ goal: 120, dayMin: 20, rest: [0, 6], celebrate: false, alarms: false });
-    expect(studyPrefs({})).toEqual({ goal: 0, dayMin: 15, rest: [], celebrate: true, alarms: true });
+    expect(studyPrefs({})).toEqual({ goal: 0, dayMin: 15, rest: [], celebrate: true });
     expect(studyPrefs({ reviews: '2026-09-01' }).reviews).toBe('2026-09-01');
     expect(studyPrefs({ reviews: null }).reviews).toBe(null);
     for (const bad of [{ reviews: '2026-13-01' }, { reviews: true }, { goal: 721 }, { goal: 1.5 }, { dayMin: 0 }, { rest: [7] }, { rest: [1, 1] }, { rest: [0, 1, 2, 3, 4, 5, 6] }, { rest: 'sun' }, { celebrate: 'yes' }, { alarms: 1 }]) {
@@ -120,9 +120,9 @@ describe('study prefs', () => {
     const body = { coat: { name: '', role: '', color: '#E4749B' }, theme: 'dark', termStart: null, displayName: '' };
     let res = await api('/api/me', { method: 'PUT', body: { ...body, studyPrefs: { goal: 90, dayMin: 20, rest: [0], celebrate: true } } });
     expect(res.status).toBe(200);
-    expect((await res.json()).studyPrefs).toEqual({ goal: 90, dayMin: 20, rest: [0], celebrate: true, alarms: true });
+    expect((await res.json()).studyPrefs).toEqual({ goal: 90, dayMin: 20, rest: [0], celebrate: true });
     res = await api('/api/me', { method: 'PUT', body: { ...body, theme: 'light' } });
-    expect((await res.json()).studyPrefs).toEqual({ goal: 90, dayMin: 20, rest: [0], celebrate: true, alarms: true });
+    expect((await res.json()).studyPrefs).toEqual({ goal: 90, dayMin: 20, rest: [0], celebrate: true });
     res = await api('/api/me', { method: 'PUT', body: { ...body, studyPrefs: { goal: -1 } } });
     expect(await res.json()).toEqual({ error: 'invalid', field: 'studyPrefs.goal' });
   });
@@ -134,11 +134,23 @@ describe('study prefs', () => {
     let res = await api('/api/me', { method: 'PUT', body: { ...body, studyPrefs: { ...prefs, reviews: '2026-09-01' } } });
     expect((await res.json()).studyPrefs.reviews).toBe('2026-09-01');
     res = await api('/api/me', { method: 'PUT', body: { ...body, studyPrefs: { ...prefs, goal: 60 } } });
-    expect((await res.json()).studyPrefs).toEqual({ ...prefs, goal: 60, alarms: true, reviews: '2026-09-01' });
+    expect((await res.json()).studyPrefs).toEqual({ ...prefs, goal: 60, reviews: '2026-09-01' });
     res = await api('/api/me', { method: 'PUT', body: { ...body, studyPrefs: { ...prefs, reviews: null } } });
     expect((await res.json()).studyPrefs.reviews).toBe(null);
     res = await api('/api/me', { method: 'PUT', body: { ...body, studyPrefs: prefs } });
     expect((await res.json()).studyPrefs.reviews).toBe(null);
+  });
+
+  it('keep the feed alarms turned off and the setup done when a tab from before leaves them out', async () => {
+    const api = await signIn();
+    const body = { coat: { name: '', role: '', color: '#E4749B' }, theme: 'dark', termStart: null, displayName: '' };
+    const prefs = { goal: 30, dayMin: 15, rest: [], celebrate: true };
+    let res = await api('/api/me', { method: 'PUT', body: { ...body, studyPrefs: { ...prefs, alarms: false, setupDone: true } } });
+    expect((await res.json()).studyPrefs).toEqual({ ...prefs, alarms: false, setupDone: true });
+    res = await api('/api/me', { method: 'PUT', body: { ...body, studyPrefs: { ...prefs, goal: 45 } } });
+    expect((await res.json()).studyPrefs).toEqual({ ...prefs, goal: 45, alarms: false, setupDone: true });
+    res = await api('/api/me', { method: 'PUT', body: { ...body, studyPrefs: { ...prefs, alarms: true } } });
+    expect((await res.json()).studyPrefs).toEqual({ ...prefs, alarms: true, setupDone: true });
   });
 });
 

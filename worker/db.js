@@ -53,17 +53,19 @@ export async function getProfile(db, userId) {
   return row ? profileFromRow(row) : null;
 }
 
-/* Study prefs replace the stored ones, except that prefs with no `reviews` (from a tab
-   opened before reviews were synced) keep the stored day reviews were turned on. */
-const PREFS_SQL = `CASE WHEN ?4 IS NULL THEN study_prefs
-  WHEN json_type(?4, '$.reviews') IS NULL AND json_type(study_prefs, '$.reviews') IS NOT NULL THEN json_set(?4, '$.reviews', json_extract(study_prefs, '$.reviews'))
-  ELSE ?4 END`;
+/* Study prefs replace the stored ones, except for the fields a tab from before them leaves
+   out: the day reviews were turned on, whether the feed carries alarms, and that the first-run
+   setup is done each keep their stored value when the prefs sent have none. */
+const KEPT_PREFS = ['reviews', 'alarms', 'setupDone'];
+const PREFS_SQL = KEPT_PREFS.reduce((sql, key) =>
+  `CASE WHEN json_type(${sql}, '$.${key}') IS NULL AND json_type(study_prefs, '$.${key}') IS NOT NULL THEN json_set(${sql}, '$.${key}', json(study_prefs -> '$.${key}')) ELSE ${sql} END`,
+  '?4');
 
 export async function updateProfile(db, userId, p, now = Date.now(), revision) {
   const prefs = p.studyPrefs ? JSON.stringify(p.studyPrefs) : null;
   const saved = await db
     .prepare(
-      `UPDATE users SET display_name = ?5, coat_name = ?6, coat_role = ?7, coat_color = ?8, theme = ?9, bg = ?10, types = COALESCE(?11, types), study_flow = COALESCE(?12, study_flow), study_prefs = ${PREFS_SQL}, school_calendar = COALESCE(?13, school_calendar), hidden_sources = COALESCE(?14, hidden_sources), grading = COALESCE(?16, grading), term_start = ?15, updated_at = ?3, revision = revision + 1 WHERE id = ?1 AND revision = ?2 RETURNING ${PROFILE_COLS}`,
+      `UPDATE users SET display_name = ?5, coat_name = ?6, coat_role = ?7, coat_color = ?8, theme = ?9, bg = ?10, types = COALESCE(?11, types), study_flow = COALESCE(?12, study_flow), study_prefs = COALESCE(${PREFS_SQL}, study_prefs), school_calendar = COALESCE(?13, school_calendar), hidden_sources = COALESCE(?14, hidden_sources), grading = COALESCE(?16, grading), term_start = ?15, updated_at = ?3, revision = revision + 1 WHERE id = ?1 AND revision = ?2 RETURNING ${PROFILE_COLS}`,
     )
     .bind(userId, revision ?? -1, now, prefs, p.displayName, p.coatName, p.coatRole, p.coatColor, p.theme, p.bg, p.types === null ? null : JSON.stringify(p.types), p.studyFlow ? JSON.stringify(p.studyFlow) : null, p.schoolCalendar ? JSON.stringify(p.schoolCalendar) : null, p.hiddenSources ? JSON.stringify(p.hiddenSources) : null, p.termStart, p.grading ? JSON.stringify(p.grading) : null)
     .first();
