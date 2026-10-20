@@ -18,6 +18,7 @@ import { toggleClassTask } from "./marks"
 import { openKeys } from "./keys"
 import { api } from "@/core/api"
 import { toast } from "./toast"
+import { backupFile, fileName, itemsCsv } from "./backup"
 import { applyCoat, TAB_OF, type SettingsTab } from "./settings"
 import { rememberUi } from "@/data/ui"
 import { launch as fireworks } from "@/lib/fireworks"
@@ -294,15 +295,26 @@ export async function saveCoat(patch: { name?: string; role?: string; color?: st
     notify()
 }
 
-/** Everything on this device, the unsynced edits and the saved copies, as a file. */
-export async function exportData() {
-    await store.reload()
-    const blob = new Blob([JSON.stringify({ ...store.data, pending: await store.pending(), conflicts: store.conflicts }, null, 2)], { type: "application/json" })
-    const url = URL.createObjectURL(blob), link = document.createElement("a")
+/* Hand the browser a file to save. */
+function saveFile(text: string, name: string, type: string) {
+    const url = URL.createObjectURL(new Blob([text], { type })), link = document.createElement("a")
     link.href = url
-    link.download = "term-backup.json"
+    link.download = name
     link.click()
     setTimeout(() => URL.revokeObjectURL(url), 1000)
+}
+
+/** Everything on this device, your classes and projects, the unsynced edits and the saved copies, as a file. */
+export async function exportData() {
+    await store.reload()
+    const file = backupFile(store.data, await store.pending(), store.conflicts, new Date())
+    saveFile(JSON.stringify(file, null, 2), fileName("term-backup", today(), "json"), "application/json")
+}
+
+/** Your items, classes' and projects' too, as a spreadsheet. */
+export async function exportItemsCsv() {
+    await store.reload()
+    saveFile(itemsCsv(effectiveItems(), effectiveCourses(), data.spaces), fileName("term-items", today(), "csv"), "text/csv;charset=utf-8")
 }
 
 /** A saved copy: restore the edit to try it again, or discard it. */

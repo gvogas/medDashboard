@@ -129,8 +129,9 @@ export type StepKind = "study" | "break"
 /** A study flow, as normalizeFlow in model.ts returns it: 1–12 steps, at least one Study, 1–12 rounds. */
 export interface Flow { steps: [StepKind, number][]; rounds: number }
 
-/** The study prefs, as normalizePrefs in model.ts returns them. */
-export interface StudyPrefs { goal: number; dayMin: number; rest: number[]; celebrate: boolean }
+/** The study prefs, as normalizePrefs in model.ts returns them. `reviews` is the day spaced
+    reviews were turned on (null = off), missing on a profile saved before it was synced. */
+export interface StudyPrefs { goal: number; dayMin: number; rest: number[]; celebrate: boolean; reviews?: string | null }
 
 /** A badge as achievements.ts works it out: built in, or one of your own (with its sticker). */
 export interface Badge {

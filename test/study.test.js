@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { lectureDates, reviewId, reviewStep, firstReviews, nextReview, dueReviews } from '../src/core/reviews.ts';
+import { lectureDates, reviewId, reviewStep, firstReviews, nextReview, dueReviews, effectiveSetting, legacyReviews } from '../src/core/reviews.ts';
 import { shortDate } from '../src/core/dates.ts';
 import { examWindow, fillTopics, prepPace, prepLabel } from '../src/core/prep.ts';
 
@@ -87,6 +87,33 @@ describe('dueReviews', () => {
 
   it('is idle when already up to date', () => {
     expect(dueReviews({ on: true, through: '2026-09-21' }, [pharm], [], '2026-09-22').rows).toEqual([]);
+  });
+});
+
+describe('the synced review setting', () => {
+  it('is off for every browser once turned off on one', () => {
+    expect(effectiveSetting(null, { on: true, through: '2026-09-21' })).toEqual({ on: false, through: null });
+  });
+
+  it('starts a browser that has handled nothing from today', () => {
+    expect(effectiveSetting('2026-09-01', { on: false, through: null })).toEqual({ on: true, through: null });
+    expect(dueReviews(effectiveSetting('2026-09-01', { on: false, through: null }), [pharm], [], '2026-09-22').rows).toEqual([]);
+  });
+
+  it('starts over when this browser last saw reviews off, so it never fills in a gap', () => {
+    expect(effectiveSetting('2026-09-20', { on: false, through: '2026-08-01' })).toEqual({ on: true, through: null });
+  });
+
+  it('keeps this browser watermark, but never before the day reviews were turned on', () => {
+    expect(effectiveSetting('2026-09-10', { on: true, through: '2026-09-16' })).toEqual({ on: true, through: '2026-09-16' });
+    expect(effectiveSetting('2026-09-20', { on: true, through: '2026-08-01' })).toEqual({ on: true, through: '2026-09-19' });
+  });
+
+  it('moves a setting kept only in this browser up once', () => {
+    expect(legacyReviews(undefined, { on: true, through: '2026-09-16' }, '2026-09-22')).toBe('2026-09-22');
+    expect(legacyReviews(undefined, { on: false, through: null }, '2026-09-22')).toBe(null);
+    expect(legacyReviews(null, { on: true, through: '2026-09-16' }, '2026-09-22')).toBe(null);
+    expect(legacyReviews('2026-09-01', { on: true, through: '2026-09-16' }, '2026-09-22')).toBe(null);
   });
 });
 
