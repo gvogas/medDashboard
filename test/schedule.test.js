@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { SELF, env } from 'cloudflare:test';
 import { signIn, BASE } from './helpers.js';
 import { OUTLINE_DAILY_LIMIT } from '../worker/limits.js';
-import { cleanGrid, cleanSchedule, parseGrid, readSchedule, splitDays, VISION_MODEL, MAX_IMAGE_BYTES, toBase64 } from '../worker/schedule.js';
+import { cleanGrid, cleanSchedule, onGridLines, parseGrid, readSchedule, splitDays, VISION_MODEL, MAX_IMAGE_BYTES, toBase64 } from '../worker/schedule.js';
 import { MODEL, cleanClasses } from '../worker/outline.js';
 import visionReply from './fixtures/schedule-vision-reply.json';
 import textReply from './fixtures/schedule-text-reply.json';
@@ -432,6 +432,45 @@ describe('a screenshot whose grid the browser found', () => {
     const ai = fakeAi(REPLY);
     await readSchedule(ai, { bytes: new Uint8Array([0xff, 0xd8, 0xff, 0]), type: 'image/jpeg', today: '2026-09-01', grid: 'nonsense' });
     expect(ai.calls[0][1].messages[0].content).not.toContain('red number');
+  });
+});
+
+describe("a PDF's grid lines", () => {
+  /* the lines the browser writes from the look-alike's PDF (test/fixtures/omnivox-grid.html), checked by hand */
+  const clock = (r) => { const m = 480 + r * 30; return String(Math.floor(m / 60)).padStart(2, '0') + ':' + String(m % 60).padStart(2, '0'); };
+  const D = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
+  const TEXT = '### Page 1\nTimetable grid (each line is one class: its weekday and its start and end times, read from the page layout):\n'
+    + LOOKALIKE.map(([c, f, t, code, name, room]) => D[c] + ' ' + clock(f) + '-' + clock(t + 1) + ' | ' + name + ' | ' + code + ' sec.00002 | ' + room.replace(/\s+/g, ' ') + ' | Classroom').join('\n');
+
+  it('give every class its weekday and times, whatever the model made of them', () => {
+    /* what went wrong live: starts a row late, ends made up, a class on the wrong day, one dropped */
+    const model = { term: '', courses: [
+      { code: '111AAAVF', name: 'History of Ideas', classes: [{ kind: 'Lecture', weekday: 1, start: '09:00', end: '10:00', room: 'N-100' }] },
+      { code: '222541VA', name: 'Graphics Programming', classes: [{ kind: 'Lab', weekday: 1, start: '10:30', end: '12:00', room: 'D-201' }] },
+      { code: '222521VA', name: 'Network Design', classes: [{ kind: 'Lab', weekday: 1, start: '14:30', end: '16:30', room: 'D-202' }] },
+      { code: '222511VA', name: 'Cloud Services', classes: [{ kind: 'Lecture', weekday: 3, start: '12:00', end: '14:30', room: 'D-206' }] },
+      { code: '222531VA', name: 'Embedded Systems', classes: [{ kind: 'Lecture', weekday: 2, start: '10:30', end: '12:00', room: 'D-204' }] },
+      { code: '333E02MQ', name: 'Projet intégrateur', classes: [{ kind: 'Lab', weekday: 3, start: '15:00', end: '16:30', room: 'A-300' }] },
+    ] };
+    const out = onGridLines(model, TEXT);
+    const meetings = out.courses.flatMap((c) => c.classes.map((m) => [c.code, m.weekday, m.start, m.end, m.room]));
+    expect(meetings).toHaveLength(14);
+    expect(meetings).toEqual(expect.arrayContaining([
+      ['111AAAVF', 1, '08:30', '10:00', 'N-100'], ['111AAAVF', 4, '08:30', '10:00', 'N-100'],
+      ['222541VA', 1, '10:00', '12:00', 'D-201'], ['222541VA', 3, '10:30', '12:30', 'D-201'], ['222541VA', 5, '10:00', '12:00', 'D-203'],
+      ['222521VA', 1, '13:00', '16:00', 'D-202'], ['222521VA', 4, '14:00', '16:00', 'D-207'],
+      ['222511VA', 1, '16:00', '18:00', 'D-203'], ['222511VA', 2, '16:00', '18:00', 'D-205'], ['222511VA', 4, '10:00', '12:00', 'D-206'],
+      ['222531VA', 2, '10:00', '12:00', 'D-204'], ['222531VA', 3, '08:30', '10:30', 'D-204'], ['222531VA', 5, '14:00', '16:00', 'D-204'],
+      ['333E02MQ', 3, '14:00', '17:00', 'A-300'],
+    ]));
+    /* a lab by its room's lone "L" */
+    expect(out.courses.find((c) => c.code === '222531VA').classes.map((m) => m.kind)).toEqual(['Lecture', 'Lab', 'Lab']);
+  });
+
+  it("leave the model's classes when a line names none of its courses, or there are no lines", () => {
+    const model = { term: '', courses: [{ code: 'XYZ1', name: 'Other', classes: [{ kind: 'Lecture', weekday: 1, start: '09:00', end: '10:00', room: '' }] }] };
+    expect(onGridLines(model, TEXT)).toBe(model);
+    expect(onGridLines(model, 'no grid here')).toBe(model);
   });
 });
 

@@ -304,5 +304,38 @@ export async function readSchedule(ai, { today, terms, codes, grid, ...doc }) {
     const found = parseGrid(grid);
     return { ...await (found ? askGrid(ai, doc, found, today, known) : askImage(ai, doc, today, known)), truncated: false };
   }
-  return askModel(ai, doc, (text) => textPrompt(text, today, known), cleanSchedule, { effort: 'low', maxTokens: TEXT_TOKENS, maxChars: TEXT_CHARS, what: 'schedule' });
+  let sent = '';
+  const ask = (text) => { sent = text; return textPrompt(text, today, known); };
+  return askModel(ai, doc, ask, (raw) => onGridLines(cleanSchedule(raw), sent), { effort: 'low', maxTokens: TEXT_TOKENS, maxChars: TEXT_CHARS, what: 'schedule' });
+}
+
+/* a line the browser wrote from a PDF's grid (src/core/timetable-grid.ts): "Mon 08:30-10:00 | words | …" */
+const GRID_LINE = /^(Sun|Mon|Tue|Wed|Thu|Fri|Sat) (\d\d:\d\d)-(\d\d:\d\d) \| (.+)$/gm;
+const squeeze = (s) => String(s || '').toLowerCase().normalize('NFD').replace(/[^a-z0-9]/g, '');
+
+/**
+ * A PDF's grid lines put on the model's courses: each line's weekday and times are read from
+ * the page's layout, exact, so they are taken as they are, and the model only says which course
+ * a line is (its code or its name in the line) and its kind and room. A model that moves a
+ * class to another day, snaps its start or drops it cannot. When a line names no course the
+ * model gave, the model's own classes stay.
+ */
+export function onGridLines(schedule, text) {
+  const lines = [...String(text || '').matchAll(GRID_LINE)].map(([, day, start, end, words]) => ({ weekday: DAYS.indexOf(day), start, end, words, flat: squeeze(words) }));
+  if (!lines.length) return schedule;
+  const owner = (line) => schedule.courses.find((c) => c.code && line.flat.includes(squeeze(c.code)))
+    || schedule.courses.find((c) => c.name && squeeze(c.name).length >= 4 && line.flat.includes(squeeze(c.name)));
+  if (!lines.every(owner)) return schedule;
+  const courses = schedule.courses.map((c) => {
+    const mine = lines.filter((l) => owner(l) === c);
+    if (!mine.length) return c;
+    const classes = mine.map((l) => {
+      /* the model's class on that weekday gives the kind and room, else the line's room ("Classroom D-243 L") */
+      const said = c.classes.find((m) => m.weekday === l.weekday && m.start === l.start) || c.classes.find((m) => m.weekday === l.weekday);
+      const room = said?.room || (l.words.split(' | ').find((p) => /^(classroom|room|salle|local)\s+\S/i.test(p)) || '');
+      return roomMarks({ kind: said?.kind || 'Lecture', weekday: l.weekday, start: l.start, end: l.end, room: clip(room, 40) });
+    });
+    return { ...c, classes };
+  });
+  return { ...schedule, courses };
 }
