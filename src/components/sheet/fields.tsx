@@ -190,13 +190,15 @@ export function TitleArea({ className, value, ...props }: ComponentProps<"textar
         t.style.height = "auto"
         t.style.height = t.scrollHeight + "px"
     }, [value])
+    /* shrink-0: the sheet's body is a scrolling flex column, and a long sheet (a course with its
+       grade setup) would otherwise squeeze the title down to its padding */
     return (
         <textarea
             ref={ref}
             rows={1}
             value={value}
             {...props}
-            className={cn("w-full resize-none overflow-hidden rounded-md border-0 bg-transparent px-0 pt-0 pb-1 font-[inherit] text-[22px] leading-[1.22] font-[750] tracking-[-.02em] text-foreground outline-none placeholder:text-muted-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)]", className)}
+            className={cn("w-full shrink-0 resize-none overflow-hidden rounded-md border-0 bg-transparent px-0 pt-0 pb-1 font-[inherit] text-[22px] leading-[1.22] font-[750] tracking-[-.02em] text-foreground outline-none placeholder:text-muted-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)]", className)}
         />
     )
 }
