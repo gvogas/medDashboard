@@ -205,9 +205,10 @@ export function schoolCalendar(v) {
 
 /* The study goal and streak rules: minutes a day to aim for (0 = no goal), the least
    that makes a day count toward the streak, rest days (0 = Sunday) that never break
-   it, whether to celebrate, whether the calendar feed carries reminders, and the day spaced
+   it, whether to celebrate, whether the calendar feed carries reminders, the day spaced
    reviews were turned on (null = off; left out by clients from before reviews were kept here,
-   so they cannot tell off from unknown). */
+   so they cannot tell off from unknown), and setupDone, kept only when true: the first-run
+   setup was finished or skipped. */
 export function studyPrefs(v) {
   obj(v, 'studyPrefs');
   const rest = v.rest ?? [];
@@ -221,6 +222,7 @@ export function studyPrefs(v) {
     celebrate: bool(v.celebrate ?? true, 'studyPrefs.celebrate'),
     alarms: bool(v.alarms ?? true, 'studyPrefs.alarms'),
     ...(v.reviews !== undefined && { reviews: optDate(v.reviews, 'studyPrefs.reviews') }),
+    ...(bool(v.setupDone ?? false, 'studyPrefs.setupDone') ? { setupDone: true } : {}),
   };
 }
 

@@ -43,13 +43,14 @@ export function TopBar() {
                 {syncTrouble(sync) && <i aria-hidden="true" data-sync-dot={sync} className={cn("absolute top-1 right-1 size-2 rounded-full ring-2 ring-card", DOT[sync])} />}
             </button>
 
-            <div className="flex min-w-0 flex-1 flex-col gap-1">
+            {/* on a small phone a dated title has its own line beside the menu, and ‹ Today › starts the next */}
+            <div className={cn("flex min-w-0 flex-1 flex-col gap-1", dated && "max-[520px]:basis-[calc(100%-44px)]")}>
                 <span className="truncate text-[13px] text-muted-foreground">{heading.sub || <>&nbsp;</>}</span>
                 <h1 className="m-0 truncate font-serif text-[34px] max-[700px]:text-[24px] leading-[1.1] font-medium tracking-[-.015em] text-foreground">{heading.title}</h1>
             </div>
 
             {dated && (
-                <div className="flex items-center gap-1">
+                <div className="flex items-center gap-1 max-[520px]:mr-auto">
                     <TextureButton variant="minimal" size="sm" aria-label="Previous" onClick={() => step(-1)}>
                         {icon(<path d="M10 3 5 8l5 5" />)}
                     </TextureButton>

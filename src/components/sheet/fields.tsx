@@ -72,7 +72,7 @@ export const IconButton = ({ className, ...props }: ComponentProps<"button">) =>
         type="button"
         {...props}
         className={cn(
-            "cursor-pointer rounded-[9px] border border-border bg-[linear-gradient(var(--panel),var(--panel-2))] px-2 py-1 font-[inherit] text-[12px] leading-tight text-ink-2 shadow-[var(--shadow-1),inset_0_1px_0_var(--rim-hi)] hover:border-[color-mix(in_srgb,var(--accent)_50%,var(--line))] hover:text-accent-foreground",
+            "hit cursor-pointer rounded-[9px] border border-border bg-[linear-gradient(var(--panel),var(--panel-2))] px-2 py-1 font-[inherit] text-[12px] leading-tight text-ink-2 shadow-[var(--shadow-1),inset_0_1px_0_var(--rim-hi)] hover:border-[color-mix(in_srgb,var(--accent)_50%,var(--line))] hover:text-accent-foreground",
             className,
         )}
     />
@@ -80,7 +80,7 @@ export const IconButton = ({ className, ...props }: ComponentProps<"button">) =>
 
 /** ✕ beside a step, a link or a class. */
 export const RemoveButton = ({ className, ...props }: ComponentProps<"button">) => (
-    <button type="button" {...props} className={cn("cursor-pointer border-0 bg-transparent px-1 font-[inherit] text-[14px] leading-none text-muted-foreground hover:text-destructive", className)}>✕</button>
+    <button type="button" {...props} className={cn("hit cursor-pointer border-0 bg-transparent px-1 font-[inherit] text-[14px] leading-none text-muted-foreground hover:text-destructive", className)}>✕</button>
 )
 
 /* ── fields ── */

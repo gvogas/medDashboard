@@ -131,8 +131,9 @@ export interface Flow { steps: [StepKind, number][]; rounds: number }
 
 /** The study prefs, as normalizePrefs in model.ts returns them. `alarms`: whether the calendar
     feed carries reminders. `reviews` is the day spaced reviews were turned on (null = off),
-    missing on a profile saved before it was synced. */
-export interface StudyPrefs { goal: number; dayMin: number; rest: number[]; celebrate: boolean; alarms: boolean; reviews?: string | null }
+    missing on a profile saved before it was synced. `setupDone`: the first-run setup was
+    finished or skipped (absent until then). */
+export interface StudyPrefs { goal: number; dayMin: number; rest: number[]; celebrate: boolean; alarms: boolean; reviews?: string | null; setupDone?: boolean }
 
 /** A badge as achievements.ts works it out: built in, or one of your own (with its sticker). */
 export interface Badge {

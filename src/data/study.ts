@@ -16,6 +16,7 @@ import { useAchievements, useCourses, useItems, useProfile, useStudySessions } f
 import { rememberUi, ui } from "./ui"
 import { keyedAchievements, keyedCourses, keyedItems, keyedSessions, leftSpaceLabel } from "./refs"
 import { forAchievements } from "./effective"
+import { defaultRange, termRecap } from "@/core/recap"
 import { withProjects } from "./projects"
 import type { Achievement, Badge, Course, HistTab, Item, SessionUndo, StudyPrefs, StudySession, StudyTab } from "./types"
 
@@ -380,4 +381,19 @@ export function undoSessionDelete() {
     clearTimeout(u.timer)
     ui.hist.undo = null
     notify()
+}
+
+/* ── the term recap (core/recap.ts) ── */
+
+/** The ranges the recap offers: each semester of the school calendar, else the last 16 weeks. */
+export function recapRanges(cal: { terms: { name: string; start: string; end: string }[] } | null, today: string) {
+    const terms = (cal?.terms ?? []).filter((t) => t.start <= today)
+    return terms.length ? terms.map((t) => ({ id: t.name, label: t.name, from: t.start, to: t.end })) : [{ id: "recent", label: "Last 16 weeks", ...defaultRange(today) }]
+}
+
+/** The recap of `from`..`to`, in key space like History: a class's course is told apart from yours. */
+export const useRecap = (from: string, to: string) => {
+    const input = useStudyInput(), items = useItems(), profile = useProfile()
+    return useMemo(() => termRecap(input.sessions, keyedItems(forAchievements(items, profile?.id ?? "")), from, to, input.today, input.prefs),
+        [input, items, profile, from, to])
 }
