@@ -205,7 +205,8 @@ export function schoolCalendar(v) {
 
 /* The study goal and streak rules: minutes a day to aim for (0 = no goal), the least
    that makes a day count toward the streak, rest days (0 = Sunday) that never break
-   it, and whether to celebrate. */
+   it, and whether to celebrate. setupDone, kept only when true: the first-run setup was
+   finished or skipped. */
 export function studyPrefs(v) {
   obj(v, 'studyPrefs');
   const rest = v.rest ?? [];
@@ -217,6 +218,7 @@ export function studyPrefs(v) {
     dayMin: int(v.dayMin ?? 15, 'studyPrefs.dayMin', 1, 240),
     rest: [...rest].sort((a, b) => a - b),
     celebrate: bool(v.celebrate ?? true, 'studyPrefs.celebrate'),
+    ...(bool(v.setupDone ?? false, 'studyPrefs.setupDone') ? { setupDone: true } : {}),
   };
 }
 

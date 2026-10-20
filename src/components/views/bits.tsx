@@ -72,7 +72,7 @@ export function ScheduleTabs({ value }: { value: Schedule }) {
                     aria-pressed={value === id}
                     onClick={() => setSchedule(id)}
                     className={cn(
-                        "cursor-pointer rounded-md border-0 bg-transparent px-2.5 py-1 text-[11.5px] font-semibold text-ink-2 hover:text-foreground",
+                        "cursor-pointer rounded-md border-0 bg-transparent px-2.5 py-1 text-[11.5px] font-semibold text-ink-2 hover:text-foreground pointer-coarse:min-h-9",
                         value === id && "bg-card text-accent-foreground shadow-[0_1px_2px_rgba(0,0,0,.08)]",
                     )}
                 >

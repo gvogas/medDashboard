@@ -329,7 +329,9 @@ export function normalizeFlow(raw: unknown): Flow {
 
 /* The study goal and streak rules: a daily goal in minutes (0 = none), the least that
    makes a day count toward the streak, rest days (0 = Sunday) that never break it, and
-   whether to celebrate. The server keeps what it is given; this fills the gaps. */
+   whether to celebrate. `setupDone` is there only once the first-run setup was finished or
+   skipped, so it is never offered again on another device. The server keeps what it is
+   given; this fills the gaps. */
 const DEFAULT_PREFS: StudyPrefs = { goal: 0, dayMin: 15, rest: [], celebrate: true };
 export function normalizePrefs(raw: unknown): StudyPrefs {
   const p = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>;
@@ -339,6 +341,7 @@ export function normalizePrefs(raw: unknown): StudyPrefs {
     dayMin: clampInt(p.dayMin, 1, 240, DEFAULT_PREFS.dayMin),
     rest,
     celebrate: p.celebrate === undefined ? true : !!p.celebrate,
+    ...(p.setupDone === true ? { setupDone: true } : {}),
   };
 }
 

@@ -130,7 +130,8 @@ export type StepKind = "study" | "break"
 export interface Flow { steps: [StepKind, number][]; rounds: number }
 
 /** The study prefs, as normalizePrefs in model.ts returns them. */
-export interface StudyPrefs { goal: number; dayMin: number; rest: number[]; celebrate: boolean }
+/* setupDone: the first-run setup was finished or skipped (absent until then) */
+export interface StudyPrefs { goal: number; dayMin: number; rest: number[]; celebrate: boolean; setupDone?: boolean }
 
 /** A badge as achievements.ts works it out: built in, or one of your own (with its sticker). */
 export interface Badge {

@@ -59,7 +59,7 @@ function DayRow({ day }: { day: Day }) {
                     onClick={() => newItemOn(day.date)}
                     aria-label={"Add item on " + day.date}
                     title={"Add on " + day.dow + " " + day.day + " " + day.mon}
-                    className="grid size-6 cursor-pointer place-items-center rounded-md border border-border bg-card text-[15px] leading-none text-ink-2 hover:border-[var(--accent)] hover:text-[var(--accent)]"
+                    className="hit grid size-6 cursor-pointer place-items-center rounded-md border border-border bg-card text-[15px] leading-none text-ink-2 hover:border-[var(--accent)] hover:text-[var(--accent)]"
                 >+</button>
             </div>
             <div className="flex min-w-0 flex-col gap-0.5">
@@ -178,7 +178,7 @@ function Tasks({ list, open }: { list: Item[]; open: number }) {
                                 aria-label={"Done: " + it.title}
                                 onClick={(e) => { void toggleTask(keyOf(it), e.currentTarget) }}
                                 className={cn(
-                                    "grid size-[18px] flex-none cursor-pointer place-items-center rounded-[5px] border-[1.5px] p-0",
+                                    "hit grid size-[18px] flex-none cursor-pointer place-items-center rounded-[5px] border-[1.5px] p-0",
                                     on ? "border-primary bg-primary text-primary-foreground" : "border-line-2 bg-card text-transparent hover:border-[var(--accent)]",
                                 )}
                             >

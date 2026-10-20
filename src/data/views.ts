@@ -395,6 +395,9 @@ function useViewInput(calendar = false): ViewInput {
     )
 }
 
+/** The Week's input, for the Agenda (agenda.ts), which reads the same days. */
+export const useWeekInput = () => useViewInput(true)
+
 export const useWeek = () => {
     const input = useViewInput(true)
     return useMemo(() => ({
