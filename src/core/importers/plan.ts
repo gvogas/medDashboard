@@ -17,7 +17,7 @@ import type { IcsEvent } from './ics.ts';
 export interface ImportRow { type: string; course: string; courseName?: string; title: string; date: string; start: string; end: string; room?: string; weight: number | null; kind?: string; weekday?: number }
 
 /** What the plan is checked against: the store's courses and items. */
-export interface PlanData { courses?: (Pick<Course, 'id' | 'code' | 'name' | 'color' | 'meetings'> & { term?: string })[]; items?: Pick<Item, 'type' | 'title' | 'date' | 'start' | 'courseId' | 'recur' | 'weekday'>[] }
+export interface PlanData { courses?: (Pick<Course, 'id' | 'code' | 'name' | 'color' | 'meetings'> & { term?: string; archived?: boolean })[]; items?: Pick<Item, 'type' | 'title' | 'date' | 'start' | 'courseId' | 'recur' | 'weekday'>[] }
 
 export interface PlanMeeting extends Meeting { include: boolean }
 export interface PlanCourse {
@@ -26,6 +26,9 @@ export interface PlanCourse {
   existing?: Meeting[];
   /* a new course from an outline: its teacher and whether to keep it with nothing ticked; term: the semester to save (a new course's, or the one picked for a course that exists; undefined leaves it as it is) */
   instructor?: string; term?: string; keep?: boolean;
+  /* a class schedule: the course as the timetable named it, the classes yours already has, and whether
+     the ticked classes replace them (true) or join them (false or unset) */
+  read?: { code: string; name: string }; had?: Meeting[]; replace?: boolean;
 }
 /** An item to create, ready for normalizeItem(). */
 export interface PlanRow { type: string; title: string; courseId: string | null; date: string; start: string; end: string; where: string; status: string; weight: number | null; recur?: 'weekly'; weekday?: number }
@@ -272,20 +275,13 @@ export function planSummary(plan: Plan): string {
  */
 export function planSchedule(s: Schedule, data: PlanData, term = ''): Plan {
   const existing = data.courses || [];
-  const norm = (t: unknown) => String(t || '').replace(/\s+/g, ' ').trim().toLowerCase();
-  const key = (t: unknown) => String(t || '').replace(/\s+/g, '').toUpperCase();
-  const rows: ImportRow[] = [];
-  const matched: string[] = [];
-  const found = s.courses.map((c) => {
-    const given = key(c.code);
-    const live = existing.find((x) => given && key(x.code) === given) || existing.find((x) => c.name && norm(x.name) === norm(c.name));
-    return { c, given, live };
-  });
+  const notes: string[] = [];
+  const courses: PlanCourse[] = [];
   /* the codes a made-up one must not take: yours, and those read with a course */
-  const used = new Set([...existing.map((x) => key(x.code)), ...found.filter((f) => !f.live && f.given).map((f) => f.given.slice(0, 8))]);
+  const used = new Set([...existing.map((x) => codeKey(x.code)), ...s.courses.map((c) => codeKey(c.code).slice(0, 8)).filter(Boolean)]);
   const made = new Map<string, string>();               /* name → the code made for it */
   const makeCode = (name: string) => {
-    const n = norm(name);
+    const n = String(name || '').replace(/\s+/g, ' ').trim().toLowerCase();
     if (made.has(n)) return made.get(n)!;
     const base = (String(name || '').replace(/[^A-Za-z0-9]/g, '').slice(0, 4) || 'NEW').toUpperCase();
     let code = base;
@@ -293,21 +289,108 @@ export function planSchedule(s: Schedule, data: PlanData, term = ''): Plan {
     used.add(code); made.set(n, code);
     return code;
   };
-  for (const { c, given, live } of found) {
-    if (live) matched.push(live.id);
-    const code = (live ? live.code : given || makeCode(c.name)).toUpperCase().slice(0, 8);
+  for (const c of s.courses) {
+    const read = { code: codeKey(c.code).slice(0, 8) || makeCode(c.name), name: clip(c.name || c.code, 80) };
+    const live = matchCourse(read, existing.filter((x) => !x.archived));
+    /* one timetable course twice (its rows apart), or two put on one of yours: the second's classes join the first's */
+    const pc = courses.find((p) => p.read?.code === read.code || (live && p.id === live.id)) || planned(read, live, existing, courses, term);
     for (const k of c.classes) {
-      rows.push({ type: 'class', kind: k.kind, weekday: k.weekday, course: code, courseName: live ? live.name : (c.name || code), title: k.kind, date: '', start: k.start, end: k.end, room: k.room, weight: null });
+      if (!k.start || !(k.weekday >= 0)) { notes.push('Skipped a class of ' + read.code + ' with no day or start time.'); continue; }
+      const end = classEnd(k.start, k.end);
+      if (pc.meetings.some((m) => m.weekday === k.weekday && m.start === k.start && m.end === end)) continue;
+      if (pc.meetings.length >= MAX_MEETINGS) { notes.push(pc.code + ' already has 12 classes; dropped ' + DOW[k.weekday] + ' ' + k.start + '.'); continue; }
+      pc.meetings.push({ id: uid(), kind: KINDS.includes(k.kind) ? k.kind : 'Lecture', weekday: k.weekday, start: k.start, end, room: clip(k.room, 40), include: true });
     }
   }
-  const plan = planImport(rows, data, 'csv');
-  for (const id of matched) {
-    if (plan.courses.some((c) => c.id === id)) continue;
-    const live = existing.find((x) => x.id === id)!;
-    plan.courses.push({ id: live.id, code: live.code, name: live.name, color: live.color, isNew: false, meetings: [] });
+  for (const pc of courses) settle(pc);
+  if (s.truncated) notes.push('The timetable was long, so only the first part was read. Check the last courses by hand.');
+  return { courses, items: [], notes, kind: 'schedule' };
+}
+
+type Mine = NonNullable<PlanData['courses']>[number];
+
+/* A plan course for what the timetable read: on the course of yours it matched, or a new one. */
+function planned(read: { code: string; name: string }, live: Mine | null, existing: Mine[], courses: PlanCourse[], term: string): PlanCourse {
+  const pc: PlanCourse = live
+    ? { id: live.id, code: live.code, name: live.name, color: live.color, isNew: false, meetings: [], had: live.meetings || [], term: live.term ?? '', read }
+    : { id: uid(), code: read.code, name: read.name || read.code, color: HEXES[(existing.length + courses.filter((c) => c.isNew).length) % HEXES.length], isNew: true, meetings: [], had: [], term, read };
+  courses.push(pc);
+  return pc;
+}
+
+const sameMeeting = (a: Meeting, b: Meeting) => a.weekday === b.weekday && a.start === b.start && a.end === b.end;
+
+/**
+ * Once the timetable's classes are in, or the course they go to was changed: a course of yours
+ * whose classes are not the timetable's is offered to have them replaced (on: the timetable was
+ * read just now). Every class starts ticked, but none at all when yours has exactly these already.
+ */
+function settle(pc: PlanCourse) {
+  const had = pc.had || [];
+  const same = had.length === pc.meetings.length && had.every((h) => pc.meetings.some((m) => sameMeeting(h, m)));
+  pc.replace = !pc.isNew && had.length > 0 && !same ? true : undefined;
+  for (const m of pc.meetings) m.include = !same;
+}
+
+/**
+ * Put the timetable's course at index `i` on another of your courses (`id`), or on a new one
+ * (null), as picked in the preview. Its classes stay as they are; whether they replace yours is
+ * worked out again.
+ */
+export function remapCourse(plan: Plan, i: number, id: string | null, data: PlanData): Plan {
+  const pc = plan.courses[i], existing = data.courses || [];
+  const read = pc.read || { code: pc.code, name: pc.name };
+  const live = id ? existing.find((x) => x.id === id) : null;
+  const next: PlanCourse = live
+    ? { ...pc, id: live.id, code: live.code, name: live.name, color: live.color, isNew: false, had: live.meetings || [], term: live.term ?? '' }
+    : { ...pc, id: pc.isNew ? pc.id : uid(), code: read.code, name: read.name || read.code, isNew: true, had: [],
+        color: pc.isNew ? pc.color : HEXES[(existing.length + plan.courses.filter((c) => c.isNew).length) % HEXES.length] };
+  settle(next);
+  return { ...plan, courses: plan.courses.map((c, k) => (k === i ? next : c)) };
+}
+
+/** A course code to compare: upper case, letters and digits only ("420-541-VA" and "420541va" are one). */
+export const codeKey = (code: unknown) => String(code || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+
+/* A name's words to compare: no case, accents or punctuation, a plural "s" off ("Networks" is "Network"). */
+const words = (name: unknown) => String(name || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
+  .split(/[^a-z0-9]+/).filter(Boolean).map((w) => (w.length > 3 && w.endsWith('s') && !w.endsWith('ss') ? w.slice(0, -1) : w));
+
+/* "prog" and "programming": one word the start of the other, 3 letters at least; numbers only the same */
+const wordsMeet = (a: string, b: string) => a === b || (Math.min(a.length, b.length) >= 3 && !/\d/.test(a + b) && (a.startsWith(b) || b.startsWith(a)));
+
+/**
+ * How surely a course read from a timetable is one of yours, 0 to 1. The same code is 1 (dashes,
+ * spaces and case aside, or one the start of the other: "420541VA" and "420-541"); else the
+ * names word by word, each word allowed to be the start of the other's ("Game Prog" and "Game
+ * Programming 2", "Advanced Network" and "Advanced Networks"): the share of the shorter name's
+ * words found in the longer, so an abbreviation scores as high as the full name. One word in
+ * common is not enough, unless each name is that one word.
+ */
+export function courseScore(read: { code?: string; name?: string }, mine: { code?: string; name?: string }): number {
+  const a = codeKey(read.code), b = codeKey(mine.code);
+  if (a && b && (a === b || (Math.min(a.length, b.length) >= 5 && (a.startsWith(b) || b.startsWith(a))))) return 1;
+  const x = words(read.name), y = words(mine.name);
+  if (!x.length || !y.length) return 0;
+  /* "IoT" and "IoT: Internet of Things": a title before its colon; "IoT" and "Internet of Things": the initials */
+  const head = (n: unknown) => words(String(n || '').split(':')[0]).join(' ')
+  const initials = (ws: string[]) => ws.map((w) => w[0]).join('')
+  const one = (a: string[], bName: unknown, b: string[]) => a.length === 1 && a[0].length >= 2 && (a[0] === head(bName) || (b.length >= 2 && a[0] === initials(b)) || a[0] === initials(words(String(bName || '').split(':').pop())))
+  if (one(x, mine.name, y) || one(y, read.name, x)) return 1;
+  const [short, long] = x.length <= y.length ? [x, y] : [y, x];
+  const hits = short.filter((w) => long.some((v) => wordsMeet(w, v))).length;
+  if (hits < 2 && !(short.length === 1 && long.length === 1)) return hits ? 0.4 : 0;
+  return hits / short.length;
+}
+
+/** The course of yours a timetable's course is: the surest at 0.75 or more, a matching code first; else null. */
+export function matchCourse<C extends { code?: string; name?: string }>(read: { code?: string; name?: string }, mine: C[]): C | null {
+  const byCode = mine.find((c) => courseScore({ code: read.code }, { code: c.code }) === 1);
+  if (byCode) return byCode;
+  let best: C | null = null, top = 0.75;
+  for (const c of mine) {
+    const score = courseScore(read, c);
+    if (score > top || (!best && score >= top)) { best = c; top = score; }
   }
-  for (const pc of plan.courses) pc.term = pc.isNew ? term : (existing.find((x) => x.id === pc.id)?.term ?? '');
-  if (s.truncated) plan.notes.push('The timetable was long, so only the first part was read. Check the last courses by hand.');
-  plan.kind = 'schedule';
-  return plan;
+  return best;
 }
