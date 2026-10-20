@@ -1,4 +1,4 @@
-// A fake Spotify for the tests. vitest.config.js routes every outbound fetch from the
+// A fake Spotify (and a fake push service) for the tests. vitest.config.js routes every outbound fetch from the
 // Worker here. accounts.spotify.com answers by the grant; api.spotify.com answers by
 // the bearer token, so a test picks Spotify's behaviour by the token it seeds.
 
@@ -197,8 +197,20 @@ async function player(request, url) {
   return new Response(null, { status: 204 });
 }
 
+/* A fake browser push service (worker/push.js): the endpoint's last part picks the answer.
+   'gone…' is unsubscribed (410), 'ok…' takes the push (201) when it carries a VAPID header
+   and no body, and anything else fails (500). */
+async function pushService(request, url) {
+  const id = url.pathname.split('/').pop();
+  if (id.startsWith('gone')) return new Response(null, { status: 410 });
+  const auth = request.headers.get('authorization') || '';
+  const ok = id.startsWith('ok') && /^vapid t=[\w-]+\.[\w-]+\.[\w-]+, k=[\w-]+$/.test(auth) && request.headers.get('ttl') && !(await request.text());
+  return new Response(null, { status: ok ? 201 : 500 });
+}
+
 export async function spotifyStub(request) {
   const url = new URL(request.url);
+  if (url.host === 'fcm.googleapis.com' && request.method === 'POST') return pushService(request, url);
   if (url.host === 'accounts.spotify.com' && url.pathname === '/api/token' && request.method === 'POST') return token(request);
   if (url.host === 'api.spotify.com') return player(request, url);
   return new Response('outbound fetch blocked in tests: ' + request.url, { status: 502 });

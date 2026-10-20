@@ -7,7 +7,7 @@
 // ACCOUNT_TABLES lists each table with how its rows name their owner (?1 is the user id), in
 // an order the foreign keys accept. Courses, items and the change feed belong to the scope
 // 'u:<id>', which no foreign key follows, so they are listed here. The user row's deletion
-// cascades to its Spotify attempts, memberships, invites, marks and space prefs.
+// cascades to its Spotify attempts, memberships, invites, marks, space prefs and push devices.
 // Activity about the account goes; activity it took part in keeps its name in detail.by. Its
 // inbox_seen row goes by ON DELETE CASCADE.
 

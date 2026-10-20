@@ -3,7 +3,7 @@
 
 /* What moves, in an order the foreign keys accept, in the shape of today's schema.
    Throttles, request windows, OAuth attempts and refresh leases are short-lived, so they
-   start empty. users comes first: scripts/move-db.mjs refuses a target that holds any
+   start empty, and so do push devices (their owners turn reminders on again). users comes first: scripts/move-db.mjs refuses a target that holds any
    user, so a run that failed partway is never continued on top of itself. */
 export const TABLES = {
   users: ['id', 'username', 'password_hash', 'pw_gen', 'display_name', 'coat_name', 'coat_role', 'coat_color', 'theme', 'bg', 'term_start', 'types', 'study_flow', 'feed_gen', 'study_prefs', 'school_calendar', 'leaderboard', 'is_admin', 'last_seen_day', 'hidden_sources', 'created_at', 'updated_at', 'revision'],
@@ -41,7 +41,7 @@ const DEFAULTS = { assignees: "'[]'", hidden_sources: "'[]'" };
 const ADDED_IN_V7 = new Set(['hidden_sources', 'updated_by', 'class_id', 'assignees', 'completed_by', 'space_id']);
 /* Short-lived, or filled by the fresh schema itself. The error log, the announcement and
    the cron's last run start fresh too. */
-const LEFT_BEHIND = ['error_log', 'app_meta', 'login_throttle', 'request_limits', 'spotify_oauth_states', 'spotify_refresh_locks', 'sync_state', 'd1_migrations'];
+const LEFT_BEHIND = ['error_log', 'app_meta', 'login_throttle', 'request_limits', 'spotify_oauth_states', 'spotify_refresh_locks', 'push_subscriptions', 'sync_state', 'd1_migrations'];
 
 /** Every column of the database's own tables, as rows of {tbl, col}. */
 export const COLUMNS_QUERY = `SELECT m.name AS tbl, p.name AS col FROM sqlite_master AS m, pragma_table_info(m.name) AS p

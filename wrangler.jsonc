@@ -39,8 +39,9 @@
   "ai": { "binding": "AI", "remote": true },
 
   "triggers": {
-    // Nightly: hard-delete tombstones older than 30 days.
-    "crons": ["0 3 * * *"]
+    // Nightly: hard-delete tombstones older than 30 days. Hourly: the morning digests
+    // (worker/push.js; worker/index.js tells the two apart by the cron string).
+    "crons": ["0 3 * * *", "0 * * * *"]
   },
 
   "observability": { "enabled": true },
