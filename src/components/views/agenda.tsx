@@ -6,11 +6,14 @@ import { useState } from "react"
 import { cn } from "@/lib/utils"
 import { isTest, tmeta } from "@/core/model"
 import { diffDays, shortDate, today } from "@/core/dates"
+import { crunchesOn, type Crunch } from "@/core/workload"
 import { courseByKey, courseKeyOf, keyOf } from "@/data/effective"
 import { AGENDA_DAYS, gapLabel, setWeekLayout, useAgenda, useNarrow, type AgendaRow, type WeekLayout } from "@/data/agenda"
 import { tintOf, type Day, type Entry } from "@/data/views"
 import { newItemOn, openItem } from "@/data/actions"
 import { useUi } from "@/data/ui"
+import { useCrunches } from "@/data/next"
+import { CrunchBand, CrunchTag } from "./crunch"
 import { SourceMark } from "./source-mark"
 import { accent, classTitle, Empty, hasSchoolTags, HeadNote, Panel, ScheduleTabs, SchoolTags, statusText, Steps, TINT } from "./bits"
 
@@ -22,10 +25,11 @@ export function AgendaView() {
     const schedule = useUi((u) => u.schedule)
     const agenda = useAgenda(days), empty = agenda.empty
     const any = agenda.rows.some((r) => r.kind === "day" && r.day.entries.length)
+    /* the crunches in the days shown, as the Week marks them: a band, and a tag on a crowded day */
+    const crunch = useCrunches(agenda.from, agenda.to)
 
     return (
         <div className="grid gap-[13px]">
-            {/* The Week's Up next panel goes here too, above the days, once it is in the Week. */}
             <Panel
                 label="Agenda"
                 title="Agenda"
@@ -35,8 +39,9 @@ export function AgendaView() {
                     <LayoutTabs value="agenda" />
                 </>}
             >
+                <CrunchBand list={crunch} />
                 <ol className="m-0 list-none p-0">
-                    {agenda.rows.map((row) => <AgendaLine key={row.kind === "day" ? row.day.date : "gap" + row.from} row={row} />)}
+                    {agenda.rows.map((row) => <AgendaLine key={row.kind === "day" ? row.day.date : "gap" + row.from} row={row} crunch={crunch} />)}
                 </ol>
                 {!any && (empty
                     ? <Empty title="Nothing here yet">Add a course from the sidebar, then a first item with “New item”.</Empty>
@@ -73,17 +78,17 @@ export function LayoutTabs({ value }: { value: WeekLayout }) {
     )
 }
 
-function AgendaLine({ row }: { row: AgendaRow }) {
+function AgendaLine({ row, crunch }: { row: AgendaRow; crunch: Crunch[] }) {
     if (row.kind === "gap") {
         return <li className="border-t border-line-2 px-4 py-2 text-[12.5px] text-muted-foreground">{gapLabel(row)}</li>
     }
-    return <DayBlock day={row.day} />
+    return <DayBlock day={row.day} crunch={crunchesOn(crunch, row.day.date).filter((c) => c.kind !== "week")} />
 }
 
 /** "Today", "Tomorrow" or "", for the day's heading. */
 const nearWord = (day: Day) => (day.isToday ? "Today" : diffDays(today(), day.date) === 1 ? "Tomorrow" : "")
 
-function DayBlock({ day }: { day: Day }) {
+function DayBlock({ day, crunch }: { day: Day; crunch: Crunch[] }) {
     const tint = tintOf(day.info)
     return (
         <li aria-label={shortDate(day.date)} className={cn("border-t border-line-2 py-1.5", tint && TINT[tint], day.isToday && "bg-[var(--accent-soft)] shadow-[inset_3px_0_0_var(--accent)]")}>
@@ -91,6 +96,7 @@ function DayBlock({ day }: { day: Day }) {
                 <h3 className="m-0 flex-1 text-[13px] font-semibold text-foreground">
                     {nearWord(day) && <span className={day.isToday ? "text-accent-foreground" : undefined}>{nearWord(day)} · </span>}{shortDate(day.date)}
                 </h3>
+                <CrunchTag list={crunch} />
                 <button
                     type="button"
                     onClick={() => newItemOn(day.date)}
