@@ -9,7 +9,7 @@ const fake = vi.hoisted(() => ({
     ui: { view: "week", bg: "med", course: "all", search: "", types: {}, aiLeft: null as number | null, aiLimit: null as number | null, aiNote: null as unknown, importNote: null as unknown },
     cal: null as unknown,
 }))
-const legacy = vi.hoisted(() => ({ saveRows: vi.fn(async (_rows: unknown) => {}), saveProfile: vi.fn(), toast: vi.fn(), shrink: vi.fn(async () => new Blob(["j"], { type: "image/jpeg" })) }))
+const legacy = vi.hoisted(() => ({ saveRows: vi.fn(async (_rows: unknown) => {}), saveProfile: vi.fn(), toast: vi.fn(), shrink: vi.fn(async (_f?: Blob) => new Blob(["j"], { type: "image/jpeg" })) }))
 const ai = vi.hoisted(() => ({ readWithAi: vi.fn(), refreshReads: vi.fn(async () => {}), asSent: vi.fn(async (f: File) => f as Blob), MAX_FILE: 5 * 1024 * 1024 }))
 const pdfTimetable = vi.hoisted(() => vi.fn())
 vi.mock("@/core/store", () => ({
@@ -23,7 +23,7 @@ vi.mock("@/data/query", () => ({ schoolCal: () => fake.cal, termStart: () => nul
 vi.mock("@/core/api", () => ({ api: { readSchedule: vi.fn(), readOutline: vi.fn(), readSchool: vi.fn() } }))
 vi.mock("@/data/ai-read", () => ai)
 vi.mock("@/data/toast", () => ({ toast: legacy.toast }))
-vi.mock("@/core/image", () => ({ shrinkImage: legacy.shrink }))
+vi.mock("@/core/image", () => ({ shrinkImage: legacy.shrink, shrinkTimetable: async (f: Blob) => ({ blob: await legacy.shrink(f), grid: "" }) }))
 vi.mock("@/core/pdftext", () => ({ pdfTimetable }))
 vi.mock("@/data/actions", () => ({ openSettings: vi.fn() }))
 

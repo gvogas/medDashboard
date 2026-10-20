@@ -218,6 +218,8 @@ const aiRead = (read, what) => async ({ request, env, url }) => {
       today: date('today') || new Date().toISOString().slice(0, 10), termStart: date('termStart'),
       claim: async () => { await limitOutline(env, userId); claimed = true; },
       deadline: t0 + TIMEOUT_MS,
+      /* a screenshot's grid as the browser found it (schedule.js parseGrid); the other reads ignore it */
+      grid: url.searchParams.get('grid') || '',
       ...knownParams(url.searchParams),
     }));
   } catch (e) {

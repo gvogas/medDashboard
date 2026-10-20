@@ -213,7 +213,7 @@ async function spaceOf(response: Promise<unknown>): Promise<SpaceSummary> {
 
 /* A read's query: only the values given, in the order given. */
 const query = (o: Record<string, string | undefined>) => new URLSearchParams(Object.entries(o).filter((e): e is [string, string] => !!e[1])).toString()
-type ReadQuery = { name: string; today: string; termStart?: string; terms?: string; codes?: string }
+type ReadQuery = { name: string; today: string; termStart?: string; terms?: string; codes?: string; grid?: string }
 
 export const api = {
   me: () => record<ServerProfile & Row>(request('GET', '/api/me'), accountId),
