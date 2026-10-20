@@ -1,0 +1,30 @@
+name: Deploy staging
+# Run by hand from the Actions tab: "Run workflow", pick the branch to try. It runs
+# `npm run deploy:staging`, which puts that branch on https://rounds-staging.termanitor07.workers.dev
+# with its own database (migrations included) and never touches the live site.
+# Uses the same two repository secrets as deploy.yml.
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: deploy-staging
+  cancel-in-progress: false
+env:
+  CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+  CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: staging
+      url: https://rounds-staging.termanitor07.workers.dev
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+          cache: npm
+      - run: npm ci
+      - run: npm test
+      - run: npm run deploy:staging

@@ -86,36 +86,67 @@ One catch: if you edit the small inline script inside `index.html`, run
 
 ## Deploying
 
-Cloudflare's Git integration deploys the site. Every push to `main` on GitHub makes
-Cloudflare run `npm run build` and upload the result. That build does **not** run the
-tests and does **not** apply database migrations to the live database.
+GitHub Actions deploys the site (`.github/workflows/deploy.yml`). Every push to `main`
+runs, in order, and stops at the first step that fails:
+
+1. `npm run check`: types, all tests and the release build
+2. the Worker secrets are set (`scripts/check-secrets.mjs`)
+3. a restore point for the live database is noted in the run's summary
+4. new migrations are applied to the live database (`npm run db:remote`)
+5. the live database checks pass (`npm run db:check -- --remote`)
+6. `npm run build` and `wrangler deploy`
+
+So a migration in the push reaches the live database before the code that needs it,
+and code whose migration failed never goes live. Watch it under the repository's
+**Actions** tab; a failed run emails you.
 
 ```mermaid
 flowchart LR
-  A[npm run check<br/>passes] --> M{New<br/>migration?}
-  M -->|yes| D[npm run db:remote<br/>then db:check --remote]
-  M -->|no| P
-  D --> P[git push<br/>to main]
-  P --> E[Cloudflare builds<br/>and uploads]
-  E --> F[Sign in on<br/>live site]
+  P[git push<br/>to main] --> C[Checks pass]
+  C --> S[Secrets set]
+  S --> B[Restore point<br/>noted]
+  B --> M[Migrations<br/>applied to live]
+  M --> D[Live database<br/>checks pass]
+  D --> E[Build and<br/>wrangler deploy]
 ```
+
+Other workflows:
+
+| Workflow | When | What it does |
+| --- | --- | --- |
+| Check (`check.yml`) | Every other branch and every pull request | `npm run check`; on a pull request, also stops if a migration that already exists was edited, renamed or deleted |
+| Deploy staging (`staging.yml`) | By hand: Actions → Deploy staging → Run workflow, pick a branch | Runs the tests, then `npm run deploy:staging` for that branch |
+| Database health (`db-health.yml`) | Nightly, or by hand | Read-only: fails if the live database is missing a migration that `main` has, or its integrity checks fail |
+
+**Setting it up (once)**
+
+1. In Cloudflare, My Profile → API Tokens → Create Token, start from the **Edit
+   Cloudflare Workers** template and add **Account → D1 → Edit**. Limit it to the
+   account that owns Rounds.
+2. In GitHub, the repository's Settings → Secrets and variables → Actions, add
+   `CLOUDFLARE_API_TOKEN` (the token) and `CLOUDFLARE_ACCOUNT_ID`
+   (`2c6057041650be9d99932b4013571adb`, the `CF_ACCOUNT_ID` in `wrangler.jsonc`).
+3. In Cloudflare, Workers & Pages → rounds → Settings → Build, **disconnect the Git
+   repository**. Otherwise Cloudflare's own build deploys each push too, without
+   waiting for the migrations.
+4. Optional: in GitHub, Settings → Environments → `production`, add yourself as a
+   required reviewer so each deploy waits for a click.
+
+The Worker's own secrets (`SESSION_SECRET`, Spotify, push) stay in Cloudflare, set with
+`npx wrangler secret put` as before. The workflow only checks that they are there.
 
 **Before you push to `main`**
 
-- [ ] `npm run check` passes (types, all tests and the release build)
 - [ ] You tried the change locally with `npm run dev`, or `npm run dev:built` to try
       the built, versioned site that goes live
 - [ ] For a change worth trying for real (Workers AI, push, a migration), you tried it on
-      [staging](#staging) first with `npm run deploy:staging`
-- [ ] If the change adds a migration, you noted a restore point **first** (see
-      [Undoing a migration](#undoing-a-migration)), applied it to live with
-      `npm run db:remote`, then ran `npm run db:check -- --remote`. New code on an old
-      database fails with 500s until the migration is applied
+      [staging](#staging) first
+- [ ] A new migration works on the code that is live now too, since it is applied a
+      minute or two before the new code arrives
 
-`npm run deploy` is the manual route. It runs `npm run check`, checks the secret names,
-applies migrations to live, runs the live database checks, then runs `wrangler deploy`.
-Use it when Git deploys are unavailable; the next push to `main` deploys again anyway.
-Never run a bare `wrangler deploy` with code that needs a migration not yet applied.
+`npm run deploy` is the manual route, the same steps from your computer. Use it when
+GitHub Actions is unavailable. Never run a bare `wrangler deploy` with code that needs a
+migration not yet applied.
 
 When `db:remote` finds new migrations, it lists them and asks `continue? (Y/n)`. Type
 Y and press Enter. If there are none, it says "No migrations to apply!".
@@ -136,7 +167,9 @@ is behind the code" next to the error.
 ### Undoing a migration
 
 Rollback puts code back, not the database. For the database, D1 keeps its history
-(7 days on the free plan) and can go back to any minute of it. Before `npm run db:remote`:
+(7 days on the free plan) and can go back to any minute of it. Each Deploy run notes the
+bookmark from just before its migrations in the run's summary, with the restore command.
+By hand, before `npm run db:remote`:
 
 ```sh
 npx wrangler d1 time-travel info rounds-v7     # prints the current bookmark; copy it
@@ -185,7 +218,8 @@ npm run user:add -- yourname --staging          # the first time: an account the
 
 `deploy:staging` never touches the live site or the live database. The staging database
 starts empty and keeps what you put in it between deploys. Cloudflare's Git build only
-deploys `main` to the live site; staging is deployed only by this command.
+deploys `main` to the live site; staging is deployed only by this command, or by the
+**Deploy staging** workflow in the Actions tab, which runs it for the branch you pick.
 
 
 ## Changing the database
@@ -226,15 +260,16 @@ the feed, open to everyone) adds no migration either.
 > `courses.grade_categories` and `items.category`, so on a database without them every
 > profile and course save fails. The old code names its columns, so applying the
 > migrations early is safe. The push secrets are optional (see
-> [Push reminders](#push-reminders)).
+> [Push reminders](#push-reminders)). With the Deploy workflow set up, merging into
+> `main` applies them before the code goes live, so this step is done for you.
 
 To change the database:
 
 1. Add a new file with the next number, `0008_something.sql`. Never edit a file that
    has already run.
 2. Apply it locally with `npm run db:local`, then test.
-3. Apply it to live with `npm run db:remote` **before** pushing the code that needs
-   it, then check with `npm run db:check -- --remote`.
+3. Push it with the code that needs it. The Deploy workflow applies it to live and runs
+   `npm run db:check -- --remote` before it deploys the code.
 
 To see what the live database is missing, run
 `npx wrangler d1 migrations list DB --remote`. "No migrations to apply!" means
@@ -436,9 +471,11 @@ the right-hand column says.
 To see the live server's errors as they happen, run `npx wrangler tail`, then
 reproduce the problem in the browser. Press Ctrl+C to stop.
 
-**Live 500s or "internal" errors: check migrations first.** Pushing `main` deploys
-code without applying migrations, so new code can reach a database that lacks its
-tables. This happened on 2026-09-21, when every live sign-in failed. Run
+**Live 500s or "internal" errors: check migrations first.** The Deploy workflow applies
+migrations before the code, but a bare `wrangler deploy`, or Cloudflare's Git build left
+connected, does not, so new code can reach a database that lacks its tables. This
+happened on 2026-09-21, when every live sign-in failed. The nightly Database health
+workflow fails when this is the case. Run
 `npx wrangler d1 migrations list DB --remote`; if anything is listed, run
 `npm run db:remote`, then `npm run db:check -- --remote`.
 
@@ -456,7 +493,7 @@ Run every command in PowerShell from the project folder.
 | `npm run db:local` | Applies new migrations to the local database | Local |
 | `npm run push:key` | Makes a local VAPID key pair for push reminders in `.dev.vars` | Local |
 | `npm run db:check` | Read-only database checks and row counts (`-- --remote` for live, `-- --staging`) | Local, live or staging, read-only |
-| `git push` to `main` | Cloudflare builds and publishes the site and API (no migrations) | Live |
+| `git push` to `main` | GitHub Actions checks, applies migrations, then publishes | Live |
 | `npm run deploy` | Manual deploy: checks, applies migrations to live, checks the live database, then publishes | Live |
 | `npm run db:remote` | Applies new migrations to live without deploying code | Live |
 | `npx wrangler d1 time-travel info rounds-v7` | Prints the live database's current restore point | Live, read-only |

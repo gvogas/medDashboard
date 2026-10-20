@@ -1,5 +1,10 @@
 name: Check
-on: [push, pull_request]
+# Every branch and pull request. Pushes to main run the same checks inside deploy.yml,
+# so they are left out here.
+on:
+  push:
+    branches-ignore: [main]
+  pull_request:
 permissions:
   contents: read
 jobs:
@@ -13,3 +18,23 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run check
+
+  # A migration runs once per database, so one that has already run must never change:
+  # the live database would keep the old version and the next fresh one would get the new.
+  # New files are fine; edited, renamed or deleted ones stop the pull request.
+  migrations-unchanged:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Existing migrations are untouched
+        run: |
+          changed=$(git diff --name-status --diff-filter=MDR "origin/${{ github.base_ref }}...HEAD" -- migrations/)
+          if [ -n "$changed" ]; then
+            echo "::error::These migrations already exist on ${{ github.base_ref }} and must not change. Add a new numbered file instead."
+            echo "$changed"
+            exit 1
+          fi
+          echo "No existing migration was changed."

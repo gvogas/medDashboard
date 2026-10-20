@@ -74,10 +74,10 @@ npm run check                     # typecheck, tests and build
 
 ## Deploying
 
-Pushing `main` deploys through Cloudflare's Git build (`npm run build`). That build does
-not apply database migrations. If a change includes a new migration, run
-`npm run db:remote` before you push: `0006_push.sql` and `0007_grades.sql` are the
-latest. The morning digest needs three optional secrets (`npm run push:key` makes
+Pushing `main` deploys through GitHub Actions (`.github/workflows/deploy.yml`): the
+checks run, new migrations are applied to the live database and checked, then the Worker
+goes live. If a step fails nothing after it runs. It needs the `CLOUDFLARE_API_TOKEN` and
+`CLOUDFLARE_ACCOUNT_ID` repository secrets. The morning digest needs three optional secrets (`npm run push:key` makes
 them); without them push is off and everything else works. To try a branch for real first,
 `npm run deploy:staging` puts it on a separate test site with its own database. Secrets,
 accounts, staging, Spotify setup and troubleshooting are in [docs/DEPLOYING.md](docs/DEPLOYING.md).

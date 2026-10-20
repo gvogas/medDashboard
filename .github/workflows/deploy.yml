@@ -1,0 +1,89 @@
+name: Deploy
+# Every push to main goes live, in the order docs/DEPLOYING.md asks for by hand:
+# checks pass → secrets are there → a restore point is noted → migrations are applied to
+# the live database → the live database checks pass → the Worker and the site are deployed.
+# If any step fails, nothing after it runs, so new code never reaches an old database.
+#
+# Needs two repository secrets (Settings → Secrets and variables → Actions):
+#   CLOUDFLARE_API_TOKEN   a token from the "Edit Cloudflare Workers" template, plus D1: Edit
+#   CLOUDFLARE_ACCOUNT_ID  the account id (also in wrangler.jsonc as CF_ACCOUNT_ID)
+# Cloudflare's own Git build must be turned off, or it deploys the code before the
+# migrations are applied (docs/DEPLOYING.md, "Deploying").
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+# One deploy at a time; a newer push waits for the running one instead of cancelling it
+# half-way through a migration.
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+env:
+  CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+  CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+          cache: npm
+      - run: npm ci
+      - run: npm run check
+
+  deploy:
+    needs: check
+    runs-on: ubuntu-latest
+    environment:
+      name: production
+      url: https://rounds.termanitor07.workers.dev
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+          cache: npm
+      - run: npm ci
+
+      - name: Worker secrets are set
+        run: node scripts/check-secrets.mjs
+
+      - name: Pending migrations
+        run: npx wrangler d1 migrations list DB --config wrangler.jsonc --remote
+
+      # The bookmark to restore if a migration goes wrong (docs/DEPLOYING.md,
+      # "Undoing a migration"). It goes in the run's summary so it is easy to find.
+      # Not fatal if it can't be read: applying migrations captures a D1 backup as well.
+      - name: Note a restore point
+        run: |
+          info=$(npx wrangler d1 time-travel info DB --config wrangler.jsonc --json) || info=""
+          bookmark=$(printf '%s' "$info" | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{try{console.log(JSON.parse(s).bookmark||"")}catch{}})')
+          if [ -z "$bookmark" ]; then
+            echo "::warning::Could not read a time-travel bookmark. Output was: $info"
+            exit 0
+          fi
+          echo "Restore point before this deploy: $bookmark"
+          {
+            echo "### Database restore point"
+            echo "If this deploy's migrations went wrong:"
+            echo '```'
+            echo "npx wrangler d1 time-travel restore DB --config wrangler.jsonc --bookmark=$bookmark"
+            echo "npx wrangler rollback"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Apply migrations to the live database
+        run: npm run db:remote
+
+      - name: Live database checks
+        run: npm run db:check -- --remote
+
+      - name: Build
+        run: npm run build
+
+      - name: Deploy
+        run: npx wrangler deploy
