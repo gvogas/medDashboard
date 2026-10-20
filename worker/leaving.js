@@ -81,9 +81,9 @@ const NOTES = `substr(CASE WHEN i.notes = '' THEN COALESCE(m.notes, '')
 
 /* Class items `which` into your scope as copies, your mark folded in; an upsert, so a tombstone of yours revives. */
 const itemCopy = (which, course, classId) => `INSERT INTO items (scope, id, type, title, course_id, date, start, end, location, status, grade, weight, notes,
-    checklist, links, recur, weekday, recur_until, dept, completed_at, class_id, created_at, updated_at, revision)
+    checklist, links, recur, weekday, recur_until, dept, completed_at, class_id, category, created_at, updated_at, revision)
   SELECT ?3, map.to_id, i.type, i.title, ${course}, i.date, i.start, i.end, i.location, COALESCE(m.status, 'todo'), m.grade, COALESCE(m.weight, i.weight), ${NOTES},
-    COALESCE(m.checklist, '[]'), i.links, i.recur, i.weekday, i.recur_until, i.dept, m.completed_at, ${classId}, ?5, ?5, ${NEXT_ROW_REVISION}
+    COALESCE(m.checklist, '[]'), i.links, i.recur, i.weekday, i.recur_until, i.dept, m.completed_at, ${classId}, i.category, ?5, ?5, ${NEXT_ROW_REVISION}
   FROM items AS i JOIN ${MAP} AS map ON map.from_id = i.id
     LEFT JOIN marks AS m ON m.user_id = ?1 AND m.space_id = ?2 AND m.item_id = i.id AND m.deleted_at IS NULL
   WHERE i.scope = ?4 AND ${which}
@@ -110,12 +110,13 @@ const layerGone = (live) => [
 
 /** The class copied into your scope (spec §13 Detach), then your layer there deleted. */
 const copyClass = (live) => [
-  `INSERT INTO courses (scope, id, code, name, color, instructor, term, archived, meetings, target, created_at, updated_at, revision)
-    SELECT ?3, ?7, c.code, c.name, COALESCE(p.color, c.color), c.instructor, COALESCE(p.term, c.term), COALESCE(p.archived, (SELECT sa.archived FROM spaces AS sa WHERE sa.id = ?2)), c.meetings, p.target, ?5, ?5, ${NEXT_ROW_REVISION}
+  `INSERT INTO courses (scope, id, code, name, color, instructor, term, archived, meetings, target, credits, grade_categories, created_at, updated_at, revision)
+    SELECT ?3, ?7, c.code, c.name, COALESCE(p.color, c.color), c.instructor, COALESCE(p.term, c.term), COALESCE(p.archived, (SELECT sa.archived FROM spaces AS sa WHERE sa.id = ?2)), c.meetings, p.target, c.credits, c.grade_categories, ?5, ?5, ${NEXT_ROW_REVISION}
     FROM courses AS c LEFT JOIN space_prefs AS p ON p.user_id = ?1 AND p.id = ?2 AND p.deleted_at IS NULL
     WHERE c.scope = ?4 AND c.deleted_at IS NULL AND ${live}
     ON CONFLICT (scope, id) DO UPDATE SET code = excluded.code, name = excluded.name, color = excluded.color, instructor = excluded.instructor,
       term = excluded.term, archived = excluded.archived, meetings = excluded.meetings, target = excluded.target,
+      credits = excluded.credits, grade_categories = excluded.grade_categories,
       updated_at = excluded.updated_at, deleted_at = NULL, revision = courses.revision + 1 WHERE courses.deleted_at IS NOT NULL`,
   itemCopy(`${TAKEN} AND ${live}`, 'CASE WHEN i.course_id IS NULL THEN NULL ELSE ?7 END', 'NULL'),
   `UPDATE items SET course_id = ?7, class_id = NULL, updated_at = ?5, revision = revision + 1
@@ -304,13 +305,13 @@ export async function shareItems(db, userId, spaceId, ids, now = Date.now()) {
   const COURSE = '(SELECT id FROM courses WHERE scope = ?4 AND deleted_at IS NULL LIMIT 1)';
   const results = await db.batch([
     `INSERT INTO items (scope, id, type, title, course_id, date, start, end, location, status, weight, notes, links, recur, weekday, recur_until, dept,
-        updated_by, created_at, updated_at, revision)
+        category, updated_by, created_at, updated_at, revision)
       SELECT ?4, p.id, p.type, p.title, ${COURSE}, p.date, p.start, p.end, p.location, 'todo', p.weight, '', p.links, p.recur, p.weekday, p.recur_until, p.dept,
-        ?1, ?5, ?5, ${NEXT_ROW_REVISION}
+        p.category, ?1, ?5, ?5, ${NEXT_ROW_REVISION}
       FROM items AS p WHERE ${OWN} AND p.type NOT GLOB 'c-*' AND ${EDITOR}
       ON CONFLICT (scope, id) DO UPDATE SET type = excluded.type, title = excluded.title, course_id = excluded.course_id, date = excluded.date,
         start = excluded.start, end = excluded.end, location = excluded.location, weight = excluded.weight, notes = '', links = excluded.links,
-        recur = excluded.recur, weekday = excluded.weekday, recur_until = excluded.recur_until, dept = excluded.dept,
+        recur = excluded.recur, weekday = excluded.weekday, recur_until = excluded.recur_until, dept = excluded.dept, category = excluded.category,
         updated_by = excluded.updated_by, updated_at = excluded.updated_at, deleted_at = NULL, revision = items.revision + 1
         WHERE items.deleted_at IS NOT NULL`,
     `INSERT INTO marks (user_id, id, space_id, item_id, status, grade, weight, notes, checklist, completed_at, hidden, created_at, updated_at, revision)

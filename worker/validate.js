@@ -5,6 +5,7 @@
 import { HttpError } from './http.js';
 import { SCHOOL_KINDS, SCHOOL_LIMITS, validDate } from '../src/core/school.ts';
 import { MARK_DEFAULTS, SHARED_FIELDS, stable } from '../src/core/shared.ts';
+import { MAX_CATEGORIES, MAX_DROP, MAX_PASS, MAX_STEPS } from '../src/core/grades.ts';
 
 const COLOURS = ['#E4749B', '#8B5CC7', '#17B3AE', '#79B6EA', '#BCA6E6'];   /* the coat's */
 export const COURSE_COLOURS = [...COLOURS, '#F08A6C', '#E8B33A', '#4FBF8B', '#8FAE86', '#4F74D9', '#B8457E', '#7D8A99'];
@@ -171,7 +172,27 @@ export function validateProfile(body) {
     schoolCalendar: body.schoolCalendar === undefined ? null : schoolCalendar(body.schoolCalendar),
     // Nor hidden sources; the stored ones are kept (null here).
     hiddenSources: body.hiddenSources === undefined ? null : sourceList(body.hiddenSources),
+    // Nor grading; the stored one is kept (null here), and {} goes back to the defaults.
+    grading: body.grading === undefined ? null : grading(body.grading),
   };
+}
+
+/* How a person grades: a scale of letters, each from a percentage and worth grade points,
+   and their pass marks. Either may be left out for the default (src/core/grades.ts). */
+function grading(v) {
+  obj(v, 'grading');
+  const out = {};
+  if (v.scale !== undefined) {
+    out.scale = list(v.scale, 'grading.scale', MAX_STEPS, (s, f) => ({
+      letter: str(s.letter, `${f}.letter`, 4, 1), min: optNum(s.min, `${f}.min`, 0, 100) ?? fail(`${f}.min`), points: optNum(s.points, `${f}.points`, 0, 10) ?? fail(`${f}.points`),
+    }));
+    if (new Set(out.scale.map((s) => s.min)).size !== out.scale.length) fail('grading.scale');
+  }
+  if (v.pass !== undefined) {
+    if (!Array.isArray(v.pass) || v.pass.length > MAX_PASS) fail('grading.pass');
+    out.pass = v.pass.map((p, i) => int(p, `grading.pass[${i}]`, 1, 100));
+  }
+  return out;
 }
 
 /* The school's academic calendar: semesters and special days (src/core/school.ts).
@@ -246,6 +267,19 @@ function meeting(m, f) {
   return out;
 }
 
+/* A grade category: a share of the course grade, split over its items, dropping the lowest scores. */
+function category(c, f) {
+  return { id: str(c.id, `${f}.id`, 24, 1), name: str(c.name, `${f}.name`, 40, 1), weight: optNum(c.weight, `${f}.weight`, 0, 100) ?? fail(`${f}.weight`), drop: int(c.drop ?? 0, `${f}.drop`, 0, MAX_DROP) };
+}
+function categories(v) {
+  if (v === undefined) return undefined;
+  const out = list(v, 'gradeCategories', MAX_CATEGORIES, category);
+  if (new Set(out.map((c) => c.id)).size !== out.length) fail('gradeCategories');
+  return out;
+}
+/* Grades fields an old client never sends (0007_grades.sql): absent is undefined, and the stored value stays. */
+const kept = (v, read) => (v === undefined ? undefined : read(v));
+
 export function validateCourse(body) {
   obj(body, 'body');
   return {
@@ -257,6 +291,8 @@ export function validateCourse(body) {
     archived: bool(body.archived ?? false, 'archived'),
     meetings: list(body.meetings ?? [], 'meetings', 12, meeting),
     target: body.target === null || body.target === undefined ? null : int(body.target, 'target', 1, 100),
+    credits: kept(body.credits, (v) => optNum(v, 'credits', 0, 30)),
+    gradeCategories: categories(body.gradeCategories),
   };
 }
 
@@ -293,6 +329,7 @@ export function validateItem(body) {
     dept: str(body.dept ?? '', 'dept', 40),
     completedAt: optInt(body.completedAt, 'completedAt'),
     classId: spaceLabel(body.classId, 'classId'),
+    category: kept(body.category, (v) => optStr(v, 'category', 24) || null),
   };
   if (out.recur === 'weekly' && out.weekday === null) fail('weekday');
   // A personal item is under a course of yours or filed under a class, never both (the u: CHECK).
@@ -377,6 +414,7 @@ export function validateSharedItem(body, kind, id) {
   if (out.courseId !== null) fail('courseId');
   if (out.grade !== null) fail('grade');
   if (out.weight !== null) fail('weight');
+  if (out.category) fail('category');
   return { ...out, assignees: assigneeList(body.assignees ?? []), classId: null };
 }
 

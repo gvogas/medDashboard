@@ -313,7 +313,7 @@ export function saveProfile(patch: ProfilePatch): Promise<void> {
   return mutate(async (a) => {
     const p = (await a('meta').get('profile'))!.value as Profile;
     if (copy.coat) Object.assign(p.coat, copy.coat);
-    for (const key of ['displayName', 'theme', 'bg', 'termStart', 'types', 'studyFlow', 'studyPrefs', 'schoolCalendar', 'hiddenSources'] as const) if (key in copy) (p as unknown as Record<string, unknown>)[key] = copy[key];
+    for (const key of ['displayName', 'theme', 'bg', 'termStart', 'types', 'studyFlow', 'studyPrefs', 'schoolCalendar', 'hiddenSources', 'grading'] as const) if (key in copy) (p as unknown as Record<string, unknown>)[key] = copy[key];
     await a('meta').put(wrap('profile', p));
     await queue(a, 'profile', 'put', p as unknown as Row);
   });

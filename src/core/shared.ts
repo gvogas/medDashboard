@@ -4,8 +4,8 @@
 
 /** The fields a shared row's `changed` may name, in API shape (spec §4). */
 export const SHARED_FIELDS = {
-  courses: ['code', 'name', 'color', 'instructor', 'term', 'meetings'],
-  class: ['type', 'title', 'courseId', 'date', 'start', 'end', 'where', 'weight', 'notes', 'links', 'recur', 'weekday', 'recurUntil', 'dept'],
+  courses: ['code', 'name', 'color', 'instructor', 'term', 'meetings', 'credits', 'gradeCategories'],
+  class: ['type', 'title', 'courseId', 'date', 'start', 'end', 'where', 'weight', 'notes', 'links', 'recur', 'weekday', 'recurUntil', 'dept', 'category'],
   project: ['type', 'title', 'date', 'start', 'end', 'where', 'status', 'notes', 'checklist', 'links', 'recur', 'weekday', 'recurUntil', 'dept', 'completedAt', 'assignees'],
   /* your mark: written with a field-level merge too, since two of your devices can both make it (spec §6) */
   marks: ['status', 'grade', 'weight', 'notes', 'checklist', 'completedAt', 'hidden'],

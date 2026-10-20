@@ -3,6 +3,8 @@
 // touches the DOM or storage; the type list is read through a getter boot.ts sets.
 
 import { diffDays, today, parse, addDays, iso } from './dates.ts';
+import { MAX_CATEGORIES, MAX_DROP } from './grades.ts';
+import type { GradeCategory } from './grades.ts';
 import type { Achievement, ChecklistEntry, Course, Flow, Item, ItemType, Mark, Meeting, Quote, SpacePref, StepKind, StudyPrefs, StudySession, TypePref } from './types.ts';
 
 /** How a type looks: its name, its plural and its colour. */
@@ -267,6 +269,7 @@ export function normalizeItem(raw: RawItem): Item {
     dept: cut(raw.dept, 40),
     completedAt: typeof raw.completedAt === 'number' ? raw.completedAt : null,
     classId: typeof raw.classId === 'string' && raw.classId ? raw.classId : null,
+    category: typeof raw.category === 'string' && raw.category ? raw.category.slice(0, 24) : null,
     createdAt: raw.createdAt ?? null,
     revision: raw.revision ?? 0, updatedAt: raw.updatedAt ?? null,
   };
@@ -297,9 +300,25 @@ export function normalizeCourse(raw: RawCourse, index = 0): Course {
           };
         })
       : [],
+    credits: typeof raw.credits === 'number' && raw.credits >= 0 && raw.credits <= 30 ? raw.credits : null,
+    gradeCategories: normalizeCategories(raw.gradeCategories),
     createdAt: raw.createdAt ?? null,
     revision: raw.revision ?? 0, updatedAt: raw.updatedAt ?? null,
   };
+}
+
+/** A course's grade categories as they may arrive: unreadable ones left out, ids unique, at most twelve. */
+export function normalizeCategories(raw: unknown): GradeCategory[] {
+  if (!Array.isArray(raw)) return [];
+  const seen = new Set<string>();
+  return raw.flatMap((c): GradeCategory[] => {
+    if (!c || typeof c !== 'object') return [];
+    const o = c as Record<string, unknown>, id = typeof o.id === 'string' ? o.id.slice(0, 24) : '';
+    if (!id || seen.has(id)) return [];
+    seen.add(id);
+    const weight = typeof o.weight === 'number' && o.weight >= 0 && o.weight <= 100 ? o.weight : 0;
+    return [{ id, name: cut(o.name, 40) || 'Category', weight, drop: isInt(o.drop) ? Math.max(0, Math.min(MAX_DROP, o.drop)) : 0 }];
+  }).slice(0, MAX_CATEGORIES);
 }
 
 export function normalizeQuote(raw: Raw<Quote>): Quote {
