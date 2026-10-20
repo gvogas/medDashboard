@@ -7,7 +7,7 @@ import { cn } from "@/lib/utils"
 import { isTest, tmeta } from "@/core/model"
 import { diffDays, shortDate, today } from "@/core/dates"
 import { courseByKey, courseKeyOf, keyOf } from "@/data/effective"
-import { AGENDA_DAYS, gapLabel, useAgenda, type AgendaRow } from "@/data/agenda"
+import { AGENDA_DAYS, gapLabel, setWeekLayout, useAgenda, useNarrow, type AgendaRow, type WeekLayout } from "@/data/agenda"
 import { tintOf, type Day, type Entry } from "@/data/views"
 import { newItemOn, openItem } from "@/data/actions"
 import { useUi } from "@/data/ui"
@@ -32,6 +32,7 @@ export function AgendaView() {
                 head={<>
                     <HeadNote>{schedule === "classes" ? "classes" : agenda.count + " item" + (agenda.count === 1 ? "" : "s")}</HeadNote>
                     <ScheduleTabs value={schedule} />
+                    <LayoutTabs value="agenda" />
                 </>}
             >
                 <ol className="m-0 list-none p-0">
@@ -49,6 +50,25 @@ export function AgendaView() {
                     </div>
                 )}
             </Panel>
+        </div>
+    )
+}
+
+/** Agenda or Week, on a phone only: a wide screen always has the Week. */
+export function LayoutTabs({ value }: { value: WeekLayout }) {
+    const narrow = useNarrow()
+    if (!narrow) return null
+    return (
+        <div role="group" aria-label="Layout" className="flex rounded-lg border border-border bg-muted p-0.5">
+            {(["agenda", "week"] as const).map((id) => (
+                <button key={id} type="button" aria-pressed={value === id} onClick={() => setWeekLayout(id)}
+                    className={cn(
+                        "min-h-9 cursor-pointer rounded-md border-0 bg-transparent px-2.5 py-1 text-[11.5px] font-semibold text-ink-2 hover:text-foreground",
+                        value === id && "bg-card text-accent-foreground shadow-[0_1px_2px_rgba(0,0,0,.08)]",
+                    )}>
+                    {id === "agenda" ? "Agenda" : "Week"}
+                </button>
+            ))}
         </div>
     )
 }

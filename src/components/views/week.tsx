@@ -11,10 +11,22 @@ import { useWeek, tintOf, type Day, type Entry } from "@/data/views"
 import { newItemOn, openItem, quickAddTask, toggleTask } from "@/data/actions"
 import type { Course, Item } from "@/data/types"
 import { accent, classTitle, Empty, hasSchoolTags, HeadNote, Panel, ScheduleTabs, SchoolTags, statusText, Steps, TINT } from "./bits"
+import { useWeekLayout } from "@/data/agenda"
+import { AgendaView, LayoutTabs } from "./agenda"
 
 export function WeekView() {
     const { week, officeHours, tasks, empty, schedule } = useWeek()
+    const layout = useWeekLayout()
     const n = week.count
+    const side = (
+        <div className="grid min-w-0 gap-[13px]">
+            <OfficeHours rows={officeHours} />
+            <Tasks list={tasks.shown} open={tasks.open} />
+        </div>
+    )
+
+    /* on a phone, the Agenda by default; office hours and tasks follow it */
+    if (layout === "agenda") return <div className="grid gap-[13px]"><AgendaView />{side}</div>
 
     return (
         <div className="grid items-start gap-[13px] [grid-template-columns:minmax(0,1fr)_256px] max-[1040px]:[grid-template-columns:minmax(0,1fr)]">
@@ -24,6 +36,7 @@ export function WeekView() {
                 head={<>
                     <HeadNote>{schedule === "classes" ? "classes" : n + " item" + (n === 1 ? "" : "s")}</HeadNote>
                     <ScheduleTabs value={schedule} />
+                    <LayoutTabs value="week" />
                 </>}
             >
                 {week.days.map((d) => <DayRow key={d.date} day={d} />)}
@@ -32,10 +45,7 @@ export function WeekView() {
                     : <Empty title="No matches this week">Try clearing the search or a filter.</Empty>)}
             </Panel>
 
-            <div className="grid min-w-0 gap-[13px]">
-                <OfficeHours rows={officeHours} />
-                <Tasks list={tasks.shown} open={tasks.open} />
-            </div>
+            {side}
         </div>
     )
 }
