@@ -43,6 +43,7 @@ import { launch as fireworks } from "@/lib/fireworks"
 import { closeSheet, cover, getSheet, openSheet } from "@/data/overlay"
 import { newSession } from "@/data/session-edit"
 import { flush, TYPING_MS } from "@/data/item-edit"
+import { runToastAction } from "@/data/toast"
 import { Sheet } from "./sheet"
 import { Page, Scrim, SheetHost } from "@/components/shell"
 import type { Item } from "@/data/types"
@@ -324,6 +325,10 @@ describe("the item sheet", () => {
         await act(async () => fireEvent.keyDown(add, { key: "Enter" }))
         expect((fake.data.items[0] as Item).checklist.map((s) => s.text)).toEqual(["Read ch. 4", "Flashcards"])
 
+        await act(async () => fireEvent.click(screen.getAllByRole("button", { name: "Remove step" })[0]))
+        expect((fake.data.items[0] as Item).checklist.map((s) => s.text)).toEqual(["Flashcards"])
+        await act(async () => runToastAction())
+        expect((fake.data.items[0] as Item).checklist.map((s) => s.text)).toEqual(["Read ch. 4", "Flashcards"])
         await act(async () => fireEvent.click(screen.getAllByRole("button", { name: "Remove step" })[0]))
         expect((fake.data.items[0] as Item).checklist.map((s) => s.text)).toEqual(["Flashcards"])
 

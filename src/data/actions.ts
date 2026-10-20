@@ -175,10 +175,21 @@ export const toggleTypeHidden = (id: string) => editType(id, (t) => {
 
 /** Only a type of your own that no item uses. */
 export const canDeleteType = (t: ItemType) => t.custom && !effectiveItems().some((it) => it.type === t.id)
-export const deleteType = (id: string) => editType(id, (t, list, i) => {
-    if (!canDeleteType(t)) return false
+/** Delete it, with Undo: the type comes back where it was. */
+export async function deleteType(id: string) {
+    const list = itemTypes(), i = list.findIndex((t) => t.id === id), t = list[i]
+    if (!t || !canDeleteType(t)) return
     list.splice(i, 1)
-})
+    await saveTypes(list)
+    toast("“" + t.plural + "” deleted", {
+        undo: () => {
+            const now = itemTypes()
+            if (now.some((x) => x.id === t.id)) return
+            now.splice(Math.min(i, now.length), 0, t)
+            void saveTypes(now)
+        },
+    })
+}
 
 /** Save a new order, given every id top to bottom. */
 export async function reorderTypes(ids: string[]) {
@@ -282,8 +293,10 @@ export async function addQuote(text: string, source: string) {
     notify()
     return true
 }
+/** Delete now, with the toast's Undo. */
 export async function removeQuote(id: string) {
-    await store.deleteQuote(id)
+    if (!data.quotes.some((x) => x.id === id)) return
+    await deleteLater("quotes", id, "Quote", () => store.deleteQuote(id))
     if (ui.quoteIx >= data.quotes.length) ui.quoteIx = 0
     notify()
 }

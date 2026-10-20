@@ -109,9 +109,19 @@ export async function adoptSchool(cal: SchoolCalendar) {
     notify()
 }
 
-/** Remove it: classes show every week again, and the term start goes back to the one set. */
+/** Remove it: classes show every week again, and the term start goes back to the one set.
+    Undo puts it back, unless another calendar was saved meanwhile. */
 export async function removeSchool() {
+    const was = schoolCal()
     await store.saveProfile({ schoolCalendar: {} })
     ui.schoolNote = { text: "School calendar removed.", error: false }
     notify()
+    if (was) toast("School calendar removed", {
+        undo: async () => {
+            if (schoolCal()) return
+            await store.saveProfile({ schoolCalendar: was })
+            ui.schoolNote = null
+            notify()
+        },
+    })
 }
