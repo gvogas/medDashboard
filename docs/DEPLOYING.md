@@ -105,7 +105,10 @@ flowchart LR
 - [ ] `npm run check` passes (types, all tests and the release build)
 - [ ] You tried the change locally with `npm run dev`, or `npm run dev:built` to try
       the built, versioned site that goes live
-- [ ] If the change adds a migration, you applied it to live **first** with
+- [ ] For a change worth trying for real (Workers AI, push, a migration), you tried it on
+      [staging](#staging) first with `npm run deploy:staging`
+- [ ] If the change adds a migration, you noted a restore point **first** (see
+      [Undoing a migration](#undoing-a-migration)), applied it to live with
       `npm run db:remote`, then ran `npm run db:check -- --remote`. New code on an old
       database fails with 500s until the migration is applied
 
@@ -129,6 +132,61 @@ is behind the code" next to the error.
    restores the code only; database changes stay. Don't roll back past a release that
    raised the IndexedDB version: browsers that already upgraded can't open their
    local data with the older code. Fix forward instead.
+
+### Undoing a migration
+
+Rollback puts code back, not the database. For the database, D1 keeps its history
+(7 days on the free plan) and can go back to any minute of it. Before `npm run db:remote`:
+
+```sh
+npx wrangler d1 time-travel info rounds-v7     # prints the current bookmark; copy it
+```
+
+If the migration goes wrong, put the database back to that bookmark, then roll the code
+back too (`npx wrangler rollback`), since the new code expects the new tables:
+
+```sh
+npx wrangler d1 time-travel restore rounds-v7 --bookmark=<the bookmark you copied>
+```
+
+A restore undoes **every** write since the bookmark, people's edits included, and devices
+that already synced past it can disagree with the server afterwards. Treat it as the last
+resort, used within minutes of a failed migration, and check the site afterwards. If you
+have to go back further than that, fixing forward with a new migration is usually safer.
+
+## Staging
+
+A test copy of the site at https://rounds-staging.termanitor07.workers.dev, with its own
+Worker (`rounds-staging`), its own empty database and its own secrets. It is the place to
+try what only works for real: Import with AI against the real models, push on a phone, a
+migration on a database that is not the live one. `env.staging` in `wrangler.jsonc` sets it
+up; Spotify is off there. It costs nothing on the free plan, but its AI reads count toward
+the account's shared 10,000 neurons a day.
+
+**Once:**
+
+```sh
+npx wrangler d1 create rounds-staging
+#   put the database_id it prints in wrangler.jsonc, env.staging, in place of 000…000
+npx wrangler secret put SESSION_SECRET --env staging     # a new long random value
+#   optional, for push on staging: npm run push:key prints a pair; then
+#   npx wrangler secret put VAPID_PUBLIC_KEY --env staging   (and VAPID_PRIVATE_KEY, VAPID_SUBJECT)
+```
+
+Commit the `database_id` (it is not a secret).
+
+**Each time:**
+
+```sh
+git checkout <the branch to try>
+npm run deploy:staging                          # typecheck, staging secrets, migrations, build, deploy
+npm run user:add -- yourname --staging          # the first time: an account there (add --admin)
+```
+
+`deploy:staging` never touches the live site or the live database. The staging database
+starts empty and keeps what you put in it between deploys. Cloudflare's Git build only
+deploys `main` to the live site; staging is deployed only by this command.
+
 
 ## Changing the database
 
@@ -397,10 +455,14 @@ Run every command in PowerShell from the project folder.
 | `npm run csp:update` | Rewrites the inline script's hash in `public/_headers` | Local |
 | `npm run db:local` | Applies new migrations to the local database | Local |
 | `npm run push:key` | Makes a local VAPID key pair for push reminders in `.dev.vars` | Local |
-| `npm run db:check` | Read-only database checks and row counts (`-- --remote` for live) | Local or live, read-only |
+| `npm run db:check` | Read-only database checks and row counts (`-- --remote` for live, `-- --staging`) | Local, live or staging, read-only |
 | `git push` to `main` | Cloudflare builds and publishes the site and API (no migrations) | Live |
 | `npm run deploy` | Manual deploy: checks, applies migrations to live, checks the live database, then publishes | Live |
 | `npm run db:remote` | Applies new migrations to live without deploying code | Live |
+| `npx wrangler d1 time-travel info rounds-v7` | Prints the live database's current restore point | Live, read-only |
+| `npm run deploy:staging` | Puts the current branch on the staging site, with migrations | Staging |
+| `npm run db:staging` | Applies new migrations to the staging database only | Staging |
+| `npm run user:add -- name --staging` | Creates an account on staging | Staging |
 | `npx wrangler d1 migrations list DB --remote` | Shows migrations the live database is missing | Live, read-only |
 | `npx wrangler deployments list` | Shows when each version went live | Live, read-only |
 | `npx wrangler rollback` | Puts the previous code version back | Live |

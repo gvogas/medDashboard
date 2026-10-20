@@ -45,6 +45,28 @@
   },
 
   "observability": { "enabled": true },
+  // A test copy of the site, `npm run deploy:staging` (docs/DEPLOYING.md, "Staging"): its own
+  // Worker (rounds-staging), its own empty database and its own secrets, so a change can be
+  // tried against the real Workers AI and real push before it reaches main. Spotify is off
+  // there (its redirect URI is the live site's). Bindings, vars and crons are not inherited
+  // from the top level, so each is repeated here.
+  "env": {
+    "staging": {
+      "name": "rounds-staging",
+      "d1_databases": [
+        {
+          "binding": "DB",
+          "database_name": "rounds-staging",
+          // `npx wrangler d1 create rounds-staging` prints the id to put here.
+          "database_id": "00000000-0000-0000-0000-000000000000",
+          "migrations_dir": "migrations"
+        }
+      ],
+      "vars": { "SPOTIFY_CLIENT_ID": "", "CF_ACCOUNT_ID": "2c6057041650be9d99932b4013571adb" },
+      "ai": { "binding": "AI", "remote": true },
+      "triggers": { "crons": ["0 3 * * *", "0 * * * *"] }
+    }
+  },
 
   // `npm run dev` always serves http://127.0.0.1:8787, the redirect URI registered with
   // Spotify. If the port is taken it fails rather than moving to another one.
