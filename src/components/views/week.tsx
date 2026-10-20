@@ -4,10 +4,14 @@
 import { useState } from "react"
 import { cn } from "@/lib/utils"
 import { isOpen, isOverdue, isTest, tmeta } from "@/core/model"
-import { hhmm, parse, DOW } from "@/core/dates"
+import { addDays, hhmm, iso, monday, parse, today, DOW } from "@/core/dates"
+import { crunchesOn, type Crunch } from "@/core/workload"
 import { courseByKey, courseKeyOf, keyOf } from "@/data/effective"
 import { SourceMark } from "./source-mark"
 import { useWeek, tintOf, type Day, type Entry } from "@/data/views"
+import { useCrunches } from "@/data/next"
+import { CrunchBand, CrunchTag } from "./crunch"
+import { UpNext } from "./up-next"
 import { newItemOn, openItem, quickAddTask, toggleTask } from "@/data/actions"
 import type { Course, Item } from "@/data/types"
 import { accent, classTitle, Empty, hasSchoolTags, HeadNote, Panel, ScheduleTabs, SchoolTags, statusText, Steps, TINT } from "./bits"
@@ -15,9 +19,13 @@ import { accent, classTitle, Empty, hasSchoolTags, HeadNote, Panel, ScheduleTabs
 export function WeekView() {
     const { week, officeHours, tasks, empty, schedule } = useWeek()
     const n = week.count
+    /* the whole week's crunches, even while a search leaves days out */
+    const from = iso(monday(parse(week.days[0]?.date ?? today())))
+    const crunch = useCrunches(from, iso(addDays(parse(from), 6)))
 
     return (
         <div className="grid items-start gap-[13px] [grid-template-columns:minmax(0,1fr)_256px] max-[1040px]:[grid-template-columns:minmax(0,1fr)]">
+            <UpNext className="col-span-full" />
             <Panel
                 label="Schedule"
                 title="Schedule"
@@ -26,7 +34,8 @@ export function WeekView() {
                     <ScheduleTabs value={schedule} />
                 </>}
             >
-                {week.days.map((d) => <DayRow key={d.date} day={d} />)}
+                <CrunchBand list={crunch} />
+                {week.days.map((d) => <DayRow key={d.date} day={d} crunch={crunchesOn(crunch, d.date).filter((c) => c.kind !== "week")} />)}
                 {!week.any && (empty
                     ? <Empty title="Nothing here yet">Add a course from the sidebar, then a first item with “New item”.</Empty>
                     : <Empty title="No matches this week">Try clearing the search or a filter.</Empty>)}
@@ -40,7 +49,7 @@ export function WeekView() {
     )
 }
 
-function DayRow({ day }: { day: Day }) {
+function DayRow({ day, crunch }: { day: Day; crunch: Crunch[] }) {
     const tint = tintOf(day.info)
     return (
         <div className={cn(
@@ -54,6 +63,7 @@ function DayRow({ day }: { day: Day }) {
                     <span className="text-[12px] text-muted-foreground">{day.dow}</span>
                 </span>
                 {day.isToday && <span className="text-[11.5px] font-medium text-accent-foreground">Today</span>}
+                <CrunchTag list={crunch} />
                 <button
                     type="button"
                     onClick={() => newItemOn(day.date)}
