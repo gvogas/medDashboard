@@ -9,6 +9,78 @@ One Xcode project in `ios/` builds the iPhone and iPad app, and the Mac app thro
 Catalyst. It talks to the live Worker, so accounts, data and Pro are shared with the
 website.
 
+## Catching up with the website (20 October 2026)
+
+This branch was written on 8 October, from main after collaboration Stage 4. Since then main
+has gained 115 commits (collaboration Stages 5–10, maintenance mode, the timetable-grid
+reader) and the `student-upgrades` branch adds more (listed below). Nothing here has been
+merged into this branch yet. This section is the plan for doing it, and what each new
+website feature means for the app.
+
+### Bringing the branch up to date
+
+Merge `main`, then `student-upgrades` once it is on main, into this branch (a merge, not a
+rebase: the branch is pushed). Expect conflicts in `worker/api.js`, `worker/admin.js`,
+`worker/db.js`, `worker/validate.js`, `src/core/types.ts`, `src/core/api.ts`,
+`src/data/session.ts`, `settings-sheet.tsx`, `sign-in.tsx`, `wrangler.jsonc` and the docs.
+
+1. **Renumber this branch's migrations.** Main and `student-upgrades` already use the numbers
+   this branch took:
+
+   | Number | On main / student-upgrades | This branch, today | This branch, renamed |
+   | --- | --- | --- | --- |
+   | 0005 | `0005_activity.sql` (live) | `0005_plans.sql` | `0008_plans.sql` |
+   | 0006 | `0006_push.sql` | `0006_apple.sql` | `0009_apple.sql` |
+   | 0007 | `0007_grades.sql` | `0007_look.sql` | `0010_look.sql` |
+
+   Rename with `git mv`, set `LATEST_MIGRATION` in `worker/admin.js` to `0010_look.sql`, and
+   update `scripts/lib/move-db.js` and the migrations table in DEPLOYING.md. None of the
+   three has run on the live database, so renaming is safe. `0008_plans.sql` rebuilds
+   `admin_log` to add `comp` and `uncomp`; main has added no audit actions since, so its
+   CHECK list is still right. `0010_look.sql` must keep `users.grading` (from
+   `0007_grades.sql`): it only adds a column, so it does.
+2. **One account-deletion path.** This branch's `DELETE /api/me` must go through main's
+   `worker/accounts.js`, which since Stage 5 hands a person's classes and team projects on,
+   takes them off project tasks and keeps the members' copies. Add `apple_accounts`, `plans`
+   and `push_subscriptions` to what it removes (the first two cascade from `users`; check),
+   and revoke Apple's grant before the rows go.
+3. **Token sign-in on the new routes.** Every route added since uses `requireUser`, so the
+   app's `Authorization: Bearer` token works on them as long as `worker/app.js` keeps
+   hooking in there. Check the inbox (`/api/inbox`), the spaces and projects routes, the
+   push routes and `GET /api/digest` with a token in the tests.
+4. **Sync.** The app uses the same `src/core/sync.ts`, so it gets sync v3 (spaces, the
+   inbox count, revoked scopes) with the merge. Old TestFlight builds on v2 keep working
+   (`v=2` is still served), but they never see classes or projects: set `MIN_APP_VERSION`
+   to the first build made after the merge.
+5. **Themes.** Notebook (`look = 'note'`) must be added to everything that lists the six
+   since: the first-run setup's theme step (`src/components/views/setup.tsx`), the term
+   recap and Up next styling, the crunch warn colours in `tokens.css`, and the sidebar
+   pictures.
+6. **Security policy.** `scripts/build-ios.mjs` writes the app's CSP. Nothing new loads
+   from another host, but re-run it and the website's `npm run csp:update` after the merge.
+7. **Tests.** Run `npm run check` and this branch's native tests. Then go through
+   IOS-TESTING.md §6 again, with the new rows in it.
+
+### What is new on the website, and what it means for the app
+
+| Website feature (where) | In the app |
+| --- | --- |
+| **Shared classes** for everyone: invites by username, join codes, roles, your own layer, leaving keeps a copy, removed items (Stages 3–6) | Works as is. A person who signs up with Sign in with Apple needs a **username** others can invite: make one on sign-up and let them change it. Join links (`/join/...`) should open the app: add a universal link (later). |
+| **Inbox and activity**: the bell, invites with Accept/Decline, a class's Activity tab (Stage 7) | Works as is. Later: a push or local notification for a new invite (see Reminders below). |
+| **Team projects**: tasks, assignees, progress rings, in the Week, Month, feed and inbox (Stages 8–10) | Works as is. The **Today** widget should list today's project tasks given to you (they are in `effectiveItems` once merged). |
+| **Maintenance mode**: admins switch a feature off with a message | Works as is; the app reads it from `GET /api/me`. Never switch off sync. |
+| **Up next** and **crunch warnings** (`src/core/next.ts`, `src/core/workload.ts`) | The **Today** widget should show the top three Up next rows instead of "what is due in the next week": same ranking, one source of truth. A crunch week can be the medium widget's headline. |
+| **Calendar feed alerts** (`studyPrefs.alarms`) and the **morning digest** by Web Push (`worker/push.js`, `GET /api/digest`) | The app already has local reminders (`src/data/reminders.ts`). Keep them, and **don't subscribe to Web Push in the app**: hide the "Morning digest" toggle when `NATIVE`. Add a local 07:30 digest built from the same rules as `/api/digest` (move them into `src/core` so both use one copy). Respect `studyPrefs.alarms` as the master switch for both. |
+| **Grade categories, credits, letter grades and GPA**, your own scale and pass marks (`0007_grades.sql`) | Works as is. A **GPA widget** (small) is a natural Pro addition. |
+| **Lecture reviews synced** across devices (`studyPrefs.reviews`) | Turning reviews on in the app now turns them on on the website too, and the other way; before, the app's web view kept its own setting. |
+| **Download my data** (JSON, CSV) | In the app, use the share sheet (`@capacitor/share` or a file write + share), since a Blob download does nothing in a web view. App Review likes it next to Delete account. |
+| **Undo** on every delete, **timer presets** | Works as is. |
+| **First-run setup** (theme, timetable, outline, reviews and goal) | This is MONETIZATION.md's Phase 2 "onboarding that sells the app", mostly built. For the app: add Notebook to its theme step, ask for notification permission in its last step (not on first launch), and show it after Sign in with Apple creates an account. |
+| **Agenda** layout under 700px and 44px touch targets | Most of Phase 1's "fix what feels wrong on a phone". The app should start in the Agenda on iPhone; iPad keeps the Week. Still to check on a device: the keyboard over sheets and the safe areas. |
+| **Term recap** (Study → History) | A good share moment at the end of a term ("share my recap" as an image) and a candidate for Pro "study stats". |
+| **Import with AI**: every failed read logged with its code, a timetable's grid read from the picture or PDF itself, existing courses matched by a close name, and classes editable in the preview (`student-f-ai`) | The app's biggest selling point gets more reliable. Screenshots from the Photos picker can be HEIC: convert to JPEG on the native side (or ask iOS for JPEG) before `shrinkImage`, which cannot open HEIC in the web view. |
+| **Study Garden** (planned: decks, spaced repetition, a plant and coins) | Not started. Decide before launch whether its cosmetics or AI decks are Pro (MONETIZATION.md). |
+
 ## What is different in the app
 
 | | Website | App |
@@ -18,7 +90,7 @@ website.
 | Offline | service worker + IndexedDB | IndexedDB only (the files are in the bundle) |
 | Security policy | `public/_headers` | a `<meta>` written by `scripts/build-ios.mjs` |
 | Spotify | connect, control, and play in the tab | control only; connecting opens the website |
-| Reminders | none | local notifications (Settings → Study → Reminders) |
+| Reminders | calendar feed alerts, and a morning digest by Web Push (on `student-upgrades`) | local notifications (Settings → Study → Reminders); no Web Push |
 | Sign in with Apple | Apple's popup, once a Services ID is set | Apple's own sheet |
 | Widgets | none | next exam (home and Lock Screen), today (classes and what is due) |
 | Term Pro | everything open, no paywall | the paywall, and Pro sold through the App Store (RevenueCat) |
@@ -159,5 +231,10 @@ When a new Worker change would break old builds, set `MIN_APP_VERSION` in
 - **Token storage** is the web view's `localStorage`, inside the app's sandbox. Moving it
   to the Keychain is a small later step.
 - **Live Activities** (the study timer on the Lock Screen) are on the roadmap, not here.
+- **Join links and invites** do not open the app yet: a universal link for `/join/...`
+  and a notification for a new invite are later steps.
+- **Push from the server** (an invite, a team task given to you) would need APNs. The
+  local reminders and the local digest cover deadlines without it.
+- **Not merged with main yet**: see "Catching up with the website" above.
 - **The widget extension is not compiled here**: these files were written without Xcode.
   If Xcode reports an error in them, it will be small; fix it there or send it back.

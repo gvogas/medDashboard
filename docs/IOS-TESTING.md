@@ -113,7 +113,7 @@ npm run ios:secrets -- --skip-webhook --p8 ~/Downloads/AuthKey_XXXXXXXXXX.p8
 
 ```sh
 npm run ios:configure
-npm run db:remote           # the database changes this work needs (once)
+npm run db:remote           # the database changes this work needs (once; after the merge, 0008–0010)
 git add -A && git commit -m "Configure the app" && git push   # the Worker picks up wrangler.jsonc
 npm run ios:doctor          # every line should be ✓ or ·
 npm run ios:sync
@@ -141,6 +141,12 @@ Sign in with your Term username first. Then:
 | Restore | Delete the app, reinstall, sign in, Term Pro → Restore purchases. | Real device |
 | Deleting the account | Settings → Account → Delete account (use a test account). | Yes |
 | Old builds | Set `MIN_APP_VERSION` above the app's version: the app is told to update. | Yes |
+| Shared classes and projects (after the merge) | Join a class with a code, accept an invite from the bell, tick a team task in the Week. They show on the website within seconds. | Yes |
+| First-run setup (after the merge) | A new account (Sign in with Apple with `SIGNUPS` open): the setup shows, Notebook is offered, the import steps open Import with AI. | Yes |
+| Agenda and touch targets (after the merge) | iPhone opens on the Agenda; every button is easy to hit; the keyboard does not cover a sheet's Save. | Yes |
+| Timetable screenshot from Photos (after the merge) | Import with AI → Class schedule → pick a screenshot, then a camera photo (HEIC). Both read; the preview lets you fix a class before saving. | Yes |
+| Download my data (after the merge) | Settings → Account → Data: the share sheet opens with the file. | Yes |
+| Reminders and the digest (after the merge) | The "Morning digest" Web Push toggle is hidden in the app; local reminders still fire; turning `alarms` off on the website stops them. | Yes |
 
 To give yourself or a tester Pro without buying, use the website's Admin → Accounts → Give
 Pro.

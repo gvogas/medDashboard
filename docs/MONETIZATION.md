@@ -18,6 +18,8 @@ What is already built is marked **built**. Everything else is a proposal to deci
   the study timer, reminders. Pro sells what costs money to run (AI) and what people
   enjoy paying for (themes, deeper stats, widgets).
 - **Before it can earn anything**, Term needs a public sign-up and an App Store listing.
+  The onboarding, the phone layout and shared classes for everyone are now built on the
+  website (see "Since this plan was written" below).
 - **The growth engine** is the first two minutes: drop in a syllabus, get the whole term
   filled in. Then shared classes, where one student invites the rest.
 
@@ -41,24 +43,33 @@ What follows is the app. On the website everything in the Pro column is open to 
 | --- | --- | --- |
 | Courses, timetable, items, week, month, all items | ✓ | ✓ |
 | Grades and "what if" | ✓ | ✓ |
+| Grade categories, drop-lowest, credits, letters and GPA | ✓ | ✓ |
+| Up next, crunch warnings, the Agenda | ✓ | ✓ |
+| Download my data, Undo, timer presets | ✓ | ✓ |
+| Shared classes and team projects | join any, create 1 of each | create unlimited *to build* |
 | Study timer, focus screen, streaks | ✓ | ✓ |
 | Deadline and exam reminders (app) | ✓ **built** | ✓ |
+| Calendar feed alerts | ✓ **built** | ✓ |
+| Morning digest (a local notification in the app) | ✓ *to build* | ✓ |
 | Calendar feed, Spotify controls | ✓ | ✓ |
 | AI imports (outlines, timetables, school calendars) | 3 a day **built** | 10 a day **built** |
 | Themes | Notebook, a cheerful periwinkle-and-butter theme made for everyone **built** | Notebook and the six by field (Medicine, CS, Law, Aviation, Sports, Engineering) **built** |
 | Home-screen and Lock Screen widgets (next exam, today) | — | ✓ **built** |
+| GPA widget, Up next in the Today widget | — | ✓ *to build* |
 | Study timer on the Lock Screen (Live Activity) | — | ✓ *to build* |
 | Full study history, year heatmap, per-course stats | this month | ✓ *to build* |
+| Term recap (hours, streaks, grades and GPA per semester) | the current term | every term, and share as an image *to build* |
 | Custom reminder times | — | ✓ *to build* |
 | Custom achievements with your own sticker | 3 | unlimited *to build* |
-| Shared classes | join any, create 1 | create unlimited *to build* |
 
 Rules of thumb:
 - Never take something away that free users already rely on. Gates go on new features
   or on volume (AI reads), not on the basics.
 - Keep **Spotify free**. Spotify's developer terms do not allow charging for their
   content, so Spotify must never be a reason to pay.
-- Shared classes stay free to join: every class is a way in for new people.
+- Shared classes and team projects stay free to join: every class is a way in for new people.
+- Grades, GPA and the planning help (Up next, crunch) stay free. They are what a student opens
+  the app for every day, and they cost nothing to run.
 
 ## Prices
 
@@ -113,6 +124,31 @@ Usage is the hard part, not the code. The plan below spends most of its effort t
   home-screen and Lock Screen widgets, and Sign in with Apple in the app and on the
   website. See [IOS.md](IOS.md).
 
+## Since this plan was written (20 October 2026)
+
+The website has moved on since 8 October. What changes here:
+
+- **Built on the website, ready for the app once merged** (IOS.md, "Catching up with the
+  website"): shared classes for everyone, the inbox, team projects, maintenance mode, Up
+  next and crunch warnings, grade categories and GPA, synced lecture reviews, data export,
+  Undo, timer presets, the first-run setup, the phone Agenda with bigger touch targets, the
+  term recap, calendar feed alerts and a Web Push morning digest (website only), and a more
+  reliable Import with AI (a timetable's grid read from the picture itself, existing courses
+  matched, classes editable before saving).
+- **Phase 1** gets shorter: most of "fix what feels wrong on a phone" is done. What is left
+  is the merge (IOS.md) and checking the keyboard and safe areas on a device.
+- **Phase 2's onboarding** is built. It needs Notebook in its theme step and to run after a
+  Sign in with Apple sign-up. Sign-up itself is still to build.
+- **Phase 4, item 4** (shared classes for everyone) is done, and team projects came with it:
+  the viral loop is live on the website.
+- **New Pro candidates**: a GPA widget, Up next in the Today widget, the term recap for past
+  terms and as a shareable image, and Study Garden's cosmetics if it goes ahead. Nothing new
+  is taken from the free plan.
+- **Database:** this branch's migrations must be renumbered to 0008–0010 before anything
+  runs on the live database (IOS.md).
+- **AI costs:** the new timetable reader sends the model only the text inside each class
+  block, so reads should cost less than before. The plan's daily caps stay as they are.
+
 ## The plan
 
 ### Phase 1: TestFlight with the people already using Term (2–3 weeks)
@@ -120,7 +156,9 @@ Usage is the hard part, not the code. The plan below spends most of its effort t
 - Build the app (IOS.md), set up App Store Connect and RevenueCat, upload to TestFlight.
 - Keep `PAYWALL` off. Give everyone using Term today Pro for life (Admin → Give Pro):
   they are the first fans, and they will be the first reviews.
-- Fix what feels wrong on a phone: spacing, touch targets, the keyboard.
+- Merge main and `student-upgrades` into this branch (IOS.md, "Bringing the branch up to date").
+- Fix what is left on a phone: the keyboard over sheets and the safe areas. The Agenda
+  layout and 44px touch targets are built.
 - Turn on `BILLING_SANDBOX` and do a real test purchase end to end.
 
 ### Phase 2: open sign-up (2–3 weeks)
@@ -133,8 +171,9 @@ Selling to strangers needs a way in. This is the biggest piece still to build:
 - **Abuse protection**: Cloudflare Turnstile (free) on web sign-up, rate limits per
   address (the existing `request_limits` table), and a cap on AI reads for new accounts.
 - **Email** (optional) for password resets; until then, Sign in with Apple covers it.
-- **Onboarding that sells the app**: pick your field (sets the theme), drop in a
-  syllabus or a timetable screenshot, watch the term fill in. Show the first deadline
+- **Onboarding that sells the app** (**built** on the website: theme, timetable, outline,
+  reviews and goal): add Notebook to its theme step, run it after a Sign in with Apple
+  sign-up, and end it by asking for notification permission and showing the first deadline
   reminder being set. The aim: under two minutes from download to "this is my term".
 
 ### Phase 3: launch Pro (1–2 weeks, timed for late August or early January)
@@ -157,13 +196,17 @@ In order of what moves downloads and conversions:
    Island. Pro.
 3. **Study stats**: per course, per week, the year heatmap, "hours before each exam".
    Pro.
-4. **Shared classes for everyone** (Stage 6 of the collaboration plan): one student
-   imports the syllabus, the class joins with a code. This is the viral loop: every
-   class shared brings in classmates.
+4. **Shared classes for everyone** (**built**, Stage 6, with team projects in Stages
+   8–10): one student imports the syllabus, the class joins with a code. This is the viral
+   loop: every class shared brings in classmates. In the app, join links should open the
+   app (a universal link).
 5. **Apple Calendar**: show Term's items in Calendar (the feed works today; an EventKit
    import of school events is next).
 6. **Referral**: give a friend a month of Pro, get a month (App Store offer codes).
 7. **Apple Watch**: next class and the study timer, later.
+8. **GPA widget and Up next in the Today widget**: both read what the website already
+   works out (`src/data/gpa.ts`, `src/core/next.ts`). Pro.
+9. **Term recap as a shareable image** at the end of a term: a free moment that spreads.
 
 ### Phase 5: grow
 
@@ -180,7 +223,7 @@ In order of what moves downloads and conversions:
 
 | Measure | Healthy |
 | --- | --- |
-| Finished onboarding with an import | over 50% of sign-ups |
+| Finished onboarding with an import | over 50% of sign-ups (the setup saves `setupDone`; count it) |
 | Still active after 7 days | over 30% |
 | Trial started | 10–20% of active users |
 | Trial to paid | 40–60% |
@@ -206,5 +249,7 @@ clean.
   without the required wording, or no account deletion. The last two are built.
 - **Free-tier limits** on Cloudflare: move to Workers Paid ($5 a month) before launch
   day, not during it.
+- **Merging late:** the longer this branch waits, the bigger the merge. Merge main into it
+  as soon as `student-upgrades` lands, before any TestFlight build.
 - **One person running it:** keep the admin tools and the maintenance switches handy;
   they already let you turn a feature off without a deploy.
