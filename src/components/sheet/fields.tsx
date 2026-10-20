@@ -45,7 +45,7 @@ export const Section = ({ title, note, children }: { title: ReactNode; note?: Re
 
 /* ── buttons ── */
 
-const BUTTON = "inline-flex cursor-pointer items-center justify-center gap-1.5 rounded-[10px] border px-3.5 py-[7px] font-[inherit] text-[12.5px] leading-tight transition-[filter,color,border-color] disabled:cursor-default"
+const BUTTON = "hit inline-flex cursor-pointer items-center justify-center gap-1.5 rounded-[10px] border px-3.5 py-[7px] font-[inherit] text-[12.5px] leading-tight transition-[filter,color,border-color] disabled:cursor-default"
 
 /** The sheet's buttons: the accent gradient, the study colour, the quiet ghost, or the crit colour. */
 export function Button({ variant = "primary", className, ...props }: ComponentProps<"button"> & { variant?: "primary" | "study" | "ghost" | "danger" }) {
@@ -214,7 +214,7 @@ export function Segmented<T extends string>({ value, options, onChange, label, i
                     aria-pressed={v === value}
                     onClick={(e) => { if (v !== value) onChange(v, e.currentTarget) }}
                     className={cn(
-                        "flex-1 cursor-pointer rounded-lg border-0 bg-transparent px-2.5 py-1 font-[inherit] text-[12px] font-semibold whitespace-nowrap text-ink-2 hover:text-foreground",
+                        "hit flex-1 cursor-pointer rounded-lg border-0 bg-transparent px-2.5 py-1 font-[inherit] text-[12px] font-semibold whitespace-nowrap text-ink-2 hover:text-foreground",
                         v === value && "bg-card text-accent-foreground shadow-[0_1px_2px_rgba(0,0,0,.1),inset_0_1px_0_var(--rim-hi)]",
                     )}
                 >{text}</button>

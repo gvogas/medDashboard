@@ -132,7 +132,7 @@ function FlowCard({ flow }: { flow: Flow }) {
                                     aria-label={"Step " + (i + 1) + ": " + (kind === "study" ? "Study" : "Break") + (only ? "" : ", switch to " + (kind === "study" ? "a break" : "study"))}
                                     title={only ? "A flow needs a Study step" : "Switch between Study and Break"}
                                     className={cn(
-                                        "inline-flex cursor-pointer items-center gap-2 justify-self-start rounded-[7px] border-0 py-[5px] pr-[11px] pl-[9px] font-[inherit] text-[12.5px] font-bold disabled:cursor-default",
+                                        "hit inline-flex cursor-pointer items-center gap-2 justify-self-start rounded-[7px] border-0 py-[5px] pr-[11px] pl-[9px] font-[inherit] text-[12.5px] font-bold disabled:cursor-default",
                                         "before:size-2 before:rounded-full before:content-['']",
                                         kind === "study"
                                             ? "bg-[var(--study-soft)] text-[var(--study-ink)] before:bg-[var(--study)]"
@@ -172,7 +172,7 @@ function FlowCard({ flow }: { flow: Flow }) {
                         return (
                             <button key={i} type="button" aria-pressed={on} onClick={() => void applyPreset(i)}
                                 className={cn(
-                                    "cursor-pointer rounded-full border px-[11px] py-1 font-[inherit] text-[12px] font-semibold outline-none focus-visible:shadow-[0_0_0_2px_var(--accent)]",
+                                    "hit cursor-pointer rounded-full border px-[11px] py-1 font-[inherit] text-[12px] font-semibold outline-none focus-visible:shadow-[0_0_0_2px_var(--accent)]",
                                     on ? "border-foreground bg-foreground text-background" : "border-border bg-card text-ink-2 hover:border-muted-foreground hover:text-foreground",
                                 )}>
                                 {name}
@@ -191,7 +191,7 @@ const AddButton = ({ kind, disabled }: { kind: "study" | "break"; disabled: bool
         disabled={disabled}
         onClick={() => void addStep(kind)}
         className={cn(
-            "inline-flex cursor-pointer items-center gap-[7px] rounded-[9px] border border-dashed border-border bg-transparent px-3 py-1.5 font-[inherit] text-[12.5px] font-semibold",
+            "hit inline-flex cursor-pointer items-center gap-[7px] rounded-[9px] border border-dashed border-border bg-transparent px-3 py-1.5 font-[inherit] text-[12.5px] font-semibold",
             "before:size-2 before:rounded-full before:bg-current before:content-[''] disabled:cursor-default disabled:opacity-40",
             kind === "study" ? "text-[var(--study-ink)]" : "text-[var(--break-ink)]",
         )}
