@@ -42,6 +42,8 @@ export function GradingGroup({ profile }: { profile: Profile }) {
     const g = normalizeGrading(stored)
     const [steps, setSteps] = useState(() => asText(g.scale))
     const [marks, setMarks] = useState(g.pass.join(", "))
+    /* the scale's rows are drawn only while it is unfolded */
+    const [open, setOpen] = useState(false)
     const f = useId()
     const checked = checkScale(steps)
     const dirty = "scale" in checked ? !same(checked.scale, g.scale) : true
@@ -69,9 +71,9 @@ export function GradingGroup({ profile }: { profile: Profile }) {
                 <span className="text-[11.5px] text-muted-foreground">%, up to {MAX_PASS}</span>
             </label>
             <span className="text-[11.5px] text-muted-foreground">A course's grade panel shows what the rest of it needs to reach each one, and your own target.</span>
-            <details className="text-[12.5px]">
+            <details className="text-[12.5px]" onToggle={(e) => setOpen(e.currentTarget.open)}>
                 <summary className="cursor-pointer font-semibold text-ink-2">Letters and grade points</summary>
-                <div className="mt-2 flex flex-col gap-1">
+                {open && <div className="mt-2 flex flex-col gap-1">
                     <div className="grid grid-cols-[3.5rem_4.5rem_4.5rem_auto] gap-1.5 text-[11px] text-muted-foreground" aria-hidden="true">
                         <span>Letter</span><span>From %</span><span>Points</span><span />
                     </div>
@@ -89,7 +91,7 @@ export function GradingGroup({ profile }: { profile: Profile }) {
                         <Button disabled={!dirty || "error" in checked} onClick={saveScale}>Save scale</Button>
                     </span>
                     {"error" in checked && <span role="alert" className="text-[11.5px] text-destructive">{checked.error}</span>}
-                </div>
+                </div>}
             </details>
         </section>
     )

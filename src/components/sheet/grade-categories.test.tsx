@@ -100,8 +100,11 @@ describe("the grading settings", () => {
         fireEvent.change(pass, { target: { value: "65" } })
         fireEvent.blur(pass)
         expect(fake.saveProfile).toHaveBeenLastCalledWith({ grading: { pass: [65] } })
+        const details = screen.getByText("Letters and grade points").closest("details")!
+        details.open = true
+        fireEvent(details, new Event("toggle"))
         fireEvent.change(screen.getByLabelText("Grade points for A"), { target: { value: "4.3" } })
         fireEvent.click(screen.getByText("Save scale"))
-        expect(fake.saveProfile.mock.lastCall![0].grading.scale[0]).toEqual({ letter: "A", min: 93, points: 4.3 })
+        expect((fake.saveProfile.mock.lastCall![0].grading as { scale: unknown[] }).scale[0]).toEqual({ letter: "A", min: 93, points: 4.3 })
     })
 })
