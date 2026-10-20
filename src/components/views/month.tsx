@@ -5,6 +5,9 @@ import { cn } from "@/lib/utils"
 import { isComplete, tmeta } from "@/core/model"
 import { hhmm } from "@/core/dates"
 import { useMonth, cellLabel, tintOf, type Cell, type Chip, type TimetableDay } from "@/data/views"
+import { useCrunches } from "@/data/next"
+import { crunchesOn, type Crunch } from "@/core/workload"
+import { CrunchBand, CrunchTag } from "./crunch"
 import { goToDay, openCourse } from "@/data/actions"
 import { courseByKey, courseKeyOf, keyOf } from "@/data/effective"
 import { SourceMark } from "./source-mark"
@@ -15,6 +18,8 @@ const HEADS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
 export function MonthView() {
     const { month, timetable, schedule } = useMonth()
     const n = month.classCount
+    /* the crunches on the six weeks shown: a crowded day carries a tag, a crowded week the band */
+    const crunch = useCrunches(month.cells[0].date, month.cells[month.cells.length - 1].date)
     return (
         <div className="grid gap-[13px]">
             <Panel
@@ -26,11 +31,12 @@ export function MonthView() {
                     <ScheduleTabs value={schedule} />
                 </>}
             >
+                <CrunchBand list={crunch} />
                 <div className="grid grid-cols-7">
                     {HEADS.map((d) => (
                         <div key={d} className="border-b border-border px-2 py-1.5 text-[10.5px] font-bold tracking-[.1em] text-muted-foreground uppercase">{d}</div>
                     ))}
-                    {month.cells.map((c) => <MonthCell key={c.date} cell={c} />)}
+                    {month.cells.map((c) => <MonthCell key={c.date} cell={c} crunch={crunchesOn(crunch, c.date).filter((x) => x.kind !== "week")} />)}
                 </div>
             </Panel>
             <Timetable days={timetable} />
@@ -38,13 +44,13 @@ export function MonthView() {
     )
 }
 
-function MonthCell({ cell }: { cell: Cell }) {
+function MonthCell({ cell, crunch }: { cell: Cell; crunch: Crunch[] }) {
     const tint = tintOf(cell.info)
     return (
         <button
             type="button"
             onClick={() => goToDay(cell.date)}
-            aria-label={cellLabel(cell)}
+            aria-label={cellLabel(cell) + (crunch.length ? ", busy: " + crunch.map((c) => c.text).join(", ") : "")}
             className={cn(
                 "flex min-h-[96px] min-w-0 cursor-pointer flex-col items-stretch gap-0.5 overflow-hidden border-0 border-r border-b border-line-2 bg-transparent p-1.5 text-left font-[inherit] [&:nth-child(7n)]:border-r-0",
                 "hover:bg-muted max-[700px]:min-h-[64px] max-[700px]:p-1",
@@ -57,6 +63,7 @@ function MonthCell({ cell }: { cell: Cell }) {
                 "self-start text-[12px] font-bold tabular-nums",
                 cell.isToday ? "grid size-6 place-items-center rounded-full bg-primary text-[11px] text-primary-foreground" : "text-ink-2",
             )}>{cell.day}</span>
+            {crunch.length > 0 && <span aria-hidden="true" className="flex"><CrunchTag list={crunch} compact /></span>}
             <span className="flex min-w-0 flex-wrap gap-0.5"><SchoolTags info={cell.info} /></span>
             {cell.chips.map((chip) => <MonthChip key={chip.key} chip={chip} />)}
             {cell.more > 0 && <span className="text-[10.5px] font-semibold text-muted-foreground">+{cell.more} more</span>}

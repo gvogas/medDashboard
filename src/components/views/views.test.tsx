@@ -57,6 +57,9 @@ afterEach(() => {
 
 const set = (patch: Partial<typeof fake.ui>) => { Object.assign(fake.ui, patch); act(() => notify()) }
 const host = (id: string) => document.getElementById(id)!
+/* the week's own panels: Up next above them lists some of the same items */
+const schedule = () => within(screen.getByRole("region", { name: "Schedule" }))
+const taskPanel = () => within(screen.getByRole("region", { name: "Tasks" }))
 /* in its host, as <App> draws it */
 const show = (node: React.ReactNode, id = "views") => render(id === "views" ? <ViewsHost>{node}</ViewsHost> : <StatsHost>{node}</StatsHost>)
 
@@ -87,13 +90,13 @@ describe("the views host", () => {
 describe("the week", () => {
     it("opens an item, adds on a day, ticks a task and quick-adds one", () => {
         show(<Views />)
-        fireEvent.click(screen.getByRole("button", { name: /Renal problem set/ }))
+        fireEvent.click(schedule().getByRole("button", { name: /Renal problem set/ }))
         expect(actions.openItem).toHaveBeenCalledWith("set")
 
         fireEvent.click(screen.getByRole("button", { name: "Add item on 2026-09-24" }))
         expect(actions.newItemOn).toHaveBeenCalledWith("2026-09-24")
 
-        const box = screen.getByRole("button", { name: "Done: Print flashcards" })
+        const box = taskPanel().getByRole("button", { name: "Done: Print flashcards" })
         fireEvent.click(box)
         expect(actions.toggleTask).toHaveBeenCalledWith("t1", box)
 
@@ -107,8 +110,8 @@ describe("the week", () => {
     it("shows every type: the type chips filter only All items", () => {
         fake.ui.types = { assignment: false, task: false }
         show(<Views />)
-        expect(screen.getByRole("button", { name: /Renal problem set/ })).toBeTruthy()
-        expect(screen.getByRole("button", { name: "Done: Print flashcards" })).toBeTruthy()
+        expect(schedule().getByRole("button", { name: /Renal problem set/ })).toBeTruthy()
+        expect(taskPanel().getByRole("button", { name: "Done: Print flashcards" })).toBeTruthy()
         set({ view: "month" })
         expect(screen.getByText("Renal problem set")).toBeTruthy()
         set({ view: "table" })
@@ -151,14 +154,14 @@ describe("the week", () => {
             item({ id: "case", title: "Case write-up", checklist: [{ id: "c1", text: "History", done: true }, { id: "c2", text: "Exam", done: false }] }),
         ]
         show(<Views />)
-        const done = screen.getByRole("button", { name: /Histology slides/ })
+        const done = schedule().getByRole("button", { name: /Histology slides/ })
         expect(done.getAttribute("data-done")).toBe("true")
         expect(done.textContent).toMatch(/Done|Attended|Submitted|Taken/)
-        const open = screen.getByRole("button", { name: /Case write-up/ })
+        const open = schedule().getByRole("button", { name: /Case write-up/ })
         expect(open.getAttribute("data-done")).toBeNull()
         expect(open.querySelector("[data-steps]")).toBeTruthy()
         expect(open.textContent).toContain("1/2")
-        expect(screen.getByRole("button", { name: /Renal problem set/ }).title).toBe("Renal problem set · due 23:59")
+        expect(schedule().getByRole("button", { name: /Renal problem set/ }).title).toBe("Renal problem set · due 23:59")
     })
 })
 
@@ -290,11 +293,11 @@ describe("classes in the views, for anyone", () => {
 
     it("mark a class's item and yours filed under it, and open the class's by its key", () => {
         show(<Views />)
-        const row = screen.getByRole("button", { name: /REST API Project/ })
+        const row = schedule().getByRole("button", { name: /REST API Project/ })
         expect(within(row).getByRole("img", { name: "Shared · Web Services" })).toBeTruthy()
         fireEvent.click(row)
         expect(actions.openItem).toHaveBeenCalledWith(WEB + "/a1")
-        expect(within(screen.getByRole("button", { name: /Extra quiz/ })).getByRole("img", { name: "Yours, under Web Services" })).toBeTruthy()
+        expect(within(schedule().getByRole("button", { name: /Extra quiz/ })).getByRole("img", { name: "Yours, under Web Services" })).toBeTruthy()
     })
 
     it("leave a hidden source off the week, and keep it on All items", () => {
@@ -331,11 +334,11 @@ describe("projects in the views", () => {
 
     it("mark a team task and the assignment a project folds into on the week", () => {
         show(<Views />)
-        expect(within(screen.getAllByRole("button", { name: /Write the endpoints/ })[0]).getByRole("img", { name: "Team task · assigned to you" })).toBeTruthy()
-        expect(within(screen.getByRole("button", { name: /REST API Project/ })).getByRole("img", { name: "Team · Fire Response API" })).toBeTruthy()
+        expect(within(schedule().getAllByRole("button", { name: /Write the endpoints/ })[0]).getByRole("img", { name: "Team task · assigned to you" })).toBeTruthy()
+        expect(within(schedule().getByRole("button", { name: /REST API Project/ })).getByRole("img", { name: "Team · Fire Response API" })).toBeTruthy()
         expect(screen.queryByRole("button", { name: /Draw the diagram/ })).toBeNull()
         set({ search: "fire response" })
-        expect(screen.getByRole("button", { name: /REST API Project/ })).toBeTruthy()
+        expect(schedule().getByRole("button", { name: /REST API Project/ })).toBeTruthy()
     })
 
     it("list every team task on All items with who has it, and pick a source", () => {
@@ -347,5 +350,57 @@ describe("projects in the views", () => {
         expect([...source.options].map((o) => o.textContent)).toEqual(["Everything", "Personal", "Web Services", "Fire Response API"])
         fireEvent.change(source, { target: { value: "space:fire00000001" } })
         expect(actions.setSource).toHaveBeenCalledWith("space:fire00000001")
+    })
+})
+
+describe("up next", () => {
+    const upNext = () => within(screen.getByRole("region", { name: "Up next" }))
+    afterEach(() => { try { localStorage.removeItem("rounds.upNext.folded") } catch { /* none */ } })
+
+    it("lists what is due with why, ticks a task and opens the rest", () => {
+        fake.data.items = [...fake.data.items, item({ id: "late", type: "lab", title: "Lab report", date: "2026-09-21", weight: 20 })]
+        show(<Views />)
+        const rows = upNext().getAllByRole("listitem")
+        expect(rows.map((r) => r.textContent)).toEqual([
+            expect.stringMatching(/^Lab report.*Overdue 2 days · worth 20%$/),
+            expect.stringMatching(/^Renal problem set.*Due today$/),
+            expect.stringMatching(/^Print flashcards.*Due today$/),
+        ])
+        const box = upNext().getByRole("button", { name: "Done: Print flashcards" })
+        fireEvent.click(box)
+        expect(actions.toggleTask).toHaveBeenCalledWith("t1", box)
+        fireEvent.click(upNext().getByRole("button", { name: /Lab report/ }))
+        expect(actions.openItem).toHaveBeenCalledWith("late")
+        expect(upNext().queryByRole("button", { name: "Done: Lab report" })).toBeNull()
+    })
+
+    it("folds away and remembers it, and says when nothing is urgent", () => {
+        show(<Views />)
+        const fold = upNext().getByRole("button", { name: "Hide" })
+        expect(fold.getAttribute("aria-expanded")).toBe("true")
+        fireEvent.click(fold)
+        expect(upNext().queryByRole("listitem")).toBeNull()
+        expect(localStorage.getItem("rounds.upNext.folded")).toBe("1")
+        cleanup()
+        show(<Views />)
+        expect(upNext().getByRole("button", { name: "Show" }).getAttribute("aria-expanded")).toBe("false")
+        fireEvent.click(upNext().getByRole("button", { name: "Show" }))
+        cleanup()
+        fake.data.items = []
+        show(<Views />)
+        expect(upNext().getByText("Nothing urgent.")).toBeTruthy()
+        expect(upNext().getByText("Good time to get ahead.")).toBeTruthy()
+    })
+
+    it("marks a crowded day on the week and the month", () => {
+        fake.data.items = [...fake.data.items,
+            item({ id: "e1", type: "exam", title: "Anatomy midterm", date: "2026-09-24" }),
+            item({ id: "q1", type: "quiz", title: "Histo quiz", date: "2026-09-24" })]
+        show(<Views />)
+        expect(schedule().getByRole("note").textContent).toBe("Heavy stretch:2 tests on Thu 24 Sep")
+        expect(schedule().getAllByRole("img", { name: "Busy: 2 tests on Thu 24 Sep" })).toHaveLength(1)
+        set({ view: "month" })
+        expect(screen.getByRole("note").textContent).toContain("2 tests on Thu 24 Sep")
+        expect(screen.getByRole("button", { name: /^Thu 2026-09-24.*busy: 2 tests on Thu 24 Sep$/ })).toBeTruthy()
     })
 })

@@ -350,6 +350,15 @@ describe("the item sheet", () => {
         expect(getSheet()).toBeNull()
     })
 
+    it("says beside Save when a new item crowds a day, without stopping it", async () => {
+        fake.data.items = [...fake.data.items, item({ id: "e1", type: "exam", title: "Anatomy midterm" })]
+        show()
+        open({ kind: "new-item", draft: item({ id: "n4", type: "quiz", title: "Histo quiz" }) })
+        expect(within(dialog()).getByRole("status").textContent).toBe("This makes 2 tests on Wed 23 Sep")
+        await act(async () => fireEvent.click(screen.getByRole("button", { name: "Save item" })))
+        expect(fake.data.items.map((x) => x.id)).toContain("n4")
+    })
+
     it("deletes through the undo delete", () => {
         show()
         open({ kind: "item", id: "i1" })
