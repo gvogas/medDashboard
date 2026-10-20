@@ -98,14 +98,14 @@ describe('the heatmap', () => {
 
 describe('study prefs', () => {
   it('fill in what is missing on the client', () => {
-    expect(normalizePrefs(undefined)).toEqual({ goal: 0, dayMin: 15, rest: [], celebrate: true });
-    expect(normalizePrefs({ goal: 125.4, dayMin: 0, rest: [6, 0, 6, 9], celebrate: false })).toEqual({ goal: 125, dayMin: 1, rest: [0, 6], celebrate: false });
+    expect(normalizePrefs(undefined)).toEqual({ goal: 0, dayMin: 15, rest: [], celebrate: true, alarms: true });
+    expect(normalizePrefs({ goal: 125.4, dayMin: 0, rest: [6, 0, 6, 9], celebrate: false, alarms: false })).toEqual({ goal: 125, dayMin: 1, rest: [0, 6], celebrate: false, alarms: false });
   });
 
   it('are checked by the Worker', () => {
-    expect(studyPrefs({ goal: 120, dayMin: 20, rest: [6, 0], celebrate: false })).toEqual({ goal: 120, dayMin: 20, rest: [0, 6], celebrate: false });
-    expect(studyPrefs({})).toEqual({ goal: 0, dayMin: 15, rest: [], celebrate: true });
-    for (const bad of [{ goal: 721 }, { goal: 1.5 }, { dayMin: 0 }, { rest: [7] }, { rest: [1, 1] }, { rest: [0, 1, 2, 3, 4, 5, 6] }, { rest: 'sun' }, { celebrate: 'yes' }]) {
+    expect(studyPrefs({ goal: 120, dayMin: 20, rest: [6, 0], celebrate: false, alarms: false })).toEqual({ goal: 120, dayMin: 20, rest: [0, 6], celebrate: false, alarms: false });
+    expect(studyPrefs({})).toEqual({ goal: 0, dayMin: 15, rest: [], celebrate: true, alarms: true });
+    for (const bad of [{ goal: 721 }, { goal: 1.5 }, { dayMin: 0 }, { rest: [7] }, { rest: [1, 1] }, { rest: [0, 1, 2, 3, 4, 5, 6] }, { rest: 'sun' }, { celebrate: 'yes' }, { alarms: 1 }]) {
       expect(() => studyPrefs(bad), JSON.stringify(bad)).toThrow();
     }
   });
@@ -115,9 +115,9 @@ describe('study prefs', () => {
     const body = { coat: { name: '', role: '', color: '#E4749B' }, theme: 'dark', termStart: null, displayName: '' };
     let res = await api('/api/me', { method: 'PUT', body: { ...body, studyPrefs: { goal: 90, dayMin: 20, rest: [0], celebrate: true } } });
     expect(res.status).toBe(200);
-    expect((await res.json()).studyPrefs).toEqual({ goal: 90, dayMin: 20, rest: [0], celebrate: true });
+    expect((await res.json()).studyPrefs).toEqual({ goal: 90, dayMin: 20, rest: [0], celebrate: true, alarms: true });
     res = await api('/api/me', { method: 'PUT', body: { ...body, theme: 'light' } });
-    expect((await res.json()).studyPrefs).toEqual({ goal: 90, dayMin: 20, rest: [0], celebrate: true });
+    expect((await res.json()).studyPrefs).toEqual({ goal: 90, dayMin: 20, rest: [0], celebrate: true, alarms: true });
     res = await api('/api/me', { method: 'PUT', body: { ...body, studyPrefs: { goal: -1 } } });
     expect(await res.json()).toEqual({ error: 'invalid', field: 'studyPrefs.goal' });
   });

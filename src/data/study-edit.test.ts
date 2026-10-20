@@ -12,7 +12,7 @@ import { footHint, newAchievement, standing, switchRule, validAchievement, type 
 import type { Course, Item, StudySession } from "./types"
 
 const TODAY = "2026-09-23"
-const prefs = { goal: 60, dayMin: 15, rest: [], celebrate: true }
+const prefs = { goal: 60, dayMin: 15, rest: [], celebrate: true, alarms: true }
 const draft = (d: Partial<SessionDraft> = {}): SessionDraft => ({
     isNew: true, base: null, id: "new", date: TODAY, time: "09:00", minutes: 30, courseId: "anat", itemId: null, note: "", ...d,
 })

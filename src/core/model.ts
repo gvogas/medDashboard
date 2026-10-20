@@ -330,7 +330,7 @@ export function normalizeFlow(raw: unknown): Flow {
 /* The study goal and streak rules: a daily goal in minutes (0 = none), the least that
    makes a day count toward the streak, rest days (0 = Sunday) that never break it, and
    whether to celebrate. The server keeps what it is given; this fills the gaps. */
-const DEFAULT_PREFS: StudyPrefs = { goal: 0, dayMin: 15, rest: [], celebrate: true };
+const DEFAULT_PREFS: StudyPrefs = { goal: 0, dayMin: 15, rest: [], celebrate: true, alarms: true };
 export function normalizePrefs(raw: unknown): StudyPrefs {
   const p = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>;
   const rest = Array.isArray(p.rest) ? [...new Set((p.rest as unknown[]).filter((d): d is number => isInt(d) && d >= 0 && d <= 6))].sort().slice(0, 6) : [];
@@ -339,6 +339,7 @@ export function normalizePrefs(raw: unknown): StudyPrefs {
     dayMin: clampInt(p.dayMin, 1, 240, DEFAULT_PREFS.dayMin),
     rest,
     celebrate: p.celebrate === undefined ? true : !!p.celebrate,
+    alarms: p.alarms === undefined ? true : !!p.alarms,
   };
 }
 

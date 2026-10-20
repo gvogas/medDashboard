@@ -81,6 +81,45 @@ describe('the .ics file', () => {
   });
 });
 
+describe('reminders in the feed', () => {
+  const alarmsOf = (ev) => [...ev.matchAll(/BEGIN:VALARM\r\n([\s\S]*?)END:VALARM/g)].map((m) => m[1]);
+  const now = Date.UTC(2026, 9, 1);
+
+  it('reminds a day and an hour before a timed exam, and at 09:00 the day before an all-day one', () => {
+    const [timed, allDay] = events(buildCalendar({ courses: [course], items: [item({ start: '09:00' }), item({ id: 'i2', type: 'assignment', title: 'Essay' })], now, alarms: true }));
+    expect(alarmsOf(timed).map((a) => a.match(/TRIGGER:(\S+)/)[1])).toEqual(['-P1D', '-PT1H']);
+    expect(alarmsOf(timed)[0]).toContain('ACTION:DISPLAY\r\nDESCRIPTION:Exam: BIO · Midterm');
+    expect(alarmsOf(allDay).map((a) => a.match(/TRIGGER:(\S+)/)[1])).toEqual(['-PT15H']);
+  });
+
+  it('leaves out what is done, missed, past, weekly or not a deadline, and everything when off', () => {
+    const items = [item({ status: 'graded' }), item({ id: 'b', status: 'missed' }), item({ id: 'c', date: '2026-09-20' }),
+      item({ id: 'd', type: 'office', recur: 'weekly', weekday: 1 }), item({ id: 'e', type: 'task' }), item({ id: 'f', type: 'tutoring' })];
+    expect(buildCalendar({ courses: [course], items, now, alarms: true })).not.toContain('VALARM');
+    expect(buildCalendar({ courses: [course], items: [item()], now })).not.toContain('VALARM');
+    const team = events(buildCalendar({ courses: [], items: [item({ type: 'project', course_id: null, title: 'Team · Poster' })], now, alarms: true }))[0];
+    expect(alarmsOf(team)).toHaveLength(1);
+  });
+
+  it('keeps every line valid and short with a long title', () => {
+    const ics = buildCalendar({ courses: [course], items: [item({ title: 'Ω'.repeat(80) + ', with; text' })], now, alarms: true });
+    for (const line of ics.split('\r\n')) expect(new TextEncoder().encode(line).length).toBeLessThanOrEqual(75);
+    expect(unfold(ics)).toContain('\\, with\\; text');
+  });
+
+  it('are on by default in the served feed and follow the study prefs', async () => {
+    const api = await signIn();
+    const day = new Date(Date.now() + 5 * 864e5).toISOString().slice(0, 10);
+    await api('/api/items/x1', { method: 'PUT', body: { type: 'exam', title: 'Final', date: day, status: 'todo' } });
+    const url = (await (await api('/api/calendar', { method: 'POST' })).json()).url;
+    expect(await (await SELF.fetch(url)).text()).toContain('BEGIN:VALARM');
+    const me = await (await api('/api/me')).json();
+    const res = await api('/api/me', { method: 'PUT', body: { coat: me.coat, theme: me.theme, termStart: null, displayName: '', studyPrefs: { ...me.studyPrefs, alarms: false } } });
+    expect(res.status).toBe(200);
+    expect(await (await SELF.fetch(url)).text()).not.toContain('VALARM');
+  });
+});
+
 describe('the feed endpoints', () => {
   it('is off until turned on, then serves the person\'s items and classes to anyone with the link', async () => {
     const api = await signIn();
