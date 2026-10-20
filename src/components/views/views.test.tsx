@@ -403,4 +403,20 @@ describe("up next", () => {
         expect(screen.getByRole("note").textContent).toContain("2 tests on Thu 24 Sep")
         expect(screen.getByRole("button", { name: /^Thu 2026-09-24.*busy: 2 tests on Thu 24 Sep$/ })).toBeTruthy()
     })
+
+    it("marks a crowded day on the phone's Agenda too", () => {
+        const before = window.matchMedia
+        window.matchMedia = ((query: string) => ({ matches: query.includes("700px"), media: query, addEventListener() {}, removeEventListener() {} })) as unknown as typeof window.matchMedia
+        try {
+            fake.data.items = [...fake.data.items,
+                item({ id: "e1", type: "exam", title: "Anatomy midterm", date: "2026-09-24" }),
+                item({ id: "q1", type: "quiz", title: "Histo quiz", date: "2026-09-24" })]
+            show(<Views />)
+            const agenda = within(screen.getByRole("region", { name: "Agenda" }))
+            expect(agenda.getByRole("note").textContent).toBe("Heavy stretch:2 tests on Thu 24 Sep")
+            expect(within(agenda.getByRole("listitem", { name: "Thu 24 Sep" })).getByRole("img", { name: "Busy: 2 tests on Thu 24 Sep" })).toBeTruthy()
+        } finally {
+            window.matchMedia = before
+        }
+    })
 })

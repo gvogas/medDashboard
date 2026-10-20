@@ -5,12 +5,13 @@ import { gridParam } from "./image"
 /* A timetable drawn into RGBA by hand, as a screenshot or a print of one looks: a time column
    and weekday columns, rows with a line under each, grey (or white) empty cells, and white
    class blocks with no line inside them and some "text" (dark specks) in their middle. */
-function draw({ cols = 5, rows = 20, rowH = 40, colW = 160, timeW = 70, head = 30, empty = 238, blocks = [] as [number, number, number][], scribble = null as null | [number, number] } = {}): Pixels {
-    const width = 20 + timeW + cols * colW + 20, height = 20 + head + rows * rowH + 20
+function draw({ cols = 5, rows = 20, rowH = 40, colW = 160, timeW = 70, head = 30, empty = 238, blocks = [] as [number, number, number][], scribble = null as null | [number, number], margin = 20 } = {}): Pixels {
+    /* margin 0: cropped to the table, its outer lines on the picture's last column and row of px */
+    const width = margin + timeW + cols * colW + Math.max(margin, 1), height = margin + head + rows * rowH + Math.max(margin, 1)
     const data = new Uint8ClampedArray(width * height * 4).fill(255)
     const put = (x: number, y: number, v: number) => { const i = (y * width + x) * 4; data[i] = data[i + 1] = data[i + 2] = v }
     const rect = (x1: number, y1: number, x2: number, y2: number, v: number) => { for (let y = y1; y < y2; y++) for (let x = x1; x < x2; x++) put(x, y, v) }
-    const left = 20, top = 20, gx = (c: number) => left + timeW + c * colW, gy = (r: number) => top + head + r * rowH
+    const left = margin, top = margin, gx = (c: number) => left + timeW + c * colW, gy = (r: number) => top + head + r * rowH
     /* every cell empty, then the blocks over them */
     rect(gx(0), gy(0), gx(cols), gy(rows), empty)
     for (const [c, from, to] of blocks) rect(gx(c), gy(from), gx(c + 1), gy(to + 1), 255)
@@ -45,6 +46,14 @@ describe("readImageGrid", () => {
         const g = readImageGrid(draw({ blocks: BLOCKS }))
         expect(g).toMatchObject({ cols: 5, rows: 20 })
         expect(found(g)).toEqual(BLOCKS)
+    })
+
+    it("finds the last weekday and the last row of a picture cropped to the table, and gives px in the picture", () => {
+        const g = readImageGrid(draw({ blocks: BLOCKS, margin: 0 }))!
+        expect(g).toMatchObject({ cols: 5, rows: 20 })
+        expect(found(g)).toEqual(BLOCKS)
+        expect(g.rowTops[0]).toBe(30)
+        expect(g.blocks[0]).toMatchObject({ x1: 70, y1: 70 })
     })
 
     it("and in a print's (white empty cells, a line round each)", () => {

@@ -22,7 +22,31 @@ const STEP = 3, DARKER = 7
 /* a pixel this dark is ink: text, not a cell's background or a border */
 const INK = 150
 
+/* A screenshot cropped to the table has its outer lines on the picture's edge, where a line
+   cannot be told from its sides: the last weekday and the last row were lost. A white margin
+   all round puts them inside; the grid found is given back in the picture's own px. */
+const MARGIN = 8
+
 export function readImageGrid(px: Pixels): ImageGrid | null {
+    const g = readGrid(withMargin(px, MARGIN))
+    if (!g) return null
+    const m = MARGIN
+    return {
+        ...g,
+        rowTops: g.rowTops.map((y) => y - m),
+        blocks: g.blocks.map((b) => ({ ...b, x1: b.x1 - m, y1: b.y1 - m, x2: b.x2 - m, y2: b.y2 - m })),
+    }
+}
+
+/** The pixels with `m` px of white all round. */
+function withMargin({ data, width, height }: Pixels, m: number): Pixels {
+    const w = width + 2 * m, h = height + 2 * m
+    const out = new Uint8ClampedArray(w * h * 4).fill(255)
+    for (let y = 0; y < height; y++) out.set(data.subarray(y * width * 4, (y + 1) * width * 4), ((y + m) * w + m) * 4)
+    return { data: out, width: w, height: h }
+}
+
+function readGrid(px: Pixels): ImageGrid | null {
     const { width: w, height: h } = px
     if (w < 200 || h < 200) return null
     const lum = luminance(px)
