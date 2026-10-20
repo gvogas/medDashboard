@@ -15,7 +15,8 @@ import { duration } from "@/lib/time"
 import { useAchievements, useCourses, useItems, useProfile, useStudySessions } from "./store"
 import { rememberUi, ui } from "./ui"
 import { keyedAchievements, keyedCourses, keyedItems, keyedSessions, leftSpaceLabel } from "./refs"
-import { forAchievements } from "./effective"
+import { courseByKey, forAchievements } from "./effective"
+import type { GradeCategory } from "@/core/grades"
 import { defaultRange, termRecap } from "@/core/recap"
 import { withProjects } from "./projects"
 import type { Achievement, Badge, Course, HistTab, Item, SessionUndo, StudyPrefs, StudySession, StudyTab } from "./types"
@@ -394,6 +395,8 @@ export function recapRanges(cal: { terms: { name: string; start: string; end: st
 /** The recap of `from`..`to`, in key space like History: a class's course is told apart from yours. */
 export const useRecap = (from: string, to: string) => {
     const input = useStudyInput(), items = useItems(), profile = useProfile()
-    return useMemo(() => termRecap(input.sessions, keyedItems(forAchievements(items, profile?.id ?? "")), from, to, input.today, input.prefs),
+    /* a course's categories, by its key, so the grade line counts them as the grade panel does */
+    return useMemo(() => termRecap(input.sessions, keyedItems(forAchievements(items, profile?.id ?? "")), from, to, input.today, input.prefs,
+        (key) => (courseByKey(key) as { gradeCategories?: GradeCategory[] } | null)?.gradeCategories),
         [input, items, profile, from, to])
 }

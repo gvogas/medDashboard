@@ -40,6 +40,17 @@ describe("termRecap", () => {
         expect(r.grades).toEqual([{ courseId: "anat", current: 64 }])
     })
 
+    it("counts a course's grade categories, dropping the lowest as the grade panel does", () => {
+        const items = [
+            it_("q1", { type: "quiz", status: "graded", grade: 50, weight: 10, category: "q" }),
+            it_("q2", { type: "quiz", status: "graded", grade: 90, weight: 10, category: "q" }),
+            it_("q3", { type: "quiz", status: "graded", grade: 70, weight: 10, category: "q" }),
+        ]
+        expect(termRecap([], items, FROM, TO, TODAY).grades).toEqual([{ courseId: "anat", current: 70 }])
+        const cats = (id: string) => (id === "anat" ? [{ id: "q", name: "Quizzes", weight: 100, drop: 1 }] : null)
+        expect(termRecap([], items, FROM, TO, TODAY, {}, cats).grades).toEqual([{ courseId: "anat", current: 80 }])
+    })
+
     it("is empty for a range that has not started", () => {
         const r = termRecap([s("2026-10-01", 60)], [], "2027-01-05", "2027-04-30", TODAY)
         expect(r).toMatchObject({ minutes: 0, sessions: 0, best: null, longestStreak: 0, completedTotal: 0, grades: [] })

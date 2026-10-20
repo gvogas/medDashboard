@@ -7,6 +7,7 @@ import { cn } from "@/lib/utils"
 import { duration } from "@/lib/time"
 import { shortDate, today } from "@/core/dates"
 import { tmeta } from "@/core/model"
+import { gpa, letterFor, normalizeGrading } from "@/core/grades"
 import { courseByKey } from "@/data/effective"
 import { projectCourse } from "@/data/projects"
 import { leftSpaceLabel } from "@/data/refs"
@@ -21,7 +22,7 @@ const courseName = (id: string | null) => (id ? courseOf(id)?.code || courseOf(i
 const plural = (n: number, one: string, many = one + "s") => n + " " + (n === 1 ? one : many)
 
 export function RecapCard() {
-    useProfile()   /* the school calendar lives on the profile */
+    const profile = useProfile()   /* the school calendar and the grading scale live on the profile */
     const ranges = recapRanges(schoolCal(), today())
     const [picked, setPicked] = useState<string | null>(null)
     const range = ranges.find((r) => r.id === picked) ?? ranges[ranges.length - 1]
@@ -70,7 +71,7 @@ export function RecapCard() {
                     </Part>
                 )}
 
-                {r.grades.length > 0 && <Grades grades={r.grades} />}
+                {r.grades.length > 0 && <Grades grades={r.grades} grading={profile?.grading} />}
 
                 {!r.minutes && !r.completedTotal && <p className="m-0 text-[13px] text-muted-foreground">Nothing studied or completed in this range yet.</p>}
             </div>
@@ -78,12 +79,15 @@ export function RecapCard() {
     )
 }
 
-/* The grade line, kept in one place: a course's weighted average so far. */
-function Grades({ grades }: { grades: { courseId: string; current: number | null }[] }) {
+/* The grade line, kept in one place: each course's weighted average so far with its letter on
+   your scale, and the range's GPA weighted by credits (core/grades.ts). */
+function Grades({ grades, grading }: { grades: { courseId: string; current: number | null }[]; grading: unknown }) {
+    const { scale } = normalizeGrading(grading)
+    const total = gpa(grades.map((g) => ({ credits: (courseOf(g.courseId) as { credits?: number | null } | null)?.credits, percent: g.current })), scale)
     return (
-        <Part title="Grades so far">
+        <Part title={"Grades so far" + (total ? " · GPA " + total.gpa.toFixed(2) : "")}>
             <ul className="m-0 flex list-none flex-wrap gap-x-4 gap-y-1 p-0 text-[13px]">
-                {grades.map((g) => <li key={g.courseId}><span className="text-ink-2">{courseName(g.courseId)}</span> <b className="font-semibold">{g.current}%</b></li>)}
+                {grades.map((g) => <li key={g.courseId}><span className="text-ink-2">{courseName(g.courseId)}</span> <b className="font-semibold">{g.current}%</b>{letterFor(g.current, scale) && <span className="text-muted-foreground"> {letterFor(g.current, scale)!.letter}</span>}</li>)}
             </ul>
         </Part>
     )

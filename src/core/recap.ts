@@ -5,7 +5,7 @@
 
 import { addDays, iso, parse } from './dates.ts';
 import { dayOf, minutesByDay, runs, type Logged, type StreakRules } from './history.ts';
-import { courseGrade, type Graded } from './grades.ts';
+import { courseGrade, type GradeCategory, type Graded } from './grades.ts';
 import { isComplete } from './model.ts';
 import type { Item } from './types.ts';
 
@@ -28,10 +28,13 @@ export interface Recap {
   grades: { courseId: string; current: number | null }[];
 }
 
-/** The range's grade line per course: today's courseGrade over the course's items in the range. */
-export function rangeGrades(items: Dated[], courseIds: string[]): Recap['grades'] {
+/** A course's grade categories, by its id (none: the items' own weights). */
+export type CategoriesOf = (courseId: string) => readonly GradeCategory[] | null | undefined;
+
+/** The range's grade line per course: today's courseGrade over the course's items in the range, with its categories. */
+export function rangeGrades(items: Dated[], courseIds: string[], categoriesOf: CategoriesOf = () => null): Recap['grades'] {
   return courseIds
-    .map((courseId) => ({ courseId, current: courseGrade(items.filter((it) => it.courseId === courseId)).current }))
+    .map((courseId) => ({ courseId, current: courseGrade(items.filter((it) => it.courseId === courseId), {}, categoriesOf(courseId)).current }))
     .filter((g) => g.current !== null);
 }
 
@@ -40,7 +43,7 @@ export function rangeGrades(items: Dated[], courseIds: string[]): Recap['grades'
  * it. Sessions count on the day they started; items on their date.
  */
 export function termRecap(
-  sessions: Logged[], items: Dated[], from: string, to: string, today: string, rules: StreakRules = {},
+  sessions: Logged[], items: Dated[], from: string, to: string, today: string, rules: StreakRules = {}, categoriesOf?: CategoriesOf,
 ): Recap {
   const end = to < today ? to : today;
   const inRange = (d: string) => d >= from && d <= end;
@@ -67,7 +70,7 @@ export function termRecap(
     daysStudied: [...byDay.values()].filter((m) => m > 0).length,
     best, longestStreak: end >= from ? runs(byDay, end, rules).longest : 0,
     byCourse, completed, completedTotal: completed.reduce((n, c) => n + c.count, 0), tests,
-    grades: rangeGrades(dated, courseIds),
+    grades: rangeGrades(dated, courseIds, categoriesOf),
   };
 }
 
