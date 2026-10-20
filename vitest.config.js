@@ -32,8 +32,12 @@ export default defineConfig(async () => {
                   SPOTIFY_TOKEN_KEYS: JSON.stringify({ current: 'v1', keys: { v1: 'test-spotify-encryption-key-at-least-32-characters' } }),
                   SPOTIFY_CLIENT_ID: 'test-client-id',
                   SPOTIFY_CLIENT_SECRET: 'test-client-secret',
+                  // A throwaway P-256 pair for push (test/push.test.js); never used anywhere else.
+                  VAPID_PUBLIC_KEY: 'BFaIBBOLQ70QXU1DzpjiDtY5IdvjKKRcBmXhZW_HOz295FnevL7DEwFro64p2aPruAH4rFAr087Ups4PvWDDr58',
+                  VAPID_PRIVATE_KEY: 'Cs4HmTxBoYcKMWGFRyhND7H91ITnKlmxKkjnh7h9sxo',
+                  VAPID_SUBJECT: 'mailto:tests@example.com',
                 },
-                // The only outbound calls are to Spotify, answered by the fake in
+                // The only outbound calls are to Spotify and a push service, answered by the fakes in
                 // test/spotify-stub.js; anything else gets a 502, so tests never touch the network.
                 outboundService: spotifyStub,
               },

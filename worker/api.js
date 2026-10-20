@@ -17,6 +17,7 @@ import { adminRoutes, markSeen, readAnnouncement } from './admin.js';
 import { classRoutes } from './classes.js';
 import { layerRoutes } from './layer.js';
 import { inboxRoutes } from './inbox.js';
+import { pushRoutes } from './push.js';
 import { unreadCount } from './activity.js';
 import { logError, messageOf } from './errors.js';
 import { guardMaintenance, publicMaintenance } from './maintenance.js';
@@ -444,6 +445,7 @@ const routes = [
   ...classRoutes,
   ...layerRoutes,
   ...inboxRoutes,
+  ...pushRoutes,
   ...adminRoutes,
 ];
 
