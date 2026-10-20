@@ -91,6 +91,13 @@ export function fakeAi(mode = 'ok') {
         || (Array.isArray(user) ? (user[0]?.text?.match(/Today is (\d{4}-\d{2}-\d{2})/) || [])[1] : null)
         || new Date().toISOString().slice(0, 10);
       if (mode === 'garbage') return chat('Sorry, I cannot read that.');
+      /* a screenshot whose grid the browser found: words for each numbered block (it cannot read
+         the picture, so a made-up course a block; the times come from the grid either way) */
+      const blocks = (text || (Array.isArray(user) ? user[0]?.text : '') || '').match(/block \d+:/g);
+      if (/llama-4-scout/.test(model) && blocks) {
+        return { response: { days: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'], firstTime: '08:00', lastTime: '18:00', term: '',
+          blocks: blocks.map((_, i) => ({ n: i + 1, code: 'TST ' + (100 + i), name: 'Block ' + (i + 1), room: 'Classroom R-' + (i + 1), kind: '' })) }, usage };
+      }
       if (/llama-4-scout/.test(model)) return { response: schedule(''), usage, tool_calls: [] };
       if (/academic calendar/i.test(system)) return chat(calendar(today));
       if (/class schedule/i.test(system)) return chat(schedule(text));
