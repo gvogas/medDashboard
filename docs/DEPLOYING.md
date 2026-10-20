@@ -296,6 +296,28 @@ tokens are stored as `keyId.ciphertext`, sealed under the `current` key.
   rotating `SESSION_SECRET` while any remain, put the old value in
   `SPOTIFY_LEGACY_TOKEN_SECRET`.
 
+## Push reminders
+
+The morning digest (Settings → Connections → Reminders) needs migration
+`0006_push.sql` on the live database (`npm run db:remote` before you push) and three
+secrets. Without the secrets the app says reminders are not set up, and nothing else
+changes. The alerts in the calendar feed need neither.
+
+1. Make a key pair locally: `npm run push:key` writes `VAPID_PUBLIC_KEY` and
+   `VAPID_PRIVATE_KEY` into `.dev.vars` without printing the private key. Set
+   `VAPID_SUBJECT` there to `mailto:` and an address of yours; push services write to it
+   if something goes wrong.
+2. Copy the three values to the live Worker, one at a time:
+   `npx wrangler secret put VAPID_PUBLIC_KEY` (and the same for the other two).
+   `npm run deploy` refuses to go on with only one or two of them set.
+
+The hourly cron (`0 * * * *` in `wrangler.jsonc`) sends each device its digest once a
+day, between 07:00 and 09:59 in that device's time zone, and only when something is due
+today or tomorrow, or overdue. Changing the keys stops every device until its owner turns
+reminders off and on again. A device the push service says is gone, or that fails five
+times in a row, is dropped. On an iPhone or iPad, push works only in the app added to
+the Home Screen.
+
 ## Managing accounts
 
 There's no sign-up page, so you create every account yourself from the command line.
@@ -364,6 +386,7 @@ Run every command in PowerShell from the project folder.
 | `npm run check` | Type check, all tests and the release build | Local |
 | `npm run csp:update` | Rewrites the inline script's hash in `public/_headers` | Local |
 | `npm run db:local` | Applies new migrations to the local database | Local |
+| `npm run push:key` | Makes a local VAPID key pair for push reminders in `.dev.vars` | Local |
 | `npm run db:check` | Read-only database checks and row counts (`-- --remote` for live) | Local or live, read-only |
 | `git push` to `main` | Cloudflare builds and publishes the site and API (no migrations) | Live |
 | `npm run deploy` | Manual deploy: checks, applies migrations to live, checks the live database, then publishes | Live |

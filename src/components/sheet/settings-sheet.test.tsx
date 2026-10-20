@@ -30,6 +30,9 @@ const api = vi.hoisted(() => ({
     calendarRenew: vi.fn(async () => ({ on: true, url: "https://x.org/cal/new.ics" })),
     calendarStop: vi.fn(async () => undefined),
 }))
+const push = vi.hoisted(() => ({
+    pushState: vi.fn(async () => "off" as string), turnOn: vi.fn(async () => "on" as string), turnOff: vi.fn(async () => "off" as string), testPush: vi.fn(async () => "ok" as string),
+}))
 const legacy = vi.hoisted(() => ({ setTheme: vi.fn(), setBg: vi.fn(), savePrefs: vi.fn(), runReviews: vi.fn(), writeSetting: vi.fn(), saveRows: vi.fn(), saveProfile: vi.fn(), render: vi.fn() }))
 
 vi.mock("@/core/store", () => ({
@@ -51,6 +54,7 @@ vi.mock("@/data/theme", () => ({ setTheme: legacy.setTheme, setBg: legacy.setBg 
 vi.mock("@/data/ai-read", () => ({ readWithAi: vi.fn(), refreshReads: vi.fn(async () => {}), asSent: vi.fn(), MAX_FILE: 5 * 1024 * 1024 }))
 vi.mock("@/lib/fireworks", () => ({ launch: vi.fn() }))
 vi.mock("@/data/actions", () => actions)
+vi.mock("@/data/push", () => push)
 
 import { notify } from "@/bridge"
 import { closeSheet, getSheet, openSheet } from "@/data/overlay"
@@ -204,6 +208,34 @@ describe("Settings", () => {
         fireEvent.click(screen.getByRole("button", { name: "Turn off" }))
         await act(async () => fireEvent.click(within(screen.getByText(/Turn the feed off\?/).parentElement!).getByRole("button", { name: "Turn off" })))
         expect(screen.getByText(/did not go through/)).toBeTruthy()
+    })
+
+    it("turns the feed's alerts and this device's morning reminders on and off, and sends a test", async () => {
+        settings("connections")
+        const group = within(document.getElementById("remindersGrp")!)
+        fireEvent.click(group.getByRole("checkbox", { name: /Alerts in the calendar feed/ }))
+        expect(legacy.savePrefs).toHaveBeenCalledWith({ alarms: false })
+        const morning = await waitFor(() => {
+            const box = group.getByRole("checkbox", { name: "Morning reminders on this device" }) as HTMLInputElement
+            expect(box.disabled).toBe(false)
+            return box
+        })
+        await act(async () => fireEvent.click(morning))
+        expect(push.turnOn).toHaveBeenCalled()
+        expect(morning.checked).toBe(true)
+        await act(async () => fireEvent.click(group.getByRole("button", { name: "Send a test" })))
+        expect(group.getByText(/Sent\./)).toBeTruthy()
+        await act(async () => fireEvent.click(morning))
+        expect(push.turnOff).toHaveBeenCalled()
+        expect(morning.checked).toBe(false)
+    })
+
+    it("says why morning reminders cannot be turned on", async () => {
+        push.pushState.mockResolvedValueOnce("ios-install")
+        settings("connections")
+        const group = within(document.getElementById("remindersGrp")!)
+        expect(await group.findByText(/add Term to your Home Screen/)).toBeTruthy()
+        expect((group.getByRole("checkbox", { name: "Morning reminders on this device" }) as HTMLInputElement).disabled).toBe(true)
     })
 
     it("shows the Spotify connection", () => {

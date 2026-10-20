@@ -285,6 +285,11 @@ export const api = {
   readSchool: (file: Blob, q: ReadQuery, signal?: AbortSignal) => request('POST', '/api/school-calendar?' + query(q), file, undefined, signal),
   readSchedule: (file: Blob, q: ReadQuery, signal?: AbortSignal) => request('POST', '/api/ai/schedule?' + query(q), file, undefined, signal),
   aiReads: (): Promise<{ left: number; limit: number }> => request('GET', '/api/ai/reads'),
+  /* push reminders (worker/push.js): the key, and this device's subscription by its endpoint */
+  pushKey: (): Promise<{ enabled: boolean; key: string | null }> => request('GET', '/api/push/key'),
+  pushOn: (endpoint: string, tz: string) => empty(request('POST', '/api/push', { endpoint, tz })),
+  pushOff: (endpoint: string) => empty(request('DELETE', '/api/push', { endpoint })),
+  pushTest: (endpoint: string): Promise<{ result: 'ok' | 'gone' | 'failed' }> => request('POST', '/api/push/test', { endpoint }),
   /* the Admin page; every call is refused (403) to anyone who is not an admin */
   admin: {
     accounts: () => request('GET', '/api/admin/accounts'),
