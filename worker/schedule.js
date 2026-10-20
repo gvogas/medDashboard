@@ -281,7 +281,21 @@ export function cleanGrid(raw, grid) {
     if (!w || w.empty || (!clip(w.code, 40) && !clip(w.name, 80))) return null;
     return { code: w.code, name: w.name, classes: [{ kind: w.kind || 'Lecture', day: DAYS[weekday(b.col)], start: clock(first + b.from * rowMin), end: clock(first + (b.to + 1) * rowMin), room: w.room || '' }] };
   }).filter(Boolean);
-  return cleanSchedule({ term: o.term, courses });
+  return cleanSchedule({ term: o.term, courses: coded(courses) });
+}
+
+/* When most blocks carry a course code (a portal's timetable), a block with none is something
+   written on the page (a note, a scribble on a printout): it stays only when its name is a
+   coded block's, and then takes that code. */
+function coded(courses) {
+  const withCode = courses.filter((c) => cleanCode(c.code));
+  if (withCode.length * 2 < courses.length) return courses;
+  const named = (n) => String(n || '').trim().toLowerCase();
+  return courses.flatMap((c) => {
+    if (cleanCode(c.code)) return [c];
+    const same = withCode.find((x) => named(x.name) && named(x.name) === named(c.name));
+    return same ? [{ ...c, code: same.code }] : [];
+  });
 }
 
 /* "08:00", "8:00 AM" as minutes after midnight; -1 for anything else */

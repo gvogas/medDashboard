@@ -404,6 +404,17 @@ describe('a screenshot whose grid the browser found', () => {
     expect(out.courses.flatMap((c) => c.classes)).toHaveLength(14);
   });
 
+  it('drops a block with no code when the others have one (handwriting the model copied), but keeps one named as a coded course', () => {
+    const grid = parseGrid(LOOKALIKE_GRID + ',3:17-17,4:17-17');
+    const out = cleanGrid({ response: lookalikeAnswer([
+      { n: 15, code: '', name: 'ml', room: '' },
+      { n: 16, code: '', name: lookalikeAnswer().blocks[0].name, room: 'X-1' },
+    ]) }, grid);
+    expect(out.courses.flatMap((c) => c.classes)).toHaveLength(15);
+    expect(out.courses.some((c) => c.name === 'ml')).toBe(false);
+    expect(out.courses.find((c) => c.name === lookalikeAnswer().blocks[0].name).classes.some((m) => m.room === 'X-1')).toBe(true);
+  });
+
   it('takes the weekdays from the headings (a grid from Sunday), and Monday first without them', () => {
     const grid = parseGrid('7.20|0:1-3,1:1-3');
     const answer = { days: ['Dim', 'Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam'], firstTime: '8:00 AM', lastTime: '6:00 PM', blocks: [{ n: 1, code: 'A 1', name: 'A', room: '' }, { n: 2, code: 'B 1', name: 'B', room: '' }] };
