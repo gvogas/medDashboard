@@ -21,7 +21,7 @@ const fake = vi.hoisted(() => {
     }
 })
 const actions = vi.hoisted(() => ({
-    addQuote: vi.fn(async () => true), removeQuote: vi.fn(), saveCoat: vi.fn(), exportData: vi.fn(), resolveConflict: vi.fn(),
+    addQuote: vi.fn(async () => true), removeQuote: vi.fn(), saveCoat: vi.fn(), exportData: vi.fn(), exportItemsCsv: vi.fn(), resolveConflict: vi.fn(),
     disconnectSpotify: vi.fn(), showShortcuts: vi.fn(), signOut: vi.fn(), keepSignedIn: vi.fn(), openSettings: vi.fn(), openAiImport: vi.fn(),
     setSettingsTab: vi.fn(), deleteItem: vi.fn(), deleteCourse: vi.fn(), openCourse: vi.fn(),
 }))
@@ -53,6 +53,7 @@ vi.mock("@/lib/fireworks", () => ({ launch: vi.fn() }))
 vi.mock("@/data/actions", () => actions)
 
 import { notify } from "@/bridge"
+import { today } from "@/core/dates"
 import { closeSheet, getSheet, openSheet } from "@/data/overlay"
 import type { ImportPlan } from "@/data/import-edit"
 import type { SchoolDraft } from "@/data/school-edit"
@@ -173,11 +174,28 @@ describe("Settings", () => {
         expect(legacy.savePrefs).toHaveBeenLastCalledWith({ celebrate: false })
     })
 
-    it("switches reviews on for this device and runs them", async () => {
+    it("switches reviews on for the account from today, or off, and runs them", async () => {
         settings("study")
-        await act(async () => fireEvent.click(screen.getByRole("checkbox", { name: /review tasks/ })))
-        expect(legacy.writeSetting).toHaveBeenCalledWith("p", { on: true, through: null })
+        const box = () => screen.getByRole("checkbox", { name: /review tasks/ }) as HTMLInputElement
+        expect(box().checked).toBe(false)
+        await act(async () => fireEvent.click(box()))
+        expect(legacy.savePrefs).toHaveBeenCalledWith({ reviews: today() })
         expect(legacy.runReviews).toHaveBeenCalled()
+
+        fake.data.profile.studyPrefs = { goal: 90, dayMin: 15, rest: [0], celebrate: true, reviews: "2026-09-01" }
+        act(() => notify())
+        expect(box().checked).toBe(true)
+        await act(async () => fireEvent.click(box()))
+        expect(legacy.writeSetting).toHaveBeenCalledWith("p", { on: false, through: null })
+        expect(legacy.savePrefs).toHaveBeenLastCalledWith({ reviews: null })
+        fake.data.profile.studyPrefs = { goal: 90, dayMin: 15, rest: [0], celebrate: true }
+    })
+
+    it("shows reviews on from this browser until the setting first syncs", () => {
+        fake.review.on = true
+        settings("study")
+        expect((screen.getByRole("checkbox", { name: /review tasks/ }) as HTMLInputElement).checked).toBe(true)
+        fake.review.on = false
     })
 
     it("has no Import on the Study tab, and sends the school calendar to Import with AI", () => {
@@ -226,6 +244,11 @@ describe("Settings", () => {
         expect(actions.resolveConflict).toHaveBeenCalledWith("c1", true)
         fireEvent.click(screen.getByRole("button", { name: "Discard saved copy" }))
         expect(actions.resolveConflict).toHaveBeenCalledWith("c1", false)
+
+        fireEvent.click(screen.getByRole("button", { name: "Download my data" }))
+        expect(actions.exportData).toHaveBeenCalled()
+        fireEvent.click(screen.getByRole("button", { name: "Download items as CSV" }))
+        expect(actions.exportItemsCsv).toHaveBeenCalled()
 
         fireEvent.click(screen.getByRole("button", { name: "Sign out" }))
         expect(actions.signOut).toHaveBeenCalled()

@@ -312,6 +312,7 @@ export const FLOW_PRESETS: [string, Flow][] = [
   ['Classic 25/5', { steps: [['study', 25], ['break', 5]], rounds: 4 }],
   ['Deep 50/10', { steps: [['study', 50], ['break', 10]], rounds: 3 }],
   ['Anki then read', { steps: [['study', 20], ['break', 5], ['study', 40], ['break', 15]], rounds: 2 }],
+  ['Sprint 15/3', { steps: [['study', 15], ['break', 3]], rounds: 3 }],
 ];
 /* `+v` as the plain JS had it: whatever the stored value is, it is read as a number. */
 const clampInt = (v: unknown, lo: number, hi: number, dflt: number) => Number.isFinite(+(v as number)) ? Math.max(lo, Math.min(hi, Math.round(+(v as number)))) : dflt;
@@ -329,7 +330,8 @@ export function normalizeFlow(raw: unknown): Flow {
 
 /* The study goal and streak rules: a daily goal in minutes (0 = none), the least that
    makes a day count toward the streak, rest days (0 = Sunday) that never break it, and
-   whether to celebrate. The server keeps what it is given; this fills the gaps. */
+   whether to celebrate, and the day spaced reviews were turned on (null = off; missing
+   until it is first saved). The server keeps what it is given; this fills the gaps. */
 const DEFAULT_PREFS: StudyPrefs = { goal: 0, dayMin: 15, rest: [], celebrate: true };
 export function normalizePrefs(raw: unknown): StudyPrefs {
   const p = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>;
@@ -339,6 +341,7 @@ export function normalizePrefs(raw: unknown): StudyPrefs {
     dayMin: clampInt(p.dayMin, 1, 240, DEFAULT_PREFS.dayMin),
     rest,
     celebrate: p.celebrate === undefined ? true : !!p.celebrate,
+    ...('reviews' in p && { reviews: typeof p.reviews === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(p.reviews) ? p.reviews : null }),
   };
 }
 

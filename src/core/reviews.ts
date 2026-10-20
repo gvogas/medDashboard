@@ -2,9 +2,11 @@
 // "Review 1/4 · PHARM Lecture Mon 14 Sep"; marking it done creates the next step, dated
 // from the day it was done: +2, +4, +14 days, which on schedule is days 1, 3, 7 and 21.
 //
-// The setting lives in this browser only (localStorage, per account) with a watermark,
-// `through`, the last lecture date already handled. Ids are derived from the lecture, so
-// two devices that both generate a step write the same row.
+// Whether reviews are on syncs with the account: studyPrefs.reviews is the day they were
+// turned on (null = off). Each browser keeps its own watermark (localStorage, per account),
+// `through`, the last lecture date it has handled: writing it to the profile every day
+// from every device would make profile conflicts. Ids are derived from the lecture, so two
+// devices that both generate a step write the same row.
 
 import { parse, addDays, iso, diffDays, shortDate } from './dates.ts';
 import { classWeekday, courseRunsOn } from './school.ts';
@@ -12,7 +14,9 @@ import type { SchoolCalendar } from './school.ts';
 import type { Course, Item, Meeting } from './types.ts';
 import { REVIEW_ID as ID } from './shared.ts';
 
-/** The setting, per account: on or off, and the last lecture date already handled. */
+/** The setting, per account: on or off, and the last lecture date already handled. In
+    localStorage `on` is what this browser last saw, so it knows when reviews were turned
+    off and back on in between; `effectiveSetting` gives the setting to act on. */
 export interface ReviewSetting { on: boolean; through: string | null }
 
 /** A review step as generated, before normalizeItem fills the rest. */
@@ -42,6 +46,26 @@ export function readSetting(account: string): ReviewSetting {
 }
 export function writeSetting(account: string, v: ReviewSetting): void {
   try { localStorage.setItem(keyFor(account), JSON.stringify(v)); } catch {}
+}
+
+/**
+ * The setting to act on, from the synced day reviews were turned on (null = off) and this
+ * browser's own copy. A browser that has handled nothing since then starts from today, as
+ * turning reviews on always has, and never backfills lectures from before they were on.
+ */
+export function effectiveSetting(since: string | null, local: ReviewSetting): ReviewSetting {
+  if (!since) return { on: false, through: null };
+  const floor = iso(addDays(parse(since), -1));
+  if (!local.on || !local.through) return { on: true, through: null };
+  return { on: true, through: local.through > floor ? local.through : floor };
+}
+
+/**
+ * What to do with a setting kept only in this browser, from before it synced: the day to
+ * save as turned on (today, keeping the watermark), or null when there is nothing to move up.
+ */
+export function legacyReviews(synced: string | null | undefined, local: ReviewSetting, today: string): string | null {
+  return synced === undefined && local.on ? today : null;
 }
 
 /**

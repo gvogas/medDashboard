@@ -52,12 +52,19 @@ export async function getProfile(db, userId) {
   return row ? profileFromRow(row) : null;
 }
 
+/* Study prefs replace the stored ones, except that prefs with no `reviews` (from a tab
+   opened before reviews were synced) keep the stored day reviews were turned on. */
+const PREFS_SQL = `CASE WHEN ?4 IS NULL THEN study_prefs
+  WHEN json_type(?4, '$.reviews') IS NULL AND json_type(study_prefs, '$.reviews') IS NOT NULL THEN json_set(?4, '$.reviews', json_extract(study_prefs, '$.reviews'))
+  ELSE ?4 END`;
+
 export async function updateProfile(db, userId, p, now = Date.now(), revision) {
+  const prefs = p.studyPrefs ? JSON.stringify(p.studyPrefs) : null;
   const saved = await db
     .prepare(
-      `UPDATE users SET display_name = ?, coat_name = ?, coat_role = ?, coat_color = ?, theme = ?, bg = ?, types = COALESCE(?, types), study_flow = COALESCE(?, study_flow), study_prefs = COALESCE(?, study_prefs), school_calendar = COALESCE(?, school_calendar), hidden_sources = COALESCE(?, hidden_sources), term_start = ?, updated_at = ?, revision = revision + 1 WHERE id = ? AND revision = ? RETURNING ${PROFILE_COLS}`,
+      `UPDATE users SET display_name = ?5, coat_name = ?6, coat_role = ?7, coat_color = ?8, theme = ?9, bg = ?10, types = COALESCE(?11, types), study_flow = COALESCE(?12, study_flow), study_prefs = ${PREFS_SQL}, school_calendar = COALESCE(?13, school_calendar), hidden_sources = COALESCE(?14, hidden_sources), term_start = ?15, updated_at = ?3, revision = revision + 1 WHERE id = ?1 AND revision = ?2 RETURNING ${PROFILE_COLS}`,
     )
-    .bind(p.displayName, p.coatName, p.coatRole, p.coatColor, p.theme, p.bg, p.types === null ? null : JSON.stringify(p.types), p.studyFlow ? JSON.stringify(p.studyFlow) : null, p.studyPrefs ? JSON.stringify(p.studyPrefs) : null, p.schoolCalendar ? JSON.stringify(p.schoolCalendar) : null, p.hiddenSources ? JSON.stringify(p.hiddenSources) : null, p.termStart, now, userId, revision ?? -1)
+    .bind(userId, revision ?? -1, now, prefs, p.displayName, p.coatName, p.coatRole, p.coatColor, p.theme, p.bg, p.types === null ? null : JSON.stringify(p.types), p.studyFlow ? JSON.stringify(p.studyFlow) : null, p.schoolCalendar ? JSON.stringify(p.schoolCalendar) : null, p.hiddenSources ? JSON.stringify(p.hiddenSources) : null, p.termStart)
     .first();
   if (!saved) throw new HttpError(409, { error: 'conflict', current: await getProfile(db, userId) });
   return profileFromRow(saved);
