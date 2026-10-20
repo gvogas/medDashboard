@@ -134,7 +134,7 @@ describe('study prefs', () => {
     let res = await api('/api/me', { method: 'PUT', body: { ...body, studyPrefs: { ...prefs, reviews: '2026-09-01' } } });
     expect((await res.json()).studyPrefs.reviews).toBe('2026-09-01');
     res = await api('/api/me', { method: 'PUT', body: { ...body, studyPrefs: { ...prefs, goal: 60 } } });
-    expect((await res.json()).studyPrefs).toEqual({ ...prefs, goal: 60, reviews: '2026-09-01' });
+    expect((await res.json()).studyPrefs).toEqual({ ...prefs, goal: 60, alarms: true, reviews: '2026-09-01' });
     res = await api('/api/me', { method: 'PUT', body: { ...body, studyPrefs: { ...prefs, reviews: null } } });
     expect((await res.json()).studyPrefs.reviews).toBe(null);
     res = await api('/api/me', { method: 'PUT', body: { ...body, studyPrefs: prefs } });
