@@ -9,7 +9,7 @@ import { useEffect, useId, useState } from "react"
 import { cn } from "@/lib/utils"
 import { baseOf, httpUrl, isOpen, isTest, statusesFor, tmeta, typeList } from "@/core/model"
 import { shortDate, today, DOW } from "@/core/dates"
-import { GRADABLE } from "@/core/grades"
+import { GRADABLE, shareOf } from "@/core/grades"
 import { fillTopics, prepLabel, prepPace } from "@/core/prep"
 import { repeatEnds } from "@/core/school"
 import * as store from "@/core/store"
@@ -35,6 +35,7 @@ import { DatePicker } from "./date-picker"
 import { ICONS } from "./prop-icons"
 import { Checklist, Links } from "./item-parts"
 import { RemovedCard } from "./removed"
+import { WeightProp } from "./grade-setup"
 
 const TITLE = "font-serif text-[30px] leading-[1.15] font-[500] tracking-[-.015em]"
 const KEY = "text-muted-foreground"
@@ -55,7 +56,8 @@ export function ClassItemSheet({ itemKey }: { itemKey: string }) {
 function ClassItemCard({ itemKey, bar }: { itemKey: string; bar: boolean }) {
     const { scope, id } = splitKey(itemKey)
     useTyping()
-    const row = useSharedItems().find((it) => it.scope === scope && it.id === id) ?? null
+    const shared = useSharedItems()
+    const row = shared.find((it) => it.scope === scope && it.id === id) ?? null
     const gone = useRemovedItems().find((it) => it.scope === scope && it.id === id) ?? null
     const courseName = useSharedCourses().find((c) => c.scope === scope)?.name ?? "the class"
     const space = useSpaces().find((s) => s.scope === scope) ?? null
@@ -89,6 +91,9 @@ function ClassItemCard({ itemKey, bar }: { itemKey: string; bar: boolean }) {
     const editor = space.role !== "member" && !space.archived
     const courseKey = scope + "/" + row.courseId
     const course = courseByKey(courseKey)
+    /* the class's items of this course: what each item of a grade category is worth */
+    const siblings = shared.filter((x) => x.scope === scope && x.courseId === row.courseId) as Item[]
+    const inCategory = shareOf(it, siblings, course?.gradeCategories).category
     const m = tmeta(it.type)
     const test = isTest(it.type)
     const lectures = !!course && (course.meetings || []).some((x) => x.kind === "Lecture")
@@ -137,7 +142,7 @@ function ClassItemCard({ itemKey, bar }: { itemKey: string; bar: boolean }) {
                     : <h2 className={cn("m-0", TITLE)}>{it.title}</h2>}
 
                 <Section title={<><SharedGlyph /> Class</>} note={by || (editor ? "Everyone in the class sees these" : undefined)}>
-                    {editor ? <ClassFields itemKey={itemKey} it={it} f={f} bg={bg} items={items} course={course} /> : <ClassFacts it={it} />}
+                    {editor ? <ClassFields itemKey={itemKey} it={it} f={f} bg={bg} items={items} course={course} siblings={siblings} /> : <ClassFacts it={it} category={inCategory?.name ?? null} />}
                 </Section>
 
                 <Section title="Yours" note="Only you see these">
@@ -156,7 +161,7 @@ function ClassItemCard({ itemKey, bar }: { itemKey: string; bar: boolean }) {
                                 </span>
                             </Prop>
                         )}
-                        {GRADABLE.includes(baseOf(it.type)) && (
+                        {GRADABLE.includes(baseOf(it.type)) && !inCategory && (
                             <Prop icon={ICONS.weight} label="Your weight" htmlFor={f + "mine"}>
                                 <span className="flex items-center gap-1">
                                     <KeptNumberInput id={f + "mine"} className={cn(QUIET, "w-16")} min={0} max={100} step="any" placeholder={it.weight == null ? "—" : String(it.weight)} value={mark.weight ?? ""}
@@ -207,7 +212,7 @@ function ClassItemCard({ itemKey, bar }: { itemKey: string; bar: boolean }) {
 }
 
 /* The class's facts, for its owner and editors: each change saves for everyone. */
-function ClassFields({ itemKey, it, f, bg, items, course }: { itemKey: string; it: Item; f: string; bg: string; items: Item[]; course: Course | null }) {
+function ClassFields({ itemKey, it, f, bg, items, course, siblings }: { itemKey: string; it: Item; f: string; bg: string; items: Item[]; course: Course | null; siblings: Item[] }) {
     const cal = schoolCal()
     const ends = repeatEnds(cal, it.date)
     const types = typeList(bg, items).filter((t) => !t.custom && (t.id === it.type || !t.hidden))
@@ -231,12 +236,7 @@ function ClassFields({ itemKey, it, f, bg, items, course }: { itemKey: string; i
                         onChange={(e) => typeRow(itemKey, { where: e.target.value })} onBlur={() => void flushTyping()} />
                 </Prop>
                 {GRADABLE.includes(baseOf(it.type)) && (
-                    <Prop icon={ICONS.weight} label="Weight" htmlFor={f + "weight"}>
-                        <span className="flex items-center gap-1">
-                            <KeptNumberInput id={f + "weight"} className={cn(QUIET, "w-16")} min={0} max={100} step="any" placeholder="—" value={it.weight ?? ""} onChange={(e) => set("weight", e.target.value)} />
-                            <span className="text-muted-foreground">% of the course grade</span>
-                        </span>
-                    </Prop>
+                    <WeightProp item={it} course={course} items={siblings} kept onWeight={(v) => set("weight", v)} onCategory={(cat) => set("category", cat)} />
                 )}
                 {REPEATS.includes(it.type) && (
                     <Prop icon={ICONS.repeat} label="Repeat" top>
@@ -266,7 +266,7 @@ function ClassFields({ itemKey, it, f, bg, items, course }: { itemKey: string; i
 }
 
 /* The class's facts, for a member: read-only. */
-function ClassFacts({ it }: { it: Item }) {
+function ClassFacts({ it, category }: { it: Item; category: string | null }) {
     const when = it.recur === "weekly" ? "Every " + DOW[it.weekday ?? 0] : shortDate(it.date)
     return (
         <>
@@ -274,7 +274,7 @@ function ClassFacts({ it }: { it: Item }) {
                 <dt className={KEY}>Type</dt><dd className="m-0">{tmeta(it.type).label}</dd>
                 <dt className={KEY}>When</dt><dd className="m-0">{when}{it.start ? " · " + it.start + (it.end ? "–" + it.end : "") : ""}</dd>
                 <dt className={KEY}>Room</dt><dd className="m-0">{it.where || "—"}</dd>
-                <dt className={KEY}>Weight</dt><dd className="m-0">{it.weight == null ? "—" : it.weight + "%"}</dd>
+                <dt className={KEY}>Weight</dt><dd className="m-0">{category ? "Counts in " + category : it.weight == null ? "—" : it.weight + "%"}</dd>
             </dl>
             {it.notes && <p className="m-0 text-[12.5px] whitespace-pre-wrap text-ink-2">{it.notes}</p>}
             {it.links.length > 0 && (
