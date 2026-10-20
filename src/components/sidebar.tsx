@@ -5,6 +5,7 @@
 // data/sidebar.ts.
 
 import { MotionConfig } from "framer-motion"
+import { SidebarGpa } from "./sidebar-gpa"
 import { useCourses, useItems, useProfile, useSpaces } from "@/data/store"
 import { courseKeyOf, courseSource, keyOf } from "@/data/effective"
 import { cn } from "@/lib/utils"
@@ -109,6 +110,7 @@ function CourseList() {
                 </div>
                 <NewMenu />
             </div>
+            <SidebarGpa />
         </section>
     )
 }

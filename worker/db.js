@@ -10,7 +10,7 @@ import { TASK_LIMIT } from './projects.js';
 import { MARK_DEFAULTS, stable } from '../src/core/shared.ts';
 
 const PROFILE_COLS =
-  'id, username, display_name, coat_name, coat_role, coat_color, theme, bg, types, study_flow, study_prefs, school_calendar, hidden_sources, term_start, is_admin, created_at, updated_at, revision';
+  'id, username, display_name, coat_name, coat_role, coat_color, theme, bg, types, study_flow, study_prefs, school_calendar, hidden_sources, grading, term_start, is_admin, created_at, updated_at, revision';
 
 function profileFromRow(r) {
   return {
@@ -25,6 +25,7 @@ function profileFromRow(r) {
     studyPrefs: prefsOut(r.study_prefs),
     schoolCalendar: prefsOut(r.school_calendar),
     hiddenSources: jsonOut(r.hidden_sources),
+    grading: prefsOut(r.grading),
     termStart: r.term_start,
     isAdmin: r.is_admin === 1,
     createdAt: r.created_at,
@@ -62,9 +63,9 @@ export async function updateProfile(db, userId, p, now = Date.now(), revision) {
   const prefs = p.studyPrefs ? JSON.stringify(p.studyPrefs) : null;
   const saved = await db
     .prepare(
-      `UPDATE users SET display_name = ?5, coat_name = ?6, coat_role = ?7, coat_color = ?8, theme = ?9, bg = ?10, types = COALESCE(?11, types), study_flow = COALESCE(?12, study_flow), study_prefs = ${PREFS_SQL}, school_calendar = COALESCE(?13, school_calendar), hidden_sources = COALESCE(?14, hidden_sources), term_start = ?15, updated_at = ?3, revision = revision + 1 WHERE id = ?1 AND revision = ?2 RETURNING ${PROFILE_COLS}`,
+      `UPDATE users SET display_name = ?5, coat_name = ?6, coat_role = ?7, coat_color = ?8, theme = ?9, bg = ?10, types = COALESCE(?11, types), study_flow = COALESCE(?12, study_flow), study_prefs = ${PREFS_SQL}, school_calendar = COALESCE(?13, school_calendar), hidden_sources = COALESCE(?14, hidden_sources), grading = COALESCE(?16, grading), term_start = ?15, updated_at = ?3, revision = revision + 1 WHERE id = ?1 AND revision = ?2 RETURNING ${PROFILE_COLS}`,
     )
-    .bind(userId, revision ?? -1, now, prefs, p.displayName, p.coatName, p.coatRole, p.coatColor, p.theme, p.bg, p.types === null ? null : JSON.stringify(p.types), p.studyFlow ? JSON.stringify(p.studyFlow) : null, p.schoolCalendar ? JSON.stringify(p.schoolCalendar) : null, p.hiddenSources ? JSON.stringify(p.hiddenSources) : null, p.termStart)
+    .bind(userId, revision ?? -1, now, prefs, p.displayName, p.coatName, p.coatRole, p.coatColor, p.theme, p.bg, p.types === null ? null : JSON.stringify(p.types), p.studyFlow ? JSON.stringify(p.studyFlow) : null, p.schoolCalendar ? JSON.stringify(p.schoolCalendar) : null, p.hiddenSources ? JSON.stringify(p.hiddenSources) : null, p.termStart, p.grading ? JSON.stringify(p.grading) : null)
     .first();
   if (!saved) throw new HttpError(409, { error: 'conflict', current: await getProfile(db, userId) });
   return profileFromRow(saved);
@@ -92,19 +93,19 @@ const flowOut = (v) => {
 
 const TABLES = {
   courses: {
-    cols: { code: 'code', name: 'name', color: 'color', instructor: 'instructor', term: 'term', archived: 'archived', meetings: 'meetings', target: 'target' },
-    toRow: (c) => ({ ...c, archived: c.archived ? 1 : 0, meetings: jsonIn(c.meetings) }),
-    fromRow: (r) => ({ archived: r.archived === 1, meetings: jsonOut(r.meetings), target: r.target ?? null }),
+    cols: { code: 'code', name: 'name', color: 'color', instructor: 'instructor', term: 'term', archived: 'archived', meetings: 'meetings', target: 'target', credits: 'credits', gradeCategories: 'grade_categories' },
+    toRow: (c) => ({ ...c, archived: c.archived ? 1 : 0, meetings: jsonIn(c.meetings), gradeCategories: c.gradeCategories === undefined ? undefined : jsonIn(c.gradeCategories) }),
+    fromRow: (r) => ({ archived: r.archived === 1, meetings: jsonOut(r.meetings), target: r.target ?? null, credits: r.credits ?? null, gradeCategories: jsonOut(r.grade_categories) }),
   },
   items: {
     cols: {
       type: 'type', title: 'title', courseId: 'course_id', date: 'date', start: 'start', end: 'end', where: 'location',
       status: 'status', grade: 'grade', weight: 'weight', notes: 'notes', checklist: 'checklist', links: 'links',
       recur: 'recur', weekday: 'weekday', recurUntil: 'recur_until', dept: 'dept', completedAt: 'completed_at',
-      classId: 'class_id',
+      classId: 'class_id', category: 'category',
     },
     toRow: (i) => ({ ...i, checklist: jsonIn(i.checklist), links: jsonIn(i.links) }),
-    fromRow: (r) => ({ checklist: jsonOut(r.checklist), links: jsonOut(r.links) }),
+    fromRow: (r) => ({ checklist: jsonOut(r.checklist), links: jsonOut(r.links), category: r.category ?? null }),
   },
   quotes: {
     cols: { text: 'text', source: 'source' },
@@ -137,6 +138,10 @@ const TABLES = {
 const ACHIEVEMENT_LIMIT = 30;
 /* Labels an old client never sends (spec §16): left out of a body, the stored value stays. */
 const KEPT_WHEN_ABSENT = new Set(['classId', 'spaceId']);
+/* Nor the grade fields (0007_grades.sql): left out, the column is not written, so the stored
+   value stays and a new row starts with the column's default. */
+const GRADE_FIELDS = new Set(['credits', 'gradeCategories', 'category']);
+const unsent = (fields) => ([field]) => !(GRADE_FIELDS.has(field) && fields[field] === undefined);
 
 /** The scope of a person's own courses and items. */
 export const personal = (userId) => 'u:' + userId;
@@ -172,7 +177,7 @@ function upsertStmt(db, table, userId, id, fields, now, revision, guard = null) 
   const row = t.toRow(fields);
   /* An old client giving a filed item a course of yours unfiles it (the u: CHECK allows one or the other). */
   const absent = (field) => KEPT_WHEN_ABSENT.has(field) && field in t.cols && fields[field] === undefined;
-  const cols = Object.entries(t.cols).filter(([field]) => !(field === 'classId' && absent('classId') && !fields.courseId));
+  const cols = Object.entries(t.cols).filter(([field]) => !(field === 'classId' && absent('classId') && !fields.courseId)).filter(unsent(fields));
   const owner = ownerCol(table), who = ownerOf(table, userId);
   const names = [owner, 'id', ...cols.map(([, col]) => col), 'created_at', 'updated_at', 'deleted_at'];
   const values = [who, id, ...cols.map(([field]) => row[field] ?? null), now, now, null];
@@ -338,8 +343,8 @@ function sharedToApi(table, r) {
 }
 /* What each field holds before anyone sets it: what a first write merges against. */
 const DEFAULTS = {
-  courses: { code: '', name: '', color: null, instructor: '', term: '', meetings: [] },
-  items: { type: 'task', title: '', courseId: null, date: null, start: '', end: '', where: '', status: 'todo', weight: null, notes: '', checklist: [], links: [], recur: null, weekday: null, recurUntil: null, dept: '', completedAt: null, assignees: [] },
+  courses: { code: '', name: '', color: null, instructor: '', term: '', meetings: [], credits: null, gradeCategories: [] },
+  items: { type: 'task', title: '', courseId: null, date: null, start: '', end: '', where: '', status: 'todo', weight: null, notes: '', checklist: [], links: [], recur: null, weekday: null, recurUntil: null, dept: '', completedAt: null, assignees: [], category: null },
 };
 /* An item's course must be a live course of the same scope (the class's one course). */
 const COURSE_LIVE = '(? IS NULL OR EXISTS (SELECT 1 FROM courses WHERE scope = ? AND id = ? AND deleted_at IS NULL))';
@@ -365,7 +370,7 @@ export async function getShared(db, table, scope, userId, id) {
 
 /* Insert or replace a whole shared row at a revision, as upsertStmt does for a personal one. */
 function sharedUpsertStmt(db, table, scope, userId, id, fields, now, revision, guard) {
-  const t = TABLES[table], row = t.toRow(fields), cols = Object.entries(t.cols);
+  const t = TABLES[table], row = t.toRow(fields), cols = Object.entries(t.cols).filter(unsent(fields));
   const names = ['scope', 'id', ...cols.map(([, col]) => col), 'updated_by', 'created_at', 'updated_at', 'deleted_at'];
   const values = [scope, id, ...cols.map(([field]) => row[field] ?? null), userId, now, now, null];
   const updates = [...cols.map(([, col]) => `${col} = excluded.${col}`), 'updated_by = excluded.updated_by', 'updated_at = excluded.updated_at', 'deleted_at = NULL', 'revision = revision + 1'];

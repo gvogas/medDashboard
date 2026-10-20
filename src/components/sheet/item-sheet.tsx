@@ -36,6 +36,7 @@ import { DatePicker } from "./date-picker"
 import { ICONS } from "./prop-icons"
 import { Checklist, Links } from "./item-parts"
 import { ShareItem } from "./share-item"
+import { WeightProp } from "./grade-setup"
 
 /** Fields saved once typing pauses; the rest save at once. */
 const TYPED: ItemField[] = ["title", "notes", "where", "dept", "checklist"]
@@ -221,12 +222,8 @@ export function ItemSheet({ id, draft }: { id?: string; draft?: Item }) {
                     )}
 
                     {gradable && (
-                        <Prop icon={ICONS.weight} label="Weight" htmlFor={f + "weight"}>
-                            <span className="flex items-center gap-1">
-                                <NumberInput id={f + "weight"} className={cn(QUIET, "w-16")} min={0} max={100} step="any" placeholder="—" value={it.weight ?? ""} onChange={(e) => set("weight", e.target.value)} />
-                                <span className="text-muted-foreground">% of the course grade</span>
-                            </span>
-                        </Prop>
+                        <WeightProp item={it} course={c} items={items.filter((x) => itemCourseKey(x) === itemCourseKey(it))}
+                            onWeight={(v) => set("weight", v)} onCategory={(id) => set("category", id)} />
                     )}
 
                     {it.status === "graded" && (
