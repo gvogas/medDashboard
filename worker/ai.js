@@ -23,15 +23,17 @@ export function timeLeft(deadline) {
 /** One model call. A spent allowance (error 4006) is a 429 of its own; no answer in `timeoutMs` a 504. */
 export async function runModel(ai, model, input, what = 'ai', timeoutMs = TIMEOUT_MS) {
   let timer;
-  const late = new Promise((_, reject) => { timer = setTimeout(() => reject(new HttpError(504, { error: 'ai_timeout' })), timeoutMs); });
+  const late = new Promise((_, reject) => { timer = setTimeout(() => reject(Object.assign(new HttpError(504, { error: 'ai_timeout' }), { detail: model + ' gave no answer in ' + Math.round(timeoutMs / 1000) + ' s' })), timeoutMs); });
   let out;
   try {
     out = await Promise.race([ai.run(model, input), late]);
   } catch (e) {
     if (e instanceof HttpError) throw e;
     /* 4006: the account's free daily neurons are spent; it resets at 00:00 UTC. */
-    if (/\b4006\b|daily free allocation/i.test(e?.message || '')) throw new HttpError(429, { error: 'outline_quota' });
-    throw e;
+    const said = String(e?.message || e).split('\n')[0].slice(0, 200);
+    if (/\b4006\b|daily free allocation/i.test(said)) throw Object.assign(new HttpError(429, { error: 'outline_quota' }), { detail: model + ': ' + said });
+    /* the model's name with Cloudflare's words, for the error log */
+    throw new Error(model + ': ' + said);
   } finally {
     clearTimeout(timer);
   }

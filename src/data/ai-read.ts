@@ -50,7 +50,7 @@ const AI_ERRORS: Record<string, string> = {
     outline_unsupported: "That kind of file cannot be read. Try a PDF or Word document.",
     outline_unavailable: "The reader is not available right now. Try again later.",
     get outline_limit() { return "That is the limit of " + readsLimit() + " AI reads for today (outlines, timetables and calendars). Try again tomorrow." },
-    outline_quota: "The free AI allowance for today is used up. It resets at 8 pm Eastern (midnight UTC).",
+    outline_quota: "The free AI allowance for today is used up. It resets at midnight UTC (7 or 8 pm Eastern).",
     too_large: "That file is over 5 MB.",
     ai_timeout: "The AI took too long to answer. Try again in a minute.",
     image_unsupported: "That is a picture. Outlines and calendars need a PDF, Word or text file; a timetable screenshot goes under Class schedule.",
