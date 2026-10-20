@@ -7,7 +7,7 @@
 import { data } from "@/core/store"
 import { today } from "@/core/dates"
 import { planSchedule, type Schedule } from "@/core/importers/plan"
-import { shrinkImage } from "@/core/image"
+import { shrinkTimetable } from "@/core/image"
 import { pdfTimetable } from "@/core/pdftext"
 import { api } from "@/core/api"
 import { schoolCal } from "@/data/query"
@@ -29,11 +29,18 @@ export const semesterChanges = (plan: ImportPlan) =>
 
 /** A timetable was picked: read it with AI, then check it in the schedule sheet. */
 export function readScheduleFile(file: File, note: NoteKey = "aiNote") {
+    /* a screenshot's grid, found as it is made smaller: sent with it, so the days and times come from the picture's lines */
+    let grid = ""
     return readWithAi(file, {
         what: "timetable", title: "Reading your timetable",
         steps: ["Reading the timetable", "Finding courses and class times", "Matching them to your courses"],
         flag: "scheduleBusy", note, refresh: notify,
-        prepare: (f) => (isImage(f) ? shrinkImage(f) : asSent(f, pdfTimetable)),
+        prepare: async (f) => {
+            if (!isImage(f)) return asSent(f, pdfTimetable)
+            const shrunk = await shrinkTimetable(f)
+            grid = shrunk.grid
+            return shrunk.blob
+        },
         /* a phone or retina screenshot can be over 5 MB; what is sent is a 1600 px JPEG */
         maxBytes: isImage(file) ? 4 * MAX_FILE : MAX_FILE,
         errors: {
@@ -44,7 +51,7 @@ export function readScheduleFile(file: File, note: NoteKey = "aiNote") {
             ...(isImage(file) ? { too_large: "That picture is too large." } : {}),
         },
         cache: ["timetable", String(data.profile?.id ?? ""), today().slice(0, 7), JSON.stringify(readContext())],
-        call: (body, signal) => api.readSchedule(body, { name: file.name, today: today(), ...readContext() }, signal),
+        call: (body, signal) => api.readSchedule(body, { name: file.name, today: today(), ...readContext(), ...(grid ? { grid } : {}) }, signal),
         done: (read: Schedule) => openSheet({
             kind: "schedule", name: file.name,
             plan: planSchedule(read, data, defaultTerm(schoolCal(), read.term || "", today())) as ImportPlan,

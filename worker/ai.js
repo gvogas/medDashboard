@@ -23,15 +23,17 @@ export function timeLeft(deadline) {
 /** One model call. A spent allowance (error 4006) is a 429 of its own; no answer in `timeoutMs` a 504. */
 export async function runModel(ai, model, input, what = 'ai', timeoutMs = TIMEOUT_MS) {
   let timer;
-  const late = new Promise((_, reject) => { timer = setTimeout(() => reject(new HttpError(504, { error: 'ai_timeout' })), timeoutMs); });
+  const late = new Promise((_, reject) => { timer = setTimeout(() => reject(Object.assign(new HttpError(504, { error: 'ai_timeout' }), { detail: model + ' gave no answer in ' + Math.round(timeoutMs / 1000) + ' s' })), timeoutMs); });
   let out;
   try {
     out = await Promise.race([ai.run(model, input), late]);
   } catch (e) {
     if (e instanceof HttpError) throw e;
     /* 4006: the account's free daily neurons are spent; it resets at 00:00 UTC. */
-    if (/\b4006\b|daily free allocation/i.test(e?.message || '')) throw new HttpError(429, { error: 'outline_quota' });
-    throw e;
+    const said = String(e?.message || e).split('\n')[0].slice(0, 200);
+    if (/\b4006\b|daily free allocation/i.test(said)) throw Object.assign(new HttpError(429, { error: 'outline_quota' }), { detail: model + ': ' + said });
+    /* the model's name with Cloudflare's words, for the error log */
+    throw new Error(model + ': ' + said);
   } finally {
     clearTimeout(timer);
   }
@@ -40,15 +42,67 @@ export async function runModel(ai, model, input, what = 'ai', timeoutMs = TIMEOU
   return out;
 }
 
-/** The model's answer as an object, or null: gpt-oss answers in JSON text, sometimes wrapped; JSON mode answers an object. */
-export function modelJson(raw) {
+/**
+ * The text or object a model answered with, from any of the shapes Workers AI hands back:
+ * chat-completions ({choices: [{message: {content}}]}, content a string or a list of parts, or
+ * a tool call's arguments), the Responses API ({output: [{content: [{text}]}]} or output_text)
+ * and Workers AI's own ({response}, text or, in JSON mode, an object).
+ */
+export function modelAnswer(raw) {
   let o = raw;
-  if (o && typeof o === 'object' && Array.isArray(o.choices)) o = o.choices[0]?.message?.content;
-  if (typeof o === 'string') {
-    const m = o.match(/\{[\s\S]*\}/);
-    try { o = m ? JSON.parse(m[0]) : null; } catch { o = null; }
+  for (let i = 0; i < 4 && o && typeof o === 'object' && !Array.isArray(o); i++) {
+    const msg = Array.isArray(o.choices) ? o.choices[0]?.message : null;
+    const call = (msg?.tool_calls || o.tool_calls)?.[0];
+    const said = Array.isArray(o.output)
+      ? o.output.filter((p) => Array.isArray(p?.content)).flatMap((p) => p.content).map(partText).join('')
+      : '';
+    /* a reasoning model cut off at max_tokens has no content: '' then, not the whole reply */
+    const next = msg ? (msg.content || call?.function?.arguments || call?.arguments || '')
+      : 'response' in o && o.response != null && o.response !== '' ? o.response
+      : typeof o.output_text === 'string' ? o.output_text
+      : said || (call ? call.function?.arguments ?? call.arguments : undefined);
+    if (next === undefined) break;
+    o = next;
+  }
+  return Array.isArray(o) && o.length && o.every((p) => p && typeof p === 'object' && typeof p.text === 'string') ? o.map(partText).join('') : o;
+}
+const partText = (p) => (typeof p === 'string' ? p : typeof p?.text === 'string' ? p.text : '');
+
+/* the first {...} or [...] that parses, after any code fence: models wrap JSON in prose or ```json */
+function parseLoose(text) {
+  const s = text.replace(/```(?:json)?/gi, '');
+  /* whichever opens first: a list of objects is a list, not its first object */
+  const pairs = [['{', '}'], ['[', ']']].sort((a, b) => (s.indexOf(a[0]) + 1 || Infinity) - (s.indexOf(b[0]) + 1 || Infinity));
+  for (const [open, close] of pairs) {
+    const from = s.indexOf(open), to = s.lastIndexOf(close);
+    if (from < 0 || to <= from) continue;
+    try { return JSON.parse(s.slice(from, to + 1)); } catch { /* the next shape */ }
+  }
+  return null;
+}
+
+/**
+ * The model's answer as an object, or null: gpt-oss answers in JSON text, sometimes wrapped;
+ * JSON mode answers an object. A bare list is the object's `items`; an answer that is the
+ * schema itself with the values in its `properties` (a small model's slip) is unwrapped.
+ */
+export function modelJson(raw) {
+  let o = modelAnswer(raw);
+  if (typeof o === 'string') o = parseLoose(o);
+  if (Array.isArray(o)) o = { items: o };
+  if (o && typeof o === 'object' && o.type === 'object' && o.properties && typeof o.properties === 'object') {
+    /* a real schema's properties are each {type: …}; an answer put there has values */
+    if (!Object.values(o.properties).every((v) => v && typeof v === 'object' && 'type' in v)) o = o.properties;
   }
   return o && typeof o === 'object' ? o : null;
+}
+
+/** The start of what a model said, for the error log: enough to see what went wrong, never a whole document. */
+export function answerSnippet(raw, max = 400) {
+  const a = modelAnswer(raw);
+  let s;
+  try { s = typeof a === 'string' ? a : JSON.stringify(a ?? null); } catch { s = String(a); }
+  return String(s).replace(/\s+/g, ' ').trim().slice(0, max);
 }
 
 /* a line that is always a page number: "Page 3", "Page 3 of 12", "- 3 -" */
@@ -114,7 +168,17 @@ export function tidyText(text) {
   }).join('\n\n').trim();
 }
 
-const reply = (out) => out?.response ?? out;
+const reply = (out) => (out && typeof out === 'object' && out.response != null && out.response !== '' ? out.response : out);
+
+/* An answer `clean` refused, said in the error log (its `detail`, never sent to the browser). */
+function cleaned(clean, answer, model) {
+  try {
+    return clean(answer);
+  } catch (e) {
+    if (e instanceof HttpError && !e.detail) e.detail = model + ' answered: ' + answerSnippet(answer);
+    throw e;
+  }
+}
 
 /* the retry is skipped when less than this is left of the read's deadline */
 const MIN_RETRY_MS = 15_000;
@@ -138,10 +202,10 @@ export async function askJson(ai, model, input, clean, what = 'ai', { timeoutMs 
   const start = Date.now();
   const out = await runModel(ai, model, input, what, timeoutMs);
   const answer = reply(out);
-  if (modelJson(answer)) return clean(answer);
+  if (modelJson(answer)) return cleaned(clean, answer, model);
   const left = timeoutMs - (Date.now() - start);
-  if (left < minRetryMs || cutOff(out, input)) return clean(answer);
-  const text = Array.isArray(answer?.choices) ? answer.choices[0]?.message?.content : answer;
+  if (left < minRetryMs || cutOff(out, input)) return cleaned(clean, answer, model);
+  const text = modelAnswer(answer);
   const said = typeof text === 'string' ? text : JSON.stringify(text ?? null);
   const again = reply(await runModel(ai, model, {
     ...input,
@@ -149,7 +213,7 @@ export async function askJson(ai, model, input, clean, what = 'ai', { timeoutMs 
       { role: 'assistant', content: said.slice(0, 2000) },
       { role: 'user', content: 'That was not one valid JSON object. Answer again with only the JSON object, nothing else.' }],
   }, what + ' retry', left));
-  return clean(again);
+  return cleaned(clean, again, model);
 }
 
 /** A list sent as one query value ("Fall 2026|Winter 2027"), trimmed, at most `max` of `len` characters. */

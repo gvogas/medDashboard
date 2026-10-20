@@ -225,7 +225,7 @@ describe("the reading card", () => {
     it("puts what went wrong in the note", async () => {
         const refresh = vi.fn()
         await act(() => read(async () => { throw new fake.ApiError(429, { error: "outline_limit" }) }, vi.fn(), refresh))
-        expect(fake.ui.importNote).toEqual({ text: "That is the limit of 10 AI reads for today (outlines, timetables and calendars). Try again tomorrow.", error: true })
+        expect(fake.ui.importNote).toEqual({ text: "That is the limit of 10 AI reads for today (outlines, timetables and calendars). Try again tomorrow. (code: outline_limit)", error: true })
         fake.ui.aiLimit = 20
         await act(() => read(async () => { throw new fake.ApiError(429, { error: "outline_limit" }) }))
         expect((fake.ui.importNote as { text: string }).text).toMatch(/^That is the limit of 20 AI reads/)
@@ -234,14 +234,26 @@ describe("the reading card", () => {
         expect(refresh).toHaveBeenCalled()
 
         await act(() => read(async () => { throw new TypeError("Failed to fetch") }))
-        expect(fake.ui.importNote).toEqual({ text: "You seem to be offline. Reading outlines needs a connection.", error: true })
+        expect(fake.ui.importNote).toEqual({ text: "You seem to be offline. Reading outlines needs a connection. (code: network)", error: true })
 
         /* switched off by the admins mid-read: their words, not a generic error */
         await act(() => read(async () => { throw new fake.ApiError(503, { error: "maintenance", feature: "import" }) }))
-        expect(fake.ui.importNote).toEqual({ text: "We’re fixing something here. Your data is safe and keeps syncing. Check back soon.", error: true })
+        expect(fake.ui.importNote).toEqual({ text: "We’re fixing something here. Your data is safe and keeps syncing. Check back soon. (code: maintenance)", error: true })
 
         await act(() => read(async () => { throw new fake.ApiError(504, { error: "ai_timeout" }) }))
-        expect(fake.ui.importNote).toEqual({ text: "The AI took too long to answer. Try again in a minute.", error: true })
+        expect(fake.ui.importNote).toEqual({ text: "The AI took too long to answer. Try again in a minute. (code: ai_timeout)", error: true })
+
+        /* the browser gave up waiting, and a code the app has no words for */
+        await act(() => read(async () => { throw new DOMException("The request timed out. Try again.", "TimeoutError") }))
+        expect(fake.ui.importNote).toEqual({ text: "The outline took too long to read. Try again in a minute. (code: client_timeout)", error: true })
+        await act(() => read(async () => { throw new fake.ApiError(500, {}) }))
+        expect(fake.ui.importNote).toEqual({ text: "The outline could not be read. (code: 500)", error: true })
+
+        /* the answer came, but the preview could not be made from it: not "offline" */
+        const spy = vi.spyOn(console, "error").mockImplementation(() => {})
+        await act(() => read(async () => ({ ok: 1 }), vi.fn(() => { throw new TypeError("x is undefined") })))
+        expect(fake.ui.importNote).toEqual({ text: "The outline was read, but its preview could not be shown. Try again, or another file. (code: preview_failed)", error: true })
+        spy.mockRestore()
 
         await act(() => read(vi.fn(), vi.fn(), vi.fn(), async () => { throw new Error("locked") }))
         expect(fake.ui.importNote).toEqual({ text: "That file could not be opened. Is it a damaged or locked PDF?", error: true })

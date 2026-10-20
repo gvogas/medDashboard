@@ -199,7 +199,9 @@ describe('the daily attempt', () => {
       .bind('outline:u-outline-empty', OUTLINE_DAILY_LIMIT - 1, Date.now() + 3_600_000).run();
     const post = (body) => call('/api/outline?name=a.txt', { method: 'POST', headers: { 'content-type': 'text/plain' }, body });
     for (let i = 0; i < 3; i++) expect(await (await post('too short')).json()).toEqual({ error: 'outline_empty' });
-    expect((await post(OUTLINE)).status).toBe(503);   // the last attempt reaches the (absent) model
+    expect((await post(OUTLINE)).status).toBe(503);   // reaches the (absent) model, and the read is given back
+    expect((await post(OUTLINE)).status).toBe(503);
+    await env.DB.prepare('UPDATE request_limits SET hits = ? WHERE key = ?').bind(OUTLINE_DAILY_LIMIT, 'outline:u-outline-empty').run();
     expect((await post(OUTLINE)).status).toBe(429);
     expect((await post('too short')).status).toBe(422);
   });
@@ -218,16 +220,28 @@ describe('POST /api/outline', () => {
     expect((await call('/api/outline', { method: 'POST', headers: { 'content-type': 'text/plain' }, body: big })).status).toBe(413);
   });
 
-  it('answers 503 when Workers AI is out of reach, and stops after the daily limit', async () => {
-    const call = await signIn();
+  it('answers 503 when Workers AI is out of reach and gives the read back; stops at the daily limit', async () => {
+    const call = await signIn('outline-down');
     const post = () => call('/api/outline?name=a.txt', { method: 'POST', headers: { 'content-type': 'text/plain' }, body: OUTLINE });
     const first = await post();
     expect(first.status).toBe(503);
     expect(await first.json()).toEqual({ error: 'outline_unavailable' });
-    for (let i = 1; i < 10; i++) await post();
+    for (let i = 1; i < 12; i++) expect((await post()).status).toBe(503);
+    expect(await (await call('/api/ai/reads')).json()).toEqual({ left: OUTLINE_DAILY_LIMIT, limit: OUTLINE_DAILY_LIMIT });
+    await env.DB.prepare('UPDATE request_limits SET hits = ? WHERE key = ?').bind(OUTLINE_DAILY_LIMIT, 'outline:u-outline-down').run();
     const over = await post();
     expect(over.status).toBe(429);
     expect((await over.json()).error).toBe('outline_limit');
+  });
+
+  it('puts every failed read in the error log with its code, the expected ones too', async () => {
+    const call = await signIn('outline-log');
+    await call('/api/outline?name=a.txt', { method: 'POST', headers: { 'content-type': 'text/plain' }, body: 'too short' });
+    await call('/api/outline?name=a.txt', { method: 'POST', headers: { 'content-type': 'text/plain' }, body: OUTLINE });
+    const { results } = await env.DB.prepare("SELECT status, route, message FROM error_log WHERE user_id = 'u-outline-log' ORDER BY at, id").all();
+    expect(results.map((r) => [r.status, r.route])).toEqual([[422, '/api/outline'], [503, '/api/outline']]);
+    expect(results[0].message).toMatch(/^outline_empty · outline · text\/plain 9 bytes · \d+ ms$/);
+    expect(results[1].message).toMatch(/^outline_unavailable · outline · text\/plain \d+ bytes · \d+ ms · read given back · /);
   });
 });
 

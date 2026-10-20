@@ -9,7 +9,7 @@ const fake = vi.hoisted(() => ({
     ui: { view: "week", bg: "med", course: "all", search: "", types: {}, aiLeft: null as number | null, aiLimit: null as number | null, aiNote: null as unknown, importNote: null as unknown },
     cal: null as unknown,
 }))
-const legacy = vi.hoisted(() => ({ saveRows: vi.fn(async (_rows: unknown) => {}), saveProfile: vi.fn(), toast: vi.fn(), shrink: vi.fn(async () => new Blob(["j"], { type: "image/jpeg" })) }))
+const legacy = vi.hoisted(() => ({ saveRows: vi.fn(async (_rows: unknown) => {}), saveProfile: vi.fn(), toast: vi.fn(), shrink: vi.fn(async (_f?: Blob) => new Blob(["j"], { type: "image/jpeg" })) }))
 const ai = vi.hoisted(() => ({ readWithAi: vi.fn(), refreshReads: vi.fn(async () => {}), asSent: vi.fn(async (f: File) => f as Blob), MAX_FILE: 5 * 1024 * 1024 }))
 const pdfTimetable = vi.hoisted(() => vi.fn())
 vi.mock("@/core/store", () => ({
@@ -23,7 +23,7 @@ vi.mock("@/data/query", () => ({ schoolCal: () => fake.cal, termStart: () => nul
 vi.mock("@/core/api", () => ({ api: { readSchedule: vi.fn(), readOutline: vi.fn(), readSchool: vi.fn() } }))
 vi.mock("@/data/ai-read", () => ai)
 vi.mock("@/data/toast", () => ({ toast: legacy.toast }))
-vi.mock("@/core/image", () => ({ shrinkImage: legacy.shrink }))
+vi.mock("@/core/image", () => ({ shrinkImage: legacy.shrink, shrinkTimetable: async (f: Blob) => ({ blob: await legacy.shrink(f), grid: "" }) }))
 vi.mock("@/core/pdftext", () => ({ pdfTimetable }))
 vi.mock("@/data/actions", () => ({ openSettings: vi.fn() }))
 
@@ -122,6 +122,50 @@ describe("the class schedule preview", () => {
         await act(async () => fireEvent.click(await screen.findByRole("button", { name: "Add 3 classes" })))
         expect(legacy.toast).toHaveBeenCalledWith("The classes were not all added: offline", { error: true, ms: 8000 })
         expect((screen.getByRole("button", { name: "Add 3 classes" }) as HTMLButtonElement).disabled).toBe(false)
+    })
+
+    it("lets each class be fixed before it is added: kind, day, times and room", async () => {
+        act(() => openSheet({ kind: "schedule", plan: plan(), name: "timetable.png" }))
+        const row = await screen.findByRole("group", { name: "BIOL266 Lecture Mon 09:00" })
+        fireEvent.change(within(row).getByLabelText("Kind of BIOL266 Lecture Mon 09:00"), { target: { value: "Lab" } })
+        const now = screen.getByRole("group", { name: "BIOL266 Lab Mon 09:00" })
+        fireEvent.change(within(now).getByLabelText("Day of BIOL266 Lab Mon 09:00"), { target: { value: "2" } })
+        const start = screen.getByLabelText("Start of BIOL266 Lab Tue 09:00")
+        fireEvent.focus(start)
+        fireEvent.change(start, { target: { value: "8:30" } })
+        fireEvent.blur(start)
+        const room = screen.getByLabelText("Room of BIOL266 Lab Tue 08:30")
+        fireEvent.change(room, { target: { value: "D-243" } })
+        await act(async () => fireEvent.click(screen.getByRole("button", { name: "Add 3 classes" })))
+        const rows = legacy.saveRows.mock.calls[0][0] as unknown as Saved
+        expect(rows.find((r) => r.row.id === "n1")!.row.meetings[0]).toMatchObject({ kind: "Lab", weekday: 2, start: "08:30", end: "10:30", room: "D-243" })
+    })
+
+    it("puts a course on another of yours, or on a new one, and replaces its classes when asked", async () => {
+        const GP = { ...CHEM, id: "gp", code: "420541VA", name: "Game Prog", meetings: [{ id: "old", kind: "Lab", weekday: 1, start: "10:30", end: "12:00", room: "D-243" }] }
+        fake.data.courses = [CHEM, GP]
+        act(() => openSheet({ kind: "schedule", plan: plan(), name: "timetable.png" }))
+        const bio = await screen.findByRole("region", { name: /BIOL266/ })
+        fireEvent.change(within(bio).getByLabelText("Course for BIOL266"), { target: { value: "gp" } })
+        const now = screen.getByRole("region", { name: /BIOL266/ })
+        expect(within(now).getByText("Matches your course")).toBeTruthy()
+        expect((within(now).getByRole("checkbox", { name: "Replace its 1 class with these" }) as HTMLInputElement).checked).toBe(true)
+        await act(async () => fireEvent.click(screen.getByRole("button", { name: "Add 3 classes" })))
+        const rows = legacy.saveRows.mock.calls[0][0] as unknown as Saved
+        /* the old Monday lab goes, the timetable's two classes take its place, and no new course is made */
+        expect(rows.find((r) => r.row.id === "gp")!.row.meetings.map((m) => (m as { start: string }).start)).toEqual(["09:00", "15:00"])
+        expect(rows.some((r) => r.row.id === "n1")).toBe(false)
+    })
+
+    it("keeps a course's own classes beside the timetable's when Replace is unticked", async () => {
+        const GP = { ...CHEM, id: "gp", code: "420541VA", name: "Game Prog", meetings: [{ id: "old", kind: "Lab", weekday: 1, start: "10:30", end: "12:00", room: "D-243" }] }
+        fake.data.courses = [CHEM, GP]
+        act(() => openSheet({ kind: "schedule", plan: plan(), name: "timetable.png" }))
+        fireEvent.change(within(await screen.findByRole("region", { name: /BIOL266/ })).getByLabelText("Course for BIOL266"), { target: { value: "gp" } })
+        fireEvent.click(screen.getByRole("checkbox", { name: "Replace its 1 class with these" }))
+        await act(async () => fireEvent.click(screen.getByRole("button", { name: "Add 3 classes" })))
+        const rows = legacy.saveRows.mock.calls[0][0] as unknown as Saved
+        expect(rows.find((r) => r.row.id === "gp")!.row.meetings).toHaveLength(3)
     })
 
     it("says when a course's classes are all there, and goes back to the card for another file", async () => {
