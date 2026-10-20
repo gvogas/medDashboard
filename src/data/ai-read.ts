@@ -141,7 +141,11 @@ export async function readWithAi<T>(file: File, { what, title, steps, flag, note
         stop.signal.throwIfAborted()
         show(2)
         u[flag] = false; hideBusy()
-        done(answer)
+        try { done(answer) } catch (e) {
+            /* the answer came but the preview could not be made from it: not the network's fault */
+            console.error("ai read preview:", e)
+            throw Object.assign(new Error("The " + what + " was read, but its preview could not be shown. Try again, or another file. (code: preview_failed)"), { name: "FileError" })
+        }
         /* only an answer the preview could use is kept: one that made `done` throw is read afresh next time */
         if (key && hit == null) remember(key, answer)
     } catch (err) {
@@ -149,12 +153,15 @@ export async function readWithAi<T>(file: File, { what, title, steps, flag, note
         const failed = err instanceof ApiError ? err as ApiError & { body?: { error?: string }; status: number } : null
         const code = failed?.body?.error ?? ""
         const stopped = stop.signal.aborted || (err as Error)?.name === "AbortError"
+        /* every message ends with its code, so a person reporting it says exactly what happened */
+        const tagged = (text: string, c: string) => text + " (code: " + c + ")"
         u[note] = stopped ? { text: "Stopped reading.", error: false }
             : (err as Error)?.name === "FileError" ? { text: (err as Error).message, error: true }
+            : (err as Error)?.name === "TimeoutError" ? { text: tagged("The " + what + " took too long to read. Try again in a minute.", "client_timeout"), error: true }
             : {
-                text: errors[code] || AI_ERRORS[code] || (failed
-                    ? "The " + what + " could not be read (" + (code || failed.status) + ")."
-                    : "You seem to be offline. Reading " + what + "s needs a connection."),
+                text: failed
+                    ? tagged(errors[code] || AI_ERRORS[code] || "The " + what + " could not be read.", code || String(failed.status))
+                    : tagged("You seem to be offline. Reading " + what + "s needs a connection.", "network"),
                 error: true,
             }
         refresh()

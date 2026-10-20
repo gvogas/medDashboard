@@ -11,7 +11,7 @@
 // model (VISION_MODEL). Both count against the same daily reads as outlines (limitOutline).
 
 import { HttpError } from './http.js';
-import { DAYS, KINDS, askModel, cleanClasses, cleanCode, clip } from './outline.js';
+import { DAYS, KINDS, askModel, cleanClasses, cleanCode, clip, dayIndex } from './outline.js';
 import { askJson, knownContext, modelJson, timeLeft } from './ai.js';
 
 const MAX_COURSES = 15;
@@ -91,9 +91,10 @@ export function cleanSchedule(raw) {
   const o = modelJson(raw);
   if (!o) throw new HttpError(502, { error: 'schedule_unreadable' });
   const merged = [];
-  for (const c of Array.isArray(o.courses) ? o.courses : []) {
-    const code = cleanCode(c?.code), name = clip(c?.name, 80);
-    const classes = Array.isArray(c?.classes) ? c.classes : [];
+  for (const c of courseList(o)) {
+    const code = cleanCode(c?.code ?? c?.course_code ?? c?.courseCode), name = clip(c?.name ?? c?.title ?? c?.course_name, 80);
+    /* a course with its classes, or (a model's flat list) one class that names its course */
+    const classes = (Array.isArray(c?.classes) ? c.classes : Array.isArray(c?.meetings) ? c.meetings : c && (c.day || c.days) ? [c] : []).flatMap(eachDay);
     const same = merged.find((m) => (code ? m.code === code : !m.code && !!name && m.name.toLowerCase() === name.toLowerCase()));
     if (same) {
       same.raw.push(...classes);
@@ -106,6 +107,45 @@ export function cleanSchedule(raw) {
     .slice(0, MAX_COURSES);
   if (!courses.length) throw new HttpError(502, { error: 'schedule_unreadable' });
   return { term: clip(o.term, 40), courses };
+}
+
+/* Where the courses are: `courses` as asked, or under a name a model chose, or the answer was the list itself. */
+const COURSE_KEYS = ['courses', 'schedule', 'timetable', 'items', 'classes', 'data'];
+function courseList(o) {
+  for (const key of COURSE_KEYS) {
+    const v = o[key];
+    if (Array.isArray(v)) return v;
+    if (v && typeof v === 'object' && Array.isArray(v.courses)) return v.courses;
+  }
+  return [];
+}
+
+/* the letters of a compact day list: "MWF", "TTh", "TR" */
+const LETTERS = /Th|Tu|Sa|Su|M|T|W|R|F|S|U/g;
+const LETTER_DAY = { M: 'Mon', T: 'Tue', Tu: 'Tue', W: 'Wed', R: 'Thu', Th: 'Thu', F: 'Fri', S: 'Sat', Sa: 'Sat', U: 'Sun', Su: 'Sun' };
+
+/** The weekdays in a model's `day`: "Tue/Thu", "Tue, Thu", "Tuesday and Thursday", "MWF", ["Mon", "Wed"]. */
+export function splitDays(day) {
+  if (Array.isArray(day)) return day.flatMap(splitDays);
+  const s = String(day || '').trim();
+  /* one word that is a day: "Thursday", "Th", "Mar." (dayIndex reads only a word's first letters) */
+  if (/^[a-zà-ÿ]+\.?$/i.test(s) && dayIndex(s) >= 0) return [s];
+  const parts = s.split(/\s*(?:[\/,&+;]|\band\b|\bet\b)\s*|\s+/i).filter(Boolean);
+  if (parts.length > 1) return parts.flatMap(splitDays);
+  if (/^(?:Th|Tu|Sa|Su|[MTWRFSU])+$/.test(s)) return (s.match(LETTERS) || []).map((l) => LETTER_DAY[l]);
+  return [s];
+}
+
+/* "08:30-10:00" or "8:30 AM to 10:00 AM" in one field */
+const RANGE = /\s*(?:[-–—]|\bto\b|\bà\b)\s*/i;
+
+/** One class entry per weekday, its start and end apart: what cleanClasses reads. */
+function eachDay(c) {
+  if (!c || typeof c !== 'object') return [];
+  let start = c.start ?? c.start_time ?? c.startTime, end = c.end ?? c.end_time ?? c.endTime;
+  const range = typeof start === 'string' && !end ? start : !start && typeof c.time === 'string' ? c.time : '';
+  if (range && RANGE.test(range)) [start, end] = range.split(RANGE);
+  return splitDays(c.day ?? c.days ?? c.weekday).map((day) => ({ ...c, day, start, end, room: c.room ?? c.location ?? '' }));
 }
 
 /* Omnivox (Quebec's CEGEPs) writes a room as "Classroom D-243", a lab's with a lone "L" after it
@@ -125,22 +165,41 @@ export function toBase64(bytes) {
   return btoa(s);
 }
 
+/* the plain retry is skipped when less than this is left of the read's deadline */
+const MIN_PLAIN_MS = 20_000;
+
+/**
+ * A screenshot read: JSON mode first. When JSON mode fails (Workers AI refuses an answer it
+ * cannot fit to the schema) or its answer has no class in it, one more try in plain mode, the
+ * schema in the prompt, as the text model is asked: part of the same read (no second claim)
+ * and of its one deadline. A spent allowance (429) or the deadline (504) is not retried.
+ */
 async function askImage(ai, { bytes, type, claim, deadline }, today, known = '') {
   if (bytes.byteLength > MAX_IMAGE_BYTES) throw new HttpError(413, { error: 'too_large' });
   const timeoutMs = timeLeft(deadline);
   if (claim) await claim();
-  return askJson(ai, VISION_MODEL, {
-    messages: [
-      { role: 'system', content: RULES.join(' ') },
-      { role: 'user', content: [
-        { type: 'text', text: 'Today is ' + today + '.' + (known ? ' ' + known : '') + ' Read this timetable.' },
-        { type: 'image_url', image_url: { url: 'data:' + imageType(type) + ';base64,' + toBase64(bytes) } },
-      ] },
-    ],
-    response_format: { type: 'json_schema', json_schema: SCHEMA },
-    max_tokens: VISION_TOKENS,
-    temperature: 0,
-  }, cleanSchedule, 'schedule', { timeoutMs });
+  const user = { role: 'user', content: [
+    { type: 'text', text: 'Today is ' + today + '.' + (known ? ' ' + known : '') + ' Read this timetable.' },
+    { type: 'image_url', image_url: { url: 'data:' + imageType(type) + ';base64,' + toBase64(bytes) } },
+  ] };
+  const ask = (input, what, ms) => askJson(ai, VISION_MODEL, { ...input, max_tokens: VISION_TOKENS, temperature: 0 }, cleanSchedule, what, { timeoutMs: ms });
+  const started = Date.now();
+  try {
+    return await ask({ messages: [{ role: 'system', content: RULES.join(' ') }, user], response_format: { type: 'json_schema', json_schema: SCHEMA } }, 'schedule', timeoutMs);
+  } catch (e) {
+    const http = e instanceof HttpError;
+    if (http && e.status !== 502) throw e;
+    const left = timeoutMs - (Date.now() - started);
+    if (left < MIN_PLAIN_MS) throw e;
+    const first = http ? e.detail || 'no classes' : 'JSON mode failed: ' + String(e?.message || e).split('\n')[0].slice(0, 200);
+    console.log('schedule: ' + first + '; trying again in plain mode');
+    try {
+      return await ask({ messages: [{ role: 'system', content: [...RULES, 'Answer with one JSON object, no other text, using exactly this JSON Schema: ' + JSON.stringify(SCHEMA)].join(' ') }, user] }, 'schedule plain', left);
+    } catch (again) {
+      if (again instanceof HttpError) again.detail = [first, again.detail].filter(Boolean).join(' · then, in plain mode: ');
+      throw again;
+    }
+  }
 }
 
 export async function readSchedule(ai, { today, terms, codes, ...doc }) {

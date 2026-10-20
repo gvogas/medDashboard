@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { SELF, env } from 'cloudflare:test';
 import { signIn, BASE } from './helpers.js';
 import { OUTLINE_DAILY_LIMIT } from '../worker/limits.js';
-import { cleanSchedule, readSchedule, VISION_MODEL, MAX_IMAGE_BYTES, toBase64 } from '../worker/schedule.js';
+import { cleanSchedule, readSchedule, splitDays, VISION_MODEL, MAX_IMAGE_BYTES, toBase64 } from '../worker/schedule.js';
 import { MODEL, cleanClasses } from '../worker/outline.js';
 import visionReply from './fixtures/schedule-vision-reply.json';
 import textReply from './fixtures/schedule-text-reply.json';
@@ -262,6 +262,80 @@ describe('readSchedule, a screenshot', () => {
     const back = atob(toBase64(big));
     expect(back.length).toBe(100_000);
     expect(back.charCodeAt(99_999)).toBe(99_999 % 256);
+  });
+});
+
+describe('answers in other shapes', () => {
+  it('splits the day lists models and timetables write', () => {
+    expect(splitDays('Tue/Thu')).toEqual(['Tue', 'Thu']);
+    expect(splitDays('Tue, Thu')).toEqual(['Tue', 'Thu']);
+    expect(splitDays('Tuesday and Thursday')).toEqual(['Tuesday', 'Thursday']);
+    expect(splitDays('MWF')).toEqual(['Mon', 'Wed', 'Fri']);
+    expect(splitDays('TTh')).toEqual(['Tue', 'Thu']);
+    expect(splitDays('TR')).toEqual(['Tue', 'Thu']);
+    expect(splitDays(['Mon', 'Wed'])).toEqual(['Mon', 'Wed']);
+    expect(splitDays('Lun et Mer')).toEqual(['Lun', 'Mer']);
+    expect(splitDays('Thursday')).toEqual(['Thursday']);
+  });
+
+  it('reads a flat list of classes that each name their course, a time range in one field, and French days', () => {
+    const out = cleanSchedule({ response: [
+      { course_code: 'CHEM 271', title: 'Organic Chemistry I', day: 'Tue/Thu', time: '8:30 a.m. - 10:00 a.m.', location: 'H-110', kind: 'LEC' },
+      { code: 'CHEM 271', name: 'Organic Chemistry I', days: 'F', start: '1:00 PM', end: '4:00 PM', room: 'SP-265 L' },
+      { code: 'PHYS 205', name: 'Waves', day: 'Lundi', start: '09:00:00', end: '10:30:00', room: 'Hall B' },
+    ] });
+    expect(out.courses).toEqual([
+      { code: 'CHEM271', name: 'Organic Chemistry I', classes: [
+        { kind: 'Lecture', weekday: 2, start: '08:30', end: '10:00', room: 'H-110' },
+        { kind: 'Lecture', weekday: 4, start: '08:30', end: '10:00', room: 'H-110' },
+        { kind: 'Lab', weekday: 5, start: '13:00', end: '16:00', room: 'SP-265' },
+      ] },
+      { code: 'PHYS205', name: 'Waves', classes: [{ kind: 'Lecture', weekday: 1, start: '09:00', end: '10:30', room: 'Hall B' }] },
+    ]);
+  });
+
+  it('finds the courses under another name, in a code fence, or in the schema the model echoed', () => {
+    const one = { code: 'PHYS 1', name: 'M', classes: [{ kind: 'Lecture', day: 'MW', start: '09:00-10:30' }] };
+    expect(cleanSchedule('```json\n' + JSON.stringify({ schedule: { courses: [one] } }) + '\n```').courses[0].classes).toHaveLength(2);
+    expect(cleanSchedule({ choices: [{ message: { content: JSON.stringify({ timetable: [one] }) } }] }).courses).toHaveLength(1);
+    expect(cleanSchedule({ type: 'object', properties: { term: 'Fall', courses: [one] } }).term).toBe('Fall');
+    expect(cleanSchedule({ output: [{ type: 'message', content: [{ type: 'output_text', text: JSON.stringify({ courses: [one] }) }] }] }).courses).toHaveLength(1);
+  });
+});
+
+describe('a screenshot JSON mode cannot read', () => {
+  const png = new Uint8Array([0x89, 0x50, 0x4e, 0x47, ...new Array(64).fill(1)]);
+
+  it('is asked again in plain mode, in the same read, when JSON mode throws', async () => {
+    const calls = [];
+    const ai = { async run(model, input) {
+      calls.push(input);
+      if (input.response_format) throw new Error('AiError: 5025: JSON Mode couldn\'t be met');
+      return { response: JSON.stringify(REPLY) };
+    } };
+    const claim = vi.fn();
+    const out = await readSchedule(ai, { bytes: png, type: 'image/png', today: '2026-09-01', claim });
+    expect(out.courses).toHaveLength(2);
+    expect(claim).toHaveBeenCalledTimes(1);
+    expect(calls).toHaveLength(2);
+    expect(calls[1].response_format).toBeUndefined();
+    expect(calls[1].messages[0].content).toContain('JSON Schema');
+  });
+
+  it('is asked again in plain mode when its answer has no class, and says both answers when that fails too', async () => {
+    const ai = { run: vi.fn(async (model, input) => ({ response: input.response_format ? { term: '', courses: [] } : 'I cannot read this image.' })) };
+    const failed = await readSchedule(ai, { bytes: png, type: 'image/png', today: '2026-09-01' }).catch((e) => e);
+    expect(failed).toMatchObject({ status: 502, body: { error: 'schedule_unreadable' } });
+    expect(failed.detail).toContain('"courses":[]');
+    expect(failed.detail).toContain('then, in plain mode:');
+    expect(failed.detail).toContain('I cannot read this image.');
+    expect(ai.run.mock.calls.length).toBeGreaterThanOrEqual(2);
+  });
+
+  it('is not asked again when the allowance is spent', async () => {
+    const ai = { run: vi.fn(async () => { throw new Error('AiError: 4006: you have used up your daily free allocation of 10,000 neurons'); }) };
+    await expect(readSchedule(ai, { bytes: png, type: 'image/png', today: '2026-09-01' })).rejects.toMatchObject({ status: 429, body: { error: 'outline_quota' } });
+    expect(ai.run).toHaveBeenCalledTimes(1);
   });
 });
 
