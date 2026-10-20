@@ -334,16 +334,16 @@ function settle(pc: PlanCourse) {
 
 /**
  * Put the timetable's course at index `i` on another of your courses (`id`), or on a new one
- * (null), as picked in the preview. Its classes stay as they are; whether they replace yours is
- * worked out again.
+ * (null), as picked in the preview. Its classes stay as they are, and so does the name the
+ * timetable gave it; whether they replace yours is worked out again.
  */
 export function remapCourse(plan: Plan, i: number, id: string | null, data: PlanData): Plan {
   const pc = plan.courses[i], existing = data.courses || [];
   const read = pc.read || { code: pc.code, name: pc.name };
   const live = id ? existing.find((x) => x.id === id) : null;
   const next: PlanCourse = live
-    ? { ...pc, id: live.id, code: live.code, name: live.name, color: live.color, isNew: false, had: live.meetings || [], term: live.term ?? '' }
-    : { ...pc, id: pc.isNew ? pc.id : uid(), code: read.code, name: read.name || read.code, isNew: true, had: [],
+    ? { ...pc, read, id: live.id, code: live.code, name: live.name, color: live.color, isNew: false, had: live.meetings || [], term: live.term ?? '' }
+    : { ...pc, read, id: pc.isNew ? pc.id : uid(), code: read.code, name: read.name || read.code, isNew: true, had: [],
         color: pc.isNew ? pc.color : HEXES[(existing.length + plan.courses.filter((c) => c.isNew).length) % HEXES.length] };
   settle(next);
   return { ...plan, courses: plan.courses.map((c, k) => (k === i ? next : c)) };
