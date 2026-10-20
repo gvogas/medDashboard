@@ -143,6 +143,8 @@ runs once per database.
 | `0003_invites.sql` | `invites`: invitations to a space by username |
 | `0004_marks.sql` | `marks` (your status, grade and notes on a shared item) and `space_prefs` (your colour, target and term for a space) |
 | `0005_activity.sql` | `activity` (what members did, from triggers on shared rows and from the member routes) and `inbox_seen` |
+| `0006_push.sql` | `push_subscriptions`: each device that turned on the morning digest |
+| `0007_grades.sql` | `courses.credits`, `courses.grade_categories`, `items.category` and `users.grading`, and the course and item change-feed triggers made again to carry them |
 
 Collaboration Stages 5 (leaving and removal) and 6 (the feed, outline imports, classes
 open to everyone) added no migration: deploying them is a plain push of `main`. Stage 6
@@ -160,9 +162,17 @@ the feed, open to everyone) adds no migration either.
 > (both delete the account's activity rows and write a hand-on row). The old code
 > ignores the new tables, so applying the migration early is safe.
 
+> **Student upgrades: apply `0006_push.sql` and `0007_grades.sql` to live first.** Run
+> `npm run db:remote`, then `npm run db:check -- --remote`, **before** merging the branch
+> into `main`. The new code reads and writes `users.grading`, `courses.credits`,
+> `courses.grade_categories` and `items.category`, so on a database without them every
+> profile and course save fails. The old code names its columns, so applying the
+> migrations early is safe. The push secrets are optional (see
+> [Push reminders](#push-reminders)).
+
 To change the database:
 
-1. Add a new file with the next number, `0006_something.sql`. Never edit a file that
+1. Add a new file with the next number, `0008_something.sql`. Never edit a file that
    has already run.
 2. Apply it locally with `npm run db:local`, then test.
 3. Apply it to live with `npm run db:remote` **before** pushing the code that needs
