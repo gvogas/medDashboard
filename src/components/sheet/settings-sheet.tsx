@@ -31,6 +31,7 @@ import {
 import { BGS, GOALS as THEME_GOALS, THEMES, goalFor, type Bg } from "@/data/themes"
 import type { Feed, Profile } from "@/data/types"
 import { radioKeys, rovingTab } from "./radio-keys"
+import { GradingGroup } from "./grading-settings"
 import { Button, CONTROL, RemoveButton, SheetBody, SheetFoot, SheetHead, Swatches, TextInput } from "./fields"
 
 export function SettingsSheet({ tab, focus }: { tab: SettingsTab; focus: string | null }) {
@@ -274,6 +275,7 @@ function StudyTab({ profile }: { profile: Profile }) {
             <Streak profile={profile} />
             <Reviews profile={profile} />
             <School />
+            <GradingGroup profile={profile} />
         </>
     )
 }

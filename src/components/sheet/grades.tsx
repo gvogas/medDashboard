@@ -67,7 +67,7 @@ export function Grades({ title = "Grades", course, items, whatIf, setWhatIf, onT
                         )
                     })}
                 </div>
-                <Note>What you need on the {guessed ? "other " : "remaining "}{g.remaining}% to finish at {targets.slice(0, -1).join(", ")} or {targets.at(-1)}.</Note>
+                <Note>What you need on the {guessed ? "other " : "remaining "}{g.remaining}% to finish at {targets.length > 1 ? targets.slice(0, -1).join(", ") + " or " + targets.at(-1) : targets[0]}.</Note>
             </> : course.target && g.current !== null && (
                 <Note tone={g.current >= course.target ? "ok" : "bad"}>{g.current >= course.target ? "At or above" : "Below"} your target of {course.target}%.</Note>
             )}
