@@ -14,6 +14,7 @@ import { minutesByDay } from "@/core/history"
 import { rememberUi } from "@/data/ui"
 import { notify, setStudyBadge, subscribe as subscribeBridge } from "@/bridge"
 import { getSheet } from "./overlay"
+import { toast } from "./toast"
 import { useCourses, useItems, useProfile, useStudySessions } from "./store"
 import { shownSessions } from "./study"
 import { ui, useUi } from "./ui"
@@ -288,10 +289,16 @@ export function setRounds(n: number): Promise<boolean> {
 /** The Quick start presets: [name, flow]. */
 export const PRESETS: readonly [string, Flow][] = FLOW_PRESETS
 
-/** Replace the flow with a Quick start preset. */
-export function applyPreset(i: number): Promise<boolean> {
+/** Replace the flow with a Quick start preset. A flow of your own that it replaces can come
+    back with the toast's Undo; a preset replacing a preset needs none. */
+export async function applyPreset(i: number): Promise<boolean> {
     const preset = PRESETS[i]
-    return preset ? saveFlow(copy(preset[1])) : Promise.resolve(false)
+    if (!preset) return false
+    const was = savedFlow()
+    const own = !PRESETS.some(([, p]) => sameFlow(p, was))
+    const saved = await saveFlow(copy(preset[1]))
+    if (saved && own) toast("Your flow was replaced", { undo: () => { if (sameFlow(savedFlow(), preset[1])) void saveFlow(was) } })
+    return saved
 }
 
 /** The Quick start presets as a theme names them: the third is the theme's own ("LeetCode then read"). */

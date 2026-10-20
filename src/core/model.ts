@@ -312,6 +312,7 @@ export const FLOW_PRESETS: [string, Flow][] = [
   ['Classic 25/5', { steps: [['study', 25], ['break', 5]], rounds: 4 }],
   ['Deep 50/10', { steps: [['study', 50], ['break', 10]], rounds: 3 }],
   ['Anki then read', { steps: [['study', 20], ['break', 5], ['study', 40], ['break', 15]], rounds: 2 }],
+  ['Sprint 15/3', { steps: [['study', 15], ['break', 3]], rounds: 3 }],
 ];
 /* `+v` as the plain JS had it: whatever the stored value is, it is read as a number. */
 const clampInt = (v: unknown, lo: number, hi: number, dflt: number) => Number.isFinite(+(v as number)) ? Math.max(lo, Math.min(hi, Math.round(+(v as number)))) : dflt;
