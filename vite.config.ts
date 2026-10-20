@@ -6,8 +6,15 @@ import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
 import { cloudflare } from '@cloudflare/vite-plugin';
 
-export default defineConfig({
-  plugins: [react(), tailwindcss(), cloudflare()],
+// `npm run dev:fake-ai` (mode fake-ai) runs the Worker with a stand-in for Workers AI, which is
+// remote-only and needs a Cloudflare login: test/fake-ai.js says how it answers, and FAKE_AI
+// (quota, garbage, fail) makes it answer badly.
+const workerFor = (mode: string) => mode === 'fake-ai'
+  ? cloudflare({ remoteBindings: false, config: (c) => ({ main: './test/fake-ai-worker.js', ai: undefined, vars: { ...c.vars, FAKE_AI: process.env.FAKE_AI || 'ok' } }) })
+  : cloudflare();
+
+export default defineConfig(({ mode }) => ({
+  plugins: [react(), tailwindcss(), workerFor(mode)],
   resolve: { alias: { '@': path.resolve(import.meta.dirname, 'src') } },
   // Bundle these for the dev server up front. Found one by one as pages load, each find
   // re-bundles mid-load, the page gets two copies of React, and it stays blank.
@@ -37,4 +44,4 @@ export default defineConfig({
       },
     },
   },
-});
+}));
