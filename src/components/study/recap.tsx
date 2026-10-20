@@ -94,7 +94,7 @@ function Fig({ label, value, sub }: { label: string; value: string; sub?: string
         <div className="min-w-0 rounded-lg border border-border bg-card px-3 py-2.5">
             <div className="text-[11.5px] text-muted-foreground">{label}</div>
             <div className="font-serif text-[22px] leading-tight">{value}</div>
-            {sub && <div className="truncate text-[11.5px] text-muted-foreground">{sub}</div>}
+            {sub && <div className="text-[11.5px] leading-snug text-muted-foreground">{sub}</div>}
         </div>
     )
 }

@@ -3,12 +3,16 @@
 // step can be skipped, and so can the whole thing. Finishing or skipping saves `setupDone`
 // in the study prefs, which sync, so another device never offers it again.
 //
+// It waits for this session's first full pull: on a new device the browser's copy is empty
+// until then, which is no sign of an empty account.
+//
 // Once offered, it stays up until finished or skipped, even after the timetable import adds
 // the first courses: the steps after it still have something to say.
 
 import { useSyncExternalStore } from "react"
 import { normalizePrefs } from "@/core/model"
 import { data } from "@/core/store"
+import { status as syncStatus } from "@/core/sync"
 import { notify, subscribe } from "@/bridge"
 import { savePrefs } from "./study-controller"
 
@@ -26,10 +30,10 @@ export function isFresh(d: Holdings): boolean {
     return !!d.profile && !d.courses.length && !d.items.length && !d.spaces.length
 }
 
-/** Whether to show the setup now. */
-export function needsSetup(d: Holdings = data): boolean {
+/** Whether to show the setup now; `pulled`: the first full pull has come back. */
+export function needsSetup(d: Holdings = data, pulled = syncStatus.lastPull !== null): boolean {
     if (done || !d.profile || normalizePrefs(d.profile.studyPrefs).setupDone) return false
-    if (isFresh(d)) started = true
+    if (pulled && isFresh(d)) started = true
     return started
 }
 
