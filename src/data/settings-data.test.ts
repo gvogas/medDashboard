@@ -94,6 +94,28 @@ describe("importing", () => {
         expect((fake.rows[2].row as unknown as { where: string }).where).toBe("Hall B")
     })
 
+    it("replaces a course's weekly classes with a timetable's ticked ones, never with none, and adds none twice", async () => {
+        const had = [{ id: "x", kind: "Lecture", weekday: 1, start: "10:30", end: "12:00", room: "D-243" }, { id: "y", kind: "Lab", weekday: 3, start: "10:30", end: "12:00", room: "D-243" }]
+        fake.data.courses = [normalizeCourse({ id: "old", code: "GP", name: "Game Prog", meetings: had }, 0) as { id: string; meetings: unknown[] }]
+        const right = { id: "n", kind: "Lab", weekday: 1, start: "10:00", end: "12:00", room: "D-243", include: true }
+        const course = (replace: boolean | undefined, meetings: typeof right[]) => ({ notes: [], items: [], courses: [{ id: "old", code: "GP", name: "Game Prog", color: "#E4749B", isNew: false, meetings, replace }] }) as ImportPlan
+        const saved = () => (fake.rows[0].row as unknown as { meetings: { start: string }[] }).meetings.map((m) => m.start)
+
+        await commitImport(course(true, [right]))
+        expect(saved()).toEqual(["10:00"])
+        fake.rows = []
+        await commitImport(course(false, [right]))
+        expect(saved()).toEqual(["10:30", "10:30", "10:00"])
+        fake.rows = []
+        /* ticked: a class it has already, kept with the rest: not twice */
+        await commitImport(course(undefined, [{ ...right, start: "10:30", end: "12:00" }]))
+        expect(saved()).toEqual(["10:30", "10:30"])
+        fake.rows = []
+        /* nothing ticked: nothing replaced */
+        await commitImport(course(true, [{ ...right, include: false }]))
+        expect(fake.rows).toEqual([])
+    })
+
     it("sets the term start only when none is set and there is no school calendar", async () => {
         await commitImport({ ...plan(), week1: "2026-09-07" })
         expect(fake.profile).toEqual([{ termStart: "2026-09-07" }])

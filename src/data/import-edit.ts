@@ -86,11 +86,19 @@ export async function commitImport(plan: ImportPlan): Promise<string> {
             if (!add.length && !(c.keep || wanted.has(c.id))) continue
             rows.push({ kind: "courses", row: normalizeCourse({ id: c.id, code: c.code, name: c.name, color: c.color, instructor: c.instructor || "", term: c.term || "", meetings: add }) as Course })
         } else {
-            const live = store.course(c.id) as Course | null
+            /* two of the timetable's courses put on one of yours: the second builds on the first */
+            const before = rows.find((r) => r.row.id === c.id)?.row as Course | undefined
+            const live = before || store.course(c.id) as Course | null
             /* a semester picked in the preview; undefined (a calendar or CSV import) leaves it */
             const term = c.term ?? live?.term ?? ""
             if (!live || (!add.length && term === live.term)) continue
-            rows.push({ kind: "courses", row: { ...live, term, meetings: [...live.meetings, ...add].slice(0, 12) } })
+            /* a class schedule can replace the course's weekly classes with the ticked ones (never with none),
+               and a class the course already has is not added twice */
+            const kept = c.replace && add.length && !before ? [] : live.meetings
+            const fresh = add.filter((m) => !kept.some((k) => k.weekday === m.weekday && k.start === m.start && k.end === m.end))
+            const row = { ...live, term, meetings: [...kept, ...fresh].slice(0, 12) }
+            if (before) Object.assign(before, row)
+            else rows.push({ kind: "courses", row })
             if (term !== live.term) terms++
         }
         classes += add.length

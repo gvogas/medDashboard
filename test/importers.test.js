@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { parseIcs } from '../src/core/importers/ics.ts';
 import { parseCsv, normDate } from '../src/core/importers/csv.ts';
-import { planImport, planOutline, planSchedule, planSummary, setWeek1, weekDate, guessKind, guessType, codeToken } from '../src/core/importers/plan.ts';
+import { courseScore, matchCourse, remapCourse, planImport, planOutline, planSchedule, planSummary, setWeek1, weekDate, guessKind, guessType, codeToken } from '../src/core/importers/plan.ts';
 import { normalizeCourse } from '../src/core/model.ts';
 
 const pad = (n) => String(n).padStart(2, '0');
@@ -265,16 +265,17 @@ describe('planSchedule', () => {
     expect(plan.items).toEqual([]);
   });
 
-  it('leaves out the classes a course already has and ticks the rest', () => {
+  it("lists all the timetable's classes for a course of yours, ticked, to replace the ones it has", () => {
     const chem = planSchedule(read, data(), '').courses[0];
-    expect(chem.meetings.map((m) => [m.kind, m.weekday, m.start, m.room, m.include])).toEqual([['Lab', 5, '13:00', 'SP-265', true]]);
+    expect(chem.meetings.map((m) => [m.kind, m.weekday, m.start, m.room, m.include])).toEqual([['Lecture', 2, '08:30', 'H-110', true], ['Lab', 5, '13:00', 'SP-265', true]]);
+    expect(chem).toMatchObject({ replace: true, had: [expect.objectContaining({ id: 'm0' })] });
   });
 
-  it('still lists a course whose classes are all there, so its semester can be set', () => {
+  it('still lists a course whose classes are all there, unticked, so its semester can be set', () => {
     const d = data();
     d.courses[0].meetings.push({ id: 'm1', kind: 'Lab', weekday: 5, start: '13:00', end: '16:00', room: 'SP-265' });
     const plan = planSchedule({ term: '', courses: [read.courses[0]] }, d, '');
-    expect(plan.courses.map((c) => [c.id, c.meetings.length])).toEqual([['c1', 0]]);
+    expect(plan.courses.map((c) => [c.id, c.meetings.map((m) => m.include), c.replace])).toEqual([['c1', [false, false], undefined]]);
   });
 
   it('keeps a course to 12 classes and says what was dropped', () => {
@@ -325,5 +326,65 @@ describe('planSchedule', () => {
       { code: '', name: 'Organic Chem', classes: [{ kind: 'Tutorial', weekday: 4, start: '10:00', end: '11:00', room: '' }] },
     ] }, data(), '');
     expect(plan.courses.map((c) => [c.id, c.meetings.map((m) => m.kind)])).toEqual([['c1', ['Lab', 'Tutorial']]]);
+  });
+});
+
+describe('matching a timetable course to one of yours', () => {
+  const mine = [
+    { id: 'gp', code: 'GP', name: 'Game Prog' }, { id: 'an', code: 'AN', name: 'Advanced Network' },
+    { id: 'ws', code: 'WEB', name: 'Web Services' }, { id: 'iot', code: 'IOT', name: 'IoT' },
+    { id: 'p1', code: 'PROG1', name: 'Programming 1' }, { id: 'cr', code: '', name: 'Le Contrat Racial' },
+    { id: 'code', code: '420-511', name: 'Something else' },
+  ];
+  const to = (code, name) => matchCourse({ code, name }, mine)?.id ?? null;
+
+  it('by code first, dashes, spaces and case aside, or one code the start of the other', () => {
+    expect(to('420511VA', 'Web Services')).toBe('code');
+    expect(to('gp', 'Unrelated')).toBe('gp');
+    expect(courseScore({ code: '420-541-VA' }, { code: '420541va' })).toBe(1);
+  });
+
+  it('by name: an abbreviation, a plural, a title before its colon, initials, accents and case', () => {
+    expect(to('420541VA', 'Game Programming 2')).toBe('gp');
+    expect(to('420521VA', 'Advanced Networks')).toBe('an');
+    expect(to('420531VA', 'IoT: Internet of Things')).toBe('iot');
+    expect(to('X', 'Internet of Things')).toBe('iot');
+    expect(to('345HSZVF', 'CONTRAT RACIAL (LE)')).toBe('cr');
+  });
+
+  it('not on one shared word, or another number', () => {
+    expect(to('Y', 'Game Theory')).toBeNull();
+    expect(to('Z', 'Programming 2')).toBeNull();
+    expect(to('602E02MQ', 'Projet expérientiel')).toBeNull();
+  });
+});
+
+describe('a timetable course put on another of yours', () => {
+  const data = { items: [], courses: [
+    { id: 'gp', code: 'GP', name: 'Game Prog', color: '#E4749B', term: 'Fall 2026', meetings: [{ id: 'old', kind: 'Lecture', weekday: 1, start: '10:30', end: '12:00', room: 'D-243' }] },
+    { id: 'other', code: 'OTH', name: 'Other', color: '#4F74D9', term: '', meetings: [] },
+  ] };
+  const read = { term: '', courses: [{ code: '420541VA', name: 'Game Programming 2', classes: [
+    { kind: 'Lab', weekday: 1, start: '10:00', end: '12:00', room: 'D-243' }, { kind: 'Lecture', weekday: 5, start: '10:00', end: '12:00', room: 'D-242' },
+  ] }] };
+
+  it('matches the abbreviated name, and offers to replace its wrong classes', () => {
+    const plan = planSchedule(read, data, '');
+    expect(plan.courses).toHaveLength(1);
+    expect(plan.courses[0]).toMatchObject({ id: 'gp', isNew: false, replace: true, read: { code: '420541VA', name: 'Game Programming 2' } });
+    expect(plan.courses[0].meetings.every((m) => m.include)).toBe(true);
+  });
+
+  it('moves to a new course, or to another of yours, keeping the classes', () => {
+    const plan = planSchedule(read, data, '');
+    const fresh = remapCourse(plan, 0, null, data).courses[0];
+    expect(fresh).toMatchObject({ isNew: true, code: '420541VA', name: 'Game Programming 2', had: [] });
+    expect(fresh.replace).toBeUndefined();
+    expect(fresh.id).not.toBe('gp');
+    expect(fresh.meetings).toHaveLength(2);
+    const other = remapCourse(plan, 0, 'other', data).courses[0];
+    expect(other).toMatchObject({ id: 'other', isNew: false, code: 'OTH' });
+    expect(other.replace).toBeUndefined();          // nothing there to replace
+    expect(remapCourse(remapCourse(plan, 0, null, data), 0, 'gp', data).courses[0]).toMatchObject({ id: 'gp', replace: true });
   });
 });

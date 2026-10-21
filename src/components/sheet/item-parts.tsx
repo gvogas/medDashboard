@@ -2,10 +2,11 @@
 // shared by your own item's card and a class item's (whose checklist is yours, in your mark,
 // and whose links are the class's).
 
-import { useState } from "react"
+import { useRef, useState } from "react"
 import { cn } from "@/lib/utils"
 import { httpUrl, isTest, uid } from "@/core/model"
 import { flush, linkUrl } from "@/data/item-edit"
+import { toast } from "@/data/toast"
 import type { ChecklistEntry, Item } from "@/data/types"
 import { Button, Meter, Note, RemoveButton, Section, CONTROL } from "./fields"
 
@@ -18,6 +19,20 @@ export function Checklist({ item, onChange, fill, fillNote, autoFocus = false, o
     const done = list.filter((s) => s.done).length
     const [adding, setAdding] = useState("")
     const replace = (id: string, change: Partial<ChecklistEntry>) => list.map((s) => (s.id === id ? { ...s, ...change } : s))
+    /* Undo puts a removed step back where it was, in the list as it is by then */
+    const latest = useRef({ list, onChange })
+    latest.current = { list, onChange }
+    const remove = (s: ChecklistEntry) => {
+        const at = list.findIndex((x) => x.id === s.id)
+        onChange(list.filter((x) => x.id !== s.id), false)
+        toast("Step removed", {
+            undo: () => {
+                const { list: now, onChange: save } = latest.current
+                if (now.some((x) => x.id === s.id) || now.length >= MAX_STEPS) return
+                save([...now.slice(0, at), s, ...now.slice(at)], false)
+            },
+        })
+    }
 
     return (
         <Section title={isTest(item.type) ? "Topics" : "Checklist"} note={list.length ? done + " of " + list.length + " done" : undefined}>
@@ -49,7 +64,7 @@ export function Checklist({ item, onChange, fill, fillNote, autoFocus = false, o
                                 className={cn("min-w-0 flex-1 border-0 bg-transparent p-px font-[inherit] text-[12.5px] outline-none", s.done ? "text-[var(--done-ink)] line-through" : "text-foreground")}
                             />
                             <RemoveButton aria-label="Remove step" className="opacity-0 group-focus-within:opacity-100 group-hover:opacity-100 focus-visible:opacity-100 [@media(hover:none)]:opacity-100"
-                                onClick={() => onChange(list.filter((x) => x.id !== s.id), false)} />
+                                onClick={() => remove(s)} />
                         </li>
                     ))}
                 </ul>

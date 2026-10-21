@@ -24,6 +24,8 @@ const FEED_LIMIT = 60;                     /* fetches an hour per link; calendar
 const HOUR_MS = 60 * 60 * 1000;
 const LABELS = { exam: 'Exam', quiz: 'Quiz', assignment: 'Assignment', lab: 'Lab', tutoring: 'Tutorial', office: 'Office hours', task: 'Task', project: 'Project' };
 const COMPLETE = { done: 1, graded: 1, submitted: 1 };
+/* What gets reminders in the feed: deadlines and tests, while still open. */
+const ALARMED = { exam: 1, quiz: 1, assignment: 1, lab: 1, project: 1 };
 const DAYS = ['SU', 'MO', 'TU', 'WE', 'TH', 'FR', 'SA'];
 const TZ = /^[A-Za-z]+(?:\/[A-Za-z0-9_+-]+){0,2}$/;
 
@@ -81,11 +83,32 @@ export const PROJECT_ROWS = `SELECT s.id AS sid, (SELECT title FROM items WHERE 
 export async function serveFeed(env, url, userId, token) {
   const gone = () => new HttpError(404, { error: 'not_found' });
   if (!/^[0-9a-f]{32}$/.test(token)) throw gone();
-  const user = await env.DB.prepare('SELECT feed_gen, term_start, types, school_calendar, hidden_sources FROM users WHERE id = ?').bind(userId).first();
+  const user = await env.DB.prepare('SELECT feed_gen, term_start, types, school_calendar, hidden_sources, study_prefs FROM users WHERE id = ?').bind(userId).first();
   if (!user?.feed_gen || !sameString(await feedToken(userId, user.feed_gen, env.SESSION_SECRET), token)) throw gone();
   const wait = await claimLimit(env.DB, `feed:${userId}`, FEED_LIMIT, Date.now(), HOUR_MS);
   if (wait) throw rateLimited(wait);
 
+  const tz = url.searchParams.get('tz');
+  const rows = await readRows(env, userId, user.hidden_sources);
+  const body = buildCalendar({
+    ...rows, termStart: user.term_start, school: parseSchool(user.school_calendar),
+    types: parseList(user.types), tz: tz && TZ.test(tz) && tz.length <= 64 ? tz : null, now: Date.now(),
+    alarms: parseObject(user.study_prefs).alarms !== false,
+  });
+  return new Response(body, {
+    headers: {
+      'content-type': 'text/calendar; charset=utf-8',
+      'content-disposition': 'inline; filename="term.ics"',
+    },
+  });
+}
+
+/**
+ * Everything the feed shows for a user, through feedRows: their courses and items, their
+ * classes' with their layer, and their projects'. The morning digest (worker/push.js) reads
+ * the same rows, so the two never disagree about what is due.
+ */
+export async function readRows(env, userId, hiddenSources) {
   const me = personal(userId);
   /* your live classes, read with your membership in the statement (spec §5); a removed class item is a tombstone, left out */
   const IN = 'JOIN members AS m ON m.space_id = s.id AND m.user_id = ?1 AND m.deleted_at IS NULL';
@@ -103,23 +126,16 @@ export async function serveFeed(env, url, userId, token) {
       WHERE s.kind = 'class' AND s.deleted_at IS NULL`).bind(userId),
     env.DB.prepare(PROJECT_ROWS).bind(userId),
   ]);
-  const tz = url.searchParams.get('tz');
-  const rows = feedRows({ courses: courses.results, items: items.results, classCourses: classCourses.results, classItems: classItems.results,
-    projectItems: projectItems.results, me: userId, hidden: parseList(user.hidden_sources) });
-  const body = buildCalendar({
-    ...rows, termStart: user.term_start, school: parseSchool(user.school_calendar),
-    types: parseList(user.types), tz: tz && TZ.test(tz) && tz.length <= 64 ? tz : null, now: Date.now(),
-  });
-  return new Response(body, {
-    headers: {
-      'content-type': 'text/calendar; charset=utf-8',
-      'content-disposition': 'inline; filename="term.ics"',
-    },
-  });
+  return feedRows({ courses: courses.results, items: items.results, classCourses: classCourses.results, classItems: classItems.results,
+    projectItems: projectItems.results, me: userId, hidden: parseList(hiddenSources) });
 }
 
 function parseSchool(v) {
   try { return normalizeSchool(JSON.parse(v)); } catch { return null; }
+}
+
+function parseObject(v) {
+  try { const out = JSON.parse(v); return out && typeof out === 'object' && !Array.isArray(out) ? out : {}; } catch { return {}; }
 }
 
 function parseList(v) {
@@ -177,9 +193,15 @@ export function feedRows({ courses, items, classCourses = [], classItems = [], p
   };
 }
 
-/** The calendar as text, CRLF lines folded at 75 octets. Pure, for tests. */
-export function buildCalendar({ courses, items, termStart = null, school = null, types = [], tz = null, now = Date.now() }) {
+/**
+ * The calendar as text, CRLF lines folded at 75 octets. Pure, for tests.
+ * With `alarms`, an open exam, quiz, assignment, lab or team project from yesterday on carries
+ * reminders: a day and an hour before a timed one, 09:00 the day before an all-day one.
+ * Apple Calendar shows them; Google keeps its own for subscribed calendars.
+ */
+export function buildCalendar({ courses, items, termStart = null, school = null, types = [], tz = null, now = Date.now(), alarms = false }) {
   const stamp = new Date(now).toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, '');
+  const yesterday = addDays(new Date(now).toISOString().slice(0, 10), -1);
   const byId = new Map(courses.map((c) => [c.id, c]));
   const labelOf = (t) => types.find((x) => x && x.id === t)?.label || LABELS[t] || 'Item';
   const lines = [
@@ -204,7 +226,12 @@ export function buildCalendar({ courses, items, termStart = null, school = null,
     if (it.status === 'missed') ev.push('STATUS:CANCELLED');
     const about = [label + (c ? ' — ' + c.name : ''), typeof it.weight === 'number' && it.weight > 0 ? 'Weight: ' + it.weight + '%' : '', it.notes || '']
       .filter(Boolean).join('\n');
-    ev.push('DESCRIPTION:' + text(about.slice(0, 1500)), 'END:VEVENT');
+    ev.push('DESCRIPTION:' + text(about.slice(0, 1500)));
+    if (alarms && ALARMED[it.type] && !COMPLETE[it.status] && it.status !== 'missed' && !weekly && first >= yesterday) {
+      const say = text(label + ': ' + (c ? c.code + ' · ' : '') + it.title);
+      for (const before of it.start ? ['-P1D', '-PT1H'] : ['-PT15H']) ev.push('BEGIN:VALARM', 'ACTION:DISPLAY', 'DESCRIPTION:' + say, 'TRIGGER:' + before, 'END:VALARM');
+    }
+    ev.push('END:VEVENT');
     lines.push(...ev);
   }
 

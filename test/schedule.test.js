@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { SELF, env } from 'cloudflare:test';
 import { signIn, BASE } from './helpers.js';
 import { OUTLINE_DAILY_LIMIT } from '../worker/limits.js';
-import { cleanSchedule, readSchedule, VISION_MODEL, MAX_IMAGE_BYTES, toBase64 } from '../worker/schedule.js';
+import { cleanGrid, cleanSchedule, onGridLines, parseGrid, readSchedule, splitDays, VISION_MODEL, MAX_IMAGE_BYTES, toBase64 } from '../worker/schedule.js';
 import { MODEL, cleanClasses } from '../worker/outline.js';
 import visionReply from './fixtures/schedule-vision-reply.json';
 import textReply from './fixtures/schedule-text-reply.json';
@@ -262,6 +262,226 @@ describe('readSchedule, a screenshot', () => {
     const back = atob(toBase64(big));
     expect(back.length).toBe(100_000);
     expect(back.charCodeAt(99_999)).toBe(99_999 % 256);
+  });
+});
+
+describe('answers in other shapes', () => {
+  it('splits the day lists models and timetables write', () => {
+    expect(splitDays('Tue/Thu')).toEqual(['Tue', 'Thu']);
+    expect(splitDays('Tue, Thu')).toEqual(['Tue', 'Thu']);
+    expect(splitDays('Tuesday and Thursday')).toEqual(['Tuesday', 'Thursday']);
+    expect(splitDays('MWF')).toEqual(['Mon', 'Wed', 'Fri']);
+    expect(splitDays('TTh')).toEqual(['Tue', 'Thu']);
+    expect(splitDays('TR')).toEqual(['Tue', 'Thu']);
+    expect(splitDays(['Mon', 'Wed'])).toEqual(['Mon', 'Wed']);
+    expect(splitDays('Lun et Mer')).toEqual(['Lun', 'Mer']);
+    expect(splitDays('Thursday')).toEqual(['Thursday']);
+  });
+
+  it('reads a flat list of classes that each name their course, a time range in one field, and French days', () => {
+    const out = cleanSchedule({ response: [
+      { course_code: 'CHEM 271', title: 'Organic Chemistry I', day: 'Tue/Thu', time: '8:30 a.m. - 10:00 a.m.', location: 'H-110', kind: 'LEC' },
+      { code: 'CHEM 271', name: 'Organic Chemistry I', days: 'F', start: '1:00 PM', end: '4:00 PM', room: 'SP-265 L' },
+      { code: 'PHYS 205', name: 'Waves', day: 'Lundi', start: '09:00:00', end: '10:30:00', room: 'Hall B' },
+    ] });
+    expect(out.courses).toEqual([
+      { code: 'CHEM271', name: 'Organic Chemistry I', classes: [
+        { kind: 'Lecture', weekday: 2, start: '08:30', end: '10:00', room: 'H-110' },
+        { kind: 'Lecture', weekday: 4, start: '08:30', end: '10:00', room: 'H-110' },
+        { kind: 'Lab', weekday: 5, start: '13:00', end: '16:00', room: 'SP-265' },
+      ] },
+      { code: 'PHYS205', name: 'Waves', classes: [{ kind: 'Lecture', weekday: 1, start: '09:00', end: '10:30', room: 'Hall B' }] },
+    ]);
+  });
+
+  it('finds the courses under another name, in a code fence, or in the schema the model echoed', () => {
+    const one = { code: 'PHYS 1', name: 'M', classes: [{ kind: 'Lecture', day: 'MW', start: '09:00-10:30' }] };
+    expect(cleanSchedule('```json\n' + JSON.stringify({ schedule: { courses: [one] } }) + '\n```').courses[0].classes).toHaveLength(2);
+    expect(cleanSchedule({ choices: [{ message: { content: JSON.stringify({ timetable: [one] }) } }] }).courses).toHaveLength(1);
+    expect(cleanSchedule({ type: 'object', properties: { term: 'Fall', courses: [one] } }).term).toBe('Fall');
+    expect(cleanSchedule({ output: [{ type: 'message', content: [{ type: 'output_text', text: JSON.stringify({ courses: [one] }) }] }] }).courses).toHaveLength(1);
+  });
+});
+
+describe('a screenshot JSON mode cannot read', () => {
+  const png = new Uint8Array([0x89, 0x50, 0x4e, 0x47, ...new Array(64).fill(1)]);
+
+  it('is asked again in plain mode, in the same read, when JSON mode throws', async () => {
+    const calls = [];
+    const ai = { async run(model, input) {
+      calls.push(input);
+      if (input.response_format) throw new Error('AiError: 5025: JSON Mode couldn\'t be met');
+      return { response: JSON.stringify(REPLY) };
+    } };
+    const claim = vi.fn();
+    const out = await readSchedule(ai, { bytes: png, type: 'image/png', today: '2026-09-01', claim });
+    expect(out.courses).toHaveLength(2);
+    expect(claim).toHaveBeenCalledTimes(1);
+    expect(calls).toHaveLength(2);
+    expect(calls[1].response_format).toBeUndefined();
+    expect(calls[1].messages[0].content).toContain('JSON Schema');
+  });
+
+  it('is asked again in plain mode when its answer has no class, and says both answers when that fails too', async () => {
+    const ai = { run: vi.fn(async (model, input) => ({ response: input.response_format ? { term: '', courses: [] } : 'I cannot read this image.' })) };
+    const failed = await readSchedule(ai, { bytes: png, type: 'image/png', today: '2026-09-01' }).catch((e) => e);
+    expect(failed).toMatchObject({ status: 502, body: { error: 'schedule_unreadable' } });
+    expect(failed.detail).toContain('"courses":[]');
+    expect(failed.detail).toContain('then, in plain mode:');
+    expect(failed.detail).toContain('I cannot read this image.');
+    expect(ai.run.mock.calls.length).toBeGreaterThanOrEqual(2);
+  });
+
+  it('is not asked again when the allowance is spent', async () => {
+    const ai = { run: vi.fn(async () => { throw new Error('AiError: 4006: you have used up your daily free allocation of 10,000 neurons'); }) };
+    await expect(readSchedule(ai, { bytes: png, type: 'image/png', today: '2026-09-01' })).rejects.toMatchObject({ status: 429, body: { error: 'outline_quota' } });
+    expect(ai.run).toHaveBeenCalledTimes(1);
+  });
+});
+
+/* A made-up week laid out as an Omnivox grid is: 08:00–18:00 in 20 half-hour rows, Monday to
+   Friday; blocks in the order the browser numbers them (column by column, top to bottom). */
+const LOOKALIKE = [
+  // col, first row, last row, code, name, room
+  [0, 1, 3, '111-AAA-VF', 'History of Ideas', 'Classroom N-100'],
+  [0, 4, 7, '222-541-VA', 'Graphics Programming', 'Classroom D-201    L'],
+  [0, 10, 15, '222-521-VA', 'Network Design', 'Classroom D-202    L'],
+  [0, 16, 19, '222-511-VA', 'Cloud Services', 'Classroom D-203'],
+  [1, 4, 7, '222-531-VA', 'Embedded Systems', 'Classroom D-204'],
+  [1, 16, 19, '222-511-VA', 'Cloud Services', 'Classroom D-205    L'],
+  [2, 1, 4, '222-531-VA', 'Embedded Systems', 'Classroom D-204    L'],
+  [2, 5, 8, '222-541-VA', 'Graphics Programming', 'Classroom D-201    L'],
+  [2, 12, 17, '333-E02-MQ', 'Projet intégrateur', 'Classroom A-300'],
+  [3, 1, 3, '111-AAA-VF', 'History of Ideas', 'Classroom N-100'],
+  [3, 4, 7, '222-511-VA', 'Cloud Services', 'Classroom D-206    L'],
+  [3, 12, 15, '222-521-VA', 'Network Design', 'Classroom D-207'],
+  [4, 4, 7, '222-541-VA', 'Graphics Programming', 'Classroom D-203'],
+  [4, 12, 15, '222-531-VA', 'Embedded Systems', 'Classroom D-204    L'],
+];
+const LOOKALIKE_GRID = '5.20|' + LOOKALIKE.map(([c, f, t]) => c + ':' + f + '-' + t).join(',');
+const lookalikeAnswer = (extra = []) => ({
+  days: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'], firstTime: '08:00', lastTime: '18:00', term: '',
+  blocks: [...LOOKALIKE.map(([, , , code, name, room], i) => ({ n: i + 1, code: code + ' sec.00002', name, room, kind: '' })), ...extra],
+});
+
+describe('a screenshot whose grid the browser found', () => {
+  it('reads ?grid=, and refuses one that does not hold together', () => {
+    expect(parseGrid('5.20|0:1-3,4:12-15')).toEqual({ cols: 5, rows: 20, blocks: [{ col: 0, from: 1, to: 3 }, { col: 4, from: 12, to: 15 }] });
+    expect(parseGrid('')).toBeNull();
+    expect(parseGrid('5.20|5:1-3')).toBeNull();      // no sixth column
+    expect(parseGrid('5.20|0:3-1')).toBeNull();      // ends before it starts
+    expect(parseGrid('5.20|0:1-20')).toBeNull();     // past the last row
+    expect(parseGrid('5.20|0:1-3;DROP')).toBeNull();
+  });
+
+  it('puts each block on its column\'s weekday and its rows\' times: all 14 classes of the look-alike exactly', () => {
+    const grid = parseGrid(LOOKALIKE_GRID);
+    const out = cleanGrid({ response: lookalikeAnswer() }, grid);
+    const meetings = out.courses.flatMap((c) => c.classes.map((m) => [c.code, m.weekday, m.start, m.end, m.room, m.kind]));
+    expect(meetings).toHaveLength(14);
+    expect(meetings).toEqual(expect.arrayContaining([
+      ['111AAAVF', 1, '08:30', '10:00', 'N-100', 'Lecture'],
+      ['222541VA', 1, '10:00', '12:00', 'D-201', 'Lab'],
+      ['222521VA', 1, '13:00', '16:00', 'D-202', 'Lab'],
+      ['222511VA', 1, '16:00', '18:00', 'D-203', 'Lecture'],
+      ['222531VA', 2, '10:00', '12:00', 'D-204', 'Lecture'],
+      ['222511VA', 2, '16:00', '18:00', 'D-205', 'Lab'],
+      ['222531VA', 3, '08:30', '10:30', 'D-204', 'Lab'],
+      ['222541VA', 3, '10:30', '12:30', 'D-201', 'Lab'],
+      ['333E02MQ', 3, '14:00', '17:00', 'A-300', 'Lecture'],
+      ['111AAAVF', 4, '08:30', '10:00', 'N-100', 'Lecture'],
+      ['222511VA', 4, '10:00', '12:00', 'D-206', 'Lab'],
+      ['222521VA', 4, '14:00', '16:00', 'D-207', 'Lecture'],
+      ['222541VA', 5, '10:00', '12:00', 'D-203', 'Lecture'],
+      ['222531VA', 5, '14:00', '16:00', 'D-204', 'Lab'],
+    ]));
+    expect(out.courses.map((c) => c.code)).toEqual(['111AAAVF', '222541VA', '222521VA', '222511VA', '222531VA', '333E02MQ']);
+  });
+
+  it('drops a block the model says is empty (a scribble), and one it said nothing of', () => {
+    const grid = parseGrid(LOOKALIKE_GRID + ',3:17-17,4:17-17');
+    const out = cleanGrid({ response: lookalikeAnswer([{ n: 15, code: '', name: '', room: '', empty: true }]) }, grid);
+    expect(out.courses.flatMap((c) => c.classes)).toHaveLength(14);
+  });
+
+  it('drops a block with no code when the others have one (handwriting the model copied), but keeps one named as a coded course', () => {
+    const grid = parseGrid(LOOKALIKE_GRID + ',3:17-17,4:17-17');
+    const out = cleanGrid({ response: lookalikeAnswer([
+      { n: 15, code: '', name: 'ml', room: '' },
+      { n: 16, code: '', name: lookalikeAnswer().blocks[0].name, room: 'X-1' },
+    ]) }, grid);
+    expect(out.courses.flatMap((c) => c.classes)).toHaveLength(15);
+    expect(out.courses.some((c) => c.name === 'ml')).toBe(false);
+    expect(out.courses.find((c) => c.name === lookalikeAnswer().blocks[0].name).classes.some((m) => m.room === 'X-1')).toBe(true);
+  });
+
+  it('takes the weekdays from the headings (a grid from Sunday), and Monday first without them', () => {
+    const grid = parseGrid('7.20|0:1-3,1:1-3');
+    const answer = { days: ['Dim', 'Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam'], firstTime: '8:00 AM', lastTime: '6:00 PM', blocks: [{ n: 1, code: 'A 1', name: 'A', room: '' }, { n: 2, code: 'B 1', name: 'B', room: '' }] };
+    expect(cleanGrid(answer, grid).courses.map((c) => c.classes[0].weekday)).toEqual([0, 1]);
+    expect(cleanGrid({ ...answer, days: [] }, parseGrid('5.20|0:1-3')).courses[0].classes[0]).toMatchObject({ weekday: 1, start: '08:30', end: '10:00' });
+  });
+
+  it('answers 502, saying why, when the side\'s times cannot be read', () => {
+    const failed = (() => { try { cleanGrid({ ...lookalikeAnswer(), lastTime: '' }, parseGrid(LOOKALIKE_GRID)); } catch (e) { return e; } })();
+    expect(failed).toMatchObject({ status: 502, body: { error: 'schedule_unreadable' } });
+    expect(failed.detail).toContain('grid times not read');
+  });
+
+  it('asks the vision model for the numbered blocks\' words, with where each is', async () => {
+    const ai = fakeAi(lookalikeAnswer());
+    const out = await readSchedule(ai, { bytes: new Uint8Array([0xff, 0xd8, 0xff, 0, 1, 2]), type: 'image/jpeg', today: '2026-09-01', grid: LOOKALIKE_GRID });
+    const [model, input] = ai.calls[0];
+    expect(model).toBe(VISION_MODEL);
+    expect(input.messages[0].content).toContain('red number');
+    expect(input.messages[1].content[0].text).toContain('block 1: column 1, rows 2–4');
+    expect(input.response_format.json_schema.required).toContain('blocks');
+    expect(out.courses.flatMap((c) => c.classes)).toHaveLength(14);
+  });
+
+  it('reads the picture as before when ?grid= is missing or bad', async () => {
+    const ai = fakeAi(REPLY);
+    await readSchedule(ai, { bytes: new Uint8Array([0xff, 0xd8, 0xff, 0]), type: 'image/jpeg', today: '2026-09-01', grid: 'nonsense' });
+    expect(ai.calls[0][1].messages[0].content).not.toContain('red number');
+  });
+});
+
+describe("a PDF's grid lines", () => {
+  /* the lines the browser writes from the look-alike's PDF (test/fixtures/omnivox-grid.html), checked by hand */
+  const clock = (r) => { const m = 480 + r * 30; return String(Math.floor(m / 60)).padStart(2, '0') + ':' + String(m % 60).padStart(2, '0'); };
+  const D = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
+  const TEXT = '### Page 1\nTimetable grid (each line is one class: its weekday and its start and end times, read from the page layout):\n'
+    + LOOKALIKE.map(([c, f, t, code, name, room]) => D[c] + ' ' + clock(f) + '-' + clock(t + 1) + ' | ' + name + ' | ' + code + ' sec.00002 | ' + room.replace(/\s+/g, ' ') + ' | Classroom').join('\n');
+
+  it('give every class its weekday and times, whatever the model made of them', () => {
+    /* what went wrong live: starts a row late, ends made up, a class on the wrong day, one dropped */
+    const model = { term: '', courses: [
+      { code: '111AAAVF', name: 'History of Ideas', classes: [{ kind: 'Lecture', weekday: 1, start: '09:00', end: '10:00', room: 'N-100' }] },
+      { code: '222541VA', name: 'Graphics Programming', classes: [{ kind: 'Lab', weekday: 1, start: '10:30', end: '12:00', room: 'D-201' }] },
+      { code: '222521VA', name: 'Network Design', classes: [{ kind: 'Lab', weekday: 1, start: '14:30', end: '16:30', room: 'D-202' }] },
+      { code: '222511VA', name: 'Cloud Services', classes: [{ kind: 'Lecture', weekday: 3, start: '12:00', end: '14:30', room: 'D-206' }] },
+      { code: '222531VA', name: 'Embedded Systems', classes: [{ kind: 'Lecture', weekday: 2, start: '10:30', end: '12:00', room: 'D-204' }] },
+      { code: '333E02MQ', name: 'Projet intégrateur', classes: [{ kind: 'Lab', weekday: 3, start: '15:00', end: '16:30', room: 'A-300' }] },
+    ] };
+    const out = onGridLines(model, TEXT);
+    const meetings = out.courses.flatMap((c) => c.classes.map((m) => [c.code, m.weekday, m.start, m.end, m.room]));
+    expect(meetings).toHaveLength(14);
+    expect(meetings).toEqual(expect.arrayContaining([
+      ['111AAAVF', 1, '08:30', '10:00', 'N-100'], ['111AAAVF', 4, '08:30', '10:00', 'N-100'],
+      ['222541VA', 1, '10:00', '12:00', 'D-201'], ['222541VA', 3, '10:30', '12:30', 'D-201'], ['222541VA', 5, '10:00', '12:00', 'D-203'],
+      ['222521VA', 1, '13:00', '16:00', 'D-202'], ['222521VA', 4, '14:00', '16:00', 'D-207'],
+      ['222511VA', 1, '16:00', '18:00', 'D-203'], ['222511VA', 2, '16:00', '18:00', 'D-205'], ['222511VA', 4, '10:00', '12:00', 'D-206'],
+      ['222531VA', 2, '10:00', '12:00', 'D-204'], ['222531VA', 3, '08:30', '10:30', 'D-204'], ['222531VA', 5, '14:00', '16:00', 'D-204'],
+      ['333E02MQ', 3, '14:00', '17:00', 'A-300'],
+    ]));
+    /* a lab by its room's lone "L" */
+    expect(out.courses.find((c) => c.code === '222531VA').classes.map((m) => m.kind)).toEqual(['Lecture', 'Lab', 'Lab']);
+  });
+
+  it("leave the model's classes when a line names none of its courses, or there are no lines", () => {
+    const model = { term: '', courses: [{ code: 'XYZ1', name: 'Other', classes: [{ kind: 'Lecture', weekday: 1, start: '09:00', end: '10:00', room: '' }] }] };
+    expect(onGridLines(model, TEXT)).toBe(model);
+    expect(onGridLines(model, 'no grid here')).toBe(model);
   });
 });
 

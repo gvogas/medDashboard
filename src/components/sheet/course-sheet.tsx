@@ -2,7 +2,8 @@
 // and for a course with weighted items, the grades so far and what the rest needs. It is
 // a draft until Save; leaving with changes asks first.
 // Opened with a class's key (from the class sheet's Edit class details), it edits the
-// class's shared facts for everyone: no grades, archive or delete, which are each member's.
+// class's shared facts for everyone: no grades, archive or delete, which are each member's;
+// its credits and grade categories are the class's, and set here.
 
 import { useEffect, useId, useMemo, useRef, useState } from "react"
 import { cn } from "@/lib/utils"
@@ -25,6 +26,7 @@ import {
 } from "./fields"
 import { TimeField } from "./time-field"
 import { Grades } from "./grades"
+import { GradeSetup } from "./grade-setup"
 import { ShareCourse } from "./share-course"
 
 const WEEK = [1, 2, 3, 4, 5, 6, 0]
@@ -146,6 +148,7 @@ export function CourseSheet({ id }: { id: string | null }) {
                         : <Note>Twelve classes is the most a course can hold.</Note>}
                 </Section>
 
+                <GradeSetup course={draft} shared={!!shared} onChange={edit} />
                 {!isNew && !shared && <Grades course={draft} items={mine} whatIf={whatIf} setWhatIf={setWhatIf} onTarget={(target) => edit({ target })} />}
                 {!isNew && !shared && <ShareCourse courseId={draft.id} dirty={changed} />}
                 {!isNew && !shared && mine.length > 0 && (

@@ -28,7 +28,7 @@ export function StudyTiles() {
                     ? t.today.sub
                     : (
                         <button type="button" onClick={() => openSettings("goalGrp")}
-                            className="cursor-pointer border-0 bg-transparent px-0 py-0.5 font-[inherit] text-[12.5px] font-semibold text-accent-foreground underline underline-offset-2">
+                            className="hit cursor-pointer border-0 bg-transparent px-0 py-0.5 font-[inherit] text-[12.5px] font-semibold text-accent-foreground underline underline-offset-2">
                             Set a daily goal
                         </button>
                     )}

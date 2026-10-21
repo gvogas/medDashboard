@@ -45,7 +45,7 @@ export const Section = ({ title, note, children }: { title: ReactNode; note?: Re
 
 /* ── buttons ── */
 
-const BUTTON = "inline-flex cursor-pointer items-center justify-center gap-1.5 rounded-[10px] border px-3.5 py-[7px] font-[inherit] text-[12.5px] leading-tight transition-[filter,color,border-color] disabled:cursor-default"
+const BUTTON = "hit inline-flex cursor-pointer items-center justify-center gap-1.5 rounded-[10px] border px-3.5 py-[7px] font-[inherit] text-[12.5px] leading-tight transition-[filter,color,border-color] disabled:cursor-default"
 
 /** The sheet's buttons: the accent gradient, the study colour, the quiet ghost, or the crit colour. */
 export function Button({ variant = "primary", className, ...props }: ComponentProps<"button"> & { variant?: "primary" | "study" | "ghost" | "danger" }) {
@@ -72,7 +72,7 @@ export const IconButton = ({ className, ...props }: ComponentProps<"button">) =>
         type="button"
         {...props}
         className={cn(
-            "cursor-pointer rounded-[9px] border border-border bg-[linear-gradient(var(--panel),var(--panel-2))] px-2 py-1 font-[inherit] text-[12px] leading-tight text-ink-2 shadow-[var(--shadow-1),inset_0_1px_0_var(--rim-hi)] hover:border-[color-mix(in_srgb,var(--accent)_50%,var(--line))] hover:text-accent-foreground",
+            "hit cursor-pointer rounded-[9px] border border-border bg-[linear-gradient(var(--panel),var(--panel-2))] px-2 py-1 font-[inherit] text-[12px] leading-tight text-ink-2 shadow-[var(--shadow-1),inset_0_1px_0_var(--rim-hi)] hover:border-[color-mix(in_srgb,var(--accent)_50%,var(--line))] hover:text-accent-foreground",
             className,
         )}
     />
@@ -80,7 +80,7 @@ export const IconButton = ({ className, ...props }: ComponentProps<"button">) =>
 
 /** ✕ beside a step, a link or a class. */
 export const RemoveButton = ({ className, ...props }: ComponentProps<"button">) => (
-    <button type="button" {...props} className={cn("cursor-pointer border-0 bg-transparent px-1 font-[inherit] text-[14px] leading-none text-muted-foreground hover:text-destructive", className)}>✕</button>
+    <button type="button" {...props} className={cn("hit cursor-pointer border-0 bg-transparent px-1 font-[inherit] text-[14px] leading-none text-muted-foreground hover:text-destructive", className)}>✕</button>
 )
 
 /* ── fields ── */
@@ -190,13 +190,15 @@ export function TitleArea({ className, value, ...props }: ComponentProps<"textar
         t.style.height = "auto"
         t.style.height = t.scrollHeight + "px"
     }, [value])
+    /* shrink-0: the sheet's body is a scrolling flex column, and a long sheet (a course with its
+       grade setup) would otherwise squeeze the title down to its padding */
     return (
         <textarea
             ref={ref}
             rows={1}
             value={value}
             {...props}
-            className={cn("w-full resize-none overflow-hidden rounded-md border-0 bg-transparent px-0 pt-0 pb-1 font-[inherit] text-[22px] leading-[1.22] font-[750] tracking-[-.02em] text-foreground outline-none placeholder:text-muted-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)]", className)}
+            className={cn("w-full shrink-0 resize-none overflow-hidden rounded-md border-0 bg-transparent px-0 pt-0 pb-1 font-[inherit] text-[22px] leading-[1.22] font-[750] tracking-[-.02em] text-foreground outline-none placeholder:text-muted-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)]", className)}
         />
     )
 }
@@ -214,7 +216,7 @@ export function Segmented<T extends string>({ value, options, onChange, label, i
                     aria-pressed={v === value}
                     onClick={(e) => { if (v !== value) onChange(v, e.currentTarget) }}
                     className={cn(
-                        "flex-1 cursor-pointer rounded-lg border-0 bg-transparent px-2.5 py-1 font-[inherit] text-[12px] font-semibold whitespace-nowrap text-ink-2 hover:text-foreground",
+                        "hit flex-1 cursor-pointer rounded-lg border-0 bg-transparent px-2.5 py-1 font-[inherit] text-[12px] font-semibold whitespace-nowrap text-ink-2 hover:text-foreground",
                         v === value && "bg-card text-accent-foreground shadow-[0_1px_2px_rgba(0,0,0,.1),inset_0_1px_0_var(--rim-hi)]",
                     )}
                 >{text}</button>

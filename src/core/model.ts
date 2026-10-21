@@ -3,6 +3,8 @@
 // touches the DOM or storage; the type list is read through a getter boot.ts sets.
 
 import { diffDays, today, parse, addDays, iso } from './dates.ts';
+import { MAX_CATEGORIES, MAX_DROP } from './grades.ts';
+import type { GradeCategory } from './grades.ts';
 import type { Achievement, ChecklistEntry, Course, Flow, Item, ItemType, Mark, Meeting, Quote, SpacePref, StepKind, StudyPrefs, StudySession, TypePref } from './types.ts';
 
 /** How a type looks: its name, its plural and its colour. */
@@ -267,6 +269,7 @@ export function normalizeItem(raw: RawItem): Item {
     dept: cut(raw.dept, 40),
     completedAt: typeof raw.completedAt === 'number' ? raw.completedAt : null,
     classId: typeof raw.classId === 'string' && raw.classId ? raw.classId : null,
+    category: typeof raw.category === 'string' && raw.category ? raw.category.slice(0, 24) : null,
     createdAt: raw.createdAt ?? null,
     revision: raw.revision ?? 0, updatedAt: raw.updatedAt ?? null,
   };
@@ -297,9 +300,25 @@ export function normalizeCourse(raw: RawCourse, index = 0): Course {
           };
         })
       : [],
+    credits: typeof raw.credits === 'number' && raw.credits >= 0 && raw.credits <= 30 ? raw.credits : null,
+    gradeCategories: normalizeCategories(raw.gradeCategories),
     createdAt: raw.createdAt ?? null,
     revision: raw.revision ?? 0, updatedAt: raw.updatedAt ?? null,
   };
+}
+
+/** A course's grade categories as they may arrive: unreadable ones left out, ids unique, at most twelve. */
+export function normalizeCategories(raw: unknown): GradeCategory[] {
+  if (!Array.isArray(raw)) return [];
+  const seen = new Set<string>();
+  return raw.flatMap((c): GradeCategory[] => {
+    if (!c || typeof c !== 'object') return [];
+    const o = c as Record<string, unknown>, id = typeof o.id === 'string' ? o.id.slice(0, 24) : '';
+    if (!id || seen.has(id)) return [];
+    seen.add(id);
+    const weight = typeof o.weight === 'number' && o.weight >= 0 && o.weight <= 100 ? o.weight : 0;
+    return [{ id, name: cut(o.name, 40) || 'Category', weight, drop: isInt(o.drop) ? Math.max(0, Math.min(MAX_DROP, o.drop)) : 0 }];
+  }).slice(0, MAX_CATEGORIES);
 }
 
 export function normalizeQuote(raw: Raw<Quote>): Quote {
@@ -312,6 +331,7 @@ export const FLOW_PRESETS: [string, Flow][] = [
   ['Classic 25/5', { steps: [['study', 25], ['break', 5]], rounds: 4 }],
   ['Deep 50/10', { steps: [['study', 50], ['break', 10]], rounds: 3 }],
   ['Anki then read', { steps: [['study', 20], ['break', 5], ['study', 40], ['break', 15]], rounds: 2 }],
+  ['Sprint 15/3', { steps: [['study', 15], ['break', 3]], rounds: 3 }],
 ];
 /* `+v` as the plain JS had it: whatever the stored value is, it is read as a number. */
 const clampInt = (v: unknown, lo: number, hi: number, dflt: number) => Number.isFinite(+(v as number)) ? Math.max(lo, Math.min(hi, Math.round(+(v as number)))) : dflt;
@@ -329,8 +349,11 @@ export function normalizeFlow(raw: unknown): Flow {
 
 /* The study goal and streak rules: a daily goal in minutes (0 = none), the least that
    makes a day count toward the streak, rest days (0 = Sunday) that never break it, and
-   whether to celebrate. The server keeps what it is given; this fills the gaps. */
-const DEFAULT_PREFS: StudyPrefs = { goal: 0, dayMin: 15, rest: [], celebrate: true };
+   whether to celebrate, whether the calendar feed carries reminders, and the day spaced
+   reviews were turned on (null = off; missing until it is first saved). `setupDone` is there
+   only once the first-run setup was finished or skipped, so it is never offered again on
+   another device. The server keeps what it is given; this fills the gaps. */
+const DEFAULT_PREFS: StudyPrefs = { goal: 0, dayMin: 15, rest: [], celebrate: true, alarms: true };
 export function normalizePrefs(raw: unknown): StudyPrefs {
   const p = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>;
   const rest = Array.isArray(p.rest) ? [...new Set((p.rest as unknown[]).filter((d): d is number => isInt(d) && d >= 0 && d <= 6))].sort().slice(0, 6) : [];
@@ -339,6 +362,9 @@ export function normalizePrefs(raw: unknown): StudyPrefs {
     dayMin: clampInt(p.dayMin, 1, 240, DEFAULT_PREFS.dayMin),
     rest,
     celebrate: p.celebrate === undefined ? true : !!p.celebrate,
+    alarms: p.alarms === undefined ? true : !!p.alarms,
+    ...('reviews' in p && { reviews: typeof p.reviews === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(p.reviews) ? p.reviews : null }),
+    ...(p.setupDone === true ? { setupDone: true } : {}),
   };
 }
 

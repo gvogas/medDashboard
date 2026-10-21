@@ -22,9 +22,11 @@ export function courseChanged(draft: Course, stored: Course | null): boolean {
     return JSON.stringify(normalizeCourse(draft)) !== JSON.stringify(normalizeCourse(stored))
 }
 
-/** The course as it is saved: a missing code becomes the name's first four letters. */
-export const forSaving = (draft: Course): Course =>
-    ({ ...draft, code: draft.code.trim() || draft.name.trim().slice(0, 4).toUpperCase() })
+/** The course as it is saved: a missing code becomes the name's first four letters, a category with no name "Category". */
+export const forSaving = (draft: Course): Course => ({
+    ...draft, code: draft.code.trim() || draft.name.trim().slice(0, 4).toUpperCase(),
+    gradeCategories: (draft.gradeCategories ?? []).map((c) => ({ ...c, name: c.name.trim() || "Category" })),
+})
 
 /** The course sheet's semester choices: each semester of the calendar, then all year ('' is stored). */
 export const semesterOptions = (cal: SchoolCalendar): [string, string][] =>

@@ -41,6 +41,7 @@ import {
     stopRun, stripSegments, tickTitle, timeText, todaySoFar, toggleMusic, togglePause, useFlow, useRun, type Run,
 } from "./study-timer"
 import { ui } from "./ui"
+import { hideToast, runToastAction } from "./toast"
 import type { Course, Flow, Item, StudySession } from "./types"
 
 /* every redraw goes through the bridge */
@@ -78,7 +79,7 @@ describe("the presets and the flow's name", () => {
     const READ: Flow = { steps: [["study", 20], ["break", 5], ["study", 40], ["break", 15]], rounds: 2 }
 
     it("name the third preset for the theme, with the same flow in every theme", () => {
-        expect(presetsFor("med").map(([name]) => name)).toEqual(["Classic 25/5", "Deep 50/10", "Anki then read"])
+        expect(presetsFor("med").map(([name]) => name)).toEqual(["Classic 25/5", "Deep 50/10", "Anki then read", "Sprint 15/3"])
         expect(presetsFor("cs")[2]).toEqual(["LeetCode then read", READ])
         expect(presetsFor("eng")[0]).toEqual(["Classic 25/5", CLASSIC])
     })
@@ -296,6 +297,23 @@ describe("editing the flow", () => {
         expect(await applyPreset(1)).toBe(true)
         expect(flow()).toEqual({ steps: [["study", 50], ["break", 10]], rounds: 3 })
         expect(await applyPreset(9)).toBe(false)
+    })
+
+    it("offers Undo when a preset replaces a flow of your own, and none for a preset", async () => {
+        await addStep("study")
+        const own = flow()
+        hideToast()
+        expect(await applyPreset(3)).toBe(true)
+        expect(flow()).toEqual({ steps: [["study", 15], ["break", 3]], rounds: 3 })
+        runToastAction()
+        await vi.waitFor(() => expect(flow()).toEqual(own))
+
+        await applyPreset(0)
+        hideToast()
+        await applyPreset(1)
+        runToastAction()
+        await Promise.resolve()
+        expect(flow()).toEqual({ steps: [["study", 50], ["break", 10]], rounds: 3 })
     })
 
     it("reads a damaged saved flow as the default", () => {

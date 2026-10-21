@@ -23,6 +23,8 @@ import { deleteItem, openCourse } from "@/data/actions"
 import { courseByKey, keyOf } from "@/data/effective"
 import { itemCourseKey, keyedItems, placeCourse } from "@/data/refs"
 import { addToClass, canAddToClass } from "@/data/marks"
+import { hintFor } from "@/data/next"
+import { toast } from "@/data/toast"
 import { accent, StatusChip } from "@/components/views/bits"
 import type { Item } from "@/data/types"
 import {
@@ -34,6 +36,7 @@ import { DatePicker } from "./date-picker"
 import { ICONS } from "./prop-icons"
 import { Checklist, Links } from "./item-parts"
 import { ShareItem } from "./share-item"
+import { WeightProp } from "./grade-setup"
 
 /** Fields saved once typing pauses; the rest save at once. */
 const TYPED: ItemField[] = ["title", "notes", "where", "dept", "checklist"]
@@ -90,6 +93,9 @@ export function ItemSheet({ id, draft }: { id?: string; draft?: Item }) {
         void editNow(it.id, patch).then(() => {
             const row = store.item(it.id) as Item | null
             if (field === "status" && row) return chainReview(row)
+            /* moved onto a crowded day or week: say so, without stopping anything */
+            const crunch = field === "date" && row ? hintFor(row) : null
+            if (crunch) toast(crunch)
         })
     }
 
@@ -117,6 +123,8 @@ export function ItemSheet({ id, draft }: { id?: string; draft?: Item }) {
     }
     const unfold = (part: "steps" | "notes" | "links") => { setUnfolded((u) => ({ ...u, [part]: true })); setFocus(part) }
     const test = isTest(it.type)
+    /* a new item that would crowd a day or week says so beside Save */
+    const crunch = isNew && it.date ? hintFor(it) : null
 
     return (
         <>
@@ -214,12 +222,8 @@ export function ItemSheet({ id, draft }: { id?: string; draft?: Item }) {
                     )}
 
                     {gradable && (
-                        <Prop icon={ICONS.weight} label="Weight" htmlFor={f + "weight"}>
-                            <span className="flex items-center gap-1">
-                                <NumberInput id={f + "weight"} className={cn(QUIET, "w-16")} min={0} max={100} step="any" placeholder="—" value={it.weight ?? ""} onChange={(e) => set("weight", e.target.value)} />
-                                <span className="text-muted-foreground">% of the course grade</span>
-                            </span>
-                        </Prop>
+                        <WeightProp item={it} course={c} items={items.filter((x) => itemCourseKey(x) === itemCourseKey(it))}
+                            onWeight={(v) => set("weight", v)} onCategory={(id) => set("category", id)} />
                     )}
 
                     {it.status === "graded" && (
@@ -280,7 +284,7 @@ export function ItemSheet({ id, draft }: { id?: string; draft?: Item }) {
             </SheetBody>
 
             {isNew ? (
-                <SheetFoot hint={it.title.trim() ? <span className="text-[var(--done-ink)]">Ready to save</span> : "Give it a name to save"}>
+                <SheetFoot hint={crunch ? <span role="status" className="text-[var(--warn)]">{crunch}</span> : it.title.trim() ? <span className="text-[var(--done-ink)]">Ready to save</span> : "Give it a name to save"}>
                     <Button variant="ghost" onClick={closeSheet}>Cancel</Button>
                     <Button disabled={!it.title.trim()} onClick={() => void save()}>Save item</Button>
                 </SheetFoot>

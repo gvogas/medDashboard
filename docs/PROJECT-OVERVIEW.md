@@ -27,14 +27,18 @@ a Spotify player and an admin page.
 | --- | --- |
 | Courses | Code, name, one of 12 colours, instructor, semester, archived flag, and a list of weekly meetings (Lecture/Lab/Seminar/Tutorial/PBL/Clinical, weekday, start, end, room). |
 | Items | 8 types, each with its own set of statuses. Every item has a date, times, location, notes, a checklist, links, a grade and a weight, and can repeat weekly (office hours). |
-| Views | **Week** (one band per day), **Month** (calendar of classes and deadlines), **All items** (sortable, filterable table), **Study**, **Music**, **Admin** (admins only). |
+| Views | **Week** (one band per day), **Month** (calendar of classes and deadlines), **All items** (sortable, filterable table), **Study**, **Music**, **Admin** (admins only). Under 700px the Week page is an **Agenda** by default: days from today, empty runs folded into "Nothing until …", with an Agenda \| Week switch kept per browser (`src/data/agenda.ts`). Small controls get a 44px touch area on touch screens (`.hit` in `src/index.css`). |
+| Up next and crunch | The Week opens with **Up next**: at most 7 things to do now (`src/core/next.ts`), scored by how soon each is due (overdue first, nothing more than two weeks out), what it is worth (its weight, or a default for tests, assignments and projects) and how far behind its exam prep is (`prepPace`). Lecture reviews come in once due. Each row has a reason ("Exam in 4 days · worth 30% · 8 topics left · ~2 a day"); tasks tick off in place, team tasks included, and the panel folds away. It leaves out hidden sources and keeps only your own project tasks. **Crunch** marks (`src/core/workload.ts`): two or more tests on a day, three or more exams in a week, or three or more weighted deadlines within 48 hours, as a band and day tags on the Week and the Month, and a hint when you save or re-date an item. |
+| First-run setup | An account with no courses, items, classes or projects gets a short setup in place of an empty Week (`src/data/setup.ts`), after its first sync: a theme, a timetable and a course outline through Import with AI (or New course when that is switched off), then lecture reviews and a daily goal. Each step can be skipped; finishing or skipping saves `studyPrefs.setupDone`, so no device offers it again. |
 | Stats | Four boxes: next exam or quiz countdown, open assignments, overdue, studied today against a goal and the streak. |
-| Grades | Weighted average per course, what the remaining work needs to reach a target, and "what if" scores. |
+| Grades | Weighted average per course, what the remaining work needs to reach a target, and "what if" scores. A course can split its grade into **categories** ("Quizzes 20%, drop the lowest 2") and an item can count in one: its share is the category's weight divided equally among the items that count, after the lowest scores (real or what-if) are dropped, one scored item always kept. Items in no category keep their own weights. Each course has **credits** (3 when empty); the sidebar shows a credit-weighted **GPA** for the semester shown and overall, read off a grading scale (a 4.0 scale by default) each person edits in Settings → Study → Grading, with their own pass marks in place of 50/60/70 (`src/core/grades.ts`, `src/data/gpa.ts`). In a class the categories, credits and each item's category are class facts. |
 | Semesters | A school calendar (1–4 semesters, special days: off, break, exams, swapped weekday) read from a PDF by AI. Courses belong to a semester. |
-| Study | A flip-clock timer that runs a flow of study and break steps you build. A focus screen. Sessions logged against a course or item. Streaks, a daily goal, a heatmap, history, spaced lecture reviews, exam prep pacing, built-in and custom achievements (with an uploaded sticker), and an opt-in leaderboard. |
+| Study | A flip-clock timer that runs a flow of study and break steps you build, or a preset (Classic 25/5, Deep 50/10, the theme's own, Sprint 15/3; replacing your own flow can be undone). A focus screen. Sessions logged against a course or item. Streaks, a daily goal, a heatmap, history, spaced lecture reviews (an account setting, `studyPrefs.reviews`, so every device follows it), exam prep pacing, built-in and custom achievements (with an uploaded sticker), and an opt-in leaderboard. History ends with a **Term recap** per semester (the last 16 weeks without a school calendar): hours in all and per course, sessions, best day, longest streak, items completed by type, exams taken, and each course's grade with its letter and the range's GPA (`src/core/recap.ts`). |
 | Themes | Six: Medicine, Computer Science, Law, Aviation, Sports, Engineering. Each has its own accent colour, sidebar picture (lab coat, badge, suit, jacket, jersey, vest), next-exam animation, wording and quote. All of them work in light, dark or follow-the-device. |
-| Import | `.ics` calendars, CSV timetables, course outlines (PDF or Word), school calendars and class schedules (PDF or screenshot) read by Workers AI. A timetable PDF's days and times are read from its grid in the browser first, so the model only copies them; a room ending in a lone "L" (Omnivox's mark) is a lab. Everything goes through a preview where the person ticks what to keep. An outline's preview can go into **My courses**, into a class you own or edit (each row New, Changed, saying what it was, or Already there; Changed rows start unticked), or into a **new class** made from it on Import (`src/data/class-import.ts`). |
-| Calendar feed | A private `.ics` link that Google or Apple Calendar can subscribe to. It carries your classes with your layer on top and your team projects (their due dates, your tasks and everyone's), and leaves out whatever you hid with the sidebar's eye toggles. |
+| Import | `.ics` calendars, CSV timetables, course outlines (PDF or Word), school calendars and class schedules (PDF or screenshot) read by Workers AI. A timetable PDF's days and times are read from its grid in the browser first, so the model only copies them; a room ending in a lone "L" (Omnivox's mark) is a lab. Everything goes through a preview where the person ticks what to keep. An outline's preview can go into **My courses**, into a class you own or edit (each row New, Changed, saying what it was, or Already there; Changed rows start unticked), or into a **new class** made from it on Import (`src/data/class-import.ts`). A timetable screenshot's grid is read from its pixels in the browser (`src/core/image-grid.ts`), so each class's day and times come from the picture and the model only copies the words in each numbered block; handwriting with no course code is dropped. The schedule preview matches courses you have by code or a close name, can replace their classes, and lets you change any class's kind, day, times and room, or which course it goes to. Every failed read is logged in Admin → Errors with its code, which the message on screen also shows. `npm run dev:fake-ai` runs the app with a fake Workers AI. |
+| Calendar feed | A private `.ics` link that Google or Apple Calendar can subscribe to. It carries your classes with your layer on top and your team projects (their due dates, your tasks and everyone's), and leaves out whatever you hid with the sidebar's eye toggles. Open exams, quizzes, assignments, labs and team projects carry alerts a day and an hour before (09:00 the day before an all-day one), unless `studyPrefs.alarms` is off; Apple Calendar shows them, Google Calendar ignores alerts in subscribed feeds. |
+| Morning digest | Each device can turn on a push notification (Settings → Connections → Reminders): sent by an hourly cron between 07:00 and 09:59 in the device's time zone, only when something is due today or tomorrow, or overdue. The push carries no payload and is signed with VAPID (an ES256 JWT made with WebCrypto, `worker/push.js`); the service worker fetches `GET /api/digest` and shows it. Off unless the three `VAPID_*` secrets are set. |
+| Undo and export | Every delete of your own can be undone from its toast for 6 s: items, courses (with their items), sessions, achievements and quotes are only hidden until then, and a checklist step, a type of your own and the school calendar are put back. Settings → Account → Data downloads a JSON backup (your rows, each class and project apart, edits not yet synced and saved conflicts) or your items as CSV, built in the browser (`src/data/backup.ts`). |
 | Spotify | Each person connects their own account. Now playing, controls, search, playlists, queue and volume. The tab itself can play music through the Web Playback SDK. |
 | Shared classes | Open to everyone signed in. A class is a shared space with its own course and items. Make one blank, from a course outline, or by converting a course (all in the **+ New** menu, beside New course), invite by username or a join code, roles (owner, editor, member). Each person keeps a private layer on it: marks on its items (status, grade, weight, notes, checklist, hidden) and prefs (colour, target, term, archived). Leaving keeps a copy of the class as your own course by default. The owner removes members (they keep a copy), archives the class (read-only for everyone, members still managed) and deletes it once nobody else is in it. A class item an editor deletes stays with whoever has something on it, marked *Removed from … by …*, until they **Keep as mine** or **Dismiss** it (editors can **Restore** it for everyone). Editors share one of their own items filed under the class with it. Deleting an account hands its classes on. The sidebar's eye toggles hide a course, a class or *Personal items* from the Week, the Month and the calendar feed (All items, grades and stats still count them). A class keeps a copy of its owner's school calendar; someone joining without one is offered it. |
 | Team projects | Open to everyone signed in (since Stage 10). **New team project** in **+ New** makes one, on its own or belonging to an item of a class you are in (its date follows the item's). Invitees join as editors. The project sheet has **Tasks** (owners and editors add, edit, assign and delete; members claim a task nobody has and complete what is theirs or everyone's), **Members** and **Activity**; the owner links or unlinks the assignment, archives, hands on, and deletes it by typing its name; anyone else leaves (their tasks become unassigned, their notes there go, nothing is copied). 200 live tasks per project. A **Projects** group in the sidebar lists them, each with a progress ring and an eye that hides it from the Week and Month. In the views (Stage 9): the Week and the Month show a project's due date and only the tasks assigned to you or to everyone; a project linked to a class assignment due the same day folds into the assignment's chip ("Team · …"). Ticking a team task there completes it for the team (or a toast says why not). Stats count your open and overdue tasks, achievements the tasks you completed, and the Study pickers offer a "Team · <name>" course per project, of your tasks. All items has a **Source** filter (Personal, a class, a project) and says who has each task. A task opens in its own card (**Team** and **Yours**). The project sheet shows progress ("12 / 18 · 67%"), each member's workload in the assignee picker, the linked assignment for those who hold its class (with **Use this date** when the dates drift, or "Linked assignment removed"), and the tasks you hid. The calendar feed carries each project's due date ("Team · <name>") and your tasks and everyone's ("<name> · <task>"). The inbox tells you of a task given to you or to everyone, its completion, new and deleted tasks, a removal and a deleted project. |
@@ -56,7 +60,8 @@ flowchart LR
   W --> AI[Workers AI]
   W --> S[Spotify Web API]
   W --> CF[Cloudflare GraphQL analytics]
-  C[Nightly cron 03:00 UTC] --> W
+  C[Crons: hourly digest, nightly purge 03:00 UTC] --> W
+  W --> P[Browser push services]
 ```
 
 - **Front end:** React 19 + TypeScript, built by Vite 8 and styled with Tailwind 4 plus
@@ -65,7 +70,8 @@ flowchart LR
 - **Back end:** plain JavaScript (ES modules) in `worker/`, with no framework. Routes are
   a regex table in `worker/api.js`.
 - **Database:** Cloudflare D1. The schema is `migrations/0001_schema.sql` (squashed)
-  plus `0002_spaces.sql`, `0003_invites.sql`, `0004_marks.sql` and `0005_activity.sql`.
+  plus `0002_spaces.sql`, `0003_invites.sql`, `0004_marks.sql`, `0005_activity.sql`,
+  `0006_push.sql` and `0007_grades.sql`.
 - **AI:** Workers AI. `@cf/openai/gpt-oss-120b` reads text (outlines, calendars,
   schedules) and `@cf/meta/llama-4-scout-17b-16e-instruct` reads screenshots. Both
   share a limit of reads per person per day.
@@ -107,12 +113,14 @@ src/bridge.ts       tiny pub/sub: notify() → hooks redraw (useSyncExternalStor
 src/core/           framework-free logic: IndexedDB (db.ts), store, sync, api client,
                     model/normalizers, dates, grades, school calendar, history, timer,
                     achievements, importers (ics, csv, plan), PDF text extraction and
-                    timetable grids (pdftext.ts, timetable-grid.ts)
+                    timetable grids (pdftext.ts, timetable-grid.ts), Up next (next.ts),
+                    crunch marks (workload.ts), the term recap (recap.ts)
 src/data/           state + hooks + controllers on top of core: views selectors, ui state,
                     session, themes, study timer, Spotify engine, item/course edits, keyboard,
                     the inbox (inbox.ts: the unread count, the list kept offline, what each
                     activity row says and opens), team projects (projects.ts: tasks,
-                    permissions, make, link, leave, delete)
+                    permissions, make, link, leave, delete), push.ts (the digest on this
+                    device), gpa.ts, backup.ts (the export), agenda.ts, setup.ts, next.ts
 src/components/     React UI: shell, sidebar (with sidebar-projects.tsx, the Projects group),
                     top bar (with inbox-bell.tsx), views/ (week, month, table, stats), sheet/
                     (side sheets for editing items, courses, settings, import, AI;
@@ -133,7 +141,7 @@ view shows and can be tested on their own.
 
 | File | Responsibility |
 | --- | --- |
-| `index.js` | Entry: `/api/*` goes to `handleApi`, everything else to static assets. Also the nightly `scheduled()` purge. |
+| `index.js` | Entry: `/api/*` goes to `handleApi`, everything else to static assets. Also `scheduled()`: the hourly morning digests and the nightly purge, told apart by the cron. |
 | `api.js` | Route table, same-origin checks, error handling and logging. |
 | `auth.js`, `password.js`, `throttle.js` | Signed session cookie (`rounds_session`), PBKDF2-SHA256 passwords, login lockouts. |
 | `http.js` | Small HTTP helpers shared by every handler (`json`, body reading, `HttpError`, revisions). |
@@ -147,6 +155,7 @@ view shows and can be tested on their own.
 | `layer.js` | Your layer on a space: marks on its items and your prefs for it, both yours alone. |
 | `activity.js` | Activity (spec §12): `noteStmt`, the row a member or space route writes in its own batch (the triggers in `0005_activity.sql` write the rest), and the reads: the inbox, its unread count, the read marker, a space's Activity tab. |
 | `inbox.js` | The inbox routes: `GET /inbox`, `PUT /inbox/seen`, `GET /spaces/:sid/activity`. |
+| `push.js` | The morning digest: VAPID signing, `push_subscriptions`, the push and digest routes, and the hourly `sendDigests`. |
 | `maintenance.js` | Maintenance mode: stored in `app_meta`, sent with `GET /api/me`, enforced (503) for AI reads and shared classes. |
 | `limits.js` | Per-user request rate limits. |
 | `ai.js`, `outline.js`, `school.js`, `schedule.js` | Workers AI reads. They return JSON and **never save**; the browser previews and saves. |
@@ -173,6 +182,7 @@ view shows and can be tested on their own.
 - **AI reads:** `POST /outline`, `POST /school-calendar`, `POST /ai/schedule`, `GET /ai/reads`.
 - **Calendar feed:** `GET|POST|DELETE /calendar`, `GET /calendar/:userId/:token.ics` (no session).
 - **Leaderboard:** `GET|PUT /leaderboard`.
+- **Push reminders:** `GET /push/key`, `POST|DELETE /push`, `POST /push/test`, `GET /digest?tz=`.
 - **Spotify:** `/spotify/connect|callback|status|player|token|devices|search|playlists|queue|volume|…`.
 - **Admin:** `/admin/*` (admins only).
 
@@ -180,12 +190,13 @@ view shows and can be tested on their own.
 
 | Group | Tables |
 | --- | --- |
-| User data | `users` (account and profile: theme, coat, study flow and prefs, school calendar, `hidden_sources`, `is_admin`), `courses` (meetings stored as a JSON column), `items`, `quotes`, `study_sessions`, `achievements` |
+| User data | `users` (account and profile: theme, coat, study flow and prefs, school calendar, `hidden_sources`, `grading`, `is_admin`), `courses` (meetings and grade categories stored as JSON columns, credits), `items` (with a grade `category`), `quotes`, `study_sessions`, `achievements` |
 | Sharing | `spaces`, `members`, `invites`, `marks` (your layer on a class item), `space_prefs` (your colour, target, term and archive per class) |
 | Activity | `activity` (what members did, from triggers on shared rows and from the member routes; 90 days), `inbox_seen` (how far each person has read) |
 | Sync | `changes`, `sync_state` |
 | Security | `login_throttle`, `request_limits` |
 | Spotify | `spotify_tokens`, `spotify_oauth_states`, `spotify_refresh_locks` |
+| Push | `push_subscriptions` (each device that gets the morning digest) |
 | Admin | `error_log`, `admin_log`, `app_meta` (announcement, maintenance) |
 | Views | `active_items`, `account_summary` |
 
@@ -222,14 +233,15 @@ The details (lockouts, sessions, rate limits) are in `docs/DATA-MODEL.md`; secre
 index.html, src/, public/   front end (public/ = _headers, sw.js, manifest, icons)
 worker/                     API Worker
 migrations/                 D1 schema: 0001_schema (squashed), 0002_spaces, 0003_invites, 0004_marks,
-                            0005_activity
-scripts/                    add-user, build, check-db, check-secrets, csp-hash, move-db, spotify-key
+                            0005_activity, 0006_push, 0007_grades
+scripts/                    add-user, build, check-db, check-secrets, csp-hash, move-db, spotify-key,
+                            vapid-key
 test/                       Worker/API tests (vitest in the Workers runtime, local D1, fake Spotify)
 src/**/*.test.ts(x)         UI tests (vitest + jsdom + Testing Library)
 design/                     prototypes and mockups (design/term-prototype.dc.html = the redesign's source of truth)
 docs/                       PROJECT-OVERVIEW, DATA-MODEL, DEPLOYING, superpowers/ (specs and
                             plans), archive/ (finished one-off docs)
-wrangler.jsonc              Worker config: assets, D1 binding, AI binding, vars, cron
+wrangler.jsonc              Worker config: assets, D1 binding, AI binding, vars, crons
 ```
 
 ## Commands
@@ -285,6 +297,18 @@ Deploying, secrets, accounts and database moves: `docs/DEPLOYING.md`.
     project's due date and your tasks and everyone's; the inbox's project events are
     checked through the routes (no code needed); team projects open to everyone; a task's
     inline Delete asks first. No migration.
+12. **Oct 20:** Student upgrades (branch `student-upgrades`): reminders (alerts in the
+    calendar feed, a morning push digest), Up next and crunch marks on the Week and the
+    Month, grade categories with drop-lowest, credits, a GPA and an editable grading
+    scale, lecture reviews synced to the account, Undo for every personal delete, a JSON
+    and CSV export, a Sprint timer preset, a first-run setup, an Agenda for phones and
+    bigger touch targets, and a term recap. Import with AI fixed for class schedules: a
+    screenshot's grid is read from its pixels (`src/core/image-grid.ts`) and a PDF's from
+    its lines, so days and times come from the page and the model only copies each block's
+    words; courses you have are matched by code or a close name and their classes can be
+    replaced; every class can be corrected in the preview; every failed read is logged with
+    its code. Migrations `0006_push.sql` and `0007_grades.sql`; three optional `VAPID_*`
+    secrets.
 
 ## Gotchas worth knowing
 

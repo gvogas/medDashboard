@@ -3,7 +3,7 @@
 // today; and a calendar or CSV, pasted or picked as a file, instead. Settings only shows and
 // removes the school calendar.
 
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { cn } from "@/lib/utils"
 import { ui, useUi } from "@/data/ui"
 import { refreshReads } from "@/data/ai-read"
@@ -60,7 +60,15 @@ function Importer({ bar }: { bar: boolean }) {
     const [text, setText] = useState("")
     /* what Preview said about the pasted text, shown beside it */
     const [pasteError, setPasteError] = useState("")
+    /* the kind last picked: what the read said shows under its own picker, where the eye is, not
+       at the foot of a sheet taller than the screen */
+    const [last, setLast] = useState<string>(KINDS[0].id)
+    const said = useRef<HTMLParagraphElement>(null)
     const none = left === 0
+
+    useEffect(() => {
+        if (note) said.current?.scrollIntoView?.({ block: "nearest", behavior: "smooth" })
+    }, [note])
 
     useEffect(() => {
         void refreshReads()
@@ -104,8 +112,9 @@ function Importer({ bar }: { bar: boolean }) {
                             <span className="text-[11.5px] text-muted-foreground">{k.note}</span>
                             <input type="file" accept={k.accept} disabled={none} aria-label={k.title + ": " + k.pick}
                                 className="absolute inset-0 w-full cursor-pointer opacity-0 disabled:cursor-not-allowed"
-                                onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) void k.read(f) }} />
+                                onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) { setLast(k.id); void k.read(f) } }} />
                         </label>
+                        {note && last === k.id && <p ref={said} role={note.error ? "alert" : "status"} className={cn("m-0 text-[12.5px] leading-[1.45]", note.error ? "text-destructive" : "text-ink-2")}>{note.text}</p>}
                     </section>
                 ))}
                 {left != null && (
@@ -117,7 +126,6 @@ function Importer({ bar }: { bar: boolean }) {
                         <span>{none ? "No AI reads left today. They come back within a day of the first one." : left + " of " + reads + " AI reads left today · pasting a calendar or CSV doesn’t count"}</span>
                     </div>
                 )}
-                {note && <p role={note.error ? "alert" : "status"} className={cn("m-0 text-[12.5px]", note.error ? "text-destructive" : "text-ink-2")}>{note.text}</p>}
                 <details className="text-[12.5px] text-ink-2">
                     <summary className="min-h-7 cursor-pointer">Use a calendar or CSV instead</summary>
                     <p className="mt-2 mb-1.5">A .ics calendar, or CSV with the columns <span className="font-mono">type,course,title,date,start,end,room,weight</span>. Choose the file or paste its text.</p>

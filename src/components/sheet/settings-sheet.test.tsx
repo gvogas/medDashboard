@@ -21,7 +21,7 @@ const fake = vi.hoisted(() => {
     }
 })
 const actions = vi.hoisted(() => ({
-    addQuote: vi.fn(async () => true), removeQuote: vi.fn(), saveCoat: vi.fn(), exportData: vi.fn(), resolveConflict: vi.fn(),
+    addQuote: vi.fn(async () => true), removeQuote: vi.fn(), saveCoat: vi.fn(), exportData: vi.fn(), exportItemsCsv: vi.fn(), resolveConflict: vi.fn(),
     disconnectSpotify: vi.fn(), showShortcuts: vi.fn(), signOut: vi.fn(), keepSignedIn: vi.fn(), openSettings: vi.fn(), openAiImport: vi.fn(),
     setSettingsTab: vi.fn(), deleteItem: vi.fn(), deleteCourse: vi.fn(), openCourse: vi.fn(),
 }))
@@ -29,6 +29,9 @@ const api = vi.hoisted(() => ({
     calendarFeed: vi.fn(async () => ({ on: true, url: "https://x.org/cal/abc.ics" })),
     calendarRenew: vi.fn(async () => ({ on: true, url: "https://x.org/cal/new.ics" })),
     calendarStop: vi.fn(async () => undefined),
+}))
+const push = vi.hoisted(() => ({
+    pushState: vi.fn(async () => "off" as string), turnOn: vi.fn(async () => "on" as string), turnOff: vi.fn(async () => "off" as string), testPush: vi.fn(async () => "ok" as string),
 }))
 const legacy = vi.hoisted(() => ({ setTheme: vi.fn(), setBg: vi.fn(), savePrefs: vi.fn(), runReviews: vi.fn(), writeSetting: vi.fn(), saveRows: vi.fn(), saveProfile: vi.fn(), render: vi.fn() }))
 
@@ -51,8 +54,10 @@ vi.mock("@/data/theme", () => ({ setTheme: legacy.setTheme, setBg: legacy.setBg 
 vi.mock("@/data/ai-read", () => ({ readWithAi: vi.fn(), refreshReads: vi.fn(async () => {}), asSent: vi.fn(), MAX_FILE: 5 * 1024 * 1024 }))
 vi.mock("@/lib/fireworks", () => ({ launch: vi.fn() }))
 vi.mock("@/data/actions", () => actions)
+vi.mock("@/data/push", () => push)
 
 import { notify } from "@/bridge"
+import { today } from "@/core/dates"
 import { closeSheet, getSheet, openSheet } from "@/data/overlay"
 import type { ImportPlan } from "@/data/import-edit"
 import type { SchoolDraft } from "@/data/school-edit"
@@ -173,11 +178,28 @@ describe("Settings", () => {
         expect(legacy.savePrefs).toHaveBeenLastCalledWith({ celebrate: false })
     })
 
-    it("switches reviews on for this device and runs them", async () => {
+    it("switches reviews on for the account from today, or off, and runs them", async () => {
         settings("study")
-        await act(async () => fireEvent.click(screen.getByRole("checkbox", { name: /review tasks/ })))
-        expect(legacy.writeSetting).toHaveBeenCalledWith("p", { on: true, through: null })
+        const box = () => screen.getByRole("checkbox", { name: /review tasks/ }) as HTMLInputElement
+        expect(box().checked).toBe(false)
+        await act(async () => fireEvent.click(box()))
+        expect(legacy.savePrefs).toHaveBeenCalledWith({ reviews: today() })
         expect(legacy.runReviews).toHaveBeenCalled()
+
+        fake.data.profile.studyPrefs = { goal: 90, dayMin: 15, rest: [0], celebrate: true, reviews: "2026-09-01" }
+        act(() => notify())
+        expect(box().checked).toBe(true)
+        await act(async () => fireEvent.click(box()))
+        expect(legacy.writeSetting).toHaveBeenCalledWith("p", { on: false, through: null })
+        expect(legacy.savePrefs).toHaveBeenLastCalledWith({ reviews: null })
+        fake.data.profile.studyPrefs = { goal: 90, dayMin: 15, rest: [0], celebrate: true }
+    })
+
+    it("shows reviews on from this browser until the setting first syncs", () => {
+        fake.review.on = true
+        settings("study")
+        expect((screen.getByRole("checkbox", { name: /review tasks/ }) as HTMLInputElement).checked).toBe(true)
+        fake.review.on = false
     })
 
     it("has no Import on the Study tab, and sends the school calendar to Import with AI", () => {
@@ -206,6 +228,34 @@ describe("Settings", () => {
         expect(screen.getByText(/did not go through/)).toBeTruthy()
     })
 
+    it("turns the feed's alerts and this device's morning reminders on and off, and sends a test", async () => {
+        settings("connections")
+        const group = within(document.getElementById("remindersGrp")!)
+        fireEvent.click(group.getByRole("checkbox", { name: /Alerts in the calendar feed/ }))
+        expect(legacy.savePrefs).toHaveBeenCalledWith({ alarms: false })
+        const morning = await waitFor(() => {
+            const box = group.getByRole("checkbox", { name: "Morning reminders on this device" }) as HTMLInputElement
+            expect(box.disabled).toBe(false)
+            return box
+        })
+        await act(async () => fireEvent.click(morning))
+        expect(push.turnOn).toHaveBeenCalled()
+        expect(morning.checked).toBe(true)
+        await act(async () => fireEvent.click(group.getByRole("button", { name: "Send a test" })))
+        expect(group.getByText(/Sent\./)).toBeTruthy()
+        await act(async () => fireEvent.click(morning))
+        expect(push.turnOff).toHaveBeenCalled()
+        expect(morning.checked).toBe(false)
+    })
+
+    it("says why morning reminders cannot be turned on", async () => {
+        push.pushState.mockResolvedValueOnce("ios-install")
+        settings("connections")
+        const group = within(document.getElementById("remindersGrp")!)
+        expect(await group.findByText(/add Term to your Home Screen/)).toBeTruthy()
+        expect((group.getByRole("checkbox", { name: "Morning reminders on this device" }) as HTMLInputElement).disabled).toBe(true)
+    })
+
     it("shows the Spotify connection", () => {
         settings("connections")
         expect(screen.getByText("Kitchen")).toBeTruthy()
@@ -226,6 +276,11 @@ describe("Settings", () => {
         expect(actions.resolveConflict).toHaveBeenCalledWith("c1", true)
         fireEvent.click(screen.getByRole("button", { name: "Discard saved copy" }))
         expect(actions.resolveConflict).toHaveBeenCalledWith("c1", false)
+
+        fireEvent.click(screen.getByRole("button", { name: "Download my data" }))
+        expect(actions.exportData).toHaveBeenCalled()
+        fireEvent.click(screen.getByRole("button", { name: "Download items as CSV" }))
+        expect(actions.exportItemsCsv).toHaveBeenCalled()
 
         fireEvent.click(screen.getByRole("button", { name: "Sign out" }))
         expect(actions.signOut).toHaveBeenCalled()

@@ -13,10 +13,26 @@ the database, cookies and IndexedDB).
 
 - **Courses and items**: exams, quizzes, assignments, labs, tutorials, office hours,
   tasks and projects. Courses carry their weekly classes (day, time, room).
-- **Views**: Week, Month, All items, Study and Music. Admins also get Admin.
+- **Views**: Week, Month, All items, Study and Music. Admins also get Admin. The Week
+  opens with **Up next**, a ranked list of what to do now, each with its reason ("Exam in
+  4 days · worth 30% · 8 topics left"). Crowded days and weeks (two tests on a day, three
+  exams in a week, three weighted deadlines within 48 hours) are marked on the Week and the
+  Month, and saving an item that crowds one says so. On a phone the Week is an **Agenda**:
+  a list of days from today, with a switch back to the grid.
+- **First-run setup**: a new account picks a theme, imports a timetable and an outline,
+  and turns on lecture reviews and a daily goal. Every step can be skipped.
 - **Semesters and school calendar**: terms, breaks and repeating items.
 - **Grades**: weights, the average so far, what the rest needs, and "What if" scores.
-- **Study**: a flow timer, a focus screen, streaks, history and spaced review.
+  A course can split its grade into categories ("Quizzes 20%, drop the lowest 2") and
+  carries its credits; the sidebar shows your GPA for the semester and overall, on a
+  grading scale and pass marks you can edit.
+- **Study**: a flow timer with presets, a focus screen, streaks, history, a term recap
+  and spaced review (on for your account, so every device follows it).
+- **Reminders**: the calendar feed alerts a day and an hour before each open deadline,
+  and each device can turn on a morning digest, a notification of what is due today and
+  tomorrow.
+- **Undo and export**: every delete of your own can be undone from its toast for 6
+  seconds, and Settings downloads all your data as JSON or your items as CSV.
 - **Achievements and a leaderboard.**
 - **Music**: each person connects their own Spotify account.
 - **Import with AI**: course outlines, school calendars and schedule screenshots,
@@ -58,10 +74,13 @@ npm run check                     # typecheck, tests and build
 
 ## Deploying
 
-Pushing `main` deploys through Cloudflare's Git build (`npm run build`). That build does
-not apply database migrations. If a change includes a new migration, run
-`npm run db:remote` before you push. Secrets, accounts, Spotify setup and
-troubleshooting are in [docs/DEPLOYING.md](docs/DEPLOYING.md).
+Pushing `main` deploys through GitHub Actions (`.github/workflows/deploy.yml`): the
+checks run, new migrations are applied to the live database and checked, then the Worker
+goes live. If a step fails nothing after it runs. It needs the `CLOUDFLARE_API_TOKEN` and
+`CLOUDFLARE_ACCOUNT_ID` repository secrets. The morning digest needs three optional secrets (`npm run push:key` makes
+them); without them push is off and everything else works. To try a branch for real first,
+`npm run deploy:staging` puts it on a separate test site with its own database. Secrets,
+accounts, staging, Spotify setup and troubleshooting are in [docs/DEPLOYING.md](docs/DEPLOYING.md).
 
 ## Keyboard shortcuts
 

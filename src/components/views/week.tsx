@@ -4,43 +4,67 @@
 import { useState } from "react"
 import { cn } from "@/lib/utils"
 import { isOpen, isOverdue, isTest, tmeta } from "@/core/model"
-import { hhmm, parse, DOW } from "@/core/dates"
+import { addDays, hhmm, iso, monday, parse, today, DOW } from "@/core/dates"
+import { crunchesOn, type Crunch } from "@/core/workload"
 import { courseByKey, courseKeyOf, keyOf } from "@/data/effective"
 import { SourceMark } from "./source-mark"
 import { useWeek, tintOf, type Day, type Entry } from "@/data/views"
+import { useCrunches } from "@/data/next"
+import { CrunchBand, CrunchTag } from "./crunch"
+import { UpNext } from "./up-next"
 import { newItemOn, openItem, quickAddTask, toggleTask } from "@/data/actions"
 import type { Course, Item } from "@/data/types"
 import { accent, classTitle, Empty, hasSchoolTags, HeadNote, Panel, ScheduleTabs, SchoolTags, statusText, Steps, TINT } from "./bits"
+import { useWeekLayout } from "@/data/agenda"
+import { AgendaView, LayoutTabs } from "./agenda"
+import { useNeedsSetup } from "@/data/setup"
+import { Setup } from "./setup"
 
 export function WeekView() {
     const { week, officeHours, tasks, empty, schedule } = useWeek()
+    const layout = useWeekLayout()
+    const setup = useNeedsSetup()
     const n = week.count
+    /* the whole week's crunches, even while a search leaves days out */
+    const from = iso(monday(parse(week.days[0]?.date ?? today())))
+    const crunch = useCrunches(from, iso(addDays(parse(from), 6)))
+    const side = (
+        <div className="grid min-w-0 gap-[13px]">
+            <OfficeHours rows={officeHours} />
+            <Tasks list={tasks.shown} open={tasks.open} />
+        </div>
+    )
+
+    /* on a phone, the Agenda by default; office hours and tasks follow it */
+    /* a new account: the setup in place of an empty board */
+    if (setup) return <div className="grid max-w-[720px] gap-[13px]"><Setup /></div>
+    if (layout === "agenda") return <div className="grid gap-[13px]"><UpNext /><AgendaView />{side}</div>
 
     return (
         <div className="grid items-start gap-[13px] [grid-template-columns:minmax(0,1fr)_256px] max-[1040px]:[grid-template-columns:minmax(0,1fr)]">
+            <UpNext className="col-span-full" />
             <Panel
                 label="Schedule"
                 title="Schedule"
                 head={<>
                     <HeadNote>{schedule === "classes" ? "classes" : n + " item" + (n === 1 ? "" : "s")}</HeadNote>
                     <ScheduleTabs value={schedule} />
+                    <LayoutTabs value="week" />
                 </>}
             >
-                {week.days.map((d) => <DayRow key={d.date} day={d} />)}
+                <CrunchBand list={crunch} />
+                {week.days.map((d) => <DayRow key={d.date} day={d} crunch={crunchesOn(crunch, d.date).filter((c) => c.kind !== "week")} />)}
                 {!week.any && (empty
                     ? <Empty title="Nothing here yet">Add a course from the sidebar, then a first item with “New item”.</Empty>
                     : <Empty title="No matches this week">Try clearing the search or a filter.</Empty>)}
             </Panel>
 
-            <div className="grid min-w-0 gap-[13px]">
-                <OfficeHours rows={officeHours} />
-                <Tasks list={tasks.shown} open={tasks.open} />
-            </div>
+            {side}
         </div>
     )
 }
 
-function DayRow({ day }: { day: Day }) {
+function DayRow({ day, crunch }: { day: Day; crunch: Crunch[] }) {
     const tint = tintOf(day.info)
     return (
         <div className={cn(
@@ -54,12 +78,13 @@ function DayRow({ day }: { day: Day }) {
                     <span className="text-[12px] text-muted-foreground">{day.dow}</span>
                 </span>
                 {day.isToday && <span className="text-[11.5px] font-medium text-accent-foreground">Today</span>}
+                <CrunchTag list={crunch} />
                 <button
                     type="button"
                     onClick={() => newItemOn(day.date)}
                     aria-label={"Add item on " + day.date}
                     title={"Add on " + day.dow + " " + day.day + " " + day.mon}
-                    className="grid size-6 cursor-pointer place-items-center rounded-md border border-border bg-card text-[15px] leading-none text-ink-2 hover:border-[var(--accent)] hover:text-[var(--accent)]"
+                    className="hit grid size-6 cursor-pointer place-items-center rounded-md border border-border bg-card text-[15px] leading-none text-ink-2 hover:border-[var(--accent)] hover:text-[var(--accent)]"
                 >+</button>
             </div>
             <div className="flex min-w-0 flex-col gap-0.5">
@@ -178,7 +203,7 @@ function Tasks({ list, open }: { list: Item[]; open: number }) {
                                 aria-label={"Done: " + it.title}
                                 onClick={(e) => { void toggleTask(keyOf(it), e.currentTarget) }}
                                 className={cn(
-                                    "grid size-[18px] flex-none cursor-pointer place-items-center rounded-[5px] border-[1.5px] p-0",
+                                    "hit grid size-[18px] flex-none cursor-pointer place-items-center rounded-[5px] border-[1.5px] p-0",
                                     on ? "border-primary bg-primary text-primary-foreground" : "border-line-2 bg-card text-transparent hover:border-[var(--accent)]",
                                 )}
                             >

@@ -2,7 +2,7 @@ import { json, readJson, readBytes, revisionOf, HttpError } from './http.js';
 import { requireUser, requireSession, signSession, sessionCookie, clearCookie, deviceCookie, trustedDevice, parseCookies, secureFlag, sameString, hex, RENEW_WITHIN_MS } from './auth.js';
 import { verifyPassword, normalizeUsername } from './password.js';
 import { claimAttempt, recordSuccess } from './throttle.js';
-import { limitLogin, limitOutline, readsLeft } from './limits.js';
+import { giveBackOutline, limitLogin, limitOutline, readsLeft } from './limits.js';
 import { readOutline, cleanCode, MAX_BYTES } from './outline.js';
 import { readSchool } from './school.js';
 import { readSchedule } from './schedule.js';
@@ -17,6 +17,7 @@ import { adminRoutes, markSeen, readAnnouncement } from './admin.js';
 import { classRoutes } from './classes.js';
 import { layerRoutes } from './layer.js';
 import { inboxRoutes } from './inbox.js';
+import { pushRoutes } from './push.js';
 import { unreadCount } from './activity.js';
 import { logError, messageOf } from './errors.js';
 import { guardMaintenance, publicMaintenance } from './maintenance.js';
@@ -198,25 +199,42 @@ export const knownParams = (params) => ({
   codes: listParam(params.get('codes'), ',', 30, 24).map(cleanCode).filter(Boolean),
 });
 
+/* Failures where the model never answered (or the read ran out of time): the read is given
+   back, so trying again does not spend the day's reads on Cloudflare's trouble. */
+const GIVEN_BACK = new Set(['outline_quota', 'outline_unavailable', 'ai_timeout']);
+
 const aiRead = (read, what) => async ({ request, env, url }) => {
   /* one deadline for the whole read: the upload, the conversion, the model and its retry */
   const t0 = Date.now();
   const userId = await requireUser(request, env);
-  const bytes = await readBytes(request, MAX_BYTES);
-  if (!bytes.byteLength) throw new HttpError(400, { error: 'invalid', field: 'body' });
-  const date = (key) => (DATE.test(url.searchParams.get(key) || '') ? url.searchParams.get(key) : null);
+  const type = request.headers.get('content-type') || '';
+  let claimed = false, size = 0;
   try {
+    const bytes = await readBytes(request, MAX_BYTES);
+    size = bytes.byteLength;
+    if (!size) throw new HttpError(400, { error: 'invalid', field: 'body' });
+    const date = (key) => (DATE.test(url.searchParams.get(key) || '') ? url.searchParams.get(key) : null);
     return json(await read(env.AI, {
-      bytes, type: request.headers.get('content-type') || '', name: (url.searchParams.get('name') || what).slice(0, 120),
-      today: date('today') || new Date().toISOString().slice(0, 10), termStart: date('termStart'), claim: () => limitOutline(env, userId),
+      bytes, type, name: (url.searchParams.get('name') || what).slice(0, 120),
+      today: date('today') || new Date().toISOString().slice(0, 10), termStart: date('termStart'),
+      claim: async () => { await limitOutline(env, userId); claimed = true; },
       deadline: t0 + TIMEOUT_MS,
+      /* a screenshot's grid as the browser found it (schedule.js parseGrid); the other reads ignore it */
+      grid: url.searchParams.get('grid') || '',
       ...knownParams(url.searchParams),
     }));
   } catch (e) {
-    if (e instanceof HttpError) throw e;
-    console.error(what + ':', e?.message || e);
-    await logError(env.DB, { method: request.method, route: url.pathname, status: 503, message: messageOf(e), userId });
-    throw new HttpError(503, { error: 'outline_unavailable' });
+    /* Every failed read goes in the error log (Admin → Errors), the expected ones too: the
+       code the person saw, the kind of file, how long it took and, for an answer that could
+       not be used, the start of what the model said. */
+    const known = e instanceof HttpError;
+    const code = known ? e.body?.error || 'error' : 'outline_unavailable';
+    if (!known) console.error(what + ':', e?.message || e);
+    if (claimed && GIVEN_BACK.has(code)) await giveBackOutline(env, userId).catch(() => {});
+    const message = [code, what, (type.split(';')[0] || 'no type') + ' ' + size + ' bytes', (Date.now() - t0) + ' ms',
+      claimed && GIVEN_BACK.has(code) ? 'read given back' : '', known ? e.detail : messageOf(e)].filter(Boolean).join(' · ');
+    await logError(env.DB, { method: request.method, route: url.pathname, status: known ? e.status : 503, message, userId });
+    throw known ? e : new HttpError(503, { error: 'outline_unavailable' });
   }
 };
 
@@ -444,6 +462,7 @@ const routes = [
   ...classRoutes,
   ...layerRoutes,
   ...inboxRoutes,
+  ...pushRoutes,
   ...adminRoutes,
 ];
 
