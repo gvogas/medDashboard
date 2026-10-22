@@ -1,11 +1,13 @@
 // Weighted grade so far, how much of the course it covers, what the rest needs to reach 50,
 // 60, 70 or your own target, and what-if scores for what is still to come (never saved). The
 // course sheet shows it for a course of yours; the class sheet, as "Your grade so far", over
-// the class's items with your marks on top (spec §8).
+// the class's items with your marks on top (spec §8). With grade categories it shows each one,
+// and the letter comes from your grading scale (Settings), the targets from your pass marks.
 
 import { useId } from "react"
 import { cn } from "@/lib/utils"
-import { courseGrade, neededLabel, targetsFor, ungraded } from "@/core/grades"
+import { courseGrade, letterFor, neededLabel, normalizeGrading, shareOf, targetsFor, ungraded } from "@/core/grades"
+import { useProfile } from "@/data/store"
 import type { Course, Item } from "@/data/types"
 import { KeptNumberInput, Meter, Note, NumberInput, Section, Warning } from "./fields"
 
@@ -13,19 +15,34 @@ export function Grades({ title = "Grades", course, items, whatIf, setWhatIf, onT
     title?: string; course: Course; items: Item[]; whatIf: Record<string, number>; setWhatIf: (w: Record<string, number>) => void; onTarget: (t: number | null) => void
 }) {
     const f = useId()
-    const real = courseGrade(items)
+    const grading = normalizeGrading(useProfile()?.grading)
+    const cats = course.gradeCategories ?? []
+    const real = courseGrade(items, {}, cats)
     if (!real.total) return null
-    const open = ungraded(items).sort((a: Item, b: Item) => a.date.localeCompare(b.date)) as Item[]
+    const open = ungraded(items, cats).sort((a: Item, b: Item) => a.date.localeCompare(b.date)) as Item[]
     const guessed = open.some((it) => typeof whatIf[it.id] === "number")
-    const g = guessed ? courseGrade(items, whatIf) : real
-    const targets: number[] = targetsFor(course.target)
+    const g = guessed ? courseGrade(items, whatIf, cats) : real
+    const targets: number[] = targetsFor(course.target, grading.pass)
+    const letter = letterFor(real.current, grading.scale)
 
     return (
         <Section title={title} note={real.graded + " of " + real.total + "% graded"}>
             <div className="flex items-baseline gap-2">
                 <b className="text-[22px] font-semibold tabular-nums text-foreground">{real.current === null ? "—" : real.current + "%"}</b>
-                <span className="text-[11.5px] text-muted-foreground">current weighted average</span>
+                {letter && <b className="text-[15px] font-semibold text-[var(--accent)]" aria-label={"Letter grade " + letter.letter}>{letter.letter}</b>}
+                <span className="text-[11.5px] text-muted-foreground">current weighted average{letter ? " · " + letter.points + " points" : ""}</span>
             </div>
+            {g.categories.length > 0 && (
+                <ul className="m-0 flex list-none flex-col gap-1 p-0 text-[12px]">
+                    {g.categories.map((c) => (
+                        <li key={c.id} className="flex items-baseline gap-2">
+                            <span className="min-w-0 flex-1 truncate">{c.name} <span className="text-muted-foreground">· {c.weight}%</span></span>
+                            {c.dropped.length > 0 && <span className="text-[11px] text-muted-foreground">{c.dropped.length} dropped</span>}
+                            <b className="font-semibold tabular-nums">{c.current === null ? "—" : c.current + "%"}</b>
+                        </li>
+                    ))}
+                </ul>
+            )}
             {guessed && (
                 <div className="flex items-baseline gap-2">
                     <b className="text-[17px] font-semibold tabular-nums text-[var(--accent)]">{g.current}%</b>
@@ -50,7 +67,7 @@ export function Grades({ title = "Grades", course, items, whatIf, setWhatIf, onT
                         )
                     })}
                 </div>
-                <Note>What you need on the {guessed ? "other " : "remaining "}{g.remaining}% to finish at {targets.slice(0, -1).join(", ")} or {targets.at(-1)}.</Note>
+                <Note>What you need on the {guessed ? "other " : "remaining "}{g.remaining}% to finish at {targets.length > 1 ? targets.slice(0, -1).join(", ") + " or " + targets.at(-1) : targets[0]}.</Note>
             </> : course.target && g.current !== null && (
                 <Note tone={g.current >= course.target ? "ok" : "bad"}>{g.current >= course.target ? "At or above" : "Below"} your target of {course.target}%.</Note>
             )}
@@ -68,7 +85,7 @@ export function Grades({ title = "Grades", course, items, whatIf, setWhatIf, onT
                         {open.map((it) => (
                             <label key={it.id} className="flex items-center gap-2">
                                 <span className="min-w-0 flex-1 truncate">{it.title}</span>
-                                <em className="text-[11px] text-muted-foreground not-italic">{it.weight}%</em>
+                                <em className="text-[11px] text-muted-foreground not-italic">{weightLabel(it, items, cats)}</em>
                                 <NumberInput inputMode="decimal" min={0} max={100} step="any" placeholder="score" className="w-20"
                                     aria-label={"If I get this score on " + it.title}
                                     defaultValue={whatIf[it.id] ?? ""}
@@ -87,4 +104,11 @@ export function Grades({ title = "Grades", course, items, whatIf, setWhatIf, onT
             {real.total !== 100 && <Warning>Weights add up to {real.total}%, not 100.</Warning>}
         </Section>
     )
+}
+
+/** What a what-if row says an item is worth: its own weight, or its share of its category. */
+function weightLabel(it: Item, items: Item[], cats: NonNullable<Course["gradeCategories"]>): string {
+    const share = shareOf(it, items, cats)
+    if (share.category) return share.category.name + (share.weight === null ? "" : " · " + share.weight + "%")
+    return share.weight === null ? "" : share.weight + "%"
 }

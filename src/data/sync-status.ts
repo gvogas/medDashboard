@@ -3,9 +3,9 @@
 
 import * as store from "@/core/store"
 import { data } from "@/core/store"
-import { normalizeItem } from "@/core/model"
+import { normalizeItem, normalizePrefs } from "@/core/model"
 import { today } from "@/core/dates"
-import { readSetting, writeSetting, dueReviews } from "@/core/reviews"
+import { readSetting, writeSetting, dueReviews, effectiveSetting, legacyReviews } from "@/core/reviews"
 import { isTyping } from "@/lib/dom"
 import { notify } from "@/bridge"
 import { effectiveCourses, effectiveItems } from "./effective"
@@ -33,9 +33,13 @@ export async function runReviews() {
     if (reviewing || !data.profile) return
     reviewing = true
     try {
-        const account = data.profile.id, setting = readSetting(account)
+        const account = data.profile.id, local = readSetting(account), prefs = normalizePrefs(data.profile.studyPrefs)
+        /* a setting from before it synced moves up once, from the browser that had it on */
+        const moved = legacyReviews(prefs.reviews, local, today())
+        if (moved) await store.saveProfile({ studyPrefs: { ...prefs, reviews: moved } })
+        const setting = moved ? local : effectiveSetting(prefs.reviews ?? null, local)
         const { rows, through } = dueReviews(setting, effectiveCourses(), effectiveItems(), today(), schoolCal())
         if (rows.length) await store.saveRows(rows.map((row) => ({ kind: "items" as const, row: normalizeItem(row) })))
-        if (through !== setting.through) writeSetting(account, { ...setting, through })
+        if (through !== local.through || setting.on !== local.on) writeSetting(account, { on: setting.on, through })
     } finally { reviewing = false }
 }

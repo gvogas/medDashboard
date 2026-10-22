@@ -43,6 +43,7 @@ import { launch as fireworks } from "@/lib/fireworks"
 import { closeSheet, cover, getSheet, openSheet } from "@/data/overlay"
 import { newSession } from "@/data/session-edit"
 import { flush, TYPING_MS } from "@/data/item-edit"
+import { runToastAction } from "@/data/toast"
 import { Sheet } from "./sheet"
 import { Page, Scrim, SheetHost } from "@/components/shell"
 import type { Item } from "@/data/types"
@@ -326,6 +327,10 @@ describe("the item sheet", () => {
 
         await act(async () => fireEvent.click(screen.getAllByRole("button", { name: "Remove step" })[0]))
         expect((fake.data.items[0] as Item).checklist.map((s) => s.text)).toEqual(["Flashcards"])
+        await act(async () => runToastAction())
+        expect((fake.data.items[0] as Item).checklist.map((s) => s.text)).toEqual(["Read ch. 4", "Flashcards"])
+        await act(async () => fireEvent.click(screen.getAllByRole("button", { name: "Remove step" })[0]))
+        expect((fake.data.items[0] as Item).checklist.map((s) => s.text)).toEqual(["Flashcards"])
 
         expect(screen.getByRole("link", { name: "Slides" })).toBeTruthy()
         expect(screen.queryByRole("link", { name: "bad" })).toBeNull()
@@ -348,6 +353,15 @@ describe("the item sheet", () => {
         await act(async () => fireEvent.click(screen.getByRole("button", { name: "Save item" })))
         expect(fake.data.items.map((x) => x.id)).toContain("n1")
         expect(getSheet()).toBeNull()
+    })
+
+    it("says beside Save when a new item crowds a day, without stopping it", async () => {
+        fake.data.items = [...fake.data.items, item({ id: "e1", type: "exam", title: "Anatomy midterm" })]
+        show()
+        open({ kind: "new-item", draft: item({ id: "n4", type: "quiz", title: "Histo quiz" }) })
+        expect(within(dialog()).getByText("This makes 2 tests on Wed 23 Sep").getAttribute("role")).toBe("status")
+        await act(async () => fireEvent.click(screen.getByRole("button", { name: "Save item" })))
+        expect(fake.data.items.map((x) => x.id)).toContain("n4")
     })
 
     it("deletes through the undo delete", () => {

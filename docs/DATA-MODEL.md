@@ -22,6 +22,7 @@ marks            your layer on a shared item: status, grade, notes, hidden
 space_prefs      your colour, target, term and archive for a space
 activity         what members did in a space: the inbox and each class's Activity tab
 inbox_seen       the last activity row each person has read
+push_subscriptions  each device that turned on the morning digest
 friendships      one row per pair of people: a request, a decline, or a friendship
 friend_settings  your two Friends switches: findable in search, shown while studying
 ```
@@ -40,8 +41,11 @@ database. The schema the last move copied from is kept as a test
 fixture in `test/fixtures/legacy-migrations/`. Later changes are new numbered files:
 `0002_spaces.sql` (`spaces`, `members`), `0003_invites.sql` (`invites`),
 `0004_marks.sql` (`marks`, `space_prefs`) and `0005_activity.sql` (`activity`,
-`inbox_seen` and the triggers that fill `activity`) and `0008_friends.sql`
-(`friendships`, `friend_settings`). The next one is `0007`.
+`inbox_seen` and the triggers that fill `activity`), `0006_push.sql`
+(`push_subscriptions`), `0007_grades.sql` (`courses.credits`,
+`courses.grade_categories`, `items.category`, `users.grading`, and the course and item
+change triggers made again to carry them) and `0008_friends.sql`
+(`friendships`, `friend_settings`). The next one is `0009`.
 
 ## Structure at a glance
 
@@ -55,6 +59,7 @@ fixture in `test/fixtures/legacy-migrations/`. Later changes are new numbered fi
 | Synchronization | `changes`, `sync_state` | Latest record changes, ordered cursors per scope, and the retention floor |
 | Authentication and request control | `login_throttle`, `request_limits` | Temporary attempt counts and cooldowns |
 | Spotify connection | `spotify_tokens`, `spotify_oauth_states`, `spotify_refresh_locks` | Credentials, one-use consent attempts, and refresh leases |
+| Push reminders | `push_subscriptions` | The devices that get the morning digest |
 | Admin page | `error_log`, `admin_log`, `app_meta` | Caught failures (30 days), what admins did (90 days), app-wide values (announcement, maintenance, last cron run) |
 | Read-only inspection | `active_items`, `account_summary` | Views over existing records, with no duplicate stored data |
 
@@ -81,6 +86,7 @@ erDiagram
     users ||--o| spotify_tokens : connects
     users ||--o| spotify_oauth_states : authorizes
     users ||--o| spotify_refresh_locks : refreshes
+    users ||--o{ push_subscriptions : "gets the digest on"
 ```
 
 An item's optional course relationship is `(scope, course_id)` to
@@ -130,7 +136,8 @@ Conventions used throughout:
 | `school_calendar` | JSON object | `{}` = none | The school's academic calendar, below. |
 | `types` | JSON array | ≤ 20 | Your item types: overrides for the built-ins (label, colour, hidden, order) and up to 12 of your own, ids `c-` plus 1–12 of `[a-z0-9]`. |
 | `study_flow` | JSON object | | The study timer's steps and rounds, below. |
-| `study_prefs` | JSON object | `{}` = defaults | Daily goal, streak rules and celebrations, below. |
+| `study_prefs` | JSON object | `{}` = defaults | Daily goal, streak rules, celebrations, feed alarms, lecture reviews and the first-run setup, below. |
+| `grading` | JSON object | `{}` = defaults | Your grading scale and pass marks, below (`0007_grades.sql`). |
 | `feed_gen` | int \| null | > 0 | The calendar feed: a number while it is on, null when off. The feed URL carries an HMAC of the user id and this number, so bumping it retires every old link. |
 | `leaderboard` | int 0/1 | default 0 | Joined the study leaderboard (opt-in; only those who joined see it or are listed). |
 | `is_admin` | int 0/1 | default 0 | May open the Admin page. The first admin is made with `npm run user:add -- <name> --admin --remote`. |
@@ -142,10 +149,17 @@ Conventions used throughout:
 
 A row is created by `npm run user:add`, or from the Admin page, with the defaults. The API
 exposes it as the **profile**, with the coat fields nested: `{coat: {name, role,
-color}, theme, bg, types, studyFlow, studyPrefs, schoolCalendar, hiddenSources,
+color}, theme, bg, types, studyFlow, studyPrefs, schoolCalendar, hiddenSources, grading,
 termStart, isAdmin, ...}`. `feed_gen`, `leaderboard` and `last_seen_day` are not in it.
 
 `hidden_sources`: what you have hidden from your Week, your Month and your calendar feed: `course:<id>`, `space:<sid>`, `personal`; at most 40. All items, grades and stats still count them. (Until Stage 6 the Week and Month applied them for admins only.) Sent and received as the profile's `hiddenSources`; a `PUT /api/me` without it keeps it.
+
+`grading`: `{scale: [{letter, min, points}], pass: [marks]}`, each part optional. `scale`
+is up to 20 steps, each a letter (1–4 characters) from a percentage `min` (0–100, no two
+the same) worth `points` (0–10); left out, a 4.0 scale (A from 93 worth 4.0 down to F).
+`pass` is up to 5 whole marks 1–100 that replace 50, 60 and 70 as the grade panel's
+targets. `normalizeGrading` in `src/core/grades.ts` fills the defaults; the sidebar's GPA
+reads letters off this scale. A `PUT /api/me` without it keeps it; `{}` is the defaults.
 
 The twelve course colours; the first five are also the coat colours:
 
@@ -179,12 +193,21 @@ The twelve course colours; the first five are also the coat colours:
 | `archived` | int 0/1 | | Hidden from the sidebar, kept for the record. |
 | `meetings` | JSON array | ≤ 12 | The class timetable. |
 | `target` | int \| null | 1–100 | The final grade you are aiming for. Personal courses only; a class keeps each member's in `space_prefs`. |
+| `credits` | real \| null | 0–30 | For the GPA; null counts as 3 (`DEFAULT_CREDITS`), 0 leaves the course out. |
+| `grade_categories` | JSON array | ≤ 12, default `[]` | `gradeCategories`: `{id ≤24, name 1–40, weight 0–100, drop 0–20}`, ids unique. A category's weight is shared equally by the items in it that count, after dropping its `drop` lowest scores (real or what-if; one scored item always stays). |
 | `updated_by` | text \| null | | The member who last wrote a class's course; null on your own. |
 | `created_at`, `updated_at`, `deleted_at` | int | | |
 | `revision` | int | starts at 1 | Optimistic concurrency, as on every synced row. |
 
 A class's course (`c:` scope) holds the class's facts only: `target` is null and
 `archived` 0; its colour and term are the class defaults that members' prefs start from.
+Its credits and grade categories are class facts too, set by owners and editors, and
+merge field by field like the rest (`SHARED_FIELDS` in `src/core/shared.ts`). Leaving or
+detaching a class, converting a course and sharing an item copy them.
+
+A write from an older client leaves `credits`, `gradeCategories` and an item's `category`
+out; the Worker then keeps the stored values (`GRADE_FIELDS` in `worker/db.js`), and a new
+row starts with the column's default.
 
 ### `meetings[]` — one weekly class
 
@@ -218,7 +241,8 @@ values apply, and the week board and table need them interleaved by date.
 | `location` | `where` | text | ≤ 80 | Room, lab, platform. `where` is a SQL keyword, hence the rename. |
 | `status` | | text | see below | |
 | `grade` | | real \| null | 0–100 | Only meaningful when `status == 'graded'`. |
-| `weight` | | real \| null | 0–100 | The share of the course grade the item carries; a missed item with a weight counts as 0 (`src/core/grades.ts`). |
+| `weight` | | real \| null | 0–100 | The share of the course grade the item carries; a missed item with a weight counts as 0 (`src/core/grades.ts`). Left aside when the item counts in a category. |
+| `category` | | text \| null | ≤ 24 | The id of one of its course's `grade_categories`; an id the course no longer has reads as none, and `weight` counts again. Not on a project task (`400 {field:'category'}`). |
 | `notes` | | text | ≤ 5000 | The item's page. |
 | `checklist` | | JSON array | ≤ 50 | `{id, text ≤140, done}`. Drives the pink progress bars. |
 | `links` | | JSON array | ≤ 20 | `{label ≤60, url ≤500}`. |
@@ -320,10 +344,25 @@ The school's academic calendar is `users.school_calendar`, JSON
 calendar feed. A class keeps a copy of its owner's in `spaces.school_calendar`, offered
 to people who join without one of their own.
 
-The goal and streak rules are `users.study_prefs`, JSON `{"goal":120,"dayMin":15,"rest":[0],"celebrate":true}`:
+The goal and streak rules are `users.study_prefs`, JSON `{"goal":120,"dayMin":15,"rest":[0],"celebrate":true,"alarms":true,"reviews":"2026-09-01","setupDone":true}`:
 a daily goal of 0–720 minutes (0 = none), 1–240 minutes to make a day count, up to six
 rest days (0 = Sunday) that never break the streak, and fireworks on or off. Streaks,
 weeks, months and the heatmap are worked out on the device (`src/core/history.ts`).
+Three more fields are each optional:
+
+- `alarms`: whether the calendar feed carries alerts (a day and an hour before each open
+  exam, quiz, assignment, lab and team project; 09:00 the day before an all-day one).
+  Missing is on.
+- `reviews`: the day spaced lecture reviews were turned on, or `null` for off. Missing
+  means unknown: a profile from before reviews were synced, when the browser's own
+  setting (`localStorage`, per account) still counts and is moved up once. Each browser
+  keeps its own watermark, the last lecture day handled, never earlier than this day.
+- `setupDone`: `true` once the first-run setup was finished or skipped, so no device
+  offers it again; never stored as `false`.
+
+A `PUT /api/me` whose prefs leave out `reviews`, `alarms` or `setupDone` (a tab opened
+before them) keeps the stored value of each (`PREFS_SQL` in `worker/db.js`); the other
+fields are replaced.
 
 ---
 
@@ -360,6 +399,25 @@ reads it to call Spotify on the user's behalf.
 | `refresh_token` | text | Versioned AES-GCM ciphertext: `keyId.ciphertext`, encrypted using independent `SPOTIFY_TOKEN_KEYS`. Legacy unversioned tokens are migrated when refreshed; see [DEPLOYING.md](DEPLOYING.md#spotify) for the keyring and rotation. |
 | `access_token` | text | lives an hour, kept in clear |
 | `expires_at`, `updated_at` | int | ms since the epoch |
+
+---
+
+## `push_subscriptions`
+
+One row per device that turned on the morning digest (`0006_push.sql`, `worker/push.js`).
+Not synced to the browser. The push carries no payload, so no keys are kept: the service
+worker fetches `GET /api/digest` itself when the push arrives.
+
+| Column | Type | Rules | Notes |
+| --- | --- | --- | --- |
+| `endpoint` | text, PK | `https://`, 20–1000 | Only the browsers' push services' hosts are accepted (`PUSH_HOSTS`). |
+| `user_id` | text | FK `users`, `ON DELETE CASCADE` | At most 5 per person: a sixth replaces the oldest. |
+| `tz` | text | 1–64, default `UTC` | The device's IANA time zone, so the digest comes in its morning. |
+| `created_at`, `last_ok_at` | int \| null | | |
+| `last_sent_day` | text \| null | `YYYY-MM-DD` | The local day the digest last went, so the hourly cron sends once a day. |
+| `failures` | int | 0–100 | In a row; the row goes at 5, or at once when the push service answers 404 or 410. |
+
+A device also goes when its owner signs out on it or turns the digest off there.
 
 ---
 
@@ -431,6 +489,7 @@ One row per pair of people, the smaller user id in `user_lo` (`CHECK (user_lo < 
 | `activity (space_id, seq)` | a space's Activity tab; the inbox per space you are in |
 | `activity (subject_user, seq)`, rows about someone only | the inbox's rows about you, even after you left the space |
 | `activity (at)` | the nightly purge of activity over 90 days |
+| `push_subscriptions (user_id)` | a person's devices, when subscribing and on the digest |
 | `friendships (user_hi)` | your friendships and requests where you are the larger id (the primary key covers the smaller) |
 | `friendships (declined_at)`, declined only | the nightly purge of declines over 30 days |
 | `error_log (at)`, `admin_log (at)` | the Admin page's lists and their nightly cleanup |
@@ -493,7 +552,7 @@ All routes are under `/api`, speak JSON, and require the session cookie except
 | `DELETE /api/session` | → clears the cookie. |
 | `POST /api/session/revoke-all` | → `204`, clears the cookie and invalidates every other session of this user. |
 | `GET /api/me` | → `{profile}`, with `announcement` and `maintenance` (see Maintenance mode) |
-| `PUT /api/me` | `{coat, theme, bg, termStart, displayName, types, studyFlow, studyPrefs, schoolCalendar, hiddenSources}` (`bg` optional, default `med`; `types`, `studyFlow`, `studyPrefs`, `schoolCalendar` and `hiddenSources` optional, kept when left out; `schoolCalendar: {}` removes it) → `{profile}` |
+| `PUT /api/me` | `{coat, theme, bg, termStart, displayName, types, studyFlow, studyPrefs, schoolCalendar, hiddenSources, grading}` (`bg` optional, default `med`; `types`, `studyFlow`, `studyPrefs`, `schoolCalendar`, `hiddenSources` and `grading` optional, kept when left out; `schoolCalendar: {}` removes it; prefs without `reviews`, `alarms` or `setupDone` keep the stored ones) → `{profile}` |
 | `POST /api/outline` · `POST /api/school-calendar` · `POST /api/ai/schedule` | the file (or a PDF's text; a timetable PDF's starts with one line per class read from its grid, `Mon 08:30-10:00 \| title \| code \| room`) as the body, `?name=&today=` (and `terms`, `codes`) → what Workers AI read: an outline, a school calendar `{name, terms, days, truncated}`, or a timetable. Nothing is saved. The three share ten reads a day per person (`429 outline_limit`); a failed read is `503 outline_unavailable`. |
 | `GET /api/ai/reads` | → `{left, limit}`: the AI reads left today. |
 | `GET /api/sync?v=3&cursors=<scope>:<seq>,…&sv=<n>` | the current protocol: a cursor per scope, your own rows (including `marks` and `space_prefs`) and those of your live spaces; the last page of a pull (`more: false`) also carries `unread`, the inbox's count. See Sync v3 below. |
@@ -534,6 +593,10 @@ All routes are under `/api`, speak JSON, and require the session cookie except
 | `GET\|PUT\|DELETE /api/marks/:sid/:itemId` | your mark on an item of a space you are in (`404` otherwise, or when the item is deleted). `PUT` merges field by field with `changed` (as shared rows), else whole at `If-Match`; on a project's item only `notes` and `hidden`. |
 | `GET\|PUT\|DELETE /api/space_prefs/:sid` | your prefs for a space you are in: `{color, target, term, archived}`, whole-row `If-Match`. |
 | `GET\|PUT\|DELETE /api/spaces/:sid/{courses,items}/:id` | a shared row of a space you are in; see Sync v3 for how a `PUT` merges. |
+| `GET /api/push/key` | → `{enabled, key}`: whether push is set up (the three `VAPID_*` secrets) and the public key to subscribe with. |
+| `POST /api/push` · `DELETE /api/push` | `{endpoint, tz}` → `204`: this device gets the morning digest (a known push service's `https://` address and an IANA zone; `400 {field}` otherwise, `503 push_off` without the secrets); DELETE `{endpoint}` → `204` stops it. See `push_subscriptions`. |
+| `POST /api/push/test` | `{endpoint}` → `{result}`: a test push to one of your devices now, and how the push service answered. 5 an hour; `404` for a device not yours, `503 push_off` without the secrets. |
+| `GET /api/digest?tz=` | → `{title, body, today, tomorrow, overdue}`: what the morning notification says, from the same rows as the calendar feed (your hidden sources left out). Open, dated, one-off items due today or tomorrow, and overdue ones from the last 14 days; office hours and tutorials never count. The service worker calls it when a push arrives. |
 | `GET /api/leaderboard?since=<ms>` · `PUT /api/leaderboard` | → `{joined, week, all}`, each list `[{name, minutes, me}]`, empty until you join; `since` is your Monday 00:00. PUT `{joined: true\|false}` → `204`. See `worker/leaderboard.js`. |
 | `/api/spotify/…` | the Music player: `connect` and `callback` (OAuth), `status`, `token` (for the Web Playback SDK), `player` and its controls, `devices`, `transfer`, `shuffle`, `repeat`, `volume`, `queue`, `play`, `search`, `recent`, `me`, `playlists`, `albums/:id/tracks`, `artists/:id/albums`; `DELETE /api/spotify` disconnects. Compact answers, never raw Spotify JSON. See `worker/api.js` and `worker/spotify/`. |
 | `/api/admin/…` | admins only (`403 forbidden` otherwise): `accounts` (list, create, `:id/password`, `:id/revoke`, `:id/admin`, delete), `locks/:key` (clear a login lockout), `errors`, `audit`, `traffic`, `health`, `announcement`, `maintenance`. See `worker/admin.js`. |
@@ -839,6 +902,16 @@ supported incremental cursor.
 The app pulls `GET /api/sync?v=3&cursors=u:<me>:812,c:<space id>:640&sv=905`. The Worker pages the person's own scope and their live spaces (at most 20), never a scope taken from the request; each scope's changes are read by its own statement, capped at 101 rows and guarded by live membership, all in one D1 batch (D1 refuses a compound SELECT of more than five terms). The answer is `{scopes, cursors, changes:[{scope, kind, row}], more, reset, revoked}`, and on the last page (`more: false`) `unread` (see The inbox and activity; so every v3 sync reads `activity`): `scopes` describes each space (with its members only when its revision is above `sv`), `reset` lists scopes whose cursor fell below the floor (each starts again from 0), and `revoked` lists scopes sent that the person may no longer read; the app removes them after the cycle's last page. A scope resyncing from 0 that is still below the floor carries a tagged cursor `r<seq>.<floor>` instead of a number; the app stores and sends it as it came, and the Worker answers a plain number once the scope is past the floor. Shared rows are written through `/api/spaces/<space id>/{courses,items}/<id>`: at the row's revision as a whole; otherwise the fields named in `changed` merge when each still holds its old or new value, else `409 {current, fields, by}`. `?v=2` remains for tabs on the old client and pages only the person's own scope.
 
 On the device, IndexedDB version 6 holds shared rows in `shared_courses` and `shared_items` (keyed `[scope, id]`), the spaces in `spaces`, your `marks` and `space_prefs`, and `meta.cursors` (`{scope: seq}`, or the tagged string while a resync is under way); pending keys for shared rows are `shared_items:<scope>:<id>`. A class item an editor deletes stays in `shared_items` as a tombstone (with `deletedAt`); the app lists these apart (`removed_items`), keeps one in your views while your mark on it holds something (a status, grade, weight, notes, checklist or completion) and you have not hidden it, and drops a tombstone 30 days old unless such a mark still holds it. After a complete pull, `revoked` also drops your marks and prefs for a lost space; a mark edit still waiting to upload is carried onto your copy of the item when it has arrived (its notes replacing your part of the copy's notes), else it goes to Saved copies. A mark upload refused with `404` waits for that pull before it is set aside.
+
+### The crons
+
+`wrangler.jsonc` has two schedules; `scheduled()` in `worker/index.js` tells them apart
+by `controller.cron`. Hourly (`0 * * * *`), `sendDigests` (`worker/push.js`) sends the
+morning digest to each device whose local time is 07:00 to 09:59 and has not had today's,
+so an hour the cron missed is made up; a morning with nothing due today or tomorrow and
+nothing overdue sends nothing but is still marked. One run sends at most 40 pushes, under
+the free plan's 50 outside requests; the rest go the next hour. Nightly (`0 3 * * *`), the
+purge below.
 
 ### The nightly purge
 

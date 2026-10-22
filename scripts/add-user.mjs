@@ -5,17 +5,18 @@
 // Make an admin:      `npm run user:add -- <username> --admin [--remote]` (opens the Admin page;
 //                     `--admin --off` takes it away). After the first, the page does the rest.
 // Prompts for the password without echoing it, hashes it exactly as the Worker does,
-// and inserts the row with wrangler. --remote targets production; otherwise the
-// local dev database.
+// and inserts the row with wrangler. --remote targets production, --staging the test
+// copy (npm run deploy:staging); otherwise the local dev database.
 
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { hashPassword, normalizeUsername } from '../worker/password.js';
 import { throttleRowsFor } from '../worker/throttle.js';
 import { ACCOUNT_TABLES, HAND_ON } from '../worker/accounts.js';
+import { target } from './lib/target.js';
 
 const args = process.argv.slice(2);
-const remote = args.includes('--remote');
+const where = target(args);
 const reset = args.includes('--reset');
 const remove = args.includes('--delete');
 const admin = args.includes('--admin');
@@ -26,7 +27,7 @@ const rawUser = args.find((a, i) => !a.startsWith('--') && (nameIx < 0 || i !== 
 
 const username = normalizeUsername(rawUser);
 if (!username) {
-  console.error('Usage: npm run user:add -- <username> [--remote] [--name "Display Name"]');
+  console.error('Usage: npm run user:add -- <username> [--remote | --staging] [--name "Display Name"]');
   console.error('       npm run user:add -- <username> --reset [--remote]   (change the password)');
   console.error('       npm run user:add -- <username> --delete [--remote]  (remove the account and its data)');
   console.error('       npm run user:add -- <username> --admin [--off] [--remote]  (give or take the Admin page)');
@@ -110,7 +111,7 @@ if (admin) {
 const wranglerBin = fileURLToPath(new URL('../node_modules/wrangler/bin/wrangler.js', import.meta.url));
 function run(statement) {
   const result = spawnSync(
-    process.execPath, [wranglerBin, 'd1', 'execute', 'DB', remote ? '--remote' : '--local', '--json', '--command', statement],
+    process.execPath, [wranglerBin, 'd1', 'execute', 'DB', ...where.args, '--json', '--command', statement],
     { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] },
   );
   try {
@@ -131,4 +132,4 @@ if (!ok) {
   console.error(admin ? 'Could not change admin access.' : remove ? 'Could not delete the account.' : reset ? 'Could not change the password.' : 'Could not create the account. If the username already exists, pick another.');
   process.exit(1);
 }
-console.log(`${admin ? (off ? 'Admin removed from' : 'Admin given to') : remove ? 'Deleted' : reset ? 'Password changed for' : 'Created'} ${username} on the ${remote ? 'production' : 'local'} database.`);
+console.log(`${admin ? (off ? 'Admin removed from' : 'Admin given to') : remove ? 'Deleted' : reset ? 'Password changed for' : 'Created'} ${username} on the ${where.label} database.`);

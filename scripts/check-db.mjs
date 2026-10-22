@@ -3,23 +3,24 @@
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { databaseChecks, databaseCountsSql, summarizeDatabase } from './lib/database-health.js';
+import { target } from './lib/target.js';
 
 const args = process.argv.slice(2);
-if (args.some((arg) => !['--remote', '--json'].includes(arg))) {
-  console.error('Usage: npm run db:check -- [--remote] [--json]');
+if (args.some((arg) => !['--remote', '--staging', '--json'].includes(arg))) {
+  console.error('Usage: npm run db:check -- [--remote | --staging] [--json]');
   process.exit(1);
 }
-const remote = args.includes('--remote');
+const where = target(args);
 const wrangler = fileURLToPath(new URL('../node_modules/wrangler/bin/wrangler.js', import.meta.url));
 const sql = [...databaseChecks.map((check) => check.sql), databaseCountsSql].join(';\n') + ';';
-const result = spawnSync(process.execPath, [wrangler, 'd1', 'execute', 'DB', remote ? '--remote' : '--local', '--json', '--command', sql], {
+const result = spawnSync(process.execPath, [wrangler, 'd1', 'execute', 'DB', ...where.args, '--json', '--command', sql], {
   cwd: fileURLToPath(new URL('../', import.meta.url)), encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'],
   timeout: 120_000, maxBuffer: 4 * 1024 * 1024,
 });
 try {
   if (result.error) throw new Error(`Could not start the database check: ${result.error.message}`);
   if (result.status !== 0) throw new Error(`Could not inspect the database. Check Wrangler access and apply pending migrations first.\n${result.stderr.trim()}`);
-  const report = { target: remote ? 'production' : 'local', ...summarizeDatabase(JSON.parse(result.stdout)) };
+  const report = { target: where.label, ...summarizeDatabase(JSON.parse(result.stdout)) };
   if (args.includes('--json')) console.log(JSON.stringify(report, null, 2));
   else {
     console.log(`Rounds database: ${report.target}`);

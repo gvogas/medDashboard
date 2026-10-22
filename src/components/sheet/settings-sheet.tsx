@@ -1,5 +1,5 @@
 // Settings in the sheet, in four tabs: You (theme, where you're headed, name, look, quotes), Study
-// (the goal and streak, reviews, the school calendar), Connections (the calendar feed, Spotify)
+// (the goal and streak, reviews, the school calendar), Connections (the calendar feed, reminders, Spotify)
 // and Account (data, saved copies, signing out). Files come in through Import with AI, not here.
 // Everything saves as it changes.
 
@@ -17,6 +17,7 @@ import { api, spotifyRetryAt } from "@/core/api"
 import { readSetting, writeSetting } from "@/core/reviews"
 import { runReviews } from "@/data/sync-status"
 import { savePrefs } from "@/data/study-controller"
+import { pushState, testPush, turnOff, turnOn, type PushState } from "@/data/push"
 import { setBg, setTheme } from "@/data/theme"
 import { notify } from "@/bridge"
 import { useConflicts, useItems, useCourses, useProfile, useQuotes } from "@/data/store"
@@ -31,6 +32,8 @@ import {
 import { BGS, GOALS as THEME_GOALS, THEMES, goalFor, type Bg } from "@/data/themes"
 import type { Feed, Profile } from "@/data/types"
 import { radioKeys, rovingTab } from "./radio-keys"
+import { ExportData } from "./export-data"
+import { GradingGroup } from "./grading-settings"
 import { Button, CONTROL, RemoveButton, SheetBody, SheetFoot, SheetHead, Swatches, TextInput } from "./fields"
 
 export function SettingsSheet({ tab, focus }: { tab: SettingsTab; focus: string | null }) {
@@ -274,6 +277,7 @@ function StudyTab({ profile }: { profile: Profile }) {
             <Streak profile={profile} />
             <Reviews profile={profile} />
             <School />
+            <GradingGroup profile={profile} />
         </>
     )
 }
@@ -326,19 +330,21 @@ function Streak({ profile }: { profile: Profile }) {
 }
 
 function Reviews({ profile }: { profile: Profile }) {
-    const [on, setOn] = useState(() => readSetting(profile.id).on)
+    /* on for the account (studyPrefs.reviews), or, before that first syncs, in this browser */
+    const since = normalizePrefs(profile.studyPrefs).reviews
+    const on = since === undefined ? readSetting(profile.id).on : !!since
     return (
         <Group title="Reviews" state={on ? "on" : "off"}>
             <label className="flex items-center gap-2 text-[12.5px] text-ink-2">
                 <input type="checkbox" checked={on} className="accent-[var(--accent)]" onChange={async (e) => {
-                    const next = e.target.checked, was = readSetting(profile.id)
-                    writeSetting(profile.id, next ? { on: true, through: was.through && was.on ? was.through : null } : { on: false, through: null })
-                    setOn(next)
+                    const next = e.target.checked
+                    if (!next) writeSetting(profile.id, { on: false, through: null })
+                    await savePrefs({ reviews: next ? today() : null })
                     await runReviews()
                 }} />
                 <span>Create review tasks after lectures</span>
             </label>
-            <Hint>Days 1, 3, 7 and 21 after each lecture. This device only, from today.</Hint>
+            <Hint>Days 1, 3, 7 and 21 after each lecture, from today, on all your devices.</Hint>
         </Group>
     )
 }
@@ -383,11 +389,73 @@ function School() {
 /* ── Connections ── */
 
 function ConnectionsTab() {
+    const profile = useProfile() as Profile | null
     return (
         <>
             <FeedGroup />
+            {profile && <RemindersGroup profile={profile} />}
             <SpotifyGroup />
         </>
+    )
+}
+
+/* Reminders: alarms in the calendar feed (an account setting), and the morning digest on
+   this device (data/push.ts). The device's state is asked for when the group opens. */
+const PUSH_SAYS: Record<PushState, string> = {
+    unsupported: "This browser cannot show reminders. Chrome, Edge, Firefox and Safari can.",
+    "ios-install": "On an iPhone or iPad, add Term to your Home Screen first (Share, then Add to Home Screen), and turn this on there.",
+    disabled: "Morning reminders are not set up on this site yet.",
+    blocked: "Notifications are blocked for this site. Allow them in the browser’s site settings, then come back.",
+    on: "A note at about 7 am when something is due today or tomorrow, or overdue. Nothing on a quiet day.",
+    off: "A note at about 7 am when something is due today or tomorrow, or overdue. Nothing on a quiet day.",
+}
+
+function RemindersGroup({ profile }: { profile: Profile }) {
+    const p = normalizePrefs(profile.studyPrefs)
+    const [state, setState] = useState<PushState | null>(null)
+    const [busy, setBusy] = useState(false)
+    const [note, setNote] = useState<{ text: string; error?: boolean } | null>(null)
+    useEffect(() => {
+        let live = true
+        pushState().then((s) => { if (live) setState(s) }, () => { if (live) setState(null) })
+        return () => { live = false }
+    }, [])
+    const run = async (work: () => Promise<void>) => {
+        setBusy(true)
+        setNote(null)
+        try { await work() }
+        catch { setNote({ text: "That did not work. Check your connection and try again.", error: true }) }
+        finally { setBusy(false) }
+    }
+    const canSwitch = state === "on" || state === "off"
+    return (
+        <Group title="Reminders" state={state === "on" ? "on this device" : null} id="remindersGrp">
+            <label className="flex items-center gap-2 text-[12.5px] text-ink-2">
+                <input type="checkbox" checked={p.alarms} className="accent-[var(--accent)]" onChange={(e) => void savePrefs({ alarms: e.target.checked })} />
+                <span>Alerts in the calendar feed: a day and an hour before each exam, quiz and deadline</span>
+            </label>
+            <label className="flex items-center gap-2 text-[12.5px] text-ink-2">
+                <input type="checkbox" checked={state === "on"} disabled={!canSwitch || busy} className="accent-[var(--accent)]"
+                    onChange={(e) => {
+                        const on = e.target.checked
+                        void run(async () => {
+                            const next = on ? await turnOn() : await turnOff()
+                            setState(next)
+                            if (on && next === "off") setNote({ text: "Notifications were not allowed, so reminders stay off." })
+                        })
+                    }} />
+                <span>Morning reminders on this device</span>
+            </label>
+            {state && <Hint>{PUSH_SAYS[state]}</Hint>}
+            {state === "on" && (
+                <Row><Button variant="ghost" disabled={busy} onClick={() => void run(async () => {
+                    const r = await testPush()
+                    if (r === "gone") setState("off")
+                    setNote(r === "ok" ? { text: "Sent. It should show in a few seconds." } : { text: "The test could not be delivered. Turn reminders off and on again.", error: true })
+                })}>Send a test</Button></Row>
+            )}
+            {note && <Hint error={note.error}>{note.text}</Hint>}
+        </Group>
     )
 }
 
@@ -518,7 +586,7 @@ function AccountTab({ profile }: { profile: Profile }) {
         <>
             <Group title="Data" state={items.length + " items · " + courses.length + " courses"}>
                 <Hint>{syncLine({ ...status, lastPull: syncStatus.lastPull })}</Hint>
-                <Row><Button variant="ghost" onClick={() => void exportData()}>Export data and saved copies</Button></Row>
+                <ExportData />
             </Group>
             {conflicts.length > 0 && (
                 <Group title="Saved copies" state={conflicts.length}>

@@ -3,15 +3,15 @@
 
 /* What moves, in an order the foreign keys accept, in the shape of today's schema.
    Throttles, request windows, OAuth attempts and refresh leases are short-lived, so they
-   start empty. users comes first: scripts/move-db.mjs refuses a target that holds any
+   start empty, and so do push devices (their owners turn reminders on again). users comes first: scripts/move-db.mjs refuses a target that holds any
    user, so a run that failed partway is never continued on top of itself. */
 export const TABLES = {
-  users: ['id', 'username', 'password_hash', 'pw_gen', 'display_name', 'coat_name', 'coat_role', 'coat_color', 'theme', 'bg', 'term_start', 'types', 'study_flow', 'feed_gen', 'study_prefs', 'school_calendar', 'leaderboard', 'is_admin', 'last_seen_day', 'hidden_sources', 'created_at', 'updated_at', 'revision'],
+  users: ['id', 'username', 'password_hash', 'pw_gen', 'display_name', 'coat_name', 'coat_role', 'coat_color', 'theme', 'bg', 'term_start', 'types', 'study_flow', 'feed_gen', 'study_prefs', 'school_calendar', 'leaderboard', 'is_admin', 'last_seen_day', 'hidden_sources', 'grading', 'created_at', 'updated_at', 'revision'],
   spaces: ['id', 'kind', 'archived', 'school_calendar', 'parent_space', 'parent_item', 'code_hash', 'code_expires', 'code_uses_left', 'created_at', 'updated_at', 'deleted_at', 'revision'],
   members: ['space_id', 'user_id', 'role', 'joined_at', 'updated_at', 'deleted_at', 'revision'],
   invites: ['space_id', 'user_id', 'invited_by', 'role', 'status', 'created_at', 'expires_at'],
-  courses: ['scope', 'id', 'code', 'name', 'color', 'instructor', 'term', 'archived', 'meetings', 'target', 'updated_by', 'created_at', 'updated_at', 'deleted_at', 'revision'],
-  items: ['scope', 'id', 'type', 'title', 'course_id', 'date', 'start', 'end', 'location', 'status', 'grade', 'weight', 'notes', 'checklist', 'links', 'recur', 'weekday', 'recur_until', 'dept', 'completed_at', 'updated_by', 'class_id', 'assignees', 'completed_by', 'created_at', 'updated_at', 'deleted_at', 'revision'],
+  courses: ['scope', 'id', 'code', 'name', 'color', 'instructor', 'term', 'archived', 'meetings', 'target', 'credits', 'grade_categories', 'updated_by', 'created_at', 'updated_at', 'deleted_at', 'revision'],
+  items: ['scope', 'id', 'type', 'title', 'course_id', 'date', 'start', 'end', 'location', 'status', 'grade', 'weight', 'notes', 'checklist', 'links', 'recur', 'weekday', 'recur_until', 'dept', 'completed_at', 'updated_by', 'class_id', 'category', 'assignees', 'completed_by', 'created_at', 'updated_at', 'deleted_at', 'revision'],
   quotes: ['user_id', 'id', 'text', 'source', 'created_at', 'updated_at', 'deleted_at', 'revision'],
   study_sessions: ['user_id', 'id', 'course_id', 'item_id', 'space_id', 'started_at', 'study_minutes', 'rounds_done', 'note', 'manual', 'created_at', 'updated_at', 'deleted_at', 'revision'],
   achievements: ['user_id', 'id', 'name', 'sticker', 'rule', 'course_id', 'item_id', 'space_id', 'target', 'created_at', 'updated_at', 'deleted_at', 'revision'],
@@ -39,11 +39,12 @@ const REBUILT = ['activity', 'changes'];
 const SCOPE_FROM_USER = `'u:' || "user_id" AS "scope"`;
 const PAYLOAD_FROM_USER = `CASE WHEN kind IN ('courses', 'items') AND json_valid(payload) AND json_type(payload, '$.user_id') = 'text'
   THEN json_set(json_remove(payload, '$.user_id'), '$.scope', 'u:' || json_extract(payload, '$.user_id')) ELSE payload END AS "payload"`;
-const DEFAULTS = { assignees: "'[]'", hidden_sources: "'[]'" };
-const ADDED_IN_V7 = new Set(['hidden_sources', 'updated_by', 'class_id', 'assignees', 'completed_by', 'space_id']);
+const DEFAULTS = { assignees: "'[]'", hidden_sources: "'[]'", grade_categories: "'[]'", grading: "'{}'" };
+/* Columns added since rounds-v6, by v7's first schema or a later migration (0007_grades.sql). */
+const ADDED_IN_V7 = new Set(['hidden_sources', 'updated_by', 'class_id', 'assignees', 'completed_by', 'space_id', 'credits', 'grade_categories', 'category', 'grading']);
 /* Short-lived, or filled by the fresh schema itself. The error log, the announcement and
    the cron's last run start fresh too. */
-const LEFT_BEHIND = ['error_log', 'app_meta', 'login_throttle', 'request_limits', 'spotify_oauth_states', 'spotify_refresh_locks', 'sync_state', 'd1_migrations'];
+const LEFT_BEHIND = ['error_log', 'app_meta', 'login_throttle', 'request_limits', 'spotify_oauth_states', 'spotify_refresh_locks', 'push_subscriptions', 'sync_state', 'd1_migrations'];
 
 /** Every column of the database's own tables, as rows of {tbl, col}. */
 export const COLUMNS_QUERY = `SELECT m.name AS tbl, p.name AS col FROM sqlite_master AS m, pragma_table_info(m.name) AS p
@@ -105,10 +106,12 @@ function literal(v) {
  */
 export function copyStatements(dump) {
   const out = [];
+  /* a column a row leaves out (a dump made before it was added) takes its default, as readQueries gives it */
+  const value = (row, c) => (row[c] === undefined && DEFAULTS[c] ? DEFAULTS[c] : literal(row[c]));
   for (const [table, cols] of Object.entries(TABLES)) {
     if (REBUILT.includes(table)) continue;
     for (const row of dump[table] || []) {
-      out.push(`INSERT INTO ${table} (${cols.map((c) => `"${c}"`).join(', ')}) VALUES (${cols.map((c) => literal(row[c])).join(', ')})`);
+      out.push(`INSERT INTO ${table} (${cols.map((c) => `"${c}"`).join(', ')}) VALUES (${cols.map((c) => value(row, c)).join(', ')})`);
     }
   }
   for (const table of REBUILT) {

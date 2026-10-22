@@ -47,3 +47,30 @@ self.addEventListener('fetch', (e) => {
       .catch(async () => (await fallback()) || new Response('Offline', { status: 503, headers: { 'content-type': 'text/plain' } })),
   );
 });
+
+// The morning digest (worker/push.js). The push is empty: what it says is fetched here with
+// the session cookie, in this device's time zone. A browser must show something for every
+// push, so a failed fetch still says that something is due.
+self.addEventListener('push', (e) => {
+  e.waitUntil((async () => {
+    let title = 'Term', body = 'You have things due soon.';
+    try {
+      const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+      const res = await fetch('/api/digest?tz=' + encodeURIComponent(tz), { credentials: 'same-origin', cache: 'no-store' });
+      const d = res.ok ? await res.json() : null;
+      if (d && typeof d.title === 'string') { title = d.title; body = typeof d.body === 'string' ? d.body : ''; }
+    } catch { /* offline or signed out: the plain words */ }
+    await self.registration.showNotification(title, { body, icon: '/apple-touch-icon.png', badge: '/apple-touch-icon.png', tag: 'digest', renotify: true, data: { url: '/' } });
+  })());
+});
+
+// A tap on the digest: back to an open tab of the app, or a new one.
+self.addEventListener('notificationclick', (e) => {
+  e.notification.close();
+  e.waitUntil((async () => {
+    const tabs = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+    const open = tabs.find((c) => new URL(c.url).origin === location.origin);
+    if (open) return open.focus();
+    return self.clients.openWindow(e.notification.data?.url || '/');
+  })());
+});

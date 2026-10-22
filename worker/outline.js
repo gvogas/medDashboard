@@ -114,15 +114,22 @@ const SHORT_DAYS = { mo: 1, tu: 2, we: 3, th: 4, fr: 5, sa: 6, su: 0, r: 4 };
 
 /** A weekday (0 = Sunday) from "Tue", "THU", "monday", "Th", "We", "R"…; -1 when it is none. */
 export function dayIndex(d) {
-  const t = String(d || '').trim().toLowerCase();
+  const t = String(d || '').trim().toLowerCase().replace(/\.$/, '');
   if (Object.hasOwn(SHORT_DAYS, t)) return SHORT_DAYS[t];
-  return DAYS.findIndex((day) => day.toLowerCase() === t.slice(0, 3));
+  const en = DAYS.findIndex((day) => day.toLowerCase() === t.slice(0, 3));
+  return en >= 0 ? en : t.length >= 3 && Object.hasOwn(FRENCH_DAYS, t.slice(0, 3)) ? FRENCH_DAYS[t.slice(0, 3)] : -1;
 }
+/* "Lundi", "Mar.", "jeu": French timetables (Omnivox) and a model that copies them */
+const FRENCH_DAYS = { dim: 0, lun: 1, mar: 2, mer: 3, jeu: 4, ven: 5, sam: 6 };
 export const clip = (v, n) => (typeof v === 'string' ? v.replace(/\s+/g, ' ').trim().slice(0, n) : '');
 
-/** "9:00", "0900", "2pm", "14.30" → "HH:MM", or '' */
+/** "9:00", "0900", "2pm", "14.30", "9:00 a.m.", "09:00:00", "9 h 30" → "HH:MM", or '' */
 export function cleanTime(v) {
-  const m = String(v || '').trim().toLowerCase().match(/^(\d{1,2})(?:[:.h]?(\d{2}))?\s*(am|pm)?$/);
+  const t = String(v || '').trim().toLowerCase()
+    .replace(/\b([ap])\.?\s?m\.?$/, '$1m')         /* "a.m." */
+    .replace(/^(\d{1,2}:\d{2}):\d{2}/, '$1')         /* seconds */
+    .replace(/\s*([:h])\s*/, '$1');                  /* "9 h 30" */
+  const m = t.match(/^(\d{1,2})(?:[:.h]?(\d{2}))?\s*(am|pm)?$/);
   if (!m) return '';
   let h = +m[1];
   const min = m[2] ? +m[2] : 0;

@@ -11,3 +11,9 @@ SPOTIFY_CLIENT_SECRET=
 # Generate the independent local token key without printing it:
 # npm run spotify:key
 # SPOTIFY_TOKEN_KEYS is a JSON keyring; see docs/RELIABILITY-UPGRADE.md.
+
+# Push reminders (the morning digest). Optional: without all three, push is off.
+# `npm run push:key` writes a local pair into .dev.vars without printing the private key.
+# VAPID_PUBLIC_KEY=
+# VAPID_PRIVATE_KEY=
+# VAPID_SUBJECT=mailto:you@example.com

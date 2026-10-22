@@ -172,19 +172,19 @@ export async function createClass(db, userId, { course, convertCourseId = null, 
       .bind(id, userId, now, now, userId, SPACE_LIMIT, ...(copy ? [mine, courseId, userId, courseId] : [])),
     db.prepare(`INSERT INTO members (space_id, user_id, role, joined_at, updated_at) SELECT ?, ?, 'owner', ?, ? WHERE ${made}`).bind(id, userId, now, now, id),
     copy
-      ? db.prepare(`INSERT INTO courses (scope, id, code, name, color, instructor, term, archived, meetings, target, updated_by, created_at, updated_at, revision)
-          SELECT ?, id, code, name, color, instructor, term, 0, meetings, NULL, ?, ?, ?, ${NEXT_ROW_REVISION} FROM courses
+      ? db.prepare(`INSERT INTO courses (scope, id, code, name, color, instructor, term, archived, meetings, target, credits, grade_categories, updated_by, created_at, updated_at, revision)
+          SELECT ?, id, code, name, color, instructor, term, 0, meetings, NULL, credits, grade_categories, ?, ?, ?, ${NEXT_ROW_REVISION} FROM courses
           WHERE scope = ? AND id = ? AND deleted_at IS NULL AND ${made}`).bind(scope, userId, now, now, mine, courseId, id)
-      : db.prepare(`INSERT INTO courses (scope, id, code, name, color, instructor, term, archived, meetings, target, updated_by, created_at, updated_at, revision)
-          SELECT ?, ?, ?, ?, ?, ?, ?, 0, ?, NULL, ?, ?, ?, ${NEXT_ROW_REVISION} WHERE ${made}`)
-          .bind(scope, courseId, course.code, course.name, course.color, course.instructor, course.term, JSON.stringify(course.meetings), userId, now, now, id),
+      : db.prepare(`INSERT INTO courses (scope, id, code, name, color, instructor, term, archived, meetings, target, credits, grade_categories, updated_by, created_at, updated_at, revision)
+          SELECT ?, ?, ?, ?, ?, ?, ?, 0, ?, NULL, ?, ?, ?, ?, ?, ${NEXT_ROW_REVISION} WHERE ${made}`)
+          .bind(scope, courseId, course.code, course.name, course.color, course.instructor, course.term, JSON.stringify(course.meetings), course.credits ?? null, JSON.stringify(course.gradeCategories ?? []), userId, now, now, id),
   ];
   if (copy && items.length) {
     /* the class's facts only: no status, grade, checklist or notes of yours (the c: CHECK) */
     stmts.push(db.prepare(`INSERT INTO items (scope, id, type, title, course_id, date, start, end, location, status, weight, notes, links,
-        recur, weekday, recur_until, dept, updated_by, created_at, updated_at, revision)
+        recur, weekday, recur_until, dept, category, updated_by, created_at, updated_at, revision)
       SELECT ?, id, type, title, course_id, date, start, end, location, 'todo', weight, '', links,
-        recur, weekday, recur_until, dept, ?, ?, ?, ${NEXT_ROW_REVISION} FROM items
+        recur, weekday, recur_until, dept, category, ?, ?, ?, ${NEXT_ROW_REVISION} FROM items
       WHERE scope = ? AND course_id = ? AND deleted_at IS NULL AND type NOT GLOB 'c-*' AND id IN (SELECT value FROM json_each(?)) AND ${made}`)
       .bind(scope, userId, now, now, mine, courseId, JSON.stringify(items), id));
   }

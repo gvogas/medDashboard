@@ -91,6 +91,12 @@ export async function limitOutline(env, userId) {
   if (wait) throw rateLimited(wait, 'outline_limit');
 }
 
+/** A read claimed by limitOutline handed back: the model never answered. */
+export async function giveBackOutline(env, userId, now = Date.now()) {
+  await env.DB.prepare('UPDATE request_limits SET hits = hits - 1 WHERE key = ? AND hits > 0 AND reset_at > ?')
+    .bind(`outline:${userId}`, now).run();
+}
+
 /** The AI reads (outlines, calendars, timetables) left in the person's window: { left, limit }. */
 export async function readsLeft(db, userId, now = Date.now()) {
   const row = await db.prepare('SELECT hits, reset_at FROM request_limits WHERE key = ?').bind(`outline:${userId}`).first();

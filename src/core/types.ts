@@ -3,6 +3,7 @@
 // app reads is typed, and a row may carry more.
 
 import type { Maintenance } from "./maintenance"
+import type { GradeCategory } from "./grades"
 
 export type ItemStatus = "todo" | "submitted" | "graded" | "done" | "missed" | (string & {})
 
@@ -37,6 +38,8 @@ export interface Item extends Synced {
     completedAt: number | null
     /** A personal item filed under a class: the class's space id (spec §5). A label, opening nothing. */
     classId?: string | null
+    /** One of its course's grade categories (core/grades.ts), or none: the item then counts by its own weight. */
+    category?: string | null
 }
 
 export interface Meeting { id: string; kind: string; weekday: number; start: string; end: string; room: string }
@@ -51,6 +54,10 @@ export interface Course extends Synced {
     archived: boolean
     target: number | null
     meetings: Meeting[]
+    /** Credits for the GPA; null counts as DEFAULT_CREDITS (core/grades.ts). */
+    credits?: number | null
+    /** Shares of the grade split over the items in each (core/grades.ts). */
+    gradeCategories?: GradeCategory[]
 }
 
 export interface Coat { name: string; role: string; color: string }
@@ -75,6 +82,8 @@ export interface Profile {
     maintenance?: Maintenance | null
     /** What you hid from your Week and Month: 'course:<id>', 'space:<sid>', 'personal' (spec §9). */
     hiddenSources?: string[]
+    /** Your grading scale and pass marks, as stored; normalizeGrading in core/grades.ts fills the defaults. */
+    grading?: unknown
     revision?: number
 }
 
@@ -129,8 +138,11 @@ export type StepKind = "study" | "break"
 /** A study flow, as normalizeFlow in model.ts returns it: 1–12 steps, at least one Study, 1–12 rounds. */
 export interface Flow { steps: [StepKind, number][]; rounds: number }
 
-/** The study prefs, as normalizePrefs in model.ts returns them. */
-export interface StudyPrefs { goal: number; dayMin: number; rest: number[]; celebrate: boolean }
+/** The study prefs, as normalizePrefs in model.ts returns them. `alarms`: whether the calendar
+    feed carries reminders. `reviews` is the day spaced reviews were turned on (null = off),
+    missing on a profile saved before it was synced. `setupDone`: the first-run setup was
+    finished or skipped (absent until then). */
+export interface StudyPrefs { goal: number; dayMin: number; rest: number[]; celebrate: boolean; alarms: boolean; reviews?: string | null; setupDone?: boolean }
 
 /** A badge as achievements.ts works it out: built in, or one of your own (with its sticker). */
 export interface Badge {

@@ -70,6 +70,8 @@ export function deriveEdit(it: Item, field: ItemField, value: unknown, courseOf:
     } else if (field === "courseId") {
         patch.courseId = (value as string) || null
         patch.title = autoTitle(it, courseOf(it.courseId), courseOf(patch.courseId))
+        /* a category is one of its course's: another course has its own */
+        if (patch.courseId !== it.courseId) patch.category = null
     } else if (field === "recurUntil") {
         patch.recurUntil = (value as string) || null
     } else if (field === "status") {

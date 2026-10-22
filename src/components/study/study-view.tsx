@@ -17,6 +17,7 @@ import type { StudyTab } from "@/data/types"
 import { StudyTiles } from "./tiles"
 import { TimerCards } from "./timer-cards"
 import { HistoryCard } from "./history"
+import { RecapCard } from "./recap"
 import { AchievementsCard } from "./achievements"
 import { LeaderboardCard } from "./leaderboard"
 import { FriendsCard } from "./friends"
@@ -73,7 +74,7 @@ export function StudyView() {
             </div>
             <div role="tabpanel" id="study-panel" aria-labelledby={"study-tab-" + open} tabIndex={0} className="min-w-0 rounded-[var(--radius)] outline-none focus-visible:shadow-[inset_0_0_0_2px_var(--accent)]">
                 {open === "timer" && <TimerCards />}
-                {open === "history" && <HistoryCard />}
+                {open === "history" && <><HistoryCard /><RecapCard /></>}
                 {open === "achievements" && <AchievementsCard />}
                 {open === "leaderboard" && <LeaderboardCard className="mx-auto w-full max-w-[760px]" />}
                 {open === "friends" && <FriendsCard />}

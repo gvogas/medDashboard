@@ -6,14 +6,17 @@
   "scripts": {
     "dev": "vite",
     "dev:built": "npm run build && vite preview",
-    "deploy": "npm run check && node scripts/check-secrets.mjs && wrangler d1 migrations apply DB --remote && node scripts/check-db.mjs --remote && wrangler deploy",
+    "dev:fake-ai": "vite --mode fake-ai",
+    "deploy": "npm run check && node scripts/check-secrets.mjs && wrangler d1 migrations apply DB --config wrangler.jsonc --remote && node scripts/check-db.mjs --remote && wrangler deploy",
+    "deploy:staging": "node scripts/deploy-staging.mjs",
     "test": "vitest run && npm run test:local",
     "test:watch": "vitest",
     "test:ui": "vitest run --project dom",
     "test:api": "vitest run --project workers",
     "test:changed": "vitest run --changed",
-    "db:local": "wrangler d1 migrations apply DB --local",
-    "db:remote": "wrangler d1 migrations apply DB --remote",
+    "db:local": "wrangler d1 migrations apply DB --config wrangler.jsonc --local",
+    "db:remote": "wrangler d1 migrations apply DB --config wrangler.jsonc --remote",
+    "db:staging": "wrangler d1 migrations apply DB --config wrangler.jsonc --env staging --remote",
     "db:check": "node scripts/check-db.mjs",
     "user:add": "node scripts/add-user.mjs",
     "build": "vite build && node scripts/build.mjs",
@@ -21,7 +24,8 @@
     "test:local": "node --test test/local-store.node.mjs test/syntax.node.mjs",
     "typecheck": "tsc --noEmit",
     "check": "npm run typecheck && npm test && npm run build",
-    "spotify:key": "node scripts/spotify-key.mjs"
+    "spotify:key": "node scripts/spotify-key.mjs",
+    "push:key": "node scripts/vapid-key.mjs"
   },
   "devDependencies": {
     "@cloudflare/vite-plugin": "^1.61.0",

@@ -9,6 +9,7 @@ import { cn } from "@/lib/utils"
 import { TextureButton } from "@/components/ui/texture-button"
 import { viewHeading } from "@/components/view-heading"
 import { ui, useUi } from "@/data/ui"
+import { useNeedsSetup } from "@/data/setup"
 import { useSide } from "@/data/sidebar"
 import { useSyncStatus } from "@/data/sync"
 import { DOT, syncTrouble } from "@/components/sync-status"
@@ -24,6 +25,9 @@ const icon = (children: ReactNode, box = "0 0 16 16") => (
 export function TopBar() {
     const heading = useUi(viewHeading)
     const dated = useUi((ui) => ui.view === "week" || ui.view === "month")
+    /* the first-run setup fills the Week: on a phone the round New item would sit on its Next */
+    const onWeek = useUi((u) => u.view === "week")
+    const setup = useNeedsSetup() && onWeek
     const open = useSide().open
     const sync = useSyncStatus().state
 
@@ -43,13 +47,14 @@ export function TopBar() {
                 {syncTrouble(sync) && <i aria-hidden="true" data-sync-dot={sync} className={cn("absolute top-1 right-1 size-2 rounded-full ring-2 ring-card", DOT[sync])} />}
             </button>
 
-            <div className="flex min-w-0 flex-1 flex-col gap-1">
+            {/* on a small phone a dated title has its own line beside the menu, and ‹ Today › starts the next */}
+            <div className={cn("flex min-w-0 flex-1 flex-col gap-1", dated && "max-[520px]:basis-[calc(100%-44px)]")}>
                 <span className="truncate text-[13px] text-muted-foreground">{heading.sub || <>&nbsp;</>}</span>
                 <h1 className="m-0 truncate font-serif text-[34px] max-[700px]:text-[24px] leading-[1.1] font-medium tracking-[-.015em] text-foreground">{heading.title}</h1>
             </div>
 
             {dated && (
-                <div className="flex items-center gap-1">
+                <div className="flex items-center gap-1 max-[520px]:mr-auto">
                     <TextureButton variant="minimal" size="sm" aria-label="Previous" onClick={() => step(-1)}>
                         {icon(<path d="M10 3 5 8l5 5" />)}
                     </TextureButton>
@@ -77,6 +82,7 @@ export function TopBar() {
                     "font-semibold",
                     "max-[700px]:fixed max-[700px]:right-4 max-[700px]:bottom-[calc(16px+env(safe-area-inset-bottom))] max-[700px]:z-30",
                     "max-[700px]:rounded-full max-[700px]:shadow-[var(--shadow-2)] max-[700px]:h-auto max-[700px]:px-5 max-[700px]:py-3",
+                    setup && "max-[700px]:hidden",
                 )}
             >
                 {icon(<path d="M8 3v10M3 8h10" />)}

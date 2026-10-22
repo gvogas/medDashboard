@@ -23,6 +23,7 @@ import { ui } from "./ui"
 import { preloadIdle } from "@/lib/lazy"
 import { openJoin } from "./classes"
 import { setUnread } from "./inbox"
+import { forgetDevice } from "./push"
 
 function rememberedSession(): ServerProfile | null {
     try { return JSON.parse(localStorage.getItem("rounds.session") || "null") } catch { return null }
@@ -114,6 +115,8 @@ export async function signOut({ everywhere = false, force = false }: { everywher
     sync.stop()
     spotify.stop()
     resetRequests()
+    /* the morning digest belongs to the account, not to whoever signs in next */
+    await forgetDevice()
     try { await (everywhere ? api.revokeAll() : api.signOut()) }
     catch {
         sync.init()

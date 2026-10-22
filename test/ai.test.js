@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { runModel, askJson, modelJson, tidyText, knownContext, listParam, cleanTerm, timeLeft, TIMEOUT_MS } from '../worker/ai.js';
+import { runModel, askJson, modelJson, answerSnippet, tidyText, knownContext, listParam, cleanTerm, timeLeft, TIMEOUT_MS } from '../worker/ai.js';
 import { knownParams } from '../worker/api.js';
 import { HttpError } from '../worker/http.js';
 
@@ -195,5 +195,31 @@ describe('timeLeft', () => {
     expect(left).toBeLessThanOrEqual(5_000);
     expect(timeLeft(Date.now() + 10 * TIMEOUT_MS)).toBe(TIMEOUT_MS);
     expect(() => timeLeft(Date.now() - 1)).toThrow(expect.objectContaining({ status: 504, body: { error: 'ai_timeout' } }));
+  });
+});
+
+describe('modelJson, in every shape Workers AI answers', () => {
+  it('reads chat content, tool calls, the Responses API, Workers AI\'s own, fences and lists', () => {
+    expect(modelJson({ choices: [{ message: { content: '```json\n{"a":1}\n```' } }] })).toEqual({ a: 1 });
+    expect(modelJson({ choices: [{ message: { content: null, tool_calls: [{ function: { arguments: '{"b":2}' } }] } }] })).toEqual({ b: 2 });
+    expect(modelJson({ choices: [{ message: { content: [{ type: 'text', text: '{"e":6}' }] } }] })).toEqual({ e: 6 });
+    expect(modelJson({ output: [{ type: 'reasoning', content: [{ type: 'reasoning_text', text: 'hmm' }] }, { type: 'message', content: [{ type: 'output_text', text: '{"c":3}' }] }] }))
+      .toEqual({ c: 3 });
+    expect(modelJson({ output_text: '{"d":4}' })).toEqual({ d: 4 });
+    expect(modelJson({ response: { f: 7 } })).toEqual({ f: 7 });
+    expect(modelJson('Here it is: [{"code":"X"}]')).toEqual({ items: [{ code: 'X' }] });
+  });
+
+  it('is null for a cut-off reasoning answer and for prose, and unwraps only an echoed schema with values', () => {
+    expect(modelJson({ choices: [{ message: { content: null } }] })).toBeNull();
+    expect(modelJson('Sorry, I cannot read that.')).toBeNull();
+    expect(modelJson({ type: 'object', properties: { term: 'Fall', courses: [] } })).toEqual({ term: 'Fall', courses: [] });
+    expect(modelJson({ type: 'object', properties: { term: { type: 'string' } } })).toEqual({ type: 'object', properties: { term: { type: 'string' } } });
+  });
+
+  it('says the start of an answer for the error log', () => {
+    expect(answerSnippet({ choices: [{ message: { content: 'Sorry  no\n\nanswer' } }] })).toBe('Sorry no answer');
+    expect(answerSnippet({ response: { courses: [] } })).toBe('{"courses":[]}');
+    expect(answerSnippet('x'.repeat(1000))).toHaveLength(400);
   });
 });
