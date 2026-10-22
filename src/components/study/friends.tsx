@@ -5,6 +5,7 @@
 
 import { useEffect, useId, useRef, useState, type ReactNode } from "react"
 import { cn } from "@/lib/utils"
+import { ago } from "@/core/dates"
 import { Panel } from "@/components/views/bits"
 import { Button, Note, TextInput } from "@/components/sheet/fields"
 import { MaintenanceBar, MaintenancePage } from "@/components/maintenance"
@@ -56,21 +57,43 @@ function Friends({ bar }: { bar: boolean }) {
     /* in a room, Invite asks to that room: the host's to do */
     const roomState = useRoom()
     const canInvite = !myRoom || isHost(roomState)
+    const live = list?.friends.filter((f) => f.live) ?? []
 
     if (!list) return <Panel title="Friends" label="Friends"><div className="p-4"><Note>{offline ? "Friends need a connection." : error || "Loading…"}</Note></div></Panel>
 
     return (
         <div className="grid items-start gap-4 min-[900px]:grid-cols-[minmax(0,1fr)_320px]">
             {bar && <MaintenanceBar className="min-[900px]:col-span-2" />}
-            <Panel title={<>Friends <span className="font-normal text-muted-foreground">{list.friends.length}</span></>} label="Friends">
+            <div className="flex min-w-0 flex-col gap-4">
+            <Panel title={<>Studying now <span className="font-normal text-muted-foreground">{live.length} of {list.friends.length}</span></>} label="Studying now"
+                head={<Button onClick={() => openTogether()}>Study together</Button>}>
                 <div className="px-4 py-1.5">
-                    {list.friends.length === 0 && <p className={cn(SMALL, "py-3")}>No friends yet. Find people with Add friends.</p>}
-                    {list.friends.map((f) => (
+                    {live.length === 0 && <p className={cn(SMALL, "py-3")}>No friends are studying right now. Start a session and invite them.</p>}
+                    {live.map((f) => (
                         <div key={f.userId} className={ROW}>
                             <Avatar p={f} />
                             <span className="flex min-w-[140px] flex-1 flex-col">
                                 <span>{f.name}</span>
-                                <span className={f.room ? "text-[12.5px] font-medium text-[var(--study-ink)]" : SMALL}>{f.room ? "Studying in a room of " + f.room.size : "@" + f.username}</span>
+                                <span className="text-[12.5px] font-medium text-[var(--study-ink)]">
+                                    {(f.live!.label || "Studying") + " · " + sinceText(f.live!.since) + " · " + (f.live!.room ? "room of " + f.live!.room.size : f.room ? "in a room" : "alone")}
+                                </span>
+                            </span>
+                            {f.room && f.room.id !== myRoom && <Button disabled={off} aria-label={"Join " + f.name} onClick={() => void run(joinRoomRun(f.room!.id))}>Join</Button>}
+                            {!f.live!.room && !f.room && canInvite && <Button variant="ghost" disabled={off} aria-label={"Invite " + f.name}
+                                onClick={() => (myRoom ? void run(inviteMore([f.userId])) : openTogether([f.userId]))}>Invite</Button>}
+                        </div>
+                    ))}
+                </div>
+            </Panel>
+            <Panel title={<>Friends <span className="font-normal text-muted-foreground">{list.friends.length}</span></>} label="Friends">
+                <div className="px-4 py-1.5">
+                    {list.friends.length === 0 && <p className={cn(SMALL, "py-3")}>No friends yet. Find people with Add friends.</p>}
+                    {list.friends.filter((f) => !f.live).map((f) => (
+                        <div key={f.userId} className={ROW}>
+                            <Avatar p={f} />
+                            <span className="flex min-w-[140px] flex-1 flex-col">
+                                <span>{f.name}</span>
+                                <span className={SMALL}>@{f.username} · {f.lastStudied ? "studied " + ago(f.lastStudied) : "new friend"}</span>
                             </span>
                             {f.room && f.room.id !== myRoom && <Button disabled={off} aria-label={"Join " + f.name} onClick={() => void run(joinRoomRun(f.room!.id))}>Join</Button>}
                             {!f.room && asking !== f.userId && canInvite && <Button variant="ghost" disabled={off} aria-label={"Invite " + f.name} onClick={() => (myRoom ? void run(inviteMore([f.userId])) : openTogether([f.userId]))}>Invite</Button>}
@@ -89,6 +112,7 @@ function Friends({ bar }: { bar: boolean }) {
                     ))}
                 </div>
             </Panel>
+            </div>
             <div className="flex min-w-0 flex-col gap-4">
                 <AddFriends list={list} off={off} run={run} />
                 {(list.incoming.length > 0 || list.sent.length > 0) && (
@@ -132,6 +156,12 @@ function Friends({ bar }: { bar: boolean }) {
             </div>
         </div>
     )
+}
+
+/** "12 min in", "1h 05m in". */
+function sinceText(since: number, now = Date.now()): string {
+    const m = Math.max(0, Math.floor((now - since) / 60_000))
+    return (m >= 60 ? Math.floor(m / 60) + "h " + String(m % 60).padStart(2, "0") + "m" : m + " min") + " in"
 }
 
 /** Where you stand with someone: what the list says when it has them, else what the search said. */

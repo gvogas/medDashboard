@@ -1,6 +1,6 @@
 // The Study page's three tiles: the streak, today against the daily goal, and the term
 // so far (the last 12 weeks with no term start), the numbers in serif. With no goal,
-// Today offers to set one.
+// Today offers to set one. Once you have studied in a room, a fourth: With friends this week.
 
 import type { ReactNode } from "react"
 import { cn } from "@/lib/utils"
@@ -13,7 +13,7 @@ export function StudyTiles() {
     const t = useStudyTiles()
     const goal = t.today.goal
     return (
-        <div className="grid grid-cols-3 gap-[13px] max-[760px]:grid-cols-2 max-[520px]:grid-cols-1">
+        <div className={cn("grid gap-[13px] max-[760px]:grid-cols-2 max-[520px]:grid-cols-1", t.together ? "grid-cols-4 max-[1100px]:grid-cols-2" : "grid-cols-3")}>
             <Tile
                 label="Streak"
                 icon={<Icon study><Flame /></Icon>}
@@ -38,8 +38,11 @@ export function StudyTiles() {
                 icon={<Icon><Calendar /></Icon>}
                 value={duration(t.term.minutes)}
                 sub={t.term.sub}
-                className="max-[760px]:col-span-2 max-[520px]:col-span-1"
+                className={t.together ? undefined : "max-[760px]:col-span-2 max-[520px]:col-span-1"}
             />
+            {t.together && (
+                <Tile label="With friends this week" icon={<Icon><People /></Icon>} value={duration(t.together.minutes)} sub={t.together.sub} />
+            )}
         </div>
     )
 }
@@ -70,6 +73,12 @@ const Icon = ({ study = false, children }: { study?: boolean; children: ReactNod
 const Flame = () => (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round">
         <path d="M12 3c1 3.5 5 5.5 5 10a5 5 0 0 1-10 0c0-2.2 1-3.6 2.2-4.8.3 1.6 1 2.6 2.3 3.1C11 8.5 11.3 5.5 12 3z" />
+    </svg>
+)
+
+const People = () => (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
+        <circle cx="8.5" cy="8.5" r="3.2" /><circle cx="16.5" cy="9.5" r="2.6" /><path d="M2.5 19.5c.6-3.4 2.9-5.2 6-5.2s5.4 1.8 6 5.2M15 14.6c2.8 0 5 1.3 5.8 4.6" />
     </svg>
 )
 

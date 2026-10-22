@@ -30,7 +30,7 @@
 |---|---|---|---|---|
 | 1 | Friends: settings, requests, search, Friends tab, inbox entries, maintenance switch, nightly purge | `together-1-friends` | `0008_friends.sql` | **below** (**built** 2026-10-21) |
 | 2 | Rooms: shared timer, Study together sheet, room screen, host controls, join/leave, invites in the inbox, `roomId` on sessions, polling | `together-2-rooms` | `0002_rooms.sql` (the clean db folded 0001–0009 into one 0001) | **below** |
-| 3 | Presence and records: solo "studying now", end summary, group record, History "with" row, With friends tile, room cleanup | `together-3-records` | `0003_presence.sql` | written after Stage 2 merges |
+| 3 | Presence and records: solo "studying now", end summary, group record, History "with" row, With friends tile, room cleanup | `together-3-records` | `0003_presence.sql` | built 2026-10-22 from the "What Stage 3 must cover" list above (no separate plan: George asked to build and ship everything) |
 
 **One change from the spec:** each stage brings its own migration rather than all tables landing in Stage 1, so Stage 2's tables are designed against the code Stage 1 leaves. And the two switches live in a `friend_settings` table, not on `users`: that keeps them out of the profile's revision and out of `scripts/lib/move-db.js`'s users column list. Update spec §4 to match in Stage 1's docs task.
 

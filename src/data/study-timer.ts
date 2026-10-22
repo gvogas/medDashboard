@@ -7,6 +7,7 @@
 import { useMemo, useSyncExternalStore } from "react"
 import * as focus from "./run"
 import * as room from "./room"
+import { watchPresence } from "./presence"
 import type { RoomLink } from "./run"
 import * as store from "@/core/store"
 import { data } from "@/core/store"
@@ -211,6 +212,9 @@ export function labelOf(courseId: string | null, itemId: string | null): string 
 
 /** The Study together sheet, with these friends ticked. */
 export const openTogether = (invite: string[] = []) => openSheet({ kind: "together", invite })
+
+/* friends see a solo run (presence.ts) */
+watchPresence(labelOf)
 
 /** Start a room on `flow` with your class picked for the timer, inviting `invite`. Inside the click. */
 export async function startRoomRun(flow: Flow, invite: string[]): Promise<string> {

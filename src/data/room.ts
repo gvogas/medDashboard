@@ -12,6 +12,7 @@ import { api, ApiError } from "@/core/api"
 import { data } from "@/core/store"
 import * as run from "./run"
 import { toast } from "./toast"
+import { openRecord } from "./record"
 import type { Flow, RoomRun, RoomView } from "./types"
 
 export const VISIBLE_MS = 5_000
@@ -134,6 +135,8 @@ run.onTick((s, event) => {
         set({ view: null, reconnecting: false })
         if (id && tellLeave === id) sendLeave(id)
         tellLeave = null
+        /* the session is saved before the end is told: with a minute or more, the summary */
+        if (id && data.study_sessions.some((x) => x.id === "r-" + id)) openRecord(id, true)
         return
     }
     if (s?.room && polling !== s.room.id) { tellLeave = s.room.id; startPolling(); if (!state.view) void poll() }

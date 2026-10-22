@@ -3,7 +3,7 @@
 import type { Row } from './db.ts';
 import { UNREAD_CAP } from './shared.ts';
 import type { Cursor, Page, ServerProfile } from './store.ts';
-import type { ActivityRow, Flow, FriendMatch, FriendSettings, Friends, Inbox, JoinCode, ParentRef, RoomView, Space, SpaceDetails, SpaceInvite, SpaceSummary } from './types.ts';
+import type { ActivityRow, Flow, FriendMatch, FriendSettings, Friends, GroupRecord, Inbox, JoinCode, ParentRef, RoomView, Space, SpaceDetails, SpaceInvite, SpaceSummary } from './types.ts';
 
 /** An error's body as the Worker sends it: its code, and for some the server's copy or a wait. */
 export interface ErrorBody { error?: string; retryAfter?: unknown; current?: Row | null; [field: string]: unknown }
@@ -289,6 +289,12 @@ export const api = {
     clock: (id: string, action: 'pause' | 'resume' | 'skip' | 'end'): Promise<RoomView> => request('PUT', `/api/rooms/${id}/clock`, { action }),
     invite: (id: string, userIds: string[]) => empty(request('POST', `/api/rooms/${id}/invite`, { userIds })),
     label: (id: string, courseLabel: string): Promise<RoomView> => request('PUT', `/api/rooms/${id}/me`, { courseLabel }),
+    record: (id: string): Promise<GroupRecord> => request('GET', `/api/rooms/${id}/record`),
+  },
+  /* a solo run, so friends see you studying (worker/rooms.js setPresence) */
+  presence: {
+    set: (p: { courseLabel: string; startedAt: number; endsAt: number }) => empty(request('PUT', '/api/presence', p)),
+    clear: () => empty(request('DELETE', '/api/presence')),
   },
   join: (code: string) => spaceOf(request('POST', '/api/join', { code })),
   get: (kind: string, id: string) => record(request('GET', rowPath(kind, id)), id),

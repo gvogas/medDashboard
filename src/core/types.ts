@@ -223,8 +223,11 @@ export interface ActivityRow {
 /** Someone on the app, as the Friends tab names them. */
 export interface FriendPerson { userId: string; username: string; name: string }
 export interface FriendRequest extends FriendPerson { at: number }
-/** A friend in an open room you may join: its id and how many are in it. */
-export interface Friend extends FriendPerson { since: number; room?: { id: string; size: number } }
+/** A friend studying now: what they picked, since when, and the room when you may join it. */
+export interface FriendLive { label: string; since: number; room: { id: string; size: number } | null }
+/** A friend. `room`: an open room of theirs you may join; `live` while they study; `lastStudied`
+    when their latest session began (null when none, or they hide it). */
+export interface Friend extends FriendPerson { since: number; room?: { id: string; size: number }; live?: FriendLive; lastStudied?: number | null }
 /** Where you stand with someone: friends, you asked, they asked, or nothing yet. */
 export type FriendState = 'none' | 'friends' | 'requested' | 'asked';
 export interface FriendMatch extends FriendPerson { state: FriendState }
@@ -249,6 +252,8 @@ export interface RoomView {
     room: { id: string; hostId: string | null; run: RoomRun; endedAt: number | null; feed: RoomEvent[] }
     members: RoomMember[]; tag: string; now: number
 }
+/** A room's group record: the people who were in it, each with the minutes of their own sessions there. */
+export interface GroupRecord { roomId: string; startedAt: number; endedAt: number | null; members: { userId: string; username: string; name: string; minutes: number }[] }
 /** An invite to a room that is still open, for the inbox. */
 export interface RoomInvite { roomId: string; hostId: string | null; name: string; username: string; run: RoomRun; size: number; at: number }
 

@@ -33,6 +33,7 @@ const ConvertSheet = lazyNamed(() => import("./convert-sheet"), "ConvertSheet", 
 const JoinSheet = lazyNamed(() => import("./join-sheet"), "JoinSheet", { idle: false })
 const InboxSheet = lazyNamed(() => import("./inbox-sheet"), "InboxSheet", { idle: false })
 const TogetherSheet = lazyNamed(() => import("./together-sheet"), "TogetherSheet", { idle: false })
+const RecordSheet = lazyNamed(() => import("./record-sheet"), "RecordSheet", { idle: false })
 const MergeSheet = lazyNamed(() => import("./merge-sheet"), "MergeSheet", { idle: false })
 /* the project sheets: downloaded when first opened, as the class sheets are */
 const NewProjectSheet = lazyNamed(() => import("./new-project-sheet"), "NewProjectSheet", { idle: false })
@@ -59,6 +60,7 @@ export function sheetLabel(s: Exclude<SheetState, null>): string {
     if (s.kind === "join") return "Join a class"
     if (s.kind === "inbox") return "Inbox"
     if (s.kind === "together") return "Study together"
+    if (s.kind === "record") return s.summary ? "Session done" : "Group session"
     if (s.kind === "merge") return "Merge into the class"
     if (s.kind === "project") return "Project"
     if (s.kind === "new-project") return "New team project"
@@ -129,6 +131,7 @@ export function Sheet() {
                 {shown?.kind === "join" && <JoinSheet key={shown.space?.id ?? "code:" + shown.code} code={shown.code} space={shown.space} />}
                 {shown?.kind === "inbox" && <InboxSheet />}
                 {shown?.kind === "together" && <TogetherSheet invite={shown.invite} />}
+                {shown?.kind === "record" && <RecordSheet key={shown.roomId} roomId={shown.roomId} summary={shown.summary} />}
                 {shown?.kind === "merge" && <MergeSheet key={shown.spaceId + shown.courseId} spaceId={shown.spaceId} courseId={shown.courseId} fromCourse={shown.fromCourse} />}
                 {shown?.kind === "new-project" && <NewProjectSheet key={shown.parent ? shown.parent.space + "/" + shown.parent.item : "new"} parent={shown.parent} />}
                 {shown?.kind === "project" && <ProjectSheet key={shown.spaceId} spaceId={shown.spaceId} tab={shown.tab} />}

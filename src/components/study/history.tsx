@@ -4,6 +4,8 @@
 // whose days open their month. A deleted session waits in the card's foot for Undo,
 // whichever tab is showing.
 
+import { openRecord, useRecord } from "@/data/record"
+import { data } from "@/core/store"
 import { useEffect, useRef, useState, type CSSProperties, type KeyboardEvent, type ReactNode } from "react"
 import { cn } from "@/lib/utils"
 import { duration } from "@/lib/time"
@@ -250,6 +252,7 @@ function SessionRow({ s, withDay, onDelete }: { s: StudySession; withDay: boolea
             <span className="flex min-w-0 flex-col @max-[520px]:[grid-area:what]">
                 <b className="truncate font-semibold">{it ? it.title : (courseOf(s.courseId) as Course | null)?.name || (leftSpaceLabel(s.courseId) ?? "No course")}</b>
                 {note && <em className="truncate font-serif text-[12.5px] text-ink-2 italic">{note}</em>}
+                {s.roomId && <WithRow roomId={s.roomId} />}
             </span>
             <span className="text-right font-mono font-semibold @max-[520px]:[grid-area:mins]">{duration(s.studyMinutes)}</span>
             <span className={cn(
@@ -265,6 +268,26 @@ function SessionRow({ s, withDay, onDelete }: { s: StudySession; withDay: boolea
                 </RowButton>
             </span>
         </li>
+    )
+}
+
+/** A session studied in a room: the others as chips, and its Group record. */
+function WithRow({ roomId }: { roomId: string }) {
+    const entry = useRecord(roomId)
+    const me = data.profile?.id ?? ""
+    const others = entry?.record?.members.filter((m) => m.userId !== me) ?? []
+    return (
+        <span className="mt-0.5 flex flex-wrap items-center gap-1">
+            <span className="text-[11.5px] text-muted-foreground">{others.length ? "with" : "group session"}</span>
+            {others.slice(0, 4).map((m) => (
+                <span key={m.userId} className="rounded-full bg-muted px-2 py-px text-[11.5px] text-ink-2">{m.name.split(/\s+/)[0]}</span>
+            ))}
+            {others.length > 4 && <span className="text-[11.5px] text-muted-foreground">+{others.length - 4}</span>}
+            <button type="button" onClick={() => openRecord(roomId)}
+                className="hit cursor-pointer border-0 bg-transparent px-1 py-0 font-[inherit] text-[11.5px] font-semibold text-accent-foreground underline underline-offset-2">
+                Group record
+            </button>
+        </span>
     )
 }
 

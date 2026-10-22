@@ -36,6 +36,8 @@ export type SheetState =
     | { kind: "inbox" }
     /* study together: start a room, these friends ticked */
     | { kind: "together"; invite: string[] }
+    /* a room's group record; `summary` at the end of a session */
+    | { kind: "record"; roomId: string; summary: boolean }
     | { kind: "merge"; spaceId: string; courseId: string; fromCourse: boolean }
     | { kind: "project"; spaceId: string; tab: ProjectTab }
     | { kind: "new-project"; parent: ParentRef | null }
