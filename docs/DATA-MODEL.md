@@ -28,7 +28,7 @@ friend_settings  your two Friends switches: findable in search, shown while stud
 ```
 
 The schema is [`migrations/0001_schema.sql`](../migrations/0001_schema.sql), in one
-piece. Six times between September and 5 October 2026 the live data moved into a fresh database built from it
+piece. Seven times between September and October 2026 the live data moved into a fresh database built from it
 (`node scripts/move-db.mjs --from <old> --to <new> --remote`): first `rounds` into
 `rounds-v2`, replacing ten migrations of patches, then `rounds-v2` into `rounds-v3`,
 folding in the study timer, quizzes, grade targets and the calendar feed, then
@@ -36,16 +36,17 @@ folding in the study timer, quizzes, grade targets and the calendar feed, then
 calendar and the leaderboard, then `rounds-v4` into `rounds-v5`, widening the theme to
 six, then `rounds-v5` into `rounds-v6`, adding the Admin page (`users.is_admin`,
 `users.last_seen_day`, `error_log`, `admin_log`, `app_meta`), then `rounds-v6` into
-`rounds-v7`, giving courses, items and the change feed a scope. `rounds-v7` is the live
-database. The next move, `rounds-v7` into `rounds-v8`, folds in shared classes and
-projects, invites, marks and space prefs, activity and the inbox, push reminders, grades
-and friends: the later migrations (`0002_spaces.sql` to `0009_friend_cancel.sql`) are
-now part of `0001_schema.sql`, with the columns added by `ALTER TABLE` at the end of
-their tables (`users.grading`, `courses.credits` and `grade_categories`, `items.category`,
-`friendships.cancelled_at`) and the course and item change triggers in their last form.
-The chain `rounds-v7` was built from (`0001_schema.sql` to `0009_friend_cancel.sql`) is
-kept as a test fixture in `test/fixtures/legacy-migrations/`, for the move's test. Later
-changes are new numbered files. The next one is `0002`.
+`rounds-v7`, giving courses, items and the change feed a scope, then `rounds-v7` into
+`rounds-v8`, folding in shared classes and projects, invites, marks and space prefs,
+activity and the inbox, push reminders, grades and friends. `rounds-v8` is the live
+database; `rounds-v7` is kept as a backup. The later migrations (`0002_spaces.sql` to
+`0009_friend_cancel.sql`) are part of `0001_schema.sql`, with the columns added by
+`ALTER TABLE` at the end of their tables (`users.grading`, `courses.credits` and
+`grade_categories`, `items.category`, `friendships.cancelled_at`) and the course and item
+change triggers in their last form. The chain `rounds-v7` was built from
+(`0001_schema.sql` to `0009_friend_cancel.sql`) is kept as a test fixture in
+`test/fixtures/legacy-migrations/`, for the move's test. Later changes are new numbered
+files. The next one is `0002`.
 
 ## Structure at a glance
 

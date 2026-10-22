@@ -15,7 +15,7 @@ flowchart LR
   B[Your browser] --> W[Cloudflare Worker<br/>rounds]
   W -->|/api/* requests| API[worker/<br/>API code]
   W -->|everything else| P[dist/client/<br/>HTML, CSS, JS built by Vite]
-  API --> D[(D1 database<br/>rounds-v7)]
+  API --> D[(D1 database<br/>rounds-v8)]
 ```
 
 Pages load from the Vite build in `dist/client/`. Anything under `/api/`, such as signing in or saving an
@@ -25,7 +25,7 @@ item, runs the code in `worker/`, which reads and writes the D1 database.
 | --- | --- | --- |
 | Front end | `index.html`, `src/`, `public/` | The pages, styles and scripts your browser runs; `npm run build` turns them into `dist/client/` |
 | API | `worker/` | Sign-in, sync, shared classes, Spotify, AI import and the Admin page. The endpoints are listed in [DATA-MODEL.md](DATA-MODEL.md) |
-| Database | Cloudflare D1, named `rounds-v7` (binding `DB`) | Stores users and everyone's data. `rounds-v6` is kept as a backup |
+| Database | Cloudflare D1, named `rounds-v8` (binding `DB`) | Stores users and everyone's data. `rounds-v7` is kept as a backup |
 | Schema changes | `migrations/` | Numbered SQL files that build and change the database |
 | Settings | `wrangler.jsonc` | The app name, the static assets in `dist/client/`, the database, the Workers AI binding, public vars (`SPOTIFY_CLIENT_ID`, `CF_ACCOUNT_ID`) and the nightly cleanup job |
 | Secret | `SESSION_SECRET` | Signs login cookies. Locally it's in `.dev.vars`; live it's stored in Cloudflare |
@@ -172,14 +172,14 @@ bookmark from just before its migrations in the run's summary, with the restore 
 By hand, before `npm run db:remote`:
 
 ```sh
-npx wrangler d1 time-travel info rounds-v7     # prints the current bookmark; copy it
+npx wrangler d1 time-travel info rounds-v8     # prints the current bookmark; copy it
 ```
 
 If the migration goes wrong, put the database back to that bookmark, then roll the code
 back too (`npx wrangler rollback`), since the new code expects the new tables:
 
 ```sh
-npx wrangler d1 time-travel restore rounds-v7 --bookmark=<the bookmark you copied>
+npx wrangler d1 time-travel restore rounds-v8 --bookmark=<the bookmark you copied>
 ```
 
 A restore undoes **every** write since the bookmark, people's edits included, and devices
@@ -232,13 +232,12 @@ runs once per database.
 | --- | --- |
 | `0001_schema.sql` | The whole schema: users, courses, items, quotes, study, Spotify tokens, the change feed, the Admin page's tables, shared spaces (classes and projects) with their members and invites, marks and space prefs, activity and the inbox, push devices, grades and friends (see [DATA-MODEL.md](DATA-MODEL.md)) |
 
-The files that used to follow it (`0002_spaces.sql` to `0009_friend_cancel.sql`) are
-folded into `0001_schema.sql`, ready for the move of `rounds-v7` into `rounds-v8` (see
+The files that used to follow it (`0002_spaces.sql` to `0009_friend_cancel.sql`) were
+folded into `0001_schema.sql` for the move of `rounds-v7` into `rounds-v8` (see
 [Moving to a fresh database](#moving-to-a-fresh-database)). `rounds-v7` was built from
 `0001_schema.sql` to `0009_friend_cancel.sql`, kept in
 `test/fixtures/legacy-migrations/`.
-Its schema and the folded one are the same, table for table and column for column, so
-this code runs on either; but this branch goes to `main` only together with the move.
+Its schema and the folded one are the same, table for table and column for column.
 
 Collaboration Stages 5 (leaving and removal) and 6 (the feed, outline imports, classes
 open to everyone) added no migration: deploying them is a plain push of `main`. Stage 6
@@ -267,12 +266,12 @@ local database; add `-- --remote` for live. It never changes records.
 
 Now and then the migrations are folded into one `0001_schema.sql` and the live data
 is moved into a new, empty database. This keeps every row and the change-feed position,
-so devices sync on without a reset. The last move was `rounds-v6` to `rounds-v7` on
-2026-10-05.
+so devices sync on without a reset. The last move was `rounds-v7` to `rounds-v8` in
+October 2026.
 
 1. Fold the migrations into `migrations/0001_schema.sql`. Move the files the live
    database was built from into `test/fixtures/legacy-migrations/` (for the move to
-   `rounds-v8`, the live `rounds-v7` chain `0001_schema.sql` to
+   `rounds-v8`, the `rounds-v7` chain `0001_schema.sql` to
    `0009_friend_cancel.sql`).
    A column added with `ALTER TABLE` goes at the end of its table, where SQLite put it,
    so the fresh database's columns are in the same order as the old one's.
@@ -293,7 +292,7 @@ so devices sync on without a reset. The last move was `rounds-v6` to `rounds-v7`
    `--remote`), then copy live:
     ```
     npm run build
-    node scripts/move-db.mjs --from rounds-v7 --to rounds-vN --remote
+    node scripts/move-db.mjs --from rounds-v8 --to rounds-vN --remote
     ```
    It only reads the old database, refuses a target that already holds data, and
    compares both afterwards. Don't pipe its output, or you lose its exit code.
@@ -495,7 +494,7 @@ Run every command in PowerShell from the project folder.
 | `git push` to `main` | GitHub Actions checks, applies migrations, then publishes | Live |
 | `npm run deploy` | Manual deploy: checks, applies migrations to live, checks the live database, then publishes | Live |
 | `npm run db:remote` | Applies new migrations to live without deploying code | Live |
-| `npx wrangler d1 time-travel info rounds-v7` | Prints the live database's current restore point | Live, read-only |
+| `npx wrangler d1 time-travel info rounds-v8` | Prints the live database's current restore point | Live, read-only |
 | `npm run deploy:staging` | Puts the current branch on the staging site, with migrations | Staging |
 | `npm run db:staging` | Applies new migrations to the staging database only | Staging |
 | `npm run user:add -- name --staging` | Creates an account on staging | Staging |

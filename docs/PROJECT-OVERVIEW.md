@@ -15,7 +15,7 @@ a Spotify player and an admin page.
   creates every account from the terminal or from the Admin page.
 - **Live at:** https://rounds.termanitor07.workers.dev (Cloudflare free plan, no custom domain).
 - **Names:** people see **Term**. It started as a med-school tracker called **Rounds**,
-  and that name is still used inside: the Worker, the D1 databases (`rounds-v7` live, `rounds-v6` kept as a backup), cookies,
+  and that name is still used inside: the Worker, the D1 databases (`rounds-v8` live, `rounds-v7` kept as a backup), cookies,
   IndexedDB and CSS classes. The GitHub repo is `gvogas/medDashboard`.
 - **Constraints:** everything has to fit Cloudflare's **free tiers**. That means no paid
   plan, no Cloudflare Access, no custom domain, and Workers AI is capped at 10,000
@@ -56,7 +56,7 @@ One Cloudflare Worker serves both the static front end and the API, in front of 
 flowchart LR
   B[Browser<br/>React SPA + IndexedDB] -->|/api/*| W[Worker<br/>worker/index.js]
   B -->|everything else| A[Static assets<br/>dist/client]
-  W --> D[(D1: rounds-v7)]
+  W --> D[(D1: rounds-v8)]
   W --> AI[Workers AI]
   W --> S[Spotify Web API]
   W --> CF[Cloudflare GraphQL analytics]
@@ -71,7 +71,7 @@ flowchart LR
   a regex table in `worker/api.js`.
 - **Database:** Cloudflare D1. The schema is one file, `migrations/0001_schema.sql`,
   with the later migrations (`0002_spaces.sql` to `0009_friend_cancel.sql`) folded
-  in, ready for the move of the live `rounds-v7` into a fresh `rounds-v8`.
+  in for the move of `rounds-v7` into a fresh `rounds-v8`, the live database.
 - **AI:** Workers AI. `@cf/openai/gpt-oss-120b` reads text (outlines, calendars,
   schedules) and `@cf/meta/llama-4-scout-17b-16e-instruct` reads screenshots. Both
   share a limit of reads per person per day.
