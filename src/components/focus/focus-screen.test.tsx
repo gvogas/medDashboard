@@ -73,7 +73,7 @@ beforeEach(() => {
     fake.data.profile = { id: "me", studyFlow: structuredClone(CLASSIC), studyPrefs: { goal: 60 } }
     Object.assign(ui, { focus: false, focusMusic: false, view: "study", study: { courseId: "anat", itemId: "e1" } })
     ui.hist.undo = null
-    Object.assign(api, fakeApi())
+    Object.assign(api, fakeApi(), { presence: { set: vi.fn(async () => null), clear: vi.fn(async () => null) } })
     resetEngine({ track: track("t1", { title: "Weightless" }), playing: true, device: "MacBook", deviceId: "mac" })
 })
 afterEach(() => {
