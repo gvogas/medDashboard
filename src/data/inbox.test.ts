@@ -179,6 +179,25 @@ describe("the inbox list", () => {
         expect(read().unread).toBe(1)
         expect((await kept())?.invites.map((i) => i.spaceId)).toEqual(["sp0000000002"])
     })
+
+    it("drops an answered friend request from the list and the count, once", async () => {
+        const req = (userId: string) => ({ userId, username: userId, name: userId, at: 1 })
+        fake.api.inbox.get.mockResolvedValueOnce({ invites: [], friendRequests: [req("u-a"), req("u-b")], items: [], seen: 0 })
+        await m.refreshInbox()
+        m.setUnread(2)
+        m.dropFriendRequest("u-a")
+        m.dropFriendRequest("u-a")
+        expect(read().box?.friendRequests?.map((r) => r.userId)).toEqual(["u-b"])
+        expect(read().unread).toBe(1)
+    })
+
+    it("counts friend requests among what stays unread after reading", async () => {
+        fake.api.inbox.get.mockResolvedValueOnce({ invites: [invite("sp0000000001")], friendRequests: [{ userId: "u-a", username: "a", name: "A", at: 1 }], items: [row({ seq: 9 })], seen: 2 })
+        await m.refreshInbox()
+        m.setUnread(5)
+        await m.markSeen()
+        expect(read().unread).toBe(2)
+    })
 })
 
 describe("a project's link", () => {

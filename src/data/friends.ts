@@ -6,6 +6,7 @@ import { useSyncExternalStore } from "react"
 import { api, ApiError } from "@/core/api"
 import * as sync from "@/core/sync"
 import { dropFriendRequest } from "./inbox"
+import { maintenanceState } from "./maintenance"
 import type { FriendMatch, FriendSettings, Friends } from "./types"
 
 export const STALE_MS = 60_000
@@ -24,11 +25,22 @@ export const resetFriends = () => set({ list: null, at: 0, loading: false, offli
 
 export const friendsStale = (now = Date.now()) => !state.list || (!state.loading && now - state.at > STALE_MS)
 
-export async function loadFriends(): Promise<void> {
-    if (state.loading) return
+/* Bumped by every local edit: an answer that began before one is older than what is shown. */
+let generation = 0
+
+/** Fetch the list; an answer that a local change has overtaken is dropped and fetched once more. */
+export async function loadFriends(again = true): Promise<void> {
+    if (state.loading || maintenanceState("friends") === "blocked") return
     set({ loading: true })
+    const started = generation
     try {
-        set({ list: await api.friends.get(), at: Date.now(), loading: false, offline: false, error: "" })
+        const list = await api.friends.get()
+        if (started !== generation) {
+            set({ loading: false })
+            if (again) await loadFriends(false)
+            return
+        }
+        set({ list, at: Date.now(), loading: false, offline: false, error: "" })
     } catch (e) {
         if ((e as Error)?.name === "AbortError") { set({ loading: false }); return }
         set({ loading: false, offline: navigator.onLine === false, error: navigator.onLine === false ? "" : LOAD_ERROR })
@@ -47,17 +59,16 @@ export function friendMessage(e: unknown): string {
     return "That did not go through. Try again."
 }
 
-const edit = (fn: (l: Friends) => Friends) => { if (state.list) set({ list: fn(state.list) }) }
+const edit = (fn: (l: Friends) => Friends) => { generation++; if (state.list) set({ list: fn(state.list) }) }
 const after = () => { void loadFriends(); sync.syncNow().catch(() => {}) }
 
 /** Ask someone by username. Returns an error message, or "" when it went through. */
-export async function askFriend(username: string, shown?: FriendMatch): Promise<string> {
+export async function askFriend(username: string): Promise<string> {
     try {
         const m = await api.friends.ask(username)
         edit((l) => m.state === "friends"
             ? { ...l, incoming: l.incoming.filter((r) => r.userId !== m.userId), friends: [{ userId: m.userId, username: m.username, name: m.name, since: Date.now() }, ...l.friends] }
             : { ...l, sent: [{ userId: m.userId, username: m.username, name: m.name, at: Date.now() }, ...l.sent.filter((r) => r.userId !== m.userId)] })
-        if (shown) shown.state = m.state
         after()
         return ""
     } catch (e) { return friendMessage(e) }
@@ -87,11 +98,13 @@ export async function removeFriend(userId: string): Promise<string> {
     } catch (e) { return friendMessage(e) }
 }
 
+/** Save the two switches; they show the change at once and go back if the server refuses it. */
 export async function saveFriendSettings(s: FriendSettings): Promise<string> {
     const before = state.list?.settings
     edit((l) => ({ ...l, settings: s }))
     try { await api.friends.settings(s); return "" } catch (e) {
-        if (before) edit((l) => ({ ...l, settings: before }))
+        /* only if no later toggle has replaced it */
+        if (before && state.list?.settings === s) edit((l) => ({ ...l, settings: before }))
         return friendMessage(e)
     }
 }

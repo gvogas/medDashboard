@@ -206,7 +206,6 @@ export interface ActivityRow {
     detail: { by?: string; title?: string; titles?: string[]; whom?: string; space?: string; assignees?: string[]; assignment?: string }
     n: number; at: number
 }
-/** GET /api/inbox: your pending invites, the newest rows, and where you have read up to. */
 /** Someone on the app, as the Friends tab names them. */
 export interface FriendPerson { userId: string; username: string; name: string }
 export interface FriendRequest extends FriendPerson { at: number }
@@ -216,6 +215,7 @@ export type FriendState = 'none' | 'friends' | 'requested' | 'asked';
 export interface FriendMatch extends FriendPerson { state: FriendState }
 export interface FriendSettings { findable: boolean; showStudying: boolean }
 export interface Friends { friends: Friend[]; incoming: FriendRequest[]; sent: FriendRequest[]; settings: FriendSettings }
+/** GET /api/inbox: your pending invites, the newest rows, and where you have read up to. */
 export interface Inbox { invites: Invite[]; friendRequests?: FriendRequest[]; items: ActivityRow[]; seen: number }
 
 /** Your layer on a shared item (spec §4): yours alone. Its id is '<space id>:<item id>'. */
