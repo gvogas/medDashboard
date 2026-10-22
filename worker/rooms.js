@@ -102,9 +102,11 @@ export function settle(room, members, now) {
   if (room.endedAt !== null) return;
   const done = doneAt(room.run);
   const until = done !== null && done <= now ? done : now;
-  for (const m of members) {
-    const seen = m.lastSeen ?? m.joinedAt;
-    if (m.state === 'in' && seen < now - GONE_MS) takeOut(room, members, m, Math.min(seen, until));
+  /* the quietest first, so the host passes on in order and an empty room ends at the last sign of life */
+  const seen = (m) => m.lastSeen ?? m.joinedAt;
+  const gone = members.filter((m) => m.state === 'in' && seen(m) < now - GONE_MS).sort((a, b) => seen(a) - seen(b));
+  for (const m of gone) {
+    takeOut(room, members, m, Math.min(seen(m), until));
     if (room.endedAt !== null) return;
   }
   if (done !== null && done <= now) end(room, done);
@@ -376,21 +378,103 @@ export const ROOM_INVITES_COUNT = `(SELECT count(*) FROM room_members AS m JOIN 
   WHERE m.user_id = ?1 AND m.state = 'invited' AND r.ended_at IS NULL AND ${STILL_FRIENDS}
     AND EXISTS (SELECT 1 FROM room_members AS o WHERE o.room_id = r.id AND o.state = 'in' AND o.last_seen > ?2 - ${GONE_MS}))`;
 
-/** The open room each friend is in, for the Friends tab's Join: only friends who show they are
-    studying, and only rooms you may join (the host is you or your friend, or you are listed). */
-export async function friendsInRooms(db, me, now = Date.now()) {
-  const { results } = await db.prepare(`SELECT m.user_id, r.id,
-      (SELECT count(*) FROM room_members AS c WHERE c.room_id = r.id AND c.state = 'in') AS size
-    FROM friendships AS f
-    JOIN room_members AS m ON m.user_id = CASE WHEN f.user_lo = ?1 THEN f.user_hi ELSE f.user_lo END AND m.state = 'in'
-    JOIN rooms AS r ON r.id = m.room_id
-    LEFT JOIN friend_settings AS s ON s.user_id = m.user_id
-    WHERE (f.user_lo = ?1 OR f.user_hi = ?1) AND f.status = 'accepted' AND COALESCE(s.show_studying, 1) = 1
-      AND m.last_seen > ?2 AND ${OPEN('r')}
-      AND (r.host_id = ?1 OR EXISTS (SELECT 1 FROM room_members AS me WHERE me.room_id = r.id AND me.user_id = ?1)
-        OR EXISTS (SELECT 1 FROM friendships AS h WHERE h.status = 'accepted' AND h.user_lo = min(?1, r.host_id) AND h.user_hi = max(?1, r.host_id)))`)
-    .bind(me, now - GONE_MS).all();
-  return new Map(results.map((r) => [r.user_id, { id: r.id, size: r.size }]));
+/* a friend who shows they are studying: the pair's row read with ?1 = me, joined to `extra` */
+const showing = (extra = '') => `FROM friendships AS f
+    JOIN users AS u ON u.id = CASE WHEN f.user_lo = ?1 THEN f.user_hi ELSE f.user_lo END
+    LEFT JOIN friend_settings AS s ON s.user_id = u.id
+    ${extra}
+    WHERE (f.user_lo = ?1 OR f.user_hi = ?1) AND f.status = 'accepted' AND COALESCE(s.show_studying, 1) = 1`;
+
+/**
+ * Your friends who are studying now, for the Friends tab (spec §1): userId → {label, since, room}.
+ * Only friends who show it (Show friends when I'm studying). `room` ({id, size}) is set when they
+ * are in an open room you may join (the host is you or your friend, or you are listed in it); a
+ * room you may not join still shows them studying. A solo run comes from presence.
+ */
+export async function friendsLive(db, me, now = Date.now()) {
+  const [rooms, solo] = await db.batch([
+    db.prepare(`SELECT u.id AS user_id, r.id, m.course_label, m.joined_at,
+        (SELECT count(*) FROM room_members AS c WHERE c.room_id = r.id AND c.state = 'in') AS size,
+        (r.host_id = ?1 OR EXISTS (SELECT 1 FROM room_members AS mine WHERE mine.room_id = r.id AND mine.user_id = ?1)
+          OR EXISTS (SELECT 1 FROM friendships AS h WHERE h.status = 'accepted' AND h.user_lo = min(?1, r.host_id) AND h.user_hi = max(?1, r.host_id))) AS joinable
+      ${showing("JOIN room_members AS m ON m.user_id = u.id AND m.state = 'in' JOIN rooms AS r ON r.id = m.room_id")}
+        AND m.last_seen > ?2 AND ${OPEN('r')}`).bind(me, now - GONE_MS),
+    db.prepare(`SELECT u.id AS user_id, p.course_label, p.started_at ${showing('JOIN presence AS p ON p.user_id = u.id')} AND p.ends_at > ?2`).bind(me, now),
+  ]);
+  const out = new Map();
+  for (const r of solo.results) out.set(r.user_id, { label: r.course_label, since: r.started_at, room: null });
+  for (const r of rooms.results) out.set(r.user_id, { label: r.course_label, since: r.joined_at, room: r.joinable ? { id: r.id, size: r.size } : null });
+  return out;
+}
+
+/** When each friend who shows it last studied (the start of their latest session). */
+export async function friendsLastStudied(db, me) {
+  const { results } = await db.prepare(`SELECT u.id AS user_id,
+      (SELECT max(ss.started_at) FROM study_sessions AS ss WHERE ss.user_id = u.id AND ss.deleted_at IS NULL) AS last
+    ${showing()}`).bind(me).all();
+  return new Map(results.filter((r) => r.last !== null).map((r) => [r.user_id, r.last]));
+}
+
+/* ── presence: a solo run, so friends see you studying ── */
+
+/** How long past its planned end a solo run still shows (a pause, a slow tab). */
+export const PRESENCE_SLACK_MS = 10 * MIN;
+
+/** A solo run started or resumed: {courseLabel, startedAt, endsAt}. Nothing is kept while you
+    hide that you are studying. */
+export async function setPresence(db, me, body, now = Date.now()) {
+  const courseLabel = label(body?.courseLabel);
+  const time = (v, field) => {
+    if (!Number.isSafeInteger(v)) throw new HttpError(400, { error: 'invalid', field });
+    return v;
+  };
+  const startedAt = Math.min(now, Math.max(now - DAY_MS, time(body?.startedAt, 'startedAt')));
+  const endsAt = Math.min(now + DAY_MS, Math.max(now, time(body?.endsAt, 'endsAt'))) + PRESENCE_SLACK_MS;
+  await db.prepare(`INSERT INTO presence (user_id, course_label, started_at, ends_at)
+    SELECT ?1, ?2, ?3, ?4 WHERE COALESCE((SELECT show_studying FROM friend_settings WHERE user_id = ?1), 1) = 1
+    ON CONFLICT (user_id) DO UPDATE SET course_label = excluded.course_label, started_at = excluded.started_at, ends_at = excluded.ends_at`)
+    .bind(me, courseLabel, startedAt, endsAt).run();
+}
+
+export const clearPresence = (db, me) => db.prepare('DELETE FROM presence WHERE user_id = ?').bind(me).run();
+
+/* ── the group record ── */
+
+/** Who was in the room and each person's minutes: the sum of their sessions that name it, so an
+    edit or delete of your own session shows here too. Only people who were in it may read it. */
+export async function groupRecord(db, me, roomId) {
+  const [room, rows] = await db.batch([
+    db.prepare('SELECT id, started_at, ended_at FROM rooms WHERE id = ?').bind(roomId),
+    db.prepare(`SELECT m.user_id, u.username, ${NAME} AS name, m.joined_at,
+        COALESCE((SELECT sum(ss.study_minutes) FROM study_sessions AS ss WHERE ss.user_id = m.user_id AND ss.room_id = m.room_id AND ss.deleted_at IS NULL), 0) AS minutes
+      FROM room_members AS m JOIN users AS u ON u.id = m.user_id
+      WHERE m.room_id = ? AND m.joined_at IS NOT NULL ORDER BY minutes DESC, m.joined_at`).bind(roomId),
+  ]);
+  const r = room.results[0];
+  if (!r || !rows.results.some((x) => x.user_id === me)) throw notFound();
+  return {
+    roomId: r.id, startedAt: r.started_at, endedAt: r.ended_at,
+    members: rows.results.map((x) => ({ userId: x.user_id, username: x.username, name: x.name, minutes: x.minutes })),
+  };
+}
+
+/* ── the nightly cron ── */
+
+export const STALE_MS = 30 * MIN;
+export const ROOM_KEEP_MS = 90 * DAY_MS;
+
+/** End rooms nobody has polled for 30 minutes (their people taken out, minutes kept), drop presence
+    past its end, and delete rooms 90 days after they ended unless a session still names them. */
+export async function purgeRooms(db, now = Date.now()) {
+  const { results } = await db.prepare(`SELECT r.id FROM rooms AS r WHERE r.ended_at IS NULL
+    AND NOT EXISTS (SELECT 1 FROM room_members AS m WHERE m.room_id = r.id AND m.state = 'in' AND m.last_seen > ?) LIMIT 200`).bind(now - STALE_MS).all();
+  for (const { id } of results) {
+    try { await change(db, id, () => {}, now); } catch { /* the next night tries again */ }
+  }
+  await db.batch([
+    db.prepare('DELETE FROM presence WHERE ends_at < ?').bind(now),
+    db.prepare('DELETE FROM rooms WHERE ended_at < ? AND NOT EXISTS (SELECT 1 FROM study_sessions AS ss WHERE ss.room_id = rooms.id)').bind(now - ROOM_KEEP_MS),
+  ]);
 }
 
 const route = (path) => new RegExp(`^/api/${path}$`);
@@ -417,4 +501,14 @@ export const roomRoutes = [
   }],
   ['PUT', route(`rooms/${ID}/me`), async ({ request, env, params: [id] }) =>
     json(await setRoomLabel(env.DB, await requireUser(request, env), id, await readJson(request)))],
+  ['GET', route(`rooms/${ID}/record`), async ({ request, env, params: [id] }) =>
+    json(await groupRecord(env.DB, await requireUser(request, env), id))],
+  ['PUT', route('presence'), async ({ request, env }) => {
+    await setPresence(env.DB, await requireUser(request, env), await readJson(request));
+    return noContent();
+  }],
+  ['DELETE', route('presence'), async ({ request, env }) => {
+    await clearPresence(env.DB, await requireUser(request, env));
+    return noContent();
+  }],
 ];

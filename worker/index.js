@@ -5,6 +5,7 @@ import { purgeLimits } from './limits.js';
 import { purgeErrors } from './errors.js';
 import { adminHousekeeping } from './admin.js';
 import { purgeFriends } from './friends.js';
+import { purgeRooms } from './rooms.js';
 import { sendDigests } from './push.js';
 import { TOMBSTONE_TTL_MS } from '../src/core/shared.ts';
 
@@ -31,5 +32,6 @@ export default {
     ctx.waitUntil(purgeErrors(env.DB));
     ctx.waitUntil(adminHousekeeping(env.DB));
     ctx.waitUntil(purgeFriends(env.DB));
+    ctx.waitUntil(purgeRooms(env.DB));
   },
 };

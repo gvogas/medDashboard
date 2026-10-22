@@ -23,6 +23,7 @@ export const TABLES = {
   friendships: ['user_lo', 'user_hi', 'requested_by', 'status', 'created_at', 'accepted_at', 'declined_at', 'cancelled_at'],
   friend_settings: ['user_id', 'findable', 'show_studying'],
   rooms: ['id', 'host_id', 'flow', 'started_at', 'paused_at', 'paused_ms', 'skipped_ms', 'skipped_study_ms', 'ended_at', 'feed', 'version', 'created_at'],
+  presence: ['user_id', 'course_label', 'started_at', 'ends_at'],
   room_members: ['room_id', 'user_id', 'state', 'invited_by', 'invited_at', 'joined_at', 'joined_study_ms', 'earlier_ms', 'left_at', 'last_seen', 'course_label'],
   /* Each device keeps its morning digest, and the day it last went out, so nobody turns
      reminders on again or gets a second digest on the day of the move. No trigger. */
@@ -32,7 +33,7 @@ export const TABLES = {
   admin_log: ['id', 'at', 'admin', 'action', 'target', 'detail'],
 };
 
-const ORDER_BY = { users: 'id', spaces: 'id', members: 'space_id, user_id', invites: 'space_id, user_id', courses: 'scope, id', items: 'scope, id', activity: 'seq', inbox_seen: 'user_id', friendships: 'user_lo, user_hi', friend_settings: 'user_id', rooms: 'id', room_members: 'room_id, user_id', push_subscriptions: 'endpoint', changes: 'seq', spotify_tokens: 'user_id', admin_log: 'id' };
+const ORDER_BY = { users: 'id', spaces: 'id', members: 'space_id, user_id', invites: 'space_id, user_id', courses: 'scope, id', items: 'scope, id', activity: 'seq', inbox_seen: 'user_id', friendships: 'user_lo, user_hi', friend_settings: 'user_id', rooms: 'id', room_members: 'room_id, user_id', presence: 'user_id', push_subscriptions: 'endpoint', changes: 'seq', spotify_tokens: 'user_id', admin_log: 'id' };
 /* Written by triggers as the rows above go in, then replaced by the source's own. */
 const REBUILT = ['activity', 'changes'];
 
