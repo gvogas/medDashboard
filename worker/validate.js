@@ -250,7 +250,7 @@ export function studyPrefs(v) {
 
 /* The study timer's flow: Study and Break steps repeated for a number of rounds. */
 const STEP_KINDS = ['study', 'break'];
-function studyFlow(v) {
+export function studyFlow(v) {
   obj(v, 'studyFlow');
   if (!Array.isArray(v.steps) || v.steps.length < 1 || v.steps.length > 12) fail('studyFlow.steps');
   const steps = v.steps.map((s, i) => {
@@ -359,7 +359,16 @@ export function validateStudySession(body) {
     note: str(body.note ?? '', 'note', 200),
     manual: bool(body.manual ?? false, 'manual'),
     spaceId: spaceLabel(body.spaceId, 'spaceId'),
+    roomId: roomLabel(body.roomId),
   };
+}
+
+/* The study room a session was studied in (worker/rooms.js): left out, the stored one stays. */
+function roomLabel(v) {
+  if (v === undefined) return undefined;
+  if (v === null) return null;
+  if (typeof v !== 'string' || !/^[a-z0-9]{12}$/.test(v)) fail('roomId');
+  return v;
 }
 
 export function validateQuote(body) {

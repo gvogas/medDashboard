@@ -72,6 +72,8 @@ line ''two''', '[{"id":"s","text":"Review","done":true}]', '[{"label":"Notes","u
 it('copies a rounds-v7 database into today\'s schema, row for row, with the change feed, activity and their heads', async () => {
   const from = env.MIGRATION_DB, to = env.MOVE_DB;
   await applyD1Migrations(from, env.LEGACY_MIGRATIONS);
+  /* and what has landed since the fold (0002_rooms on), as a live database would have it */
+  await applyD1Migrations(from, env.TEST_MIGRATIONS.slice(1));
   await applyD1Migrations(to, env.TEST_MIGRATIONS);
   await fillLegacy(from);
 

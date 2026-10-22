@@ -5,6 +5,7 @@ import { requireUser } from './auth.js';
 import { myInvites } from './invites.js';
 import { inboxRows, markSeen, spaceActivity } from './activity.js';
 import { incomingRequests } from './friends.js';
+import { roomInvites } from './rooms.js';
 
 const route = (path) => new RegExp(`^/api/${path}$`);
 const seqOf = (v, field) => {
@@ -16,8 +17,8 @@ const seqOf = (v, field) => {
 export const inboxRoutes = [
   ['GET', route('inbox'), async ({ request, env }) => {
     const userId = await requireUser(request, env);
-    const [invites, box, friendRequests] = await Promise.all([myInvites(env.DB, userId), inboxRows(env.DB, userId), incomingRequests(env.DB, userId)]);
-    return json({ invites, friendRequests, ...box });
+    const [invites, box, friendRequests, rooms] = await Promise.all([myInvites(env.DB, userId), inboxRows(env.DB, userId), incomingRequests(env.DB, userId), roomInvites(env.DB, userId)]);
+    return json({ invites, friendRequests, roomInvites: rooms, ...box });
   }],
   ['PUT', route('inbox/seen'), async ({ request, env }) => {
     const userId = await requireUser(request, env);

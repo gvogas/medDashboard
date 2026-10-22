@@ -5,6 +5,7 @@ import { json, readJson, HttpError } from './http.js';
 import { requireUser } from './auth.js';
 import { claimLimit, rateLimited } from './limits.js';
 import { normalizeUsername } from './password.js';
+import { friendsInRooms } from './rooms.js';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 export const FRIEND_LIMIT = 200;
@@ -22,8 +23,10 @@ const OTHER = 'CASE WHEN f.user_lo = ?1 THEN f.user_hi ELSE f.user_lo END';
 
 const person = (r) => ({ userId: r.id, username: r.username, name: r.name });
 
-/** {friends, incoming, sent, settings}: names as they are now, newest first. */
-export async function listFriends(db, userId) {
+/** {friends, incoming, sent, settings}: names as they are now, newest first. A friend in an open
+ * room you may join carries it as `room` ({id, size}). */
+export async function listFriends(db, userId, now = Date.now()) {
+  const rooms = await friendsInRooms(db, userId, now);
   const [rows, settings] = await db.batch([
     db.prepare(`SELECT u.id, u.username, ${NAME} AS name, f.status, f.requested_by, f.created_at, f.accepted_at, f.cancelled_at
       FROM friendships AS f JOIN users AS u ON u.id = ${OTHER}
@@ -33,7 +36,7 @@ export async function listFriends(db, userId) {
   ]);
   const out = { friends: [], incoming: [], sent: [] };
   for (const r of rows.results) {
-    if (r.status === 'accepted') out.friends.push({ ...person(r), since: r.accepted_at });
+    if (r.status === 'accepted') out.friends.push({ ...person(r), since: r.accepted_at, ...(rooms.has(r.id) ? { room: rooms.get(r.id) } : {}) });
     /* a decline reads as still waiting to the one who asked (spec §1) */
     else if (r.requested_by === userId) { if (!(r.status === 'declined' && r.cancelled_at)) out.sent.push({ ...person(r), at: r.created_at }); }
     else out.incoming.push({ ...person(r), at: r.created_at });
