@@ -379,6 +379,7 @@ export function normalizeStudySession(raw: Raw<StudySession>): StudySession {
     note: typeof raw.note === 'string' ? raw.note.slice(0, 200) : '',
     manual: !!raw.manual,
     spaceId: raw.spaceId || null,
+    roomId: raw.roomId || null,
     createdAt: raw.createdAt ?? null,
     revision: raw.revision ?? 0, updatedAt: raw.updatedAt ?? null,
   };

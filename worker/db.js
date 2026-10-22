@@ -115,7 +115,7 @@ const TABLES = {
     fromRow: () => ({}),
   },
   study_sessions: {
-    cols: { courseId: 'course_id', itemId: 'item_id', startedAt: 'started_at', studyMinutes: 'study_minutes', roundsDone: 'rounds_done', note: 'note', manual: 'manual', spaceId: 'space_id' },
+    cols: { courseId: 'course_id', itemId: 'item_id', startedAt: 'started_at', studyMinutes: 'study_minutes', roundsDone: 'rounds_done', note: 'note', manual: 'manual', spaceId: 'space_id', roomId: 'room_id' },
     toRow: (s) => ({ ...s, note: s.note ?? '', manual: s.manual ? 1 : 0 }),
     fromRow: (r) => ({ note: r.note ?? '', manual: r.manual === 1 }),
   },
@@ -139,7 +139,7 @@ const TABLES = {
 /* Live achievements an account may hold; each carries its sticker picture. */
 const ACHIEVEMENT_LIMIT = 30;
 /* Labels an old client never sends (spec §16): left out of a body, the stored value stays. */
-const KEPT_WHEN_ABSENT = new Set(['classId', 'spaceId']);
+const KEPT_WHEN_ABSENT = new Set(['classId', 'spaceId', 'roomId']);
 /* Nor the grade fields (courses.credits, grade_categories, items.category): left out, the column is not written, so the stored
    value stays and a new row starts with the column's default. */
 const GRADE_FIELDS = new Set(['credits', 'gradeCategories', 'category']);
@@ -188,6 +188,8 @@ function upsertStmt(db, table, userId, id, fields, now, revision, guard = null) 
   const setCol = ([field, col]) =>
     field === 'spaceId' && absent('spaceId')
       ? `${col} = CASE WHEN ${table}.course_id IS excluded.course_id AND ${table}.item_id IS excluded.item_id THEN ${table}.${col} END`
+      /* a session's room, left out, stays: the room it was studied in never changes */
+      : field === 'roomId' && absent('roomId') ? `${col} = ${table}.${col}`
       : `${col} = excluded.${col}`;
   const updates = [...cols.map(setCol), 'updated_at = excluded.updated_at', 'deleted_at = NULL', 'revision = revision + 1'];
   const courseGuard = table === 'items' ? ' AND (? IS NULL OR EXISTS (SELECT 1 FROM courses WHERE scope = ? AND id = ? AND deleted_at IS NULL))' : '';

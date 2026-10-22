@@ -14,7 +14,7 @@ export const TABLES = {
   courses: ['scope', 'id', 'code', 'name', 'color', 'instructor', 'term', 'archived', 'meetings', 'target', 'updated_by', 'created_at', 'updated_at', 'deleted_at', 'revision', 'credits', 'grade_categories'],
   items: ['scope', 'id', 'type', 'title', 'course_id', 'date', 'start', 'end', 'location', 'status', 'grade', 'weight', 'notes', 'checklist', 'links', 'recur', 'weekday', 'recur_until', 'dept', 'completed_at', 'updated_by', 'class_id', 'assignees', 'completed_by', 'created_at', 'updated_at', 'deleted_at', 'revision', 'category'],
   quotes: ['user_id', 'id', 'text', 'source', 'created_at', 'updated_at', 'deleted_at', 'revision'],
-  study_sessions: ['user_id', 'id', 'course_id', 'item_id', 'space_id', 'started_at', 'study_minutes', 'rounds_done', 'note', 'manual', 'created_at', 'updated_at', 'deleted_at', 'revision'],
+  study_sessions: ['user_id', 'id', 'course_id', 'item_id', 'space_id', 'started_at', 'study_minutes', 'rounds_done', 'note', 'manual', 'created_at', 'updated_at', 'deleted_at', 'revision', 'room_id'],
   achievements: ['user_id', 'id', 'name', 'sticker', 'rule', 'course_id', 'item_id', 'space_id', 'target', 'created_at', 'updated_at', 'deleted_at', 'revision'],
   marks: ['user_id', 'id', 'space_id', 'item_id', 'status', 'grade', 'weight', 'notes', 'checklist', 'completed_at', 'hidden', 'created_at', 'updated_at', 'deleted_at', 'revision'],
   space_prefs: ['user_id', 'id', 'space_id', 'color', 'target', 'term', 'archived', 'created_at', 'updated_at', 'deleted_at', 'revision'],
@@ -22,6 +22,9 @@ export const TABLES = {
   inbox_seen: ['user_id', 'seq'],
   friendships: ['user_lo', 'user_hi', 'requested_by', 'status', 'created_at', 'accepted_at', 'declined_at', 'cancelled_at'],
   friend_settings: ['user_id', 'findable', 'show_studying'],
+  rooms: ['id', 'host_id', 'flow', 'started_at', 'paused_at', 'paused_ms', 'skipped_ms', 'skipped_study_ms', 'ended_at', 'feed', 'version', 'created_at'],
+  presence: ['user_id', 'course_label', 'started_at', 'ends_at'],
+  room_members: ['room_id', 'user_id', 'state', 'invited_by', 'invited_at', 'joined_at', 'joined_study_ms', 'earlier_ms', 'left_at', 'last_seen', 'course_label'],
   /* Each device keeps its morning digest, and the day it last went out, so nobody turns
      reminders on again or gets a second digest on the day of the move. No trigger. */
   push_subscriptions: ['endpoint', 'user_id', 'tz', 'created_at', 'last_ok_at', 'last_sent_day', 'failures'],
@@ -30,7 +33,7 @@ export const TABLES = {
   admin_log: ['id', 'at', 'admin', 'action', 'target', 'detail'],
 };
 
-const ORDER_BY = { users: 'id', spaces: 'id', members: 'space_id, user_id', invites: 'space_id, user_id', courses: 'scope, id', items: 'scope, id', activity: 'seq', inbox_seen: 'user_id', friendships: 'user_lo, user_hi', friend_settings: 'user_id', push_subscriptions: 'endpoint', changes: 'seq', spotify_tokens: 'user_id', admin_log: 'id' };
+const ORDER_BY = { users: 'id', spaces: 'id', members: 'space_id, user_id', invites: 'space_id, user_id', courses: 'scope, id', items: 'scope, id', activity: 'seq', inbox_seen: 'user_id', friendships: 'user_lo, user_hi', friend_settings: 'user_id', rooms: 'id', room_members: 'room_id, user_id', presence: 'user_id', push_subscriptions: 'endpoint', changes: 'seq', spotify_tokens: 'user_id', admin_log: 'id' };
 /* Written by triggers as the rows above go in, then replaced by the source's own. */
 const REBUILT = ['activity', 'changes'];
 

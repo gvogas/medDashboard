@@ -37,6 +37,12 @@ describe("the tiles", () => {
         expect(t.term).toEqual({ label: "Last 12 weeks", minutes: 0, sub: "0 sessions" })
     })
 
+    it("add With friends this week once you have studied in a room", () => {
+        expect(studyTiles([at(TODAY, 30)], prefs(), null, TODAY).together).toBeNull()
+        const list = [at("2026-09-20", 40), at("2026-09-21", 25), at(TODAY, 50), at(TODAY, 30)].map((s, i) => (i === 3 ? s : { ...s, roomId: "room0000000" + i }))
+        expect(studyTiles(list, prefs(), null, TODAY).together).toEqual({ minutes: 75, sub: "2 group sessions this week" })
+    })
+
     it("count the streak, and ask for today while it does not count yet", () => {
         const list = [at("2026-09-21", 30), at("2026-09-22", 20)]
         expect(studyTiles(list, prefs(), null, TODAY).streak).toEqual({ days: 2, sub: "Longest 2 · a day counts from 15 min · study today to keep it" })

@@ -5,6 +5,7 @@
 import { memberGuard, assertAllowed } from './access.js';
 import { BUCKET, BUCKET_MS, NAME, SPACE_NAME } from './accounts.js';
 import { UNREAD_CAP } from '../src/core/shared.ts';
+import { ROOM_INVITES_COUNT } from './rooms.js';
 
 export { BUCKET_MS, SPACE_NAME };
 
@@ -83,6 +84,7 @@ export async function unreadCount(db, userId, now = Date.now()) {
       (SELECT count(*) FROM invites AS i JOIN spaces AS s ON s.id = i.space_id AND s.deleted_at IS NULL
         WHERE i.user_id = ?1 AND i.status = 'pending' AND i.expires_at > ?2)
       + (SELECT count(*) FROM friendships WHERE (user_lo = ?1 OR user_hi = ?1) AND status = 'pending' AND requested_by != ?1)
+      + ${ROOM_INVITES_COUNT}
       + (SELECT count(*) FROM (SELECT 1 FROM (${INBOX(SEEN, UNREAD_CAP + 1)}) LIMIT ${UNREAD_CAP + 1}))) AS n`).bind(userId, now).first();
   return r.n;
 }

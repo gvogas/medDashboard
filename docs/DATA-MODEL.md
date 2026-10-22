@@ -25,6 +25,9 @@ inbox_seen       the last activity row each person has read
 push_subscriptions  each device that turned on the morning digest
 friendships      one row per pair of people: a request, a decline, or a friendship
 friend_settings  your two Friends switches: findable in search, shown while studying
+rooms            a study room: one shared timer (the solo run record), its host and activity
+room_members     who is invited to, in, or has left each room, and their study so far
+presence         a solo run going, so friends see you studying
 ```
 
 The schema is [`migrations/0001_schema.sql`](../migrations/0001_schema.sql), in one
@@ -57,6 +60,7 @@ files. The next one is `0002`.
 | Your layer on shared rows | `marks`, `space_prefs` | Your status, grade and notes on a shared item; your settings for a space |
 | Activity and the inbox | `activity`, `inbox_seen` | What members did in each space (90 days), and how far each person has read |
 | Friends | `friendships`, `friend_settings` | Friend requests and friendships; whether you show in search |
+| Study rooms | `rooms`, `room_members`, `presence` | Shared timers and who is in them (`0002_rooms.sql`); a solo run friends can see (`0003_presence.sql`) |
 | Synchronization | `changes`, `sync_state` | Latest record changes, ordered cursors per scope, and the retention floor |
 | Authentication and request control | `login_throttle`, `request_limits` | Temporary attempt counts and cooldowns |
 | Spotify connection | `spotify_tokens`, `spotify_oauth_states`, `spotify_refresh_locks` | Credentials, one-use consent attempts, and refresh leases |
@@ -328,6 +332,7 @@ progress lives in the browser's IndexedDB on that device and does not sync.
 | `study_minutes` | int | 1–1440, whole minutes |
 | `rounds_done` | int | 0–12, rounds whose every step finished |
 | `note` | text | up to 200 characters: what was covered |
+| `room_id` | text, nullable | the study room it was studied in (12 characters); its id is then `r-` + the room id. Left out of a PUT, the stored one stays |
 | `manual` | int | 1 when logged by hand, 0 when the timer recorded it |
 | `space_id` | text, nullable | the shared space `course_id` or `item_id` belongs to, when it is a class's or a project's (a session on a team project has `course_id` `project`, the project's own item, and `item_id` the task, when one is picked) |
 | `created_at`, `updated_at`, `deleted_at` | int | |
@@ -464,7 +469,21 @@ One row per pair of people, the smaller user id in `user_lo` (`CHECK (user_lo < 
 
 ## `friend_settings`
 
-`user_id` (primary key, `ON DELETE CASCADE`), `findable`, `show_studying` (0/1). No row means both on. `findable = 0` hides you from search except for your exact username. `show_studying` is read from study together's Stage 3 on. Kept off `users`, so a change never moves the profile's revision.
+`user_id` (primary key, `ON DELETE CASCADE`), `findable`, `show_studying` (0/1). No row means both on. `findable = 0` hides you from search except for your exact username. `show_studying = 0` hides your solo runs, your rooms and when you last studied from your friends. Kept off `users`, so a change never moves the profile's revision.
+
+## `rooms`
+
+A study room (study together, `worker/rooms.js`): `id` (12 characters), `host_id` (`ON DELETE SET NULL`), and the solo timer's run record (`flow` JSON, `started_at`, `paused_at`, `paused_ms`, `skipped_ms`, `skipped_study_ms`; see `src/core/timer.ts`), which every device reads the clock from. Only the host's Pause, Resume, Skip and End change it. `ended_at` is set when the host ends it, the last person leaves, or the flow runs out; the record is paused at that moment, so everyone's minutes come out the same at any later time. `feed` holds the last 20 events (started, joined, left, paused, resumed, skipped, ended, host), newest first. `version` goes up with every change to the clock or to who is in; a poll's `?v=` tag is the version plus who is away. Each change reads the room, works it out in JS, and writes it back guarded by `version`.
+
+## `room_members`
+
+`(room_id, user_id)`, both `ON DELETE CASCADE`. `state` is `invited`, `in` or `left`. `joined_at` is your first join; `joined_study_ms` is the room's study time when you last joined; `earlier_ms` is what earlier stints came to. Your minutes are `earlier_ms` + the room's study now − `joined_study_ms`. `last_seen` is written at most every 30 s by any request of yours: 2 minutes without one shows you as away, 10 takes you out (by the next request on the room). Up to 8 `in`; one open room at a time (joining another leaves the first). Someone not in the room may see or join it only while they are a friend of the host, or of whoever invited them. `course_label` (60 characters) is what the room sees you studying.
+
+## `presence`
+
+`user_id` (primary key, `ON DELETE CASCADE`), `course_label`, `started_at`, `ends_at`. Written by `PUT /api/presence` when a solo run starts or resumes (`ends_at` = when it would end, plus 10 minutes), deleted by `DELETE /api/presence` when it stops, and only while `friend_settings.show_studying` is on (turning it off deletes the row). A row past `ends_at` reads as nobody studying; the nightly cron deletes it.
+
+The nightly cron also ends rooms nobody has polled for 30 minutes (the people in them taken out at their last sign of life, minutes kept) and deletes rooms 90 days after they ended, unless a session still names them. `GET /api/rooms/:id/record` sums each member's own `study_sessions` with that `room_id`, for people who were in the room only.
 
 ## Indexes
 

@@ -3,7 +3,7 @@
 import type { Row } from './db.ts';
 import { UNREAD_CAP } from './shared.ts';
 import type { Cursor, Page, ServerProfile } from './store.ts';
-import type { ActivityRow, FriendMatch, FriendSettings, Friends, Inbox, JoinCode, ParentRef, Space, SpaceDetails, SpaceInvite, SpaceSummary } from './types.ts';
+import type { ActivityRow, Flow, FriendMatch, FriendSettings, Friends, GroupRecord, Inbox, JoinCode, ParentRef, RoomView, Space, SpaceDetails, SpaceInvite, SpaceSummary } from './types.ts';
 
 /** An error's body as the Worker sends it: its code, and for some the server's copy or a wait. */
 export interface ErrorBody { error?: string; retryAfter?: unknown; current?: Row | null; [field: string]: unknown }
@@ -121,11 +121,13 @@ async function send(method: string, path: string, body?: unknown, extraHeaders: 
       body: file ? body : body !== undefined ? JSON.stringify(body) : undefined,
     });
     signal.throwIfAborted();
-    // Reading the body shares the request's deadline, including error responses.
-    const data = res.status === 204 ? null : await res.json().catch(() => null);
+    // Reading the body shares the request's deadline, including error responses. A 304 (a room
+    // that has not changed) has no body, as a 204.
+    const bare = res.status === 204 || res.status === 304;
+    const data = bare ? null : await res.json().catch(() => null);
     signal.throwIfAborted();
-    if (!res.ok) throw new ApiError(res.status, data, Number(res.headers.get('retry-after')) || null);
-    if (res.status !== 204 && (!data || typeof data !== 'object')) throw invalidResponse();
+    if (!res.ok && res.status !== 304) throw new ApiError(res.status, data, Number(res.headers.get('retry-after')) || null);
+    if (!bare && (!data || typeof data !== 'object')) throw invalidResponse();
     return data;
   } catch (error) {
     signal.throwIfAborted();
@@ -277,6 +279,22 @@ export const api = {
     answer: (userId: string, accept: boolean) => empty(request('PUT', `/api/friends/${encodeURIComponent(userId)}`, { accept })),
     remove: (userId: string) => empty(request('DELETE', `/api/friends/${encodeURIComponent(userId)}`)),
     settings: (s: FriendSettings) => empty(request('PUT', '/api/friends/settings', s)),
+  },
+  /* study rooms (study together, worker/rooms.js); get gives null when the room is as `tag` had it */
+  rooms: {
+    create: (flow: Flow, courseLabel: string, invite: string[]): Promise<RoomView> => request('POST', '/api/rooms', { flow, courseLabel, invite }),
+    get: (id: string, tag?: string): Promise<RoomView | null> => request('GET', `/api/rooms/${id}` + (tag ? '?v=' + encodeURIComponent(tag) : '')),
+    join: (id: string, courseLabel: string): Promise<RoomView> => request('POST', `/api/rooms/${id}/join`, { courseLabel }),
+    leave: (id: string) => empty(request('POST', `/api/rooms/${id}/leave`)),
+    clock: (id: string, action: 'pause' | 'resume' | 'skip' | 'end'): Promise<RoomView> => request('PUT', `/api/rooms/${id}/clock`, { action }),
+    invite: (id: string, userIds: string[]) => empty(request('POST', `/api/rooms/${id}/invite`, { userIds })),
+    label: (id: string, courseLabel: string): Promise<RoomView> => request('PUT', `/api/rooms/${id}/me`, { courseLabel }),
+    record: (id: string): Promise<GroupRecord> => request('GET', `/api/rooms/${id}/record`),
+  },
+  /* a solo run, so friends see you studying (worker/rooms.js setPresence) */
+  presence: {
+    set: (p: { courseLabel: string; startedAt: number; endsAt: number }) => empty(request('PUT', '/api/presence', p)),
+    clear: () => empty(request('DELETE', '/api/presence')),
   },
   join: (code: string) => spaceOf(request('POST', '/api/join', { code })),
   get: (kind: string, id: string) => record(request('GET', rowPath(kind, id)), id),

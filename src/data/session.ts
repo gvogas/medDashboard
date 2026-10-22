@@ -11,6 +11,8 @@ import * as web from "./spotify/web-player"
 import { closeSheet } from "./overlay"
 import { forgetReads, keepReadsFor } from "./ai-cache"
 import { resetFriends } from "./friends"
+import { resetRoom } from "./room"
+import { resetRecords } from "./record"
 import { toast } from "./toast"
 import { applyCoat } from "./settings"
 import { openSettings } from "./actions"
@@ -84,7 +86,7 @@ function joinReturn(): string | null {
 export function onStoreEvent(evt: StoreEvent) {
     if (evt.type === "change" && data.profile) { celebrateStudy(); celebrateAchievements() }
     if (evt.type === "save-error") toast("The change could not be saved on this device. " + evt.message, { error: true, ms: 10000 })
-    if (evt.type === "signed-out") { sync.stop(); spotify.stop(); web.stop(); resetRequests(); forgetReads(); resetFriends(); location.reload() }
+    if (evt.type === "signed-out") { sync.stop(); spotify.stop(); web.stop(); resetRequests(); forgetReads(); resetFriends(); resetRoom(); resetRecords(); location.reload() }
     if (evt.type === "remote" && data.profile) refreshAfterSync()
     if ((evt.type === "synced" || evt.type === "remote") && data.profile) celebrateAchievements({ quiet: true })
 }
@@ -95,7 +97,7 @@ export function onStorage(event: StorageEvent) {
     let id: string | undefined
     try { id = JSON.parse(event.newValue || "null")?.id } catch {}
     if (id !== data.profile.id) {
-        sync.stop(); spotify.stop(); web.stop(); resetRequests(); forgetReads(); resetFriends()
+        sync.stop(); spotify.stop(); web.stop(); resetRequests(); forgetReads(); resetFriends(); resetRoom(); resetRecords()
         store.close().finally(() => location.reload())
     }
 }
@@ -130,7 +132,7 @@ export async function signOut({ everywhere = false, force = false }: { everywher
     spotify.stop()
     web.stop()
     closeSheet()
-    forgetReads(); resetFriends()
+    forgetReads(); resetFriends(); resetRoom(); resetRecords()
     if (id) {
         try { await store.wipe(id) }
         catch (e) { alert("You are signed out, but local cleanup is still pending. " + (e as Error).message) }

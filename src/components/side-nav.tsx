@@ -8,6 +8,7 @@ import { cn } from "@/lib/utils"
 import { subscribe, getStudyBadge } from "@/bridge"
 import { ui } from "@/data/ui"
 import { setView } from "@/data/study-controller"
+import { useFriends } from "@/data/friends"
 import { setSide, sideOpen } from "@/data/sidebar"
 import { useProfile } from "@/data/store"
 import type { View } from "@/data/types"
@@ -28,6 +29,8 @@ const currentView = () => ui.view as View
 export function SideNav() {
     const view = useSyncExternalStore(subscribe, currentView)
     const badge = useSyncExternalStore(subscribe, getStudyBadge)
+    /* a friend studying now, as the last friends list said */
+    const friendLive = !!useFriends().list?.friends.some((f) => f.live)
     const admin = !!useProfile()?.isAdmin
     return (
         <nav aria-label="Pages" className="flex flex-col gap-0.5">
@@ -48,6 +51,7 @@ export function SideNav() {
                     >
                         {p.label}
                         {p.id === "study" && badge && <span className="font-mono text-[11.5px] text-accent-foreground">{badge}</span>}
+                        {p.id === "study" && !badge && friendLive && <span title="A friend is studying now" className="size-[7px] rounded-full bg-[var(--study)]"><span className="sr-only">, a friend is studying now</span></span>}
                     </button>
                 )
             })}

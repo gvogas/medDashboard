@@ -18,6 +18,7 @@ import { classRoutes } from './classes.js';
 import { layerRoutes } from './layer.js';
 import { inboxRoutes } from './inbox.js';
 import { friendRoutes } from './friends.js';
+import { roomRoutes } from './rooms.js';
 import { pushRoutes } from './push.js';
 import { unreadCount } from './activity.js';
 import { logError, messageOf } from './errors.js';
@@ -464,6 +465,7 @@ const routes = [
   ...layerRoutes,
   ...inboxRoutes,
   ...friendRoutes,
+  ...roomRoutes,
   ...pushRoutes,
   ...adminRoutes,
 ];

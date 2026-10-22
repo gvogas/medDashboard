@@ -56,7 +56,7 @@ const GUARDED = [
   [/^\/api\/(outline|school-calendar)$/, 'import'],
   [/^\/api\/ai\//, 'import'],
   [/^\/api\/(spaces|invites|join|inbox)(\/|$)/, 'classes'],
-  [/^\/api\/friends(\/|$)/, 'friends'],
+  [/^\/api\/(friends|rooms|presence)(\/|$)/, 'friends'],
 ];
 
 /**

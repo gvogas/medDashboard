@@ -42,6 +42,9 @@ export function toast(text: string, { undo = null, label = "Undo", badge = null,
     emit()
 }
 
+/** The toast showing now, or null. */
+export const currentToast = (): Toast | null => current
+
 export function hideToast() {
     clearTimeout(timer)
     if (!current) return

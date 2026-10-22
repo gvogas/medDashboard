@@ -2,7 +2,8 @@
 // what others did in your classes and projects that concerns you, newest first. Opening it
 // marks everything read. Offline it shows the copy kept from last time. While the admins have
 // shared classes switched off, everyone else gets the maintenance page instead; friend
-// requests also hide while friends are switched off (they stay on the Friends tab).
+// requests also hide while friends are switched off (they stay on the Friends tab), and so do
+// invites to study rooms (Join, or Not now, which drops the invite).
 
 import { useEffect, useState } from "react"
 import { ago, dayMonth, iso } from "@/core/dates"
@@ -10,7 +11,12 @@ import { data } from "@/core/store"
 import { closeSheet } from "@/data/overlay"
 import { accept, decline, joinMessageFor, messageFor, openJoin } from "@/data/classes"
 import { answerRequest } from "@/data/friends"
-import { describe, markSeen, openable, openRow, refreshInbox, useInbox, useInboxOffline } from "@/data/inbox"
+import { describe, dropRoomInvite, markSeen, openable, openRow, refreshInbox, useInbox, useInboxOffline } from "@/data/inbox"
+import { api } from "@/core/api"
+import { roomMessage } from "@/data/room"
+import { joinRoomRun } from "@/data/study-timer"
+import { read as readClock } from "@/core/timer"
+import type { RoomInvite } from "@/data/types"
 import { useMaintenance } from "@/data/maintenance"
 import { MaintenanceBar, MaintenancePage } from "@/components/maintenance"
 import type { ActivityRow, Invite } from "@/data/types"
@@ -36,6 +42,7 @@ function InboxCard({ bar }: { bar: boolean }) {
     const offline = useInboxOffline()
     const friendsOff = useMaintenance("friends") === "blocked"
     const requests = friendsOff ? [] : box?.friendRequests ?? []
+    const rooms = friendsOff ? [] : box?.roomInvites ?? []
     const [busy, setBusy] = useState(false)
     const [err, setErr] = useState("")
     /* how far it was read when the list came, so rows new on opening stay marked while the sheet is open;
@@ -61,6 +68,19 @@ function InboxCard({ bar }: { bar: boolean }) {
         setErr(m); setBusy(false)
     }
 
+    /* Join inside the click, so the focus screen may go full screen */
+    const joinRoom = async (r: RoomInvite) => {
+        setBusy(true); setErr("")
+        const m = await joinRoomRun(r.roomId)
+        if (m) { setErr(m); setBusy(false); return }
+        dropRoomInvite(r.roomId)
+        closeSheet()
+    }
+    const notNow = async (r: RoomInvite) => {
+        setBusy(true); setErr("")
+        try { await api.rooms.leave(r.roomId); dropRoomInvite(r.roomId) } catch (e) { setErr(roomMessage(e)) } finally { setBusy(false) }
+    }
+
     return (
         <>
             <SheetHead kind="Inbox" onClose={closeSheet} />
@@ -84,6 +104,25 @@ function InboxCard({ bar }: { bar: boolean }) {
                                 ))}
                             </ul>
                         )}
+                        {rooms.length > 0 && (
+                            <ul aria-label="Study invites" className={LIST}>
+                                {rooms.map((r) => {
+                                    const c = readClock(r.run)
+                                    return (
+                                        <li key={r.roomId} className={ROW}>
+                                            <span><b>{r.name || "A friend"}</b> invited you to study together</span>
+                                            <span className="text-[11px] text-muted-foreground">
+                                                Round {c.round} of {r.run.flow.rounds}{c.paused ? " · paused" : ""} · {r.size} in the room · {ago(r.at)}
+                                            </span>
+                                            <span className="flex gap-2">
+                                                <Button variant="ghost" disabled={busy || offline} aria-label={"Not now, " + (r.name || "invite")} onClick={() => void notNow(r)}>Not now</Button>
+                                                <Button disabled={busy || offline} aria-label={"Join " + (r.name || "the room")} onClick={() => void joinRoom(r)}>Join now</Button>
+                                            </span>
+                                        </li>
+                                    )
+                                })}
+                            </ul>
+                        )}
                         {box.invites.length > 0 && (
                             <ul aria-label="Invites to you" className={LIST}>
                                 {box.invites.map((inv) => (
@@ -100,7 +139,7 @@ function InboxCard({ bar }: { bar: boolean }) {
                                 ))}
                             </ul>
                         )}
-                        {box.items.length === 0 && box.invites.length === 0 && requests.length === 0 && <Note>Nothing new. News from your classes shows here.</Note>}
+                        {box.items.length === 0 && box.invites.length === 0 && requests.length === 0 && rooms.length === 0 && <Note>Nothing new. News from your classes shows here.</Note>}
                         {box.items.length > 0 && (
                             <ul aria-label="News" className={LIST}>
                                 {box.items.map((r) => <NewsRow key={r.seq} row={r} me={me} unread={r.seq > (seenAtOpen ?? box.seen)} />)}

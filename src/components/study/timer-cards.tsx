@@ -5,18 +5,23 @@
 // presets; every change saves the flow to the profile, study-timer.ts) and Today
 // (today-card.tsx). Under 1000px, one column (the 314px Ready clock plus the card's
 // padding does not fit beside the 260px sidebar and Your flow below about 996px; the card
-// trims its padding to 24px under 1100px).
+// trims its padding to 24px under 1100px). Above Your flow, Study together: start a room with
+// friends, or join a friend who is in one (data/room.ts).
 
-import { useState, type KeyboardEvent, type ReactNode } from "react"
+import { useEffect, useState, type KeyboardEvent, type ReactNode } from "react"
 import { cn } from "@/lib/utils"
 import { duration } from "@/lib/time"
 import { Panel, HeadNote } from "@/components/views/bits"
 import { RemoveButton } from "@/components/sheet/fields"
 import { openCourse } from "@/data/actions"
 import { useUi } from "@/data/ui"
+import { useMaintenance } from "@/data/maintenance"
+import { friendsStale, loadFriends, useFriends } from "@/data/friends"
+import { useScreen } from "@/data/signin"
+import { Button, Note } from "@/components/sheet/fields"
 import { THEMES } from "@/data/themes"
 import {
-    addStep, applyPreset, delStep, flowName, flowTotals, MAX_MINUTES, MAX_ROUNDS, MAX_STEPS, openFocus, pickCourse, pickItem, presetsFor,
+    addStep, applyPreset, delStep, flowName, flowTotals, joinRoomRun, MAX_MINUTES, MAX_ROUNDS, MAX_STEPS, openFocus, openTogether, pickCourse, pickItem, presetsFor,
     sameFlow, setRounds, setStepKind, setStepMinutes, startRun, stripSegments, useFlow, useRun, useStudyPick,
 } from "@/data/study-timer"
 import type { Flow } from "@/data/types"
@@ -32,6 +37,7 @@ export function TimerCards() {
         <div className={cn("grid items-stretch gap-4 [grid-template-columns:minmax(0,1.4fr)_minmax(0,1fr)] max-[1000px]:[grid-template-columns:minmax(0,1fr)]")}>
             <ReadyCard flow={flow} />
             <div className="flex min-w-0 flex-col gap-4">
+                <TogetherCard />
                 <FlowCard flow={flow} />
                 <TodayCard />
             </div>
@@ -102,6 +108,53 @@ const GoButton = ({ onClick, children }: { onClick: () => void; children: ReactN
         {children}
     </button>
 )
+
+/* ── Study together ── */
+
+function TogetherCard() {
+    const maintenance = useMaintenance("friends")
+    const run = useRun()
+    const { list } = useFriends()
+    const screen = useScreen()
+    const [err, setErr] = useState("")
+    const [busy, setBusy] = useState(false)
+    useEffect(() => { if (screen === "app" && maintenance !== "blocked" && friendsStale()) void loadFriends() }, [screen, maintenance])
+    if (maintenance === "blocked") return null
+    const inRooms = (list?.friends ?? []).filter((f) => f.room)
+    const join = async (id: string) => {
+        setBusy(true); setErr("")
+        setErr(await joinRoomRun(id))
+        setBusy(false)
+    }
+    return (
+        <Panel label="Study together" title="Study together">
+            <div className="flex flex-col gap-2.5 p-3.5">
+                {run?.room ? (
+                    <>
+                        <p className="m-0 text-[12.5px] text-muted-foreground">You're in a group session.</p>
+                        <div><Button onClick={openFocus}>Back to the room</Button></div>
+                    </>
+                ) : (
+                    <>
+                        <p className="m-0 text-[12.5px] text-muted-foreground">One shared timer with friends. Everyone's minutes go into their own sessions.</p>
+                        {inRooms.length > 0 && (
+                            <ul aria-label="Friends in a room" className="m-0 flex list-none flex-col gap-1.5 p-0">
+                                {inRooms.slice(0, 3).map((f) => (
+                                    <li key={f.userId} className="flex items-center gap-2 text-[13px]">
+                                        <span className="min-w-0 flex-1 truncate">{f.name} <span className="text-muted-foreground">· in a room of {f.room!.size}</span></span>
+                                        <Button variant="ghost" disabled={busy} aria-label={"Join " + f.name} onClick={() => void join(f.room!.id)}>Join</Button>
+                                    </li>
+                                ))}
+                            </ul>
+                        )}
+                        <div><Button onClick={() => openTogether()}>Start a group session</Button></div>
+                    </>
+                )}
+                {err && <div role="alert"><Note tone="bad">{err}</Note></div>}
+            </div>
+        </Panel>
+    )
+}
 
 /* ── Your flow ── */
 

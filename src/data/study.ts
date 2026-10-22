@@ -10,7 +10,7 @@ import { dayOf, heatRange, level, minutesByDay, month, streak, week } from "@/co
 import { achievements, nextUp, ownAchievements } from "@/core/achievements"
 import { normalizePrefs } from "@/core/model"
 import { termStart as currentTermStart } from "@/data/query"
-import { addDays, dayMonth, iso, parse, shortDate, today as todayIso, DOW, MON } from "@/core/dates"
+import { addDays, dayMonth, iso, monday, parse, shortDate, today as todayIso, DOW, MON } from "@/core/dates"
 import { duration } from "@/lib/time"
 import { useAchievements, useCourses, useItems, useProfile, useStudySessions } from "./store"
 import { rememberUi, ui } from "./ui"
@@ -60,6 +60,8 @@ export interface Tiles {
     /* `sub` is "" with no goal: the tile offers to set one */
     today: { minutes: number; goal: number; sub: string }
     term: { label: string; minutes: number; sub: string }
+    /* study in rooms this week; null until you have studied in one */
+    together: { minutes: number; sub: string } | null
 }
 
 /** The streak, today against the goal, and the term so far (the last 12 weeks with no term start). */
@@ -78,7 +80,16 @@ export function studyTiles(sessions: StudySession[], prefs: StudyPrefs, termStar
             minutes: sum(term),
             sub: plural(term.length, "session") + (range.since ? " since " + dayMonth(range.since) : ""),
         },
+        together: withFriends(sessions, today),
     }
+}
+
+/** Study in rooms this week (Monday on): null until you have studied in one at all. */
+export function withFriends(sessions: StudySession[], today: string): { minutes: number; sub: string } | null {
+    const rooms = sessions.filter((s) => s.roomId)
+    if (!rooms.length) return null
+    const week = inRange(rooms, iso(monday(parse(today))), today)
+    return { minutes: sum(week), sub: plural(week.length, "group session") + " this week" }
 }
 
 /* ── the Timer tab's Today ── */
