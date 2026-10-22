@@ -37,15 +37,14 @@ calendar and the leaderboard, then `rounds-v4` into `rounds-v5`, widening the th
 six, then `rounds-v5` into `rounds-v6`, adding the Admin page (`users.is_admin`,
 `users.last_seen_day`, `error_log`, `admin_log`, `app_meta`), then `rounds-v6` into
 `rounds-v7`, giving courses, items and the change feed a scope. `rounds-v7` is the live
-database. The schema the last move copied from is kept as a test
-fixture in `test/fixtures/legacy-migrations/`. Later changes are new numbered files:
-`0002_spaces.sql` (`spaces`, `members`), `0003_invites.sql` (`invites`),
-`0004_marks.sql` (`marks`, `space_prefs`) and `0005_activity.sql` (`activity`,
-`inbox_seen` and the triggers that fill `activity`), `0006_push.sql`
-(`push_subscriptions`), `0007_grades.sql` (`courses.credits`,
-`courses.grade_categories`, `items.category`, `users.grading`, and the course and item
-change triggers made again to carry them) and `0008_friends.sql`
-(`friendships`, `friend_settings`). The next one is `0009`.
+database. The next move, `rounds-v7` into `rounds-v8`, folds in shared classes and
+projects, invites, marks and space prefs, activity and the inbox, push reminders, grades
+and friends: the later migrations (`0002_spaces.sql` to `0008_friends.sql`) are now part
+of `0001_schema.sql`, with the grade columns at the end of `users`, `courses` and `items`
+(where `ALTER TABLE` had put them) and the course and item change triggers in their last
+form. The chain `rounds-v7` was built from (`0001_schema.sql` to `0008_friends.sql`) is
+kept as a test fixture in `test/fixtures/legacy-migrations/`, for the move's test. Later
+changes are new numbered files. The next one is `0002`.
 
 ## Structure at a glance
 
@@ -137,7 +136,7 @@ Conventions used throughout:
 | `types` | JSON array | ≤ 20 | Your item types: overrides for the built-ins (label, colour, hidden, order) and up to 12 of your own, ids `c-` plus 1–12 of `[a-z0-9]`. |
 | `study_flow` | JSON object | | The study timer's steps and rounds, below. |
 | `study_prefs` | JSON object | `{}` = defaults | Daily goal, streak rules, celebrations, feed alarms, lecture reviews and the first-run setup, below. |
-| `grading` | JSON object | `{}` = defaults | Your grading scale and pass marks, below (`0007_grades.sql`). |
+| `grading` | JSON object | `{}` = defaults | Your grading scale and pass marks, below. |
 | `feed_gen` | int \| null | > 0 | The calendar feed: a number while it is on, null when off. The feed URL carries an HMAC of the user id and this number, so bumping it retires every old link. |
 | `leaderboard` | int 0/1 | default 0 | Joined the study leaderboard (opt-in; only those who joined see it or are listed). |
 | `is_admin` | int 0/1 | default 0 | May open the Admin page. The first admin is made with `npm run user:add -- <name> --admin --remote`. |
@@ -404,7 +403,7 @@ reads it to call Spotify on the user's behalf.
 
 ## `push_subscriptions`
 
-One row per device that turned on the morning digest (`0006_push.sql`, `worker/push.js`).
+One row per device that turned on the morning digest (`worker/push.js`).
 Not synced to the browser. The push carries no payload, so no keys are kept: the service
 worker fetches `GET /api/digest` itself when the push arrives.
 
@@ -449,7 +448,7 @@ The `verb` CHECK lists all eighteen verbs, so Stages 8–10 need no migration: `
 
 Rows coalesce on the unique key `(space_id, actor_id, verb, subject, subject_user, bucket)`: a later change by the same person to the same thing in the same ten minutes updates the row in place (its `new_value`, `n`, `at`, `detail`), keeping the first row's `seq` and "from", so a row already read does not come back as unread. A change that returns to where it started deletes its row. Indexes: `activity_space (space_id, seq)` (a space's activity; the inbox per space you are in), `activity_about (subject_user, seq) WHERE subject_user != ''` (rows about a person), `activity_at (at)` (the purge).
 
-**Triggers** write the rows about shared items and courses (`activity_items_insert`, `activity_items_update`, `activity_courses_update`, in `migrations/0005_activity.sql`). They see `OLD` and `NEW`, so "from → to" is the real previous value, and the actor is `NEW.updated_by`. An insert writes one `item.created` per actor and bucket holding up to ten titles (an import is one row; the project's own `project` item is not news) and a `task.assigned` per starting assignee; an update writes one row per kind of change it makes, then deletes the rows it brought back to their start (and an assignee added and taken off again in the bucket); a class course's update writes `course.meetings` and `course.instructor`. Personal rows (`u:` scope) never write activity. Because of the triggers, `meta.changes` on a shared `items` or `courses` write counts their rows too: count your own with `SELECT changes()`.
+**Triggers** write the rows about shared items and courses (`activity_items_insert`, `activity_items_update`, `activity_courses_update`, in `migrations/0001_schema.sql`). They see `OLD` and `NEW`, so "from → to" is the real previous value, and the actor is `NEW.updated_by`. An insert writes one `item.created` per actor and bucket holding up to ten titles (an import is one row; the project's own `project` item is not news) and a `task.assigned` per starting assignee; an update writes one row per kind of change it makes, then deletes the rows it brought back to their start (and an assignee added and taken off again in the bucket); a class course's update writes `course.meetings` and `course.instructor`. Personal rows (`u:` scope) never write activity. Because of the triggers, `meta.changes` on a shared `items` or `courses` write counts their rows too: count your own with `SELECT changes()`.
 
 **Routes** write the member and space rows with `noteStmt` (`worker/activity.js`) inside their own batch, each with a condition that the act happened in that batch (a membership whose `joined_at` or `deleted_at` is now, a role whose `updated_at` is now, `changes() > 0` after the archive's update), so a retried request that changed nothing writes nothing: `member.joined` (accept, join by code), `member.left`, `member.removed`, `member.role`, `space.archived`, `space.transferred`. Their bucket is `CAST(now AS INTEGER) / 600000` (`BUCKET` in `worker/accounts.js`): D1 binds a JavaScript number as a REAL, and without the cast the division keeps its fraction and nothing coalesces. A role changed back, or a class unarchived, within the bucket leaves no row (`undoneStmt`). Deleting an account appends a set-based `space.transferred` statement to `HAND_ON` (`worker/accounts.js`): one row in each class just handed on, the deleted account as actor and the heir as `subject_user`, written before the user row goes so the names still read. `ACCOUNT_TABLES` deletes the rows about the account (`subject_user`); rows it acted in stay, with its name in `detail.by`.
 

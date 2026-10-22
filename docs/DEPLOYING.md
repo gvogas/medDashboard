@@ -230,42 +230,26 @@ runs once per database.
 
 | File | What it adds |
 | --- | --- |
-| `0001_schema.sql` | The whole schema up to the last squash: users, courses, items, quotes, study, Spotify tokens, the change feed (see [DATA-MODEL.md](DATA-MODEL.md)) |
-| `0002_spaces.sql` | Shared spaces (classes and projects) and their `members` |
-| `0003_invites.sql` | `invites`: invitations to a space by username |
-| `0004_marks.sql` | `marks` (your status, grade and notes on a shared item) and `space_prefs` (your colour, target and term for a space) |
-| `0005_activity.sql` | `activity` (what members did, from triggers on shared rows and from the member routes) and `inbox_seen` |
-| `0006_push.sql` | `push_subscriptions`: each device that turned on the morning digest |
-| `0007_grades.sql` | `courses.credits`, `courses.grade_categories`, `items.category` and `users.grading`, and the course and item change-feed triggers made again to carry them |
+| `0001_schema.sql` | The whole schema: users, courses, items, quotes, study, Spotify tokens, the change feed, the Admin page's tables, shared spaces (classes and projects) with their members and invites, marks and space prefs, activity and the inbox, push devices, grades and friends (see [DATA-MODEL.md](DATA-MODEL.md)) |
+
+The files that used to follow it (`0002_spaces.sql` to `0008_friends.sql`) are folded
+into `0001_schema.sql`, ready for the move of `rounds-v7` into `rounds-v8` (see
+[Moving to a fresh database](#moving-to-a-fresh-database)). `rounds-v7` was built from
+`0001_schema.sql` to `0008_friends.sql`, kept in `test/fixtures/legacy-migrations/`.
+Its schema and the folded one are the same, table for table and column for column, so
+this code runs on either; but this branch goes to `main` only together with the move.
 
 Collaboration Stages 5 (leaving and removal) and 6 (the feed, outline imports, classes
 open to everyone) added no migration: deploying them is a plain push of `main`. Stage 6
-uses `spaces.school_calendar`, which has been there since `0002_spaces.sql`. Stage 8
+uses `spaces.school_calendar`, which has been there since spaces were added. Stage 8
 (team projects) adds none either: it uses Stage 1's `assignees` and `completed_by`
 columns and Stage 7's `space.linked` and `space.deleted` verbs. Stage 9 (projects in
 the views) changes only the app: no migration, no Worker change. Stage 10 (projects in
 the feed, open to everyone) adds no migration either.
 
-> **Stage 7 (inbox and activity): apply `0005_activity.sql` to live first.** Run
-> `npm run db:remote`, then `npm run db:check -- --remote`, **before** merging the stage
-> into `main` and pushing. Every v3 sync now reads `activity` for the unread count, so
-> new code on a database without it fails every sync with 500s. Deleting an account
-> needs it too, from the Admin page and from `npm run user:add -- name --delete --remote`
-> (both delete the account's activity rows and write a hand-on row). The old code
-> ignores the new tables, so applying the migration early is safe.
-
-> **Student upgrades: apply `0006_push.sql` and `0007_grades.sql` to live first.** Run
-> `npm run db:remote`, then `npm run db:check -- --remote`, **before** merging the branch
-> into `main`. The new code reads and writes `users.grading`, `courses.credits`,
-> `courses.grade_categories` and `items.category`, so on a database without them every
-> profile and course save fails. The old code names its columns, so applying the
-> migrations early is safe. The push secrets are optional (see
-> [Push reminders](#push-reminders)). With the Deploy workflow set up, merging into
-> `main` applies them before the code goes live, so this step is done for you.
-
 To change the database:
 
-1. Add a new file with the next number, `0008_something.sql`. Never edit a file that
+1. Add a new file with the next number, `0002_something.sql`. Never edit a file that
    has already run.
 2. Apply it locally with `npm run db:local`, then test.
 3. Push it with the code that needs it. The Deploy workflow applies it to live and runs
@@ -286,13 +270,25 @@ so devices sync on without a reset. The last move was `rounds-v6` to `rounds-v7`
 2026-10-05.
 
 1. Fold the migrations into `migrations/0001_schema.sql`. Move the files the live
-   database was built from into `test/fixtures/legacy-migrations/`.
+   database was built from into `test/fixtures/legacy-migrations/` (for the move to
+   `rounds-v8`, the live `rounds-v7` chain `0001_schema.sql` to `0008_friends.sql`).
+   A column added with `ALTER TABLE` goes at the end of its table, where SQLite put it,
+   so the fresh database's columns are in the same order as the old one's.
+   This rewrites and deletes migrations that have already run, which the Check
+   workflow's `migrations-unchanged` job refuses on a pull request. So a fold never goes
+   through a pull request: its branch is pushed straight to `main`, and only after the
+   data has moved (step 5).
 2. If the old database has tables or columns the copy doesn't know, add them to
-   `TABLES` in `scripts/lib/move-db.js`. The script refuses to run while anything
-   would be dropped.
-3. Create the new database with `npx wrangler d1 create rounds-vN`, point the `DB`
-   binding in `wrangler.jsonc` at it, and apply the schema with `npm run db:remote`.
-4. Rehearse locally first, then copy live:
+   `TABLES` in `scripts/lib/move-db.js`, in the schema's column order. The script
+   refuses to run while anything would be dropped.
+3. Create the new database with `npx wrangler d1 create rounds-vN`. Keep the switch of
+   the `DB` binding in `wrangler.jsonc` (and the docs naming the live database) in a
+   commit of its own, the branch's last, so every commit before it still points at the
+   live database. Check that commit out, run `npm run build`, and apply the schema
+   with `npm run db:remote`.
+4. Rehearse locally first (a second binding for the new database, the schema applied to
+   it with `npx wrangler d1 migrations apply rounds-vN --local`, the same command without
+   `--remote`), then copy live:
     ```
     npm run build
     node scripts/move-db.mjs --from rounds-v7 --to rounds-vN --remote
@@ -300,7 +296,9 @@ so devices sync on without a reset. The last move was `rounds-v6` to `rounds-v7`
    It only reads the old database, refuses a target that already holds data, and
    compares both afterwards. Don't pipe its output, or you lose its exit code.
 5. Deploy straight away (`npx wrangler deploy`) so no live edits land in the old
-   database, then run `npm run db:check -- --remote` and push `main`.
+   database, then run `npm run db:check -- --remote` and push the branch straight to
+   `main` (`git push origin <branch>:main`, a fast-forward). The Deploy workflow finds no
+   migration to apply and deploys the same code again.
 6. Keep the old database as a backup until you're sure the move went well.
 
 ## Maintenance switches
@@ -401,9 +399,8 @@ tokens are stored as `keyId.ciphertext`, sealed under the `current` key.
 
 ## Push reminders
 
-The morning digest (Settings → Connections → Reminders) needs migration
-`0006_push.sql` on the live database (`npm run db:remote` before you push) and three
-secrets. Without the secrets the app says reminders are not set up, and nothing else
+The morning digest (Settings → Connections → Reminders) needs the
+`push_subscriptions` table (part of `0001_schema.sql`) and three secrets. Without the secrets the app says reminders are not set up, and nothing else
 changes. The alerts in the calendar feed need neither.
 
 1. Make a key pair locally: `npm run push:key` writes `VAPID_PUBLIC_KEY` and

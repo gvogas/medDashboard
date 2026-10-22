@@ -1,8 +1,10 @@
 -- Rounds — med school tracker. D1 (SQLite) schema, in one piece.
 --
--- This replaces every earlier migration: the live data was copied into a fresh
--- database built from this file (scripts/move-db.mjs), so no table carries the
--- patches of earlier versions. Change the schema with a new numbered file.
+-- This replaces every earlier migration, shared classes and projects, invites, marks
+-- and space prefs, activity and the inbox, push reminders, grades and friends included:
+-- the live data was copied into a fresh database built from this file
+-- (scripts/move-db.mjs), so no table carries the patches of earlier versions. Change the
+-- schema with a new numbered file.
 --
 -- Every table is keyed by its owner and an id: ownership is part of the key, not a
 -- filter a handler might forget. Courses and items belong to a scope: 'u:<user id>' for a
@@ -71,7 +73,11 @@ CREATE TABLE users (
                         AND json_array_length(hidden_sources) <= 40),
   created_at     INTEGER NOT NULL,
   updated_at     INTEGER NOT NULL,
-  revision       INTEGER NOT NULL DEFAULT 1 CHECK (typeof(revision) = 'integer' AND revision > 0)
+  revision       INTEGER NOT NULL DEFAULT 1 CHECK (typeof(revision) = 'integer' AND revision > 0),
+  -- The person's grading: {scale: [{letter, min, points}], pass: [marks]}; {} is the default
+  -- 4.0 scale and the pass marks 50, 60 and 70. Checked in the Worker (worker/validate.js).
+  grading        TEXT NOT NULL DEFAULT '{}'
+                 CHECK (json_valid(grading) AND json_type(grading) = 'object')
 );
 
 CREATE TABLE courses (
@@ -99,6 +105,22 @@ CREATE TABLE courses (
   updated_at  INTEGER NOT NULL,
   deleted_at  INTEGER,
   revision    INTEGER NOT NULL DEFAULT 1 CHECK (typeof(revision) = 'integer' AND revision > 0),
+  -- Grade categories, credits and the grading scale (src/core/grades.ts).
+  --
+  -- A course can split its grade into categories ("Quizzes 20%, drop the lowest 2") and an
+  -- item can belong to one: the category's weight is then shared by its items, and the item's
+  -- own weight is left aside. A course carries its credits for the GPA, and each person keeps
+  -- a grading scale (letters and grade points) and their own pass marks.
+  --
+  -- A class's course holds its categories and credits for everyone, and a class item its
+  -- category, as the class's other facts. An old client never sends these fields: the Worker
+  -- keeps the stored values when a write leaves them out (worker/db.js `KEPT_WHEN_ABSENT`).
+  --
+  -- [{id, name, weight, drop}], at most 12. Each entry is validated in the Worker; SQLite
+  -- checks it is a bounded JSON array. NULL credits count as the default (3).
+  credits     REAL CHECK (credits IS NULL OR credits BETWEEN 0 AND 30),
+  grade_categories TEXT NOT NULL DEFAULT '[]'
+              CHECK (json_valid(grade_categories) AND json_type(grade_categories) = 'array' AND json_array_length(grade_categories) <= 12),
   PRIMARY KEY (scope, id),
   -- A class's course holds the class's facts only: each member's target and "archived in
   -- my sidebar" live in their space_prefs. Its colour and term are the class's defaults.
@@ -152,6 +174,9 @@ CREATE TABLE items (
   updated_at    INTEGER NOT NULL,
   deleted_at    INTEGER,
   revision      INTEGER NOT NULL DEFAULT 1 CHECK (typeof(revision) = 'integer' AND revision > 0),
+  -- The id of one of its course's grade categories, or none. A label: an id the course no
+  -- longer has reads as none, and the item's own weight counts again.
+  category      TEXT CHECK (category IS NULL OR length(category) BETWEEN 1 AND 24),
   PRIMARY KEY (scope, id),
   -- A course reference can only point at a course in the same scope. SET NULL would
   -- also null the scope, so a hard delete is refused while references remain: the API
@@ -268,23 +293,23 @@ INSERT INTO sync_state (id) VALUES (1);
 CREATE TRIGGER courses_change_insert AFTER INSERT ON courses BEGIN
  DELETE FROM changes WHERE scope = NEW.scope AND kind = 'courses' AND row_id = NEW.id;
  INSERT INTO changes(scope, kind, row_id, payload, deleted_at)
- VALUES(NEW.scope, 'courses', NEW.id, json_object('scope', NEW.scope, 'id', NEW.id, 'code', NEW.code, 'name', NEW.name, 'color', NEW.color, 'instructor', NEW.instructor, 'term', NEW.term, 'archived', NEW.archived, 'meetings', NEW.meetings, 'target', NEW.target, 'updated_by', NEW.updated_by, 'created_at', NEW.created_at, 'updated_at', NEW.updated_at, 'deleted_at', NEW.deleted_at, 'revision', NEW.revision), NEW.deleted_at);
+ VALUES(NEW.scope, 'courses', NEW.id, json_object('scope', NEW.scope, 'id', NEW.id, 'code', NEW.code, 'name', NEW.name, 'color', NEW.color, 'instructor', NEW.instructor, 'term', NEW.term, 'archived', NEW.archived, 'meetings', NEW.meetings, 'target', NEW.target, 'credits', NEW.credits, 'grade_categories', NEW.grade_categories, 'updated_by', NEW.updated_by, 'created_at', NEW.created_at, 'updated_at', NEW.updated_at, 'deleted_at', NEW.deleted_at, 'revision', NEW.revision), NEW.deleted_at);
 END;
 CREATE TRIGGER courses_change_update AFTER UPDATE ON courses BEGIN
  DELETE FROM changes WHERE scope = NEW.scope AND kind = 'courses' AND row_id = NEW.id;
  INSERT INTO changes(scope, kind, row_id, payload, deleted_at)
- VALUES(NEW.scope, 'courses', NEW.id, json_object('scope', NEW.scope, 'id', NEW.id, 'code', NEW.code, 'name', NEW.name, 'color', NEW.color, 'instructor', NEW.instructor, 'term', NEW.term, 'archived', NEW.archived, 'meetings', NEW.meetings, 'target', NEW.target, 'updated_by', NEW.updated_by, 'created_at', NEW.created_at, 'updated_at', NEW.updated_at, 'deleted_at', NEW.deleted_at, 'revision', NEW.revision), NEW.deleted_at);
+ VALUES(NEW.scope, 'courses', NEW.id, json_object('scope', NEW.scope, 'id', NEW.id, 'code', NEW.code, 'name', NEW.name, 'color', NEW.color, 'instructor', NEW.instructor, 'term', NEW.term, 'archived', NEW.archived, 'meetings', NEW.meetings, 'target', NEW.target, 'credits', NEW.credits, 'grade_categories', NEW.grade_categories, 'updated_by', NEW.updated_by, 'created_at', NEW.created_at, 'updated_at', NEW.updated_at, 'deleted_at', NEW.deleted_at, 'revision', NEW.revision), NEW.deleted_at);
 END;
 
 CREATE TRIGGER items_change_insert AFTER INSERT ON items BEGIN
  DELETE FROM changes WHERE scope = NEW.scope AND kind = 'items' AND row_id = NEW.id;
  INSERT INTO changes(scope, kind, row_id, payload, deleted_at)
- VALUES(NEW.scope, 'items', NEW.id, json_object('scope', NEW.scope, 'id', NEW.id, 'type', NEW.type, 'title', NEW.title, 'course_id', NEW.course_id, 'date', NEW.date, 'start', NEW.start, 'end', NEW.end, 'location', NEW.location, 'status', NEW.status, 'grade', NEW.grade, 'weight', NEW.weight, 'notes', NEW.notes, 'checklist', NEW.checklist, 'links', NEW.links, 'recur', NEW.recur, 'weekday', NEW.weekday, 'recur_until', NEW.recur_until, 'dept', NEW.dept, 'completed_at', NEW.completed_at, 'updated_by', NEW.updated_by, 'class_id', NEW.class_id, 'assignees', NEW.assignees, 'completed_by', NEW.completed_by, 'created_at', NEW.created_at, 'updated_at', NEW.updated_at, 'deleted_at', NEW.deleted_at, 'revision', NEW.revision), NEW.deleted_at);
+ VALUES(NEW.scope, 'items', NEW.id, json_object('scope', NEW.scope, 'id', NEW.id, 'type', NEW.type, 'title', NEW.title, 'course_id', NEW.course_id, 'date', NEW.date, 'start', NEW.start, 'end', NEW.end, 'location', NEW.location, 'status', NEW.status, 'grade', NEW.grade, 'weight', NEW.weight, 'notes', NEW.notes, 'checklist', NEW.checklist, 'links', NEW.links, 'recur', NEW.recur, 'weekday', NEW.weekday, 'recur_until', NEW.recur_until, 'dept', NEW.dept, 'completed_at', NEW.completed_at, 'updated_by', NEW.updated_by, 'class_id', NEW.class_id, 'category', NEW.category, 'assignees', NEW.assignees, 'completed_by', NEW.completed_by, 'created_at', NEW.created_at, 'updated_at', NEW.updated_at, 'deleted_at', NEW.deleted_at, 'revision', NEW.revision), NEW.deleted_at);
 END;
 CREATE TRIGGER items_change_update AFTER UPDATE ON items BEGIN
  DELETE FROM changes WHERE scope = NEW.scope AND kind = 'items' AND row_id = NEW.id;
  INSERT INTO changes(scope, kind, row_id, payload, deleted_at)
- VALUES(NEW.scope, 'items', NEW.id, json_object('scope', NEW.scope, 'id', NEW.id, 'type', NEW.type, 'title', NEW.title, 'course_id', NEW.course_id, 'date', NEW.date, 'start', NEW.start, 'end', NEW.end, 'location', NEW.location, 'status', NEW.status, 'grade', NEW.grade, 'weight', NEW.weight, 'notes', NEW.notes, 'checklist', NEW.checklist, 'links', NEW.links, 'recur', NEW.recur, 'weekday', NEW.weekday, 'recur_until', NEW.recur_until, 'dept', NEW.dept, 'completed_at', NEW.completed_at, 'updated_by', NEW.updated_by, 'class_id', NEW.class_id, 'assignees', NEW.assignees, 'completed_by', NEW.completed_by, 'created_at', NEW.created_at, 'updated_at', NEW.updated_at, 'deleted_at', NEW.deleted_at, 'revision', NEW.revision), NEW.deleted_at);
+ VALUES(NEW.scope, 'items', NEW.id, json_object('scope', NEW.scope, 'id', NEW.id, 'type', NEW.type, 'title', NEW.title, 'course_id', NEW.course_id, 'date', NEW.date, 'start', NEW.start, 'end', NEW.end, 'location', NEW.location, 'status', NEW.status, 'grade', NEW.grade, 'weight', NEW.weight, 'notes', NEW.notes, 'checklist', NEW.checklist, 'links', NEW.links, 'recur', NEW.recur, 'weekday', NEW.weekday, 'recur_until', NEW.recur_until, 'dept', NEW.dept, 'completed_at', NEW.completed_at, 'updated_by', NEW.updated_by, 'class_id', NEW.class_id, 'category', NEW.category, 'assignees', NEW.assignees, 'completed_by', NEW.completed_by, 'created_at', NEW.created_at, 'updated_at', NEW.updated_at, 'deleted_at', NEW.deleted_at, 'revision', NEW.revision), NEW.deleted_at);
 END;
 
 CREATE TRIGGER quotes_change_insert AFTER INSERT ON quotes BEGIN
@@ -415,4 +440,355 @@ CREATE TABLE app_meta (
   key         TEXT PRIMARY KEY,
   value       TEXT NOT NULL,
   updated_at  INTEGER NOT NULL
+);
+
+-- ── shared classes and projects (worker/spaces.js) ────────────────────────────
+
+-- Shared spaces: a class ('c:<id>' scope) or a team project ('p:<id>'), and who is in it.
+-- A space has no name of its own: a class is named by its one course, a project by its
+-- 'project' item. Spec: docs/superpowers/specs/2026-10-02-shared-classes-design.md §3.
+
+CREATE TABLE spaces (
+  -- 12 characters of [a-z0-9], made by the Worker, never by a client.
+  id              TEXT PRIMARY KEY CHECK (length(id) = 12 AND id NOT GLOB '*[^a-z0-9]*'),
+  kind            TEXT NOT NULL CHECK (kind IN ('class', 'project')),
+  archived        INTEGER NOT NULL DEFAULT 0 CHECK (archived IN (0, 1)),
+  -- The owner's school calendar, offered to joiners who have none (class only).
+  school_calendar TEXT CHECK (school_calendar IS NULL OR (json_valid(school_calendar) AND json_type(school_calendar) = 'object')),
+  -- The class assignment a project belongs to (project only; ids, no foreign key).
+  parent_space    TEXT CHECK (parent_space IS NULL OR length(parent_space) = 12),
+  parent_item     TEXT CHECK (parent_item IS NULL OR length(parent_item) BETWEEN 1 AND 24),
+  -- The join code, stored as its SHA-256 (hex), with its expiry and uses left.
+  code_hash       TEXT CHECK (code_hash IS NULL OR length(code_hash) = 64),
+  code_expires    INTEGER,
+  code_uses_left  INTEGER CHECK (code_uses_left IS NULL OR code_uses_left BETWEEN 0 AND 10),
+  created_at      INTEGER NOT NULL,
+  updated_at      INTEGER NOT NULL,
+  deleted_at      INTEGER,
+  -- Moved on by every change to the space or its members (worker/spaces.js), so sync
+  -- can tell which member lists moved.
+  revision        INTEGER NOT NULL DEFAULT 1 CHECK (typeof(revision) = 'integer' AND revision > 0),
+  CHECK (school_calendar IS NULL OR kind = 'class'),
+  CHECK ((parent_space IS NULL AND parent_item IS NULL) OR (kind = 'project' AND parent_space IS NOT NULL AND parent_item IS NOT NULL))
+);
+CREATE INDEX spaces_revision ON spaces (revision);
+CREATE INDEX spaces_code ON spaces (code_hash) WHERE code_hash IS NOT NULL;
+CREATE INDEX spaces_deleted ON spaces (deleted_at) WHERE deleted_at IS NOT NULL;
+
+CREATE TABLE members (
+  space_id    TEXT NOT NULL REFERENCES spaces(id) ON DELETE CASCADE,
+  -- Deleting an account deletes its memberships; Stage 5 transfers or deletes the
+  -- spaces it owns first.
+  user_id     TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  role        TEXT NOT NULL CHECK (role IN ('owner', 'editor', 'member')),
+  joined_at   INTEGER NOT NULL,
+  updated_at  INTEGER NOT NULL,
+  -- Left or removed. A rejoin revives the row.
+  deleted_at  INTEGER,
+  revision    INTEGER NOT NULL DEFAULT 1 CHECK (typeof(revision) = 'integer' AND revision > 0),
+  PRIMARY KEY (space_id, user_id)
+);
+-- Exactly one live owner, stored nowhere else. A transfer demotes before it promotes.
+CREATE UNIQUE INDEX members_one_owner ON members (space_id) WHERE role = 'owner' AND deleted_at IS NULL;
+-- My spaces, on every sync.
+CREATE INDEX members_user ON members (user_id) WHERE deleted_at IS NULL;
+CREATE INDEX members_deleted ON members (deleted_at) WHERE deleted_at IS NOT NULL;
+
+-- Invitations to a space by username (spec §11). One row per person and space: a repeat
+-- refreshes it. Accepting makes the membership and marks the row, so the inviter sees what
+-- became of it. Join codes live on spaces. The nightly purge deletes invites
+-- 90 days after they were made.
+
+CREATE TABLE invites (
+  space_id    TEXT NOT NULL REFERENCES spaces(id) ON DELETE CASCADE,
+  -- The person invited; deleting their account deletes their invites.
+  user_id     TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  -- Who sent it; NULL once that account is gone.
+  invited_by  TEXT REFERENCES users(id) ON DELETE SET NULL,
+  -- The role accepting gives. Never 'owner': ownership moves only by a transfer.
+  role        TEXT NOT NULL CHECK (role IN ('editor', 'member')),
+  status      TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'accepted', 'declined')),
+  created_at  INTEGER NOT NULL,
+  expires_at  INTEGER NOT NULL CHECK (expires_at > created_at),
+  PRIMARY KEY (space_id, user_id)
+);
+-- Invites to me: the invites list and the inbox count.
+CREATE INDEX invites_user ON invites (user_id) WHERE status = 'pending';
+-- The nightly purge.
+CREATE INDEX invites_created ON invites (created_at);
+
+-- ── your layer on a shared space ──────────────────────────────────────────────
+
+-- Your layer on a shared class or project (spec §3, §4). Your status, grade, weight
+-- override, checklist, notes and "not mine" on a shared item live in `marks`; your colour,
+-- grade target, semester and "archived in my sidebar" for a space in `space_prefs`. Each
+-- belongs to one person, is read only with their user id, and writes its changes into that
+-- person's own feed ('u:' || user_id), so no other member's sync ever pages it. One text id
+-- each, like every other personal row: a mark's is '<space id>:<item id>', a prefs row's the
+-- space id. Deleting an account deletes both.
+
+CREATE TABLE marks (
+  user_id       TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  id            TEXT NOT NULL CHECK (length(id) <= 40 AND id = space_id || ':' || item_id),
+  space_id      TEXT NOT NULL CHECK (length(space_id) = 12 AND space_id NOT GLOB '*[^a-z0-9]*'),
+  item_id       TEXT NOT NULL CHECK (length(item_id) BETWEEN 1 AND 24),
+  status        TEXT NOT NULL DEFAULT 'todo' CHECK (status IN ('todo', 'submitted', 'graded', 'done', 'missed')),
+  grade         REAL CHECK (grade IS NULL OR grade BETWEEN 0 AND 100),
+  -- Your weight for the item, when it differs from the class's; NULL uses the class's.
+  weight        REAL CHECK (weight IS NULL OR weight BETWEEN 0 AND 100),
+  notes         TEXT NOT NULL DEFAULT '' CHECK (length(notes) <= 5000),
+  -- [{id, text, done}], at most 50: exam prep's topics on a class exam.
+  checklist     TEXT NOT NULL DEFAULT '[]'
+                CHECK (json_valid(checklist) AND json_type(checklist) = 'array' AND json_array_length(checklist) <= 50),
+  completed_at  INTEGER,
+  -- "Not mine": left out of your views, grades and stats until shown again.
+  hidden        INTEGER NOT NULL DEFAULT 0 CHECK (hidden IN (0, 1)),
+  created_at    INTEGER NOT NULL,
+  updated_at    INTEGER NOT NULL,
+  deleted_at    INTEGER,
+  revision      INTEGER NOT NULL DEFAULT 1 CHECK (typeof(revision) = 'integer' AND revision > 0),
+  PRIMARY KEY (user_id, id),
+  -- One mark per person and item; also "my marks in a space" (detach, revocation).
+  UNIQUE (user_id, space_id, item_id)
+);
+CREATE INDEX marks_deleted ON marks (deleted_at) WHERE deleted_at IS NOT NULL;
+
+CREATE TABLE space_prefs (
+  user_id     TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  id          TEXT NOT NULL CHECK (id = space_id),
+  space_id    TEXT NOT NULL CHECK (length(space_id) = 12 AND space_id NOT GLOB '*[^a-z0-9]*'),
+  -- Your colour for the space: one of the twelve course colours.
+  color       TEXT NOT NULL CHECK (color IN ('#E4749B', '#8B5CC7', '#17B3AE', '#79B6EA', '#BCA6E6',
+                                              '#F08A6C', '#E8B33A', '#4FBF8B', '#8FAE86', '#4F74D9', '#B8457E', '#7D8A99')),
+  target      INTEGER CHECK (target IS NULL OR (typeof(target) = 'integer' AND target BETWEEN 1 AND 100)),
+  -- Your semester for a class ('' is every semester), as a course's own term is.
+  term        TEXT NOT NULL DEFAULT '' CHECK (length(term) <= 40),
+  archived    INTEGER NOT NULL DEFAULT 0 CHECK (archived IN (0, 1)),
+  created_at  INTEGER NOT NULL,
+  updated_at  INTEGER NOT NULL,
+  deleted_at  INTEGER,
+  revision    INTEGER NOT NULL DEFAULT 1 CHECK (typeof(revision) = 'integer' AND revision > 0),
+  PRIMARY KEY (user_id, id)
+);
+CREATE INDEX space_prefs_deleted ON space_prefs (deleted_at) WHERE deleted_at IS NOT NULL;
+
+CREATE TRIGGER marks_change_insert AFTER INSERT ON marks BEGIN
+ DELETE FROM changes WHERE scope = 'u:' || NEW.user_id AND kind = 'marks' AND row_id = NEW.id;
+ INSERT INTO changes(scope, kind, row_id, payload, deleted_at)
+ VALUES('u:' || NEW.user_id, 'marks', NEW.id, json_object('user_id', NEW.user_id, 'id', NEW.id, 'space_id', NEW.space_id, 'item_id', NEW.item_id, 'status', NEW.status, 'grade', NEW.grade, 'weight', NEW.weight, 'notes', NEW.notes, 'checklist', NEW.checklist, 'completed_at', NEW.completed_at, 'hidden', NEW.hidden, 'created_at', NEW.created_at, 'updated_at', NEW.updated_at, 'deleted_at', NEW.deleted_at, 'revision', NEW.revision), NEW.deleted_at);
+END;
+CREATE TRIGGER marks_change_update AFTER UPDATE ON marks BEGIN
+ DELETE FROM changes WHERE scope = 'u:' || NEW.user_id AND kind = 'marks' AND row_id = NEW.id;
+ INSERT INTO changes(scope, kind, row_id, payload, deleted_at)
+ VALUES('u:' || NEW.user_id, 'marks', NEW.id, json_object('user_id', NEW.user_id, 'id', NEW.id, 'space_id', NEW.space_id, 'item_id', NEW.item_id, 'status', NEW.status, 'grade', NEW.grade, 'weight', NEW.weight, 'notes', NEW.notes, 'checklist', NEW.checklist, 'completed_at', NEW.completed_at, 'hidden', NEW.hidden, 'created_at', NEW.created_at, 'updated_at', NEW.updated_at, 'deleted_at', NEW.deleted_at, 'revision', NEW.revision), NEW.deleted_at);
+END;
+
+CREATE TRIGGER space_prefs_change_insert AFTER INSERT ON space_prefs BEGIN
+ DELETE FROM changes WHERE scope = 'u:' || NEW.user_id AND kind = 'space_prefs' AND row_id = NEW.id;
+ INSERT INTO changes(scope, kind, row_id, payload, deleted_at)
+ VALUES('u:' || NEW.user_id, 'space_prefs', NEW.id, json_object('user_id', NEW.user_id, 'id', NEW.id, 'space_id', NEW.space_id, 'color', NEW.color, 'target', NEW.target, 'term', NEW.term, 'archived', NEW.archived, 'created_at', NEW.created_at, 'updated_at', NEW.updated_at, 'deleted_at', NEW.deleted_at, 'revision', NEW.revision), NEW.deleted_at);
+END;
+CREATE TRIGGER space_prefs_change_update AFTER UPDATE ON space_prefs BEGIN
+ DELETE FROM changes WHERE scope = 'u:' || NEW.user_id AND kind = 'space_prefs' AND row_id = NEW.id;
+ INSERT INTO changes(scope, kind, row_id, payload, deleted_at)
+ VALUES('u:' || NEW.user_id, 'space_prefs', NEW.id, json_object('user_id', NEW.user_id, 'id', NEW.id, 'space_id', NEW.space_id, 'color', NEW.color, 'target', NEW.target, 'term', NEW.term, 'archived', NEW.archived, 'created_at', NEW.created_at, 'updated_at', NEW.updated_at, 'deleted_at', NEW.deleted_at, 'revision', NEW.revision), NEW.deleted_at);
+END;
+
+-- ── activity and the inbox (worker/activity.js) ───────────────────────────────
+
+-- What members did in a shared space, as they read it (spec §12): the inbox and each space's
+-- Activity tab. Separate from `changes`, which keeps only the latest state of a row for sync.
+-- Rows about shared items and courses come from the triggers below, which see OLD and NEW, so
+-- "from → to" is the real previous value and the actor is NEW.updated_by; member and space
+-- rows are written by their routes (worker/activity.js noteStmt). Rows coalesce per
+-- (space, actor, verb, subject, person, 10-minute bucket), keeping the first "from"; a change
+-- that returns to where it started deletes its row. Kept 90 days (the nightly purge).
+
+CREATE TABLE activity (
+  seq           INTEGER PRIMARY KEY AUTOINCREMENT,
+  -- No foreign key: rows about a person outlive the space (a removal, a deleted space).
+  space_id      TEXT NOT NULL CHECK (length(space_id) = 12),
+  -- Who acted: the user id, '' when unknown. No foreign key: the row outlives the account.
+  actor_id      TEXT NOT NULL DEFAULT '',
+  verb          TEXT NOT NULL CHECK (verb IN ('item.created', 'item.deleted', 'item.date', 'item.weight', 'item.title',
+                  'course.meetings', 'course.instructor', 'task.assigned', 'task.unassigned', 'task.status',
+                  'member.joined', 'member.left', 'member.removed', 'member.role',
+                  'space.archived', 'space.linked', 'space.transferred', 'space.deleted')),
+  -- The item or course id; '' for creations (an import is one row) and space events.
+  subject       TEXT NOT NULL DEFAULT '',
+  -- Whom it is about (an assignee, a removed member, a new owner); '' for everyone. Never
+  -- NULL, so the unique key below can match.
+  subject_user  TEXT NOT NULL DEFAULT '',
+  old_value     TEXT,
+  new_value     TEXT,
+  -- {by, title | titles, whom, space, assignees}: names as they were, so a row still reads
+  -- after the item, the account or the space is gone.
+  detail        TEXT NOT NULL DEFAULT '{}' CHECK (json_valid(detail) AND json_type(detail) = 'object'),
+  -- How many changes this row stands for (creations coalesced into one).
+  n             INTEGER NOT NULL DEFAULT 1 CHECK (n >= 1),
+  bucket        INTEGER NOT NULL,
+  at            INTEGER NOT NULL,
+  UNIQUE (space_id, actor_id, verb, subject, subject_user, bucket)
+);
+-- A space's activity, newest first (the Activity tab; the inbox per space you are in).
+CREATE INDEX activity_space ON activity (space_id, seq);
+-- Rows about a person (the inbox, even after they left the space).
+CREATE INDEX activity_about ON activity (subject_user, seq) WHERE subject_user != '';
+-- The nightly purge.
+CREATE INDEX activity_at ON activity (at);
+
+-- The last activity row a person read. Kept off users, so reading never moves the profile's revision.
+CREATE TABLE inbox_seen (
+  user_id  TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+  seq      INTEGER NOT NULL DEFAULT 0 CHECK (seq >= 0)
+);
+
+-- A shared item made: one row per actor and bucket, holding up to ten titles; and each assignee
+-- a new task starts with. The space's own 'project' item is made with the space and is not news.
+CREATE TRIGGER activity_items_insert AFTER INSERT ON items
+WHEN NEW.scope NOT GLOB 'u:*' AND NEW.deleted_at IS NULL AND NEW.id != 'project' BEGIN
+ INSERT INTO activity (space_id, actor_id, verb, subject, subject_user, detail, bucket, at)
+ SELECT substr(NEW.scope, 3), COALESCE(NEW.updated_by, ''), 'item.created', '', '',
+   json_object('titles', json_array(NEW.title), 'by', (SELECT COALESCE(NULLIF(u.display_name, ''), u.username) FROM users AS u WHERE u.id = NEW.updated_by)),
+   NEW.updated_at / 600000, NEW.updated_at
+ WHERE true
+ ON CONFLICT (space_id, actor_id, verb, subject, subject_user, bucket) DO UPDATE SET n = activity.n + 1, at = excluded.at,
+   detail = CASE WHEN json_array_length(activity.detail, '$.titles') < 10
+     THEN json_insert(activity.detail, '$.titles[#]', json_extract(excluded.detail, '$.titles[0]')) ELSE activity.detail END;
+ INSERT INTO activity (space_id, actor_id, verb, subject, subject_user, new_value, detail, bucket, at)
+ SELECT substr(NEW.scope, 3), COALESCE(NEW.updated_by, ''), 'task.assigned', NEW.id, CASE WHEN a.value = '*' THEN '' ELSE a.value END, a.value,
+   json_object('title', NEW.title, 'by', (SELECT COALESCE(NULLIF(u.display_name, ''), u.username) FROM users AS u WHERE u.id = NEW.updated_by),
+     'whom', (SELECT COALESCE(NULLIF(w.display_name, ''), w.username) FROM users AS w WHERE w.id = a.value)),
+   NEW.updated_at / 600000, NEW.updated_at
+ FROM json_each(NEW.assignees) AS a WHERE NEW.type = 'task'
+ ON CONFLICT (space_id, actor_id, verb, subject, subject_user, bucket) DO UPDATE SET at = excluded.at, detail = excluded.detail;
+END;
+
+-- A shared item changed. Each statement records one kind of change; the last deletes any row
+-- this change brought back to where it started.
+CREATE TRIGGER activity_items_update AFTER UPDATE ON items WHEN NEW.scope NOT GLOB 'u:*' BEGIN
+ INSERT INTO activity (space_id, actor_id, verb, subject, subject_user, old_value, new_value, detail, bucket, at)
+ SELECT substr(NEW.scope, 3), COALESCE(NEW.updated_by, ''), 'item.deleted', NEW.id, '',
+   CASE WHEN OLD.deleted_at IS NULL THEN '0' ELSE '1' END, CASE WHEN NEW.deleted_at IS NULL THEN '0' ELSE '1' END,
+   json_object('title', NEW.title, 'by', (SELECT COALESCE(NULLIF(u.display_name, ''), u.username) FROM users AS u WHERE u.id = NEW.updated_by)),
+   NEW.updated_at / 600000, NEW.updated_at
+ WHERE (OLD.deleted_at IS NULL) != (NEW.deleted_at IS NULL)
+ ON CONFLICT (space_id, actor_id, verb, subject, subject_user, bucket) DO UPDATE SET new_value = excluded.new_value, n = activity.n + 1, at = excluded.at, detail = excluded.detail;
+ INSERT INTO activity (space_id, actor_id, verb, subject, subject_user, old_value, new_value, detail, bucket, at)
+ SELECT substr(NEW.scope, 3), COALESCE(NEW.updated_by, ''), 'item.date', NEW.id, '',
+   OLD.date || '|' || OLD.start || '|' || OLD.end, NEW.date || '|' || NEW.start || '|' || NEW.end,
+   json_object('title', NEW.title, 'by', (SELECT COALESCE(NULLIF(u.display_name, ''), u.username) FROM users AS u WHERE u.id = NEW.updated_by)),
+   NEW.updated_at / 600000, NEW.updated_at
+ WHERE NEW.deleted_at IS NULL AND (OLD.date != NEW.date OR OLD.start != NEW.start OR OLD.end != NEW.end)
+ ON CONFLICT (space_id, actor_id, verb, subject, subject_user, bucket) DO UPDATE SET new_value = excluded.new_value, n = activity.n + 1, at = excluded.at, detail = excluded.detail;
+ INSERT INTO activity (space_id, actor_id, verb, subject, subject_user, old_value, new_value, detail, bucket, at)
+ SELECT substr(NEW.scope, 3), COALESCE(NEW.updated_by, ''), 'item.weight', NEW.id, '', CAST(OLD.weight AS TEXT), CAST(NEW.weight AS TEXT),
+   json_object('title', NEW.title, 'by', (SELECT COALESCE(NULLIF(u.display_name, ''), u.username) FROM users AS u WHERE u.id = NEW.updated_by)),
+   NEW.updated_at / 600000, NEW.updated_at
+ WHERE NEW.deleted_at IS NULL AND OLD.weight IS NOT NEW.weight
+ ON CONFLICT (space_id, actor_id, verb, subject, subject_user, bucket) DO UPDATE SET new_value = excluded.new_value, n = activity.n + 1, at = excluded.at, detail = excluded.detail;
+ INSERT INTO activity (space_id, actor_id, verb, subject, subject_user, old_value, new_value, detail, bucket, at)
+ SELECT substr(NEW.scope, 3), COALESCE(NEW.updated_by, ''), 'item.title', NEW.id, '', OLD.title, NEW.title,
+   json_object('title', NEW.title, 'by', (SELECT COALESCE(NULLIF(u.display_name, ''), u.username) FROM users AS u WHERE u.id = NEW.updated_by)),
+   NEW.updated_at / 600000, NEW.updated_at
+ WHERE NEW.deleted_at IS NULL AND OLD.title != NEW.title
+ ON CONFLICT (space_id, actor_id, verb, subject, subject_user, bucket) DO UPDATE SET new_value = excluded.new_value, n = activity.n + 1, at = excluded.at, detail = excluded.detail;
+ INSERT INTO activity (space_id, actor_id, verb, subject, subject_user, new_value, detail, bucket, at)
+ SELECT substr(NEW.scope, 3), COALESCE(NEW.updated_by, ''), 'task.assigned', NEW.id, CASE WHEN a.value = '*' THEN '' ELSE a.value END, a.value,
+   json_object('title', NEW.title, 'by', (SELECT COALESCE(NULLIF(u.display_name, ''), u.username) FROM users AS u WHERE u.id = NEW.updated_by),
+     'whom', (SELECT COALESCE(NULLIF(w.display_name, ''), w.username) FROM users AS w WHERE w.id = a.value)),
+   NEW.updated_at / 600000, NEW.updated_at
+ FROM json_each(NEW.assignees) AS a
+ WHERE NEW.type = 'task' AND NEW.deleted_at IS NULL AND a.value NOT IN (SELECT o.value FROM json_each(OLD.assignees) AS o)
+ ON CONFLICT (space_id, actor_id, verb, subject, subject_user, bucket) DO UPDATE SET at = excluded.at, detail = excluded.detail;
+ INSERT INTO activity (space_id, actor_id, verb, subject, subject_user, old_value, new_value, detail, bucket, at)
+ SELECT substr(NEW.scope, 3), COALESCE(NEW.updated_by, ''), 'task.unassigned', NEW.id, '', OLD.assignees, '[]',
+   json_object('title', NEW.title, 'by', (SELECT COALESCE(NULLIF(u.display_name, ''), u.username) FROM users AS u WHERE u.id = NEW.updated_by)),
+   NEW.updated_at / 600000, NEW.updated_at
+ WHERE NEW.type = 'task' AND NEW.deleted_at IS NULL AND NEW.assignees = '[]' AND OLD.assignees != '[]'
+ ON CONFLICT (space_id, actor_id, verb, subject, subject_user, bucket) DO UPDATE SET new_value = excluded.new_value, n = activity.n + 1, at = excluded.at, detail = excluded.detail;
+ INSERT INTO activity (space_id, actor_id, verb, subject, subject_user, old_value, new_value, detail, bucket, at)
+ SELECT substr(NEW.scope, 3), COALESCE(NEW.updated_by, ''), 'task.status', NEW.id, '',
+   CASE WHEN OLD.completed_at IS NULL THEN 'todo' ELSE 'done' END, CASE WHEN NEW.completed_at IS NULL THEN 'todo' ELSE 'done' END,
+   json_object('title', NEW.title, 'by', (SELECT COALESCE(NULLIF(u.display_name, ''), u.username) FROM users AS u WHERE u.id = NEW.updated_by),
+     'assignees', json(NEW.assignees)),
+   NEW.updated_at / 600000, NEW.updated_at
+ WHERE NEW.scope GLOB 'p:*' AND NEW.type = 'task' AND NEW.deleted_at IS NULL AND (OLD.completed_at IS NULL) != (NEW.completed_at IS NULL)
+ ON CONFLICT (space_id, actor_id, verb, subject, subject_user, bucket) DO UPDATE SET new_value = excluded.new_value, n = activity.n + 1, at = excluded.at, detail = excluded.detail;
+ -- An assignee this person added in this bucket and has taken off again (new_value is the
+ -- id as stored in assignees, '*' for everyone).
+ DELETE FROM activity WHERE space_id = substr(NEW.scope, 3) AND actor_id = COALESCE(NEW.updated_by, '') AND bucket = NEW.updated_at / 600000
+   AND subject = NEW.id AND verb = 'task.assigned' AND new_value NOT IN (SELECT value FROM json_each(NEW.assignees));
+ DELETE FROM activity WHERE space_id = substr(NEW.scope, 3) AND actor_id = COALESCE(NEW.updated_by, '') AND bucket = NEW.updated_at / 600000
+   AND subject = NEW.id AND subject_user = '' AND verb IN ('item.deleted', 'item.date', 'item.weight', 'item.title', 'task.status') AND old_value IS new_value;
+END;
+
+-- A class's course changed: its weekly times and rooms, or its instructor.
+CREATE TRIGGER activity_courses_update AFTER UPDATE ON courses WHEN NEW.scope GLOB 'c:*' AND NEW.deleted_at IS NULL BEGIN
+ INSERT INTO activity (space_id, actor_id, verb, subject, subject_user, old_value, new_value, detail, bucket, at)
+ SELECT substr(NEW.scope, 3), COALESCE(NEW.updated_by, ''), 'course.meetings', NEW.id, '', OLD.meetings, NEW.meetings,
+   json_object('title', NEW.name, 'by', (SELECT COALESCE(NULLIF(u.display_name, ''), u.username) FROM users AS u WHERE u.id = NEW.updated_by)),
+   NEW.updated_at / 600000, NEW.updated_at
+ WHERE OLD.meetings != NEW.meetings
+ ON CONFLICT (space_id, actor_id, verb, subject, subject_user, bucket) DO UPDATE SET new_value = excluded.new_value, n = activity.n + 1, at = excluded.at, detail = excluded.detail;
+ INSERT INTO activity (space_id, actor_id, verb, subject, subject_user, old_value, new_value, detail, bucket, at)
+ SELECT substr(NEW.scope, 3), COALESCE(NEW.updated_by, ''), 'course.instructor', NEW.id, '', OLD.instructor, NEW.instructor,
+   json_object('title', NEW.name, 'by', (SELECT COALESCE(NULLIF(u.display_name, ''), u.username) FROM users AS u WHERE u.id = NEW.updated_by)),
+   NEW.updated_at / 600000, NEW.updated_at
+ WHERE OLD.instructor != NEW.instructor
+ ON CONFLICT (space_id, actor_id, verb, subject, subject_user, bucket) DO UPDATE SET new_value = excluded.new_value, n = activity.n + 1, at = excluded.at, detail = excluded.detail;
+ DELETE FROM activity WHERE space_id = substr(NEW.scope, 3) AND actor_id = COALESCE(NEW.updated_by, '') AND bucket = NEW.updated_at / 600000
+   AND subject = NEW.id AND subject_user = '' AND verb IN ('course.meetings', 'course.instructor') AND old_value IS new_value;
+END;
+
+-- ── push reminders (worker/push.js) ───────────────────────────────────────────
+
+-- Push reminders: each device that turned on the morning digest (worker/push.js). The push
+-- carries no payload, so only the endpoint is kept: the service worker fetches the digest
+-- itself when the push arrives. A row goes with its account (ON DELETE CASCADE), when the push
+-- service says the endpoint is gone (404 or 410), or after five failures in a row.
+
+CREATE TABLE push_subscriptions (
+  -- Only the browser push services' hosts are accepted (worker/push.js PUSH_HOSTS).
+  endpoint       TEXT PRIMARY KEY CHECK (length(endpoint) BETWEEN 20 AND 1000 AND substr(endpoint, 1, 8) = 'https://'),
+  user_id        TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  -- The device's IANA time zone, so the digest comes at 07:00 there.
+  tz             TEXT NOT NULL DEFAULT 'UTC' CHECK (length(tz) BETWEEN 1 AND 64),
+  created_at     INTEGER NOT NULL,
+  last_ok_at     INTEGER,
+  -- The local day ('YYYY-MM-DD') the digest last went out, so the hourly cron sends once a day.
+  last_sent_day  TEXT CHECK (last_sent_day IS NULL OR length(last_sent_day) = 10),
+  failures       INTEGER NOT NULL DEFAULT 0 CHECK (failures BETWEEN 0 AND 100)
+);
+CREATE INDEX push_subscriptions_user ON push_subscriptions (user_id);
+
+-- ── friends (worker/friends.js) ───────────────────────────────────────────────
+
+-- Friends (study together, Stage 1; spec docs/superpowers/specs/2026-10-21-study-together-design.md §1, §4).
+-- One row per pair, smaller id first. pending → accepted or declined. Removing a friend or
+-- cancelling a request deletes the row; a decline is kept 30 days (from declined_at; created_at
+-- stays as it was) so the sender keeps seeing "Requested" unchanged and is never told. The
+-- nightly purge drops it.
+CREATE TABLE friendships (
+  user_lo       TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  user_hi       TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  requested_by  TEXT NOT NULL,
+  status        TEXT NOT NULL CHECK (status IN ('pending', 'accepted', 'declined')),
+  created_at    INTEGER NOT NULL,
+  accepted_at   INTEGER,
+  declined_at   INTEGER,
+  PRIMARY KEY (user_lo, user_hi),
+  CHECK (user_lo < user_hi AND requested_by IN (user_lo, user_hi))
+);
+-- Rows where you are the larger id (the primary key covers the smaller).
+CREATE INDEX friendships_hi ON friendships (user_hi);
+-- The nightly purge of old declines.
+CREATE INDEX friendships_declined ON friendships (declined_at) WHERE status = 'declined';
+
+-- The two switches on the Friends tab. No row means both on. Kept off users, so a change
+-- never moves the profile's revision.
+CREATE TABLE friend_settings (
+  user_id        TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+  findable       INTEGER NOT NULL DEFAULT 1 CHECK (findable IN (0, 1)),
+  show_studying  INTEGER NOT NULL DEFAULT 1 CHECK (show_studying IN (0, 1))
 );

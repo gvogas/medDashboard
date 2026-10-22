@@ -284,7 +284,7 @@ function categories(v) {
   if (new Set(out.map((c) => c.id)).size !== out.length) fail('gradeCategories');
   return out;
 }
-/* Grades fields an old client never sends (0007_grades.sql): absent is undefined, and the stored value stays. */
+/* Grades fields an old client never sends (added after the first clients shipped): absent is undefined, and the stored value stays. */
 const kept = (v, read) => (v === undefined ? undefined : read(v));
 
 export function validateCourse(body) {

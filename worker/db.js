@@ -140,7 +140,7 @@ const TABLES = {
 const ACHIEVEMENT_LIMIT = 30;
 /* Labels an old client never sends (spec §16): left out of a body, the stored value stays. */
 const KEPT_WHEN_ABSENT = new Set(['classId', 'spaceId']);
-/* Nor the grade fields (0007_grades.sql): left out, the column is not written, so the stored
+/* Nor the grade fields (courses.credits, grade_categories, items.category): left out, the column is not written, so the stored
    value stays and a new row starts with the column's default. */
 const GRADE_FIELDS = new Set(['credits', 'gradeCategories', 'category']);
 const unsent = (fields) => ([field]) => !(GRADE_FIELDS.has(field) && fields[field] === undefined);

@@ -1,9 +1,9 @@
 #!/usr/bin/env node
-// Copy every account, course, item, quote, study session, achievement, Spotify connection and the change feed
+// Copy every table in TABLES (scripts/lib/move-db.js), the change feed and activity included,
 // from one D1 database into a fresh one built from migrations/0001_schema.sql, then
 // read both back and compare. The source is only read.
 //
-//   node scripts/move-db.mjs --from rounds-v6 --to rounds-v7 [--remote]
+//   node scripts/move-db.mjs --from rounds-v7 --to rounds-v8 [--remote]
 import { spawnSync } from 'node:child_process';
 import { mkdtempSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
