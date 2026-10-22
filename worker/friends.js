@@ -1,5 +1,5 @@
 // Friends (study together, spec §1): requests by username, search, the friends list and the
-// two switches. One friendships row per pair, smaller id first (migrations/0006_friends.sql).
+// two switches. One friendships row per pair, smaller id first (migrations/0008_friends.sql).
 // Every check runs here on the server; the client hides buttons only for convenience.
 import { json, readJson, HttpError } from './http.js';
 import { requireUser } from './auth.js';

@@ -26,7 +26,7 @@ export const TABLES = {
   admin_log: ['id', 'at', 'admin', 'action', 'target', 'detail'],
 };
 
-/* Tables added after rounds-v7's first schema (0002_spaces.sql … 0006_friends.sql): a
+/* Tables added after rounds-v7's first schema (0002_spaces.sql … 0008_friends.sql): a
    database made before them has none of their rows. */
 const ADDED_TABLES = new Set(['spaces', 'members', 'invites', 'marks', 'space_prefs', 'activity', 'inbox_seen', 'friendships', 'friend_settings']);
 const ORDER_BY = { users: 'id', spaces: 'id', members: 'space_id, user_id', invites: 'space_id, user_id', courses: 'scope, id', items: 'scope, id', activity: 'seq', inbox_seen: 'user_id', friendships: 'user_lo, user_hi', friend_settings: 'user_id', changes: 'seq', spotify_tokens: 'user_id', admin_log: 'id' };

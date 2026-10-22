@@ -28,7 +28,7 @@
 
 | # | Stage | Branch | Database | Detailed plan |
 |---|---|---|---|---|
-| 1 | Friends: settings, requests, search, Friends tab, inbox entries, maintenance switch, nightly purge | `together-1-friends` | `0006_friends.sql` | **below** (**built** 2026-10-21) |
+| 1 | Friends: settings, requests, search, Friends tab, inbox entries, maintenance switch, nightly purge | `together-1-friends` | `0008_friends.sql` | **below** (**built** 2026-10-21) |
 | 2 | Rooms: shared timer, Study together sheet, room screen, host controls, join/leave, invites in the inbox, `roomId` on sessions, polling | `together-2-rooms` | `0007_rooms.sql` | written after Stage 1 merges |
 | 3 | Presence and records: solo "studying now", end summary, group record, History "with" row, With friends tile, room cleanup | `together-3-records` | `0008_presence.sql` | written after Stage 2 merges |
 
@@ -54,12 +54,12 @@
 **Branch:** `git checkout -b together-1-friends` from `main`.
 
 **Files:**
-- Create: `migrations/0006_friends.sql`, `worker/friends.js`, `test/friends.test.js`, `src/data/friends.ts`, `src/components/study/friends.tsx`, `src/components/study/friends.test.tsx`
+- Create: `migrations/0008_friends.sql`, `worker/friends.js`, `test/friends.test.js`, `src/data/friends.ts`, `src/components/study/friends.tsx`, `src/components/study/friends.test.tsx`
 - Modify: `worker/api.js` (routes), `worker/index.js` (purge), `worker/inbox.js` + `worker/activity.js` (requests in the inbox and count), `worker/maintenance.js`, `worker/admin.js` (`LATEST_MIGRATION`), `scripts/lib/move-db.js`, `src/core/types.ts`, `src/core/api.ts`, `src/core/maintenance.ts`, `src/data/types.ts`, `src/data/ui.ts`, `src/data/inbox.ts`, `src/components/study/study-view.tsx`, `src/components/study/study.test.tsx`, `src/components/sheet/inbox-sheet.tsx`, `src/components/admin/maintenance.tsx`, `docs/DATA-MODEL.md`, the spec
 
 ### Task 1: Migration
 
-**Files:** Create `migrations/0006_friends.sql`; Modify `worker/admin.js:19`, `scripts/lib/move-db.js:8-30`; Test `test/friends.test.js`
+**Files:** Create `migrations/0008_friends.sql`; Modify `worker/admin.js:19`, `scripts/lib/move-db.js:8-30`; Test `test/friends.test.js`
 
 - [ ] **Step 1: Write the failing schema test**
 
@@ -98,7 +98,7 @@ Expected: FAIL, `no such table: friendships`.
 - [ ] **Step 3: Write the migration**
 
 ```sql
--- migrations/0006_friends.sql
+-- migrations/0008_friends.sql
 -- Friends (study together, Stage 1; spec docs/superpowers/specs/2026-10-21-study-together-design.md §1, §4).
 -- One row per pair, smaller id first. pending → accepted or declined. Removing a friend or
 -- cancelling a request deletes the row; a decline is kept 30 days (from created_at, reset when
@@ -131,7 +131,7 @@ CREATE TABLE friend_settings (
 
 `worker/admin.js:19`:
 ```js
-export const LATEST_MIGRATION = '0006_friends.sql';
+export const LATEST_MIGRATION = '0008_friends.sql';
 ```
 
 `scripts/lib/move-db.js`, add to `TABLES` after `inbox_seen`:
@@ -141,7 +141,7 @@ export const LATEST_MIGRATION = '0006_friends.sql';
 ```
 and change the comment and set below it to:
 ```js
-/* Tables added after rounds-v7's first schema (0002_spaces.sql … 0006_friends.sql): a
+/* Tables added after rounds-v7's first schema (0002_spaces.sql … 0008_friends.sql): a
    database made before them has none of their rows. */
 const ADDED_TABLES = new Set(['spaces', 'members', 'invites', 'marks', 'space_prefs', 'activity', 'inbox_seen', 'friendships', 'friend_settings']);
 ```
@@ -155,7 +155,7 @@ Expected: PASS. Then `npx vitest run test/move-db.test.js test/admin.test.js` �
 - [ ] **Step 5: Commit**
 
 ```bash
-git add migrations/0006_friends.sql worker/admin.js scripts/lib/move-db.js test/friends.test.js
+git add migrations/0008_friends.sql worker/admin.js scripts/lib/move-db.js test/friends.test.js
 git commit -m "Study together 1: friendships and friend_settings tables"
 ```
 
@@ -206,7 +206,7 @@ Expected: FAIL, 404 on `/api/friends`.
 
 ```js
 // Friends (study together, spec §1): requests by username, search, the friends list and the
-// two switches. One friendships row per pair, smaller id first (migrations/0006_friends.sql).
+// two switches. One friendships row per pair, smaller id first (migrations/0008_friends.sql).
 // Every check runs here on the server; the client hides buttons only for convenience.
 import { json, readJson, HttpError } from './http.js';
 import { requireUser } from './auth.js';
@@ -1235,7 +1235,7 @@ git add docs
 git commit -m "Study together 1: docs"
 ```
 
-- [ ] **Step 5: Release (only with George's yes).** `npm run db:remote` then `npm run db:check -- --remote` (applies `0006_friends.sql` to rounds-v7), merge `together-1-friends` into `main` with a merge commit, push; the Cloudflare Git build deploys. Check the live site: Friends tab loads, search works.
+- [ ] **Step 5: Release (only with George's yes).** `npm run db:remote` then `npm run db:check -- --remote` (applies `0008_friends.sql` to rounds-v7), merge `together-1-friends` into `main` with a merge commit, push; the Cloudflare Git build deploys. Check the live site: Friends tab loads, search works.
 
 ---
 

@@ -40,7 +40,7 @@ database. The schema the last move copied from is kept as a test
 fixture in `test/fixtures/legacy-migrations/`. Later changes are new numbered files:
 `0002_spaces.sql` (`spaces`, `members`), `0003_invites.sql` (`invites`),
 `0004_marks.sql` (`marks`, `space_prefs`) and `0005_activity.sql` (`activity`,
-`inbox_seen` and the triggers that fill `activity`) and `0006_friends.sql`
+`inbox_seen` and the triggers that fill `activity`) and `0008_friends.sql`
 (`friendships`, `friend_settings`). The next one is `0007`.
 
 ## Structure at a glance
