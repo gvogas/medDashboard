@@ -69,6 +69,7 @@ export async function askFriend(username: string): Promise<string> {
         edit((l) => m.state === "friends"
             ? { ...l, incoming: l.incoming.filter((r) => r.userId !== m.userId), friends: [{ userId: m.userId, username: m.username, name: m.name, since: Date.now() }, ...l.friends] }
             : { ...l, sent: [{ userId: m.userId, username: m.username, name: m.name, at: Date.now() }, ...l.sent.filter((r) => r.userId !== m.userId)] })
+        if (m.state === "friends") dropFriendRequest(m.userId)
         after()
         return ""
     } catch (e) { return friendMessage(e) }

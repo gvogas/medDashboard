@@ -121,6 +121,15 @@ describe("the bell and the inbox (spec §12, §15)", () => {
         await waitFor(() => expect(screen.queryByRole("list", { name: "Friend requests" })).toBeNull())
     })
 
+    it("hides friend requests while friends are switched off", async () => {
+        fake.data.profile = { id: "u-me", isAdmin: false, maintenance: { features: ["friends"], message: "" } }
+        fake.api.inbox.get.mockResolvedValue({ invites: [], friendRequests: [{ userId: "u-jo", username: "jordanlee", name: "Jordan Lee", at: Date.now() }], items: [news], seen: 0 })
+        render(<><TopBar /><Sheet /></>)
+        await act(async () => { fireEvent.click(bell(/^Inbox/)) })
+        expect(await screen.findByText("Gabriel moved REST API: 15 Oct → 18 Oct")).toBeTruthy()
+        expect(screen.queryByRole("list", { name: "Friend requests" })).toBeNull()
+    })
+
     it("keeps the rows new on opening marked when the list comes twice (StrictMode)", async () => {
         /* the second fetch can come back after the first one's read marker went up */
         fake.api.inbox.get

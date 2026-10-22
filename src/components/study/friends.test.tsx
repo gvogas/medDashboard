@@ -58,6 +58,7 @@ describe("the Friends tab", () => {
         fake.api.friends.search.mockResolvedValue({ people: [{ userId: "u-mo", username: "morgand", name: "Morgan Diaz", state: "none" }] })
         fake.api.friends.ask.mockResolvedValue({ userId: "u-mo", username: "morgand", name: "Morgan Diaz", state: "requested" })
         await show()
+        fake.api.friends.get.mockReturnValue(new Promise(() => {}))   /* the reload after a change never answers */
         const box = screen.getByRole("searchbox", { name: "Name or username" })
         fireEvent.change(box, { target: { value: "m" } })
         await act(async () => { vi.advanceTimersByTime(400) })
@@ -84,5 +85,54 @@ describe("the Friends tab", () => {
         await show()
         expect(screen.getByText("Maintenance")).toBeTruthy()
         expect(fake.api.friends.get).not.toHaveBeenCalled()
+    })
+
+    it("asks before removing a friend, and Keep leaves them", async () => {
+        fake.api.friends.remove.mockResolvedValue(null)
+        await show()
+        fake.api.friends.get.mockReturnValue(new Promise(() => {}))   /* the reload after a change never answers */
+        fireEvent.click(screen.getByRole("button", { name: "Remove Sam Okoye" }))
+        expect(screen.getByText("Remove Sam Okoye?")).toBeTruthy()
+        expect(fake.api.friends.remove).not.toHaveBeenCalled()
+        fireEvent.click(screen.getByRole("button", { name: "Keep" }))
+        expect(screen.queryByText("Remove Sam Okoye?")).toBeNull()
+        fireEvent.click(screen.getByRole("button", { name: "Remove Sam Okoye" }))
+        fireEvent.click(screen.getByRole("button", { name: "Confirm removing Sam Okoye" }))
+        await act(async () => {})
+        expect(fake.api.friends.remove).toHaveBeenCalledWith("u-sam")
+        expect(within(screen.getByRole("region", { name: "Friends" })).queryByText("Sam Okoye")).toBeNull()
+    })
+
+    it("declines a request and cancels one you sent", async () => {
+        fake.api.friends.answer.mockResolvedValue(null)
+        fake.api.friends.remove.mockResolvedValue(null)
+        await show()
+        fake.api.friends.get.mockReturnValue(new Promise(() => {}))   /* the reload after a change never answers */
+        fireEvent.click(screen.getByRole("button", { name: "Decline Jordan Lee" }))
+        await act(async () => {})
+        expect(fake.api.friends.answer).toHaveBeenCalledWith("u-jo", false)
+        fireEvent.click(screen.getByRole("button", { name: "Cancel the request to Taylor Kim" }))
+        await act(async () => {})
+        expect(fake.api.friends.remove).toHaveBeenCalledWith("u-tk")
+        expect(screen.queryByRole("region", { name: "Requests" })).toBeNull()
+    })
+
+    it("saves the studying switch, and says so when a change fails", async () => {
+        fake.api.friends.settings.mockRejectedValue(new Error("offline"))
+        await show()
+        fireEvent.click(screen.getByRole("checkbox", { name: /Show friends when I'm studying/ }))
+        await act(async () => {})
+        expect(fake.api.friends.settings).toHaveBeenCalledWith({ findable: true, showStudying: false })
+        expect(screen.getByRole("alert").textContent).toMatch(/needs a connection/)
+        expect((screen.getByRole("checkbox", { name: /Show friends when I'm studying/ }) as HTMLInputElement).checked).toBe(true)
+    })
+
+    it("shows a search result as friends once the list says so", async () => {
+        fake.api.friends.search.mockResolvedValue({ people: [{ userId: "u-sam", username: "samo", name: "Sam Okoye", state: "none" }] })
+        await show()
+        fireEvent.change(screen.getByRole("searchbox", { name: "Name or username" }), { target: { value: "sam" } })
+        await act(async () => { vi.advanceTimersByTime(400) })
+        expect(screen.queryByRole("button", { name: "Add Sam Okoye" })).toBeNull()
+        expect(within(screen.getByRole("searchbox").closest("section")!).getByText("Friends")).toBeTruthy()
     })
 })

@@ -14,6 +14,7 @@ vi.mock("./inbox", () => ({ dropFriendRequest: vi.fn() }))
 vi.mock("./maintenance", () => ({ maintenanceState: vi.fn(() => "off") }))
 
 import { ApiError } from "@/core/api"
+import { dropFriendRequest } from "./inbox"
 import { friendsNow, loadFriends, answerRequest, askFriend, removeFriend, saveFriendSettings, resetFriends } from "./friends"
 
 const list = { friends: [], incoming: [{ userId: "u-b", username: "b", name: "Bea", at: 1 }], sent: [], settings: { findable: true, showStudying: true } }
@@ -64,6 +65,7 @@ describe("the friends store", () => {
         expect(await askFriend("b")).toBe("")
         expect(friendsNow().list?.incoming).toEqual([])
         expect(friendsNow().list?.friends.map((f) => f.userId)).toEqual(["u-b"])
+        expect(dropFriendRequest).toHaveBeenCalledWith("u-b")
     })
 
     it("removes a friend or a sent request", async () => {

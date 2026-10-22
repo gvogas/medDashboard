@@ -1,15 +1,16 @@
 // The Study page, in #views: the three tiles, then five tabs. Timer is the Ready card large
 // beside Your flow and Today (timer-cards.tsx); History and Achievements fill the width;
-// the Leaderboard is a centred column; Friends is the friends list, Add friends and the two switches. Only the open tab is drawn, so the leaderboard
-// loads when its tab opens. The tab is ui.studyTab, remembered on this browser; the arrow
-// keys, Home and End move between tabs (radio-keys.ts).
+// the Leaderboard is a centred column; Friends is the friends list, Add friends and the two
+// switches. Only the open tab is drawn, so the leaderboard loads when its tab opens. The tab is
+// ui.studyTab, remembered on this browser; the arrow keys, Home and End move between tabs
+// (radio-keys.ts).
 
 import { useEffect } from "react"
 import { cn } from "@/lib/utils"
 import { useUi } from "@/data/ui"
 import { setStudyTab } from "@/data/study"
 import { friendsStale, loadFriends, useFriends } from "@/data/friends"
-import { maintenanceState } from "@/data/maintenance"
+import { maintenanceState, useMaintenance } from "@/data/maintenance"
 import { useScreen } from "@/data/signin"
 import { tabKeys } from "@/components/sheet/radio-keys"
 import type { StudyTab } from "@/data/types"
@@ -25,7 +26,10 @@ const TABS: readonly [StudyTab, string][] = [["timer", "Timer"], ["history", "Hi
 export function StudyView() {
     const open = useUi((u) => u.studyTab)
     const screen = useScreen()
-    const waiting = useFriends().list?.incoming.length ?? 0
+    const list = useFriends().list
+    const blocked = useMaintenance("friends") === "blocked"
+    const waiting = blocked ? 0 : list?.incoming.length ?? 0
+    const fresh = !blocked && !!list && list.friends.length === 0 && list.incoming.length === 0
     /* loaded when the page shows, so the tab's count is there before the tab opens */
     useEffect(() => { if (screen === "app" && maintenanceState("friends") !== "blocked" && friendsStale()) void loadFriends() }, [screen])
     return (
@@ -49,7 +53,12 @@ export function StudyView() {
                         )}
                     >
                         {label}
-                        {id === "friends" && waiting > 0 && <span className="ml-1.5 rounded-full bg-primary px-1.5 text-[10.5px] leading-4 font-semibold text-primary-foreground" aria-label={waiting + " waiting"}>{waiting}</span>}
+                        {id === "friends" && waiting > 0 && (
+                            <><span aria-hidden="true" className="ml-1.5 rounded-full bg-primary px-1.5 text-[10.5px] leading-4 font-semibold text-primary-foreground">{waiting}</span><span className="sr-only">, {waiting} waiting</span></>
+                        )}
+                        {id === "friends" && fresh && (
+                            <><span aria-hidden="true" className="ml-1.5 rounded-full bg-muted px-1.5 text-[10.5px] leading-4 font-semibold text-muted-foreground">New</span><span className="sr-only">, new</span></>
+                        )}
                     </button>
                 ))}
             </div>

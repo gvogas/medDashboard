@@ -1,7 +1,8 @@
-// The inbox (spec §12, §15): invites and friend requests to you, with Accept or Decline, then what others did in
-// your classes and projects that concerns you, newest first. Opening it marks everything
-// read. Offline it shows the copy kept from last time. While the admins have shared classes
-// switched off, everyone else gets the maintenance page instead.
+// The inbox (spec §12, §15): invites and friend requests to you, with Accept or Decline, then
+// what others did in your classes and projects that concerns you, newest first. Opening it
+// marks everything read. Offline it shows the copy kept from last time. While the admins have
+// shared classes switched off, everyone else gets the maintenance page instead; friend
+// requests also hide while friends are switched off (they stay on the Friends tab).
 
 import { useEffect, useState } from "react"
 import { ago, dayMonth, iso } from "@/core/dates"
@@ -33,6 +34,8 @@ const kindWord = (k: string) => (k === "project" ? "team project" : "shared clas
 function InboxCard({ bar }: { bar: boolean }) {
     const box = useInbox()
     const offline = useInboxOffline()
+    const friendsOff = useMaintenance("friends") === "blocked"
+    const requests = friendsOff ? [] : box?.friendRequests ?? []
     const [busy, setBusy] = useState(false)
     const [err, setErr] = useState("")
     /* how far it was read when the list came, so rows new on opening stay marked while the sheet is open;
@@ -67,9 +70,9 @@ function InboxCard({ bar }: { bar: boolean }) {
                 {offline && <Note>You're offline. This is what the inbox held last time.</Note>}
                 {!box ? <Note>Loading…</Note> : (
                     <>
-                        {(box.friendRequests?.length ?? 0) > 0 && (
+                        {requests.length > 0 && (
                             <ul aria-label="Friend requests" className={LIST}>
-                                {box.friendRequests!.map((r) => (
+                                {requests.map((r) => (
                                     <li key={r.userId} className={ROW}>
                                         <span><b>{r.name}</b> wants to be friends</span>
                                         <span className="text-[11px] text-muted-foreground">@{r.username} · {dayMonth(iso(new Date(r.at)))}</span>
@@ -97,7 +100,7 @@ function InboxCard({ bar }: { bar: boolean }) {
                                 ))}
                             </ul>
                         )}
-                        {box.items.length === 0 && box.invites.length === 0 && !box.friendRequests?.length && <Note>Nothing new. News from your classes shows here.</Note>}
+                        {box.items.length === 0 && box.invites.length === 0 && requests.length === 0 && <Note>Nothing new. News from your classes shows here.</Note>}
                         {box.items.length > 0 && (
                             <ul aria-label="News" className={LIST}>
                                 {box.items.map((r) => <NewsRow key={r.seq} row={r} me={me} unread={r.seq > (seenAtOpen ?? box.seen)} />)}

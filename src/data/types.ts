@@ -12,7 +12,7 @@ export type View = "week" | "month" | "table" | "spotify" | "study" | "admin"
 
 /** The History card on the Study page: its tab, the week and month shown, the day picked, a delete Undo can take back. */
 export type HistTab = "week" | "month" | "term"
-/** The Study page's four tabs. */
+/** The Study page's five tabs. */
 export type StudyTab = "timer" | "history" | "achievements" | "leaderboard" | "friends"
 export interface SessionUndo { session: StudySession; timer: ReturnType<typeof setTimeout> }
 export interface Hist { weekOffset: number; tab: HistTab; monthOffset: number; focusDay: string | null; undo: SessionUndo | null }

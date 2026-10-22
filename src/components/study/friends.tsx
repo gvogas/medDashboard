@@ -2,15 +2,15 @@
 // from you, Add friends (search), and the two switches. Loads when it opens and the list is
 // missing or a minute old. While friends are switched off, the maintenance page.
 
-import { useEffect, useRef, useState, type ReactNode } from "react"
+import { useEffect, useId, useRef, useState, type ReactNode } from "react"
 import { cn } from "@/lib/utils"
 import { Panel } from "@/components/views/bits"
 import { Button, Note, TextInput } from "@/components/sheet/fields"
 import { MaintenanceBar, MaintenancePage } from "@/components/maintenance"
 import { useMaintenance } from "@/data/maintenance"
 import { useScreen } from "@/data/signin"
-import { answerRequest, askFriend, friendsStale, loadFriends, removeFriend, saveFriendSettings, searchPeople, useFriends } from "@/data/friends"
-import type { FriendMatch, FriendPerson } from "@/data/types"
+import { answerRequest, askFriend, friendsNow, friendsStale, loadFriends, removeFriend, saveFriendSettings, searchPeople, useFriends } from "@/data/friends"
+import type { FriendMatch, FriendPerson, FriendState, Friends as FriendList } from "@/data/types"
 
 const ROW = "flex flex-wrap items-center gap-3 border-b border-line-2 py-2.5 last:border-b-0"
 const SMALL = "text-[12.5px] text-muted-foreground"
@@ -22,13 +22,30 @@ export function FriendsCard() {
     return <Friends bar={maintenance === "admin"} />
 }
 
+/** An error the screen reader hears when it appears. */
+const Alert = ({ children }: { children: ReactNode }) => <div role="alert"><Note tone="bad">{children}</Note></div>
+
 function Friends({ bar }: { bar: boolean }) {
     const { list, offline, error } = useFriends()
     const screen = useScreen()
     const [msg, setMsg] = useState("")
+    const [busy, setBusy] = useState(false)
+    /* the friend whose Remove is waiting for a yes */
+    const [asking, setAsking] = useState<string | null>(null)
     useEffect(() => { if (screen === "app" && friendsStale()) void loadFriends() }, [screen])
+    useEffect(() => {
+        const online = () => { if (friendsNow().offline) void loadFriends() }
+        window.addEventListener("online", online)
+        return () => window.removeEventListener("online", online)
+    }, [])
 
-    const run = async (p: Promise<string>) => setMsg(await p)
+    /* one change at a time; its error shows below */
+    const run = async (p: Promise<string>) => {
+        setBusy(true); setMsg("")
+        setMsg(await p)
+        setBusy(false)
+    }
+    const off = busy || offline
 
     if (!list) return <Panel title="Friends" label="Friends"><div className="p-4"><Note>{offline ? "Friends need a connection." : error || "Loading…"}</Note></div></Panel>
 
@@ -42,13 +59,22 @@ function Friends({ bar }: { bar: boolean }) {
                         <div key={f.userId} className={ROW}>
                             <Avatar p={f} />
                             <span className="flex min-w-[140px] flex-1 flex-col"><span>{f.name}</span><span className={SMALL}>@{f.username}</span></span>
-                            <Button variant="danger" aria-label={"Remove " + f.name} onClick={() => void run(removeFriend(f.userId))}>Remove</Button>
+                            {asking === f.userId ? (
+                                <span className="flex flex-wrap items-center gap-1.5">
+                                    <span className={SMALL}>Remove {f.name}?</span>
+                                    <Button variant="danger" disabled={off} aria-label={"Confirm removing " + f.name}
+                                        onClick={() => { setAsking(null); void run(removeFriend(f.userId)) }}>Remove</Button>
+                                    <Button variant="ghost" onClick={() => setAsking(null)}>Keep</Button>
+                                </span>
+                            ) : (
+                                <Button variant="ghost" disabled={off} aria-label={"Remove " + f.name} onClick={() => setAsking(f.userId)}>Remove</Button>
+                            )}
                         </div>
                     ))}
                 </div>
             </Panel>
             <div className="flex min-w-0 flex-col gap-4">
-                <AddFriends onMessage={setMsg} />
+                <AddFriends list={list} off={off} run={run} />
                 {(list.incoming.length > 0 || list.sent.length > 0) && (
                     <Panel title="Requests" label="Requests">
                         <div className="px-4 py-1.5">
@@ -57,8 +83,8 @@ function Friends({ bar }: { bar: boolean }) {
                                     <Avatar p={r} />
                                     <span className="flex min-w-[120px] flex-1 flex-col"><span>{r.name}</span><span className={SMALL}>Wants to be friends</span></span>
                                     <span className="flex gap-1.5">
-                                        <Button aria-label={"Accept " + r.name} onClick={() => void run(answerRequest(r.userId, true))}>Accept</Button>
-                                        <Button variant="ghost" aria-label={"Decline " + r.name} onClick={() => void run(answerRequest(r.userId, false))}>Decline</Button>
+                                        <Button disabled={off} aria-label={"Accept " + r.name} onClick={() => void run(answerRequest(r.userId, true))}>Accept</Button>
+                                        <Button variant="ghost" disabled={off} aria-label={"Decline " + r.name} onClick={() => void run(answerRequest(r.userId, false))}>Decline</Button>
                                     </span>
                                 </div>
                             ))}
@@ -66,7 +92,7 @@ function Friends({ bar }: { bar: boolean }) {
                                 <div key={r.userId} className={ROW}>
                                     <Avatar p={r} />
                                     <span className="flex min-w-[120px] flex-1 flex-col"><span>{r.name}</span><span className={SMALL}>You asked</span></span>
-                                    <Button variant="ghost" aria-label={"Cancel the request to " + r.name} onClick={() => void run(removeFriend(r.userId))}>Cancel</Button>
+                                    <Button variant="ghost" disabled={off} aria-label={"Cancel the request to " + r.name} onClick={() => void run(removeFriend(r.userId))}>Cancel</Button>
                                 </div>
                             ))}
                         </div>
@@ -74,77 +100,89 @@ function Friends({ bar }: { bar: boolean }) {
                 )}
                 <Panel title="Privacy" label="Privacy">
                     <div className="flex flex-col gap-3 p-4">
-                        <Switch checked={list.settings.findable}
+                        <Switch checked={list.settings.findable} disabled={off}
+                            about={list.settings.findable ? "Your name and username show in Add friends." : "Only someone who types your exact username can find you."}
                             onChange={(on) => void run(saveFriendSettings({ ...list.settings, findable: on }))}>
                             Let people find me in search
                         </Switch>
-                        <p className={cn(SMALL, "m-0 -mt-1.5 pl-6")}>{list.settings.findable ? "Your name and username show in Add friends." : "Only someone who types your exact username can find you."}</p>
-                        <Switch checked={list.settings.showStudying}
+                        <Switch checked={list.settings.showStudying} disabled={off}
+                            about="They see the class you picked and how long you've been going."
                             onChange={(on) => void run(saveFriendSettings({ ...list.settings, showStudying: on }))}>
                             Show friends when I'm studying
                         </Switch>
-                        <p className={cn(SMALL, "m-0 -mt-1.5 pl-6")}>They see the class you picked and how long you've been going.</p>
                     </div>
                 </Panel>
-                {msg && <Note tone="bad">{msg}</Note>}
+                {msg && <Alert>{msg}</Alert>}
             </div>
         </div>
     )
 }
 
-function AddFriends({ onMessage }: { onMessage: (m: string) => void }) {
+/** Where you stand with someone: what the list says when it has them, else what the search said. */
+function stateOf(p: FriendMatch, list: FriendList): FriendState {
+    if (list.friends.some((x) => x.userId === p.userId)) return "friends"
+    if (list.sent.some((x) => x.userId === p.userId)) return "requested"
+    if (list.incoming.some((x) => x.userId === p.userId)) return "asked"
+    return "none"
+}
+
+function AddFriends({ list, off, run }: { list: FriendList; off: boolean; run: (p: Promise<string>) => Promise<void> }) {
     const [q, setQ] = useState("")
     const [people, setPeople] = useState<FriendMatch[]>([])
     const [err, setErr] = useState("")
     const asked = useRef(0)
+    const word = q.trim()
     useEffect(() => {
         const n = ++asked.current
-        if (q.trim().length < 2) { setPeople([]); setErr(""); return }
+        if (word.length < 2) { setPeople([]); setErr(""); return }
         const t = setTimeout(() => {
-            void searchPeople(q).then((r) => { if (n === asked.current) { setPeople(r.people); setErr(r.error) } })
+            void searchPeople(word).then((r) => { if (n === asked.current) { setPeople(r.people); setErr(r.error) } })
         }, SEARCH_WAIT_MS)
         return () => clearTimeout(t)
-    }, [q])
+    }, [word])
 
-    const add = async (p: FriendMatch) => {
-        const m = await askFriend(p.username)
-        onMessage(m)
-        /* none becomes requested; asked (they asked you) becomes friends */
-        if (!m) setPeople((all) => all.map((x) => (x.userId === p.userId ? { ...x, state: x.state === "asked" ? "friends" : "requested" } : x)))
-    }
+    /* none becomes requested and asked becomes friends, as the list now says */
+    const add = (p: FriendMatch) => run(askFriend(p.username))
 
     return (
         <Panel title="Add friends" label="Add friends">
             <div className="flex flex-col gap-2.5 p-4">
                 <TextInput type="search" aria-label="Name or username" placeholder="Name or username" value={q} maxLength={40}
                     autoComplete="off" onChange={(e) => setQ(e.target.value)} />
-                {q.trim().length === 1 && <p className={cn(SMALL, "m-0")}>Keep typing: at least 2 letters.</p>}
-                {err && <Note tone="bad">{err}</Note>}
-                {q.trim().length >= 2 && !err && people.length === 0 && <p className={cn(SMALL, "m-0")}>Nobody matches. People hidden from search show up only for their exact username.</p>}
+                {word.length === 1 && <p className={cn(SMALL, "m-0")}>Keep typing: at least 2 letters.</p>}
+                {err && <Alert>{err}</Alert>}
+                {word.length >= 2 && !err && people.length === 0 && <p className={cn(SMALL, "m-0")}>Nobody matches. People hidden from search show up only for their exact username.</p>}
                 <div>
-                    {people.map((p) => (
-                        <div key={p.userId} className={ROW}>
-                            <Avatar p={p} />
-                            <span className="flex min-w-[110px] flex-1 flex-col"><span>{p.name}</span><span className={SMALL}>@{p.username}</span></span>
-                            {p.state === "none" && <Button aria-label={"Add " + p.name} onClick={() => void add(p)}>Add</Button>}
-                            {p.state === "asked" && <Button aria-label={"Accept " + p.name} onClick={() => void add(p)}>Accept</Button>}
-                            {p.state === "requested" && <span className={SMALL}>Requested</span>}
-                            {p.state === "friends" && <span className={SMALL}>Friends</span>}
-                        </div>
-                    ))}
+                    {people.map((p) => {
+                        const state = stateOf(p, list)
+                        return (
+                            <div key={p.userId} className={ROW}>
+                                <Avatar p={p} />
+                                <span className="flex min-w-[110px] flex-1 flex-col"><span>{p.name}</span><span className={SMALL}>@{p.username}</span></span>
+                                {state === "none" && <Button disabled={off} aria-label={"Add " + p.name} onClick={() => void add(p)}>Add</Button>}
+                                {state === "asked" && <Button disabled={off} aria-label={"Accept " + p.name} onClick={() => void add(p)}>Accept</Button>}
+                                {state === "requested" && <span className={SMALL}>Requested</span>}
+                                {state === "friends" && <span className={SMALL}>Friends</span>}
+                            </div>
+                        )
+                    })}
                 </div>
             </div>
         </Panel>
     )
 }
 
-/* a checkbox the label names (fields.tsx's Checkbox has no label element) */
-function Switch({ checked, onChange, children }: { checked: boolean; onChange: (on: boolean) => void; children: ReactNode }) {
+/* a checkbox the label names (fields.tsx's Checkbox has no label element), with its explanation */
+function Switch({ checked, disabled, about, onChange, children }: { checked: boolean; disabled: boolean; about: string; onChange: (on: boolean) => void; children: ReactNode }) {
+    const note = useId()
     return (
-        <label className="flex cursor-pointer items-center gap-2 text-[13px]">
-            <input type="checkbox" checked={checked} onChange={(e) => onChange(e.target.checked)} className="size-3.5 accent-[var(--accent)]" />
-            {children}
-        </label>
+        <div className="flex flex-col gap-1">
+            <label className="flex cursor-pointer items-center gap-2 text-[13px]">
+                <input type="checkbox" checked={checked} disabled={disabled} aria-describedby={note} onChange={(e) => onChange(e.target.checked)} className="size-3.5 accent-[var(--accent)]" />
+                {children}
+            </label>
+            <p id={note} className={cn(SMALL, "m-0 pl-6")}>{about}</p>
+        </div>
     )
 }
 

@@ -2,6 +2,7 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } 
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react"
 import { stubMatchMedia } from "@/components/test-media"
 import { showApp, showSignInState } from "@/data/signin"
+import { resetFriends } from "@/data/friends"
 
 // The app is not booted: the page reads a fake store and ui through the real
 // study.ts and leaderboard.ts; the sheets and the API are fakes. The
@@ -51,6 +52,8 @@ const session = (id: string, day: number, hour: number, minutes: number, row: Pa
 const joined = { joined: true, week: [{ name: "Ada", minutes: 300, me: false }, { name: "George", minutes: 0, me: true }, { name: "Ben", minutes: 0, me: false }], all: [{ name: "Ada", minutes: 900, me: false }, { name: "George", minutes: 45, me: true }], at: 0 }
 
 beforeEach(() => {
+    resetFriends()
+    fake.api.friends.get.mockImplementation(() => new Promise(() => {}))
     showApp()
     fake.data.courses = [normalizeCourse({ id: "anat", code: "ANAT", name: "Anatomy", color: "#C2571A" }, 0), normalizeCourse({ id: "phys", code: "PHYS", name: "Physiology", color: "#1E628F" }, 1)]
     fake.data.items = [normalizeItem({ id: "e1", type: "exam", title: "Brachial plexus quiz", courseId: "anat", date: "2026-10-01", status: "todo" })]
@@ -103,6 +106,21 @@ describe("the Study page", () => {
         expect(panel.tabIndex).toBe(0)
         for (const name of ["Ready", "Your flow"]) expect(within(panel).getByRole("region", { name })).toBeTruthy()
         for (const name of ["History", "Achievements", "Leaderboard"]) expect(screen.queryByRole("region", { name })).toBeNull()
+    })
+
+    it("counts the requests waiting on the Friends tab", async () => {
+        fake.api.friends.get.mockResolvedValue({ friends: [], incoming: [{ userId: "u-jo", username: "jo", name: "Jo", at: 1 }], sent: [], settings: { findable: true, showStudying: true } })
+        await show()
+        await act(async () => {})
+        expect(screen.getByRole("tab", { name: /Friends, 1 waiting/ })).toBeTruthy()
+        expect(tab("Friends, 1 waiting").textContent).toContain("1")
+    })
+
+    it("marks the Friends tab New while there are no friends and no requests", async () => {
+        fake.api.friends.get.mockResolvedValue({ friends: [], incoming: [], sent: [], settings: { findable: true, showStudying: true } })
+        await show()
+        await act(async () => {})
+        expect(screen.getByRole("tab", { name: /Friends, new/ }).textContent).toContain("New")
     })
 
     it("opens a tab on a click, and keeps it in the ui", async () => {
