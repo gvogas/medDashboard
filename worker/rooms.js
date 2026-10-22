@@ -102,9 +102,11 @@ export function settle(room, members, now) {
   if (room.endedAt !== null) return;
   const done = doneAt(room.run);
   const until = done !== null && done <= now ? done : now;
-  for (const m of members) {
-    const seen = m.lastSeen ?? m.joinedAt;
-    if (m.state === 'in' && seen < now - GONE_MS) takeOut(room, members, m, Math.min(seen, until));
+  /* the quietest first, so the host passes on in order and an empty room ends at the last sign of life */
+  const seen = (m) => m.lastSeen ?? m.joinedAt;
+  const gone = members.filter((m) => m.state === 'in' && seen(m) < now - GONE_MS).sort((a, b) => seen(a) - seen(b));
+  for (const m of gone) {
+    takeOut(room, members, m, Math.min(seen(m), until));
     if (room.endedAt !== null) return;
   }
   if (done !== null && done <= now) end(room, done);
@@ -286,7 +288,6 @@ export async function joinRoom(db, me, roomId, body, now = Date.now()) {
   if (!first) throw notFound();
   if (!(await mayEnter(db, me, first.room, first.members.find((m) => m.userId === me)))) throw notFound();
   if (first.room.endedAt !== null) throw ended();
-  await leaveOthers(db, me, roomId, now);
   const who = await db.prepare(`SELECT u.username, ${NAME} AS name FROM users AS u WHERE u.id = ?`).bind(me).first();
   const { room, members } = await change(db, roomId, (room, members) => {
     if (room.endedAt !== null) throw ended();
@@ -300,6 +301,8 @@ export async function joinRoom(db, me, roomId, body, now = Date.now()) {
     Object.assign(m, { name: who.name, username: who.username, state: 'in', joinedAt: m.joinedAt ?? now, joinedStudyMs: studyAt(room.run, now), leftAt: null, lastSeen: now, courseLabel });
     event(room, 'joined', who.name, now);
   }, now, me);
+  /* only once you are in: a join that fails (full, ended) leaves you where you were */
+  await leaveOthers(db, me, roomId, now);
   return view(room, members, now);
 }
 

@@ -12,7 +12,7 @@ import { useMaintenance } from "@/data/maintenance"
 import { useScreen } from "@/data/signin"
 import { answerRequest, askFriend, friendsNow, friendsStale, loadFriends, removeFriend, saveFriendSettings, searchPeople, useFriends } from "@/data/friends"
 import { joinRoomRun, openTogether, useRun } from "@/data/study-timer"
-import { inviteMore } from "@/data/room"
+import { inviteMore, isHost, useRoom } from "@/data/room"
 import type { FriendMatch, FriendPerson, FriendState, Friends as FriendList } from "@/data/types"
 
 const ROW = "flex flex-wrap items-center gap-3 border-b border-line-2 py-2.5 last:border-b-0"
@@ -53,6 +53,9 @@ function Friends({ bar }: { bar: boolean }) {
     }
     const off = busy || offline
     const myRoom = useRun()?.room?.id ?? null
+    /* in a room, Invite asks to that room: the host's to do */
+    const roomState = useRoom()
+    const canInvite = !myRoom || isHost(roomState)
 
     if (!list) return <Panel title="Friends" label="Friends"><div className="p-4"><Note>{offline ? "Friends need a connection." : error || "Loading…"}</Note></div></Panel>
 
@@ -70,7 +73,7 @@ function Friends({ bar }: { bar: boolean }) {
                                 <span className={f.room ? "text-[12.5px] font-medium text-[var(--study-ink)]" : SMALL}>{f.room ? "Studying in a room of " + f.room.size : "@" + f.username}</span>
                             </span>
                             {f.room && f.room.id !== myRoom && <Button disabled={off} aria-label={"Join " + f.name} onClick={() => void run(joinRoomRun(f.room!.id))}>Join</Button>}
-                            {!f.room && asking !== f.userId && <Button variant="ghost" disabled={off} aria-label={"Invite " + f.name} onClick={() => (myRoom ? void run(inviteMore([f.userId])) : openTogether([f.userId]))}>Invite</Button>}
+                            {!f.room && asking !== f.userId && canInvite && <Button variant="ghost" disabled={off} aria-label={"Invite " + f.name} onClick={() => (myRoom ? void run(inviteMore([f.userId])) : openTogether([f.userId]))}>Invite</Button>}
                             {asking === f.userId ? (
                                 <span className="flex flex-wrap items-center gap-1.5">
                                     <span className={SMALL}>Remove {f.name}?</span>

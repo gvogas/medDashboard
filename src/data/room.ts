@@ -47,10 +47,17 @@ export const isHost = (s: State = state) => !!s.view && s.view.room.hostId === m
 const local = (r: RoomRun, offset: number): RoomRun =>
     ({ ...r, startedAt: r.startedAt - offset, pausedAt: r.pausedAt === null ? null : r.pausedAt - offset })
 
+/* The room's version in the last answer taken (the tag starts with it). A poll sent before the
+   host's Pause can come back after it: an older answer is dropped, not adopted. */
+let applied = { id: "", version: 0 }
+const versionOf = (v: RoomView) => Number.parseInt(v.tag, 10) || 0
+
 /** Take a full answer: the run follows it, or ends when the room has ended or let you go. */
 async function apply(view: RoomView, sentAt: number): Promise<void> {
     const id = roomId()
     if (!id || view.room.id !== id) return
+    if (applied.id === id && versionOf(view) < applied.version) return
+    applied = { id, version: versionOf(view) }
     /* the answer was made somewhere between sending and now: take the middle */
     const offset = view.now - (sentAt + Date.now()) / 2
     set({ view, offset, reconnecting: false })
@@ -125,13 +132,22 @@ run.onTick((s, event) => {
         const id = polling ?? tellLeave
         stop()
         set({ view: null, reconnecting: false })
-        if (id && tellLeave === id) api.rooms.leave(id).catch(() => {})
+        if (id && tellLeave === id) sendLeave(id)
         tellLeave = null
         return
     }
     if (s?.room && polling !== s.room.id) { tellLeave = s.room.id; startPolling(); if (!state.view) void poll() }
 })
 document.addEventListener("visibilitychange", () => { if (polling && document.visibilityState === "visible") void poll() })
+
+/* Tell the server you left; offline or switched off for maintenance, try again a few times
+   (until then the room shows you, and the server takes you out after 10 minutes anyway). */
+function sendLeave(id: string, tries = 4) {
+    api.rooms.leave(id).catch((e) => {
+        if (e instanceof ApiError && e.status !== 503 && e.status < 500) return   /* gone, or not yours: nothing to tell */
+        if (tries > 1) setTimeout(() => sendLeave(id, tries - 1), 30_000)
+    })
+}
 
 /** End this device's run: it logs your minutes. `leave` tells the server too. */
 async function end(leave: boolean) {
@@ -158,6 +174,7 @@ export function roomMessage(e: unknown): string {
 async function enter(view: RoomView, sentAt: number, courseId: string, itemId: string | null) {
     const offset = view.now - (sentAt + Date.now()) / 2
     const mine = view.members.find((m) => m.userId === me())!
+    applied = { id: view.room.id, version: versionOf(view) }
     set({ view, offset, reconnecting: false })
     await run.begin(view.room.run.flow, courseId, itemId, {
         link: { id: view.room.id, joinedAt: mine.joinedAt - offset, joinedStudyMs: mine.joinedStudyMs, earlierMs: mine.earlierMs },
@@ -225,4 +242,4 @@ export function memberMinutes(m: RoomView["members"][number], clock: RoomRun, no
 export const localClock = (s: State = state): RoomRun | null => (s.view ? local(s.view.room.run, s.offset) : null)
 
 /** For tests and sign-out. */
-export function resetRoom() { stop(); tellLeave = null; set({ view: null, offset: 0, reconnecting: false }) }
+export function resetRoom() { stop(); tellLeave = null; applied = { id: "", version: 0 }; set({ view: null, offset: 0, reconnecting: false }) }
