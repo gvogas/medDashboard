@@ -138,31 +138,31 @@ runs once per database.
 
 | File | What it adds |
 | --- | --- |
-| `0001_schema.sql` | The whole schema: users, courses, items, quotes, study, Spotify tokens, the change feed, the Admin page's tables, shared spaces (classes and projects) with their members and invites, marks and space prefs, activity and the inbox, and friends (see [DATA-MODEL.md](DATA-MODEL.md)) |
-
-The files that used to follow it (`0002_spaces.sql` to `0006_friends.sql`) are folded
-into `0001_schema.sql`, ready for the move of `rounds-v7` into `rounds-v8` (see
-[Moving to a fresh database](#moving-to-a-fresh-database)). `rounds-v7` was built from
-`0001_schema.sql` to `0005_activity.sql`, kept in `test/fixtures/legacy-migrations/`;
-the friends tables reach live only with the move.
+| `0001_schema.sql` | The whole schema up to the last squash: users, courses, items, quotes, study, Spotify tokens, the change feed (see [DATA-MODEL.md](DATA-MODEL.md)) |
+| `0002_spaces.sql` | Shared spaces (classes and projects) and their `members` |
+| `0003_invites.sql` | `invites`: invitations to a space by username |
+| `0004_marks.sql` | `marks` (your status, grade and notes on a shared item) and `space_prefs` (your colour, target and term for a space) |
+| `0005_activity.sql` | `activity` (what members did, from triggers on shared rows and from the member routes) and `inbox_seen` |
 
 Collaboration Stages 5 (leaving and removal) and 6 (the feed, outline imports, classes
 open to everyone) added no migration: deploying them is a plain push of `main`. Stage 6
-uses `spaces.school_calendar`, which has been there since spaces were added. Stage 8
+uses `spaces.school_calendar`, which has been there since `0002_spaces.sql`. Stage 8
 (team projects) adds none either: it uses Stage 1's `assignees` and `completed_by`
 columns and Stage 7's `space.linked` and `space.deleted` verbs. Stage 9 (projects in
 the views) changes only the app: no migration, no Worker change. Stage 10 (projects in
 the feed, open to everyone) adds no migration either.
 
-> **Study together 1 (friends) needs `rounds-v8`.** `friendships` and `friend_settings`
-> exist only in the folded `0001_schema.sql`, and `npm run db:remote` finds nothing to
-> apply on `rounds-v7` (it has already run a file of that name). Every v3 sync reads
-> `friendships` for the unread count, so this code on `rounds-v7` fails every sync with
-> 500s. Deploy it only together with the move to `rounds-v8` below.
+> **Stage 7 (inbox and activity): apply `0005_activity.sql` to live first.** Run
+> `npm run db:remote`, then `npm run db:check -- --remote`, **before** merging the stage
+> into `main` and pushing. Every v3 sync now reads `activity` for the unread count, so
+> new code on a database without it fails every sync with 500s. Deleting an account
+> needs it too, from the Admin page and from `npm run user:add -- name --delete --remote`
+> (both delete the account's activity rows and write a hand-on row). The old code
+> ignores the new tables, so applying the migration early is safe.
 
 To change the database:
 
-1. Add a new file with the next number, `0002_something.sql`. Never edit a file that
+1. Add a new file with the next number, `0006_something.sql`. Never edit a file that
    has already run.
 2. Apply it locally with `npm run db:local`, then test.
 3. Apply it to live with `npm run db:remote` **before** pushing the code that needs
@@ -183,8 +183,7 @@ so devices sync on without a reset. The last move was `rounds-v6` to `rounds-v7`
 2026-10-05.
 
 1. Fold the migrations into `migrations/0001_schema.sql`. Move the files the live
-   database was built from into `test/fixtures/legacy-migrations/` (for the move to
-   `rounds-v8`, the live `rounds-v7` chain `0001_schema.sql` to `0005_activity.sql`).
+   database was built from into `test/fixtures/legacy-migrations/`.
 2. If the old database has tables or columns the copy doesn't know, add them to
    `TABLES` in `scripts/lib/move-db.js`. The script refuses to run while anything
    would be dropped.

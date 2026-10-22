@@ -26,13 +26,21 @@ export const TABLES = {
   admin_log: ['id', 'at', 'admin', 'action', 'target', 'detail'],
 };
 
-/* Tables added after the schema rounds-v7 was built from (0001_schema.sql … 0005_activity.sql,
-   the legacy fixture): a database made before them has none of their rows. */
-const ADDED_TABLES = new Set(['friendships', 'friend_settings']);
+/* Tables added after rounds-v7's first schema (0002_spaces.sql … 0006_friends.sql): a
+   database made before them has none of their rows. */
+const ADDED_TABLES = new Set(['spaces', 'members', 'invites', 'marks', 'space_prefs', 'activity', 'inbox_seen', 'friendships', 'friend_settings']);
 const ORDER_BY = { users: 'id', spaces: 'id', members: 'space_id, user_id', invites: 'space_id, user_id', courses: 'scope, id', items: 'scope, id', activity: 'seq', inbox_seen: 'user_id', friendships: 'user_lo, user_hi', friend_settings: 'user_id', changes: 'seq', spotify_tokens: 'user_id', admin_log: 'id' };
 /* Written by triggers as the rows above go in, then replaced by the source's own. */
 const REBUILT = ['activity', 'changes'];
 
+/* Reading rounds-v6 or older, whose courses, items and change feed name a user: the owner
+   becomes the scope of that person's own rows, a course's or item's change names the
+   scope in its payload too, and columns the old schema lacks read as today's defaults. */
+const SCOPE_FROM_USER = `'u:' || "user_id" AS "scope"`;
+const PAYLOAD_FROM_USER = `CASE WHEN kind IN ('courses', 'items') AND json_valid(payload) AND json_type(payload, '$.user_id') = 'text'
+  THEN json_set(json_remove(payload, '$.user_id'), '$.scope', 'u:' || json_extract(payload, '$.user_id')) ELSE payload END AS "payload"`;
+const DEFAULTS = { assignees: "'[]'", hidden_sources: "'[]'" };
+const ADDED_IN_V7 = new Set(['hidden_sources', 'updated_by', 'class_id', 'assignees', 'completed_by', 'space_id']);
 /* Short-lived, or filled by the fresh schema itself. The error log, the announcement and
    the cron's last run start fresh too. */
 const LEFT_BEHIND = ['error_log', 'app_meta', 'login_throttle', 'request_limits', 'spotify_oauth_states', 'spotify_refresh_locks', 'sync_state', 'd1_migrations'];
@@ -47,26 +55,30 @@ export const COLUMNS_QUERY = `SELECT m.name AS tbl, p.name AS col FROM sqlite_ma
  * these, since it reads back only what TABLES names.
  */
 export function uncopied(columns) {
-  return columns.filter(({ tbl, col }) => !LEFT_BEHIND.includes(tbl) && !TABLES[tbl]?.includes(col))
+  return columns.filter(({ tbl, col }) => !LEFT_BEHIND.includes(tbl) && !TABLES[tbl]?.includes(col)
+    && !(col === 'user_id' && TABLES[tbl]?.includes('scope')))
     .map(({ tbl, col }) => `${tbl}.${col}`);
 }
 
 /**
  * The reads that make a dump, in today's shape: one per table, plus the feed's floor and
- * head. `columns` are the source's own (COLUMNS_QUERY): a table added since the source was
- * made reads as empty, and any other gap is a mismatch between TABLES and the source, so
- * it stops the move rather than reading as NULL.
+ * head. `columns` are the source's own (COLUMNS_QUERY), so an older database is adapted.
  */
 export function readQueries(columns) {
   const has = new Set(columns.map(({ tbl, col }) => `${tbl}.${col}`));
   const tables = new Set(columns.map(({ tbl }) => tbl));
   const pick = (table, col) => {
-    if (!has.has(`${table}.${col}`)) throw new Error(`${table}.${col} is not in the source database`);
-    return `"${col}"`;
+    if (has.has(`${table}.${col}`)) return `"${col}"`;
+    if (col === 'scope' && has.has(`${table}.user_id`)) return SCOPE_FROM_USER;
+    /* Only the columns rounds-v7 added may be missing from the source; any other gap is a
+       mismatch between TABLES and the source, and reading it as NULL would hide it. */
+    if (!ADDED_IN_V7.has(col)) throw new Error(`${table}.${col} is not in the source database`);
+    return `${DEFAULTS[col] ?? 'NULL'} AS "${col}"`;
   };
   const out = Object.entries(TABLES).map(([table, cols]) => {
     if (ADDED_TABLES.has(table) && !tables.has(table)) return [table, `SELECT ${cols.map((col) => `NULL AS "${col}"`).join(', ')} WHERE 0`];
-    return [table, `SELECT ${cols.map((col) => pick(table, col)).join(', ')} FROM ${table} ORDER BY ${ORDER_BY[table] || 'user_id, id'}`];
+    const list = cols.map((col) => (table === 'changes' && col === 'payload' && has.has('changes.user_id') ? PAYLOAD_FROM_USER : pick(table, col)));
+    return [table, `SELECT ${list.join(', ')} FROM ${table} ORDER BY ${ORDER_BY[table] || 'user_id, id'}`];
   });
   out.push(['state', `SELECT (SELECT floor FROM sync_state WHERE id = 1) AS floor, COALESCE((SELECT seq FROM sqlite_sequence WHERE name = 'changes'), 0) AS head,
     COALESCE((SELECT seq FROM sqlite_sequence WHERE name = 'activity'), 0) AS activity_head`]);

@@ -1,4 +1,4 @@
-// Spaces (migrations/0001_schema.sql) and what the class routes share: the limits,
+// Spaces (migrations/0002_spaces.sql) and what the class routes share: the limits,
 // Worker-made ids, the space revision and a space's summary. Making a class, its details,
 // roles and transfer follow below; invites and join codes are in worker/invites.js.
 import { HttpError } from './http.js';
