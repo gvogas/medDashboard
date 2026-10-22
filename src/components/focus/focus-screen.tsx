@@ -133,7 +133,7 @@ function FocusScreen({ run }: { run: Run }) {
                         title="Leave focus (Esc)"
                         className="inline-flex cursor-pointer items-center gap-1.5 border-0 bg-transparent px-0.5 py-1 font-[inherit] text-[12.5px] font-semibold text-[var(--fx-ink-3)] hover:text-[var(--fx-ink)] [&_svg]:size-[15px]"
                     >
-                        <BackIcon />Leave
+                        <BackIcon />{inRoom ? "Back" : "Leave"}
                     </button>
                     {inRoom ? (
                         <label className="inline-flex max-w-full min-w-0 items-center gap-2 text-[12.5px] text-[var(--fx-ink-2)]">
