@@ -27,6 +27,7 @@ vi.mock("@/core/api", async (orig) => ({ ...(await orig<typeof import("@/core/ap
 import * as run from "./run"
 import { hostClock, joinRoom, leaveRoom, poll, resetRoom, roomNow, startRoom } from "./room"
 import { currentToast, hideToast } from "./toast"
+import { ApiError } from "@/core/api"
 import type { RoomMember, RoomView } from "./types"
 
 const MIN = 60_000
@@ -123,10 +124,30 @@ describe("a room run", () => {
         fake.rooms.join.mockResolvedValue(view())
         await joinRoom("room00000001", "bio", null, "BIO")
         vi.setSystemTime(T0 + 24 * MIN)
-        fake.rooms.get.mockResolvedValue(view({ members: [member("host"), member("me", { state: "left", earlierMs: 3 * MIN, joinedStudyMs: 10 * MIN })] }))
+        /* the server dates the leave to when you were last seen */
+        fake.rooms.get.mockResolvedValue(view({ members: [member("host"), member("me", { state: "left", earlierMs: 3 * MIN, joinedStudyMs: 10 * MIN, leftAt: T0 + SKEW + 13 * MIN })] }))
         await poll()
         expect(fake.sessions).toEqual([expect.objectContaining({ studyMinutes: 3 })])
         expect(run.active()).toBe(false)
+        expect(currentToast()?.text).toMatch(/after a while away/)
+    })
+
+    it("says only that you left when you left from another device", async () => {
+        fake.rooms.join.mockResolvedValue(view())
+        await joinRoom("room00000001", "bio", null, "BIO")
+        vi.setSystemTime(T0 + 14 * MIN)
+        fake.rooms.get.mockResolvedValue(view({ members: [member("host"), member("me", { state: "left", earlierMs: 4 * MIN, joinedStudyMs: 10 * MIN, leftAt: T0 + SKEW + 14 * MIN })] }))
+        await poll()
+        expect(run.active()).toBe(false)
+        expect(currentToast()?.text).toBe("You left the room. Your minutes are saved.")
+    })
+
+    it("keeps the run going when starting a room fails", async () => {
+        await run.begin(FLOW, "bio", null)
+        fake.rooms.create.mockRejectedValue(new ApiError(429, {}))
+        expect(await startRoom(FLOW, "bio", null, "BIO", [])).toMatch(/a lot of rooms/)
+        expect(run.active()).toBe(true)
+        expect(fake.sessions).toEqual([])
     })
 
     it("writes the same session again with the total after a rejoin", async () => {

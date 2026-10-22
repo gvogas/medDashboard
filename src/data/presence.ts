@@ -25,6 +25,8 @@ export function watchPresence(labelOf: (courseId: string | null, itemId: string 
         if (s.room) return
         /* on start, on a reload's first tick, and on resume */
         const start = event === "start" || wasPaused === null || (wasPaused && !s.paused)
+        /* a run restored after a reload may have shown itself before it: its end clears that too */
+        if (wasPaused === null && event !== "start") shown = true
         wasPaused = s.paused
         if (!start || s.paused || !allowed()) return
         shown = true

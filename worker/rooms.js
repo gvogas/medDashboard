@@ -88,10 +88,16 @@ function takeOut(room, members, m, at) {
     event(room, 'left', m.name, at);
   }
   m.state = 'left';
+  handOver(room, members, at);
+}
+
+/** A room whose host is no longer in it (left, or deleted their account) passes to whoever has been
+    in longest; an empty room ends. */
+function handOver(room, members, at) {
   if (room.endedAt !== null) return;
   const inside = members.filter((x) => x.state === 'in').sort((a, b) => a.joinedAt - b.joinedAt);
   if (!inside.length) { end(room, at); return; }
-  if (room.hostId === m.userId) {
+  if (!inside.some((x) => x.userId === room.hostId)) {
     room.hostId = inside[0].userId;
     event(room, 'host', inside[0].name, at);
   }
@@ -109,7 +115,8 @@ export function settle(room, members, now) {
     takeOut(room, members, m, Math.min(seen(m), until));
     if (room.endedAt !== null) return;
   }
-  if (done !== null && done <= now) end(room, done);
+  handOver(room, members, until);
+  if (room.endedAt === null && done !== null && done <= now) end(room, done);
 }
 
 /* ── writing it back ── */
@@ -218,12 +225,15 @@ async function friendsAmong(db, me, ids) {
   return ids.filter((id) => ok.has(id));
 }
 
-/** Whether someone not in the room may see or enter it: a friend of the host, or invited by someone
-    who is still their friend. An invite or an earlier stint alone is not enough once the friendship
-    ends. Someone in the room may always see it. */
-async function mayEnter(db, me, room, m) {
+/** Whether someone not in the room may see or enter it: a friend of the host, invited by someone
+    who is still their friend, or in it before and a friend of someone in it now (the host may have
+    passed on). An invite or an earlier stint alone is not enough once the friendship ends. Someone
+    in the room may always see it. */
+async function mayEnter(db, me, room, members, m) {
   if (m?.state === 'in' || room.hostId === me) return true;
-  const via = [room.hostId, m?.state === 'invited' ? m.invitedBy : null].filter(Boolean);
+  const before = m?.joinedAt != null;
+  const via = [room.hostId, m?.state === 'invited' || before ? m.invitedBy : null,
+    ...(before ? members.filter((x) => x.state === 'in').map((x) => x.userId) : [])].filter(Boolean);
   return (await friendsAmong(db, me, [...new Set(via)])).length > 0;
 }
 
@@ -234,10 +244,14 @@ async function leaveOthers(db, me, keep, now) {
   for (const { room_id } of results) await leaveRoom(db, me, room_id, now);
 }
 
+/** Someone who said Not now gets asked again only after this long. */
+export const REINVITE_MS = 10 * MIN;
+
 function invite(room, members, host, ids, now) {
   for (const id of ids) {
     const m = members.find((x) => x.userId === id);
-    if (m && m.state !== 'left') continue;
+    /* already asked or in it; someone who studied here may rejoin as they are (mayEnter) */
+    if (m && (m.state !== 'left' || m.joinedAt !== null || m.invitedAt > now - REINVITE_MS)) continue;
     if (!m && members.length >= ROOM_ROWS) continue;
     if (m) Object.assign(m, { state: 'invited', invitedBy: host, invitedAt: now });
     else members.push({ userId: id, name: '', username: '', state: 'invited', invitedBy: host, invitedAt: now, joinedAt: null, joinedStudyMs: null, earlierMs: 0, leftAt: null, lastSeen: null, courseLabel: '' });
@@ -273,7 +287,7 @@ export async function createRoom(db, me, body, now = Date.now()) {
 export async function getRoom(db, me, roomId, tag = null, now = Date.now()) {
   const first = await load(db, roomId);
   const listed = first?.members.find((m) => m.userId === me);
-  if (!listed || !(await mayEnter(db, me, first.room, listed))) throw notFound();
+  if (!listed || !(await mayEnter(db, me, first.room, first.members, listed))) throw notFound();
   const { room, members } = await change(db, roomId, (room, members) => {
     if (!members.some((m) => m.userId === me)) throw notFound();
   }, now, me);
@@ -286,7 +300,7 @@ export async function joinRoom(db, me, roomId, body, now = Date.now()) {
   const courseLabel = label(body?.courseLabel);
   const first = await load(db, roomId);
   if (!first) throw notFound();
-  if (!(await mayEnter(db, me, first.room, first.members.find((m) => m.userId === me)))) throw notFound();
+  if (!(await mayEnter(db, me, first.room, first.members, first.members.find((m) => m.userId === me)))) throw notFound();
   if (first.room.endedAt !== null) throw ended();
   const who = await db.prepare(`SELECT u.username, ${NAME} AS name FROM users AS u WHERE u.id = ?`).bind(me).first();
   const { room, members } = await change(db, roomId, (room, members) => {
@@ -389,14 +403,15 @@ const showing = (extra = '') => `FROM friendships AS f
 /**
  * Your friends who are studying now, for the Friends tab (spec §1): userId → {label, since, room}.
  * Only friends who show it (Show friends when I'm studying). `room` ({id, size}) is set when they
- * are in an open room you may join (the host is you or your friend, or you are listed in it); a
+ * are in an open room you may join (as mayEnter: the host is you or your friend, you were in it before, or a friend invited you); a
  * room you may not join still shows them studying. A solo run comes from presence.
  */
 export async function friendsLive(db, me, now = Date.now()) {
   const [rooms, solo] = await db.batch([
     db.prepare(`SELECT u.id AS user_id, r.id, m.course_label, m.joined_at,
         (SELECT count(*) FROM room_members AS c WHERE c.room_id = r.id AND c.state = 'in') AS size,
-        (r.host_id = ?1 OR EXISTS (SELECT 1 FROM room_members AS mine WHERE mine.room_id = r.id AND mine.user_id = ?1)
+        (r.host_id = ?1 OR EXISTS (SELECT 1 FROM room_members AS mine WHERE mine.room_id = r.id AND mine.user_id = ?1
+            AND (mine.joined_at IS NOT NULL OR (mine.state = 'invited' AND ${FRIEND_OF('mine.invited_by')})))
           OR EXISTS (SELECT 1 FROM friendships AS h WHERE h.status = 'accepted' AND h.user_lo = min(?1, r.host_id) AND h.user_hi = max(?1, r.host_id))) AS joinable
       ${showing("JOIN room_members AS m ON m.user_id = u.id AND m.state = 'in' JOIN rooms AS r ON r.id = m.room_id")}
         AND m.last_seen > ?2 AND ${OPEN('r')}`).bind(me, now - GONE_MS),

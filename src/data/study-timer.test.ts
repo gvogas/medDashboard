@@ -38,7 +38,7 @@ import * as focus from "@/data/run"
 import { getStudyBadge, notify, subscribe } from "@/bridge"
 import {
     addStep, applyPreset, clockTime, delStep, doneAt, escapeFocus, flowName, leaveFocus, openFocus, flowTotals, nextLine, pickFor, presetsFor, sameFlow, setRounds, setStepKind, setStepMinutes, skip, startRun,
-    stopRun, stripSegments, tickTitle, timeText, todaySoFar, toggleMusic, togglePause, useFlow, useRun, type Run,
+    joinRoomRun, JOIN_ENDS_FIRST, stopRun, stripSegments, tickTitle, timeText, todaySoFar, toggleMusic, togglePause, useFlow, useRun, type Run,
 } from "./study-timer"
 import { ui } from "./ui"
 import { hideToast, runToastAction } from "./toast"
@@ -349,6 +349,13 @@ describe("a run", () => {
     const tickFor = (ms: number) => act(async () => { await vi.advanceTimersByTimeAsync(ms) })
     /* hours at once: the clock moves on, then one tick reads it (as after a throttled tab) */
     const jump = async (ms: number) => { vi.setSystemTime(Date.now() + ms - 250); await tickFor(250) }
+
+    it("asks before a Join ends the run going", async () => {
+        expect(await begin(CLASSIC)).toBe(true)
+        expect(await joinRoomRun("room00000001")).toBe(JOIN_ENDS_FIRST)
+        expect(focus.active()).toBe(true)
+        expect(fake.sessions).toEqual([])
+    })
 
     it("is none until one starts", () => {
         const { result } = renderHook(() => useRun())
