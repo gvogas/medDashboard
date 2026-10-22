@@ -39,7 +39,7 @@ six, then `rounds-v5` into `rounds-v6`, adding the Admin page (`users.is_admin`,
 `rounds-v7`, giving courses, items and the change feed a scope, then `rounds-v7` into
 `rounds-v8`, folding in shared classes and projects, invites, marks and space prefs,
 activity and the inbox, push reminders, grades and friends. `rounds-v8` is the live
-database; `rounds-v7` is kept as a backup. The later migrations (`0002_spaces.sql` to
+database (the older ones were deleted after each move was confirmed). The later migrations (`0002_spaces.sql` to
 `0009_friend_cancel.sql`) are part of `0001_schema.sql`, with the columns added by
 `ALTER TABLE` at the end of their tables (`users.grading`, `courses.credits` and
 `grade_categories`, `items.category`, `friendships.cancelled_at`) and the course and item

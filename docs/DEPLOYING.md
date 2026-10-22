@@ -25,7 +25,7 @@ item, runs the code in `worker/`, which reads and writes the D1 database.
 | --- | --- | --- |
 | Front end | `index.html`, `src/`, `public/` | The pages, styles and scripts your browser runs; `npm run build` turns them into `dist/client/` |
 | API | `worker/` | Sign-in, sync, shared classes, Spotify, AI import and the Admin page. The endpoints are listed in [DATA-MODEL.md](DATA-MODEL.md) |
-| Database | Cloudflare D1, named `rounds-v8` (binding `DB`) | Stores users and everyone's data. `rounds-v7` is kept as a backup |
+| Database | Cloudflare D1, named `rounds-v8` (binding `DB`) | Stores users and everyone's data |
 | Schema changes | `migrations/` | Numbered SQL files that build and change the database |
 | Settings | `wrangler.jsonc` | The app name, the static assets in `dist/client/`, the database, the Workers AI binding, public vars (`SPOTIFY_CLIENT_ID`, `CF_ACCOUNT_ID`) and the nightly cleanup job |
 | Secret | `SESSION_SECRET` | Signs login cookies. Locally it's in `.dev.vars`; live it's stored in Cloudflare |

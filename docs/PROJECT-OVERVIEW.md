@@ -15,7 +15,7 @@ a Spotify player and an admin page.
   creates every account from the terminal or from the Admin page.
 - **Live at:** https://rounds.termanitor07.workers.dev (Cloudflare free plan, no custom domain).
 - **Names:** people see **Term**. It started as a med-school tracker called **Rounds**,
-  and that name is still used inside: the Worker, the D1 databases (`rounds-v8` live, `rounds-v7` kept as a backup), cookies,
+  and that name is still used inside: the Worker, the D1 databases (`rounds-v8` live), cookies,
   IndexedDB and CSS classes. The GitHub repo is `gvogas/medDashboard`.
 - **Constraints:** everything has to fit Cloudflare's **free tiers**. That means no paid
   plan, no Cloudflare Access, no custom domain, and Workers AI is capped at 10,000
@@ -268,7 +268,7 @@ Deploying, secrets, accounts and database moves: `docs/DEPLOYING.md`.
 4. **Oct 1:** Admin dashboard. The database moved to a fresh `rounds-v6` built from the
    squashed schema.
 5. **Oct 5:** Maintenance mode. Collaboration Stage 1 (scope keys on courses, items and
-   the change feed) with a move to a fresh `rounds-v7`; `rounds-v6` is kept as a backup.
+   the change feed) with a move to a fresh `rounds-v7`.
    Stage 2: spaces, members and sync v3.
 6. **Oct 6:** Stages 3 and 4 (main `3bb488a`): shared classes (make, convert, invite,
    join codes, roles) and the personal layer (marks, space prefs, hidden sources,
