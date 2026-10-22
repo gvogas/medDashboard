@@ -53,7 +53,7 @@ People add each other as friends, then study in a shared room: one timer that ev
 
 ## 4. Data
 
-Each stage brings its own migration: `0008_friends.sql` (Stage 1, as built: `friendships` with a `declined_at` column so a decline never changes what the asker sees, and `friend_settings` in place of the two `users` columns below), then `0007_rooms.sql` and `0008_presence.sql`. The sketch below is the first design; Stage 1's file is the reference for the friends tables.
+Each stage brings its own migration: `0008_friends.sql` (Stage 1, as built: `friendships` with a `declined_at` column so a decline never changes what the asker sees, and `friend_settings` in place of the two `users` columns below), then `0009_rooms.sql` and `0010_presence.sql`. The sketch below is the first design; Stage 1's file is the reference for the friends tables.
 
 ```sql
 -- Built instead as friend_settings (user_id, findable, show_studying).

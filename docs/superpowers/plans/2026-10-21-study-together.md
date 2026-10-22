@@ -29,20 +29,20 @@
 | # | Stage | Branch | Database | Detailed plan |
 |---|---|---|---|---|
 | 1 | Friends: settings, requests, search, Friends tab, inbox entries, maintenance switch, nightly purge | `together-1-friends` | `0008_friends.sql` | **below** (**built** 2026-10-21) |
-| 2 | Rooms: shared timer, Study together sheet, room screen, host controls, join/leave, invites in the inbox, `roomId` on sessions, polling | `together-2-rooms` | `0007_rooms.sql` | written after Stage 1 merges |
-| 3 | Presence and records: solo "studying now", end summary, group record, History "with" row, With friends tile, room cleanup | `together-3-records` | `0008_presence.sql` | written after Stage 2 merges |
+| 2 | Rooms: shared timer, Study together sheet, room screen, host controls, join/leave, invites in the inbox, `roomId` on sessions, polling | `together-2-rooms` | `0009_rooms.sql` | written after Stage 1 merges |
+| 3 | Presence and records: solo "studying now", end summary, group record, History "with" row, With friends tile, room cleanup | `together-3-records` | `0010_presence.sql` | written after Stage 2 merges |
 
 **One change from the spec:** each stage brings its own migration rather than all tables landing in Stage 1, so Stage 2's tables are designed against the code Stage 1 leaves. And the two switches live in a `friend_settings` table, not on `users`: that keeps them out of the profile's revision and out of `scripts/lib/move-db.js`'s users column list. Update spec §4 to match in Stage 1's docs task.
 
 ### What Stage 2 must cover (its plan starts from this)
-- `0007_rooms.sql`: `rooms` (as spec §4, with `feed`), `room_members`, `study_sessions.room_id` + index; `move-db.js` TABLES/ADDED_TABLES/ORDER_BY; `LATEST_MIGRATION`.
+- `0009_rooms.sql`: `rooms` (as spec §4, with `feed`), `room_members`, `study_sessions.room_id` + index; `move-db.js` TABLES/ADDED_TABLES/ORDER_BY; `LATEST_MIGRATION`.
 - `worker/rooms.js`: create, get (`?v=` → 304), join, leave (host handover, end when empty), clock (host only: pause/resume/skip/end using `core/timer.ts` arithmetic on the server), invite, me. Join rule: invited or friend of host, under 8, one open room per person. `last_seen` written at most every 30 s.
 - `GET /api/inbox` gains `roomInvites` (open rooms only); `unreadCount` counts them.
 - `worker/db.js`: `roomId: 'room_id'` in study_sessions `cols`, and in `KEPT_WHEN_ABSENT`.
 - Client: `run.ts` room runs (`roomId`, the server's record replaces the local one on each poll), session id `r-<roomId>`, `joined_study_ms` subtraction for minutes; poller 5 s visible / 30 s hidden; Study together card + sheet; room focus screen (people panel, host controls, Leave, Reconnecting note); Join from Friends tab and inbox; maintenance `friends` covers rooms.
 
 ### What Stage 3 must cover
-- `0008_presence.sql`: `presence`. `PUT/DELETE /api/presence` from `run.ts` start/stop when show_studying is on; `GET /api/friends` adds `live` (room or presence) and `lastStudied`.
+- `0010_presence.sql`: `presence`. `PUT/DELETE /api/presence` from `run.ts` start/stop when show_studying is on; `GET /api/friends` adds `live` (room or presence) and `lastStudied`.
 - "Studying now" section with Join/Invite; Study nav dot.
 - End summary sheet; `GET /api/rooms/:id/record` (minutes summed from sessions); History "with" chips + Group record; With friends this week tile.
 - Cron: end rooms unpolled 30 min, drop expired presence, delete rooms 90 days after end unless sessions point at them.
