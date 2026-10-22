@@ -132,7 +132,6 @@ describe('a room', () => {
     const [h, a, b] = await users('ro-h-h', 'ro-h-a', 'ro-h-b');
     await befriend(h, a);
     await befriend(h, b);
-    await befriend(a, b);   /* b reads the room afterwards, with a as host */
     const { room } = await createRoom(env.DB, h, { flow: FLOW }, T0);
     await joinRoom(env.DB, a, room.id, {}, T0 + MIN);
     await joinRoom(env.DB, b, room.id, {}, T0 + 2 * MIN);

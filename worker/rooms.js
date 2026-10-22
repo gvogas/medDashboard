@@ -220,7 +220,7 @@ async function friendsAmong(db, me, ids) {
     who is still their friend. An invite or an earlier stint alone is not enough once the friendship
     ends. Someone in the room may always see it. */
 async function mayEnter(db, me, room, m) {
-  if (m?.state === 'in') return true;
+  if (m?.state === 'in' || room.hostId === me) return true;
   const via = [room.hostId, m?.state === 'invited' ? m.invitedBy : null].filter(Boolean);
   return (await friendsAmong(db, me, [...new Set(via)])).length > 0;
 }
