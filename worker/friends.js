@@ -102,9 +102,9 @@ export async function requestFriend(db, me, body, now = Date.now()) {
       WHERE friendships.status = 'declined' RETURNING user_lo`).bind(lo, hi, me, now).first();
   if (made) return out('requested');
   /* someone wrote the pair first: take what is there now */
-  const now2 = await db.prepare(ROW).bind(lo, hi).first();
-  if (now2?.status === 'pending' && now2.requested_by === who.id) { await accept(db, me, who.id, now); return out('friends'); }
-  return out(now2?.status === 'accepted' ? 'friends' : 'requested');
+  const current = await db.prepare(ROW).bind(lo, hi).first();
+  if (current?.status === 'pending' && current.requested_by === who.id) { await accept(db, me, who.id, now); return out('friends'); }
+  return out(current?.status === 'accepted' ? 'friends' : 'requested');
 }
 
 /** Accept or decline a request someone sent you. */
@@ -125,6 +125,27 @@ export async function removeFriend(db, me, other) {
   if (!gone) throw new HttpError(404, { error: 'not_found' });
 }
 
+const STATE = `CASE WHEN f.status = 'accepted' THEN 'friends'
+  WHEN f.requested_by = ?1 THEN 'requested'
+  WHEN f.status = 'pending' THEN 'asked' ELSE 'none' END`;
+
+/** Up to 8 people matching `q` (2-40 characters) with where you stand with each. */
+export async function searchPeople(db, me, raw, now = Date.now()) {
+  const q = String(raw ?? '').trim().toLowerCase();
+  if (q.length < 2 || q.length > 40) throw new HttpError(400, { error: 'invalid', field: 'q' });
+  const wait = await claimLimit(db, `friend-search:${me}`, SEARCH_LIMIT, now);
+  if (wait) throw rateLimited(wait);
+  const like = '%' + q.replace(/[\\%_]/g, (c) => '\\' + c) + '%';
+  const { results } = await db.prepare(`SELECT u.id, u.username, ${NAME} AS name, ${STATE} AS state
+    FROM users AS u
+    LEFT JOIN friend_settings AS s ON s.user_id = u.id
+    LEFT JOIN friendships AS f ON f.user_lo = min(?1, u.id) AND f.user_hi = max(?1, u.id)
+    WHERE u.id != ?1 AND (u.username = ?2
+      OR (COALESCE(s.findable, 1) = 1 AND (u.username LIKE ?3 ESCAPE '\\' OR lower(u.display_name) LIKE ?3 ESCAPE '\\')))
+    ORDER BY u.username = ?2 DESC, name LIMIT ${RESULTS}`).bind(me, q, like).all();
+  return { people: results.map((r) => ({ ...person(r), state: r.state })) };
+}
+
 const route = (path) => new RegExp(`^/api/${path}$`);
 
 /* The fixed paths (settings, search) must stay before friends/([^/]{1,64}). */
@@ -134,6 +155,8 @@ export const friendRoutes = [
     await saveSettings(env.DB, await requireUser(request, env), await readJson(request));
     return new Response(null, { status: 204 });
   }],
+  ['GET', route('friends/search'), async ({ request, env, url }) =>
+    json(await searchPeople(env.DB, await requireUser(request, env), url.searchParams.get('q')))],
   ['POST', route('friends'), async ({ request, env }) =>
     json(await requestFriend(env.DB, await requireUser(request, env), await readJson(request)))],
   ['PUT', route('friends/([^/]{1,64})'), async ({ request, env, params: [other] }) => {
