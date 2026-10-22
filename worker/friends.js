@@ -135,7 +135,7 @@ export async function searchPeople(db, me, raw, now = Date.now()) {
   if (q.length < 2 || q.length > 40) throw new HttpError(400, { error: 'invalid', field: 'q' });
   const wait = await claimLimit(db, `friend-search:${me}`, SEARCH_LIMIT, now);
   if (wait) throw rateLimited(wait);
-  /* LIKE ignores case for ASCII letters only, so "É" does not match "é" */
+  /* LIKE ignores case for ASCII letters only; accented letters must match exactly */
   const like = '%' + q.replace(/[\\%_]/g, (c) => '\\' + c) + '%';
   const { results } = await db.prepare(`SELECT u.id, u.username, ${NAME} AS name, ${STATE} AS state
     FROM users AS u
