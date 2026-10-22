@@ -33,7 +33,7 @@ export const ui: Ui = {
     focus: false,            /* the focus screen is up: the study clock and Spotify, nothing else */
     focusMusic: false,       /* the focus screen's music panel is open */
     study: { courseId: null, itemId: null },   /* what the next study run is logged against */
-    studyTab: "timer",       /* the Study page's tab: Timer, History, Achievements or Leaderboard */
+    studyTab: "timer",       /* the Study page's tab: Timer, History, Achievements, Leaderboard or Friends */
     /* the Study page's History card: which week and month are shown, the Week, Month or
        Term tab, the day picked on the month's calendar or the heatmap, and a deleted
        session that can still be undone */
@@ -56,7 +56,7 @@ try {
     if (["week", "month", "table", "spotify", "study", "admin"].includes(saved.view!)) ui.view = saved.view as Ui["view"]
     if (["all", "deadlines", "classes"].includes(saved.schedule!)) ui.schedule = saved.schedule as Ui["schedule"]
     else if (saved.monthDeadlines === false) ui.schedule = "classes"   /* the month's old Deadlines toggle */
-    if (["timer", "history", "achievements", "leaderboard"].includes(saved.studyTab!)) ui.studyTab = saved.studyTab as Ui["studyTab"]
+    if (["timer", "history", "achievements", "leaderboard", "friends"].includes(saved.studyTab!)) ui.studyTab = saved.studyTab as Ui["studyTab"]
 } catch {}
 
 export function rememberUi() {

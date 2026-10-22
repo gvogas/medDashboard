@@ -17,7 +17,7 @@ const fake = vi.hoisted(() => ({
         lb: null as unknown, lbTab: "week", study: { courseId: null as string | null, itemId: null as string | null },
     },
     termStart: null as string | null,
-    api: { leaderboard: vi.fn(), leaderboardJoin: vi.fn() },
+    api: { leaderboard: vi.fn(), leaderboardJoin: vi.fn(), friends: { get: vi.fn(() => new Promise(() => {})) } },
 }))
 const actions = vi.hoisted(() => ({ openSession: vi.fn(), deleteSession: vi.fn(), openAchievement: vi.fn(), openSettings: vi.fn() }))
 vi.mock("@/data/actions", () => actions)
@@ -92,12 +92,12 @@ const tab = (name: string) => screen.getByRole("tab", { name })
 const tabs = () => within(screen.getByRole("tablist", { name: "Study" })).getAllByRole("tab")
 
 describe("the Study page", () => {
-    it("shows the tiles, then four tabs with Timer open: the Ready card and Your flow", async () => {
+    it("shows the tiles, then five tabs with Timer open: the Ready card and Your flow", async () => {
         await show()
         for (const name of ["Streak", "Today", "This term"]) expect(tile(name)).toBeTruthy()
-        expect(tabs().map((t) => t.textContent)).toEqual(["Timer", "History", "Achievements", "Leaderboard"])
-        expect(tabs().map((t) => t.getAttribute("aria-selected"))).toEqual(["true", "false", "false", "false"])
-        expect(tabs().map((t) => t.tabIndex)).toEqual([0, -1, -1, -1])
+        expect(tabs().map((t) => t.textContent)).toEqual(["Timer", "History", "Achievements", "Leaderboard", "Friends"])
+        expect(tabs().map((t) => t.getAttribute("aria-selected"))).toEqual(["true", "false", "false", "false", "false"])
+        expect(tabs().map((t) => t.tabIndex)).toEqual([0, -1, -1, -1, -1])
         const panel = screen.getByRole("tabpanel", { name: "Timer" })
         expect(tab("Timer").getAttribute("aria-controls")).toBe(panel.id)
         expect(panel.tabIndex).toBe(0)
@@ -135,13 +135,13 @@ describe("the Study page", () => {
         expect(fake.ui.studyTab).toBe("history")
         fireEvent.keyDown(document.activeElement!, { key: "End" })
         await act(async () => {})
-        expect(document.activeElement).toBe(tab("Leaderboard"))
-        expect(tab("Leaderboard").tabIndex).toBe(0)
+        expect(document.activeElement).toBe(tab("Friends"))
+        expect(tab("Friends").tabIndex).toBe(0)
         fireEvent.keyDown(document.activeElement!, { key: "ArrowRight" })   /* round to the first */
         expect(document.activeElement).toBe(tab("Timer"))
         fireEvent.keyDown(document.activeElement!, { key: "ArrowLeft" })
         await act(async () => {})
-        expect(fake.ui.studyTab).toBe("leaderboard")
+        expect(fake.ui.studyTab).toBe("friends")
         fireEvent.keyDown(document.activeElement!, { key: "Home" })
         expect(fake.ui.studyTab).toBe("timer")
         fireEvent.keyDown(document.activeElement!, { key: "ArrowDown" })   /* a row of tabs: down does nothing */
