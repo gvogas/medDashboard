@@ -45,7 +45,8 @@ fixture in `test/fixtures/legacy-migrations/`. Later changes are new numbered fi
 (`push_subscriptions`), `0007_grades.sql` (`courses.credits`,
 `courses.grade_categories`, `items.category`, `users.grading`, and the course and item
 change triggers made again to carry them) and `0008_friends.sql`
-(`friendships`, `friend_settings`). The next one is `0009`.
+(`friendships`, `friend_settings`) and `0009_friend_cancel.sql`
+(`friendships.cancelled_at`). The next one is `0010`.
 
 ## Structure at a glance
 
@@ -459,7 +460,7 @@ Rows coalesce on the unique key `(space_id, actor_id, verb, subject, subject_use
 
 ## `friendships`
 
-One row per pair of people, the smaller user id in `user_lo` (`CHECK (user_lo < user_hi)`), `requested_by` one of the two, both `ON DELETE CASCADE`. `status` is `pending` (a request), `accepted` (friends, `accepted_at` set) or `declined`. A decline is silent: the row keeps its `created_at`, gets `declined_at`, and still reads as a waiting request to the one who asked, until they cancel it or the nightly purge drops it 30 days after `declined_at`. The one who declined may ask later, which turns the row into their own request. Removing a friend or cancelling a request deletes the row. Limits (`worker/friends.js`): 20 requests a day per person (counted before the name is looked up), 200 friends each (checked inside the accepting write), 30 searches a minute. See Friends under API.
+One row per pair of people, the smaller user id in `user_lo` (`CHECK (user_lo < user_hi)`), `requested_by` one of the two, both `ON DELETE CASCADE`. `status` is `pending` (a request), `accepted` (friends, `accepted_at` set) or `declined`. A decline is silent: the row keeps its `created_at`, gets `declined_at`, and still reads as a waiting request to the one who asked, until they cancel it or the nightly purge drops it 30 days after `declined_at`. The one who declined may ask later, which turns the row into their own request. Removing a friend or cancelling a request that is waiting deletes the row. Cancelling a request that was declined does not: it sets `cancelled_at` and keeps the row (still declined, still purged 30 days after `declined_at`), so the asker's list and search read as if it were gone, and asking again clears `cancelled_at` and reads `requested` again, but never reaches the one who declined. Their asking later still turns the row into their own request. Limits (`worker/friends.js`): 20 requests a day per person (counted before the name is looked up), 200 friends each (checked inside the accepting write), 30 searches a minute. See Friends under API.
 
 ## `friend_settings`
 

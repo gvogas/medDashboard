@@ -92,6 +92,41 @@ describe('friend requests', () => {
     expect((await lists(a)).sent).toEqual([]);
   });
 
+  it('keeps a cancelled decline silent: asking again never reaches the one who declined', async () => {
+    const a = await person('cx-a'), b = await person('cx-b');
+    const find = async () => (await (await a('/api/friends/search?q=cx-b')).json()).people.find((p) => p.userId === b.id)?.state;
+    const rows = () => env.DB.prepare('SELECT status, cancelled_at FROM friendships WHERE user_lo = ?').bind(a.id).first();
+    await ask(a, 'cx-b');
+    await answer(b, a.id, false);
+    expect(await find()).toBe('requested');
+    expect((await drop(a, b.id)).status).toBe(204);
+    expect((await lists(a)).sent).toEqual([]);
+    expect(await find()).toBe('none');
+    expect(await rows()).toMatchObject({ status: 'declined' });
+    expect((await rows()).cancelled_at).toBeGreaterThan(0);
+    expect((await lists(b)).incoming).toEqual([]);
+    expect((await drop(a, b.id)).status).toBe(204);            /* cancelling twice is harmless */
+    const again = await ask(a, 'cx-b');
+    expect(again.status).toBe(200);
+    expect((await again.json()).state).toBe('requested');
+    expect((await lists(b)).incoming).toEqual([]);
+    expect((await (await b('/api/inbox')).json()).friendRequests).toEqual([]);
+    expect(await unreadCount(env.DB, b.id)).toBe(0);
+    expect((await lists(a)).sent.map((f) => f.userId)).toEqual([b.id]);
+    expect(await find()).toBe('requested');
+    /* cancel and ask again as often as they like: still nothing for b */
+    await drop(a, b.id);
+    await ask(a, 'cx-b');
+    expect((await lists(b)).incoming).toEqual([]);
+    /* only once the purge has dropped it can a new request reach b */
+    await env.DB.prepare("UPDATE friendships SET declined_at = ? WHERE user_lo = ?").bind(Date.now() - 31 * 86_400_000, a.id).run();
+    await purgeFriends(env.DB, Date.now());
+    expect(await rows()).toBeNull();
+    expect((await (await ask(a, 'cx-b')).json()).state).toBe('requested');
+    expect((await lists(b)).incoming.map((f) => f.userId)).toEqual([a.id]);
+    expect(await unreadCount(env.DB, b.id)).toBe(1);
+  });
+
   it('lets the one who declined ask later', async () => {
     const a = await person('rq-g'), b = await person('rq-h');
     await ask(a, 'rq-h');
