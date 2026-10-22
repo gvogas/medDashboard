@@ -52,6 +52,7 @@ export function friendMessage(e: unknown): string {
     if (!(e instanceof ApiError)) return "That needs a connection. Try again when you're online."
     const code = e.body?.error
     if (code === "no_user") return "Nobody has that username."
+    if (code === "not_found") return "That request is no longer there."
     if (code === "friends") return "You're already friends."
     if (code === "friend_limit") return "One of you already has 200 friends."
     if (e.status === 429) return "That's a lot of requests. Try again later."
@@ -86,7 +87,15 @@ export async function answerRequest(userId: string, accept: boolean): Promise<st
         dropFriendRequest(userId)
         after()
         return ""
-    } catch (e) { return friendMessage(e) }
+    } catch (e) {
+        /* already answered or taken back elsewhere: it is gone either way */
+        if (e instanceof ApiError && e.status === 404 && e.body?.error === "not_found") {
+            edit((l) => ({ ...l, incoming: l.incoming.filter((x) => x.userId !== userId) }))
+            dropFriendRequest(userId)
+            after()
+        }
+        return friendMessage(e)
+    }
 }
 
 /** Remove a friend, or cancel a request you sent. */

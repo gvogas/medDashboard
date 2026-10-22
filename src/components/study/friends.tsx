@@ -195,7 +195,7 @@ const COLORS = ["#4F74D9", "#8B5CC7", "#F08A6C", "#B8457E", "#4FBF8B", "#7D8A99"
 function Avatar({ p }: { p: FriendPerson }) {
     let h = 0
     for (const c of p.userId) h = (h * 31 + c.charCodeAt(0)) >>> 0
-    const initials = p.name.split(/\s+/).map((w) => w[0] ?? "").join("").slice(0, 2).toUpperCase()
+    const initials = Array.from(p.name.split(/\s+/).map((w) => Array.from(w)[0] ?? "").join("")).slice(0, 2).join("").toUpperCase()
     return (
         <span aria-hidden="true" style={{ background: COLORS[h % COLORS.length] }}
             className="grid size-[30px] flex-none place-items-center rounded-full text-[12px] font-semibold text-white">

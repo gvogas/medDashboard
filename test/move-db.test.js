@@ -133,6 +133,18 @@ it('reads marks and space prefs as empty from a database made before them, and c
   expect(sql.filter((s) => s.startsWith('INSERT INTO ')).map((s) => s.split(' ')[2]).slice(0, 3)).toEqual(['users', 'marks', 'space_prefs']);
 });
 
+it('reads friendships and friend settings as empty from a database made before them, and copies them after users', async () => {
+  const queries = new Map(readQueries(await columns(env.MIGRATION_DB)));
+  expect((await env.MIGRATION_DB.prepare(queries.get('friendships')).all()).results).toEqual([]);
+  expect((await env.MIGRATION_DB.prepare(queries.get('friend_settings')).all()).results).toEqual([]);
+  const sql = copyStatements({
+    users: [{ id: 'ana', username: 'ana' }, { id: 'bo', username: 'bo' }],
+    friendships: [{ user_lo: 'ana', user_hi: 'bo', requested_by: 'ana', status: 'accepted', created_at: 1, accepted_at: 2, declined_at: null }],
+    friend_settings: [{ user_id: 'ana', findable: 0, show_studying: 1 }],
+  });
+  expect(sql.filter((s) => s.startsWith('INSERT INTO ')).map((s) => s.split(' ')[2]).slice(0, 4)).toEqual(['users', 'users', 'friendships', 'friend_settings']);
+});
+
 it('reads activity and inbox_seen as empty from a database made before them, and keeps the source activity, not the triggers\' copy', async () => {
   const queries = new Map(readQueries(await columns(env.MIGRATION_DB)));
   expect((await env.MIGRATION_DB.prepare(queries.get('activity')).all()).results).toEqual([]);

@@ -431,6 +431,8 @@ One row per pair of people, the smaller user id in `user_lo` (`CHECK (user_lo < 
 | `activity (space_id, seq)` | a space's Activity tab; the inbox per space you are in |
 | `activity (subject_user, seq)`, rows about someone only | the inbox's rows about you, even after you left the space |
 | `activity (at)` | the nightly purge of activity over 90 days |
+| `friendships (user_hi)` | your friendships and requests where you are the larger id (the primary key covers the smaller) |
+| `friendships (declined_at)`, declined only | the nightly purge of declines over 30 days |
 | `error_log (at)`, `admin_log (at)` | the Admin page's lists and their nightly cleanup |
 
 Primary keys and unique constraints also provide indexes. Clients page through

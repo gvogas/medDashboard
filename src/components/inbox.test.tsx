@@ -121,6 +121,18 @@ describe("the bell and the inbox (spec §12, §15)", () => {
         await waitFor(() => expect(screen.queryByRole("list", { name: "Friend requests" })).toBeNull())
     })
 
+    it("drops a friend request that is already gone, and says so", async () => {
+        const { ApiError } = await import("@/core/api")
+        fake.api.inbox.get.mockResolvedValue({ invites: [], friendRequests: [{ userId: "u-jo", username: "jordanlee", name: "Jordan Lee", at: Date.now() }], items: [], seen: 0 })
+        fake.api.friends.answer.mockRejectedValue(new ApiError(404, { error: "not_found" }))
+        render(<><TopBar /><Sheet /></>)
+        act(() => setUnread(1))
+        await act(async () => { fireEvent.click(bell("Inbox, 1 unread")) })
+        fireEvent.click(await screen.findByRole("button", { name: "Accept Jordan Lee" }))
+        expect(await screen.findByText("That request is no longer there.")).toBeTruthy()
+        await waitFor(() => expect(screen.queryByRole("list", { name: "Friend requests" })).toBeNull())
+    })
+
     it("hides friend requests while friends are switched off", async () => {
         fake.data.profile = { id: "u-me", isAdmin: false, maintenance: { features: ["friends"], message: "" } }
         fake.api.inbox.get.mockResolvedValue({ invites: [], friendRequests: [{ userId: "u-jo", username: "jordanlee", name: "Jordan Lee", at: Date.now() }], items: [news], seen: 0 })

@@ -138,6 +138,12 @@ describe("the Friends tab", () => {
         expect(screen.queryByRole("button", { name: "Add Zed Quinn" })).toBeNull()
     })
 
+    it("keeps an emoji whole in someone's initials", async () => {
+        fake.api.friends.get.mockResolvedValue({ ...list(), friends: [{ userId: "u-em", username: "em", name: "\u{1F393} Study", since: 1 }] })
+        await show()
+        expect(screen.getByText("\u{1F393}S")).toBeTruthy()
+    })
+
     it("shows a search result as friends once the list says so", async () => {
         fake.api.friends.search.mockResolvedValue({ people: [{ userId: "u-sam", username: "samo", name: "Sam Okoye", state: "none" }] })
         await show()

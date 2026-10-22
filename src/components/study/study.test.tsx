@@ -123,6 +123,26 @@ describe("the Study page", () => {
         expect(screen.getByRole("tab", { name: /Friends, new/ }).textContent).toContain("New")
     })
 
+    it("asks for the friends again each minute while the page shows, and stops when it goes", async () => {
+        const timers = vi.spyOn(globalThis, "setInterval")
+        fake.api.friends.get.mockResolvedValue({ friends: [], incoming: [], sent: [], settings: { findable: true, showStudying: true } })
+        const r = await show()
+        await act(async () => {})
+        expect(fake.api.friends.get).toHaveBeenCalledTimes(1)
+        const tick = timers.mock.calls.find((c) => c[1] === 60_000)![0] as () => void
+        vi.setSystemTime(new Date(2026, 8, 23, 12, 0, 30))
+        await act(async () => { tick() })
+        expect(fake.api.friends.get).toHaveBeenCalledTimes(1)
+        vi.setSystemTime(new Date(2026, 8, 23, 12, 1, 5))
+        await act(async () => { tick() })
+        expect(fake.api.friends.get).toHaveBeenCalledTimes(2)
+        const clear = vi.spyOn(globalThis, "clearInterval")
+        r.unmount()
+        expect(clear).toHaveBeenCalled()
+        timers.mockRestore(); clear.mockRestore()
+        vi.setSystemTime(new Date(2026, 8, 23, 12))
+    })
+
     it("opens a tab on a click, and keeps it in the ui", async () => {
         await show()
         fireEvent.click(tab("History"))

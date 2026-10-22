@@ -9,7 +9,7 @@ import { useEffect } from "react"
 import { cn } from "@/lib/utils"
 import { useUi } from "@/data/ui"
 import { setStudyTab } from "@/data/study"
-import { friendsStale, loadFriends, useFriends } from "@/data/friends"
+import { STALE_MS, friendsStale, loadFriends, useFriends } from "@/data/friends"
 import { maintenanceState, useMaintenance } from "@/data/maintenance"
 import { useScreen } from "@/data/signin"
 import { tabKeys } from "@/components/sheet/radio-keys"
@@ -31,7 +31,15 @@ export function StudyView() {
     const waiting = blocked ? 0 : list?.incoming.length ?? 0
     const fresh = !blocked && !!list && list.friends.length === 0 && list.incoming.length === 0
     /* loaded when the page shows, so the tab's count is there before the tab opens */
-    useEffect(() => { if (screen === "app" && maintenanceState("friends") !== "blocked" && friendsStale()) void loadFriends() }, [screen])
+    useEffect(() => {
+        if (screen !== "app") return
+        const reload = () => { if (!document.hidden && maintenanceState("friends") !== "blocked" && friendsStale()) void loadFriends() }
+        reload()
+        /* nothing is pushed: ask again each minute while the page is open and seen */
+        const timer = setInterval(reload, STALE_MS)
+        document.addEventListener("visibilitychange", reload)
+        return () => { clearInterval(timer); document.removeEventListener("visibilitychange", reload) }
+    }, [screen])
     return (
         <div className="grid gap-4 pb-1.5">
             <StudyTiles />

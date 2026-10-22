@@ -19,7 +19,7 @@ People add each other as friends, then study in a shared room: one timer that ev
 
 **Where.** A fifth Study tab, **Friends**, after Leaderboard. Until you have friends it shows a "New" pill; while requests are waiting it shows how many.
 
-**Search.** "Add friends" takes at least 2 characters and returns up to 8 people whose username or display name contains the text, excluding you. People who turned off **Let people find me in search** (`users.findable = 0`) appear only when the text is their exact username. Each result shows its state: Add, Requested, Accept (they asked you first), or Friends. Searches share a limit of 30 per minute per user (`request_limits`).
+**Search.** "Add friends" takes at least 2 characters and returns up to 8 people whose username or display name contains the text, excluding you. People who turned off **Let people find me in search** (`friend_settings.findable = 0`) appear only when the text is their exact username. Each result shows its state: Add, Requested, Accept (they asked you first), or Friends. Searches share a limit of 30 per minute per user (`request_limits`).
 
 **Requests.** Add sends a request. If the other person has already asked you, Add accepts their request instead. The other person sees the request on the Friends tab and in the inbox bell, and can Accept or Decline. Declining is silent: the sender keeps seeing "Requested" until they cancel, and the row is deleted after 30 days. Limits: 20 requests sent a day, 200 friends each. Remove deletes the friendship, and either person can send a new request later.
 

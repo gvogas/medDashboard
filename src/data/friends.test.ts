@@ -58,6 +58,16 @@ describe("the friends store", () => {
         expect(fake.api.friends.get).toHaveBeenCalledTimes(2)
     })
 
+    it("treats a request that is already gone as answered", async () => {
+        await loadFriends()
+        fake.api.friends.answer.mockRejectedValue(new ApiError(404, { error: "not_found" }))
+        fake.api.friends.get.mockReturnValue(new Promise(() => {}))
+        expect(await answerRequest("u-b", true)).toBe("That request is no longer there.")
+        expect(friendsNow().list?.incoming).toEqual([])
+        expect(friendsNow().list?.friends).toEqual([])
+        expect(dropFriendRequest).toHaveBeenCalledWith("u-b")
+    })
+
     it("moves a request into friends when asking someone who already asked you", async () => {
         await loadFriends()
         fake.api.friends.ask.mockResolvedValue({ userId: "u-b", username: "b", name: "Bea", state: "friends" })

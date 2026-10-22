@@ -28,7 +28,7 @@
 
 | # | Stage | Branch | Database | Detailed plan |
 |---|---|---|---|---|
-| 1 | Friends: settings, requests, search, Friends tab, inbox entries, maintenance switch, nightly purge | `together-1-friends` | `0006_friends.sql` | **below** (**built** 2026-10-22, tip `98a60b8`) |
+| 1 | Friends: settings, requests, search, Friends tab, inbox entries, maintenance switch, nightly purge | `together-1-friends` | `0006_friends.sql` | **below** (**built** 2026-10-21) |
 | 2 | Rooms: shared timer, Study together sheet, room screen, host controls, join/leave, invites in the inbox, `roomId` on sessions, polling | `together-2-rooms` | `0007_rooms.sql` | written after Stage 1 merges |
 | 3 | Presence and records: solo "studying now", end summary, group record, History "with" row, With friends tile, room cleanup | `together-3-records` | `0008_presence.sql` | written after Stage 2 merges |
 
