@@ -61,7 +61,7 @@ export async function saveSettings(db, userId, body) {
 
 /** Drop declines older than 30 days (the nightly cron). */
 export function purgeFriends(db, now = Date.now()) {
-  return db.prepare("DELETE FROM friendships WHERE status = 'declined' AND created_at < ?").bind(now - DECLINE_KEEP_MS).run();
+  return db.prepare("DELETE FROM friendships WHERE status = 'declined' AND declined_at < ?").bind(now - DECLINE_KEEP_MS).run();
 }
 
 const ROW = 'SELECT status, requested_by FROM friendships WHERE user_lo = ? AND user_hi = ?';
@@ -92,13 +92,19 @@ export async function requestFriend(db, me, body, now = Date.now()) {
   const row = await db.prepare(ROW).bind(lo, hi).first();
   const out = (state) => ({ ...person(who), state });
   if (row?.status === 'accepted') throw new HttpError(409, { error: 'friends' });
-  if (row?.requested_by === who.id && row.status === 'pending') { await accept(db, me, who.id, now); return out('friends'); }
-  if (row?.requested_by === me) return out('requested');   /* waiting, or declined unseen */
+  if (row?.requested_by === who.id && row.status === 'pending') {
+    try { await accept(db, me, who.id, now); return out('friends'); }
+    catch (e) { if (e.status !== 404) throw e; /* they cancelled in between: ask afresh below */ }
+  } else if (row?.requested_by === me) return out('requested');   /* waiting, or declined unseen */
   /* none, or they asked and I declined: a fresh request from me */
-  await db.prepare(`INSERT INTO friendships (user_lo, user_hi, requested_by, status, created_at) VALUES (?1, ?2, ?3, 'pending', ?4)
-    ON CONFLICT (user_lo, user_hi) DO UPDATE SET requested_by = ?3, status = 'pending', created_at = ?4
-      WHERE friendships.status = 'declined'`).bind(lo, hi, me, now).run();
-  return out('requested');
+  const made = await db.prepare(`INSERT INTO friendships (user_lo, user_hi, requested_by, status, created_at) VALUES (?1, ?2, ?3, 'pending', ?4)
+    ON CONFLICT (user_lo, user_hi) DO UPDATE SET requested_by = ?3, status = 'pending', created_at = ?4, declined_at = NULL
+      WHERE friendships.status = 'declined' RETURNING user_lo`).bind(lo, hi, me, now).first();
+  if (made) return out('requested');
+  /* someone wrote the pair first: take what is there now */
+  const now2 = await db.prepare(ROW).bind(lo, hi).first();
+  if (now2?.status === 'pending' && now2.requested_by === who.id) { await accept(db, me, who.id, now); return out('friends'); }
+  return out(now2?.status === 'accepted' ? 'friends' : 'requested');
 }
 
 /** Accept or decline a request someone sent you. */
@@ -106,7 +112,7 @@ export async function answerFriend(db, me, other, body, now = Date.now()) {
   if (typeof body?.accept !== 'boolean') throw new HttpError(400, { error: 'invalid', field: 'accept' });
   if (body.accept) return accept(db, me, other, now);
   const [lo, hi] = pairOf(me, other);
-  const done = await db.prepare(`UPDATE friendships SET status = 'declined', created_at = ?4
+  const done = await db.prepare(`UPDATE friendships SET status = 'declined', declined_at = ?4
     WHERE user_lo = ?1 AND user_hi = ?2 AND status = 'pending' AND requested_by = ?3 RETURNING user_lo`).bind(lo, hi, other, now).first();
   if (!done) throw new HttpError(404, { error: 'not_found' });
 }
@@ -121,6 +127,7 @@ export async function removeFriend(db, me, other) {
 
 const route = (path) => new RegExp(`^/api/${path}$`);
 
+/* The fixed paths (settings, search) must stay before friends/([^/]{1,64}). */
 export const friendRoutes = [
   ['GET', route('friends'), async ({ request, env }) => json(await listFriends(env.DB, await requireUser(request, env)))],
   ['PUT', route('friends/settings'), async ({ request, env }) => {
@@ -131,7 +138,7 @@ export const friendRoutes = [
     json(await requestFriend(env.DB, await requireUser(request, env), await readJson(request)))],
   ['PUT', route('friends/([^/]{1,64})'), async ({ request, env, params: [other] }) => {
     await answerFriend(env.DB, await requireUser(request, env), other, await readJson(request));
-    return json({ ok: true });
+    return new Response(null, { status: 204 });
   }],
   ['DELETE', route('friends/([^/]{1,64})'), async ({ request, env, params: [other] }) => {
     await removeFriend(env.DB, await requireUser(request, env), other);

@@ -63,7 +63,7 @@ describe('friend requests', () => {
     const res = await ask(a, 'rq-b');
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ userId: b.id, username: 'rq-b', name: 'rq-b', state: 'requested' });
-    expect((await answer(b, a.id, true)).status).toBe(200);
+    expect((await answer(b, a.id, true)).status).toBe(204);
     expect((await lists(a)).friends.map((f) => f.userId)).toEqual([b.id]);
     expect((await lists(b)).friends.map((f) => f.userId)).toEqual([a.id]);
     expect((await ask(a, 'rq-b')).status).toBe(409);
@@ -79,8 +79,10 @@ describe('friend requests', () => {
   it('declines silently: the asker still sees Requested, and may cancel', async () => {
     const a = await person('rq-e'), b = await person('rq-f');
     await ask(a, 'rq-f');
-    expect((await answer(b, a.id, false)).status).toBe(200);
-    expect((await lists(a)).sent.map((f) => f.userId)).toEqual([b.id]);
+    const before = (await lists(a)).sent;
+    expect((await answer(b, a.id, false)).status).toBe(204);
+    expect((await lists(a)).sent).toEqual(before);             /* nothing changes for the asker, not even the time */
+    expect(before.map((f) => f.userId)).toEqual([b.id]);
     expect((await lists(b)).incoming).toEqual([]);
     expect((await ask(a, 'rq-f')).status).toBe(200);           /* asking again changes nothing */
     expect((await lists(b)).incoming).toEqual([]);
@@ -115,18 +117,51 @@ describe('friend requests', () => {
     expect((await ask(a, 'nobody-x')).status).toBe(429);
   });
 
-  it('stops at 200 friends', async () => {
-    const a = await person('rq-l'), b = await person('rq-m');
+  const fill = async (a, tag) => {
     const stmts = [];
     for (let i = 0; i < 200; i++) {
-      const id = await createUser('rq-many-' + i);
+      const id = await createUser(`${tag}-${i}`);
       const [lo, hi] = [a.id, id].sort();
       stmts.push(env.DB.prepare("INSERT INTO friendships (user_lo, user_hi, requested_by, status, created_at, accepted_at) VALUES (?, ?, ?, 'accepted', 1, 1)").bind(lo, hi, lo));
     }
     await env.DB.batch(stmts);
+  };
+
+  it('stops at 200 friends', async () => {
+    const a = await person('rq-l'), b = await person('rq-m');
+    await fill(a, 'rq-many');
     await ask(b, 'rq-l');
     const res = await answer(a, b.id, true);
     expect(res.status).toBe(409);
     expect((await res.json()).error).toBe('friend_limit');
+  });
+
+  it('stops at 200 friends when the one who asked is full', async () => {
+    const a = await person('rq-n'), b = await person('rq-o');
+    await ask(a, 'rq-o');
+    await fill(a, 'rq-full');
+    const res = await answer(b, a.id, true);
+    expect(res.status).toBe(409);
+    expect((await res.json()).error).toBe('friend_limit');
+  });
+
+  it('refuses an auto-accept when one side is full', async () => {
+    const a = await person('rq-p'), b = await person('rq-q');
+    await ask(a, 'rq-q');
+    await fill(b, 'rq-fullb');
+    const res = await ask(b, 'rq-p');
+    expect(res.status).toBe(409);
+    expect((await res.json()).error).toBe('friend_limit');
+  });
+
+  it('keeps a third person out of another pair', async () => {
+    const a = await person('rq-r'), b = await person('rq-s'), c = await person('rq-t');
+    await ask(a, 'rq-s');
+    expect((await answer(c, a.id, true)).status).toBe(404);
+    expect((await drop(c, a.id)).status).toBe(404);
+    expect((await drop(c, b.id)).status).toBe(404);
+    await answer(b, a.id, true);
+    expect((await drop(c, a.id)).status).toBe(404);
+    expect((await lists(a)).friends.map((f) => f.userId)).toEqual([b.id]);
   });
 });
