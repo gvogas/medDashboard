@@ -88,6 +88,7 @@ function Friends({ bar }: { bar: boolean }) {
             <Panel title={<>Friends <span className="font-normal text-muted-foreground">{list.friends.length}</span></>} label="Friends">
                 <div className="px-4 py-1.5">
                     {list.friends.length === 0 && <p className={cn(SMALL, "py-3")}>No friends yet. Find people with Add friends.</p>}
+                    {list.friends.length > 0 && live.length === list.friends.length && <p className={cn(SMALL, "py-3")}>Everyone is studying now: see Studying now above.</p>}
                     {list.friends.filter((f) => !f.live).map((f) => (
                         <div key={f.userId} className={ROW}>
                             <Avatar p={f} />
