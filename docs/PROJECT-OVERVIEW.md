@@ -70,8 +70,8 @@ flowchart LR
 - **Back end:** plain JavaScript (ES modules) in `worker/`, with no framework. Routes are
   a regex table in `worker/api.js`.
 - **Database:** Cloudflare D1. The schema is one file, `migrations/0001_schema.sql`,
-  with the later migrations (`0002_spaces.sql` to `0008_friends.sql`) folded in, ready
-  for the move of the live `rounds-v7` into a fresh `rounds-v8`.
+  with the later migrations (`0002_spaces.sql` to `0009_friend_cancel.sql`) folded
+  in, ready for the move of the live `rounds-v7` into a fresh `rounds-v8`.
 - **AI:** Workers AI. `@cf/openai/gpt-oss-120b` reads text (outlines, calendars,
   schedules) and `@cf/meta/llama-4-scout-17b-16e-instruct` reads screenshots. Both
   share a limit of reads per person per day.

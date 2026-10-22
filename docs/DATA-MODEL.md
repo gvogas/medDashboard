@@ -39,10 +39,11 @@ six, then `rounds-v5` into `rounds-v6`, adding the Admin page (`users.is_admin`,
 `rounds-v7`, giving courses, items and the change feed a scope. `rounds-v7` is the live
 database. The next move, `rounds-v7` into `rounds-v8`, folds in shared classes and
 projects, invites, marks and space prefs, activity and the inbox, push reminders, grades
-and friends: the later migrations (`0002_spaces.sql` to `0008_friends.sql`) are now part
-of `0001_schema.sql`, with the grade columns at the end of `users`, `courses` and `items`
-(where `ALTER TABLE` had put them) and the course and item change triggers in their last
-form. The chain `rounds-v7` was built from (`0001_schema.sql` to `0008_friends.sql`) is
+and friends: the later migrations (`0002_spaces.sql` to `0009_friend_cancel.sql`) are
+now part of `0001_schema.sql`, with the columns added by `ALTER TABLE` at the end of
+their tables (`users.grading`, `courses.credits` and `grade_categories`, `items.category`,
+`friendships.cancelled_at`) and the course and item change triggers in their last form.
+The chain `rounds-v7` was built from (`0001_schema.sql` to `0009_friend_cancel.sql`) is
 kept as a test fixture in `test/fixtures/legacy-migrations/`, for the move's test. Later
 changes are new numbered files. The next one is `0002`.
 
@@ -458,7 +459,7 @@ Rows coalesce on the unique key `(space_id, actor_id, verb, subject, subject_use
 
 ## `friendships`
 
-One row per pair of people, the smaller user id in `user_lo` (`CHECK (user_lo < user_hi)`), `requested_by` one of the two, both `ON DELETE CASCADE`. `status` is `pending` (a request), `accepted` (friends, `accepted_at` set) or `declined`. A decline is silent: the row keeps its `created_at`, gets `declined_at`, and still reads as a waiting request to the one who asked, until they cancel it or the nightly purge drops it 30 days after `declined_at`. The one who declined may ask later, which turns the row into their own request. Removing a friend or cancelling a request deletes the row. Limits (`worker/friends.js`): 20 requests a day per person (counted before the name is looked up), 200 friends each (checked inside the accepting write), 30 searches a minute. See Friends under API.
+One row per pair of people, the smaller user id in `user_lo` (`CHECK (user_lo < user_hi)`), `requested_by` one of the two, both `ON DELETE CASCADE`. `status` is `pending` (a request), `accepted` (friends, `accepted_at` set) or `declined`. A decline is silent: the row keeps its `created_at`, gets `declined_at`, and still reads as a waiting request to the one who asked, until they cancel it or the nightly purge drops it 30 days after `declined_at`. The one who declined may ask later, which turns the row into their own request. Removing a friend or cancelling a request that is waiting deletes the row. Cancelling a request that was declined does not: it sets `cancelled_at` and keeps the row (still declined, still purged 30 days after `declined_at`), so the asker's list and search read as if it were gone, and asking again clears `cancelled_at` and reads `requested` again, but never reaches the one who declined. Their asking later still turns the row into their own request. Limits (`worker/friends.js`): 20 requests a day per person (counted before the name is looked up), 200 friends each (checked inside the accepting write), 30 searches a minute. See Friends under API.
 
 ## `friend_settings`
 

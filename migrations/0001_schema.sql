@@ -777,6 +777,11 @@ CREATE TABLE friendships (
   created_at    INTEGER NOT NULL,
   accepted_at   INTEGER,
   declined_at   INTEGER,
+  -- Friends: a request the other person declined, which the asker then cancelled. The row stays
+  -- (still declined, still purged 30 days after declined_at) instead of being deleted, so asking
+  -- again stays silent: deleting it would let the asker send a fresh request the other person
+  -- sees again, and again. cancelled_at is set when the asker cancels, cleared when they ask again.
+  cancelled_at  INTEGER,
   PRIMARY KEY (user_lo, user_hi),
   CHECK (user_lo < user_hi AND requested_by IN (user_lo, user_hi))
 );

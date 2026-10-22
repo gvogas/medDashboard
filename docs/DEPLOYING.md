@@ -232,10 +232,11 @@ runs once per database.
 | --- | --- |
 | `0001_schema.sql` | The whole schema: users, courses, items, quotes, study, Spotify tokens, the change feed, the Admin page's tables, shared spaces (classes and projects) with their members and invites, marks and space prefs, activity and the inbox, push devices, grades and friends (see [DATA-MODEL.md](DATA-MODEL.md)) |
 
-The files that used to follow it (`0002_spaces.sql` to `0008_friends.sql`) are folded
-into `0001_schema.sql`, ready for the move of `rounds-v7` into `rounds-v8` (see
+The files that used to follow it (`0002_spaces.sql` to `0009_friend_cancel.sql`) are
+folded into `0001_schema.sql`, ready for the move of `rounds-v7` into `rounds-v8` (see
 [Moving to a fresh database](#moving-to-a-fresh-database)). `rounds-v7` was built from
-`0001_schema.sql` to `0008_friends.sql`, kept in `test/fixtures/legacy-migrations/`.
+`0001_schema.sql` to `0009_friend_cancel.sql`, kept in
+`test/fixtures/legacy-migrations/`.
 Its schema and the folded one are the same, table for table and column for column, so
 this code runs on either; but this branch goes to `main` only together with the move.
 
@@ -271,7 +272,8 @@ so devices sync on without a reset. The last move was `rounds-v6` to `rounds-v7`
 
 1. Fold the migrations into `migrations/0001_schema.sql`. Move the files the live
    database was built from into `test/fixtures/legacy-migrations/` (for the move to
-   `rounds-v8`, the live `rounds-v7` chain `0001_schema.sql` to `0008_friends.sql`).
+   `rounds-v8`, the live `rounds-v7` chain `0001_schema.sql` to
+   `0009_friend_cancel.sql`).
    A column added with `ALTER TABLE` goes at the end of its table, where SQLite put it,
    so the fresh database's columns are in the same order as the old one's.
    This rewrites and deletes migrations that have already run, which the Check

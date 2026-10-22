@@ -52,12 +52,13 @@ line ''two''', '[{"id":"s","text":"Review","done":true}]', '[{"label":"Notes","u
   await db.prepare(`INSERT INTO space_prefs (user_id, id, space_id, color, target, term, created_at, updated_at, revision) VALUES ('ana', '${CLASS}', '${CLASS}', '#4F74D9', 90, 'Fall 2026', 305, 305, 23)`).run();
   await db.prepare(`INSERT INTO activity (space_id, actor_id, verb, subject_user, detail, bucket, at) VALUES ('${CLASS}', 'ana', 'member.joined', 'ana', '{"by":"ANA"}', 0, 306)`).run();
   await db.prepare("INSERT INTO inbox_seen (user_id, seq) VALUES ('ana', 1)").run();
-  /* push devices (0006_push) and friends (0008_friends) */
+  /* push devices (0006_push) and friends (0008_friends, 0009_friend_cancel) */
   await db.prepare(`INSERT INTO push_subscriptions (endpoint, user_id, tz, created_at, last_ok_at, last_sent_day, failures) VALUES
     ('https://fcm.googleapis.com/fcm/send/ana-phone', 'ana', 'America/Toronto', 310, 320, '2026-10-21', 0),
     ('https://updates.push.services.mozilla.com/wpush/v2/ana-laptop', 'ana', 'UTC', 311, NULL, NULL, 3),
     ('https://web.push.apple.com/ben-phone', 'ben', 'Europe/Paris', 312, 330, '2026-10-20', 1)`).run();
-  await db.prepare("INSERT INTO friendships (user_lo, user_hi, requested_by, status, created_at, accepted_at) VALUES ('ana', 'ben', 'ben', 'accepted', 340, 341)").run();
+  /* ben asked, ana declined, ben cancelled: the row stays, with cancelled_at (0009_friend_cancel) */
+  await db.prepare("INSERT INTO friendships (user_lo, user_hi, requested_by, status, created_at, declined_at, cancelled_at) VALUES ('ana', 'ben', 'ben', 'declined', 340, 341, 342)").run();
   await db.prepare("INSERT INTO friend_settings (user_id, findable, show_studying) VALUES ('ben', 0, 1)").run();
   await db.prepare("INSERT INTO spotify_tokens (user_id, refresh_token, access_token, expires_at, updated_at) VALUES ('ana', 'enc', 'acc', 999, 280)").run();
   await db.prepare('UPDATE sync_state SET floor = 2 WHERE id = 1').run();
@@ -84,7 +85,7 @@ it('copies a rounds-v7 database into today\'s schema, row for row, with the chan
   expect(source.inbox_seen).toEqual([{ user_id: 'ana', seq: 1 }]);
   expect(source.push_subscriptions.map((p) => [p.user_id, p.tz, p.last_sent_day, p.failures])).toEqual([
     ['ana', 'America/Toronto', '2026-10-21', 0], ['ana', 'UTC', null, 3], ['ben', 'Europe/Paris', '2026-10-20', 1]]);
-  expect(source.friendships).toEqual([{ user_lo: 'ana', user_hi: 'ben', requested_by: 'ben', status: 'accepted', created_at: 340, accepted_at: 341, declined_at: null }]);
+  expect(source.friendships).toEqual([{ user_lo: 'ana', user_hi: 'ben', requested_by: 'ben', status: 'declined', created_at: 340, accepted_at: null, declined_at: 341, cancelled_at: 342 }]);
   expect(source.friend_settings).toEqual([{ user_id: 'ben', findable: 0, show_studying: 1 }]);
   expect(source.users.map((u) => u.grading)).toEqual(['{"scale":[{"letter":"A","min":85,"points":4}],"pass":[60]}', '{}']);
   expect(source.courses[0]).toMatchObject({ credits: 4.5, grade_categories: '[{"id":"qz","name":"Quizzes","weight":20,"drop":1}]' });
@@ -152,7 +153,7 @@ it('copies marks and space prefs after users', () => {
 it('copies friendships, friend settings and push devices after users', () => {
   const sql = copyStatements({
     users: [{ id: 'ana', username: 'ana' }, { id: 'bo', username: 'bo' }],
-    friendships: [{ user_lo: 'ana', user_hi: 'bo', requested_by: 'ana', status: 'accepted', created_at: 1, accepted_at: 2, declined_at: null }],
+    friendships: [{ user_lo: 'ana', user_hi: 'bo', requested_by: 'ana', status: 'accepted', created_at: 1, accepted_at: 2, declined_at: null, cancelled_at: null }],
     friend_settings: [{ user_id: 'ana', findable: 0, show_studying: 1 }],
     push_subscriptions: [{ endpoint: 'https://fcm.googleapis.com/fcm/send/x', user_id: 'bo', tz: 'UTC', created_at: 1, last_ok_at: null, last_sent_day: null, failures: 0 }],
   });
