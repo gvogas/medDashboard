@@ -141,7 +141,7 @@ describe('the guards', () => {
   });
 
   it('never stop personal data or sync', async () => {
-    await setFeatures(['app', 'week', 'month', 'table', 'study', 'spotify', 'import', 'classes']);
+    await setFeatures(['app', 'week', 'month', 'table', 'study', 'spotify', 'import', 'classes', 'friends']);
     const put = await person('/api/courses/c1', { method: 'PUT', body: { code: 'BIO1', name: 'Biology', color: '#17B3AE' } });
     expect(put.status).toBe(200);
     expect((await person('/api/sync?v=3')).status).toBe(200);

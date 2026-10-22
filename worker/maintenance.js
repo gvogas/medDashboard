@@ -9,7 +9,7 @@ import { HttpError } from './http.js';
 import { requireUser } from './auth.js';
 
 /* In the Admin page's order; 'app' is the whole app. */
-export const FEATURES = ['app', 'week', 'month', 'table', 'study', 'spotify', 'import', 'classes'];
+export const FEATURES = ['app', 'week', 'month', 'table', 'study', 'spotify', 'import', 'classes', 'friends'];
 export const MESSAGE_MAX = 280;
 
 /** The stored switches, {features, message, updatedAt}; nothing on when absent or unreadable. */
@@ -56,6 +56,7 @@ const GUARDED = [
   [/^\/api\/(outline|school-calendar)$/, 'import'],
   [/^\/api\/ai\//, 'import'],
   [/^\/api\/(spaces|invites|join|inbox)(\/|$)/, 'classes'],
+  [/^\/api\/friends(\/|$)/, 'friends'],
 ];
 
 /**

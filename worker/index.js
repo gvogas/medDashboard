@@ -4,6 +4,7 @@ import { purgeThrottle } from './throttle.js';
 import { purgeLimits } from './limits.js';
 import { purgeErrors } from './errors.js';
 import { adminHousekeeping } from './admin.js';
+import { purgeFriends } from './friends.js';
 import { TOMBSTONE_TTL_MS } from '../src/core/shared.ts';
 
 export default {
@@ -21,5 +22,6 @@ export default {
     ctx.waitUntil(purgeLimits(env.DB));
     ctx.waitUntil(purgeErrors(env.DB));
     ctx.waitUntil(adminHousekeeping(env.DB));
+    ctx.waitUntil(purgeFriends(env.DB));
   },
 };

@@ -2,6 +2,8 @@
 import { env } from 'cloudflare:test';
 import { describe, expect, it } from 'vitest';
 import { createUser, signIn } from './helpers.js';
+import { unreadCount } from '../worker/activity.js';
+import { purgeFriends } from '../worker/friends.js';
 
 describe('the friendships table', () => {
   it('keeps one row per pair, smaller id first, and drops it with either account', async () => {
@@ -163,5 +165,87 @@ describe('friend requests', () => {
     await answer(b, a.id, true);
     expect((await drop(c, a.id)).status).toBe(404);
     expect((await lists(a)).friends.map((f) => f.userId)).toEqual([b.id]);
+  });
+});
+
+describe('GET /api/friends/search', () => {
+  const search = async (api, q) => api('/api/friends/search?q=' + encodeURIComponent(q));
+
+  it('finds people by part of their username or name, up to 8, never you', async () => {
+    const me = await person('sr-morgan');
+    for (const n of ['sr-mora', 'sr-morb', 'sr-other']) await createUser(n);
+    await env.DB.prepare("UPDATE users SET display_name = 'Dana Morrow' WHERE id = 'u-sr-other'").run();
+    const body = await (await search(me, 'mor')).json();
+    const names = body.people.map((p) => p.username);
+    expect(names).toEqual(expect.arrayContaining(['sr-mora', 'sr-morb', 'sr-other']));
+    expect(names).not.toContain('sr-morgan');
+    expect(body.people.length).toBeLessThanOrEqual(8);
+    expect(body.people.every((p) => p.state === 'none')).toBe(true);
+  });
+
+  it("shows each person's state, and keeps a decline silent", async () => {
+    const a = await person('sr-st-a'), b = await person('sr-st-b'), c = await person('sr-st-c'), d = await person('sr-st-d'), e = await person('sr-st-e');
+    await a('/api/friends', { method: 'POST', body: { username: 'sr-st-b' } });
+    await c('/api/friends', { method: 'POST', body: { username: 'sr-st-a' } });
+    /* d declines a's request: a still reads Requested */
+    await a('/api/friends', { method: 'POST', body: { username: 'sr-st-d' } });
+    await d(`/api/friends/${a.id}`, { method: 'PUT', body: { accept: false } });
+    /* a declines e's request: e is a stranger again to a */
+    await e('/api/friends', { method: 'POST', body: { username: 'sr-st-a' } });
+    await a(`/api/friends/${e.id}`, { method: 'PUT', body: { accept: false } });
+    const by = Object.fromEntries((await (await search(a, 'sr-st')).json()).people.map((p) => [p.username, p.state]));
+    expect(by).toEqual({ 'sr-st-b': 'requested', 'sr-st-c': 'asked', 'sr-st-d': 'requested', 'sr-st-e': 'none' });
+    /* d, who declined, sees a as a stranger too */
+    const mine = Object.fromEntries((await (await search(d, 'sr-st-a')).json()).people.map((p) => [p.username, p.state]));
+    expect(mine).toEqual({ 'sr-st-a': 'none' });
+  });
+
+  it('hides someone who turned off search, except for their exact username', async () => {
+    const a = await person('sr-hide-a'), b = await person('sr-hide-b');
+    await b('/api/friends/settings', { method: 'PUT', body: { findable: false, showStudying: true } });
+    expect((await (await search(a, 'sr-hide')).json()).people).toEqual([]);
+    expect((await (await search(a, 'sr-hide-b')).json()).people.map((p) => p.username)).toEqual(['sr-hide-b']);
+  });
+
+  it('wants 2 to 40 characters, takes % and _ literally, and allows 30 a minute', async () => {
+    const a = await person('sr-lim');
+    expect((await search(a, 'x')).status).toBe(400);
+    expect((await (await search(a, '%%')).json()).people).toEqual([]);
+    /* 'x' is refused before it counts; '%%' counts: 1 + 29 = 30, the most a minute allows */
+    for (let i = 0; i < 29; i++) await search(a, 'zz');
+    expect((await search(a, 'zz')).status).toBe(429);
+  });
+});
+
+describe('friend requests elsewhere', () => {
+  it('appear in the inbox and its unread count until answered', async () => {
+    const a = await person('ib-a'), b = await person('ib-b');
+    await a('/api/friends', { method: 'POST', body: { username: 'ib-b' } });
+    const box = await (await b('/api/inbox')).json();
+    expect(box.friendRequests.map((r) => r.userId)).toEqual([a.id]);
+    expect(await unreadCount(env.DB, b.id)).toBe(1);
+    await b(`/api/friends/${a.id}`, { method: 'PUT', body: { accept: true } });
+    expect((await (await b('/api/inbox')).json()).friendRequests).toEqual([]);
+    expect(await unreadCount(env.DB, b.id)).toBe(0);
+  });
+
+  it('are refused while friends are in maintenance', async () => {
+    const a = await person('mt-a');
+    await env.DB.prepare("INSERT INTO app_meta (key, value, updated_at) VALUES ('maintenance', ?1, 1) ON CONFLICT (key) DO UPDATE SET value = ?1")
+      .bind(JSON.stringify({ features: ['friends'], message: '', updatedAt: 1 })).run();
+    try {
+      expect((await a('/api/friends')).status).toBe(503);
+    } finally {
+      await env.DB.prepare("DELETE FROM app_meta WHERE key = 'maintenance'").run();
+    }
+  });
+
+  it('drops declines 30 days after the decline', async () => {
+    const a = await createUser('pg-a'), b = await createUser('pg-b');
+    await env.DB.prepare("INSERT INTO friendships (user_lo, user_hi, requested_by, status, created_at, declined_at) VALUES (?, ?, ?, 'declined', 1, 1)").bind(a, b, a).run();
+    await purgeFriends(env.DB, 1 + 29 * 86_400_000);
+    expect(await env.DB.prepare('SELECT count(*) AS n FROM friendships WHERE user_lo = ?').bind(a).first()).toEqual({ n: 1 });
+    await purgeFriends(env.DB, 1 + 31 * 86_400_000);
+    expect(await env.DB.prepare('SELECT count(*) AS n FROM friendships WHERE user_lo = ?').bind(a).first()).toEqual({ n: 0 });
   });
 });
