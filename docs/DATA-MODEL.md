@@ -22,6 +22,8 @@ marks            your layer on a shared item: status, grade, notes, hidden
 space_prefs      your colour, target, term and archive for a space
 activity         what members did in a space: the inbox and each class's Activity tab
 inbox_seen       the last activity row each person has read
+friendships      one row per pair of people: a request, a decline, or a friendship
+friend_settings  your two Friends switches: findable in search, shown while studying
 ```
 
 The schema is [`migrations/0001_schema.sql`](../migrations/0001_schema.sql), in one
@@ -38,7 +40,8 @@ database. The schema the last move copied from is kept as a test
 fixture in `test/fixtures/legacy-migrations/`. Later changes are new numbered files:
 `0002_spaces.sql` (`spaces`, `members`), `0003_invites.sql` (`invites`),
 `0004_marks.sql` (`marks`, `space_prefs`) and `0005_activity.sql` (`activity`,
-`inbox_seen` and the triggers that fill `activity`). The next one is `0006`.
+`inbox_seen` and the triggers that fill `activity`) and `0006_friends.sql`
+(`friendships`, `friend_settings`). The next one is `0007`.
 
 ## Structure at a glance
 
@@ -48,6 +51,7 @@ fixture in `test/fixtures/legacy-migrations/`. Later changes are new numbered fi
 | Shared classes and projects | `spaces`, `members`, `invites` | Who is in which space, join codes and invitations |
 | Your layer on shared rows | `marks`, `space_prefs` | Your status, grade and notes on a shared item; your settings for a space |
 | Activity and the inbox | `activity`, `inbox_seen` | What members did in each space (90 days), and how far each person has read |
+| Friends | `friendships`, `friend_settings` | Friend requests and friendships; whether you show in search |
 | Synchronization | `changes`, `sync_state` | Latest record changes, ordered cursors per scope, and the retention floor |
 | Authentication and request control | `login_throttle`, `request_limits` | Temporary attempt counts and cooldowns |
 | Spotify connection | `spotify_tokens`, `spotify_oauth_states`, `spotify_refresh_locks` | Credentials, one-use consent attempts, and refresh leases |
@@ -395,6 +399,14 @@ Rows coalesce on the unique key `(space_id, actor_id, verb, subject, subject_use
 
 `user_id` (primary key, `ON DELETE CASCADE`), `seq`: the last activity row you have read. Kept off `users`, so reading never moves the profile's revision. `PUT /api/inbox/seen` moves it forward only, and never past the newest activity row there is.
 
+## `friendships`
+
+One row per pair of people, the smaller user id in `user_lo` (`CHECK (user_lo < user_hi)`), `requested_by` one of the two, both `ON DELETE CASCADE`. `status` is `pending` (a request), `accepted` (friends, `accepted_at` set) or `declined`. A decline is silent: the row keeps its `created_at`, gets `declined_at`, and still reads as a waiting request to the one who asked, until they cancel it or the nightly purge drops it 30 days after `declined_at`. The one who declined may ask later, which turns the row into their own request. Removing a friend or cancelling a request deletes the row. Limits (`worker/friends.js`): 20 requests a day per person (counted before the name is looked up), 200 friends each (checked inside the accepting write), 30 searches a minute. See Friends under API.
+
+## `friend_settings`
+
+`user_id` (primary key, `ON DELETE CASCADE`), `findable`, `show_studying` (0/1). No row means both on. `findable = 0` hides you from search except for your exact username. `show_studying` is read from study together's Stage 3 on. Kept off `users`, so a change never moves the profile's revision.
+
 ## Indexes
 
 | Index | Serves |
@@ -499,7 +511,11 @@ All routes are under `/api`, speak JSON, and require the session cookie except
 | `GET /api/spaces/:sid` | → `{id, scope, kind, role, archived, members, invites, code, schoolCalendar}`: the members and the class's school-calendar snapshot (or `null`) for everyone in the space, its invites for the owner and editors, the join code's expiry and uses left for the owner. `404` outside it. |
 | `POST /api/spaces/:sid/school` | the owner, archived or not: copy your school calendar into the class again → `{schoolCalendar}` (what the class now holds). With no calendar of yours that has a semester, the old snapshot stays. Classes only (`404` otherwise). The app syncs first and says so when your calendar has not reached the server yet. |
 | `POST /api/spaces/:sid/invites` · `DELETE /api/spaces/:sid/invites/:userId` | `{username, role?}` → `201` the invite (30 days; a repeat refreshes it). The owner or an editor; only the owner gives a role other than the default. `404 no_user`, `409 member`; 20 an hour. So anyone in a class can learn whether a username exists by inviting it, at most 20 names an hour. DELETE withdraws it: whoever sent it, or the owner. |
-| `GET /api/inbox` | → `{invites, items, seen}`: your invites (as `GET /api/invites`), the inbox's newest 50 rows within the 90 days, newest first, and your `inbox_seen.seq` (0 for none). Each row: `{seq, spaceId, space, kind, verb, subject, actor, subjectUser, about, old, new, detail, n, at}`, `space` the space's name now (or as it was, once gone), `about` whether it is about you. See The inbox and activity below. |
+| `GET /api/friends` | → `{friends, incoming, sent, settings}`: `friends` `[{userId, username, name, since}]`, requests to you and from you `[{userId, username, name, at}]` (a request the other person declined stays in `sent`), `settings` `{findable, showStudying}`. |
+| `GET /api/friends/search?q=` | 2–40 characters → `{people: [{userId, username, name, state}]}`: up to 8 people whose username or display name contains `q` (ASCII case ignored), never you, and someone hidden from search only for their exact username. `state` is `none`, `friends`, `requested` (you asked, or they declined) or `asked` (they asked you). 30 a minute. |
+| `POST /api/friends` · `PUT /api/friends/:userId` · `DELETE /api/friends/:userId` | POST `{username}` → `{userId, username, name, state}`: a request, or a friendship when they had already asked you (`404 no_user`, `409 friends`, `409 friend_limit`, `429` past 20 a day). PUT `{accept}` answers a request sent to you → `204` (`404` when there is none). DELETE removes a friend or cancels your request → `204` (`404` otherwise). |
+| `PUT /api/friends/settings` | `{findable, showStudying}` (both booleans) → `204`. |
+| `GET /api/inbox` | → `{invites, friendRequests, items, seen}`: your invites (as `GET /api/invites`), friend requests waiting for you (as `incoming` above), the inbox's newest 50 rows within the 90 days, newest first, and your `inbox_seen.seq` (0 for none). Each row: `{seq, spaceId, space, kind, verb, subject, actor, subjectUser, about, old, new, detail, n, at}`, `space` the space's name now (or as it was, once gone), `about` whether it is about you. See The inbox and activity below. |
 | `PUT /api/inbox/seen` | `{seq}` → `204`: you have read up to `seq` (forward only, never past the newest row). `400 {field:'seq'}` for anything but a whole number ≥ 0. |
 | `GET /api/spaces/:sid/activity?before=<seq>` | → `{items, more}`: a space's Activity tab, 30 rows below `before` (the newest when left out) within the 90 days, newest first, in the inbox's row shape. Any live member, archived or not; `404` outside it; `400 {field:'before'}` for a bad `before`. |
 | `GET /api/invites` · `POST /api/invites/:sid/accept` · `POST /api/invites/:sid/decline` | your invites, expired ones marked (the list is for old clients only: the app reads invites from `GET /api/inbox`); accept → `{space}` (`404` once withdrawn, `410 expired`, `403 archived` while the class is archived, `409 limit`/`full`; the invite stays pending); decline → `204`. |
@@ -747,7 +763,7 @@ The Admin page's Maintenance tab switches features off while an admin works on
 them. `app_meta` key `maintenance` holds `{features, message, updatedAt, updatedBy}`
 (no table of its own, no migration); `features` ⊆ `app` (the whole app), `week`,
 `month`, `table` (All items), `study`, `spotify` (Music), `import` (Import with AI),
-`classes` (shared classes & projects), and `message` is at most 280 characters
+`classes` (shared classes & projects), `friends` (the Friends tab and its routes), and `message` is at most 280 characters
 (empty: the app's default copy). `GET/PUT /api/admin/maintenance` read and set it
 (admins only, `400 invalid` for an unknown feature). Changes are not in `admin_log`,
 whose `action` CHECK would need a migration; the value records who changed it.
@@ -759,7 +775,8 @@ off, and the message in the Import with AI sheet; admins keep the feature under 
 bar. The Worker enforces what is a feature of its own: for non-admins, with
 `import` or `app` on, `/api/outline`, `/api/school-calendar` and `/api/ai/*` answer
 `503 {error: 'maintenance', feature}`; with `classes` or `app` on, so does every
-`/api/spaces…`, `/api/invites…`, `/api/inbox…` and `/api/join` route. Personal
+`/api/spaces…`, `/api/invites…`, `/api/inbox…` and `/api/join` route; with
+`friends` or `app` on, every `/api/friends…` route. Personal
 rows, `/api/me` and `/api/sync` are never stopped. A shared edit refused this way
 stays pending on the device, with no try counted, and uploads once it is back.
 
@@ -823,7 +840,7 @@ On the device, IndexedDB version 6 holds shared rows in `shared_courses` and `sh
 
 ### The nightly purge
 
-`purgeTombstones` (`worker/db.js`) runs in this order: (1) soft-delete the marks on shared items whose tombstones expire, so the change feed carries it: every mark on a project task (your note goes with it, spec §13), only the bare ones (holding nothing) on a class item; (2) for each space deleted more than 30 days ago, its items, course, change feed, members, invites, marks, prefs and activity (except the rows about a person, `subject_user != ''`, which stay in that person's inbox), then the space; (3) the floor and the 30-day tombstones, now also `members`, never an expiring class item that a meaningful live mark still holds, invites 90 days after `created_at`, and activity 90 days after `at` (`KEEP_MS` in `worker/activity.js`); (4) after that batch, **Keep as mine** on behalf of each person still holding something on an expiring class item, at most 3 (person, class) groups a night, each group's failure logged and skipped. The kept item's class row goes the next night. A project's rows are never held back by a mark: only class items (`c:`) wait.
+`purgeTombstones` (`worker/db.js`) runs in this order: (1) soft-delete the marks on shared items whose tombstones expire, so the change feed carries it: every mark on a project task (your note goes with it, spec §13), only the bare ones (holding nothing) on a class item; (2) for each space deleted more than 30 days ago, its items, course, change feed, members, invites, marks, prefs and activity (except the rows about a person, `subject_user != ''`, which stay in that person's inbox), then the space; (3) the floor and the 30-day tombstones, now also `members`, never an expiring class item that a meaningful live mark still holds, invites 90 days after `created_at`, and activity 90 days after `at` (`KEEP_MS` in `worker/activity.js`); (4) after that batch, **Keep as mine** on behalf of each person still holding something on an expiring class item, at most 3 (person, class) groups a night, each group's failure logged and skipped. The kept item's class row goes the next night. A project's rows are never held back by a mark: only class items (`c:`) wait. Separately, `purgeFriends` (`worker/friends.js`) drops declined friend requests 30 days after `declined_at`.
 
 ---
 

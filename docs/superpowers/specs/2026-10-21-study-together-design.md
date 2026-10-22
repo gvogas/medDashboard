@@ -25,7 +25,7 @@ People add each other as friends, then study in a shared room: one timer that ev
 
 **Friends list.** First comes **Studying now**: friends who have **Show friends when I'm studying** on and have a run going. Each shows their class name and how long they've been going. A friend in a room has **Join**. A friend studying alone has **Invite**, which opens Study together with that friend already ticked. (The prototype's "Ask to join" became Invite; it does the same job without a new kind of message.) Under that comes everyone else, showing when they last studied, with Invite and Remove.
 
-**Settings.** The two switches sit at the bottom of the Friends tab. Both are on by default and stored on `users`.
+**Settings.** The two switches sit at the bottom of the Friends tab. Both are on by default and stored in `friend_settings` (no row means both on), so a change never moves the profile's revision.
 
 ## 2. Rooms
 
@@ -51,9 +51,12 @@ People add each other as friends, then study in a shared room: one timer that ev
 - **Group record.** `GET /api/rooms/:id/record` returns the members and each person's minutes. The minutes are the sum of the `study_sessions` rows with that `room_id`, so if someone edits or deletes their own session, their row in the record changes too. Only people who were in the room can read it.
 - **History.** Sessions with a `roomId` show a "with" row of friend chips and a Group record button. A new Study tile, **With friends this week**, adds up those sessions.
 
-## 4. Data (migration 0006_study_together.sql)
+## 4. Data
+
+Each stage brings its own migration: `0006_friends.sql` (Stage 1, as built: `friendships` with a `declined_at` column so a decline never changes what the asker sees, and `friend_settings` in place of the two `users` columns below), then `0007_rooms.sql` and `0008_presence.sql`. The sketch below is the first design; Stage 1's file is the reference for the friends tables.
 
 ```sql
+-- Built instead as friend_settings (user_id, findable, show_studying).
 ALTER TABLE users ADD COLUMN findable      INTEGER NOT NULL DEFAULT 1 CHECK (findable IN (0, 1));
 ALTER TABLE users ADD COLUMN show_studying INTEGER NOT NULL DEFAULT 1 CHECK (show_studying IN (0, 1));
 
@@ -157,8 +160,8 @@ Room events go in `rooms.feed`, not the `activity` table, because `activity` bel
 
 ## 9. Stages
 
-1. **Friends.** Migration 0006 (whole), friends routes, Friends tab (search, requests, list without live status), inbox entries, settings, maintenance switch.
+1. **Friends.** Migration 0006 (friends tables only), friends routes, Friends tab (search, requests, list without live status), inbox entries, settings, maintenance switch.
 2. **Rooms.** Rooms routes, Study together sheet, room focus screen, host controls, join from Friends and from the inbox, `run.ts` room runs, session `roomId` sync, polling.
 3. **Presence and records.** Solo presence, "Studying now", end-of-session summary, group record, the "with" row in History, the With friends tile, cron cleanup.
 
-Each stage is tested (vitest for routes and data; component tests for the tab and the room) and released on its own, and Stage 1 applies the remote migration before deploy.
+Each stage is tested (vitest for routes and data; component tests for the tab and the room) and released on its own, and each stage applies its remote migration before deploy.
