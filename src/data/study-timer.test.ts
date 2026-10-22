@@ -65,7 +65,7 @@ function runAt(flow: Flow, into: number, extra: Partial<Run> = {}): Run {
     return {
         round: Math.min(flow.rounds, roundsDone + 1), index, kind: flow.steps[index][0], leftMs: stepMs - Math.min(left, stepMs), stepMs,
         studyMs: 0, roundsDone, done: into >= totalMs, paused: false, leftInFlowMs: Math.max(0, totalMs - into),
-        courseId: "anat", itemId: null, flow, startedAt: T0, at: T0 + into, ...extra,
+        courseId: "anat", itemId: null, flow, startedAt: T0, room: null, at: T0 + into, ...extra,
     }
 }
 

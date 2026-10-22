@@ -1,6 +1,7 @@
 // The Friends tab on the Study page (study together, spec §1): your friends, requests to and
 // from you, Add friends (search), and the two switches. Loads when it opens and the list is
-// missing or a minute old. While friends are switched off, the maintenance page.
+// missing or a minute old. While friends are switched off, the maintenance page. A friend in a
+// study room has Join; everyone has Invite, which opens Study together with them ticked.
 
 import { useEffect, useId, useRef, useState, type ReactNode } from "react"
 import { cn } from "@/lib/utils"
@@ -10,6 +11,8 @@ import { MaintenanceBar, MaintenancePage } from "@/components/maintenance"
 import { useMaintenance } from "@/data/maintenance"
 import { useScreen } from "@/data/signin"
 import { answerRequest, askFriend, friendsNow, friendsStale, loadFriends, removeFriend, saveFriendSettings, searchPeople, useFriends } from "@/data/friends"
+import { joinRoomRun, openTogether, useRun } from "@/data/study-timer"
+import { inviteMore } from "@/data/room"
 import type { FriendMatch, FriendPerson, FriendState, Friends as FriendList } from "@/data/types"
 
 const ROW = "flex flex-wrap items-center gap-3 border-b border-line-2 py-2.5 last:border-b-0"
@@ -49,6 +52,7 @@ function Friends({ bar }: { bar: boolean }) {
         setBusy(false)
     }
     const off = busy || offline
+    const myRoom = useRun()?.room?.id ?? null
 
     if (!list) return <Panel title="Friends" label="Friends"><div className="p-4"><Note>{offline ? "Friends need a connection." : error || "Loading…"}</Note></div></Panel>
 
@@ -61,7 +65,12 @@ function Friends({ bar }: { bar: boolean }) {
                     {list.friends.map((f) => (
                         <div key={f.userId} className={ROW}>
                             <Avatar p={f} />
-                            <span className="flex min-w-[140px] flex-1 flex-col"><span>{f.name}</span><span className={SMALL}>@{f.username}</span></span>
+                            <span className="flex min-w-[140px] flex-1 flex-col">
+                                <span>{f.name}</span>
+                                <span className={f.room ? "text-[12.5px] font-medium text-[var(--study-ink)]" : SMALL}>{f.room ? "Studying in a room of " + f.room.size : "@" + f.username}</span>
+                            </span>
+                            {f.room && f.room.id !== myRoom && <Button disabled={off} aria-label={"Join " + f.name} onClick={() => void run(joinRoomRun(f.room!.id))}>Join</Button>}
+                            {!f.room && asking !== f.userId && <Button variant="ghost" disabled={off} aria-label={"Invite " + f.name} onClick={() => (myRoom ? void run(inviteMore([f.userId])) : openTogether([f.userId]))}>Invite</Button>}
                             {asking === f.userId ? (
                                 <span className="flex flex-wrap items-center gap-1.5">
                                     <span className={SMALL}>Remove {f.name}?</span>
@@ -192,7 +201,7 @@ function Switch({ checked, disabled, about, onChange, children }: { checked: boo
 
 /* initials on a colour picked from the user id, so a person keeps theirs */
 const COLORS = ["#4F74D9", "#8B5CC7", "#F08A6C", "#B8457E", "#4FBF8B", "#7D8A99", "#E8B33A", "#17B3AE"]
-function Avatar({ p }: { p: FriendPerson }) {
+export function Avatar({ p }: { p: FriendPerson }) {
     let h = 0
     for (const c of p.userId) h = (h * 31 + c.charCodeAt(0)) >>> 0
     const initials = Array.from(p.name.split(/\s+/).map((w) => Array.from(w)[0] ?? "").join("")).slice(0, 2).join("").toUpperCase()

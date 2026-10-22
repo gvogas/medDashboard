@@ -1,17 +1,23 @@
 // A study run on this device: starts, pauses, skips, stops, and logs its study time.
 // The run record lives in IndexedDB's meta store, so a reload picks it up; only the
 // finished session syncs. study-timer.ts draws from read() and listens with onTick().
+// A run in a study room (room.ts) carries `room`: its clock is the room's, which adopt()
+// replaces on each poll, and it logs as the session 'r-' + the room id.
 
 import * as store from "@/core/store"
+import { data } from "@/core/store"
 import * as timer from "@/core/timer"
 import { uid } from "@/core/model"
 import { refOf } from "./refs"
 import type { Flow, StepKind } from "./types"
 
+/** A run's place in a room: the room, when you first joined (on this device's clock), the room's
+    study time when you last joined, and what earlier stints in it came to. */
+export interface RoomLink { id: string; joinedAt: number; joinedStudyMs: number; earlierMs: number }
 /** timer.start() plus what the run is logged against. */
-export interface StoredRun extends timer.Run { id: string; courseId: string | null; itemId: string | null }
+export interface StoredRun extends timer.Run { id: string; courseId: string | null; itemId: string | null; room?: RoomLink }
 /** What read() gives: the timer's state and what the run is logged against. */
-export interface RunRead extends timer.RunState { courseId: string | null; itemId: string | null; flow: Flow; startedAt: number }
+export interface RunRead extends timer.RunState { courseId: string | null; itemId: string | null; flow: Flow; startedAt: number; room: RoomLink | null }
 export type RunEvent = "tick" | "step" | "start" | "end"
 
 const KEY = "studyRun"
@@ -26,7 +32,13 @@ const emit = (event: RunEvent) => { const s = read(); for (const fn of listeners
 
 export const active = () => !!run
 export function read(now = Date.now()): RunRead | null {
-    return run ? { ...timer.read(run, now), courseId: run.courseId, itemId: run.itemId, flow: run.flow, startedAt: run.startedAt } : null
+    return run ? { ...timer.read(run, now), courseId: run.courseId, itemId: run.itemId, flow: run.flow, startedAt: run.startedAt, room: run.room ?? null } : null
+}
+
+/** Your study in a room run: earlier stints, and the room's study since you last joined. */
+export function roomStudyMs(r: Pick<StoredRun, "room"> & timer.Run, now = Date.now()): number {
+    if (!r.room) return timer.read(r, now).studyMs
+    return r.room.earlierMs + Math.max(0, timer.read(r, now).studyMs - r.room.joinedStudyMs)
 }
 
 /** On sign-in: resume a run this device was in the middle of. */
@@ -65,9 +77,15 @@ export function prime() {
     fullscreen(true)
 }
 
-/** Begin a run, after prime() in the Start click. */
-export async function begin(flow: Flow, courseId: string, itemId: string | null) {
-    run = { ...timer.start(flow), id: uid(), courseId, itemId: itemId || null }
+const clockOf = (r: timer.Run): timer.Run => ({
+    flow: r.flow, startedAt: r.startedAt, pausedAt: r.pausedAt, pausedMs: r.pausedMs, skippedMs: r.skippedMs, skippedStudyMs: r.skippedStudyMs,
+})
+
+/** Begin a run, after prime() in the Start click; in a room, on the room's clock. */
+export async function begin(flow: Flow, courseId: string, itemId: string | null, room?: { link: RoomLink; clock: timer.Run }) {
+    run = room
+        ? { ...clockOf(room.clock), id: "r-" + room.link.id, courseId, itemId: itemId || null, room: room.link }
+        : { ...timer.start(flow), id: uid(), courseId, itemId: itemId || null }
     lastStep = stepKey(run)
     await save()
     holdScreen()
@@ -75,8 +93,27 @@ export async function begin(flow: Flow, courseId: string, itemId: string | null)
     emit("start")
 }
 
-export async function togglePause() {
+/** A room's latest clock, and your place in it. Nothing when this is not that room's run. */
+export async function adopt(clock: timer.Run, link: RoomLink) {
+    if (!run?.room || run.room.id !== link.id) return
+    const was = run.pausedAt
+    run = { ...run, ...clockOf(clock), room: link }
+    if (run.pausedAt === null && was !== null) holdScreen()
+    else if (run.pausedAt !== null && was === null) releaseScreen()
+    await save()
+    tick()
+}
+
+/** Change what the run is logged against (a room member picks another class mid-run). */
+export async function setPick(courseId: string, itemId: string | null) {
     if (!run) return
+    run = { ...run, courseId, itemId: itemId || null }
+    await save()
+    emit("tick")
+}
+
+export async function togglePause() {
+    if (!run || run.room) return
     /* the timer copies the run with its changes, so the id and what it is logged against stay */
     run = (run.pausedAt === null ? timer.pause(run) : timer.resume(run)) as StoredRun
     if (run.pausedAt === null) holdScreen(); else releaseScreen()
@@ -85,7 +122,7 @@ export async function togglePause() {
 }
 
 export async function skip() {
-    if (!run) return
+    if (!run || run.room) return
     run = timer.skip(run) as StoredRun
     await save()
     tick()
@@ -107,13 +144,17 @@ async function finish() {
     try {
         if (stored?.id === ended.id) {
             const s = timer.read(ended)
-            const minutes = timer.loggedMinutes(s)
+            const minutes = timer.loggedMinutes({ studyMs: roomStudyMs(ended) })
             /* the session first: if it fails, the kept run is still there on the next load */
             if (minutes >= 1) {
+                /* back in a room after leaving it: the same session, written again with the total */
+                const before = ended.room ? data.study_sessions.find((x) => x.id === ended.id) : undefined
                 await store.saveStudySession({
+                    ...before,
                     /* the run holds keys; the session stores the ids and the space they are in */
                     id: ended.id, ...refOf(ended.courseId, ended.itemId),
-                    startedAt: ended.startedAt, studyMinutes: minutes, roundsDone: s.roundsDone,
+                    startedAt: ended.room ? ended.room.joinedAt : ended.startedAt, studyMinutes: minutes, roundsDone: s.roundsDone,
+                    ...(ended.room ? { roomId: ended.room.id } : {}),
                 })
             }
             await store.meta.set(KEY, null)

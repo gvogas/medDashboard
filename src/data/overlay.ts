@@ -34,6 +34,8 @@ export type SheetState =
     | { kind: "convert"; courseId: string }
     | { kind: "join"; code: string; space: SpaceSummary | null }
     | { kind: "inbox" }
+    /* study together: start a room, these friends ticked */
+    | { kind: "together"; invite: string[] }
     | { kind: "merge"; spaceId: string; courseId: string; fromCourse: boolean }
     | { kind: "project"; spaceId: string; tab: ProjectTab }
     | { kind: "new-project"; parent: ParentRef | null }

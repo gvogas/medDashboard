@@ -6,6 +6,8 @@
 
 import { useMemo, useSyncExternalStore } from "react"
 import * as focus from "./run"
+import * as room from "./room"
+import type { RoomLink } from "./run"
 import * as store from "@/core/store"
 import { data } from "@/core/store"
 import { isOpen, normalizeFlow, normalizePrefs, FLOW_PRESETS } from "@/core/model"
@@ -13,7 +15,7 @@ import { iso, today as todayIso } from "@/core/dates"
 import { minutesByDay } from "@/core/history"
 import { rememberUi } from "@/data/ui"
 import { notify, setStudyBadge, subscribe as subscribeBridge } from "@/bridge"
-import { getSheet } from "./overlay"
+import { getSheet, openSheet } from "./overlay"
 import { toast } from "./toast"
 import { useCourses, useItems, useProfile, useStudySessions } from "./store"
 import { shownSessions } from "./study"
@@ -45,6 +47,8 @@ export interface Run {
     itemId: string | null
     flow: Flow
     startedAt: number
+    /** In a study room (room.ts): which, and your place in it. */
+    room: RoomLink | null
     at: number
 }
 
@@ -65,7 +69,7 @@ function readRun(): Run | null {
 
 const keyOf = (r: Run | null) => (r
     ? [r.round, r.index, r.kind, r.paused, r.done, r.roundsDone, Math.ceil(r.leftMs / 1000), Math.floor(r.studyMs / 1000),
-        Math.floor(r.at / 1000), r.courseId, r.itemId].join()
+        Math.floor(r.at / 1000), r.courseId, r.itemId, r.room?.id ?? ""].join()
     : "")
 
 /* A new snapshot also retitles the tab ("24:13 · Study") and badges the Study icon. */
@@ -184,10 +188,54 @@ export async function startRun(): Promise<boolean> {
     return true
 }
 
-export const togglePause = (): Promise<void> => focus.togglePause()
-export const skip = (): Promise<void> => focus.skip()
-/** Stop & log: the study time done so far is saved as a session. */
-export const stopRun = (): Promise<void> => focus.stop()
+/* In a room the clock is the room's: Pause and Skip are the host's, for everyone (room.ts). */
+export function togglePause(): Promise<void> {
+    const r = focus.read()
+    if (r?.room) return room.hostClock(r.paused ? "resume" : "pause")
+    return focus.togglePause()
+}
+export function skip(): Promise<void> {
+    return focus.read()?.room ? room.hostClock("skip") : focus.skip()
+}
+/** Stop & log: the study time done so far is saved as a session. In a room, that is Leave. */
+export const stopRun = (): Promise<void> => (focus.read()?.room ? room.leaveRoom() : focus.stop())
+
+/* ── study together: the class picked, as the room shows it ── */
+
+/** "BIO 101 · Midterm": what the room sees you studying, from the course and item keys. */
+export function labelOf(courseId: string | null, itemId: string | null): string {
+    const [courses, items] = studyLists()
+    const c = courses.find((x) => x.id === courseId), it = itemId ? items.find((x) => x.id === itemId) : null
+    return ((c ? c.code || c.name : "") + (it ? " · " + it.title : "")).slice(0, 60)
+}
+
+/** The Study together sheet, with these friends ticked. */
+export const openTogether = (invite: string[] = []) => openSheet({ kind: "together", invite })
+
+/** Start a room on `flow` with your class picked for the timer, inviting `invite`. Inside the click. */
+export async function startRoomRun(flow: Flow, invite: string[]): Promise<string> {
+    const { courseId, itemId } = pickFor(...studyLists(), ui.study)
+    if (!courseId) return "Add a course first; study time is logged against one."
+    focus.prime()
+    return room.startRoom(flow, courseId, itemId, labelOf(courseId, itemId), invite)
+}
+
+/** Join a room with your class picked for the timer. Inside the click. */
+export async function joinRoomRun(id: string): Promise<string> {
+    const { courseId, itemId } = pickFor(...studyLists(), ui.study)
+    if (!courseId) return "Add a course first; study time is logged against one."
+    focus.prime()
+    const err = await room.joinRoom(id, courseId, itemId, labelOf(courseId, itemId))
+    if (err) focus.fullscreen(false)
+    return err
+}
+
+/** In a room: log to another class from here on. */
+export function pickRoomClass(courseId: string, itemId: string | null): Promise<void> {
+    ui.study.courseId = courseId
+    ui.study.itemId = itemId
+    return room.setRoomPick(courseId, itemId, labelOf(courseId, itemId))
+}
 
 /** Back to the focus screen (the dock's Focus, or the Study view during a run), full screen again. */
 export function openFocus() {

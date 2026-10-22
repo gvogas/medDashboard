@@ -63,7 +63,7 @@ export async function markSeen(): Promise<void> {
     if (!box || offline || top <= box.seen) return
     const before = box.seen, unreadBefore = unread
     box = { ...box, seen: top }
-    setUnread(box.invites.filter((i) => !i.expired).length + (box.friendRequests?.length ?? 0))
+    setUnread(box.invites.filter((i) => !i.expired).length + (box.friendRequests?.length ?? 0) + (box.roomInvites?.length ?? 0))
     keep(box)
     emit()
     try { await api.inbox.seen(top) } catch {
@@ -89,6 +89,15 @@ export function dropInvite(spaceId: string): void {
 export function dropFriendRequest(userId: string): void {
     if (!box?.friendRequests?.some((r) => r.userId === userId)) return
     box = { ...box, friendRequests: box.friendRequests.filter((r) => r.userId !== userId) }
+    setUnread(Math.max(0, unread - 1))
+    keep(box)
+    emit()
+}
+
+/** A room invite joined or put off: it leaves the list and the count. */
+export function dropRoomInvite(roomId: string): void {
+    if (!box?.roomInvites?.some((r) => r.roomId === roomId)) return
+    box = { ...box, roomInvites: box.roomInvites.filter((r) => r.roomId !== roomId) }
     setUnread(Math.max(0, unread - 1))
     keep(box)
     emit()

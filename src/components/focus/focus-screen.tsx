@@ -6,8 +6,11 @@
 // Stop & log. The music: a pill at the bottom that opens a glass side panel (a bottom
 // sheet on a phone); the stage re-centres in what is left. Space pauses, M opens or shuts
 // the music; Esc (data/keyboard.ts, escapeFocus) shuts the music, then leaves.
+// In a study room (data/room.ts) the course chip picks what you log to, the controls are the
+// host's (Pause and End for everyone) or a note naming the host, Stop & log becomes Leave,
+// and the people panel (room-panel.tsx) sits on the right.
 
-import { useEffect, useLayoutEffect, useMemo, useRef, type ReactNode } from "react"
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react"
 import { cn } from "@/lib/utils"
 import { duration } from "@/lib/time"
 import { isTyping } from "@/lib/dom"
@@ -24,8 +27,10 @@ import { getSheet } from "@/data/overlay"
 import { keysOpen } from "@/data/keys"
 import { getBusy } from "@/data/ai-read"
 import {
-    clockTime, doneAt, leaveFocus, nextLine, skip, stopRun, stripSegments, toggleMusic, togglePause, useRun, useToday, type Run,
+    clockTime, doneAt, leaveFocus, nextLine, pickRoomClass, skip, stopRun, stripSegments, toggleMusic, togglePause, useRun, useToday, type Run,
 } from "@/data/study-timer"
+import { hostClock, isHost, useRoom } from "@/data/room"
+import { RoomLine, RoomPanel } from "./room-panel"
 import { MusicPill } from "./music-pill"
 import { MusicPanel } from "./music-panel"
 
@@ -94,6 +99,11 @@ function FocusScreen({ run }: { run: Run }) {
     const next = nextLine(run)
     const at = clockTime(doneAt(run, run.at))
     const phase = run.kind === "study" ? THEMES[bg].studyWord : "Break"
+    const roomState = useRoom()
+    const inRoom = run.room !== null
+    const host = inRoom && isHost(roomState)
+    const hostName = roomState.view?.members.find((m) => m.userId === roomState.view?.room.hostId)?.name ?? "The host"
+    const [ending, setEnding] = useState(false)
 
     return (
         <div
@@ -125,6 +135,15 @@ function FocusScreen({ run }: { run: Run }) {
                     >
                         <BackIcon />Leave
                     </button>
+                    {inRoom ? (
+                        <label className="inline-flex max-w-full min-w-0 items-center gap-2 text-[12.5px] text-[var(--fx-ink-2)]">
+                            Logging to
+                            <select value={run.courseId ?? ""} onChange={(e) => void pickRoomClass(e.target.value, null)}
+                                className="h-8 max-w-[220px] min-w-0 cursor-pointer rounded-full border border-white/10 bg-white/5 px-3 font-[inherit] text-[12.5px] text-[var(--fx-ink)] [&_option]:bg-card [&_option]:text-foreground">
+                                {courses.filter((c) => !c.archived || c.id === run.courseId).map((c) => <option key={c.id} value={c.id}>{c.code}{run.courseId === c.id && item ? " · " + item.title : ""}</option>)}
+                            </select>
+                        </label>
+                    ) : (
                     <span className="inline-flex max-w-full min-w-0 items-center gap-2 overflow-hidden rounded-full border border-white/10 bg-white/5 px-3 py-[5px] text-[12.5px] whitespace-nowrap text-[var(--fx-ink-2)]">
                         <i aria-hidden="true" style={accent(course?.color)} className="size-2 flex-none rounded-[2px] bg-[var(--c,#7D8A99)]" />
                         <span className="min-w-0 truncate">
@@ -132,6 +151,7 @@ function FocusScreen({ run }: { run: Run }) {
                             {item && " · " + item.title}
                         </span>
                     </span>
+                    )}
                     {today.goal > 0 && (
                         <span className="inline-flex items-center gap-2 text-[12.5px] text-[var(--fx-ink-2)] tabular-nums">
                             <GoalRing part={today.minutes} whole={today.goal} tone="fx" className="size-[22px]" />
@@ -144,7 +164,8 @@ function FocusScreen({ run }: { run: Run }) {
                     "relative flex min-h-0 flex-1 flex-col items-center justify-center gap-5 py-4",
                     music && "max-[700px]:gap-2.5 max-[700px]:py-2",
                 )}>
-                    <PhaseLabel>{phase} · round {run.round} of {run.flow.rounds}{run.paused ? " · paused" : ""}</PhaseLabel>
+                    {inRoom && roomState.reconnecting && <p role="status" className="m-0 text-[12.5px] text-[var(--fx-ink-3)]">Reconnecting… the clock keeps running.</p>}
+                    <PhaseLabel>{phase} · round {run.round} of {run.flow.rounds}{run.paused ? (inRoom && !host ? " · paused by " + hostName : " · paused") : ""}</PhaseLabel>
                     <FlipClock
                         ms={run.leftMs}
                         running={!run.paused}
@@ -162,22 +183,34 @@ function FocusScreen({ run }: { run: Run }) {
                         </p>
                     </div>
                     <div className="flex flex-wrap items-center justify-center gap-3.5">
-                        <GhostButton onClick={() => void skip()} className={cn(music && "max-[700px]:hidden")}><SkipIcon />Skip</GhostButton>
+                        {(!inRoom || host) && <GhostButton onClick={() => void skip()} className={cn(music && "max-[700px]:hidden")}><SkipIcon />Skip</GhostButton>}
                         <button
                             type="button"
                             onClick={() => void togglePause()}
-                            aria-label={run.paused ? "Resume timer" : "Pause timer"}
+                            disabled={inRoom && !host}
+                            title={inRoom && !host ? "Only the host can pause" : undefined}
+                            aria-label={(run.paused ? "Resume timer" : "Pause timer") + (inRoom ? " for everyone" : "")}
                             aria-keyshortcuts="Space"
                             className={cn(
                                 "grid size-16 cursor-pointer place-items-center rounded-full border-0 bg-[var(--ph)] text-[var(--fx-on-ph)] shadow-[0_10px_26px_-8px_var(--ph)] [&_svg]:size-[22px]",
                                 "transition-[background-color,transform] duration-500 hover:scale-105 motion-reduce:transition-none motion-reduce:hover:scale-100",
+                                "disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:scale-100",
                                 music && "max-[700px]:size-11 max-[700px]:[&_svg]:size-4",
                             )}
                         >
                             {run.paused ? <PlayIcon /> : <PauseIcon />}
                         </button>
-                        <GhostButton onClick={() => void stopRun()} className={cn(music && "max-[700px]:hidden")}><StopIcon />Stop &amp; log</GhostButton>
+                        {inRoom && host && (ending
+                            ? <GhostButton onClick={() => { setEnding(false); void hostClock("end") }} className={cn(music && "max-[700px]:hidden")}>End for everyone?</GhostButton>
+                            : <GhostButton onClick={() => setEnding(true)} className={cn(music && "max-[700px]:hidden")}><StopIcon />End for everyone</GhostButton>)}
+                        <GhostButton onClick={() => void stopRun()} className={cn(music && "max-[700px]:hidden")}>{inRoom ? "Leave" : <><StopIcon />Stop &amp; log</>}</GhostButton>
                     </div>
+                    {inRoom && <RoomLine run={run} />}
+                    {inRoom && (
+                        <p className={cn("m-0 text-center text-[12.5px] text-[var(--fx-ink-3)]", music && "max-[700px]:hidden")}>
+                            {host ? "You're the host: Pause, Skip and End act for everyone." : hostName + " controls the timer. Your minutes count from when you joined."}
+                        </p>
+                    )}
                 </div>
 
                 {!music && (
@@ -186,6 +219,8 @@ function FocusScreen({ run }: { run: Run }) {
                     </div>
                 )}
             </div>
+
+            {inRoom && !music && <RoomPanel run={run} />}
 
             {music && (
                 <MusicPanel
