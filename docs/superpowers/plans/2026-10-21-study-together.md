@@ -29,8 +29,8 @@
 | # | Stage | Branch | Database | Detailed plan |
 |---|---|---|---|---|
 | 1 | Friends: settings, requests, search, Friends tab, inbox entries, maintenance switch, nightly purge | `together-1-friends` | `0008_friends.sql` | **below** (**built** 2026-10-21) |
-| 2 | Rooms: shared timer, Study together sheet, room screen, host controls, join/leave, invites in the inbox, `roomId` on sessions, polling | `together-2-rooms` | `0009_rooms.sql` | written after Stage 1 merges |
-| 3 | Presence and records: solo "studying now", end summary, group record, History "with" row, With friends tile, room cleanup | `together-3-records` | `0010_presence.sql` | written after Stage 2 merges |
+| 2 | Rooms: shared timer, Study together sheet, room screen, host controls, join/leave, invites in the inbox, `roomId` on sessions, polling | `together-2-rooms` | `0002_rooms.sql` (the clean db folded 0001–0009 into one 0001) | **below** |
+| 3 | Presence and records: solo "studying now", end summary, group record, History "with" row, With friends tile, room cleanup | `together-3-records` | `0003_presence.sql` | written after Stage 2 merges |
 
 **One change from the spec:** each stage brings its own migration rather than all tables landing in Stage 1, so Stage 2's tables are designed against the code Stage 1 leaves. And the two switches live in a `friend_settings` table, not on `users`: that keeps them out of the profile's revision and out of `scripts/lib/move-db.js`'s users column list. Update spec §4 to match in Stage 1's docs task.
 
@@ -1236,6 +1236,73 @@ git commit -m "Study together 1: docs"
 ```
 
 - [ ] **Step 5: Release (only with George's yes).** `npm run db:remote` then `npm run db:check -- --remote` (applies `0008_friends.sql` to rounds-v7), merge `together-1-friends` into `main` with a merge commit, push; the Cloudflare Git build deploys. Check the live site: Friends tab loads, search works.
+
+---
+
+# Stage 2: Rooms
+
+Written 2026-10-22, after Stage 1 and the clean db (rounds-v8, one `0001_schema.sql`) were live.
+
+**Branch:** `together-2-rooms` from `main` (44dc7a9). **Release:** merge to `main` and push with George's yes; GitHub Actions (`deploy.yml`) applies `0002_rooms.sql` before it deploys the code.
+
+## Decisions made while planning
+
+| Question | Decision |
+|---|---|
+| Migration | `migrations/0002_rooms.sql`. The `study_sessions` change triggers name every column in `json_object`, so they are dropped and made again with `room_id`. |
+| Clock on the server | `worker/rooms.js` imports `src/core/timer.ts` (the worker already imports `src/core/*.ts`), so the server and every device use the same arithmetic. |
+| Device clocks | Each room answer carries the server's `now`. The client shifts the record's times by `now - Date.now()` before keeping it, so a device whose clock is off still shows the room's time. |
+| End | End for everyone pauses the record (if it is running) and sets `ended_at`. The record is then frozen, so every device works out the same minutes at any later time. |
+| Flow finished | A room whose flow is over is ended by the first request that sees it (`ended_at` = the moment it finished). Devices finish on their own when `read()` says done. |
+| One room at a time | Creating or joining a room leaves any other room you are in on the server (with handover). The device ends its own room run first, which logs it. |
+| Leaving and coming back | `room_members.earlier_ms` keeps the study time from earlier stints. Rejoining sets `joined_study_ms` again; the session (`r-<roomId>`) is written again with the total, so it stays one row. |
+| Your minutes | `floor((earlier_ms + studyMs(now) - joined_study_ms) / 60000)`, logged when at least 1. Session `startedAt` is your first `joined_at`. |
+| Away and gone | Away: no poll for 2 minutes (shown dimmed). Gone: 10 minutes, swept by any request on the room: state `left`, `left_at = last_seen`, host handed over, room ended if nobody is left. Stage 3's cron does the same for rooms nobody polls. |
+| 304 | `GET /api/rooms/:id?v=<tag>`: the tag is `version` plus who is away. Every change to the clock or to who is in bumps `version`. |
+| Not now on an invite | `POST /api/rooms/:id/leave` from an invited member drops the invite (state `left`, never joined). |
+| Who may join | A member row of any state (invited, or was in before) or a friend of the host; the room open; fewer than 8 in. |
+| Friends tab in Stage 2 | `GET /api/friends` gives each friend `room` (`{id, size}`) when they are in an open room and have Show friends when I'm studying on. The friend's row shows "In a room · N" and Join. Everyone else has Invite. "Studying now" as its own section is Stage 3. |
+| Rate limits | 30 rooms created a day per person (`claimLimit`). |
+
+## Data (`0002_rooms.sql`)
+
+`rooms` and `room_members` as spec §4, plus `room_members.earlier_ms INTEGER NOT NULL DEFAULT 0`. `study_sessions.room_id` (12 characters or null) with a partial index. The two session triggers made again with `'room_id', NEW.room_id`. `LATEST_MIGRATION = '0002_rooms.sql'`. `scripts/lib/move-db.js`: `study_sessions` gains `room_id`; `rooms` and `room_members` go after `friend_settings`.
+
+## API (`worker/rooms.js`)
+
+Room answer: `{room: {id, hostId, run: {flow, startedAt, pausedAt, pausedMs, skippedMs, skippedStudyMs}, endedAt, feed}, members: [{userId, username, name, state, joinedAt, joinedStudyMs, earlierMs, courseLabel, away}], tag, now}`. Members are those `in` or `left` after having been in; invited rows are left out. Feed entries: `{at, kind: started|joined|left|paused|resumed|skipped|ended|host, name}`, newest first, 20 kept.
+
+| Route | Rules |
+|---|---|
+| `POST /api/rooms` `{flow, courseLabel, invite}` | flow as `validate.js`'s study flow; label ≤ 60; up to 7 invites, friends only. Leaves other rooms. 30 a day. |
+| `GET /api/rooms/:id?v=` | your row of any state, else 404. Sweeps gone members, ends a finished flow, writes `last_seen` (if `in` and 30 s old). 304 on a matching tag. |
+| `POST /api/rooms/:id/join` `{courseLabel}` | 404 `not_found` (no room, or not allowed), 409 `ended`, 409 `full`. Leaves other rooms. |
+| `POST /api/rooms/:id/leave` | 204. In: `earlier_ms` grows, handover, end when empty. Invited: invite dropped. |
+| `PUT /api/rooms/:id/clock` `{action}` | 403 `not_host`, 409 `ended`. pause, resume, skip, end. |
+| `POST /api/rooms/:id/invite` `{userIds}` | host only; friends of the host; total rows ≤ 8 + 16 invited. |
+| `PUT /api/rooms/:id/me` `{courseLabel}` | yours while `in`. |
+
+`GET /api/inbox` adds `roomInvites: [{roomId, hostId, name, flow, startedAt, pausedAt, pausedMs, skippedMs, skippedStudyMs, size, at}]`: rooms still open where you are `invited`. `unreadCount` adds them. Maintenance: `/api/rooms` is part of `friends`.
+
+## Client
+
+- `src/data/run.ts`: `StoredRun.room?: {id, joinedStudyMs, earlierMs, joinedAt}`. `begin(flow, courseId, itemId, room?, record?)`, `adopt(record, room)` (replace the clock fields, keep id/course/item), `finish(at?)` logs `r-<id>` with `roomId` for a room run, `setPick(courseId, itemId)`.
+- `src/data/room.ts` (new): the room store (`useRoom()`), the poller (5 s visible, 30 s hidden, "Reconnecting" after a failed poll), `startRoom`, `joinRoom`, `leaveRoom`, `hostClock`, `inviteMore`, `setRoomPick`. A reload with a room run starts polling again.
+- `study-timer.ts`: Pause and Skip in a room go to `hostClock` (non-hosts get a toast); Stop & log becomes Leave.
+- `timer-cards.tsx`: a Study together card under the Ready card → `StudyTogetherSheet` (flow presets and your flow, your class, friends to invite).
+- `focus-screen.tsx`: in a room, the people panel (members, host tag, minutes so far, away dimmed, activity), host controls ("Pause for everyone", Skip, "End for everyone", Leave, Invite more) or "<Host> controls the timer" and Leave; "Logging to" picker; Reconnecting note.
+- Friends tab: Invite (opens the sheet with that friend ticked) and Join on friends in a room. Inbox sheet: room invites with Join and Not now.
+- Types: `StudySession.roomId`, `Room`, `RoomMember`, `RoomInvite`, `Friend.room`.
+
+## Tasks
+
+1. Migration + schema test (`test/rooms.test.js`), move-db, `LATEST_MIGRATION`.
+2. `worker/rooms.js` routes + tests: create, get/304, join rules, leave/handover/end, clock (host only, arithmetic), invite, me, away/gone sweep, flow done.
+3. Sessions: `roomId` in `validate.js`, `db.js` cols and kept-when-absent, sync round trip test.
+4. Inbox `roomInvites` + count; `GET /api/friends` `room`; maintenance guard; tests.
+5. Client types, `api.ts`, `run.ts` room runs, `room.ts` store and poller; unit tests.
+6. UI: Study together card + sheet, room focus screen, Friends tab Join/Invite, inbox sheet invites; component tests.
+7. Docs (DATA-MODEL, spec §4 numbering), `npm run check`, try it with two users locally, release with George's yes.
 
 ---
 
