@@ -32,6 +32,9 @@ function Friends({ bar }: { bar: boolean }) {
     const [busy, setBusy] = useState(false)
     /* the friend whose Remove is waiting for a yes */
     const [asking, setAsking] = useState<string | null>(null)
+    /* which button takes focus when it next appears: "confirm:<id>" or "remove:<id>" */
+    const want = useRef<string | null>(null)
+    const focusIf = (key: string) => (el: HTMLButtonElement | null) => { if (el && want.current === key) { want.current = null; el.focus() } }
     useEffect(() => { if (screen === "app" && friendsStale()) void loadFriends() }, [screen])
     useEffect(() => {
         const online = () => { if (friendsNow().offline) void loadFriends() }
@@ -62,12 +65,13 @@ function Friends({ bar }: { bar: boolean }) {
                             {asking === f.userId ? (
                                 <span className="flex flex-wrap items-center gap-1.5">
                                     <span className={SMALL}>Remove {f.name}?</span>
-                                    <Button variant="danger" disabled={off} aria-label={"Confirm removing " + f.name}
+                                    <Button variant="danger" disabled={off} aria-label={"Confirm removing " + f.name} ref={focusIf("confirm:" + f.userId)}
                                         onClick={() => { setAsking(null); void run(removeFriend(f.userId)) }}>Remove</Button>
-                                    <Button variant="ghost" onClick={() => setAsking(null)}>Keep</Button>
+                                    <Button variant="ghost" onClick={() => { want.current = "remove:" + f.userId; setAsking(null) }}>Keep</Button>
                                 </span>
                             ) : (
-                                <Button variant="ghost" disabled={off} aria-label={"Remove " + f.name} onClick={() => setAsking(f.userId)}>Remove</Button>
+                                <Button variant="ghost" disabled={off} aria-label={"Remove " + f.name} ref={focusIf("remove:" + f.userId)}
+                                    onClick={() => { want.current = "confirm:" + f.userId; setAsking(f.userId) }}>Remove</Button>
                             )}
                         </div>
                     ))}
@@ -123,7 +127,7 @@ function stateOf(p: FriendMatch, list: FriendList): FriendState {
     if (list.friends.some((x) => x.userId === p.userId)) return "friends"
     if (list.sent.some((x) => x.userId === p.userId)) return "requested"
     if (list.incoming.some((x) => x.userId === p.userId)) return "asked"
-    return "none"
+    return p.state
 }
 
 function AddFriends({ list, off, run }: { list: FriendList; off: boolean; run: (p: Promise<string>) => Promise<void> }) {

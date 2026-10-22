@@ -94,8 +94,10 @@ describe("the Friends tab", () => {
         fireEvent.click(screen.getByRole("button", { name: "Remove Sam Okoye" }))
         expect(screen.getByText("Remove Sam Okoye?")).toBeTruthy()
         expect(fake.api.friends.remove).not.toHaveBeenCalled()
+        expect(document.activeElement).toBe(screen.getByRole("button", { name: "Confirm removing Sam Okoye" }))
         fireEvent.click(screen.getByRole("button", { name: "Keep" }))
         expect(screen.queryByText("Remove Sam Okoye?")).toBeNull()
+        expect(document.activeElement).toBe(screen.getByRole("button", { name: "Remove Sam Okoye" }))
         fireEvent.click(screen.getByRole("button", { name: "Remove Sam Okoye" }))
         fireEvent.click(screen.getByRole("button", { name: "Confirm removing Sam Okoye" }))
         await act(async () => {})
@@ -125,6 +127,15 @@ describe("the Friends tab", () => {
         expect(fake.api.friends.settings).toHaveBeenCalledWith({ findable: true, showStudying: false })
         expect(screen.getByRole("alert").textContent).toMatch(/needs a connection/)
         expect((screen.getByRole("checkbox", { name: /Show friends when I'm studying/ }) as HTMLInputElement).checked).toBe(true)
+    })
+
+    it("takes a result's state from the search when the list does not have them", async () => {
+        fake.api.friends.search.mockResolvedValue({ people: [{ userId: "u-zz", username: "zed", name: "Zed Quinn", state: "requested" }] })
+        await show()
+        fireEvent.change(screen.getByRole("searchbox", { name: "Name or username" }), { target: { value: "zed" } })
+        await act(async () => { vi.advanceTimersByTime(400) })
+        expect(screen.getByText("Requested")).toBeTruthy()
+        expect(screen.queryByRole("button", { name: "Add Zed Quinn" })).toBeNull()
     })
 
     it("shows a search result as friends once the list says so", async () => {
