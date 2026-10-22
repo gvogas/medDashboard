@@ -135,14 +135,15 @@ export async function searchPeople(db, me, raw, now = Date.now()) {
   if (q.length < 2 || q.length > 40) throw new HttpError(400, { error: 'invalid', field: 'q' });
   const wait = await claimLimit(db, `friend-search:${me}`, SEARCH_LIMIT, now);
   if (wait) throw rateLimited(wait);
+  /* LIKE ignores case for ASCII letters only, so "É" does not match "é" */
   const like = '%' + q.replace(/[\\%_]/g, (c) => '\\' + c) + '%';
   const { results } = await db.prepare(`SELECT u.id, u.username, ${NAME} AS name, ${STATE} AS state
     FROM users AS u
     LEFT JOIN friend_settings AS s ON s.user_id = u.id
     LEFT JOIN friendships AS f ON f.user_lo = min(?1, u.id) AND f.user_hi = max(?1, u.id)
     WHERE u.id != ?1 AND (u.username = ?2
-      OR (COALESCE(s.findable, 1) = 1 AND (u.username LIKE ?3 ESCAPE '\\' OR lower(u.display_name) LIKE ?3 ESCAPE '\\')))
-    ORDER BY u.username = ?2 DESC, name LIMIT ${RESULTS}`).bind(me, q, like).all();
+      OR (COALESCE(s.findable, 1) = 1 AND (u.username LIKE ?3 ESCAPE '\\' OR u.display_name LIKE ?3 ESCAPE '\\')))
+    ORDER BY u.username = ?2 DESC, name COLLATE NOCASE LIMIT ${RESULTS}`).bind(me, q, like).all();
   return { people: results.map((r) => ({ ...person(r), state: r.state })) };
 }
 

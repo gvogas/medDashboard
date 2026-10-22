@@ -204,6 +204,8 @@ describe('GET /api/friends/search', () => {
     const a = await person('sr-hide-a'), b = await person('sr-hide-b');
     await b('/api/friends/settings', { method: 'PUT', body: { findable: false, showStudying: true } });
     expect((await (await search(a, 'sr-hide')).json()).people).toEqual([]);
+    await env.DB.prepare("UPDATE users SET display_name = 'Hidden Hana' WHERE id = ?").bind(b.id).run();
+    expect((await (await search(a, 'hidden han')).json()).people).toEqual([]);
     expect((await (await search(a, 'sr-hide-b')).json()).people.map((p) => p.username)).toEqual(['sr-hide-b']);
   });
 
