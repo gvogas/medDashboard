@@ -4,7 +4,7 @@ import { env } from 'cloudflare:test';
 import { describe, expect, it } from 'vitest';
 import { createUser, signIn, feed } from './helpers.js';
 import { unreadCount } from '../worker/activity.js';
-import { createRoom, getRoom, joinRoom, leaveRoom, roomClock, settle, studyAt, AWAY_MS, GONE_MS, ROOM_SIZE } from '../worker/rooms.js';
+import { createRoom, friendsLive, getRoom, inviteToRoom, joinRoom, leaveRoom, roomClock, settle, studyAt, AWAY_MS, GONE_MS, REINVITE_MS, ROOM_SIZE } from '../worker/rooms.js';
 import * as timer from '../src/core/timer.ts';
 
 const MIN = 60_000;
@@ -232,6 +232,54 @@ describe('a room', () => {
     const me = await (await host(`/api/rooms/${room.id}/me`, { method: 'PUT', body: { courseLabel: 'Physics' } })).json();
     expect(me.members[0].courseLabel).toBe('Physics');
     expect((await host(`/api/rooms/${room.id}/me`, { method: 'PUT', body: { courseLabel: 'x'.repeat(61) } })).status).toBe(400);
+  });
+
+  it('lets someone who was in it back in once the host has passed to a stranger, if a friend is in it', async () => {
+    const [a, b, c] = await users('ro-r-a', 'ro-r-b', 'ro-r-c');
+    await befriend(a, b);
+    await befriend(a, c);
+    await befriend(b, c);
+    const { room } = await createRoom(env.DB, a, { flow: FLOW }, T0);
+    await joinRoom(env.DB, b, room.id, {}, T0 + MIN);
+    await joinRoom(env.DB, c, room.id, {}, T0 + 2 * MIN);
+    await leaveRoom(env.DB, a, room.id, T0 + 3 * MIN);
+    await leaveRoom(env.DB, c, room.id, T0 + 4 * MIN);
+    /* the host is now b, c's friend; once c is no friend of b, only a friend inside lets c back */
+    await env.DB.prepare('DELETE FROM friendships WHERE user_lo = ? AND user_hi = ?').bind(...(b < c ? [b, c] : [c, b])).run();
+    expect((await friendsLive(env.DB, c, T0 + 5 * MIN)).get(b)).toBeUndefined();
+    await expect(joinRoom(env.DB, c, room.id, {}, T0 + 5 * MIN)).rejects.toMatchObject({ status: 404 });
+    await joinRoom(env.DB, a, room.id, {}, T0 + 5 * MIN);
+    expect((await friendsLive(env.DB, c, T0 + 6 * MIN)).get(a).room).toMatchObject({ id: room.id });
+    const r = await joinRoom(env.DB, c, room.id, {}, T0 + 6 * MIN);
+    expect(r.members.find((m) => m.userId === c).state).toBe('in');
+  });
+
+  it('passes the host on when the host deletes their account', async () => {
+    const [h, a] = await users('ro-d-h', 'ro-d-a');
+    await befriend(h, a);
+    const { room } = await createRoom(env.DB, h, { flow: FLOW }, T0);
+    await joinRoom(env.DB, a, room.id, {}, T0 + MIN);
+    await env.DB.prepare('DELETE FROM users WHERE id = ?').bind(h).run();
+    const r = await getRoom(env.DB, a, room.id, null, T0 + 2 * MIN);
+    expect(r.room).toMatchObject({ hostId: a, endedAt: null });
+    expect((await roomClock(env.DB, a, room.id, { action: 'pause' }, T0 + 3 * MIN)).room.run.pausedAt).toBe(T0 + 3 * MIN);
+  });
+
+  it('leaves someone who studied here as they are on Invite, and asks again after Not now only after a while', async () => {
+    const [h, a, b] = await users('ro-ri-h', 'ro-ri-a', 'ro-ri-b');
+    await befriend(h, a);
+    await befriend(h, b);
+    const { room } = await createRoom(env.DB, h, { flow: FLOW, invite: [b] }, T0);
+    await joinRoom(env.DB, a, room.id, {}, T0 + MIN);
+    await leaveRoom(env.DB, a, room.id, T0 + 2 * MIN);
+    await leaveRoom(env.DB, b, room.id, T0 + 2 * MIN);
+    await inviteToRoom(env.DB, h, room.id, { userIds: [a, b] }, T0 + 3 * MIN);
+    let r = await getRoom(env.DB, h, room.id, null, T0 + 3 * MIN);
+    expect(r.members.find((m) => m.userId === a).state).toBe('left');
+    const state = async (id) => (await env.DB.prepare('SELECT state FROM room_members WHERE room_id = ? AND user_id = ?').bind(room.id, id).first()).state;
+    expect(await state(b)).toBe('left');
+    await inviteToRoom(env.DB, h, room.id, { userIds: [b] }, T0 + 2 * MIN + REINVITE_MS);
+    expect(await state(b)).toBe('invited');
   });
 
   it('shows a friend in a room on your Friends list, with Join', async () => {

@@ -39,6 +39,19 @@ describe("presence", () => {
         expect(fake.presence.clear).toHaveBeenCalledTimes(1)
     })
 
+    it("takes it back when a run paused before a reload stops", async () => {
+        await run.begin(FLOW, "bio", null)
+        await run.togglePause()
+        /* the reload: run.ts and presence.ts start over from what the store kept */
+        vi.resetModules()
+        const again = await import("./run")
+        ;(await import("./presence")).watchPresence(() => "BIO")
+        await again.load()
+        expect(again.read()?.paused).toBe(true)
+        await again.stop()
+        expect(fake.presence.clear).toHaveBeenCalledTimes(1)
+    })
+
     it("sends nothing while you hide that you are studying", async () => {
         fake.showStudying = false
         await run.begin(FLOW, "bio", null)

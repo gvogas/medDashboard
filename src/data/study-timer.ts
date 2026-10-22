@@ -224,10 +224,21 @@ export async function startRoomRun(flow: Flow, invite: string[]): Promise<string
     return room.startRoom(flow, courseId, itemId, labelOf(courseId, itemId), invite)
 }
 
+/* Join while another run is going asks first (as the Study together sheet does): the same Join
+   again within JOIN_SURE_MS goes ahead and ends that run. */
+export const JOIN_SURE_MS = 15_000
+export const JOIN_ENDS_FIRST = "Your current session ends first. Its minutes are saved. Press Join again to go ahead."
+let joinAsked: { id: string; at: number } | null = null
+
 /** Join a room with your class picked for the timer. Inside the click. */
 export async function joinRoomRun(id: string): Promise<string> {
     const { courseId, itemId } = pickFor(...studyLists(), ui.study)
     if (!courseId) return "Add a course first; study time is logged against one."
+    if (focus.active() && room.roomId() !== id) {
+        const sure = joinAsked?.id === id && Date.now() - joinAsked.at < JOIN_SURE_MS
+        joinAsked = sure ? null : { id, at: Date.now() }
+        if (!sure) return JOIN_ENDS_FIRST
+    }
     focus.prime()
     const err = await room.joinRoom(id, courseId, itemId, labelOf(courseId, itemId))
     if (err) focus.fullscreen(false)

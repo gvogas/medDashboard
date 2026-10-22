@@ -17,6 +17,8 @@ import type { Flow, RoomRun, RoomView } from "./types"
 
 export const VISIBLE_MS = 5_000
 export const HIDDEN_MS = 30_000
+/** No poll for this long and the server takes you out (worker/rooms.js GONE_MS). */
+const GONE_MS = 10 * 60_000
 /** Friends one room can invite at a time: the room holds 8, you included. */
 export const ROOM_INVITES = 7
 
@@ -68,7 +70,9 @@ async function apply(view: RoomView, sentAt: number): Promise<void> {
     if (!mine || mine.state !== "in") {
         /* taken out after 10 minutes away, or left from another device: what the server kept counts */
         await run.adopt(clock, { id, joinedAt: kept?.joinedAt ?? Date.now(), joinedStudyMs: Number.MAX_SAFE_INTEGER, earlierMs: mine?.earlierMs ?? kept?.earlierMs ?? 0 })
-        toast("You left the room after a while away. Your minutes are saved.")
+        /* taken out for being away: the server dates the leave to when you were last seen, 10+ minutes back */
+        const away = mine?.state === "left" && mine.leftAt !== null && view.now - mine.leftAt >= GONE_MS
+        toast(away ? "You left the room after a while away. Your minutes are saved." : "You left the room. Your minutes are saved.")
         await end(false)
         return
     }
@@ -185,11 +189,16 @@ async function enter(view: RoomView, sentAt: number, courseId: string, itemId: s
     })
 }
 
-/** Start a room as its host, inviting `invite`. Ends a run already going first (it is logged). Returns an error message or "". */
+/** Start a room as its host, inviting `invite`. A run already going ends once the room is made (it
+    is logged); a start that fails leaves it running. Returns an error message or "". */
 export async function startRoom(flow: Flow, courseId: string, itemId: string | null, courseLabel: string, invite: string[]): Promise<string> {
-    if (run.active()) await end(true)
     const sentAt = Date.now()
-    try { await enter(await api.rooms.create(flow, courseLabel, invite), sentAt, courseId, itemId); return "" } catch (e) { return roomMessage(e) }
+    let view: RoomView
+    try { view = await api.rooms.create(flow, courseLabel, invite) } catch (e) { return roomMessage(e) }
+    /* the server has already taken you out of any other room */
+    if (run.active()) await end(false)
+    await enter(view, sentAt, courseId, itemId)
+    return ""
 }
 
 /** Join a room. A run already going ends first, unless it is this room's. Returns an error message or "". */
