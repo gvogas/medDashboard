@@ -13,7 +13,7 @@ import { Button } from "@/components/sheet/fields"
 /* What each switch is called in a sentence; the whole app is Term. */
 const NAMES: Record<Feature, string> = {
     app: "Term", week: "Week", month: "Month", table: "All items", study: "Study", spotify: "Music",
-    import: "Import with AI", classes: "Shared classes & projects",
+    import: "Import with AI", classes: "Shared classes & projects", friends: "Friends",
 }
 /* The pages, in the sidebar's order (side-nav.tsx). */
 const PAGES = ["week", "month", "table", "study", "spotify"] as const

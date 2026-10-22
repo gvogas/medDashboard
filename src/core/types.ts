@@ -207,7 +207,16 @@ export interface ActivityRow {
     n: number; at: number
 }
 /** GET /api/inbox: your pending invites, the newest rows, and where you have read up to. */
-export interface Inbox { invites: Invite[]; items: ActivityRow[]; seen: number }
+/** Someone on the app, as the Friends tab names them. */
+export interface FriendPerson { userId: string; username: string; name: string }
+export interface FriendRequest extends FriendPerson { at: number }
+export interface Friend extends FriendPerson { since: number }
+/** Where you stand with someone: friends, you asked, they asked, or nothing yet. */
+export type FriendState = 'none' | 'friends' | 'requested' | 'asked';
+export interface FriendMatch extends FriendPerson { state: FriendState }
+export interface FriendSettings { findable: boolean; showStudying: boolean }
+export interface Friends { friends: Friend[]; incoming: FriendRequest[]; sent: FriendRequest[]; settings: FriendSettings }
+export interface Inbox { invites: Invite[]; friendRequests?: FriendRequest[]; items: ActivityRow[]; seen: number }
 
 /** Your layer on a shared item (spec §4): yours alone. Its id is '<space id>:<item id>'. */
 export interface Mark extends Synced {

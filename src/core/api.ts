@@ -3,7 +3,7 @@
 import type { Row } from './db.ts';
 import { UNREAD_CAP } from './shared.ts';
 import type { Cursor, Page, ServerProfile } from './store.ts';
-import type { ActivityRow, Inbox, JoinCode, ParentRef, Space, SpaceDetails, SpaceInvite, SpaceSummary } from './types.ts';
+import type { ActivityRow, FriendMatch, FriendSettings, Friends, Inbox, JoinCode, ParentRef, Space, SpaceDetails, SpaceInvite, SpaceSummary } from './types.ts';
 
 /** An error's body as the Worker sends it: its code, and for some the server's copy or a wait. */
 export interface ErrorBody { error?: string; retryAfter?: unknown; current?: Row | null; [field: string]: unknown }
@@ -268,6 +268,15 @@ export const api = {
   invites: {
     accept: (sid: string) => spaceOf(request('POST', `/api/invites/${sid}/accept`)),
     decline: (sid: string) => empty(request('POST', `/api/invites/${sid}/decline`)),
+  },
+  /* friends (study together) */
+  friends: {
+    get: (): Promise<Friends> => request('GET', '/api/friends'),
+    search: (q: string): Promise<{ people: FriendMatch[] }> => request('GET', '/api/friends/search?q=' + encodeURIComponent(q)),
+    ask: (username: string): Promise<FriendMatch> => request('POST', '/api/friends', { username }),
+    answer: (userId: string, accept: boolean) => empty(request('PUT', `/api/friends/${encodeURIComponent(userId)}`, { accept })),
+    remove: (userId: string) => empty(request('DELETE', `/api/friends/${encodeURIComponent(userId)}`)),
+    settings: (s: FriendSettings) => empty(request('PUT', '/api/friends/settings', s)),
   },
   join: (code: string) => spaceOf(request('POST', '/api/join', { code })),
   get: (kind: string, id: string) => record(request('GET', rowPath(kind, id)), id),

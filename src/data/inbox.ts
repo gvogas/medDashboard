@@ -63,7 +63,7 @@ export async function markSeen(): Promise<void> {
     if (!box || offline || top <= box.seen) return
     const before = box.seen, unreadBefore = unread
     box = { ...box, seen: top }
-    setUnread(box.invites.filter((i) => !i.expired).length)
+    setUnread(box.invites.filter((i) => !i.expired).length + (box.friendRequests?.length ?? 0))
     keep(box)
     emit()
     try { await api.inbox.seen(top) } catch {
@@ -81,6 +81,15 @@ export function dropInvite(spaceId: string): void {
     const had = box.invites.some((i) => i.spaceId === spaceId && !i.expired)
     box = { ...box, invites: box.invites.filter((i) => i.spaceId !== spaceId) }
     if (had) setUnread(Math.max(0, unread - 1))
+    keep(box)
+    emit()
+}
+
+/** A friend request answered on the Friends tab: it leaves the list and the count. */
+export function dropFriendRequest(userId: string): void {
+    if (!box?.friendRequests?.some((r) => r.userId === userId)) return
+    box = { ...box, friendRequests: box.friendRequests.filter((r) => r.userId !== userId) }
+    setUnread(Math.max(0, unread - 1))
     keep(box)
     emit()
 }
