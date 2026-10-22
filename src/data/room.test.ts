@@ -90,6 +90,14 @@ describe("a room run", () => {
         expect(run.read()?.paused).toBe(true)
     })
 
+    it("drops a poll answer older than one already taken", async () => {
+        fake.rooms.join.mockResolvedValue(view({ tag: "3.0" }))
+        await joinRoom("room00000001", "bio", null, "BIO")
+        fake.rooms.get.mockResolvedValue(view({ pausedAt: T0 + SKEW + 10 * MIN, tag: "2.0" }))
+        await poll()
+        expect(run.read()?.paused).toBe(false)
+    })
+
     it("logs your minutes from when you joined as r-<room>, and tells the server on Leave", async () => {
         fake.rooms.join.mockResolvedValue(view())
         await joinRoom("room00000001", "bio", null, "BIO")

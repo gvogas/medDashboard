@@ -201,6 +201,19 @@ describe('a room', () => {
     expect((await pal(`/api/rooms/${room.id}/join`, { method: 'POST', body: {} })).status).toBe(404);
   });
 
+  it('keeps you in your room when a join elsewhere fails', async () => {
+    const [h, g, h2] = await users('ro-k-h', 'ro-k-g', 'ro-k-h2');
+    await befriend(h, g);
+    await befriend(h2, g);
+    const one = await createRoom(env.DB, h, { flow: FLOW }, T0);
+    await joinRoom(env.DB, g, one.room.id, {}, T0);
+    const two = await createRoom(env.DB, h2, { flow: FLOW }, T0);
+    await roomClock(env.DB, h2, two.room.id, { action: 'end' }, T0 + MIN);
+    await expect(joinRoom(env.DB, g, two.room.id, {}, T0 + 2 * MIN)).rejects.toMatchObject({ status: 409 });
+    const r = await getRoom(env.DB, g, one.room.id, null, T0 + 2 * MIN);
+    expect(r.members.find((m) => m.userId === g).state).toBe('in');
+  });
+
   it('drops an invite on Not now, and still lets a friend of the host join later', async () => {
     const host = await person('ro-n-host'), pal = await person('ro-n-pal');
     await befriend(host.id, pal.id);

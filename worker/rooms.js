@@ -288,7 +288,6 @@ export async function joinRoom(db, me, roomId, body, now = Date.now()) {
   if (!first) throw notFound();
   if (!(await mayEnter(db, me, first.room, first.members.find((m) => m.userId === me)))) throw notFound();
   if (first.room.endedAt !== null) throw ended();
-  await leaveOthers(db, me, roomId, now);
   const who = await db.prepare(`SELECT u.username, ${NAME} AS name FROM users AS u WHERE u.id = ?`).bind(me).first();
   const { room, members } = await change(db, roomId, (room, members) => {
     if (room.endedAt !== null) throw ended();
@@ -302,6 +301,8 @@ export async function joinRoom(db, me, roomId, body, now = Date.now()) {
     Object.assign(m, { name: who.name, username: who.username, state: 'in', joinedAt: m.joinedAt ?? now, joinedStudyMs: studyAt(room.run, now), leftAt: null, lastSeen: now, courseLabel });
     event(room, 'joined', who.name, now);
   }, now, me);
+  /* only once you are in: a join that fails (full, ended) leaves you where you were */
+  await leaveOthers(db, me, roomId, now);
   return view(room, members, now);
 }
 

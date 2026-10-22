@@ -35,6 +35,12 @@ export function read(now = Date.now()): RunRead | null {
     return run ? { ...timer.read(run, now), courseId: run.courseId, itemId: run.itemId, flow: run.flow, startedAt: run.startedAt, room: run.room ?? null } : null
 }
 
+/** Whole rounds of study in `ms`: a room run logs the rounds' worth you studied, not the room's. */
+const roundsIn = (flow: Flow, ms: number) => {
+    const per = flow.steps.reduce((a, [k, m]) => a + (k === "study" ? m * 60_000 : 0), 0)
+    return Math.min(flow.rounds, Math.floor(ms / per))
+}
+
 /** Your study in a room run: earlier stints, and the room's study since you last joined. */
 export function roomStudyMs(r: Pick<StoredRun, "room"> & timer.Run, now = Date.now()): number {
     if (!r.room) return timer.read(r, now).studyMs
@@ -153,7 +159,7 @@ async function finish() {
                     ...before,
                     /* the run holds keys; the session stores the ids and the space they are in */
                     id: ended.id, ...refOf(ended.courseId, ended.itemId),
-                    startedAt: ended.room ? ended.room.joinedAt : ended.startedAt, studyMinutes: minutes, roundsDone: s.roundsDone,
+                    startedAt: ended.room ? ended.room.joinedAt : ended.startedAt, studyMinutes: minutes, roundsDone: ended.room ? roundsIn(ended.flow, roomStudyMs(ended)) : s.roundsDone,
                     ...(ended.room ? { roomId: ended.room.id } : {}),
                 })
             }
