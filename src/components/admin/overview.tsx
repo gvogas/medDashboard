@@ -192,7 +192,7 @@ function HealthPanel({ health, error }: { health: Health | null; error: string |
     const rows: [string, boolean, string][] = [
         ["Database schema", health.migrations.ok, health.migrations.ok ? "Up to date (" + health.migrations.latest + ")" : "Behind: has " + (health.migrations.applied || "none") + ", needs " + health.migrations.latest + ". Run npm run db:remote."],
         ["Nightly cleanup", cronOk, health.cronLastRun ? "Last ran " + when(health.cronLastRun) + " (" + ago(health.cronLastRun) + ")" : "Hasn't run since the Admin page was added"],
-        ["Errors, last 24 h", health.errors24h === 0, health.errors24h === 0 ? "None" : health.errors24h + " — see the Errors tab"],
+        ["Errors, last 24 h", health.errors24h === 0, health.errors24h === 0 ? "None (refused requests aside)" : health.errors24h + " — see the Errors tab"],
         ["Workers AI", health.ai, health.ai ? "Bound" : "Not bound"],
         ...Object.entries(health.secrets).map(([name, ok]): [string, boolean, string] => [name === "SPOTIFY" ? "Spotify secrets" : name, ok, ok ? "Set" : "Not set"]),
     ]

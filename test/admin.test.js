@@ -2,7 +2,7 @@ import { env, SELF } from 'cloudflare:test';
 import { describe, expect, it } from 'vitest';
 import { BASE, createUser, login, signIn } from './helpers.js';
 import { LATEST_MIGRATION, adminHousekeeping } from '../worker/admin.js';
-import { DAILY_CAP, logError, purgeErrors } from '../worker/errors.js';
+import { BROWSER_PER_HOUR, CAPS, DAILY_CAP, cronJob, logError, purgeErrors } from '../worker/errors.js';
 import { trafficReport } from '../worker/analytics.js';
 import { upsertRow } from '../worker/db.js';
 import { NEXT_SPACE_REVISION as COPIED_REVISION } from '../worker/accounts.js';
@@ -240,6 +240,60 @@ describe('errors', () => {
     expect(await env.DB.prepare("SELECT count(*) AS n FROM error_log WHERE message = 'next day'").first()).toEqual({ n: 1 });
     await purgeErrors(env.DB);
     expect(await env.DB.prepare('SELECT count(*) AS n FROM error_log WHERE at < ?').bind(day + 2 * 24 * 60 * 60 * 1000).first()).toEqual({ n: 0 });
+  });
+});
+
+describe('every kind of error', () => {
+  const rows = (route) => env.DB.prepare('SELECT method, status, message, user_id FROM error_log WHERE route = ? ORDER BY id').bind(route).all().then((r) => r.results);
+
+  it('logs a refused request with who sent it, as a request error, and leaves it out of the health count', async () => {
+    const admin = await signInAdmin('boss20');
+    const before = (await (await admin('/api/admin/health')).json()).errors24h;
+    expect((await admin('/api/items/nope', { method: 'PUT', body: {} })).status).toBeGreaterThanOrEqual(400);
+    expect((await admin('/api/no-such-thing')).status).toBe(404);
+    expect(await rows('/api/no-such-thing')).toEqual([{ method: 'GET', status: 404, message: 'not_found', user_id: 'u-boss20' }]);
+    const { groups } = await (await admin('/api/admin/errors')).json();
+    expect(groups.find((g) => g.route === '/api/no-such-thing')).toMatchObject({ kind: 'request', users: 1 });
+    expect((await (await admin('/api/admin/health')).json()).errors24h).toBe(before);
+  });
+
+  it('takes a crash from a browser, signed in or not, a few an hour each', async () => {
+    const person = await signIn('crash1');
+    expect((await person('/api/errors', { method: 'POST', body: { kind: 'react', message: 'TypeError: x is undefined @ /assets/a.js:1:2', where: '/study' } })).status).toBe(204);
+    expect(await rows('/study')).toEqual([{ method: 'BROWSER', status: 0, message: 'react: TypeError: x is undefined @ /assets/a.js:1:2', user_id: 'u-crash1' }]);
+    const anon = (body) => SELF.fetch(`${BASE}/api/errors`, { method: 'POST', headers: { 'content-type': 'application/json', 'cf-connecting-ip': '10.9.9.9' }, body: JSON.stringify(body) });
+    expect((await anon({ message: 'boom', where: '/signin' })).status).toBe(204);
+    expect(await rows('/signin')).toEqual([expect.objectContaining({ method: 'BROWSER', user_id: null })]);
+    expect((await anon({ message: '' })).status).toBe(400);
+    for (let i = 1; i < BROWSER_PER_HOUR; i++) await anon({ message: 'again ' + i });
+    expect((await anon({ message: 'one too many' })).status).toBe(429);
+    /* a refused report is not logged again as a refused request */
+    expect(await rows('/api/errors')).toEqual([]);
+  });
+
+  it('logs a nightly job that fails, and the jobs after it still run', async () => {
+    let ran = false;
+    await cronJob(env.DB, 'test-job', async () => { throw new Error('disk on fire\nat stack'); });
+    await cronJob(env.DB, 'next-job', async () => { ran = true; });
+    expect(ran).toBe(true);
+    expect(await rows('cron/test-job')).toEqual([{ method: 'CRON', status: 500, message: 'disk on fire', user_id: null }]);
+    const admin = await signInAdmin('boss21');
+    const { groups, recent } = await (await admin('/api/admin/errors')).json();
+    expect(groups.find((g) => g.route === 'cron/test-job').kind).toBe('nightly');
+    expect(recent.find((e) => e.route === 'cron/test-job').kind).toBe('nightly');
+  });
+
+  it('caps each kind on its own, so a flood of refused requests leaves room for failures', async () => {
+    const day = Date.UTC(2020, 1, 1, 12);
+    await env.DB.prepare("INSERT INTO error_log (at, method, status, message) SELECT ?, 'GET', 404, 'flood' FROM (WITH RECURSIVE n(i) AS (SELECT 1 UNION ALL SELECT i + 1 FROM n WHERE i < ?) SELECT i FROM n)")
+      .bind(day, CAPS.request).run();
+    await logError(env.DB, { method: 'GET', route: '/cap/req', status: 404, message: 'x' }, day + 1000);
+    await logError(env.DB, { method: 'GET', route: '/cap/500', status: 500, message: 'x' }, day + 1000);
+    await logError(env.DB, { method: 'BROWSER', route: '/cap/br', status: 0, message: 'x' }, day + 1000);
+    expect((await rows('/cap/req')).length).toBe(0);
+    expect((await rows('/cap/500')).length).toBe(1);
+    expect((await rows('/cap/br')).length).toBe(1);
+    await env.DB.prepare('DELETE FROM error_log WHERE at < ?').bind(day + 24 * 60 * 60 * 1000).run();
   });
 });
 

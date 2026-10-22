@@ -10,6 +10,7 @@ import { requireUser } from './auth.js';
 import { claimLimit, rateLimited } from './limits.js';
 import { randomId } from './spaces.js';
 import { studyFlow } from './validate.js';
+import { logError, messageOf } from './errors.js';
 import * as timer from '../src/core/timer.ts';
 
 const MIN = 60_000;
@@ -485,7 +486,10 @@ export async function purgeRooms(db, now = Date.now()) {
   const { results } = await db.prepare(`SELECT r.id FROM rooms AS r WHERE r.ended_at IS NULL
     AND NOT EXISTS (SELECT 1 FROM room_members AS m WHERE m.room_id = r.id AND m.state = 'in' AND m.last_seen > ?) LIMIT 200`).bind(now - STALE_MS).all();
   for (const { id } of results) {
-    try { await change(db, id, () => {}, now); } catch { /* the next night tries again */ }
+    try { await change(db, id, () => {}, now); } catch (e) {
+      /* the next night tries again; Admin → Errors shows it meanwhile */
+      await logError(db, { method: 'CRON', route: 'cron/rooms/' + id, message: messageOf(e) }, now);
+    }
   }
   await db.batch([
     db.prepare('DELETE FROM presence WHERE ends_at < ?').bind(now),

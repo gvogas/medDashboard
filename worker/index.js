@@ -2,7 +2,7 @@ import { handleApi } from './api.js';
 import { purgeTombstones } from './db.js';
 import { purgeThrottle } from './throttle.js';
 import { purgeLimits } from './limits.js';
-import { purgeErrors } from './errors.js';
+import { cronJob, purgeErrors } from './errors.js';
 import { adminHousekeeping } from './admin.js';
 import { purgeFriends } from './friends.js';
 import { purgeRooms } from './rooms.js';
@@ -23,15 +23,17 @@ export default {
   // entries, and note the run for the Admin page's health panel.
   async scheduled(controller, env, ctx) {
     if (controller.cron === HOURLY) {
-      ctx.waitUntil(sendDigests(env, controller.scheduledTime || Date.now()));
+      ctx.waitUntil(cronJob(env.DB, 'digests', () => sendDigests(env, controller.scheduledTime || Date.now())));
       return;
     }
-    ctx.waitUntil(purgeTombstones(env.DB, Date.now() - TOMBSTONE_TTL_MS));
-    ctx.waitUntil(purgeThrottle(env.DB, Date.now() - 24 * 60 * 60 * 1000));
-    ctx.waitUntil(purgeLimits(env.DB));
-    ctx.waitUntil(purgeErrors(env.DB));
-    ctx.waitUntil(adminHousekeeping(env.DB));
-    ctx.waitUntil(purgeFriends(env.DB));
-    ctx.waitUntil(purgeRooms(env.DB));
+    /* each job on its own: one failing is logged (Admin → Errors, nightly) and the rest still run */
+    const job = (name, fn) => ctx.waitUntil(cronJob(env.DB, name, fn));
+    job('tombstones', () => purgeTombstones(env.DB, Date.now() - TOMBSTONE_TTL_MS));
+    job('throttle', () => purgeThrottle(env.DB, Date.now() - 24 * 60 * 60 * 1000));
+    job('limits', () => purgeLimits(env.DB));
+    job('errors', () => purgeErrors(env.DB));
+    job('housekeeping', () => adminHousekeeping(env.DB));
+    job('friends', () => purgeFriends(env.DB));
+    job('rooms', () => purgeRooms(env.DB));
   },
 };

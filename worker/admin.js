@@ -106,7 +106,7 @@ async function health(env, now = Date.now()) {
   const [migrations, cron, counts] = await Promise.all([
     db.prepare('SELECT name FROM d1_migrations ORDER BY id').all().then((r) => r.results.map((m) => m.name), () => []),
     db.prepare("SELECT value FROM app_meta WHERE key = 'cron'").first(),
-    db.prepare('SELECT (SELECT count(*) FROM users) AS accounts, (SELECT count(*) FROM error_log WHERE at >= ?) AS errors24h').bind(now - DAY_MS).first(),
+    db.prepare('SELECT (SELECT count(*) FROM users) AS accounts, (SELECT count(*) FROM error_log WHERE at >= ? AND status NOT BETWEEN 400 AND 499) AS errors24h').bind(now - DAY_MS).first(),
   ]);
   return {
     migrations: { latest: LATEST_MIGRATION, applied: migrations.at(-1) || null, ok: migrations.includes(LATEST_MIGRATION) },

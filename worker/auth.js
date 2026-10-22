@@ -107,6 +107,15 @@ export async function requireSession(request, env) {
   return session;
 }
 
+/** Who a request says it is, from the cookie alone (no D1 read): for the error log, not access. */
+export async function sessionUserId(request, env) {
+  try {
+    return (await readSession(parseCookies(request.headers.get('cookie'))[COOKIE], env.SESSION_SECRET))?.userId ?? null;
+  } catch {
+    return null;
+  }
+}
+
 /** The signed-in user id, or a 401. */
 export async function requireUser(request, env) {
   return (await requireSession(request, env)).userId;
