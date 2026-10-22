@@ -2,7 +2,7 @@ import { env, SELF } from 'cloudflare:test';
 import { describe, expect, it } from 'vitest';
 import { BASE, createUser, login, signIn } from './helpers.js';
 import { LATEST_MIGRATION, adminHousekeeping } from '../worker/admin.js';
-import { BROWSER_PER_HOUR, CAPS, DAILY_CAP, cronJob, logError, purgeErrors } from '../worker/errors.js';
+import { ANON_CAPS, BROWSER_PER_HOUR, CAPS, DAILY_CAP, cronJob, logError, purgeErrors } from '../worker/errors.js';
 import { trafficReport } from '../worker/analytics.js';
 import { upsertRow } from '../worker/db.js';
 import { NEXT_SPACE_REVISION as COPIED_REVISION } from '../worker/accounts.js';
@@ -293,6 +293,18 @@ describe('every kind of error', () => {
     expect((await rows('/cap/req')).length).toBe(0);
     expect((await rows('/cap/500')).length).toBe(1);
     expect((await rows('/cap/br')).length).toBe(1);
+    await env.DB.prepare('DELETE FROM error_log WHERE at < ?').bind(day + 24 * 60 * 60 * 1000).run();
+  });
+
+  it('keeps room for signed-in people when strangers send a flood', async () => {
+    const day = Date.UTC(2020, 2, 1, 12);
+    await env.DB.prepare("INSERT INTO error_log (at, method, status, message) SELECT ?, 'GET', 404, 'flood' FROM (WITH RECURSIVE n(i) AS (SELECT 1 UNION ALL SELECT i + 1 FROM n WHERE i < ?) SELECT i FROM n)")
+      .bind(day, ANON_CAPS.request).run();
+    await logError(env.DB, { method: 'GET', route: '/anon/req', status: 404, message: 'x' }, day + 1000);
+    await createUser('capped1');
+    await logError(env.DB, { method: 'GET', route: '/anon/user', status: 404, message: 'x', userId: 'u-capped1' }, day + 1000);
+    expect((await rows('/anon/req')).length).toBe(0);
+    expect((await rows('/anon/user')).length).toBe(1);
     await env.DB.prepare('DELETE FROM error_log WHERE at < ?').bind(day + 24 * 60 * 60 * 1000).run();
   });
 });

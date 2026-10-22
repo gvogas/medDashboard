@@ -5,13 +5,17 @@
 //
 // Writing one must never fail the request it describes, and a bug that fails every request
 // must not spend the day's free D1 writes, so each kind writes at most its cap per UTC day;
-// the rest only reach Workers Logs. A flood of 4xx cannot crowd out the 500s.
+// the rest only reach Workers Logs. A flood of 4xx cannot crowd out the 500s, and refused
+// requests and browser reports from no account (anyone on the internet) have a smaller cap
+// inside their kind's, so they cannot crowd out those from people signed in.
 import { readJson, HttpError } from './http.js';
 import { claimLimit, rateLimited } from './limits.js';
 import { sessionUserId } from './auth.js';
 
 export const KINDS = ['server', 'request', 'browser', 'nightly'];
 export const CAPS = { server: 500, request: 500, browser: 300, nightly: 100 };
+/** Of the cap, how many may come from no account. */
+export const ANON_CAPS = { request: 100, browser: 100 };
 /** The server kind's cap, as before kinds. */
 export const DAILY_CAP = CAPS.server;
 const KEEP_MS = 30 * 24 * 60 * 60 * 1000;
@@ -30,11 +34,13 @@ const dayStart = (now) => now - (now % (24 * 60 * 60 * 1000));
 /** Record one error. Never throws. */
 export async function logError(db, { method = '', route = '', status = 500, message = '', userId = null }, now = Date.now()) {
   const kind = kindOf({ method, status });
+  const anonCap = userId === null ? ANON_CAPS[kind] ?? null : null;
   try {
     await db.prepare(
       `INSERT INTO error_log (at, method, route, status, message, user_id)
-       SELECT ?1, ?2, ?3, ?4, ?5, ?6 WHERE (SELECT count(*) FROM error_log WHERE at >= ?7 AND ${KIND_SQL} = ?9) < ?8`,
-    ).bind(now, String(method).slice(0, 8), String(route).slice(0, 200), status, String(message).slice(0, 500), userId, dayStart(now), CAPS[kind], kind).run();
+       SELECT ?1, ?2, ?3, ?4, ?5, ?6 WHERE (SELECT count(*) FROM error_log WHERE at >= ?7 AND ${KIND_SQL} = ?9) < ?8
+         AND (?10 IS NULL OR (SELECT count(*) FROM error_log WHERE at >= ?7 AND ${KIND_SQL} = ?9 AND user_id IS NULL) < ?10)`,
+    ).bind(now, String(method).slice(0, 8), String(route).slice(0, 200), status, String(message).slice(0, 500), userId, dayStart(now), CAPS[kind], kind, anonCap).run();
   } catch (e) {
     console.error('error_log:', e?.message || e);
   }

@@ -75,7 +75,7 @@ export function Errors() {
                             <li key={e.at + ":" + i} className="flex flex-wrap gap-x-3 gap-y-0.5 border-b border-border px-5 py-2 text-[12px] last:border-b-0">
                                 <span className="w-[120px] flex-none text-muted-foreground">{when(e.at)}</span>
                                 <span className="font-mono text-ink-2">{badge(e)} {what(e)}</span>
-                                {e.username && <span className="text-ink-2">· {e.username}</span>}
+                                {e.username ? <span className="text-ink-2">· {e.username}</span> : (e.kind === "request" || e.kind === "browser") && <span className="text-muted-foreground">· signed out</span>}
                                 <span className="basis-full break-words font-mono text-foreground sm:basis-auto">{e.message}</span>
                             </li>
                         ))}
