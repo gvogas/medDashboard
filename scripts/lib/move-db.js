@@ -19,7 +19,7 @@ export const TABLES = {
   space_prefs: ['user_id', 'id', 'space_id', 'color', 'target', 'term', 'archived', 'created_at', 'updated_at', 'deleted_at', 'revision'],
   activity: ['seq', 'space_id', 'actor_id', 'verb', 'subject', 'subject_user', 'old_value', 'new_value', 'detail', 'n', 'bucket', 'at'],
   inbox_seen: ['user_id', 'seq'],
-  friendships: ['user_lo', 'user_hi', 'requested_by', 'status', 'created_at', 'accepted_at', 'declined_at'],
+  friendships: ['user_lo', 'user_hi', 'requested_by', 'status', 'created_at', 'accepted_at', 'declined_at', 'cancelled_at'],
   friend_settings: ['user_id', 'findable', 'show_studying'],
   spotify_tokens: ['user_id', 'refresh_token', 'access_token', 'expires_at', 'updated_at'],
   changes: ['seq', 'scope', 'kind', 'row_id', 'payload', 'deleted_at'],

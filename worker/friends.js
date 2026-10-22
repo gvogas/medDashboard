@@ -25,7 +25,7 @@ const person = (r) => ({ userId: r.id, username: r.username, name: r.name });
 /** {friends, incoming, sent, settings}: names as they are now, newest first. */
 export async function listFriends(db, userId) {
   const [rows, settings] = await db.batch([
-    db.prepare(`SELECT u.id, u.username, ${NAME} AS name, f.status, f.requested_by, f.created_at, f.accepted_at
+    db.prepare(`SELECT u.id, u.username, ${NAME} AS name, f.status, f.requested_by, f.created_at, f.accepted_at, f.cancelled_at
       FROM friendships AS f JOIN users AS u ON u.id = ${OTHER}
       WHERE (f.user_lo = ?1 OR f.user_hi = ?1) AND (f.status != 'declined' OR f.requested_by = ?1)
       ORDER BY COALESCE(f.accepted_at, f.created_at) DESC`).bind(userId),
@@ -35,7 +35,7 @@ export async function listFriends(db, userId) {
   for (const r of rows.results) {
     if (r.status === 'accepted') out.friends.push({ ...person(r), since: r.accepted_at });
     /* a decline reads as still waiting to the one who asked (spec §1) */
-    else if (r.requested_by === userId) out.sent.push({ ...person(r), at: r.created_at });
+    else if (r.requested_by === userId) { if (!(r.status === 'declined' && r.cancelled_at)) out.sent.push({ ...person(r), at: r.created_at }); }
     else out.incoming.push({ ...person(r), at: r.created_at });
   }
   const s = settings.results[0];
@@ -95,10 +95,15 @@ export async function requestFriend(db, me, body, now = Date.now()) {
   if (row?.requested_by === who.id && row.status === 'pending') {
     try { await accept(db, me, who.id, now); return out('friends'); }
     catch (e) { if (e.status !== 404) throw e; /* they cancelled in between: ask afresh below */ }
-  } else if (row?.requested_by === me) return out('requested');   /* waiting, or declined unseen */
+  } else if (row?.requested_by === me) {
+    /* waiting, or declined unseen. A declined one I had cancelled shows in my list again; the
+       other person is told nothing, so asking again never reaches them. */
+    if (row.status === 'declined') await db.prepare("UPDATE friendships SET cancelled_at = NULL WHERE user_lo = ?1 AND user_hi = ?2 AND status = 'declined' AND requested_by = ?3").bind(lo, hi, me).run();
+    return out('requested');
+  }
   /* none, or they asked and I declined: a fresh request from me */
   const made = await db.prepare(`INSERT INTO friendships (user_lo, user_hi, requested_by, status, created_at) VALUES (?1, ?2, ?3, 'pending', ?4)
-    ON CONFLICT (user_lo, user_hi) DO UPDATE SET requested_by = ?3, status = 'pending', created_at = ?4, declined_at = NULL
+    ON CONFLICT (user_lo, user_hi) DO UPDATE SET requested_by = ?3, status = 'pending', created_at = ?4, declined_at = NULL, cancelled_at = NULL
       WHERE friendships.status = 'declined' RETURNING user_lo`).bind(lo, hi, me, now).first();
   if (made) return out('requested');
   /* someone wrote the pair first: take what is there now */
@@ -117,16 +122,21 @@ export async function answerFriend(db, me, other, body, now = Date.now()) {
   if (!done) throw new HttpError(404, { error: 'not_found' });
 }
 
-/** Remove a friend, or cancel a request you sent (seen or declined). */
-export async function removeFriend(db, me, other) {
+/** Remove a friend, or cancel a request you sent. A request they declined is not deleted (that
+ * would let you ask again and show up for them): it is marked cancelled and stays until the purge. */
+export async function removeFriend(db, me, other, now = Date.now()) {
   const [lo, hi] = pairOf(me, other);
-  const gone = await db.prepare(`DELETE FROM friendships WHERE user_lo = ?1 AND user_hi = ?2
-    AND (status = 'accepted' OR requested_by = ?3) RETURNING user_lo`).bind(lo, hi, me).first();
-  if (!gone) throw new HttpError(404, { error: 'not_found' });
+  const [gone, hid] = await db.batch([
+    db.prepare(`DELETE FROM friendships WHERE user_lo = ?1 AND user_hi = ?2
+      AND (status = 'accepted' OR (status = 'pending' AND requested_by = ?3)) RETURNING user_lo`).bind(lo, hi, me),
+    db.prepare(`UPDATE friendships SET cancelled_at = ?4 WHERE user_lo = ?1 AND user_hi = ?2
+      AND status = 'declined' AND requested_by = ?3 RETURNING user_lo`).bind(lo, hi, me, now),
+  ]);
+  if (!gone.results.length && !hid.results.length) throw new HttpError(404, { error: 'not_found' });
 }
 
 const STATE = `CASE WHEN f.status = 'accepted' THEN 'friends'
-  WHEN f.requested_by = ?1 THEN 'requested'
+  WHEN f.requested_by = ?1 AND NOT (f.status = 'declined' AND f.cancelled_at IS NOT NULL) THEN 'requested'
   WHEN f.status = 'pending' THEN 'asked' ELSE 'none' END`;
 
 /** Up to 8 people matching `q` (2-40 characters) with where you stand with each. */
