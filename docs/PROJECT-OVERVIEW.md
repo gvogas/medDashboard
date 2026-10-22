@@ -64,8 +64,9 @@ flowchart LR
   IBM Plex Mono. Animation uses framer-motion. It is a single-page app.
 - **Back end:** plain JavaScript (ES modules) in `worker/`, with no framework. Routes are
   a regex table in `worker/api.js`.
-- **Database:** Cloudflare D1. The schema is `migrations/0001_schema.sql` (squashed)
-  plus `0002_spaces.sql`, `0003_invites.sql`, `0004_marks.sql` and `0005_activity.sql`.
+- **Database:** Cloudflare D1. The schema is one file, `migrations/0001_schema.sql`,
+  with the later migrations (`0002_spaces.sql` to `0006_friends.sql`) folded in, ready
+  for the move of the live `rounds-v7` into a fresh `rounds-v8`.
 - **AI:** Workers AI. `@cf/openai/gpt-oss-120b` reads text (outlines, calendars,
   schedules) and `@cf/meta/llama-4-scout-17b-16e-instruct` reads screenshots. Both
   share a limit of reads per person per day.
@@ -145,7 +146,7 @@ view shows and can be tested on their own.
 | `leaving.js` | Leaving and removal (spec §13): detach (a copy of the class into your own scope), leave, remove, archive, delete a class, Keep as mine, share an item, handing classes on, the purge's auto-keep. |
 | `invites.js` | Invites by username and join codes; the 20-spaces and 30-members limits ride in each statement. |
 | `layer.js` | Your layer on a space: marks on its items and your prefs for it, both yours alone. |
-| `activity.js` | Activity (spec §12): `noteStmt`, the row a member or space route writes in its own batch (the triggers in `0005_activity.sql` write the rest), and the reads: the inbox, its unread count, the read marker, a space's Activity tab. |
+| `activity.js` | Activity (spec §12): `noteStmt`, the row a member or space route writes in its own batch (the triggers in `0001_schema.sql` write the rest), and the reads: the inbox, its unread count, the read marker, a space's Activity tab. |
 | `inbox.js` | The inbox routes: `GET /inbox`, `PUT /inbox/seen`, `GET /spaces/:sid/activity`. |
 | `maintenance.js` | Maintenance mode: stored in `app_meta`, sent with `GET /api/me`, enforced (503) for AI reads and shared classes. |
 | `limits.js` | Per-user request rate limits. |
@@ -221,8 +222,7 @@ The details (lockouts, sessions, rate limits) are in `docs/DATA-MODEL.md`; secre
 ```
 index.html, src/, public/   front end (public/ = _headers, sw.js, manifest, icons)
 worker/                     API Worker
-migrations/                 D1 schema: 0001_schema (squashed), 0002_spaces, 0003_invites, 0004_marks,
-                            0005_activity
+migrations/                 D1 schema: 0001_schema (squashed, the only file)
 scripts/                    add-user, build, check-db, check-secrets, csp-hash, move-db, spotify-key
 test/                       Worker/API tests (vitest in the Workers runtime, local D1, fake Spotify)
 src/**/*.test.ts(x)         UI tests (vitest + jsdom + Testing Library)

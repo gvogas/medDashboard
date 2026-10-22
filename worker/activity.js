@@ -1,5 +1,5 @@
 // Activity (spec §12): the rows routes write for member and space events (the triggers in
-// migrations/0005_activity.sql write the rest), and the reads: your inbox, its unread count,
+// migrations/0001_schema.sql write the rest), and the reads: your inbox, its unread count,
 // and a space's Activity tab. Nothing is fanned out: the inbox is a query over the spaces you
 // are in and the rows about you.
 import { memberGuard, assertAllowed } from './access.js';

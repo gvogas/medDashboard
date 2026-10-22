@@ -1,7 +1,7 @@
 import { env } from 'cloudflare:test';
 import { describe, expect, it } from 'vitest';
 import { createUser } from './helpers.js';
-import { makeSpace, setMember } from './spaces.js';
+import { makeSpace } from './spaces.js';
 import { purgeTombstones } from '../worker/db.js';
 import { databaseChecks, databaseCountsSql, summarizeDatabase } from '../scripts/lib/database-health.js';
 
@@ -19,8 +19,6 @@ function pref(userId, spaceId, cols = {}) {
   return env.DB.prepare(`INSERT INTO space_prefs (user_id, ${names.join(', ')}) VALUES (?, ${names.map(() => '?').join(', ')})`)
     .bind(userId, ...Object.values(row)).run();
 }
-/* The migration's backfill statement, run again on rows made here. */
-const backfill = () => env.TEST_MIGRATIONS.find((m) => m.name === '0004_marks.sql').queries.find((q) => q.includes('INSERT INTO space_prefs'));
 const count = async (sql, ...binds) => (await env.DB.prepare(sql).bind(...binds).first()).n;
 
 describe('marks and space prefs in the schema', () => {
@@ -89,23 +87,5 @@ describe('marks and space prefs in the schema', () => {
   it("find a person's marks in a space by an index", async () => {
     const plan = await env.DB.prepare("EXPLAIN QUERY PLAN SELECT id FROM marks WHERE user_id = 'u' AND space_id = 's'").all();
     expect(plan.results.some((row) => /USING .*INDEX.*space_id=\?/.test(row.detail))).toBe(true);
-  });
-
-  it("backfill prefs for memberships made before the table: the class's colour unless used, else the first free; again changes nothing", async () => {
-    const f = await createUser('ms-f'), g = await createUser('ms-g'), h = await createUser('ms-h');
-    /* f already uses the class's colour on a course of their own */
-    await env.DB.prepare("INSERT INTO courses (scope, id, code, name, color, created_at, updated_at) VALUES (?, 'mine', 'MY', 'Mine', '#17B3AE', 1, 1)").bind('u:' + f).run();
-    const s = await makeSpace({ members: { [f]: 'owner', [g]: 'member', [h]: 'member' } });
-    await env.DB.prepare("UPDATE courses SET term = 'Fall 2026' WHERE scope = ?").bind(s.scope).run();
-    await setMember(s.id, h, null);
-    await env.DB.prepare(backfill()).run();
-    const rows = async () => (await env.DB.prepare('SELECT user_id, color, target, term, archived FROM space_prefs WHERE space_id = ? ORDER BY user_id').bind(s.id).all()).results;
-    expect(await rows()).toEqual([
-      { user_id: f, color: '#E4749B', target: null, term: 'Fall 2026', archived: 0 },
-      { user_id: g, color: '#17B3AE', target: null, term: 'Fall 2026', archived: 0 },
-    ]);
-    await env.DB.prepare('UPDATE space_prefs SET color = ? WHERE user_id = ? AND id = ?').bind('#4F74D9', g, s.id).run();
-    await env.DB.prepare(backfill()).run();
-    expect((await rows()).map((r) => r.color)).toEqual(['#E4749B', '#4F74D9']);
   });
 });
