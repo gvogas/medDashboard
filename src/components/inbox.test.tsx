@@ -1,5 +1,5 @@
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest"
-import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react"
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react"
 import { StrictMode } from "react"
 
 // The bell in the top bar and the inbox sheet it opens, with the store, the API, sync and the
@@ -17,6 +17,7 @@ const fake = vi.hoisted(() => ({
         invites: { accept: vi.fn(), decline: vi.fn() },
         spaces: { get: vi.fn(), activity: vi.fn() },
         join: vi.fn(),
+        friends: { answer: vi.fn(), get: vi.fn(() => new Promise(() => {})) },
     },
     syncNow: vi.fn(async () => true),
     ui: { view: "table", anchor: "2026-10-15", search: "" },
@@ -105,6 +106,19 @@ describe("the bell and the inbox (spec §12, §15)", () => {
         await waitFor(() => expect(getSheet()).toEqual({ kind: "join", code: "", space: summary }))
         expect(fake.api.invites.accept).toHaveBeenCalledWith(SID)
         expect(bell("Inbox")).toBeTruthy()
+    })
+
+    it("lists friend requests with Accept and Decline", async () => {
+        fake.api.inbox.get.mockResolvedValue({ invites: [], friendRequests: [{ userId: "u-jo", username: "jordanlee", name: "Jordan Lee", at: Date.now() }], items: [], seen: 0 })
+        fake.api.friends.answer.mockResolvedValue(null)
+        render(<><TopBar /><Sheet /></>)
+        act(() => setUnread(1))
+        await act(async () => { fireEvent.click(bell("Inbox, 1 unread")) })
+        const list = await screen.findByRole("list", { name: "Friend requests" })
+        expect(within(list).getByText("@jordanlee · 15 Oct")).toBeTruthy()
+        fireEvent.click(within(list).getByRole("button", { name: "Accept Jordan Lee" }))
+        await waitFor(() => expect(fake.api.friends.answer).toHaveBeenCalledWith("u-jo", true))
+        await waitFor(() => expect(screen.queryByRole("list", { name: "Friend requests" })).toBeNull())
     })
 
     it("keeps the rows new on opening marked when the list comes twice (StrictMode)", async () => {

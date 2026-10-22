@@ -24,6 +24,7 @@ const SWITCHES: readonly [Feature, string, string][] = [
     ["spotify", "Music", ""],
     ["import", "Import with AI", "The sheet shows the message, and the AI reads are refused."],
     ["classes", "Shared classes & projects", "Their routes are refused; shared edits wait on each device and upload after."],
+    ["friends", "Friends & study together", "The Friends tab shows the message, and its routes are refused."],
 ]
 const NAME = Object.fromEntries(SWITCHES.map(([id, name]) => [id, name])) as Record<Feature, string>
 

@@ -1,4 +1,4 @@
-// The inbox (spec §12, §15): invites to you, with Accept or Decline, then what others did in
+// The inbox (spec §12, §15): invites and friend requests to you, with Accept or Decline, then what others did in
 // your classes and projects that concerns you, newest first. Opening it marks everything
 // read. Offline it shows the copy kept from last time. While the admins have shared classes
 // switched off, everyone else gets the maintenance page instead.
@@ -8,6 +8,7 @@ import { ago, dayMonth, iso } from "@/core/dates"
 import { data } from "@/core/store"
 import { closeSheet } from "@/data/overlay"
 import { accept, decline, joinMessageFor, messageFor, openJoin } from "@/data/classes"
+import { answerRequest } from "@/data/friends"
 import { describe, markSeen, openable, openRow, refreshInbox, useInbox, useInboxOffline } from "@/data/inbox"
 import { useMaintenance } from "@/data/maintenance"
 import { MaintenanceBar, MaintenancePage } from "@/components/maintenance"
@@ -51,6 +52,12 @@ function InboxCard({ bar }: { bar: boolean }) {
         try { await decline(inv.spaceId) } catch (e) { setErr(messageFor(e)) } finally { setBusy(false) }
     }
 
+    const friend = async (userId: string, yes: boolean) => {
+        setBusy(true); setErr("")
+        const m = await answerRequest(userId, yes)
+        setErr(m); setBusy(false)
+    }
+
     return (
         <>
             <SheetHead kind="Inbox" onClose={closeSheet} />
@@ -60,6 +67,20 @@ function InboxCard({ bar }: { bar: boolean }) {
                 {offline && <Note>You're offline. This is what the inbox held last time.</Note>}
                 {!box ? <Note>Loading…</Note> : (
                     <>
+                        {(box.friendRequests?.length ?? 0) > 0 && (
+                            <ul aria-label="Friend requests" className={LIST}>
+                                {box.friendRequests!.map((r) => (
+                                    <li key={r.userId} className={ROW}>
+                                        <span><b>{r.name}</b> wants to be friends</span>
+                                        <span className="text-[11px] text-muted-foreground">@{r.username} · {dayMonth(iso(new Date(r.at)))}</span>
+                                        <span className="flex gap-2">
+                                            <Button variant="ghost" disabled={busy || offline} aria-label={"Decline " + r.name} onClick={() => void friend(r.userId, false)}>Decline</Button>
+                                            <Button disabled={busy || offline} aria-label={"Accept " + r.name} onClick={() => void friend(r.userId, true)}>Accept</Button>
+                                        </span>
+                                    </li>
+                                ))}
+                            </ul>
+                        )}
                         {box.invites.length > 0 && (
                             <ul aria-label="Invites to you" className={LIST}>
                                 {box.invites.map((inv) => (
@@ -76,7 +97,7 @@ function InboxCard({ bar }: { bar: boolean }) {
                                 ))}
                             </ul>
                         )}
-                        {box.items.length === 0 && box.invites.length === 0 && <Note>Nothing new. News from your classes shows here.</Note>}
+                        {box.items.length === 0 && box.invites.length === 0 && !box.friendRequests?.length && <Note>Nothing new. News from your classes shows here.</Note>}
                         {box.items.length > 0 && (
                             <ul aria-label="News" className={LIST}>
                                 {box.items.map((r) => <NewsRow key={r.seq} row={r} me={me} unread={r.seq > (seenAtOpen ?? box.seen)} />)}
