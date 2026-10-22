@@ -23,7 +23,7 @@
     {
       "binding": "DB",
       "database_name": "rounds-v8",
-      "database_id": "1fe82396-4947-48b3-87eb-70d55bd71a42",
+      "database_id": "c4f807a5-0755-418f-9a39-455e87703afd",
       "migrations_dir": "migrations"
     }
   ],
