@@ -19,15 +19,17 @@ export const TABLES = {
   space_prefs: ['user_id', 'id', 'space_id', 'color', 'target', 'term', 'archived', 'created_at', 'updated_at', 'deleted_at', 'revision'],
   activity: ['seq', 'space_id', 'actor_id', 'verb', 'subject', 'subject_user', 'old_value', 'new_value', 'detail', 'n', 'bucket', 'at'],
   inbox_seen: ['user_id', 'seq'],
+  friendships: ['user_lo', 'user_hi', 'requested_by', 'status', 'created_at', 'accepted_at'],
+  friend_settings: ['user_id', 'findable', 'show_studying'],
   spotify_tokens: ['user_id', 'refresh_token', 'access_token', 'expires_at', 'updated_at'],
   changes: ['seq', 'scope', 'kind', 'row_id', 'payload', 'deleted_at'],
   admin_log: ['id', 'at', 'admin', 'action', 'target', 'detail'],
 };
 
-/* Tables added after rounds-v7's first schema (0002_spaces.sql … 0005_activity.sql): a
+/* Tables added after rounds-v7's first schema (0002_spaces.sql … 0006_friends.sql): a
    database made before them has none of their rows. */
-const ADDED_TABLES = new Set(['spaces', 'members', 'invites', 'marks', 'space_prefs', 'activity', 'inbox_seen']);
-const ORDER_BY = { users: 'id', spaces: 'id', members: 'space_id, user_id', invites: 'space_id, user_id', courses: 'scope, id', items: 'scope, id', activity: 'seq', inbox_seen: 'user_id', changes: 'seq', spotify_tokens: 'user_id', admin_log: 'id' };
+const ADDED_TABLES = new Set(['spaces', 'members', 'invites', 'marks', 'space_prefs', 'activity', 'inbox_seen', 'friendships', 'friend_settings']);
+const ORDER_BY = { users: 'id', spaces: 'id', members: 'space_id, user_id', invites: 'space_id, user_id', courses: 'scope, id', items: 'scope, id', activity: 'seq', inbox_seen: 'user_id', friendships: 'user_lo, user_hi', friend_settings: 'user_id', changes: 'seq', spotify_tokens: 'user_id', admin_log: 'id' };
 /* Written by triggers as the rows above go in, then replaced by the source's own. */
 const REBUILT = ['activity', 'changes'];
 
