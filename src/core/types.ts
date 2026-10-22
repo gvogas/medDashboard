@@ -117,6 +117,8 @@ export interface StudySession extends Synced {
     manual: boolean
     /** The space `courseId`/`itemId` belong to, when they are a class's or a project's (spec §7). */
     spaceId?: string | null
+    /** The study room it was studied in (study together); its id is 'r-' + this. */
+    roomId?: string | null
 }
 
 /** An achievement of your own: a sticker, earned by hours on a course or a grade on an exam. */
@@ -221,14 +223,34 @@ export interface ActivityRow {
 /** Someone on the app, as the Friends tab names them. */
 export interface FriendPerson { userId: string; username: string; name: string }
 export interface FriendRequest extends FriendPerson { at: number }
-export interface Friend extends FriendPerson { since: number }
+/** A friend in an open room you may join: its id and how many are in it. */
+export interface Friend extends FriendPerson { since: number; room?: { id: string; size: number } }
 /** Where you stand with someone: friends, you asked, they asked, or nothing yet. */
 export type FriendState = 'none' | 'friends' | 'requested' | 'asked';
 export interface FriendMatch extends FriendPerson { state: FriendState }
 export interface FriendSettings { findable: boolean; showStudying: boolean }
 export interface Friends { friends: Friend[]; incoming: FriendRequest[]; sent: FriendRequest[]; settings: FriendSettings }
 /** GET /api/inbox: your pending invites, the newest rows, and where you have read up to. */
-export interface Inbox { invites: Invite[]; friendRequests?: FriendRequest[]; items: ActivityRow[]; seen: number }
+export interface Inbox { invites: Invite[]; friendRequests?: FriendRequest[]; roomInvites?: RoomInvite[]; items: ActivityRow[]; seen: number }
+
+/* ── study rooms (worker/rooms.js) ── */
+
+/** The room's clock: the solo timer's run record (core/timer.ts), in the server's time. */
+export interface RoomRun { flow: Flow; startedAt: number; pausedAt: number | null; pausedMs: number; skippedMs: number; skippedStudyMs: number }
+export type RoomEventKind = 'started' | 'joined' | 'left' | 'paused' | 'resumed' | 'skipped' | 'ended' | 'host';
+export interface RoomEvent { at: number; kind: RoomEventKind; name: string }
+/** Someone who is in the room or was. Their minutes: earlierMs + the room's study now − joinedStudyMs. */
+export interface RoomMember {
+    userId: string; username: string; name: string; state: 'in' | 'left'
+    joinedAt: number; joinedStudyMs: number; earlierMs: number; leftAt: number | null; courseLabel: string; away: boolean
+}
+/** A room as GET /api/rooms/:id gives it; `now` is the server's clock, `tag` goes back as ?v=. */
+export interface RoomView {
+    room: { id: string; hostId: string | null; run: RoomRun; endedAt: number | null; feed: RoomEvent[] }
+    members: RoomMember[]; tag: string; now: number
+}
+/** An invite to a room that is still open, for the inbox. */
+export interface RoomInvite { roomId: string; hostId: string | null; name: string; username: string; run: RoomRun; size: number; at: number }
 
 /** Your layer on a shared item (spec §4): yours alone. Its id is '<space id>:<item id>'. */
 export interface Mark extends Synced {

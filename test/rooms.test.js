@@ -132,6 +132,7 @@ describe('a room', () => {
     const [h, a, b] = await users('ro-h-h', 'ro-h-a', 'ro-h-b');
     await befriend(h, a);
     await befriend(h, b);
+    await befriend(a, b);   /* b reads the room afterwards, with a as host */
     const { room } = await createRoom(env.DB, h, { flow: FLOW }, T0);
     await joinRoom(env.DB, a, room.id, {}, T0 + MIN);
     await joinRoom(env.DB, b, room.id, {}, T0 + 2 * MIN);
@@ -188,6 +189,17 @@ describe('a room', () => {
     await joinRoom(env.DB, g, two.room.id, {}, T0 + 2 * MIN);
     const r = await getRoom(env.DB, h, one.room.id, null, T0 + 3 * MIN);
     expect(r.members.find((m) => m.userId === g)).toMatchObject({ state: 'left', earlierMs: 2 * MIN });
+  });
+
+  it('closes the room to someone the host unfriends, invite or not', async () => {
+    const host = await person('ro-u-host'), pal = await person('ro-u-pal');
+    await befriend(host.id, pal.id);
+    const { room } = await (await host('/api/rooms', { method: 'POST', body: { flow: FLOW, invite: [pal.id] } })).json();
+    await host(`/api/friends/${pal.id}`, { method: 'DELETE' });
+    expect((await (await pal('/api/inbox')).json()).roomInvites).toEqual([]);
+    expect(await unreadCount(env.DB, pal.id)).toBe(0);
+    expect((await pal(`/api/rooms/${room.id}`)).status).toBe(404);
+    expect((await pal(`/api/rooms/${room.id}/join`, { method: 'POST', body: {} })).status).toBe(404);
   });
 
   it('drops an invite on Not now, and still lets a friend of the host join later', async () => {

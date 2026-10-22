@@ -216,6 +216,15 @@ async function friendsAmong(db, me, ids) {
   return ids.filter((id) => ok.has(id));
 }
 
+/** Whether someone not in the room may see or enter it: a friend of the host, or invited by someone
+    who is still their friend. An invite or an earlier stint alone is not enough once the friendship
+    ends. Someone in the room may always see it. */
+async function mayEnter(db, me, room, m) {
+  if (m?.state === 'in') return true;
+  const via = [room.hostId, m?.state === 'invited' ? m.invitedBy : null].filter(Boolean);
+  return (await friendsAmong(db, me, [...new Set(via)])).length > 0;
+}
+
 /** Leave every other open room you are in (one room at a time). */
 async function leaveOthers(db, me, keep, now) {
   const { results } = await db.prepare(`SELECT m.room_id FROM room_members AS m JOIN rooms AS r ON r.id = m.room_id
@@ -260,6 +269,9 @@ export async function createRoom(db, me, body, now = Date.now()) {
 
 /** The room as you see it; null for a 304 (`tag` matched). Writes your last_seen every 30 s. */
 export async function getRoom(db, me, roomId, tag = null, now = Date.now()) {
+  const first = await load(db, roomId);
+  const listed = first?.members.find((m) => m.userId === me);
+  if (!listed || !(await mayEnter(db, me, first.room, listed))) throw notFound();
   const { room, members } = await change(db, roomId, (room, members) => {
     if (!members.some((m) => m.userId === me)) throw notFound();
   }, now, me);
@@ -272,8 +284,7 @@ export async function joinRoom(db, me, roomId, body, now = Date.now()) {
   const courseLabel = label(body?.courseLabel);
   const first = await load(db, roomId);
   if (!first) throw notFound();
-  const listed = first.members.some((m) => m.userId === me);
-  if (!listed && !(first.room.hostId && (await friendsAmong(db, me, [first.room.hostId])).length)) throw notFound();
+  if (!(await mayEnter(db, me, first.room, first.members.find((m) => m.userId === me)))) throw notFound();
   if (first.room.endedAt !== null) throw ended();
   await leaveOthers(db, me, roomId, now);
   const who = await db.prepare(`SELECT u.username, ${NAME} AS name FROM users AS u WHERE u.id = ?`).bind(me).first();
@@ -351,14 +362,19 @@ export async function roomInvites(db, me, now = Date.now()) {
   const { results } = await db.prepare(`SELECT r.*, u.username, ${NAME} AS name, m.invited_at,
       (SELECT count(*) FROM room_members AS c WHERE c.room_id = r.id AND c.state = 'in') AS size
     FROM room_members AS m JOIN rooms AS r ON r.id = m.room_id LEFT JOIN users AS u ON u.id = r.host_id
-    WHERE m.user_id = ?1 AND m.state = 'invited' AND ${OPEN('r')}
+    WHERE m.user_id = ?1 AND m.state = 'invited' AND ${OPEN('r')} AND ${STILL_FRIENDS}
     ORDER BY m.invited_at DESC LIMIT 20`).bind(me, now - GONE_MS).all();
   return results.map((r) => ({ roomId: r.id, hostId: r.host_id, name: r.name ?? '', username: r.username ?? '', run: roomOf(r).run, size: r.size, at: r.invited_at }));
 }
 
+/* an invite counts only while the one who sent it, or the host, is still your friend (mayEnter) */
+const FRIEND_OF = (other) => `EXISTS (SELECT 1 FROM friendships AS fo WHERE fo.status = 'accepted' AND fo.user_lo = min(?1, ${other}) AND fo.user_hi = max(?1, ${other}))`;
+const STILL_FRIENDS = `(${FRIEND_OF('m.invited_by')} OR ${FRIEND_OF('r.host_id')})`;
+
 /** How many open-room invites wait for you (the inbox's count). */
 export const ROOM_INVITES_COUNT = `(SELECT count(*) FROM room_members AS m JOIN rooms AS r ON r.id = m.room_id
-  WHERE m.user_id = ?1 AND m.state = 'invited' AND r.ended_at IS NULL AND EXISTS (SELECT 1 FROM room_members AS o WHERE o.room_id = r.id AND o.state = 'in' AND o.last_seen > ?2 - ${GONE_MS}))`;
+  WHERE m.user_id = ?1 AND m.state = 'invited' AND r.ended_at IS NULL AND ${STILL_FRIENDS}
+    AND EXISTS (SELECT 1 FROM room_members AS o WHERE o.room_id = r.id AND o.state = 'in' AND o.last_seen > ?2 - ${GONE_MS}))`;
 
 /** The open room each friend is in, for the Friends tab's Join: only friends who show they are
     studying, and only rooms you may join (the host is you or your friend, or you are listed). */
