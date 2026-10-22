@@ -129,7 +129,8 @@ describe("the Study page", () => {
         const r = await show()
         await act(async () => {})
         expect(fake.api.friends.get).toHaveBeenCalledTimes(1)
-        const tick = timers.mock.calls.find((c) => c[1] === 60_000)![0] as () => void
+        /* every half minute, so a list loaded just under a minute ago is asked for again at the next tick */
+        const tick = timers.mock.calls.find((c) => c[1] === 30_000)![0] as () => void
         vi.setSystemTime(new Date(2026, 8, 23, 12, 0, 30))
         await act(async () => { tick() })
         expect(fake.api.friends.get).toHaveBeenCalledTimes(1)

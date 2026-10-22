@@ -35,8 +35,9 @@ export function StudyView() {
         if (screen !== "app") return
         const reload = () => { if (!document.hidden && maintenanceState("friends") !== "blocked" && friendsStale()) void loadFriends() }
         reload()
-        /* nothing is pushed: ask again each minute while the page is open and seen */
-        const timer = setInterval(reload, STALE_MS)
+        /* nothing is pushed: ask again each minute while the page is open and seen. The list is
+           a little under a minute old at a tick a minute after the last load, so tick twice as often */
+        const timer = setInterval(reload, STALE_MS / 2)
         document.addEventListener("visibilitychange", reload)
         return () => { clearInterval(timer); document.removeEventListener("visibilitychange", reload) }
     }, [screen])
