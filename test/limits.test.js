@@ -1,7 +1,12 @@
 import { env, SELF } from 'cloudflare:test';
 import { describe, expect, it } from 'vitest';
 import { API_LIMIT, SPOTIFY_LIMIT, OUTLINE_DAILY_LIMIT, claimLimit, cooldownRemaining, setCooldown, purgeLimits, readsLeft } from '../worker/limits.js';
+import { handleApi } from '../worker/api.js';
 import { BASE, signIn } from './helpers.js';
+
+/** A rate-limiting binding that refuses the keys in `full`. */
+const limiter = (full = []) => ({ limit: async ({ key }) => ({ success: !full.includes(key) }) });
+const call = (api, e, path, init = {}) => handleApi(new Request(BASE + path, { ...init, headers: { cookie: api.cookie } }), e, new URL(BASE + path));
 
 describe('shared request limits', () => {
   it('admits only the configured number of simultaneous requests', async () => {
@@ -16,27 +21,33 @@ describe('shared request limits', () => {
 
   it('enforces the general API budget and isolates users', async () => {
     const api = await signIn('limit-general');
-    await env.DB.prepare('INSERT INTO request_limits VALUES (?, ?, ?)').bind('api:u-limit-general', API_LIMIT, Date.now() + 60000).run();
-    const res = await api('/api/me');
+    const e = { ...env, API_LIMITER: limiter(['u-limit-general']) };
+    const res = await call(api, e, '/api/me');
     expect(res.status).toBe(429);
     expect(res.headers.get('cache-control')).toBe('no-store');
     expect(Number(res.headers.get('retry-after'))).toBeGreaterThan(0);
     const other = await signIn('limit-other');
-    expect((await other('/api/me')).status).toBe(200);
+    expect((await call(other, e, '/api/me')).status).toBe(200);
   });
 
   it('limits Spotify separately while leaving the player poll, SDK tokens and disconnect available', async () => {
     const api = await signIn('limit-spotify');
-    await env.DB.prepare('INSERT INTO request_limits VALUES (?, ?, ?)').bind('spotify:u-limit-spotify', SPOTIFY_LIMIT, Date.now() + 60000).run();
-    expect((await api('/api/spotify/devices')).status).toBe(429);
-    expect((await api('/api/spotify/player/pause', { method: 'POST' })).status).toBe(429);
-    // The background player poll is bounded by the API limit only; it spends no Spotify row.
-    expect(await (await api('/api/spotify/player')).json()).toEqual({ connected: false });
-    expect(await (await api('/api/spotify/status')).json()).toEqual({ connected: false });
-    expect((await api('/api/spotify/connect', { redirect: 'manual' })).status).toBe(302);
-    expect((await api('/api/spotify/token')).status).toBe(409);
-    expect((await api('/api/spotify', { method: 'DELETE' })).status).toBe(204);
-    expect((await api('/api/me')).status).toBe(200);
+    const e = { ...env, SPOTIFY_LIMITER: limiter(['u-limit-spotify']) };
+    expect((await call(api, e, '/api/spotify/devices')).status).toBe(429);
+    expect((await call(api, e, '/api/spotify/player/pause', { method: 'POST' })).status).toBe(429);
+    // The background player poll is bounded by the API limit only.
+    expect(await (await call(api, e, '/api/spotify/player')).json()).toEqual({ connected: false });
+    expect(await (await call(api, e, '/api/spotify/status')).json()).toEqual({ connected: false });
+    expect((await call(api, e, '/api/spotify/connect', { redirect: 'manual' })).status).toBe(302);
+    expect((await call(api, e, '/api/spotify/token')).status).toBe(409);
+    expect((await call(api, e, '/api/spotify', { method: 'DELETE' })).status).toBe(204);
+    expect((await call(api, e, '/api/me')).status).toBe(200);
+  });
+
+  it('has the bindings from wrangler.jsonc, at the limits limits.js names', async () => {
+    expect(typeof env.API_LIMITER?.limit).toBe('function');
+    expect(typeof env.SPOTIFY_LIMITER?.limit).toBe('function');
+    expect([API_LIMIT, SPOTIFY_LIMIT]).toEqual([600, 60]);
   });
 
   it('bounds username spraying by the edge IP, ignoring spoofed forwarding headers', async () => {

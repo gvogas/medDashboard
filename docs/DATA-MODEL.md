@@ -967,15 +967,21 @@ purge below.
    React escapes all text it renders, and nothing uses `dangerouslySetInnerHTML`.
    Inline `style` attributes are blocked; React's `style` props are set through the
    DOM, and ids and colours are validated before they reach an attribute.
-6. **Rate limits** — `worker/limits.js`, fixed one-minute windows in D1
-   (`request_limits`), so they hold across tabs and isolates; a refused request does
-   not extend or count toward its window, and gets `429` with `Retry-After`.
+6. **Rate limits** — `worker/limits.js`. A refused request gets `429` with `Retry-After`.
+   The two per-request budgets are counted by Cloudflare's rate-limiting bindings
+   (`API_LIMITER`, `SPOTIFY_LIMITER` in `wrangler.jsonc`), so a signed-in request reads D1
+   once (the session's generation) and writes nothing. They count per Cloudflare location
+   and settle in the background, so a burst can pass the limit a little; they bound abuse,
+   not exact use. A config without them falls back to D1 windows (`api:<user>`,
+   `spotify:<user>`). Every other budget is a fixed window in D1 (`request_limits`), so it
+   holds exactly across tabs and isolates, and a refused request does not extend or count
+   toward its window.
 
    | Budget | Limit | Key |
    | --- | --- | --- |
    | Sign-in, per IP | 30 a minute (`too_many_attempts`) | a SHA-256 of `cf-connecting-ip`; plus the per-username lockout above |
-   | Every signed-in request | 600 a minute per account | `api:<user>`, claimed with the session check in one batch |
-   | Spotify routes | 60 a minute per account | `spotify:<user>`; `token`, `status`, `connect`, `callback` and the `GET player` poll are exempt (still under the 600) |
+   | Every signed-in request | 600 a minute per account | `API_LIMITER`, keyed by the user id, after the session check |
+   | Spotify routes | 60 a minute per account | `SPOTIFY_LIMITER`, counted only when the 600 admitted the request; `token`, `status`, `connect`, `callback` and the `GET player` poll are exempt (still under the 600) |
    | AI reads (outline, school calendar, schedule) | 10 a day per account (`outline_limit`) | `outline:<user>`, counted before the model runs |
    | Calendar feed | 60 fetches an hour per link | |
    | Invites, join codes | 20 invites an hour, 10 join tries an hour | |

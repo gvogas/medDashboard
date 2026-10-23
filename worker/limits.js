@@ -59,18 +59,36 @@ export async function limitLogin(request, env) {
   if (wait) throw rateLimited(wait, 'too_many_attempts');
 }
 
-/**
- * Check the session's generation and claim the user's windows in one D1 round trip.
- * False when the user is gone or signed out everywhere (nothing is counted then);
- * a 429 when a window is full.
- */
-export async function limitUser(request, env, userId, gen, now = Date.now()) {
-  const db = env.DB;
+/** Whether a request counts toward the Spotify budget as well as the API's. */
+function spotifyCounted(request) {
   const path = new URL(request.url).pathname;
   // SDK token retrieval and disconnect remain available during a Spotify API cooldown.
-  // The player poll is exempt too: it is the steady background read, and a second
-  // counter row per poll would double its D1 writes. The API limit still bounds it.
-  const spotify = path.startsWith('/api/spotify/') && !SPOTIFY_EXEMPT.includes(path) && !(request.method === 'GET' && path === '/api/spotify/player');
+  // The player poll is exempt too: it is the steady background read. The API limit still bounds it.
+  return path.startsWith('/api/spotify/') && !SPOTIFY_EXEMPT.includes(path) && !(request.method === 'GET' && path === '/api/spotify/player');
+}
+
+/**
+ * Check the session's generation, then count the request. False when the user is gone or
+ * signed out everywhere (nothing is counted then); a 429 when a budget is spent.
+ *
+ * The counting is Cloudflare's rate-limiting bindings (API_LIMITER, SPOTIFY_LIMITER in
+ * wrangler.jsonc), so a request reads D1 once and writes nothing. They count per Cloudflare
+ * location and settle in the background, so a burst can pass the limit a little: they bound
+ * abuse, not exact use. Without them (a config that leaves them out) the windows are D1 rows.
+ */
+export async function limitUser(request, env, userId, gen, now = Date.now()) {
+  const spotify = spotifyCounted(request);
+  if (!env.API_LIMITER || (spotify && !env.SPOTIFY_LIMITER)) return limitUserInD1(env.DB, userId, gen, spotify, now);
+  const user = await env.DB.prepare('SELECT pw_gen FROM users WHERE id = ?').bind(userId).first();
+  if (user?.pw_gen !== gen) return false;
+  if (!(await env.API_LIMITER.limit({ key: userId })).success) throw rateLimited(WINDOW_MS / 1000);
+  // Counted only when the API hit was.
+  if (spotify && !(await env.SPOTIFY_LIMITER.limit({ key: userId })).success) throw rateLimited(WINDOW_MS / 1000);
+  return true;
+}
+
+/* The same in D1: the generation check and the windows in one round trip, one write each. */
+async function limitUserInD1(db, userId, gen, spotify, now) {
   const keys = [`api:${userId}`, ...(spotify ? [`spotify:${userId}`] : [])];
   const [user, api, spotifyClaim, windows] = await db.batch([
     db.prepare('SELECT pw_gen FROM users WHERE id = ?').bind(userId),

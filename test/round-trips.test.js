@@ -40,38 +40,66 @@ const request = (api, path, init = {}) =>
 
 beforeEach(async () => { await env.DB.prepare("DELETE FROM request_limits WHERE key LIKE 'upstream:%'").run(); });
 
+/** A rate-limiting binding that records each key it counts and refuses those in `full`. */
+function limiter(full = []) {
+  const keys = [];
+  return { keys, limit: async ({ key }) => { keys.push(key); return { success: !full.includes(key) }; } };
+}
+
 describe('a signed-in request', () => {
-  it('checks the session and claims the rate limit in one round trip', async () => {
+  it('checks the session in one round trip and writes nothing: Cloudflare counts it', async () => {
     const api = await signIn('trip-session');
-    const e = countedEnv();
+    const e = { ...countedEnv(), API_LIMITER: limiter(), SPOTIFY_LIMITER: limiter() };
     expect((await requireSession(request(api, '/api/me'), e)).userId).toBe('u-trip-session');
-    expect(e.log).toHaveLength(1);
-    const s = countedEnv();
-    await requireSession(request(api, '/api/spotify/devices'), s);
-    expect(s.log).toHaveLength(1);
-    const hits = await env.DB.prepare('SELECT key, hits FROM request_limits WHERE key LIKE ? ORDER BY key').bind('%:u-trip-session').all();
-    expect(hits.results).toEqual([{ key: 'api:u-trip-session', hits: 2 }, { key: 'spotify:u-trip-session', hits: 1 }]);
+    await requireSession(request(api, '/api/spotify/devices'), e);
+    expect(e.log).toEqual(['SELECT pw_gen FROM users WHERE id = ?', 'SELECT pw_gen FROM users WHERE id = ?']);
+    expect(e.API_LIMITER.keys).toEqual(['u-trip-session', 'u-trip-session']);
+    expect(e.SPOTIFY_LIMITER.keys).toEqual(['u-trip-session']);
+    expect((await env.DB.prepare('SELECT count(*) AS n FROM request_limits WHERE key LIKE ?').bind('%:u-trip-session').first()).n).toBe(0);
   });
 
   it('spends no request budget on a signed-out cookie', async () => {
     const api = await signIn('trip-revoked');
+    const e = { ...env, API_LIMITER: limiter(), SPOTIFY_LIMITER: limiter() };
     await env.DB.prepare('UPDATE users SET pw_gen = pw_gen + 1 WHERE id = ?').bind('u-trip-revoked').run();
-    const before = await env.DB.prepare('SELECT hits FROM request_limits WHERE key = ?').bind('api:u-trip-revoked').first();
-    await expect(requireSession(request(api, '/api/spotify/devices'), env)).rejects.toMatchObject({ status: 401, body: { error: 'unauthenticated' } });
-    expect(await env.DB.prepare('SELECT hits FROM request_limits WHERE key = ?').bind('api:u-trip-revoked').first()).toEqual(before);
-    expect(await env.DB.prepare('SELECT 1 FROM request_limits WHERE key = ?').bind('spotify:u-trip-revoked').first()).toBeNull();
+    await expect(requireSession(request(api, '/api/spotify/devices'), e)).rejects.toMatchObject({ status: 401, body: { error: 'unauthenticated' } });
     await env.DB.prepare('DELETE FROM users WHERE id = ?').bind('u-trip-revoked').run();
-    await expect(requireSession(request(api, '/api/me'), env)).rejects.toMatchObject({ status: 401 });
+    await expect(requireSession(request(api, '/api/me'), e)).rejects.toMatchObject({ status: 401 });
+    expect(e.API_LIMITER.keys).toEqual([]);
+    expect(e.SPOTIFY_LIMITER.keys).toEqual([]);
+  });
+
+  it('refuses over the limit for a minute, and counts Spotify only when the API admitted it', async () => {
+    const api = await signIn('trip-limit');
+    const e = { ...env, API_LIMITER: limiter(['u-trip-limit']), SPOTIFY_LIMITER: limiter() };
+    const err = await requireSession(request(api, '/api/spotify/devices'), e).catch((x) => x);
+    expect(err).toMatchObject({ status: 429, body: { error: 'rate_limited', retryAfter: 60 } });
+    expect(err.headers['retry-after']).toBe('60');
+    expect(e.SPOTIFY_LIMITER.keys).toEqual([]);
+  });
+});
+
+describe('without the rate-limiting bindings', () => {
+  /* the windows are D1 rows, claimed with the session check in one batch */
+  const d1Env = () => { const { API_LIMITER, SPOTIFY_LIMITER, ...rest } = countedEnv(); return rest; };
+
+  it('checks the session and claims the windows in one round trip', async () => {
+    const api = await signIn('trip-d1');
+    const e = d1Env();
+    expect((await requireSession(request(api, '/api/me'), e)).userId).toBe('u-trip-d1');
+    expect(e.log).toEqual(['batch']);
+    await requireSession(request(api, '/api/spotify/devices'), d1Env());
+    const hits = await env.DB.prepare('SELECT key, hits FROM request_limits WHERE key LIKE ? ORDER BY key').bind('%:u-trip-d1').all();
+    expect(hits.results).toEqual([{ key: 'api:u-trip-d1', hits: 2 }, { key: 'spotify:u-trip-d1', hits: 1 }]);
   });
 
   it('refuses over the limit with the time left in the window', async () => {
-    const api = await signIn('trip-limit');
-    await env.DB.prepare('INSERT OR REPLACE INTO request_limits (key, hits, reset_at) VALUES (?, ?, ?)').bind('api:u-trip-limit', API_LIMIT, Date.now() + 30_000).run();
-    const err = await requireSession(request(api, '/api/me'), env).catch((e) => e);
+    const api = await signIn('trip-d1-limit');
+    await env.DB.prepare('INSERT OR REPLACE INTO request_limits (key, hits, reset_at) VALUES (?, ?, ?)').bind('api:u-trip-d1-limit', API_LIMIT, Date.now() + 30_000).run();
+    const err = await requireSession(request(api, '/api/me'), d1Env()).catch((x) => x);
     expect(err).toMatchObject({ status: 429, body: { error: 'rate_limited' } });
     expect(err.body.retryAfter).toBeGreaterThanOrEqual(29);
     expect(err.body.retryAfter).toBeLessThanOrEqual(30);
-    expect(err.headers['retry-after']).toBe(String(err.body.retryAfter));
   });
 });
 
@@ -88,8 +116,8 @@ describe('the player poll', () => {
     const e = countedEnv();
     const res = await handleApi(request(api, '/api/spotify/player'), e, new URL(BASE + '/api/spotify/player'));
     expect((await res.json()).connected).toBe(true);
-    // The session and limit; the token row and the upstream cooldown together.
-    expect(e.log).toEqual(['batch', 'batch']);
+    // The session; the token row and the upstream cooldown together.
+    expect(e.log).toEqual(['SELECT pw_gen FROM users WHERE id = ?', 'batch']);
   });
 
   it('does not read the row back after a refresh', async () => {
