@@ -18,6 +18,7 @@ import { boot as openSession, showSignIn, onStoreEvent, onStorage } from "@/data
 import { commitUndo, finishDelete } from "@/data/study-controller"
 import { onKeydown } from "@/data/keyboard"
 import { forgetReads } from "@/data/ai-cache"
+import { followToday } from "@/data/ui"
 // Listen to the store and sync from the start, before any component mounts.
 import "@/data/store"
 import "@/data/sync"
@@ -38,6 +39,10 @@ export function boot() {
     /* what is typed in the item sheet is saved before the page goes */
     window.addEventListener("pagehide", () => { flushTyping(); void flushMarks() })
     document.addEventListener("visibilitychange", () => { if (document.visibilityState === "hidden") { flushTyping(); void flushMarks(); commitUndo(); finishDelete().catch(() => {}) } })
+    /* a page left open overnight moves to the new day: when it is shown again, or within a minute while it stays shown */
+    const newDay = () => { if (followToday()) notify() }
+    document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") newDay() })
+    setInterval(() => { if (document.visibilityState === "visible") newDay() }, 60_000)
 
     /* ═════════ theme ═════════ */
     useTypePrefs(() => data.profile?.types || [])

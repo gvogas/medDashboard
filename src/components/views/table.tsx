@@ -19,6 +19,7 @@ import { accent, Empty, HeadNote, onActivate, Panel, StatusChip, Steps, TypeChip
 
 const when = (it: Item) => {
     if (it.recur === "weekly") return "Weekly · " + DOW[it.weekday ?? 0]
+    if (!it.date) return "—"   /* one bad row must not blank the whole table */
     const d = parse(it.date)
     return DOW[d.getDay()] + " " + d.getDate() + " " + MON[d.getMonth()].slice(0, 3)
 }
@@ -38,22 +39,24 @@ function hiddenBy(f: Filters, spaces: Space[]): string {
 
 const time = (it: Item) => (it.start ? hhmm(it.start) + (it.end ? "–" + hhmm(it.end) : "") : it.end ? hhmm(it.end) : "")
 
+/* A column you sort by. At module scope, so a redraw keeps its button (and the focus on it). */
+function Head({ k, label, sort }: { k: SortKey; label: string; sort: { key: SortKey; dir: number } }) {
+    const on = sort.key === k
+    return (
+        <th aria-sort={on ? (sort.dir > 0 ? "ascending" : "descending") : "none"} className="sticky top-0 z-[1] border-b border-border bg-card p-0 text-left">
+            <button type="button" onClick={() => sortTable(k)}
+                className="flex w-full cursor-pointer items-center gap-1 border-0 bg-transparent px-3 py-2 font-[inherit] text-[10.5px] font-bold tracking-[.1em] text-ink-2 uppercase hover:text-foreground">
+                {label}{on && <span aria-hidden="true" className="text-[var(--accent)]">{sort.dir > 0 ? "↑" : "↓"}</span>}
+            </button>
+        </th>
+    )
+}
+
 export function TableView() {
     const { rows, total, sort, filters, overdue, perType } = useTable()
     const spaces = useSpaces(), me = useProfile()?.id ?? ""   /* who has a project's task */
     const why = hiddenBy(filters, spaces)
 
-    const Head = ({ k, label }: { k: SortKey; label: string }) => {
-        const on = sort.key === k
-        return (
-            <th aria-sort={on ? (sort.dir > 0 ? "ascending" : "descending") : "none"} className="sticky top-0 z-[1] border-b border-border bg-card p-0 text-left">
-                <button type="button" onClick={() => sortTable(k)}
-                    className="flex w-full cursor-pointer items-center gap-1 border-0 bg-transparent px-3 py-2 font-[inherit] text-[10.5px] font-bold tracking-[.1em] text-ink-2 uppercase hover:text-foreground">
-                    {label}{on && <span aria-hidden="true" className="text-[var(--accent)]">{sort.dir > 0 ? "↑" : "↓"}</span>}
-                </button>
-            </th>
-        )
-    }
     const plain = "sticky top-0 z-[1] border-b border-border bg-card px-3 py-2 text-left text-[10.5px] font-bold tracking-[.1em] text-ink-2 uppercase"
     const td = "border-b border-line-2 px-3 py-2 align-middle"
 
@@ -64,13 +67,13 @@ export function TableView() {
                 <table className="w-full border-collapse text-[12.5px] max-[640px]:block">
                     <thead className="max-[640px]:hidden">
                         <tr>
-                            <Head k="title" label="Item" />
-                            <Head k="type" label="Type" />
-                            <Head k="course" label="Course" />
-                            <Head k="date" label="Date" />
+                            <Head k="title" label="Item" sort={sort} />
+                            <Head k="type" label="Type" sort={sort} />
+                            <Head k="course" label="Course" sort={sort} />
+                            <Head k="date" label="Date" sort={sort} />
                             <th className={plain}>Time</th>
                             <th className={plain}>Where</th>
-                            <Head k="status" label="Status" />
+                            <Head k="status" label="Status" sort={sort} />
                         </tr>
                     </thead>
                     <tbody className="max-[640px]:grid max-[640px]:gap-2 max-[640px]:p-2.5">

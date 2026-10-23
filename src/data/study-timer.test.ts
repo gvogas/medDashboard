@@ -520,6 +520,26 @@ describe("a run", () => {
         expect(getStudyBadge()).toBeNull()
     })
 
+    it("logs a run's minutes as kept when another tab of this device paused it", async () => {
+        await begin({ steps: [["study", 5], ["break", 1]], rounds: 1 })
+        await tickFor(2 * 60_000)
+        /* the other tab pauses at 2 minutes and keeps the run; this one never hears of it */
+        const kept = fake.meta.get("studyRun") as { pausedAt: number | null }
+        fake.meta.set("studyRun", { ...kept, pausedAt: Date.now() })
+        await jump(10 * 60_000)
+        expect(fake.sessions).toEqual([expect.objectContaining({ studyMinutes: 2 })])
+    })
+
+    it("ticks the badge without the store's change signal, so the views are not worked out again each second", async () => {
+        await begin({ steps: [["study", 5], ["break", 1]], rounds: 1 })
+        const heard = vi.fn(), off = subscribe(heard)
+        await tickFor(3_000)
+        expect(getStudyBadge()).toBe("04:57")
+        expect(heard).not.toHaveBeenCalled()
+        off()
+        await act(() => stopRun())
+    })
+
     it("opens the focus screen on Start, and goes to the Study page's Timer tab when it ends", async () => {
         ui.view = "week"
         ui.focus = false

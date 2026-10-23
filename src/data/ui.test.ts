@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest"
 import { setBg } from "./theme"
-import { ui } from "./ui"
+import { followToday, ui } from "./ui"
 
 /* ui.ts reads what this browser remembered when it loads, so each case loads it afresh. */
 const load = async (saved: unknown) => {
@@ -51,5 +51,18 @@ describe("the theme", () => {
         expect(ui.bg).toBe("law")
         setBg("foo", { persist: false })
         expect(document.documentElement.getAttribute("data-bg")).toBe("med")
+    })
+})
+
+describe("a page left open overnight", () => {
+    it("moves the Week to the new day, unless you had gone to another date", () => {
+        const start = ui.anchor
+        expect(followToday(start)).toBe(false)
+        expect(followToday("2099-01-02")).toBe(true)
+        expect(ui.anchor).toBe("2099-01-02")
+        ui.anchor = "2099-03-01"   /* you went to March */
+        expect(followToday("2099-01-03")).toBe(false)
+        expect(ui.anchor).toBe("2099-03-01")
+        ui.anchor = start
     })
 })

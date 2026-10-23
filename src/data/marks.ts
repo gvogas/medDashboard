@@ -34,7 +34,15 @@ function typist<T>(save: (key: string, patch: Partial<T>) => Promise<unknown>) {
         held = null
         if (!h) return
         clearTimeout(h.timer)
-        try { await save(h.key, h.patch) } finally { bump() }
+        try { await save(h.key, h.patch) }
+        catch (e) {
+            /* not saved: it waits for the next flush, unless newer typing took its place */
+            const now = held as typeof h | null   /* typing may have come in while the save ran */
+            if (!now) held = { ...h, timer: undefined as unknown as ReturnType<typeof setTimeout> }
+            else if (now.key === h.key) now.patch = { ...h.patch, ...now.patch }
+            throw e
+        }
+        finally { bump() }
     }
     return {
         type(key: string, patch: Partial<T>) {

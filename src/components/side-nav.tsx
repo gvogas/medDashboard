@@ -5,7 +5,7 @@
 
 import { useSyncExternalStore } from "react"
 import { cn } from "@/lib/utils"
-import { subscribe, getStudyBadge } from "@/bridge"
+import { subscribe, subscribeStudyBadge, getStudyBadge } from "@/bridge"
 import { ui } from "@/data/ui"
 import { setView } from "@/data/study-controller"
 import { useFriends } from "@/data/friends"
@@ -28,7 +28,7 @@ const currentView = () => ui.view as View
 
 export function SideNav() {
     const view = useSyncExternalStore(subscribe, currentView)
-    const badge = useSyncExternalStore(subscribe, getStudyBadge)
+    const badge = useSyncExternalStore(subscribeStudyBadge, getStudyBadge)
     /* a friend studying now, as the last friends list said */
     const friendLive = !!useFriends().list?.friends.some((f) => f.live)
     const admin = !!useProfile()?.isAdmin

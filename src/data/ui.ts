@@ -13,6 +13,22 @@ import { toBg } from "./themes"
 
 const KEY = "rounds.ui"
 
+/* The day the Week and the Month last followed as today. */
+let followedDay = today()
+/**
+ * A page left open past midnight: when the day has moved on and the Week or the Month still
+ * stands on the old today, it moves to the new one; one you had moved to another date stays.
+ * True when the anchor moved.
+ */
+export function followToday(now = today()): boolean {
+    if (now === followedDay) return false
+    const was = followedDay
+    followedDay = now
+    if (ui.anchor !== was) return false
+    ui.anchor = now
+    return true
+}
+
 export const ui: Ui = {
     view: "week", anchor: today(), search: "", course: "all",
     sem: null,               /* the sidebar's semester; null follows the current one */

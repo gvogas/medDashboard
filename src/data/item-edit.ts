@@ -167,7 +167,15 @@ export async function flush() {
     pending = null
     if (!p) return
     clearTimeout(p.timer)
-    try { await save(p.id, p.patch) } finally { emit() }
+    try { await save(p.id, p.patch) }
+    catch (e) {
+        /* not saved: the text stays waiting (and on screen) for the next flush, unless newer typing took its place */
+        const now = pending as typeof p | null   /* typing may have come in while the save ran */
+        if (!now) pending = { ...p, timer: undefined as unknown as ReturnType<typeof setTimeout> }
+        else if (now.id === p.id) now.patch = { ...p.patch, ...now.patch }
+        throw e
+    }
+    finally { emit() }
 }
 
 /** Any other edit: saved at once, after what is waiting (so the two do not undo each other). */

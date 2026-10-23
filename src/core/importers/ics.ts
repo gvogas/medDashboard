@@ -8,7 +8,8 @@ import { iso } from '../dates.ts';
 export interface IcsEvent { summary: string; location: string; date: string; start: string; end: string; weekly: boolean; weekdays: number[] }
 
 interface Property { name: string; params: Record<string, string>; value: string }
-interface When { date: string; time: string }
+/* shift: days the local date is from the written one (a UTC time moved to local), which RRULE's BYDAY moves with */
+interface When { date: string; time: string; shift?: number }
 interface Draft { summary?: string; location?: string; start?: When | null; end?: When | null; rrule?: string; cancelled?: boolean }
 
 const DAY: Record<string, number> = { SU: 0, MO: 1, TU: 2, WE: 3, TH: 4, FR: 5, SA: 6 };
@@ -48,7 +49,8 @@ function when(prop: Property): When | null {
   if (!m[4] || prop.params.VALUE === 'DATE') return { date: m[1] + '-' + m[2] + '-' + m[3], time: '' };
   if (m[7]) {
     const d = new Date(Date.UTC(+m[1], +m[2] - 1, +m[3], +m[4], +m[5]));
-    return { date: iso(d), time: pad(d.getHours()) + ':' + pad(d.getMinutes()) };
+    const shift = Math.round((Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()) - Date.UTC(+m[1], +m[2] - 1, +m[3])) / 86_400_000);
+    return { date: iso(d), time: pad(d.getHours()) + ':' + pad(d.getMinutes()), shift };
   }
   return { date: m[1] + '-' + m[2] + '-' + m[3], time: m[4] + ':' + m[5] };
 }
@@ -88,6 +90,8 @@ function finish(ev: Draft & { start: When }): IcsEvent {
   const weekly = rule.FREQ === 'WEEKLY' && !!ev.start.time;
   const weekdays = weekly && rule.BYDAY
     ? rule.BYDAY.split(',').map((d) => DAY[d.replace(/^[+-]?\d+/, '')]).filter((d) => d !== undefined)
+      /* BYDAY is in DTSTART's frame: a UTC start's weekdays move with it to local */
+      .map((d) => (d + (ev.start.shift ?? 0) + 7) % 7)
     : [];
   const [y, mo, d] = ev.start.date.split('-').map(Number);
   return {

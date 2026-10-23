@@ -420,3 +420,17 @@ describe("up next", () => {
         }
     })
 })
+
+describe("All items' sort headers", () => {
+    it("keep the focus on the column a keyboard user sorted by, through a redraw", () => {
+        fake.ui.view = "table"
+        show(<Views />)
+        const button = () => within(screen.getByRole("columnheader", { name: /Item/ })).getByRole("button")
+        const before = button()
+        before.focus()
+        set({ sort: { key: "title", dir: 1 } })
+        expect(button()).toBe(before)
+        expect(document.activeElement).toBe(before)
+    })
+})
+
