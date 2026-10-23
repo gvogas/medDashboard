@@ -20,8 +20,10 @@ export default defineConfig(async () => {
             cloudflareTest({
               wrangler: { configPath: './wrangler.jsonc' },
               // Never reach Cloudflare from tests: the AI binding is remote-only, so outline
-              // reading is tested with a fake passed to worker/outline.js directly.
+              // reading is tested with a fake passed to worker/outline.js directly, and the routes
+              // run behind test/no-ai-worker.js, where Workers AI is out of reach.
               remoteBindings: false,
+              main: './test/no-ai-worker.js',
               miniflare: {
                 // Two more empty databases: an old-schema source and a fresh target for the copy.
                 d1Databases: { MIGRATION_DB: 'rounds-migration-tests', MOVE_DB: 'rounds-move-tests' },

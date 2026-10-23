@@ -217,7 +217,7 @@ npm run user:add -- yourname --staging          # the first time: an account the
 ```
 
 `deploy:staging` never touches the live site or the live database. The staging database
-starts empty and keeps what you put in it between deploys. Cloudflare's Git build only
+starts empty and keeps what you put in it between deploys. The Deploy workflow only
 deploys `main` to the live site; staging is deployed only by this command, or by the
 **Deploy staging** workflow in the Actions tab, which runs it for the branch you pick.
 

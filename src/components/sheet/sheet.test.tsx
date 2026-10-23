@@ -47,6 +47,7 @@ import { runToastAction } from "@/data/toast"
 import { Sheet } from "./sheet"
 import { Page, Scrim, SheetHost } from "@/components/shell"
 import type { Item } from "@/data/types"
+import { showApp } from "@/data/signin"
 
 const item = (row: Record<string, unknown>) => normalizeItem({ type: "assignment", date: "2026-09-23", status: "todo", ...row }) as Item
 const TWO_TERMS = normalizeSchool({ terms: [
@@ -73,8 +74,8 @@ afterEach(async () => {
     Object.values(actions).forEach((fn) => fn.mockClear())
 })
 
-/* the page, the scrim and the sheet as <App> draws them */
-const show = () => render(<><Page><button id="opener">Open</button></Page><Scrim /><SheetHost><Sheet /></SheetHost></>)
+/* the page, the scrim and the sheet as <App> draws them, signed in (a hidden page takes no focus) */
+const show = () => { showApp(); return render(<><Page><button id="opener">Open</button></Page><Scrim /><SheetHost><Sheet /></SheetHost></>) }
 const open = (s: Parameters<typeof openSheet>[0]) => act(() => openSheet(s))
 const dialog = () => screen.getByRole("dialog")
 
