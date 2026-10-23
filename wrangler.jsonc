@@ -49,6 +49,14 @@
     "crons": ["0 3 * * *", "0 * * * *"]
   },
 
+  // Every signed-in request's budget, and the Spotify routes' (worker/limits.js limitUser): counted
+  // by Cloudflare, so a request writes nothing to D1. Per account, per minute, in each location.
+  // The limits match API_LIMIT and SPOTIFY_LIMIT there.
+  "ratelimits": [
+    { "name": "API_LIMITER", "namespace_id": "1001", "simple": { "limit": 600, "period": 60 } },
+    { "name": "SPOTIFY_LIMITER", "namespace_id": "1002", "simple": { "limit": 60, "period": 60 } }
+  ],
+
   "observability": { "enabled": true },
   // A test copy of the site, `npm run deploy:staging` (docs/DEPLOYING.md, "Staging"): its own
   // Worker (rounds-staging), its own empty database and its own secrets, so a change can be
@@ -69,6 +77,10 @@
       ],
       "vars": { "SPOTIFY_CLIENT_ID": "", "CF_ACCOUNT_ID": "2c6057041650be9d99932b4013571adb" },
       "ai": { "binding": "AI", "remote": true },
+      "ratelimits": [
+        { "name": "API_LIMITER", "namespace_id": "2001", "simple": { "limit": 600, "period": 60 } },
+        { "name": "SPOTIFY_LIMITER", "namespace_id": "2002", "simple": { "limit": 60, "period": 60 } }
+      ],
       "triggers": { "crons": ["0 3 * * *", "0 * * * *"] }
     }
   },
