@@ -107,6 +107,9 @@ export async function requireSession(request, env) {
   return session;
 }
 
+/** Whether a request carries a session cookie at all, valid or not. */
+export const hasSessionCookie = (request) => Boolean(parseCookies(request.headers.get('cookie'))[COOKIE]);
+
 /** Who a request says it is, from the cookie alone (no D1 read): for the error log, not access. */
 export async function sessionUserId(request, env) {
   try {

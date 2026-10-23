@@ -1,5 +1,5 @@
 import { json, readJson, readBytes, revisionOf, HttpError } from './http.js';
-import { requireUser, requireSession, signSession, sessionCookie, clearCookie, deviceCookie, trustedDevice, parseCookies, secureFlag, sameString, hex, RENEW_WITHIN_MS, sessionUserId } from './auth.js';
+import { requireUser, requireSession, signSession, sessionCookie, clearCookie, deviceCookie, trustedDevice, parseCookies, secureFlag, sameString, hex, RENEW_WITHIN_MS, sessionUserId, hasSessionCookie } from './auth.js';
 import { verifyPassword, normalizeUsername } from './password.js';
 import { claimAttempt, recordSuccess } from './throttle.js';
 import { giveBackOutline, limitLogin, limitOutline, readsLeft } from './limits.js';
@@ -510,8 +510,10 @@ export async function handleApi(request, env, url) {
   } catch (e) {
     if (e instanceof HttpError) {
       res = json(e.body, e.status, e.headers);
-      /* every refused request, for Admin → Errors (a browser report's own refusal aside) */
-      if (e.status >= 400 && e.status <= 499 && !e.logged && url.pathname !== '/api/errors') {
+      /* every refused request, for Admin → Errors (a browser report's own refusal aside, and a
+         401 to someone with no session at all: the sign-in page asks /api/me on every visit) */
+      const signedOut = e.status === 401 && e.body?.error === 'unauthenticated' && !hasSessionCookie(request);
+      if (e.status >= 400 && e.status <= 499 && !e.logged && !signedOut && url.pathname !== '/api/errors') {
         const detail = Object.entries(e.body || {}).map(([k, v]) => (k === 'error' ? String(v) : `${k}: ${v}`)).join(' · ');
         await logError(env.DB, { method: request.method, route: url.pathname, status: e.status, message: detail, userId: await sessionUserId(request, env) });
       }
