@@ -1,11 +1,11 @@
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest"
 
 /* A store in memory: saving replaces the row, as a reload does. */
-const fake = vi.hoisted(() => ({ items: [] as { id: string }[], saved: [] as unknown[] }))
+const fake = vi.hoisted(() => ({ items: [] as { id: string }[], saved: [] as unknown[], fail: 0 }))
 vi.mock("@/core/store", () => ({
     data: { get items() { return fake.items } },
     item: (id: string) => fake.items.find((x) => x.id === id) || null,
-    saveItem: async (row: { id: string }) => { fake.saved.push(row); fake.items = fake.items.map((x) => (x.id === row.id ? row : x)) },
+    saveItem: async (row: { id: string }) => { if (fake.fail) { fake.fail--; throw new Error("Sign in again before saving") } fake.saved.push(row); fake.items = fake.items.map((x) => (x.id === row.id ? row : x)) },
     subscribe: () => () => {},
 }))
 vi.mock("@/lib/fireworks", () => ({ launch: vi.fn() }))
@@ -125,6 +125,18 @@ describe("saving as you type", () => {
         typeInto("i1", { where: "Lab 4" })
         await flush()
         expect(fake.items[0]).toMatchObject({ where: "Lab 4" })
+    })
+
+    it("keeps typed text a failed save could not keep, and saves it with the next", async () => {
+        fake.items = [item({})]
+        typeInto("i1", { notes: "read ch. 4" })
+        fake.fail = 1
+        await expect(flush()).rejects.toThrow(/Sign in again/)
+        expect(pendingFor("i1")).toEqual({ notes: "read ch. 4" })
+        typeInto("i1", { title: "Renal" })
+        await flush()
+        expect(fake.items[0]).toMatchObject({ notes: "read ch. 4", title: "Renal" })
+        expect(pendingFor("i1")).toBeNull()
     })
 })
 

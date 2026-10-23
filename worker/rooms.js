@@ -150,11 +150,12 @@ async function save(db, before, room, members) {
 /**
  * Read the room, settle it, let `act` change it, and write it back; again from the top when
  * someone else wrote first. `act(room, members, me)` may throw an HttpError; what it returns
- * is passed on. 404 when the room does not exist.
+ * is passed on. 404 when the room does not exist. `loaded`, a read the caller just made, stands
+ * in for the first one (it is never changed: each try works on a copy).
  */
-async function change(db, roomId, act, now, me) {
+async function change(db, roomId, act, now, me, loaded = null) {
   for (let i = 0; i < TRIES; i++) {
-    const before = await load(db, roomId);
+    const before = i === 0 && loaded ? loaded : await load(db, roomId);
     if (!before) throw notFound();
     const { room, members } = structuredClone(before);
     settle(room, members, now);
@@ -289,9 +290,10 @@ export async function getRoom(db, me, roomId, tag = null, now = Date.now()) {
   const first = await load(db, roomId);
   const listed = first?.members.find((m) => m.userId === me);
   if (!listed || !(await mayEnter(db, me, first.room, first.members, listed))) throw notFound();
+  /* the read above is the first try's: a poll is one read, not two */
   const { room, members } = await change(db, roomId, (room, members) => {
     if (!members.some((m) => m.userId === me)) throw notFound();
-  }, now, me);
+  }, now, me, first);
   const out = view(room, members, now);
   return tag !== null && tag === out.tag ? null : out;
 }
@@ -315,7 +317,7 @@ export async function joinRoom(db, me, roomId, body, now = Date.now()) {
     }
     Object.assign(m, { name: who.name, username: who.username, state: 'in', joinedAt: m.joinedAt ?? now, joinedStudyMs: studyAt(room.run, now), leftAt: null, lastSeen: now, courseLabel });
     event(room, 'joined', who.name, now);
-  }, now, me);
+  }, now, me, first);
   /* only once you are in: a join that fails (full, ended) leaves you where you were */
   await leaveOthers(db, me, roomId, now);
   return view(room, members, now);

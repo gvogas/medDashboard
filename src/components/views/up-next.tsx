@@ -28,7 +28,7 @@ export function UpNext({ className }: { className?: string }) {
             className={className}
             head={<>
                 <HeadNote>{rows.length ? (late ? late + " overdue · " : "") + rows.length + " to do" : "all clear"}</HeadNote>
-                <button type="button" onClick={fold} aria-expanded={!folded} aria-controls="up-next-list"
+                <button type="button" onClick={fold} aria-expanded={!folded} aria-controls={folded ? undefined : "up-next-list"}
                     className="cursor-pointer rounded-md border-0 bg-transparent px-2 py-1 text-[11.5px] font-semibold text-ink-2 hover:text-foreground pointer-coarse:min-h-10">
                     {folded ? "Show" : "Hide"}
                 </button>

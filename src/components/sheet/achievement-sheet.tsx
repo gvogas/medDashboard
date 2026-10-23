@@ -53,20 +53,25 @@ export function AchievementSheet({ draft: d }: { draft: AchievementDraft }) {
         if (!chosen) return
         const got = await readPicture(chosen)
         if (!got) { toast("That picture could not be read. Try a JPG or PNG.", { error: true }); return }
+        drop()
         pic.current = got
         setCrop({ x: 0, y: 0, zoom: 1 })
     }
-    const cancelCrop = () => { pic.current = null; setCrop(null); setAfter("pick") }
+    /* a decoded photo can be tens of MB: let it go as soon as the crop is over */
+    const drop = () => { pic.current?.close?.(); pic.current = null }
+    useEffect(() => drop, [])
+    const cancelCrop = () => { drop(); setCrop(null); setAfter("pick") }
     const useCrop = () => {
         if (!crop || !pic.current) return
         const url = stickerData(pic.current, crop)
         if (!url) { toast("That picture is too detailed to keep small. Try zooming in, or another picture.", { error: true }); return }
-        pic.current = null
+        drop()
         setCrop(null)
         edit({ sticker: url })
         setAfter("name")
     }
-    const move = (dx: number, dy: number, shown: number) => { if (crop && pic.current) setCrop(dragCrop(crop, pic.current, dx, dy, shown)) }
+    /* from the latest crop, so pointer moves faster than redraws all count */
+    const move = (dx: number, dy: number, shown: number) => { const p = pic.current; if (p) setCrop((c) => c && dragCrop(c, p, dx, dy, shown)) }
 
     const liveCourses = courses.filter((c) => !c.archived || c.id === d.courseId)
     const tests = items.filter((it) => isTest(it.type)).sort((a, b) => a.date.localeCompare(b.date))

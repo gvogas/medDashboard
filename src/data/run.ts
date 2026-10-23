@@ -137,6 +137,9 @@ export async function skip() {
 /** Stop & log: save the study time done so far. */
 export const stop = () => finish()
 
+/* the clock's own fields of a run */
+const pick = (r: timer.Run): timer.Run => ({ flow: r.flow, startedAt: r.startedAt, pausedAt: r.pausedAt, pausedMs: r.pausedMs, skippedMs: r.skippedMs, skippedStudyMs: r.skippedStudyMs })
+
 async function finish() {
     if (!run) return
     const ended = run
@@ -149,8 +152,10 @@ async function finish() {
     const stored = await store.meta.get(KEY) as StoredRun | null | undefined
     try {
         if (stored?.id === ended.id) {
-            const s = timer.read(ended)
-            const minutes = timer.loggedMinutes({ studyMs: roomStudyMs(ended) })
+            /* a solo run's clock as kept: another tab of this device may have paused or skipped it since this one read it */
+            const clock = ended.room ? ended : { ...ended, ...pick(stored) }
+            const s = timer.read(clock)
+            const minutes = timer.loggedMinutes({ studyMs: roomStudyMs(clock) })
             /* the session first: if it fails, the kept run is still there on the next load */
             if (minutes >= 1) {
                 /* back in a room after leaving it: the same session, written again with the total */

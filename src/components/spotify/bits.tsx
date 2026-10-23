@@ -2,7 +2,7 @@
 // 24-unit box), a cover, the equaliser, the empty and loading lines, Show more and ↻,
 // the short note, and the glass tokens that turn any of it dark for the focus screen.
 
-import type { ReactNode } from "react"
+import { useState, type ReactNode } from "react"
 import { cn } from "@/lib/utils"
 
 /** The focus screen's glass: Term's tokens re-pointed at the dark --fx-* palette, so the
@@ -72,10 +72,13 @@ export function mmss(ms: number) {
     return Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0")
 }
 
-/** A cover, or an empty square where Spotify has none. */
+/** A cover, or an empty square where Spotify has none, or the picture would not load. */
 export function Art({ src, className, round = false }: { src: string | null | undefined; className?: string; round?: boolean }) {
+    const [broken, setBroken] = useState<string | null>(null)
     const cls = cn("block flex-none bg-muted object-cover", round ? "rounded-full" : "rounded-[5px]", className)
-    return src ? <img src={src} alt="" loading="lazy" className={cls} /> : <span aria-hidden="true" className={cls} />
+    return src && src !== broken
+        ? <img src={src} alt="" loading="lazy" className={cls} onError={() => setBroken(src)} />
+        : <span aria-hidden="true" className={cls} />
 }
 
 /** The three bars beside the track that is playing; still with reduced motion. */
