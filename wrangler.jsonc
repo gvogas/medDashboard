@@ -10,6 +10,11 @@
   "workers_dev": true,
   "preview_urls": false,
 
+  // The API makes two or more D1 round trips a request (the session's check and limit, then the
+  // route): Smart Placement may run it near the database rather than near the person. Static
+  // files are still served from the nearest location. Free on every plan.
+  "placement": { "mode": "smart" },
+
   "assets": {
     "directory": "./dist/client",
     "binding": "ASSETS",

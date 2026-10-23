@@ -2,7 +2,6 @@
 // so it stays reachable while a drawer makes the page behind it inert. Bottom left; on
 // phones, full width above the round New item button.
 
-import { motion, useReducedMotion } from "framer-motion"
 import { hideToast, runToastAction, useToast, type Toast } from "@/data/toast"
 import { Card } from "@/components/ui/card"
 import { TextureButton } from "@/components/ui/texture-button"
@@ -22,15 +21,13 @@ export function Toaster() {
 }
 
 function ToastCard({ t }: { t: Toast }) {
-    const reduced = useReducedMotion()
+    /* each new toast springs up (.toast-in, src/index.css): a CSS animation, so framer-motion
+       stays out of the first load */
     return (
-        <motion.div
+        <div
             key={t.id}
-            initial={reduced ? false : { opacity: 0, y: 16, scale: 0.96 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            transition={{ type: "spring", stiffness: 520, damping: 32 }}
             className={cn(
-                "fixed bottom-[calc(18px+env(safe-area-inset-bottom,0px))] left-[18px] z-[70] max-w-[min(440px,calc(100vw-36px))]",
+                "toast-in fixed bottom-[calc(18px+env(safe-area-inset-bottom,0px))] left-[18px] z-[70] max-w-[min(440px,calc(100vw-36px))]",
                 /* beside the sidebar on wide screens, not over the coat or badge */
                 "min-[901px]:left-[240px]",
                 "max-[640px]:right-3 max-[640px]:left-3 max-[640px]:bottom-[calc(84px+env(safe-area-inset-bottom,0px))] max-[640px]:max-w-none"
@@ -58,6 +55,6 @@ function ToastCard({ t }: { t: Toast }) {
                     </button>
                 </div>
             </Card>
-        </motion.div>
+        </div>
     )
 }

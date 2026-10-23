@@ -19,6 +19,14 @@ describe("the poller", () => {
         expect(nextDelayMs({ connected: true, playing: false })).toBe(20000)
         expect(nextDelayMs({ connected: false })).toBeNull()
     })
+
+    it("polls less with the music out of sight, and just after a playing track ends", () => {
+        expect(nextDelayMs({ connected: true, playing: false }, false)).toBe(60000)
+        expect(nextDelayMs({ connected: true, playing: true, track: { progressMs: 0, durationMs: 240000 } }, false)).toBe(30000)
+        expect(nextDelayMs({ connected: true, playing: true, track: { progressMs: 230000, durationMs: 240000 } }, false)).toBe(11500)
+        expect(nextDelayMs({ connected: true, playing: true, track: { progressMs: 240000, durationMs: 240000 } }, false)).toBe(5000)
+        expect(nextDelayMs({ connected: false }, false)).toBeNull()
+    })
 })
 
 describe("playTarget", () => {

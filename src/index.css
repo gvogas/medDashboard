@@ -127,6 +127,15 @@
   50% { transform: scaleY(2); }
 }
 
+/* A toast springs up from the foot of the screen (components/toaster.tsx). */
+@keyframes toast-in {
+  from { opacity: 0; transform: translateY(16px) scale(.96); }
+}
+@layer components {
+  .toast-in { animation: toast-in .28s cubic-bezier(.3, 1.35, .6, 1); }
+  @media (prefers-reduced-motion: reduce) { .toast-in { animation: none; } }
+}
+
 /* The shortcuts panel and the busy card fade in over the page. */
 @keyframes overlay-in {
   from { opacity: 0; }

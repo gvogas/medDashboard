@@ -66,7 +66,8 @@ flowchart LR
 
 - **Front end:** React 19 + TypeScript, built by Vite 8 and styled with Tailwind 4 plus
   plain CSS (`src/styles/`). Fonts are self-hosted: Source Serif 4, IBM Plex Sans and
-  IBM Plex Mono. Animation uses framer-motion. It is a single-page app.
+  IBM Plex Mono. Animation is CSS, plus framer-motion for dragging types into order (it
+  loads with All items, not on the first screen). It is a single-page app.
 - **Back end:** plain JavaScript (ES modules) in `worker/`, with no framework. Routes are
   a regex table in `worker/api.js`.
 - **Database:** Cloudflare D1. The schema is one file, `migrations/0001_schema.sql`,

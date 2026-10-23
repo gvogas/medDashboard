@@ -4,6 +4,8 @@
 import { api, ApiError, retryDelayMs } from "@/core/api"
 import * as web from "./web-player"
 import { changed } from "./signal"
+import { ui } from "@/data/ui"
+import { subscribe as onUi } from "@/bridge"
 import type { PlayerState } from "./types"
 
 export const state: PlayerState = {
@@ -33,11 +35,19 @@ let wired = false
 let generation = 0
 
 /** 10 s while playing (the progress line ticks locally between polls), 20 s when
-    connected but quiet, null when not connected. Each poll is a D1 write. */
-export function nextDelayMs(s: { connected: boolean; playing?: boolean }): number | null {
+    connected but quiet, null when not connected. Each poll is a D1 write, so with the music
+    out of sight (only the sidebar's player shows) it is 30 s and 60 s, and while playing it
+    asks again just after the track should end, for the next one's title. */
+export function nextDelayMs(s: { connected: boolean; playing?: boolean; track?: { progressMs: number; durationMs: number } | null }, shown = true): number | null {
     if (!s.connected) return null
-    return s.playing ? 10000 : 20000
+    if (shown) return s.playing ? 10000 : 20000
+    if (!s.playing) return 60000
+    const left = s.track ? s.track.durationMs - s.track.progressMs + 1500 : Infinity
+    return Math.max(5000, Math.min(30000, left))
 }
+
+/** The Music page or the focus screen's music panel is up. */
+const musicShown = () => ui.view === "spotify" || ui.focusMusic
 
 /** boot.ts's one callback; React reads through useSpotify(). */
 export function onState(fn: (s: PlayerState, kind: StateKind) => void) { listener = fn }
@@ -91,7 +101,7 @@ export async function poll() {
         if (started !== generation || !active) return
         apply(result)
         emit("state")
-        schedule(nextDelayMs(state))
+        schedule(nextDelayMs(state, musicShown()))
     } catch (e) {
         if (started !== generation || !active) return
         if (e instanceof ApiError && e.status === 401) { stop(); onSignedOut(); return }
@@ -113,6 +123,13 @@ function wire() {
     wired = true
     document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") poll() })
     window.addEventListener("online", poll)
+    /* the music coming into sight asks at once, rather than at the slower pace's next turn */
+    let shown = musicShown()
+    onUi(() => {
+        const now = musicShown()
+        if (now && !shown && state.connected) poll()
+        shown = now
+    })
 }
 
 export function start() {
