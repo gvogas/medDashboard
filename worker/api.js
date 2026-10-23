@@ -1,5 +1,5 @@
 import { json, readJson, readBytes, revisionOf, HttpError } from './http.js';
-import { requireUser, requireSession, signSession, sessionCookie, clearCookie, deviceCookie, trustedDevice, parseCookies, secureFlag, sameString, hex, RENEW_WITHIN_MS } from './auth.js';
+import { requireUser, requireSession, signSession, sessionCookie, clearCookie, deviceCookie, trustedDevice, parseCookies, secureFlag, sameString, hex, RENEW_WITHIN_MS, sessionUserId } from './auth.js';
 import { verifyPassword, normalizeUsername } from './password.js';
 import { claimAttempt, recordSuccess } from './throttle.js';
 import { giveBackOutline, limitLogin, limitOutline, readsLeft } from './limits.js';
@@ -21,7 +21,7 @@ import { friendRoutes } from './friends.js';
 import { roomRoutes } from './rooms.js';
 import { pushRoutes } from './push.js';
 import { unreadCount } from './activity.js';
-import { logError, messageOf } from './errors.js';
+import { errorRoutes, logError, messageOf } from './errors.js';
 import { guardMaintenance, publicMaintenance } from './maintenance.js';
 
 /** `cursors=u:<me>:812,c:<space id>:r640.700`: each entry split at its last ':', a sequence or a
@@ -236,6 +236,7 @@ const aiRead = (read, what) => async ({ request, env, url }) => {
     const message = [code, what, (type.split(';')[0] || 'no type') + ' ' + size + ' bytes', (Date.now() - t0) + ' ms',
       claimed && GIVEN_BACK.has(code) ? 'read given back' : '', known ? e.detail : messageOf(e)].filter(Boolean).join(' · ');
     await logError(env.DB, { method: request.method, route: url.pathname, status: known ? e.status : 503, message, userId });
+    if (known) e.logged = true;   /* not again as a refused request */
     throw known ? e : new HttpError(503, { error: 'outline_unavailable' });
   }
 };
@@ -468,6 +469,7 @@ const routes = [
   ...roomRoutes,
   ...pushRoutes,
   ...adminRoutes,
+  ...errorRoutes,
 ];
 
 /**
@@ -506,12 +508,18 @@ export async function handleApi(request, env, url) {
         allowed.length ? { allow: allowed.join(', ') } : {});
     }
   } catch (e) {
-    if (e instanceof HttpError) res = json(e.body, e.status, e.headers);
-    else {
+    if (e instanceof HttpError) {
+      res = json(e.body, e.status, e.headers);
+      /* every refused request, for Admin → Errors (a browser report's own refusal aside) */
+      if (e.status >= 400 && e.status <= 499 && !e.logged && url.pathname !== '/api/errors') {
+        const detail = Object.entries(e.body || {}).map(([k, v]) => (k === 'error' ? String(v) : `${k}: ${v}`)).join(' · ');
+        await logError(env.DB, { method: request.method, route: url.pathname, status: e.status, message: detail, userId: await sessionUserId(request, env) });
+      }
+    } else {
       // A schema the code expects but D1 lacks means a migration was not applied remotely.
       if (/no such (table|column)/i.test(e?.message || '')) console.error('D1 schema is behind the code; run `npm run db:remote`.');
       console.error(e);
-      await logError(env.DB, { method: request.method, route: url.pathname, status: 500, message: messageOf(e) });
+      await logError(env.DB, { method: request.method, route: url.pathname, status: 500, message: messageOf(e), userId: await sessionUserId(request, env) });
       res = json({ error: 'internal' }, 500);
     }
   }

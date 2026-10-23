@@ -80,6 +80,29 @@ describe("the Admin page", () => {
         expect(screen.getByRole("button", { name: "Unlock" })).toBeTruthy()
     })
 
+    it("shows every kind of error, and picks out one kind", async () => {
+        const at = Date.now() - 60_000
+        const g = (kind: string, method: string, route: string, status: number, message: string) => ({ kind, method, route, status, message, count: 2, last: at, first: at - 1, users: 1 })
+        admin.errors.mockResolvedValue({
+            groups: [g("server", "GET", "/api/items", 500, "D1 is down"), g("request", "POST", "/api/rooms", 429, "rate_limited"),
+                g("browser", "BROWSER", "/study", 0, "react: TypeError: x is undefined"), g("nightly", "CRON", "cron/rooms", 500, "busy")],
+            recent: [{ at, kind: "browser", method: "BROWSER", route: "/study", status: 0, message: "react: TypeError: x is undefined", username: "sam" }],
+        })
+        render(<AdminPage />)
+        fireEvent.click(screen.getByRole("tab", { name: "Errors" }))
+        expect(await screen.findByText("D1 is down")).toBeTruthy()
+        expect(screen.getByText("rate_limited")).toBeTruthy()
+        expect(screen.getByText("busy")).toBeTruthy()
+        expect(screen.getByRole("button", { name: "Browser 2" })).toBeTruthy()
+        fireEvent.click(screen.getByRole("button", { name: "Nightly jobs 2" }))
+        expect(screen.getByText("busy")).toBeTruthy()
+        expect(screen.queryByText("D1 is down")).toBeNull()
+        expect(screen.queryByText("Latest")).toBeNull()
+        fireEvent.click(screen.getByRole("button", { name: "Browser 2" }))
+        expect(screen.getAllByText("react: TypeError: x is undefined")).toHaveLength(2)
+        expect(screen.getByText("page /study")).toBeTruthy()
+    })
+
     it("creates an account and says why one was refused", async () => {
         admin.create.mockRejectedValueOnce(new ApiError(409, { error: "taken", field: "username" }))
         admin.create.mockResolvedValueOnce({ id: "u-new", username: "newbie" })
