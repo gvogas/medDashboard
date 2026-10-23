@@ -4,7 +4,6 @@
 // It renders inside <App>'s <aside id="side">, whose .on and inert come from
 // data/sidebar.ts.
 
-import { MotionConfig } from "framer-motion"
 import { SidebarGpa } from "./sidebar-gpa"
 import { useCourses, useItems, useProfile, useSpaces } from "@/data/store"
 import { courseKeyOf, courseSource, keyOf } from "@/data/effective"
@@ -28,22 +27,20 @@ import { ProjectsGroup } from "./sidebar-projects"
 export function Sidebar() {
     const bg = useUi((u) => u.bg)
     return (
-        <MotionConfig reducedMotion="user">
-            <div className="flex grow flex-col gap-5 px-1 pt-1">
-                <div className="flex items-baseline justify-between px-2.5">
-                    <span className="font-serif text-[26px] font-semibold tracking-[-.01em]">Term</span>
-                    <span className="text-[12px] font-medium text-accent-foreground">{THEMES[bg].label}</span>
-                </div>
-                <SideNav />
-                <CourseList />
-                <ProjectsGroup />
-                <div className="mt-auto flex flex-col gap-3.5 pt-2">
-                    <SidebarWho />
-                    <SidebarPlayer />
-                    <SideFoot />
-                </div>
+        <div className="flex grow flex-col gap-5 px-1 pt-1">
+            <div className="flex items-baseline justify-between px-2.5">
+                <span className="font-serif text-[26px] font-semibold tracking-[-.01em]">Term</span>
+                <span className="text-[12px] font-medium text-accent-foreground">{THEMES[bg].label}</span>
             </div>
-        </MotionConfig>
+            <SideNav />
+            <CourseList />
+            <ProjectsGroup />
+            <div className="mt-auto flex flex-col gap-3.5 pt-2">
+                <SidebarWho />
+                <SidebarPlayer />
+                <SideFoot />
+            </div>
+        </div>
     )
 }
 

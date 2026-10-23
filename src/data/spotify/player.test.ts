@@ -24,8 +24,10 @@ async function fresh(route: Route) {
     vi.stubGlobal("fetch", fetcher)
     player = await import("./player")
     const web = await import("./web-player")
+    const { ui } = await import("@/data/ui")
+    const { notify } = await import("@/bridge")
     const paths = () => fetcher.mock.calls.map(([p]) => p)
-    return { player, web, fetcher, paths }
+    return { player, web, ui, notify, fetcher, paths }
 }
 
 beforeEach(() => { setVisible(true); setOnline(true) })
@@ -52,10 +54,11 @@ describe("Spotify connection on startup", () => {
 })
 
 describe("the poller", () => {
-    it("asks every 10 s while playing and every 20 s when quiet", async () => {
+    it("asks every 10 s while playing and every 20 s when quiet, on the Music page", async () => {
         vi.useFakeTimers()
         let answer: object = PLAYING
-        const { player, paths } = await fresh((path) => path === "/api/spotify/status" ? json({ connected: true }) : json(answer))
+        const { player, ui, paths } = await fresh((path) => path === "/api/spotify/status" ? json({ connected: true }) : json(answer))
+        ui.view = "spotify"
         player.start()
         await vi.advanceTimersByTimeAsync(0)
         expect(paths()).toEqual(["/api/spotify/status", "/api/spotify/player"])
@@ -70,6 +73,30 @@ describe("the poller", () => {
         expect(paths()).toHaveLength(3)
         await vi.advanceTimersByTimeAsync(1)
         expect(paths()).toHaveLength(4)
+    })
+
+    it("asks every 30 s while playing and every 60 s when quiet elsewhere, and at once when Music opens", async () => {
+        vi.useFakeTimers()
+        let answer: object = PLAYING
+        const { player, ui, notify, paths } = await fresh((path) => path === "/api/spotify/status" ? json({ connected: true }) : json(answer))
+        ui.view = "week"
+        player.start()
+        await vi.advanceTimersByTimeAsync(0)
+        expect(paths()).toHaveLength(2)
+        answer = QUIET
+        await vi.advanceTimersByTimeAsync(29999)
+        expect(paths()).toHaveLength(2)
+        await vi.advanceTimersByTimeAsync(1)
+        expect(paths()).toHaveLength(3)
+        await vi.advanceTimersByTimeAsync(30000)
+        expect(paths()).toHaveLength(3)
+        ui.view = "spotify"
+        notify()
+        await vi.advanceTimersByTimeAsync(0)
+        expect(paths()).toHaveLength(4)
+        /* back to the 20 s of the Music page */
+        await vi.advanceTimersByTimeAsync(20000)
+        expect(paths()).toHaveLength(5)
     })
 
     it("moves the progress line between polls, up to the track's end", async () => {
