@@ -18,10 +18,12 @@ import { readWithAi, refreshReads } from "@/data/ai-read"
 import { closeSheet, openSheet } from "@/data/overlay"
 import { Overlays } from "./overlays"
 import { Page, SheetHost } from "./shell"
+import { showApp } from "@/data/signin"
 
 beforeAll(() => { if (!globalThis.crypto?.subtle) vi.stubGlobal("crypto", webcrypto) })
 beforeEach(() => {
-    /* the page, the sheet and the overlays as <App> draws them */
+    /* the page, the sheet and the overlays as <App> draws them, signed in (a hidden page takes no focus) */
+    showApp()
     render(<>
         <Page><button id="opener">Open</button></Page>
         <SheetHost><div role="dialog" tabIndex={-1} id="panel" /></SheetHost>

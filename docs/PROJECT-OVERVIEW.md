@@ -75,11 +75,12 @@ flowchart LR
 - **AI:** Workers AI. `@cf/openai/gpt-oss-120b` reads text (outlines, calendars,
   schedules) and `@cf/meta/llama-4-scout-17b-16e-instruct` reads screenshots. Both
   share a limit of reads per person per day.
-- **Hosting/deploy:** `wrangler.jsonc`. Cloudflare's Git integration builds pushes to
-  `main` with `npm run build`, but it does **not** apply remote D1 migrations. Run
-  `npm run deploy` or `npm run db:remote` for those.
+- **Hosting/deploy:** `wrangler.jsonc`. Every push to `main` goes live through the
+  **Deploy** workflow (`.github/workflows/deploy.yml`): checks, secrets, a restore point,
+  remote D1 migrations, a database check, then `wrangler deploy`. Cloudflare's own Git
+  build must stay off, since it would deploy the code before the migrations.
 - **CI:** GitHub Actions (`.github/workflows/check.yml`) runs `npm run check`
-  (typecheck, tests, build).
+  (typecheck, tests, build) on every other branch and pull request.
 
 ### Local-first sync (the core idea)
 
@@ -252,7 +253,7 @@ npm run user:add -- name --name "Name"   # local account (add --remote for live,
 npm run dev                      # http://127.0.0.1:8787 (Vite with the Worker inside)
 npm test                         # all tests (workers + dom + node)
 npm run check                    # typecheck + tests + build (what CI runs)
-npm run db:remote                # apply migrations to the live D1 (Git builds do not)
+npm run db:remote                # apply migrations to the live D1 by hand (the Deploy workflow does it on each push)
 ```
 
 Deploying, secrets, accounts and database moves: `docs/DEPLOYING.md`.
