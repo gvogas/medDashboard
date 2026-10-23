@@ -257,6 +257,16 @@ describe('every kind of error', () => {
     expect((await (await admin('/api/admin/health')).json()).errors24h).toBe(before);
   });
 
+  it('leaves out a 401 to someone with no session, and keeps one to a session that ended', async () => {
+    /* other tests ask /api/me too: only what these two add counts */
+    const before = (await rows('/api/me')).length;
+    expect((await SELF.fetch(`${BASE}/api/me`)).status).toBe(401);
+    expect((await rows('/api/me')).length).toBe(before);
+    const stale = await SELF.fetch(`${BASE}/api/me`, { headers: { cookie: 'rounds_session=not-a-session' } });
+    expect(stale.status).toBe(401);
+    expect((await rows('/api/me')).slice(before)).toEqual([{ method: 'GET', status: 401, message: 'unauthenticated', user_id: null }]);
+  });
+
   it('takes a crash from a browser, signed in or not, a few an hour each', async () => {
     const person = await signIn('crash1');
     expect((await person('/api/errors', { method: 'POST', body: { kind: 'react', message: 'TypeError: x is undefined @ /assets/a.js:1:2', where: '/study' } })).status).toBe(204);
