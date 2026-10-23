@@ -8,7 +8,8 @@ import { requireSession } from '../worker/auth.js';
 import { handleApi } from '../worker/api.js';
 import { upsertRow, deleteRow } from '../worker/db.js';
 import { encryptToken } from '../worker/spotify.js';
-import { BASE, signIn } from './helpers.js';
+import { createRoom, getRoom, joinRoom, roomClock } from '../worker/rooms.js';
+import { BASE, createUser, signIn } from './helpers.js';
 
 const RAW = Symbol('statement');
 
@@ -177,5 +178,38 @@ describe('saving and deleting rows', () => {
     const live = await upsertRow(env.DB, 'quotes', 'u-trip-put', 'q2', { text: 'y', source: '' });
     await expect(deleteRow(env.DB, 'quotes', 'u-trip-put', 'q2', Date.now(), live.revision + 5))
       .rejects.toMatchObject({ status: 409, body: { error: 'conflict', current: { id: 'q2', revision: live.revision } } });
+  });
+});
+
+describe('a sync', () => {
+  it('pages and counts the inbox in three round trips: the session, the spaces, the page with the count', async () => {
+    const api = await signIn('trip-sync');
+    await api('/api/quotes/q1', { method: 'PUT', body: { text: 'x', source: '' } });
+    const e = countedEnv();
+    const res = await handleApi(request(api, '/api/sync?v=3'), e, new URL(BASE + '/api/sync?v=3'));
+    const page = await res.json();
+    expect(page).toMatchObject({ more: false, unread: 0 });
+    expect(page.changes.map((c) => c.row.id)).toEqual(['q1']);
+    expect(e.log).toHaveLength(3);
+    expect(e.log.slice(1)).toEqual(['batch', 'batch']);
+  });
+});
+
+describe('a room poll', () => {
+  const T = 1_800_000_000_000;
+  const FLOW = { steps: [['study', 25], ['break', 5]], rounds: 2 };
+
+  it('reads the room once, and still sees what changed since the last poll', async () => {
+    const [h, p] = await Promise.all([createUser('trip-room-h'), createUser('trip-room-p')]);
+    const [lo, hi] = h < p ? [h, p] : [p, h];
+    await env.DB.prepare("INSERT INTO friendships (user_lo, user_hi, requested_by, status, created_at, accepted_at) VALUES (?, ?, ?, 'accepted', 1, 1)").bind(lo, hi, lo).run();
+    const made = await createRoom(env.DB, h, { flow: FLOW }, T);
+    await joinRoom(env.DB, p, made.room.id, {}, T);
+    /* within 30 s of the last sign of life, so last_seen is not written: one read of the room */
+    const db = counted(env.DB);
+    expect(await getRoom(db, h, made.room.id, null, T + 1000)).toMatchObject({ room: { id: made.room.id } });
+    expect(db.log).toEqual(['batch']);
+    await roomClock(env.DB, h, made.room.id, { action: 'pause' }, T + 2000);
+    expect((await getRoom(db, p, made.room.id, null, T + 3000)).room.run.pausedAt).toBe(T + 2000);
   });
 });

@@ -585,9 +585,10 @@ export async function readMemberships(db, userId, sv) {
  * by live membership inside the statement, so a removal since readMemberships pages
  * nothing. D1 refuses a compound SELECT of more than five terms, so this is a batch rather
  * than one UNION ALL. Rows come back in sequence order, not yet cut; `lost` lists the
- * scopes the guard refused, checked in the same batch.
+ * scopes the guard refused, checked in the same batch. `also`, a statement to run in the same
+ * batch, answers in `extra` (its first row).
  */
-export async function readPage(db, userId, wanted, limit = 100) {
+export async function readPage(db, userId, wanted, limit = 100, also = null) {
   const guards = wanted.map(([scope]) => {
     const p = parseScope(scope);
     return p.kind === 'user' ? { sql: p.userId === userId ? '1' : '0', binds: [] } : memberGuard(p.spaceId, userId);
@@ -598,9 +599,11 @@ export async function readPage(db, userId, wanted, limit = 100) {
     ...wanted.map(([scope, cursor], i) =>
       db.prepare(`SELECT seq, scope, kind, payload FROM changes WHERE scope = ? AND seq > ? AND ${guards[i].sql} ORDER BY seq LIMIT ?`)
         .bind(scope, cursor, ...guards[i].binds, limit + 1)),
+    ...(also ? [also] : []),
   ]);
+  const extra = also ? pages.pop().results[0] : undefined;
   const lost = wanted.map(([scope]) => scope).filter((_, i) => !access.results[0][`a${i}`]);
-  return { ...state.results[0], lost, rows: pages.flatMap((p) => p.results).sort((a, b) => a.seq - b.seq) };
+  return { ...state.results[0], lost, rows: pages.flatMap((p) => p.results).sort((a, b) => a.seq - b.seq), extra };
 }
 
 /**
@@ -626,13 +629,14 @@ export function parseCursor(token) {
  * it began: the client wiped that scope, so a tombstone purged before then is nothing it
  * holds, and a purge since would move the floor. Each cursor moves to just below its
  * scope's first row not delivered (the head when none is left), never back; one still
- * below the floor after a resync from 0 comes back tagged.
+ * below the floor after a resync from 0 comes back tagged. With `unread` (activity.js
+ * unreadStmt), the last page carries the inbox's count, read in the page's own batch.
  */
-export async function syncPageV3(db, userId, cursors, sv, limit = 100) {
+export async function syncPageV3(db, userId, cursors, sv, limit = 100, { unread = null } = {}) {
   const held = await readMemberships(db, userId, sv);
   const sent = new Map(cursors.map(([s, c]) => [s, parseCursor(c) || { seq: 0, base: null }]));
   const from = (s) => sent.get(s) || { seq: 0, base: null };
-  const { floor, head, lost, rows: all } = await readPage(db, userId, [personal(userId), ...held.map((s) => s.scope)].map((s) => [s, from(s).seq]), limit);
+  const { floor, head, lost, rows: all, extra } = await readPage(db, userId, [personal(userId), ...held.map((s) => s.scope)].map((s) => [s, from(s).seq]), limit, unread);
   /* a space left since readMemberships pages nothing and keeps no cursor: gone, as if never read */
   const spaces = held.filter((s) => !lost.includes(s.scope));
   const scopes = [personal(userId), ...spaces.map((s) => s.scope)];
@@ -649,6 +653,7 @@ export async function syncPageV3(db, userId, cursors, sv, limit = 100) {
     const at = Math.max(seq, left ? left.seq - 1 : head);
     return at >= floor || at === 0 ? at : `r${at}.${base ?? floor}`;
   };
+  const more = full || reset.length > 0;
   return {
     scopes: spaces,
     cursors: Object.fromEntries(scopes.map((s) => [s, reset.includes(s) ? 0 : next(s)])),
@@ -656,9 +661,11 @@ export async function syncPageV3(db, userId, cursors, sv, limit = 100) {
       const raw = JSON.parse(r.payload);
       return { scope: r.scope, kind: r.kind, row: r.scope.startsWith('u:') ? rowToApi(r.kind, raw) : sharedToApi(r.kind, raw) };
     }),
-    more: full || reset.length > 0,
+    more,
     reset,
     revoked,
+    /* once per sync cycle: only the last page carries the inbox's count (spec §12, §18) */
+    ...(unread && !more ? { unread: extra.n } : {}),
   };
 }
 

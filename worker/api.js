@@ -20,7 +20,7 @@ import { inboxRoutes } from './inbox.js';
 import { friendRoutes } from './friends.js';
 import { roomRoutes } from './rooms.js';
 import { pushRoutes } from './push.js';
-import { unreadCount } from './activity.js';
+import { unreadStmt } from './activity.js';
 import { errorRoutes, logError, messageOf } from './errors.js';
 import { guardMaintenance, publicMaintenance } from './maintenance.js';
 
@@ -306,9 +306,7 @@ const routes = [
     const userId = await requireUser(request, env);
     const q = url.searchParams;
     if (q.get('v') === '3') {
-      const page = await syncPageV3(env.DB, userId, cursorsParam(q.get('cursors')), svParam(q.get('sv')));
-      /* once per sync cycle: only the last page carries the inbox's count (spec §12, §18) */
-      return json(page.more ? page : { ...page, unread: await unreadCount(env.DB, userId) });
+      return json(await syncPageV3(env.DB, userId, cursorsParam(q.get('cursors')), svParam(q.get('sv')), undefined, { unread: unreadStmt(env.DB, userId) }));
     }
     // v=2, for tabs still on the old client: the person's own scope, one cursor (spec §16).
     const cursor = url.searchParams.get('cursor') || '0';

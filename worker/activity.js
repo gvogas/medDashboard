@@ -80,13 +80,17 @@ export async function inboxRows(db, userId, now = Date.now()) {
 
 /** Unread (Decision 5): pending unexpired invites to live spaces plus inbox rows above what you read; at most UNREAD_CAP (99). */
 export async function unreadCount(db, userId, now = Date.now()) {
-  const r = await db.prepare(`SELECT MIN(${UNREAD_CAP},
+  return (await unreadStmt(db, userId, now).first()).n;
+}
+
+/** unreadCount's statement, `n` its one column: for a batch that has other reads to make (sync's last page). */
+export function unreadStmt(db, userId, now = Date.now()) {
+  return db.prepare(`SELECT MIN(${UNREAD_CAP},
       (SELECT count(*) FROM invites AS i JOIN spaces AS s ON s.id = i.space_id AND s.deleted_at IS NULL
         WHERE i.user_id = ?1 AND i.status = 'pending' AND i.expires_at > ?2)
       + (SELECT count(*) FROM friendships WHERE (user_lo = ?1 OR user_hi = ?1) AND status = 'pending' AND requested_by != ?1)
       + ${ROOM_INVITES_COUNT}
-      + (SELECT count(*) FROM (SELECT 1 FROM (${INBOX(SEEN, UNREAD_CAP + 1)}) LIMIT ${UNREAD_CAP + 1}))) AS n`).bind(userId, now).first();
-  return r.n;
+      + (SELECT count(*) FROM (SELECT 1 FROM (${INBOX(SEEN, UNREAD_CAP + 1)}) LIMIT ${UNREAD_CAP + 1}))) AS n`).bind(userId, now);
 }
 
 /** You have read up to `seq`: forward only, never past the newest row there is. */
