@@ -9,6 +9,7 @@
 // devices that both generate a step write the same row.
 
 import { parse, addDays, iso, diffDays, shortDate } from './dates.ts';
+import { heldOn } from './model.ts';
 import { classWeekday, courseRunsOn } from './school.ts';
 import type { SchoolCalendar } from './school.ts';
 import type { Course, Item, Meeting } from './types.ts';
@@ -89,7 +90,7 @@ export function lectureDates(courses: Timetabled[], from: string | null | undefi
     const date = iso(d), wd = classWeekday(cal, date);
     for (const c of courses) {
       if (c.archived || !courseRunsOn(cal, c.term, date)) continue;
-      for (const m of c.meetings || []) if (m.kind === 'Lecture' && m.weekday === wd) out.push({ course: c, meeting: m, date });
+      for (const m of c.meetings || []) if (m.kind === 'Lecture' && m.weekday === wd && heldOn(m, date)) out.push({ course: c, meeting: m, date });
     }
     d = addDays(d, 1);
   }

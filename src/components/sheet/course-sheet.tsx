@@ -15,13 +15,13 @@ import { courseKeyOf, type EffectiveCourse } from "@/data/effective"
 import { isSharedKey, splitKey } from "@/data/refs"
 import type { Row } from "@/core/db"
 import { closeSheet, onRequestClose } from "@/data/overlay"
-import { courseChanged, forSaving, MAX_CLASSES, newClass, newCourse, semesterNote, semesterOptions, semesterPicked } from "@/data/course-edit"
+import { changeClass, courseChanged, forSaving, MAX_CLASSES, newClass, newCourse, semesterNote, semesterOptions, semesterPicked } from "@/data/course-edit"
 import { schoolCal } from "@/data/query"
 import { deleteCourse } from "@/data/actions"
 import { accent } from "@/components/views/bits"
 import type { Course, Meeting } from "@/data/types"
 import {
-    Button, Checkbox, Fields, Label, Note, RemoveButton, Section, Segmented, SheetBody, SheetFoot, SheetHead, Swatches,
+    Button, Checkbox, DateInput, Fields, Label, Note, RemoveButton, Section, Segmented, SheetBody, SheetFoot, SheetHead, Swatches,
     TextInput, TitleArea, Warning, CONTROL,
 } from "./fields"
 import { TimeField } from "./time-field"
@@ -62,7 +62,7 @@ export function CourseSheet({ id }: { id: string | null }) {
     useEffect(() => { if (asking) keep.current?.focus() }, [asking])
 
     const edit = (change: Partial<Course>) => { setDraft((d) => ({ ...d, ...change })); setAsking(false) }
-    const editClass = (mid: string, change: Partial<Meeting>) => edit({ meetings: draft.meetings.map((m) => (m.id === mid ? { ...m, ...change } : m)) })
+    const editClass = (mid: string, change: Partial<Meeting>) => edit({ meetings: draft.meetings.map((m) => (m.id === mid ? changeClass(m, change) : m)) })
     const save = async () => {
         if (!draft.name.trim()) return
         if (shared) await store.saveShared("shared_courses", { ...forSaving(draft), scope: shared.scope, target: null, archived: false } as unknown as Row & { scope: string })
@@ -139,6 +139,10 @@ export function CourseSheet({ id }: { id: string | null }) {
                                 <TimeField label="End" value={m.end} onChange={(v) => { if (v) editClass(m.id, { end: v }) }} className="border-border bg-card" />
                                 <input aria-label="Room" value={m.room} maxLength={40} placeholder="Room number" onChange={(e) => editClass(m.id, { room: e.target.value })}
                                     className={cn(CONTROL, "min-w-0 flex-[1_1_104px] border-border bg-card")} />
+                                <label className="flex flex-none items-center gap-1.5 text-[12px] text-muted-foreground">
+                                    Ends
+                                    <DateInput aria-label="Last day" title="Last day of this class; leave empty to repeat for ever" value={m.until ?? ""} onChange={(e) => editClass(m.id, { until: e.target.value })} className="w-auto border-border bg-card" />
+                                </label>
                             </div>
                             <RemoveButton aria-label="Remove class" className="self-start" onClick={() => edit({ meetings: draft.meetings.filter((x) => x.id !== m.id) })} />
                         </div>

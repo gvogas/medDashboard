@@ -4,7 +4,7 @@
 
 import { useMemo, useSyncExternalStore } from "react"
 import { getVersion, subscribe } from "@/bridge"
-import { isOpen, isOverdue, isTest, normalizePrefs, occurrences, statusLabel, tmeta } from "@/core/model"
+import { heldOn, isOpen, isOverdue, isTest, normalizePrefs, occurrences, statusLabel, tmeta } from "@/core/model"
 import { addDays, diffDays, dur, iso, monday, parse, today as todayIso, DOW, MON } from "@/core/dates"
 import { classWeekday, courseRunsOn, currentTerm, dayInfo, inTerm, weekOf } from "@/core/school"
 import type { SchoolCalendar } from "@/core/school"
@@ -99,7 +99,7 @@ const byWeekday = (list: ClassSlot[]) => {
 
 /** The classes of a weekday that run on `date`: a course set to one semester has none outside it. */
 const runningOn = (list: ClassSlot[] | undefined, cal: SchoolCal, date: string) =>
-    (list || []).filter((slot) => courseRunsOn(cal, slot.course.term, date))
+    (list || []).filter((slot) => courseRunsOn(cal, slot.course.term, date) && heldOn(slot.mtg, date))
 
 /* ── the school calendar ── */
 

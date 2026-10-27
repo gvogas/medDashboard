@@ -56,6 +56,8 @@ function isTypeId(t: unknown): boolean {
 }
 
 const isInt = (v: unknown): v is number => Number.isInteger(v);
+/* a real YYYY-MM-DD date */
+const isDay = (v: unknown): v is string => typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v) && iso(parse(v)) === v;
 
 export function pluralOf(label: string): string {
   if (/iz$/i.test(label)) return label + 'zes';
@@ -161,6 +163,9 @@ export function isTest(t: string): boolean {
   return t === 'exam' || t === 'quiz' || (!TYPES[t] && /\b(quiz|test|exam|midterm)/i.test(tmeta(t).label));
 }
 
+/** Whether a class still meets on `date`: it does until its last day, and for ever with none. */
+export const heldOn = (m: Pick<Meeting, 'until'>, date: string): boolean => !m.until || date <= m.until;
+
 /**
  * Where an exam or quiz sits when it falls on a day the course meets: the room of
  * the class its time overlaps, else of that day's lecture, else of the day's first
@@ -169,7 +174,7 @@ export function isTest(t: string): boolean {
 export function classRoom(it: Pick<Item, 'type' | 'recur' | 'date' | 'start'>, c: Pick<Course, 'meetings'> | null | undefined): string {
   if (!c || !isTest(it.type) || it.recur === 'weekly') return '';
   const day = parse(it.date).getDay();
-  const held = (c.meetings || []).filter((m) => m.weekday === day && m.room)
+  const held = (c.meetings || []).filter((m) => m.weekday === day && m.room && heldOn(m, it.date))
     .sort((a, b) => a.start.localeCompare(b.start));
   const hit = held.find((m) => it.start && it.start >= m.start && it.start < m.end)
     || held.find((m) => m.kind === 'Lecture') || held[0];
@@ -304,6 +309,7 @@ export function normalizeCourse(raw: RawCourse, index = 0): Course {
             weekday: isInt(m.weekday) ? m.weekday : 1,
             start, end: classEnd(start, m.end),
             room: cut(m.room, 40),
+            ...(isDay(m.until) ? { until: m.until } : {}),
           };
         })
       : [],

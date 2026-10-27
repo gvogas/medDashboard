@@ -5,7 +5,7 @@
 import { useState } from "react"
 import { cn } from "@/lib/utils"
 import { typeList } from "@/core/model"
-import { DOW, shortDate } from "@/core/dates"
+import { DOW, dayMonth, shortDate } from "@/core/dates"
 import { schoolCal, termStart } from "@/data/query"
 import { semesterOptions, semesterPicked } from "@/data/course-edit"
 import { planSummary } from "@/core/importers/plan"
@@ -156,7 +156,7 @@ export function ImportSheet({ plan: initial, name, target: given = { kind: "mine
                                     <label key={m.id} className={ROW}>
                                         <input type="checkbox" checked={m.include} onChange={(e) => { m.include = e.target.checked; redraw() }} />
                                         <span className="min-w-[62px] flex-none text-ink-2">{m.kind}</span>
-                                        <span>{DOW[m.weekday]} {m.start}–{m.end}</span>
+                                        <span>{DOW[m.weekday]} {m.start}–{m.end}{m.until ? " · ends " + dayMonth(m.until) : ""}</span>
                                         <span className={WHERE}>{m.room}</span>
                                     </label>
                                 ))}

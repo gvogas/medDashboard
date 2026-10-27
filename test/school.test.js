@@ -99,6 +99,13 @@ describe('a school calendar', () => {
     expect(dates).toEqual(['2026-10-06']);   /* the 5th and 12th are off; the 6th runs Monday's */
   });
 
+  it("stops lecture reviews after the class's last day", () => {
+    const course = { id: 'n', code: 'NEURO', meetings: [{ id: 'm', kind: 'Lecture', weekday: 2, until: '2026-10-13' }] };
+    expect(lectureDates([course], '2026-10-01', '2026-10-31').map((x) => x.date)).toEqual(['2026-10-06', '2026-10-13']);
+    const mon = { ...course, meetings: [{ id: 'm', kind: 'Lecture', weekday: 1, until: '2026-10-06' }] };
+    expect(lectureDates([mon], '2026-10-01', '2026-10-31', cal).map((x) => x.date)).toEqual(['2026-10-06']);   /* Monday's swap day is its last; the 19th and 26th are cut */
+  });
+
   it("keeps lecture reviews to the course's semester", () => {
     const course = { id: 'w', code: 'NEURO', term: 'Winter 2027', meetings: [{ id: 'm', kind: 'Lecture', weekday: 2 }] };
     const dates = lectureDates([course], '2026-12-01', '2027-01-26', cal).map((x) => x.date);
@@ -232,6 +239,16 @@ describe('the calendar feed with a school calendar', () => {
     expect(ics).not.toContain('UID:class-n-m-2026-08-24@rounds');
     expect(ics).toContain('UID:class-n-m-2027-01-19@rounds');
     expect(ics).toContain('RRULE:FREQ=WEEKLY;BYDAY=MO;UNTIL=20270514T235959');
+  });
+
+  it('cuts a class short at its own last day inside the semester', () => {
+    const meet = (until) => ({ ...course, meetings: JSON.stringify([{ id: 'm', kind: 'Lecture', weekday: 1, start: '10:00', end: '11:00', room: '', until }]) });
+    const ics = unfold(buildCalendar({ courses: [meet('2026-10-19')], items: [], school: cal, now: Date.UTC(2026, 8, 26) }));
+    expect(ics).toContain('RRULE:FREQ=WEEKLY;BYDAY=MO;UNTIL=20261019T235959');
+    expect(ics).not.toContain('UID:class-n-m-2027-01-18');
+    expect(ics).not.toMatch(/UNTIL=20261210/);
+    const gone = unfold(buildCalendar({ courses: [meet('2026-08-01')], items: [], school: cal, now: Date.UTC(2026, 8, 26) }));
+    expect(gone).not.toContain('UID:class-n-m');
   });
 
   it('repeats each class within a semester, skips days off, and adds swapped days', () => {

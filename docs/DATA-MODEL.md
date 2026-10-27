@@ -223,6 +223,7 @@ row starts with the column's default.
 | `weekday` | number | 0–6 | |
 | `start`, `end` | string | `HH:MM` | `end` after `start`. |
 | `room` | string | ≤ 40 | `Hall A`, `Lab 3B · table 7`. |
+| `until` | string | optional, `YYYY-MM-DD` | The last day the class meets, inclusive; absent (or `''`) repeats for ever. The Worker drops an empty one. Views, lecture dates, reviews, prep and the calendar feed (`RRULE ... UNTIL`) stop after it. |
 
 These are what the **month view** shows, and only these. They are not `items` — a class
 that meets every Monday all term is one array entry, expanded onto the calendar in the

@@ -271,6 +271,8 @@ function meeting(m, f) {
     room: str(m.room ?? '', `${f}.room`, 40),
   };
   if (out.end <= out.start) fail(`${f}.end`);
+  /* the last day it meets; '' or absent is none, and only a date is kept */
+  if (m.until !== undefined && m.until !== null && m.until !== '') out.until = date(m.until, `${f}.until`);
   return out;
 }
 

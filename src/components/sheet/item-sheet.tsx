@@ -6,7 +6,7 @@
 
 import { useEffect, useId, useState } from "react"
 import { cn } from "@/lib/utils"
-import { baseOf, isComplete, isOpen, isTest, normalizeItem, statusesFor, tmeta, typeList } from "@/core/model"
+import { baseOf, heldOn, isComplete, isOpen, isTest, normalizeItem, statusesFor, tmeta, typeList } from "@/core/model"
 import { shortDate, today, DOW } from "@/core/dates"
 import * as store from "@/core/store"
 import { repeatEnds } from "@/core/school"
@@ -110,7 +110,7 @@ export function ItemSheet({ id, draft }: { id?: string; draft?: Item }) {
     const prep = !isNew && isTest(it.type) && isOpen(it) ? prepPace(it, today()) : null
     const lectures = !!c && (c.meetings || []).some((x) => x.kind === "Lecture")
     const studied = isNew ? 0 : studiedFor(sessions, it.id)
-    const next = c && (c.meetings || []).length ? [...c.meetings].sort((a, b) => (a.weekday + 6) % 7 - (b.weekday + 6) % 7)[0] : null
+    const next = c ? [...(c.meetings || [])].filter((x) => heldOn(x, today())).sort((a, b) => (a.weekday + 6) % 7 - (b.weekday + 6) % 7)[0] ?? null : null
 
     const busy = busyDays(items, it.id)
     const gradable = GRADABLE.includes(baseOf(it.type))

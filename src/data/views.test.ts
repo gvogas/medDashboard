@@ -107,6 +107,14 @@ describe("the week", () => {
         expect(w.days[3].entries.map((e) => e.kind === "class" && e.slot.mtg.id)).toEqual(["m3", "m2"])
     })
 
+    it("stops a class after its last day, inclusive", () => {
+        const ends = course({ ...anat, meetings: [{ ...mtg("m2", 3, "14:00", "15:00"), until: "2026-09-23" }, { ...mtg("m1", 1, "09:00", "10:30"), until: "2026-09-20" }] })
+        const ids = (anchor: string, date: string) => weekDays(input([], [ends], { anchor })).days.find((d) => d.date === date)!.entries.map((e) => e.kind === "class" && e.slot.mtg.id)
+        expect(ids("2026-09-23", "2026-09-23")).toEqual(["m2"])      /* the last day still has it */
+        expect(ids("2026-09-30", "2026-09-30")).toEqual([])          /* a week on, it is gone */
+        expect(ids("2026-09-23", "2026-09-21")).toEqual([])          /* Monday's ended the day before */
+    })
+
     it("shows a course's classes only in its semester; all-year courses in both", () => {
         const fall = course({ ...anat, term: "Fall 2026" }), winter = course({ ...phys, term: "winter 2027" }, 1)
         const w = weekDays(input([], [fall, winter], { cal: TWO }))

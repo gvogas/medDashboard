@@ -73,6 +73,18 @@ describe('rows from storage or the network are made safe', () => {
     expect(normalizeItem({ date: '2026-09-24', checklist: [null, { text: 'Read ch. 3' }] }).checklist.map((c) => c.text)).toEqual(['', 'Read ch. 3']);
     expect(normalizeCourse({ meetings: [null, { weekday: 2, start: '10:00' }] }).meetings).toHaveLength(1);
   });
+  it('keeps the last day of a class when it is a real date, and drops anything else', () => {
+    const until = (u) => normalizeCourse({ meetings: [{ weekday: 2, start: '10:00', until: u }] }).meetings[0];
+    expect(until('2026-11-16').until).toBe('2026-11-16');
+    for (const bad of ['', null, undefined, '2026-02-30', '16/11/2026', 20261116]) expect('until' in until(bad)).toBe(false);
+  });
+  it('validates the last day of a class: kept when set, left off when empty, refused when not a date', () => {
+    const base = { id: 'c', code: 'A', name: 'A', color: '#E4749B', meetings: [{ id: 'm', kind: 'Lecture', weekday: 1, start: '09:00', end: '10:00', room: '' }] };
+    const one = (u) => validateCourse({ ...base, meetings: [{ ...base.meetings[0], ...u }] }).meetings[0];
+    expect(one({ until: '2026-11-16' }).until).toBe('2026-11-16');
+    for (const empty of [{}, { until: '' }, { until: null }]) expect('until' in one(empty)).toBe(false);
+    for (const bad of ['2026-02-30', 'soon', 5]) expect(() => one({ until: bad })).toThrow();
+  });
   it('takes no built-in object key for a type or a status', () => {
     expect(normalizeItem({ date: '2026-09-24', type: 'constructor' }).type).toBe('task');
     expect(isOpen({ status: 'constructor' })).toBe(true);
