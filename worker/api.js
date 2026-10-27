@@ -7,7 +7,7 @@ import { readOutline, cleanCode, MAX_BYTES } from './outline.js';
 import { readSchool } from './school.js';
 import { readSchedule } from './schedule.js';
 import { listParam, cleanTerm, TIMEOUT_MS } from './ai.js';
-import { validateProfile, validateCourse, validateItem, validateQuote, validateStudySession, validateAchievement, validateId, validateSharedCourse, validateSharedItem, validateChanged } from './validate.js';
+import { validateProfile, validateCourse, validateItem, validateQuote, validateStudySession, validateAchievement, validateId, validateSharedCourse, validateSharedItem, validateChanged, DATE } from './validate.js';
 import { getUserForLogin, getProfile, updateProfile, getRow, upsertRow, deleteRow, syncPage, syncPageV3, parseCursor, bumpPasswordGen, saveSpotifyTokens, deleteSpotifyTokens, getShared, upsertShared, deleteShared, memberTaskWrite } from './db.js';
 import { parseScope, roleOf, scopeOf } from './access.js';
 import * as spotify from './spotify.js';
@@ -188,7 +188,6 @@ async function spotifyCallback({ request, env, url }) {
   return redirect(url, 'connected', clear);
 }
 
-const DATE = /^\d{4}-\d{2}-\d{2}$/;
 
 /* Read an uploaded document with Workers AI: a course outline, a school calendar or a class
    schedule. The body is the file; ?name= is its file name and ?today= / ?termStart= help the

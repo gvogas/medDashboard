@@ -13,6 +13,7 @@ import { studyFlow } from './validate.js';
 import { logError, messageOf } from './errors.js';
 import * as timer from '../src/core/timer.ts';
 import { MINUTE_MS, DAY_MS } from './time.js';
+import { DISPLAY_NAME, pairOf } from './accounts.js';
 
 export const ROOM_SIZE = 8;
 /** Rows a room may hold in all: the people in it and those invited. */
@@ -26,10 +27,7 @@ export const GONE_MS = 10 * MINUTE_MS;
 /** last_seen is written at most this often. */
 export const SEEN_EVERY_MS = 30_000;
 const TRIES = 4;
-const NAME = "COALESCE(NULLIF(u.display_name, ''), u.username)";
 
-/* a friendship's key, smaller id first (as friends.js; not imported, since friends.js imports this file) */
-const pairOf = (a, b) => (a < b ? [a, b] : [b, a]);
 const notFound = () => new HttpError(404, { error: 'not_found' });
 const ended = () => new HttpError(409, { error: 'ended' });
 
@@ -52,7 +50,7 @@ const memberOf = (r) => ({
 async function load(db, roomId) {
   const [room, members] = await db.batch([
     db.prepare('SELECT * FROM rooms WHERE id = ?').bind(roomId),
-    db.prepare(`SELECT m.*, u.username, ${NAME} AS name FROM room_members AS m JOIN users AS u ON u.id = m.user_id WHERE m.room_id = ?`).bind(roomId),
+    db.prepare(`SELECT m.*, u.username, ${DISPLAY_NAME} AS name FROM room_members AS m JOIN users AS u ON u.id = m.user_id WHERE m.room_id = ?`).bind(roomId),
   ]);
   const r = room.results[0];
   return r ? { room: roomOf(r), members: members.results.map(memberOf) } : null;
@@ -270,7 +268,7 @@ export async function createRoom(db, me, body, now = Date.now()) {
   if (wait) throw rateLimited(wait);
   await leaveOthers(db, me, '', now);
   const friends = await friendsAmong(db, me, asked);
-  const who = await db.prepare(`SELECT ${NAME} AS name FROM users AS u WHERE u.id = ?`).bind(me).first();
+  const who = await db.prepare(`SELECT ${DISPLAY_NAME} AS name FROM users AS u WHERE u.id = ?`).bind(me).first();
   const id = randomId(12);
   const run = timer.start(flow, now);
   const feed = [{ at: now, kind: 'started', name: who?.name ?? '' }];
@@ -304,7 +302,7 @@ export async function joinRoom(db, me, roomId, body, now = Date.now()) {
   if (!first) throw notFound();
   if (!(await mayEnter(db, me, first.room, first.members, first.members.find((m) => m.userId === me)))) throw notFound();
   if (first.room.endedAt !== null) throw ended();
-  const who = await db.prepare(`SELECT u.username, ${NAME} AS name FROM users AS u WHERE u.id = ?`).bind(me).first();
+  const who = await db.prepare(`SELECT u.username, ${DISPLAY_NAME} AS name FROM users AS u WHERE u.id = ?`).bind(me).first();
   const { room, members } = await change(db, roomId, (room, members) => {
     if (room.endedAt !== null) throw ended();
     let m = members.find((x) => x.userId === me);
@@ -378,7 +376,7 @@ const OPEN = (r) => `${r}.ended_at IS NULL AND EXISTS (SELECT 1 FROM room_member
 
 /** Invites to open rooms, for the inbox: newest first. */
 export async function roomInvites(db, me, now = Date.now()) {
-  const { results } = await db.prepare(`SELECT r.*, u.username, ${NAME} AS name, m.invited_at,
+  const { results } = await db.prepare(`SELECT r.*, u.username, ${DISPLAY_NAME} AS name, m.invited_at,
       (SELECT count(*) FROM room_members AS c WHERE c.room_id = r.id AND c.state = 'in') AS size
     FROM room_members AS m JOIN rooms AS r ON r.id = m.room_id LEFT JOIN users AS u ON u.id = r.host_id
     WHERE m.user_id = ?1 AND m.state = 'invited' AND ${OPEN('r')} AND ${STILL_FRIENDS}
@@ -463,7 +461,7 @@ export const clearPresence = (db, me) => db.prepare('DELETE FROM presence WHERE 
 export async function groupRecord(db, me, roomId) {
   const [room, rows] = await db.batch([
     db.prepare('SELECT id, started_at, ended_at FROM rooms WHERE id = ?').bind(roomId),
-    db.prepare(`SELECT m.user_id, u.username, ${NAME} AS name, m.joined_at,
+    db.prepare(`SELECT m.user_id, u.username, ${DISPLAY_NAME} AS name, m.joined_at,
         COALESCE((SELECT sum(ss.study_minutes) FROM study_sessions AS ss WHERE ss.user_id = m.user_id AND ss.room_id = m.room_id AND ss.deleted_at IS NULL), 0) AS minutes
       FROM room_members AS m JOIN users AS u ON u.id = m.user_id
       WHERE m.room_id = ? AND m.joined_at IS NOT NULL ORDER BY minutes DESC, m.joined_at`).bind(roomId),

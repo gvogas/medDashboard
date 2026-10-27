@@ -20,7 +20,12 @@ export const NEXT_SPACE_REVISION =
 export const BUCKET_MS = 600_000;
 /* The bucket of the time `t` (SQL). D1 binds a JS number as a REAL, so it is made an integer first, or the division keeps its fraction and nothing coalesces. */
 export const BUCKET = (t) => `(CAST(${t} AS INTEGER) / ${BUCKET_MS})`;
-export const NAME = (id) => `(SELECT COALESCE(NULLIF(u.display_name, ''), u.username) FROM users AS u WHERE u.id = ${id})`;
+/** A user's display name, in SQL, where the user row is aliased `u`. */
+export const DISPLAY_NAME = "COALESCE(NULLIF(u.display_name, ''), u.username)";
+/** The same for the user whose id is the SQL `id`. */
+export const NAME = (id) => `(SELECT ${DISPLAY_NAME} FROM users AS u WHERE u.id = ${id})`;
+/** A friendship's key: the smaller id first. */
+export const pairOf = (a, b) => (a < b ? [a, b] : [b, a]);
 /** A space's name now: its class course's, or its project item's title. */
 export const SPACE_NAME = (id) => `(SELECT CASE s.kind WHEN 'class' THEN (SELECT name FROM courses WHERE scope = 'c:' || s.id AND deleted_at IS NULL LIMIT 1)
   ELSE (SELECT title FROM items WHERE scope = 'p:' || s.id AND id = 'project') END FROM spaces AS s WHERE s.id = ${id})`;

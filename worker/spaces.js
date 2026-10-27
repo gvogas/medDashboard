@@ -6,6 +6,7 @@ import { assertAllowed, assertKeeper, keeperGuard, memberGuard, scopeOf } from '
 import { REVIEW_ID } from '../src/core/shared.ts';
 import { COURSE_COLOURS } from './validate.js';
 import { noteStmt, undoneStmt } from './activity.js';
+import { DISPLAY_NAME } from './accounts.js';
 
 /** The most live spaces a person holds, and the most live members a space holds (spec §3 Limits). */
 export const SPACE_LIMIT = 20;
@@ -204,7 +205,6 @@ export async function createClass(db, userId, { course, convertCourseId = null, 
   throw new HttpError(400, { error: 'invalid', field: 'convertCourseId' });
 }
 
-const NAME = "COALESCE(NULLIF(u.display_name, ''), u.username)";
 
 /**
  * A space for its Members tab (spec §11, §15): its members for everyone in it; its invites
@@ -217,9 +217,9 @@ export async function spaceDetails(db, userId, spaceId, now = Date.now()) {
   const me = await assertAllowed(db, userId, spaceId, 'read');
   const g = memberGuard(spaceId, userId);
   const [members, invites, code, cal] = await db.batch([
-    db.prepare(`SELECT m.user_id, m.role, m.joined_at, u.username, ${NAME} AS name FROM members AS m JOIN users AS u ON u.id = m.user_id
+    db.prepare(`SELECT m.user_id, m.role, m.joined_at, u.username, ${DISPLAY_NAME} AS name FROM members AS m JOIN users AS u ON u.id = m.user_id
       WHERE m.space_id = ? AND m.deleted_at IS NULL AND ${g.sql} ORDER BY m.joined_at, m.user_id`).bind(spaceId, ...g.binds),
-    db.prepare(`SELECT i.user_id, i.role, i.status, i.created_at, i.expires_at, i.invited_by, u.username, ${NAME} AS name
+    db.prepare(`SELECT i.user_id, i.role, i.status, i.created_at, i.expires_at, i.invited_by, u.username, ${DISPLAY_NAME} AS name
       FROM invites AS i JOIN users AS u ON u.id = i.user_id
       WHERE i.space_id = ? AND i.status != 'accepted' AND ${g.sql} ORDER BY i.created_at DESC, i.user_id`).bind(spaceId, ...g.binds),
     db.prepare(`SELECT code_expires, code_uses_left FROM spaces WHERE id = ? AND code_hash IS NOT NULL AND ${g.sql}`).bind(spaceId, ...g.binds),

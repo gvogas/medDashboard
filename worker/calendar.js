@@ -19,7 +19,7 @@ import { claimLimit, rateLimited } from './limits.js';
 import { sameString, hex } from './auth.js';
 import { personal } from './db.js';
 import { normalizeSchool, classWeekday, courseTerm, dayInfo, weekdayOf } from '../src/core/school.ts';
-import { HOUR_MS } from './time.js';
+import { HOUR_MS, TZ, addDays } from './time.js';
 
 const FEED_LIMIT = 60;                     /* fetches an hour per link; calendars poll a few times a day */
 const LABELS = { exam: 'Exam', quiz: 'Quiz', assignment: 'Assignment', lab: 'Lab', tutoring: 'Tutorial', office: 'Office hours', task: 'Task', project: 'Project' };
@@ -27,7 +27,6 @@ const COMPLETE = { done: 1, graded: 1, submitted: 1 };
 /* What gets reminders in the feed: deadlines and tests, while still open. */
 const ALARMED = { exam: 1, quiz: 1, assignment: 1, lab: 1, project: 1 };
 const DAYS = ['SU', 'MO', 'TU', 'WE', 'TH', 'FR', 'SA'];
-const TZ = /^[A-Za-z]+(?:\/[A-Za-z0-9_+-]+){0,2}$/;
 
 let cachedKey = null;
 async function feedKey(secret) {
@@ -300,12 +299,6 @@ function plusHour(t) {
 }
 
 const compact = (d) => d.replace(/-/g, '');
-
-function addDays(d, n) {
-  const t = new Date(d + 'T00:00:00Z');
-  t.setUTCDate(t.getUTCDate() + n);
-  return t.toISOString().slice(0, 10);
-}
 
 /** The first date on or after `d` that falls on `weekday` (0 = Sunday). */
 export function onOrAfter(d, weekday) {

@@ -10,11 +10,11 @@ import { LIVE_MEMBERS, MEMBER_LIMIT, MY_SPACES, NEXT_SPACE_REVISION, SPACE_LIMIT
 import { normalizeCode } from '../src/core/shared.ts';
 import { noteStmt } from './activity.js';
 import { HOUR_MS, DAY_MS } from './time.js';
+import { DISPLAY_NAME } from './accounts.js';
 
 /** Invites one person may send in an hour, and how long an invite stays open (spec §11). */
 export const INVITE_LIMIT = 20;
 export const INVITE_TTL_MS = 30 * DAY_MS;
-const NAME = "COALESCE(NULLIF(u.display_name, ''), u.username)";
 const SPACE_NAME = `CASE s.kind WHEN 'class' THEN (SELECT name FROM courses WHERE scope = 'c:' || s.id AND deleted_at IS NULL LIMIT 1)
   ELSE (SELECT title FROM items WHERE scope = 'p:' || s.id AND id = 'project') END`;
 
@@ -42,7 +42,7 @@ export async function invite(db, userId, spaceId, { username, role = null }, now
   const wait = await claimLimit(db, `invite:${userId}`, INVITE_LIMIT, now, HOUR_MS);
   if (wait) throw rateLimited(wait);
   const name = normalizeUsername(username);
-  const who = name && await db.prepare(`SELECT u.id, u.username, ${NAME} AS name,
+  const who = name && await db.prepare(`SELECT u.id, u.username, ${DISPLAY_NAME} AS name,
       EXISTS (SELECT 1 FROM members WHERE space_id = ? AND user_id = u.id AND deleted_at IS NULL) AS member
     FROM users AS u WHERE u.username = ?`).bind(spaceId, name).first();
   if (!who) throw new HttpError(404, { error: 'no_user' });
@@ -76,7 +76,7 @@ export async function revokeInvite(db, userId, spaceId, targetId) {
 
 /** Your invites not yet answered, newest first: the space's name, who sent it, and whether it has expired. */
 export async function myInvites(db, userId, now = Date.now()) {
-  const { results } = await db.prepare(`SELECT i.space_id, i.role, i.created_at, i.expires_at, s.kind, ${NAME} AS sender, ${SPACE_NAME} AS name
+  const { results } = await db.prepare(`SELECT i.space_id, i.role, i.created_at, i.expires_at, s.kind, ${DISPLAY_NAME} AS sender, ${SPACE_NAME} AS name
     FROM invites AS i JOIN spaces AS s ON s.id = i.space_id AND s.deleted_at IS NULL LEFT JOIN users AS u ON u.id = i.invited_by
     WHERE i.user_id = ? AND i.status = 'pending' ORDER BY i.created_at DESC LIMIT 50`).bind(userId).all();
   return results.map((r) => ({

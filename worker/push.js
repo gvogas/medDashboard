@@ -14,7 +14,7 @@ import { HttpError, json, readJson } from './http.js';
 import { requireUser } from './auth.js';
 import { claimLimit, rateLimited } from './limits.js';
 import { readRows } from './calendar.js';
-import { HOUR_MS } from './time.js';
+import { HOUR_MS, TZ, addDays } from './time.js';
 
 const MAX_DEVICES = 5;                    /* per person; the oldest goes when a sixth comes */
 const MAX_PUSHES = 40;                    /* per cron run, under the free plan's 50 outside requests */
@@ -25,7 +25,6 @@ const OVERDUE_DAYS = 14;                  /* older than this, an open item is no
 /* Events, not deadlines: they never make a digest. */
 const NOT_DUE = { office: 1, tutoring: 1 };
 const CLOSED = { done: 1, graded: 1, submitted: 1, missed: 1 };
-const TZ = /^[A-Za-z]+(?:\/[A-Za-z0-9_+-]+){0,2}$/;
 
 /* The browsers' push services. Anything else is refused, so the Worker never posts to an address someone made up. */
 const PUSH_HOSTS = [/^fcm\.googleapis\.com$/, /^updates\.push\.services\.mozilla\.com$/, /^web\.push\.apple\.com$/, /^[a-z0-9-]+\.notify\.windows\.com$/];
@@ -99,12 +98,6 @@ export function localNow(tz, now = Date.now()) {
 export function validTz(tz) {
   if (typeof tz !== 'string' || tz.length > 64 || !(TZ.test(tz) || tz === 'UTC')) return null;
   try { localNow(tz); return tz; } catch { return null; }
-}
-
-function addDays(d, n) {
-  const t = new Date(d + 'T00:00:00Z');
-  t.setUTCDate(t.getUTCDate() + n);
-  return t.toISOString().slice(0, 10);
 }
 
 /**
