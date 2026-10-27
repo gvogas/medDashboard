@@ -135,6 +135,22 @@ describe('accounts', () => {
     expect(await env.DB.prepare(LAST_ADMIN).bind(id).first()).toBeNull();
   });
 
+  it('undoes a deletion batch that would leave no admin, as when two admins delete each other at once', async () => {
+    const x = await createUser('racex'), y = await createUser('racey');
+    const { results: others } = await env.DB.prepare('SELECT id FROM users WHERE is_admin = 1').all();
+    await env.DB.prepare('UPDATE users SET is_admin = 0').run();
+    await env.DB.prepare('UPDATE users SET is_admin = 1 WHERE id IN (?, ?)').bind(x, y).run();
+    try {
+      /* both checks ran before either batch: the first batch goes through, the second stops at its guard */
+      await env.DB.batch(deleteAccountStmts(env.DB, { id: x, username: 'racex', actor: 'racey' }));
+      await expect(env.DB.batch(deleteAccountStmts(env.DB, { id: y, username: 'racey', actor: 'racex' }))).rejects.toThrow();
+      expect(await env.DB.prepare('SELECT username, is_admin FROM users WHERE id = ?').bind(y).first()).toEqual({ username: 'racey', is_admin: 1 });
+      expect(await env.DB.prepare("SELECT count(*) AS n FROM admin_log WHERE action = 'delete' AND target = 'racey'").first()).toEqual({ n: 0 });
+    } finally {
+      await env.DB.batch(others.map((a) => env.DB.prepare('UPDATE users SET is_admin = 1 WHERE id = ?').bind(a.id)));
+    }
+  });
+
   it("keeps worker/accounts.js's copy of the next space revision in step with worker/spaces.js", () => {
     expect(COPIED_REVISION).toBe(NEXT_SPACE_REVISION);
   });

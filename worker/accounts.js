@@ -90,15 +90,23 @@ export const ACCOUNT_TABLES = [
 /** Whether ?1 is the only admin left (a row when so): neither the Admin page nor the script may delete it. */
 export const LAST_ADMIN = 'SELECT 1 AS x FROM users WHERE id = ?1 AND is_admin = 1 AND (SELECT count(*) FROM users WHERE is_admin = 1) <= 1';
 
+/* LAST_ADMIN again, inside the deletion's own transaction: when ?1 is the last admin, json()
+   of text that is not JSON fails the statement, so the batch undoes itself. Two admins deleting
+   each other at once both pass the check before the batch; D1 runs the batches one at a time,
+   so the second one stops here. The text holds ?1 so SQLite cannot work it out ahead of time. */
+const LAST_ADMIN_GUARD = `SELECT CASE WHEN EXISTS (${LAST_ADMIN}) THEN json('last_admin:' || ?1) END`;
+
 /** Deletes a username's sign-in lock rows (the name itself and its `name#device` ones); `name` is SQL. Not LIKE: `_` is a wildcard there. */
 export const UNLOCK = (name) => `DELETE FROM login_throttle WHERE username = ${name} OR substr(username, 1, length(${name}) + 1) = ${name} || '#'`;
 
 /*
  * Every statement of an account's deletion, in order, for one batch: ?1 the user id, ?2 now,
  * ?3 the username, ?4 who did it (the admin's username, or 'cli'), ?5 a note for the audit log.
- * It ends with the audit entry, so a deletion that fails leaves none.
+ * It starts with the last-admin guard and ends with the audit entry, so a deletion that fails
+ * leaves none.
  */
 export const DELETE_ACCOUNT = [
+  LAST_ADMIN_GUARD,
   ...HAND_ON,
   ...ACCOUNT_TABLES.map(([table, owner]) => `DELETE FROM ${table} WHERE ${owner}`),
   'DELETE FROM users WHERE id = ?1',

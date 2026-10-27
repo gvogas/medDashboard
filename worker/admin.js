@@ -205,7 +205,13 @@ export const adminRoutes = [
     const db = env.DB;
     if (await db.prepare(LAST_ADMIN).bind(id).first()) throw new HttpError(409, { error: 'last_admin' });
     /* Its classes pass on (or go, with nobody else in them) in the same batch as the deletion. */
-    await db.batch(deleteAccountStmts(db, { id, username: user.username, actor: admin.username }));
+    try {
+      await db.batch(deleteAccountStmts(db, { id, username: user.username, actor: admin.username }));
+    } catch (e) {
+      /* the batch's guard: another admin was deleted between the check above and this batch */
+      if (await db.prepare(LAST_ADMIN).bind(id).first()) throw new HttpError(409, { error: 'last_admin' });
+      throw e;
+    }
     return done();
   }],
 
