@@ -86,10 +86,10 @@ export function codeToken(summary: unknown): string {
 const clip = (s: unknown, n: number) => String(s || '').trim().slice(0, n);
 
 /**
- * events: from parseIcs (source 'ics') or parseCsv (source 'csv').
+ * events: from parseIcs or parseCsv; a calendar event is told from a row by its `summary`.
  * data:   the store's { courses, items }.
  */
-export function planImport(events: (IcsEvent | ImportRow)[], data: PlanData, source: 'ics' | 'csv'): Plan {
+export function planImport(events: (IcsEvent | ImportRow)[], data: PlanData): Plan {
   const notes: string[] = [];
   const byCode = new Map<string, PlanCourse>();          /* CODE → plan course */
   const courses: PlanCourse[] = [];
@@ -115,9 +115,9 @@ export function planImport(events: (IcsEvent | ImportRow)[], data: PlanData, sou
 
   const classes: PlanClass[] = [], singles: PlanSingle[] = [];
   const endings = new Map<string, string>();   /* a series with an UNTIL or COUNT: classes have no end date, so say so */
-  /* the source says which each event is: a CSV or outline row, or a calendar event */
-  for (const ev of events as (ImportRow & IcsEvent)[]) {
-    if (source === 'csv') {
+  /* each event is a CSV or outline row, or a calendar event (only it has a summary) */
+  for (const ev of events) {
+    if (!('summary' in ev)) {
       const t = ev.type;
       const weekday = Number.isInteger(ev.weekday) ? ev.weekday as number : ev.date ? parse(ev.date).getDay() : -1;
       if (CLASS_TYPES[t] && weekday >= 0) classes.push({ code: clip(ev.course, 8).toUpperCase(), name: ev.courseName || ev.course, title: ev.title, weekdays: [weekday], start: ev.start, end: ev.end, room: ev.room, kind: KINDS.includes(ev.kind as string) ? ev.kind as string : t === 'class' ? guessKind(ev.title) : CLASS_TYPES[t] });
@@ -201,7 +201,7 @@ export function planOutline(o: Outline, data: PlanData, termStart = ''): Plan {
     ...o.classes.map((c) => ({ type: 'class', kind: c.kind, weekday: c.weekday, course: code, courseName: name, title: c.kind, date: '', start: c.start, end: c.end, room: c.room, weight: null })),
     ...o.assessments.filter((a) => a.date).map((a) => ({ type: a.type, course: code, courseName: name, title: a.title, date: a.date as string, start: a.start, end: a.end, room: a.room, weight: a.weight })),
   ];
-  const plan = planImport(rows, data, 'csv');
+  const plan = planImport(rows, data);
   let pc = plan.courses.find((c) => c.code.toUpperCase() === code);
   if (!pc) {
     /* nothing dated and no classes: still offer the course itself, or use the one that exists */

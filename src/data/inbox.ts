@@ -30,7 +30,7 @@ export const useInboxOffline = () => useSyncExternalStore(subscribe, () => offli
 /* the list as it now stands, for offline reading; a failed write only leaves the older copy */
 const keep = (b: Inbox) => { void Promise.resolve().then(() => store.meta.set("inbox", b)).catch(() => {}) }
 
-/** The count sync brought (core/sync.ts onUnread). */
+/** The count sync brought (core/sync.ts setOnUnread). */
 export function setUnread(n: number): void { if (n !== unread) { unread = n; emit() } }
 
 export const openInbox = () => openSheet({ kind: "inbox" })

@@ -9,11 +9,11 @@ const fake = vi.hoisted(() => ({
     store: { open: vi.fn(async () => {}), close: vi.fn(async () => {}) },
     classes: { openJoin: vi.fn() },
     inbox: { setUnread: vi.fn() },
-    onUnread: vi.fn(),
+    setOnUnread: vi.fn(),
 }))
 vi.mock("@/core/api", () => ({ api: {}, ApiError: class extends Error {}, resetRequests: vi.fn(), bindAccount: vi.fn() }))
 vi.mock("@/core/store", () => ({ data: fake.data, open: fake.store.open, close: fake.store.close }))
-vi.mock("@/core/sync", () => ({ startingProfile: vi.fn(async (p: unknown) => p), stop: vi.fn(), init: vi.fn(), syncNow: vi.fn(), onUnread: fake.onUnread }))
+vi.mock("@/core/sync", () => ({ startingProfile: vi.fn(async (p: unknown) => p), stop: vi.fn(), init: vi.fn(), syncNow: vi.fn(), setOnUnread: fake.setOnUnread }))
 vi.mock("@/bridge", () => ({ notify: vi.fn() }))
 vi.mock("./spotify/player", () => ({ start: vi.fn(), stop: vi.fn() }))
 vi.mock("./spotify/web-player", () => ({ stop: vi.fn() }))
@@ -74,7 +74,7 @@ describe("a join link", () => {
         expect(location.hash).toBe("")
         expect(fake.classes.openJoin).toHaveBeenCalledWith("7KQ2M9XD")
         /* the inbox's count comes with each sync */
-        expect(fake.onUnread).toHaveBeenCalledWith(fake.inbox.setUnread)
+        expect(fake.setOnUnread).toHaveBeenCalledWith(fake.inbox.setUnread)
 
         vi.clearAllMocks()
         localStorage.setItem("rounds.session", JSON.stringify({ id: "u1" }))
@@ -84,6 +84,6 @@ describe("a join link", () => {
         expect(location.hash).toBe("")
         expect(fake.classes.openJoin).toHaveBeenCalledWith("7KQ2M9XD")
         /* the inbox's count comes with each sync */
-        expect(fake.onUnread).toHaveBeenCalledWith(fake.inbox.setUnread)
+        expect(fake.setOnUnread).toHaveBeenCalledWith(fake.inbox.setUnread)
     })
 })

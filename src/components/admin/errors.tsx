@@ -10,10 +10,8 @@ import { cn } from "@/lib/utils"
 import { Panel, HeadNote, Empty } from "@/components/views/bits"
 import { Button } from "@/components/sheet/fields"
 import { ago, useLoad, when } from "./use-admin"
+import type { ErrorKind as Kind, ErrorGroup as Group, ErrorRow as One } from "@/core/types"
 
-type Kind = "server" | "request" | "browser" | "nightly"
-interface Group { kind: Kind; method: string; route: string; status: number; message: string; count: number; last: number; first: number; users: number }
-interface One { at: number; kind: Kind; method: string; route: string; status: number; message: string; username: string | null }
 
 const KINDS: readonly [Kind | "all", string][] = [["all", "All"], ["server", "Server"], ["request", "Requests (4xx)"], ["browser", "Browser"], ["nightly", "Nightly jobs"]]
 const EMPTY: Record<Kind | "all", string> = {

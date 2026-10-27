@@ -53,7 +53,7 @@ async function start(profile: ServerProfile) {
     notify()
     celebrateStudy()                             /* the first look only records where today stands */
     celebrateAchievements()
-    sync.onUnread(setUnread)
+    sync.setOnUnread(setUnread)
     sync.init()
     sync.syncNow()
     spotify.start()

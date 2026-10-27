@@ -4,8 +4,8 @@ import { api } from "@/core/api"
 import { Panel, HeadNote, Empty } from "@/components/views/bits"
 import { Button } from "@/components/sheet/fields"
 import { useLoad, when } from "./use-admin"
+import type { AuditEntry as Entry } from "@/core/types"
 
-interface Entry { at: number; admin: string; action: string; target: string; detail: string }
 
 const SAYS: Record<string, (e: Entry) => string> = {
     create: (e) => "created " + e.target + (e.detail ? " " + e.detail : ""),

@@ -110,13 +110,17 @@ export async function hide(key: string, on = true): Promise<void> {
 export async function reload(): Promise<void> {
   const handle = db;
   if (!handle) return;
-  const snapshot = await handle.transaction(stores, 'readonly', async (a) => ({
-    courses: await a('courses').all(), items: await a('items').all(), quotes: await a('quotes').all(), study_sessions: await a('study_sessions').all(), achievements: await a('achievements').all(),
-    marks: await a('marks').all(), space_prefs: await a('space_prefs').all(),
-    shared_courses: await a('shared_courses').all(), shared_items: await a('shared_items').all(), spaces: await a('spaces').all(),
-    profile: (await a('meta').get('profile'))?.value as Profile | undefined,
-    pending: await a('pending').all(), conflicts: await a('conflicts').all(),
-  }));
+  /* one transaction, every read issued at once rather than each waiting for the last */
+  const snapshot = await handle.transaction(stores, 'readonly', async (a) => {
+    const [courses, items, quotes, study_sessions, achievements, marks, space_prefs, shared_courses, shared_items, spaces, meta, pending, conflicts] = await Promise.all([
+      a('courses').all(), a('items').all(), a('quotes').all(), a('study_sessions').all(), a('achievements').all(),
+      a('marks').all(), a('space_prefs').all(),
+      a('shared_courses').all(), a('shared_items').all(), a('spaces').all(),
+      a('meta').get('profile'),
+      a('pending').all(), a('conflicts').all(),
+    ]);
+    return { courses, items, quotes, study_sessions, achievements, marks, space_prefs, shared_courses, shared_items, spaces, profile: meta?.value as Profile | undefined, pending, conflicts };
+  });
   if (db !== handle) return;
   for (const kind of kinds) (data as Record<Kind, Rows[Kind][]>)[kind] = snapshot[kind].filter((r) => !hidden.has(kind + ':' + r.id)).map(normalizer(kind));
   data.shared_courses = snapshot.shared_courses.filter((r) => !hidden.has(sharedKey('shared_courses', r.scope, r.id))).map((r) => normalShared.shared_courses(r as unknown as Row));
@@ -242,23 +246,23 @@ export const saveAchievement = (row: Raw<Achievement>) => saveRow('achievements'
 export const saveSpacePref = (row: Raw<SpacePref>) => saveRow('space_prefs', row);
 /** Your mark on a shared item: it uploads with the mark it started from, since marks merge field by field (spec §6). */
 export function saveMark(row: Raw<Mark>): Promise<Mark> {
-  const clean = normalizeMark(structuredClone(row));
+  const normalized = normalizeMark(structuredClone(row));
   return mutate(async (a) => {
-    const before = await a('marks').get(clean.id);
-    await a('marks').put(clean);
-    await queue(a, `marks:${clean.id}`, 'put', clean as unknown as Row, (before as unknown as Row | undefined) ?? null);
-    return clean;
+    const before = await a('marks').get(normalized.id);
+    await a('marks').put(normalized);
+    await queue(a, `marks:${normalized.id}`, 'put', normalized as unknown as Row, (before as unknown as Row | undefined) ?? null);
+    return normalized;
   });
 }
 /** Save a class's or a project's course or item; it uploads with the row it started from (spec §6 Push). The UI calls this from Stage 4. */
 export function saveShared(store: SharedStore, row: Row & { scope: string }): Promise<SharedCourse | SharedItem> {
-  const clean = normalShared[store](structuredClone(row));
+  const normalized = normalShared[store](structuredClone(row));
   return mutate(async (a) => {
     const shared = a(store) as unknown as Access<'shared_items'>;
-    const before = await shared.get([clean.scope, clean.id]);
-    await shared.put(clean as SharedItem);
-    await queue(a, sharedKey(store, clean.scope, clean.id), 'put', clean as unknown as Row, (before as unknown as Row | undefined) ?? null);
-    return clean;
+    const before = await shared.get([normalized.scope, normalized.id]);
+    await shared.put(normalized as SharedItem);
+    await queue(a, sharedKey(store, normalized.scope, normalized.id), 'put', normalized as unknown as Row, (before as unknown as Row | undefined) ?? null);
+    return normalized;
   });
 }
 /** Delete a class's or a project's row on this device and queue the delete. */
@@ -289,8 +293,8 @@ async function unlinkSessions(a: Accessor, field: 'itemId' | 'courseId', id: str
   for (const s of await a('study_sessions').all()) if (s[field] === id) {
     s[field] = null;
     await a('study_sessions').put(s);
-    const pending = await a('pending').get(`study_sessions:${s.id}`);
-    if (pending?.body) { pending.body[field] = null; await a('pending').put(pending); }
+    const queued = await a('pending').get(`study_sessions:${s.id}`);
+    if (queued?.body) { queued.body[field] = null; await a('pending').put(queued); }
   }
 }
 export const deleteQuote = (id: string) => deleteRow('quotes', id);
@@ -300,8 +304,8 @@ export function deleteCourse(id: string): Promise<void> {
       // Server clears this reference atomically with the course deletion.
       it.courseId = null;
       await a('items').put(it);
-      const pending = await a('pending').get(`items:${it.id}`);
-      if (pending?.body) { pending.body.courseId = null; await a('pending').put(pending); }
+      const queued = await a('pending').get(`items:${it.id}`);
+      if (queued?.body) { queued.body.courseId = null; await a('pending').put(queued); }
     }
     await unlinkSessions(a, 'courseId', id);
   });
@@ -381,8 +385,8 @@ export function rejectOperation(op: PendingOp, current: Row | null | undefined, 
 export function applyPage(page: Page, reset: boolean | string[] = false): Promise<boolean> {
   return mutate(async (a) => {
     const own = 'u:' + userId;
-    const wipe = reset === true ? [own] : reset || [];
-    for (const scope of wipe) {
+    const wiped = reset === true ? [own] : reset || [];
+    for (const scope of wiped) {
       if (scope === own) {
         for (const kind of kinds) for (const row of await a(kind).all()) if (!(await a('pending').get(`${kind}:${row.id}`))) await a(kind).del(row.id);
       } else for (const s of SHARED_STORES) {
@@ -423,7 +427,7 @@ export function applyPage(page: Page, reset: boolean | string[] = false): Promis
       for (const [id, at] of Object.entries(held ?? {})) detached[id] = Math.max(detached[id] ?? 0, at);
       await a('meta').put({ key: 'detached', value: detached });
     }
-    const changed = wipe.length > 0 || page.changes.length > 0 || (page.scopes?.length ?? 0) > 0;
+    const changed = wiped.length > 0 || page.changes.length > 0 || (page.scopes?.length ?? 0) > 0;
     const cursors = (await a('meta').get('cursors'))?.value as Record<string, Cursor> | undefined;
     await a('meta').put({ key: 'cursors', value: { ...cursors, ...(page.cursors ?? (page.cursor !== undefined ? { [own]: page.cursor } : {})) } });
     return changed;

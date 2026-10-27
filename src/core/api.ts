@@ -1,9 +1,11 @@
 // The only file that knows the API's URLs. Same-origin, cookie session.
 
 import type { Row } from './db.ts';
+import type { Outline, Schedule } from './importers/plan.ts';
 import { UNREAD_CAP } from './shared.ts';
 import type { Cursor, Page, ServerProfile } from './store.ts';
-import type { ActivityRow, Flow, FriendMatch, FriendSettings, Friends, GroupRecord, Inbox, JoinCode, ParentRef, RoomView, Space, SpaceDetails, SpaceInvite, SpaceSummary } from './types.ts';
+import type { Album, Device, Page as SpotifyPage, PlayerState, Playlist, SearchResults, Track } from '../data/spotify/types.ts';
+import type { ActivityRow, AdminAccounts, AdminHealth, AdminTraffic, Announcement, AuditEntry, CalendarFeed, ErrorGroup, ErrorRow, MaintenanceState, Flow, FriendMatch, FriendSettings, Friends, GroupRecord, Inbox, JoinCode, ParentRef, RoomView, Space, SpaceDetails, SpaceInvite, SpaceSummary } from './types.ts';
 
 /** An error's body as the Worker sends it: its code, and for some the server's copy or a wait. */
 export interface ErrorBody { error?: string; retryAfter?: unknown; current?: Row | null; [field: string]: unknown }
@@ -88,14 +90,17 @@ function spotifyRequest(method: string, path: string, body?: unknown) {
 }
 
 /** Resolves to JSON (or null for 204). Invalid replies never acknowledge a write. */
-export function request(method: string, path: string, body?: unknown, headers?: Record<string, string>, signal?: AbortSignal) {
+export function request<T = unknown>(method: string, path: string, body?: unknown, headers?: Record<string, string>, signal?: AbortSignal): Promise<T> {
   /* Account operations and the local connection check remain available during an API cooldown. */
   if (path.startsWith('/api/spotify/') && !['/api/spotify/token', '/api/spotify/status'].includes(path)) return spotifyRequest(method, path, body);
   return send(method, path, body, headers, signal);
 }
+/** What the Worker's /api/spotify/player and /status say: a part of the player's state. */
+type SpotifyAnswer = Partial<Omit<PlayerState, 'stale' | 'error' | 'loaded'>>;
+type Queue = { current: Track | null; queue: Track[] };
 
-/* The answer is JSON as the Worker sends it (typed `any`, as Response.json() is): each
-   caller says what it expects, and the record and sync answers are checked here. */
+/* The answer is JSON as the Worker sends it (`any`, as Response.json() is); request<T>() gives
+   it the type each api method promises, and the record and sync answers are checked here. */
 async function send(method: string, path: string, body?: unknown, extraHeaders: Record<string, string> = {}, outer?: AbortSignal) {
   const session = sessionRequests.signal;
   const controller = new AbortController();
@@ -170,7 +175,8 @@ function cursorSeq(c: unknown): number {
 }
 async function changesV3(cursors: Record<string, Cursor>, sv: number): Promise<PageV3> {
   const list = Object.entries(cursors).map(([scope, seq]) => `${scope}:${seq}`).join(',');
-  const page = await request('GET', `/api/sync?v=3&cursors=${encodeURIComponent(list)}&sv=${sv}`);
+  /* `any`: every field is checked below before the page is trusted */
+  const page = await request<any>('GET', `/api/sync?v=3&cursors=${encodeURIComponent(list)}&sv=${sv}`);
   const valid = !!page && typeof page.more === 'boolean' && scopeList(page.reset) && scopeList(page.revoked)
     && !!page.cursors && typeof page.cursors === 'object'
     && Object.entries(page.cursors).every(([s, n]) => SCOPE.test(s) && !Number.isNaN(cursorSeq(n)))
@@ -182,7 +188,7 @@ async function changesV3(cursors: Record<string, Cursor>, sv: number): Promise<P
   /* the inbox's count (spec §12): one unreadable value must not fail a whole sync page */
   if (!(Number.isSafeInteger(page.unread) && page.unread >= 0 && page.unread <= UNREAD_CAP)) delete page.unread;
   /* a cursor never moves back, except to 0 for a scope that reset */
-  for (const [scope, cursor] of Object.entries(page.cursors as Record<string, Cursor>)) {
+  for (const [scope, cursor] of Object.entries<Cursor>(page.cursors)) {
     if (cursorSeq(cursor) < (cursorSeq(cursors[scope] ?? 0) || 0) && !page.reset.includes(scope)) throw invalidResponse();
   }
   return page;
@@ -292,14 +298,14 @@ export const api = {
     record(request('PUT', rowPath(kind, id), changed ? { ...row, changed } : row, match(row.revision)), id, row.revision),
   revokeAll: () => empty(request('POST', '/api/session/revoke-all')),
   del: (kind: string, id: string, revision = 0) => empty(request('DELETE', rowPath(kind, id), undefined, match(revision))),
-  calendarFeed: () => request('GET', '/api/calendar'),
-  calendarRenew: () => request('POST', '/api/calendar'),
+  calendarFeed: (): Promise<CalendarFeed> => request('GET', '/api/calendar'),
+  calendarRenew: (): Promise<CalendarFeed> => request('POST', '/api/calendar'),
   calendarStop: () => empty(request('DELETE', '/api/calendar')),
   leaderboard: (since: string | number) => request('GET', `/api/leaderboard?since=${since}`),
   leaderboardJoin: (joined: boolean) => empty(request('PUT', '/api/leaderboard', { joined })),
-  readOutline: (file: Blob, q: ReadQuery, signal?: AbortSignal) => request('POST', '/api/outline?' + query(q), file, undefined, signal),
+  readOutline: (file: Blob, q: ReadQuery, signal?: AbortSignal): Promise<Outline> => request('POST', '/api/outline?' + query(q), file, undefined, signal),
   readSchool: (file: Blob, q: ReadQuery, signal?: AbortSignal) => request('POST', '/api/school-calendar?' + query(q), file, undefined, signal),
-  readSchedule: (file: Blob, q: ReadQuery, signal?: AbortSignal) => request('POST', '/api/ai/schedule?' + query(q), file, undefined, signal),
+  readSchedule: (file: Blob, q: ReadQuery, signal?: AbortSignal): Promise<Schedule> => request('POST', '/api/ai/schedule?' + query(q), file, undefined, signal),
   aiReads: (): Promise<{ left: number; limit: number }> => request('GET', '/api/ai/reads'),
   /* push reminders (worker/push.js): the key, and this device's subscription by its endpoint */
   pushKey: (): Promise<{ enabled: boolean; key: string | null }> => request('GET', '/api/push/key'),
@@ -308,40 +314,40 @@ export const api = {
   pushTest: (endpoint: string): Promise<{ result: 'ok' | 'gone' | 'failed' }> => request('POST', '/api/push/test', { endpoint }),
   /* the Admin page; every call is refused (403) to anyone who is not an admin */
   admin: {
-    accounts: () => request('GET', '/api/admin/accounts'),
-    create: (body: { username: string; displayName: string; password: string; admin: boolean }) => request('POST', '/api/admin/accounts', body),
+    accounts: (): Promise<AdminAccounts> => request('GET', '/api/admin/accounts'),
+    create: (body: { username: string; displayName: string; password: string; admin: boolean }): Promise<{ username: string }> => request('POST', '/api/admin/accounts', body),
     resetPassword: (id: string, password: string) => empty(request('POST', `/api/admin/accounts/${encodeURIComponent(id)}/password`, { password })),
     revoke: (id: string) => empty(request('POST', `/api/admin/accounts/${encodeURIComponent(id)}/revoke`)),
     setAdmin: (id: string, admin: boolean) => empty(request('PUT', `/api/admin/accounts/${encodeURIComponent(id)}/admin`, { admin })),
     remove: (id: string, confirm: string) => empty(request('DELETE', `/api/admin/accounts/${encodeURIComponent(id)}`, { confirm })),
     unlock: (key: string) => empty(request('DELETE', `/api/admin/locks/${encodeURIComponent(key)}`)),
-    errors: () => request('GET', '/api/admin/errors'),
-    audit: () => request('GET', '/api/admin/audit'),
-    traffic: () => request('GET', '/api/admin/traffic'),
-    health: () => request('GET', '/api/admin/health'),
-    announcement: () => request('GET', '/api/admin/announcement'),
+    errors: (): Promise<{ groups: ErrorGroup[]; recent: ErrorRow[] }> => request('GET', '/api/admin/errors'),
+    audit: (): Promise<{ entries: AuditEntry[] }> => request('GET', '/api/admin/audit'),
+    traffic: (): Promise<AdminTraffic> => request('GET', '/api/admin/traffic'),
+    health: (): Promise<AdminHealth> => request('GET', '/api/admin/health'),
+    announcement: (): Promise<{ announcement: Announcement | null }> => request('GET', '/api/admin/announcement'),
     announce: (text: string, until: number) => request('PUT', '/api/admin/announcement', { text, until }),
     unannounce: () => empty(request('DELETE', '/api/admin/announcement')),
-    maintenance: () => request('GET', '/api/admin/maintenance'),
+    maintenance: (): Promise<{ maintenance: MaintenanceState }> => request('GET', '/api/admin/maintenance'),
     setMaintenance: (features: string[], message: string) => request('PUT', '/api/admin/maintenance', { features, message }),
   },
-  spotifyPlayer: () => request('GET', '/api/spotify/player'),
-  spotifyStatus: () => request('GET', '/api/spotify/status'),
+  spotifyPlayer: (): Promise<SpotifyAnswer> => request('GET', '/api/spotify/player'),
+  spotifyStatus: (): Promise<SpotifyAnswer> => request('GET', '/api/spotify/status'),
   spotifyControl: (action: string, deviceId?: string | null) => request('POST', `/api/spotify/player/${action}` + (deviceId ? `?deviceId=${encodeURIComponent(deviceId)}` : '')),
-  spotifyToken: () => request('GET', '/api/spotify/token'),
+  spotifyToken: (): Promise<{ token: string }> => request('GET', '/api/spotify/token'),
   spotifyTransfer: (deviceId: string | null, play = true) => request('POST', '/api/spotify/transfer', { deviceId, play }),
-  spotifyDevices: () => request('GET', '/api/spotify/devices'),
+  spotifyDevices: (): Promise<{ devices: Device[] }> => request('GET', '/api/spotify/devices'),
   spotifyShuffle: (state: boolean) => request('PUT', '/api/spotify/shuffle', { state }),
   spotifyRepeat: (state: string) => request('PUT', '/api/spotify/repeat', { state }),
-  spotifyMe: () => request('GET', '/api/spotify/me'),
-  spotifyRecent: () => request('GET', '/api/spotify/recent'),
-  spotifyAlbumTracks: (id: string, offset = 0) => request('GET', `/api/spotify/albums/${encodeURIComponent(id)}/tracks?offset=${offset}`),
-  spotifyArtistAlbums: (id: string, offset = 0) => request('GET', `/api/spotify/artists/${encodeURIComponent(id)}/albums?offset=${offset}`),
+  spotifyMe: (): Promise<{ id: string; name: string } | null> => request('GET', '/api/spotify/me'),
+  spotifyRecent: (): Promise<{ items: Track[] }> => request('GET', '/api/spotify/recent'),
+  spotifyAlbumTracks: (id: string, offset = 0): Promise<SpotifyPage<Track>> => request('GET', `/api/spotify/albums/${encodeURIComponent(id)}/tracks?offset=${offset}`),
+  spotifyArtistAlbums: (id: string, offset = 0): Promise<SpotifyPage<Album>> => request('GET', `/api/spotify/artists/${encodeURIComponent(id)}/albums?offset=${offset}`),
   spotifyDisconnect: () => request('DELETE', '/api/spotify'),
-  spotifySearch: (q: string, type: string | null = null, offset: number | null = 0) => request('GET', `/api/spotify/search?q=${encodeURIComponent(q)}` + (type ? `&type=${type}&offset=${offset}` : '')),
-  spotifyPlaylists: (offset = 0) => request('GET', `/api/spotify/playlists?offset=${offset}`),
-  spotifyPlaylistTracks: (id: string, offset = 0) => request('GET', `/api/spotify/playlists/${encodeURIComponent(id)}/tracks?offset=${offset}`),
-  spotifyQueue: () => request('GET', '/api/spotify/queue'),
+  spotifySearch: (q: string, type: string | null = null, offset: number | null = 0): Promise<Omit<SearchResults, 'q'>> => request('GET', `/api/spotify/search?q=${encodeURIComponent(q)}` + (type ? `&type=${type}&offset=${offset}` : '')),
+  spotifyPlaylists: (offset = 0): Promise<SpotifyPage<Playlist>> => request('GET', `/api/spotify/playlists?offset=${offset}`),
+  spotifyPlaylistTracks: (id: string, offset = 0): Promise<SpotifyPage<Track>> => request('GET', `/api/spotify/playlists/${encodeURIComponent(id)}/tracks?offset=${offset}`),
+  spotifyQueue: (): Promise<Queue | null> => request('GET', '/api/spotify/queue'),
   spotifyQueueAdd: (uri: string) => request('POST', '/api/spotify/queue', { uri }),
   spotifyPlay: (what: Record<string, unknown>) => request('POST', '/api/spotify/play', what),
   spotifyVolume: (percent: number | null) => request('PUT', '/api/spotify/volume', { percent }),

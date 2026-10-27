@@ -12,8 +12,7 @@ import { toast } from "@/data/toast"
 import { Panel, Empty } from "@/components/views/bits"
 import { Button, Label, Note, TextArea } from "@/components/sheet/fields"
 import { ago, problem, useLoad } from "./use-admin"
-
-interface Stored { features: Feature[]; message: string; updatedAt: number | null; updatedBy: string }
+import type { MaintenanceState as Stored } from "@/core/types"
 
 /* In the order the sidebar lists the pages; the whole app first. */
 const SWITCHES: readonly [Feature, string, string][] = [

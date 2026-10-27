@@ -7,7 +7,7 @@ import { state as player, poll, onRoundsIfIdle } from "./player"
 import { state as web } from "./web-player"
 import { cache, rerender, say, explain, load, queueChanged, playFrom } from "./library"
 import { changed } from "./signal"
-import type { Device, Repeat } from "./types"
+import type { Repeat } from "./types"
 
 /**
  * Play a track, a context, or a track within a list Spotify has no context for
@@ -73,7 +73,7 @@ export async function cycleRepeat() {
 export function toggleDevices() {
     if (cache.devices) { cache.devices = null; rerender(); return }
     cache.devices = []
-    load("devices", async () => { cache.devices = ((await api.spotifyDevices()) as { devices: Device[] }).devices },
+    load("devices", async () => { cache.devices = (await api.spotifyDevices()).devices },
         () => { cache.devices = null; return false })
 }
 

@@ -130,7 +130,7 @@ describe('planImport', () => {
   };
 
   it('matches courses by code, proposes new ones and skips known classes', () => {
-    const plan = planImport(parseIcs(ICS), data, 'ics');
+    const plan = planImport(parseIcs(ICS), data);
     const pharm = plan.courses.find((c) => c.code === 'PHARM101');
     expect(pharm).toMatchObject({ isNew: true, name: 'Pharmacology Lecture' });
     expect(pharm.meetings.map((m) => m.weekday)).toEqual([1, 3]);
@@ -146,27 +146,27 @@ describe('planImport', () => {
   it('gives a class with no end an hour, and knows it again on a second import', () => {
     const ics = ['BEGIN:VCALENDAR', 'BEGIN:VEVENT', 'SUMMARY:PHYS Lecture', 'DTSTART:20260914T090000',
       'RRULE:FREQ=WEEKLY;BYDAY=MO', 'END:VEVENT', 'END:VCALENDAR'].join('\r\n');
-    const first = planImport(parseIcs(ics), { courses: [], items: [] }, 'ics');
+    const first = planImport(parseIcs(ics), { courses: [], items: [] });
     expect(first.courses[0].meetings[0]).toMatchObject({ weekday: 1, start: '09:00', end: '10:00' });
     const saved = { courses: [normalizeCourse({ ...first.courses[0], meetings: first.courses[0].meetings })], items: [] };
-    expect(planImport(parseIcs(ics), saved, 'ics').courses).toEqual([]);
+    expect(planImport(parseIcs(ics), saved).courses).toEqual([]);
   });
 
   it('marks duplicates unticked', () => {
     const withItem = { ...data, items: [{ courseId: null, title: 'Reading week', date: '2026-10-26' }] };
-    const plan = planImport(parseIcs(ICS), withItem, 'ics');
+    const plan = planImport(parseIcs(ICS), withItem);
     expect(plan.items.find((i) => i.row.title === 'Reading week')).toMatchObject({ duplicate: true, include: false });
   });
 
   it('caps a course at twelve classes and says so', () => {
     const rows = Array.from({ length: 14 }, (_, i) => ({ type: 'class', course: 'BIG', title: 'Lecture', date: '2026-09-14', start: pad(7 + i) + ':00', end: pad(8 + i) + ':00', room: '', weight: null }));
-    const plan = planImport(rows, { courses: [], items: [] }, 'csv');
+    const plan = planImport(rows, { courses: [], items: [] });
     expect(plan.courses[0].meetings).toHaveLength(12);
     expect(plan.notes.filter((n) => /12 classes/.test(n))).toHaveLength(2);
   });
 
   it('keeps CSV item types and weights, and creates a named course', () => {
-    const plan = planImport(parseCsv('type,course,title,date,weight\nassignment,BIOC,Essay,2026-10-01,20'), { courses: [], items: [] }, 'csv');
+    const plan = planImport(parseCsv('type,course,title,date,weight\nassignment,BIOC,Essay,2026-10-01,20'), { courses: [], items: [] });
     expect(plan.courses[0]).toMatchObject({ code: 'BIOC', isNew: true });
     expect(plan.items[0].row).toMatchObject({ type: 'assignment', weight: 20, courseId: plan.courses[0].id });
   });
@@ -391,7 +391,7 @@ describe('a timetable course put on another of yours', () => {
 
 describe('planImport: how a weekly class ends', () => {
   const ics = (rrule) => ['BEGIN:VCALENDAR', 'BEGIN:VEVENT', 'SUMMARY:ANAT101 Lecture', 'DTSTART:20260914T090000', 'DTEND:20260914T100000', 'RRULE:' + rrule, 'END:VEVENT', 'END:VCALENDAR'].join('\n');
-  const plan = (rrule) => planImport(parseIcs(ics(rrule)), { courses: [], items: [] }, 'ics');
+  const plan = (rrule) => planImport(parseIcs(ics(rrule)), { courses: [], items: [] });
 
   it('skips every 2 weeks with a note, not as a weekly class', () => {
     const p = plan('FREQ=WEEKLY;INTERVAL=2;BYDAY=MO');
