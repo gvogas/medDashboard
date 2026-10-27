@@ -36,6 +36,7 @@ import { ICONS } from "./prop-icons"
 import { Checklist, Links } from "./item-parts"
 import { RemovedCard } from "./removed"
 import { WeightProp } from "./grade-setup"
+import { CHECKLIST_MAX } from "@/core/shared"
 
 const TITLE = "font-serif text-[30px] leading-[1.15] font-[500] tracking-[-.015em]"
 const KEY = "text-muted-foreground"
@@ -115,8 +116,8 @@ function ClassItemCard({ itemKey, bar }: { itemKey: string; bar: boolean }) {
         const r = fillTopics({ ...view, id: itemKey, courseId: courseKey }, course, keyedItems(items), termStart(), schoolCal())
         if (r.added) void editMark(itemKey, { checklist: r.checklist })
         setFillNote(r.added
-            ? "Added " + r.added + " lecture" + (r.added === 1 ? "" : "s") + "." + (r.left ? " " + r.left + " more did not fit under the 50-step limit." : "")
-            : r.left ? "The list is full: 50 steps is the most an item can hold." : "Every lecture before this " + m.label.toLowerCase() + " is already listed.")
+            ? "Added " + r.added + " lecture" + (r.added === 1 ? "" : "s") + "." + (r.left ? " " + r.left + " more did not fit under the " + CHECKLIST_MAX + "-step limit." : "")
+            : r.left ? "The list is full: " + CHECKLIST_MAX + " steps is the most an item can hold." : "Every lecture before this " + m.label.toLowerCase() + " is already listed.")
     }
 
     return (

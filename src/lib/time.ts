@@ -3,6 +3,8 @@
 // and lengths of study, for the Study page and the timer.
 
 export const STEP = 15
+/** A minute in milliseconds. */
+export const MINUTE_MS = 60_000
 
 const pad = (n: number) => String(n).padStart(2, "0")
 

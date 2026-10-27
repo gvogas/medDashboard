@@ -11,7 +11,7 @@ import { DAY_MS } from './time.js';
 export const FRIEND_LIMIT = 200;
 /** Requests one person may send in a day, and searches in a minute. */
 export const REQUEST_LIMIT = 20;
-export const SEARCH_LIMIT = 30;
+export const SEARCHES_PER_MINUTE = 30;
 export const RESULTS = 8;
 export const DECLINE_KEEP_MS = 30 * DAY_MS;
 const NAME = "COALESCE(NULLIF(u.display_name, ''), u.username)";
@@ -153,7 +153,7 @@ const STATE = `CASE WHEN f.status = 'accepted' THEN 'friends'
 export async function searchPeople(db, me, raw, now = Date.now()) {
   const q = String(raw ?? '').trim().toLowerCase();
   if (q.length < 2 || q.length > 40) throw new HttpError(400, { error: 'invalid', field: 'q' });
-  const wait = await claimLimit(db, `friend-search:${me}`, SEARCH_LIMIT, now);
+  const wait = await claimLimit(db, `friend-search:${me}`, SEARCHES_PER_MINUTE, now);
   if (wait) throw rateLimited(wait);
   /* LIKE ignores case for ASCII letters only; accented letters must match exactly */
   const like = '%' + q.replace(/[\\%_]/g, (c) => '\\' + c) + '%';

@@ -15,13 +15,13 @@ import { ACCOUNT_TABLES } from './accounts.js';
 import { readMaintenance, validateMaintenance } from './maintenance.js';
 import { handOnStmts } from './leaving.js';
 import { DAY_MS } from './time.js';
+import { MESSAGE_MAX } from '../src/core/shared.ts';
 
 /* The newest file in migrations/; a test keeps it in step. */
 export const LATEST_MIGRATION = '0003_presence.sql';
 const AUDIT_KEEP_MS = 90 * DAY_MS;
 export const MIN_PASSWORD = 8;
 const MAX_PASSWORD = 200;
-const ANNOUNCE_MAX = 280;
 const ANNOUNCE_MAX_MS = 30 * DAY_MS;
 
 /** The signed-in admin, {id, username}, or a 403. */
@@ -96,7 +96,7 @@ export async function adminHousekeeping(db, now = Date.now()) {
 }
 
 /** Remember the UTC day the person was last seen; one write a day at most. */
-export async function markSeen(db, userId, now = Date.now()) {
+export async function markSeenToday(db, userId, now = Date.now()) {
   const day = new Date(now).toISOString().slice(0, 10);
   await db.prepare('UPDATE users SET last_seen_day = ?1 WHERE id = ?2 AND (last_seen_day IS NULL OR last_seen_day != ?1)').bind(day, userId).run();
 }
@@ -259,7 +259,7 @@ export const adminRoutes = [
     const admin = await requireAdmin(request, env);
     const body = await readJson(request);
     const text = typeof body.text === 'string' ? body.text.replace(/[\x00-\x1f\x7f]/g, ' ').trim() : '';
-    if (!text || text.length > ANNOUNCE_MAX) throw new HttpError(400, { error: 'invalid', field: 'text' });
+    if (!text || text.length > MESSAGE_MAX) throw new HttpError(400, { error: 'invalid', field: 'text' });
     const now = Date.now();
     if (!Number.isSafeInteger(body.until) || body.until <= now || body.until > now + ANNOUNCE_MAX_MS) throw new HttpError(400, { error: 'invalid', field: 'until' });
     /* a new id each time, so a changed message shows again to those who closed the last */

@@ -7,10 +7,10 @@
 
 import { HttpError } from './http.js';
 import { requireUser } from './auth.js';
+import { MESSAGE_MAX } from '../src/core/shared.ts';
 
 /* In the Admin page's order; 'app' is the whole app. */
 export const FEATURES = ['app', 'week', 'month', 'table', 'study', 'spotify', 'import', 'classes', 'friends'];
-export const MESSAGE_MAX = 280;
 
 /** The stored switches, {features, message, updatedAt}; nothing on when absent or unreadable. */
 export async function readMaintenance(db) {

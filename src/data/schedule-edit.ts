@@ -16,7 +16,7 @@ import { asSent, MAX_FILE, readWithAi, type NoteKey } from "./ai-read"
 import { readContext } from "./ai-context"
 import { commitImport, defaultTerm, type ImportPlan } from "./import-edit"
 import { closeSheet, openSheet } from "./overlay"
-import { toast } from "./toast"
+import { toast, TOAST_LONG_MS } from "./toast"
 
 export const isImage = (f: File) => /^image\//.test(f.type) || /\.(png|jpe?g|webp|heic)$/i.test(f.name)
 
@@ -77,7 +77,7 @@ export async function commitSchedule(plan: ImportPlan): Promise<boolean> {
             : "Updated the semester of " + plural(terms, "course"))
         return true
     } catch (e) {
-        toast((n ? "The classes were not all added: " : "The semesters were not saved: ") + (e as Error).message, { error: true, ms: 8000 })
+        toast((n ? "The classes were not all added: " : "The semesters were not saved: ") + (e as Error).message, { error: true, ms: TOAST_LONG_MS })
         return false
     }
 }

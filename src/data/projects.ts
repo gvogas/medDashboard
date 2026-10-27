@@ -16,9 +16,9 @@ import { once, spaceGone, uploadFirst } from "./leave"
 import { closeSheet, openSheet } from "./overlay"
 import { toast } from "./toast"
 import type { Course, Item, ParentRef, SharedItem, Space, SpacePref } from "./types"
+import { TASK_LIMIT } from "@/core/shared"
 
 /** The most live tasks a project holds (spec §3); the Worker refuses the 201st too. */
-export const TASK_LIMIT = 200
 
 export type ProjectTab = "tasks" | "members" | "activity"
 export const openProject = (spaceId: string, tab: ProjectTab = "tasks") => openSheet({ kind: "project", spaceId, tab })
@@ -51,7 +51,7 @@ const write = (t: SharedItem) => store.saveShared("shared_items", t as unknown a
 
 /** A new task (editors): unassigned, not done. False when the project already holds 200. */
 export async function addTask(spaceId: string, title: string, date: string): Promise<boolean> {
-    if (tasksOf(spaceId).length >= TASK_LIMIT) { toast("A project holds 200 tasks at most."); return false }
+    if (tasksOf(spaceId).length >= TASK_LIMIT) { toast(`A project holds ${TASK_LIMIT} tasks at most.`); return false }
     await write({
         id: uid(), scope: scopeOf(spaceId), type: "task", title: title.trim() || "Untitled", courseId: null, date, start: "", end: "", where: "",
         status: "todo", grade: null, weight: null, notes: "", checklist: [], links: [], recur: null, weekday: null, recurUntil: null, dept: "",

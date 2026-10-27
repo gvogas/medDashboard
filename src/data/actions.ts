@@ -17,7 +17,7 @@ import { openProject, toggleTeamTask } from "./projects"
 import { toggleClassTask } from "./marks"
 import { openKeys } from "./keys"
 import { api } from "@/core/api"
-import { toast } from "./toast"
+import { toast, TOAST_LONG_MS } from "./toast"
 import { backupFile, fileName, itemsCsv } from "./backup"
 import { applyCoat, TAB_OF, type SettingsTab } from "./settings"
 import { rememberUi } from "@/data/ui"
@@ -332,12 +332,12 @@ export async function exportItemsCsv() {
 
 /** A saved copy: restore the edit to try it again, or discard it. */
 export async function resolveConflict(id: string, restore: boolean) {
-    try { await store.resolveConflict(id, restore) } catch (error) { toast((error as Error).message, { error: true, ms: 8000 }) }
+    try { await store.resolveConflict(id, restore) } catch (error) { toast((error as Error).message, { error: true, ms: TOAST_LONG_MS }) }
     notify()
 }
 
 export async function disconnectSpotify() {
-    try { await api.spotifyDisconnect() } catch { toast("Spotify could not be disconnected. Try again when you are online.", { error: true, ms: 8000 }); return }
+    try { await api.spotifyDisconnect() } catch { toast("Spotify could not be disconnected. Try again when you are online.", { error: true, ms: TOAST_LONG_MS }); return }
     location.reload()
 }
 

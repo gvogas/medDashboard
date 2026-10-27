@@ -5,12 +5,13 @@
 import { useRef, useState } from "react"
 import { cn } from "@/lib/utils"
 import { httpUrl, isTest, uid } from "@/core/model"
+import { CHECKLIST_MAX } from "@/core/shared"
 import { flush, linkUrl } from "@/data/item-edit"
 import { toast } from "@/data/toast"
 import type { ChecklistEntry, Item } from "@/data/types"
 import { Button, Meter, Note, RemoveButton, Section, CONTROL } from "./fields"
 
-const MAX_STEPS = 50, MAX_LINKS = 20
+const MAX_LINKS = 20
 
 export function Checklist({ item, onChange, fill, fillNote, autoFocus = false, onLeave = () => void flush() }: {
     item: Item; onChange: (list: ChecklistEntry[], typing: boolean) => void; fill: (() => void) | null; fillNote: string; autoFocus?: boolean; onLeave?: () => void
@@ -28,7 +29,7 @@ export function Checklist({ item, onChange, fill, fillNote, autoFocus = false, o
         toast("Step removed", {
             undo: () => {
                 const { list: now, onChange: save } = latest.current
-                if (now.some((x) => x.id === s.id) || now.length >= MAX_STEPS) return
+                if (now.some((x) => x.id === s.id) || now.length >= CHECKLIST_MAX) return
                 save([...now.slice(0, at), s, ...now.slice(at)], false)
             },
         })
@@ -69,7 +70,7 @@ export function Checklist({ item, onChange, fill, fillNote, autoFocus = false, o
                     ))}
                 </ul>
             )}
-            {list.length < MAX_STEPS && (
+            {list.length < CHECKLIST_MAX && (
                 <input
                     type="text"
                     value={adding}

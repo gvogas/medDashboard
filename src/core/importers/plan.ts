@@ -12,6 +12,7 @@ import { KINDS, HEXES, TYPES, uid, classEnd } from '../model.ts';
 import { parse, DOW, iso, addDays, monday } from '../dates.ts';
 import type { Course, Item, Meeting } from '../types.ts';
 import type { IcsEvent } from './ics.ts';
+import { MEETINGS_MAX } from '../shared.ts';
 
 /** A CSV row, or one planOutline makes: a class from an outline has its kind and weekday. */
 export interface ImportRow { type: string; course: string; courseName?: string; title: string; date: string; start: string; end: string; room?: string; weight: number | null; kind?: string; weekday?: number }
@@ -54,7 +55,6 @@ export interface Schedule {
 interface PlanClass { code: string; name: string; title: string; weekdays: number[]; start: string; end: string; room?: string; kind: string }
 interface PlanSingle { code: string; name?: string; explicit: boolean; title: string; date: string; start: string; end: string; room?: string; weight: number | null; type: string }
 
-const MAX_MEETINGS = 12;
 const ITEM_TYPES = Object.keys(TYPES);
 const CLASS_TYPES: Record<string, string> = { class: 'Lecture', lecture: 'Lecture', seminar: 'Seminar', tutorial: 'Tutorial', pbl: 'PBL', clinical: 'Clinical' };
 
@@ -140,8 +140,8 @@ export function planImport(events: (IcsEvent | ImportRow)[], data: PlanData, sou
       const end = classEnd(cl.start, cl.end);
       const same = (m: Meeting) => m.weekday === weekday && m.start === cl.start && m.end === end;
       if (pc.existing!.some(same) || pc.meetings.some(same)) continue;
-      if (pc.existing!.length + pc.meetings.length >= MAX_MEETINGS) {
-        notes.push(pc.code + ' already has 12 classes; dropped ' + DOW[weekday] + ' ' + cl.start + '.');
+      if (pc.existing!.length + pc.meetings.length >= MEETINGS_MAX) {
+        notes.push(pc.code + ' already has ' + MEETINGS_MAX + ' classes; dropped ' + DOW[weekday] + ' ' + cl.start + '.');
         continue;
       }
       pc.meetings.push({ id: uid(), kind: KINDS.includes(cl.kind) ? cl.kind : 'Lecture', weekday, start: cl.start, end, room: clip(cl.room, 40), include: true });
@@ -298,7 +298,7 @@ export function planSchedule(s: Schedule, data: PlanData, term = ''): Plan {
       if (!k.start || !(k.weekday >= 0)) { notes.push('Skipped a class of ' + read.code + ' with no day or start time.'); continue; }
       const end = classEnd(k.start, k.end);
       if (pc.meetings.some((m) => m.weekday === k.weekday && m.start === k.start && m.end === end)) continue;
-      if (pc.meetings.length >= MAX_MEETINGS) { notes.push(pc.code + ' already has 12 classes; dropped ' + DOW[k.weekday] + ' ' + k.start + '.'); continue; }
+      if (pc.meetings.length >= MEETINGS_MAX) { notes.push(pc.code + ' already has ' + MEETINGS_MAX + ' classes; dropped ' + DOW[k.weekday] + ' ' + k.start + '.'); continue; }
       pc.meetings.push({ id: uid(), kind: KINDS.includes(k.kind) ? k.kind : 'Lecture', weekday: k.weekday, start: k.start, end, room: clip(k.room, 40), include: true });
     }
   }

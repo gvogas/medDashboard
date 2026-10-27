@@ -8,7 +8,7 @@ import { notify } from "@/bridge"
 
 const QUERY = "(max-width:900px)"
 const narrow = () => typeof window.matchMedia === "function" ? window.matchMedia(QUERY) : null
-const isNarrow = () => !!narrow()?.matches
+const isDrawer = () => !!narrow()?.matches
 
 export interface SideState {
     open: boolean
@@ -25,7 +25,7 @@ const listeners = new Set<() => void>()
 
 export function setSide(open: boolean) {
     const had = !!document.getElementById("side")?.contains(document.activeElement)
-    state = { open, narrow: isNarrow(), focus: open ? "side" : had ? "menu" : null, turn: state.turn + 1 }
+    state = { open, narrow: isDrawer(), focus: open ? "side" : had ? "menu" : null, turn: state.turn + 1 }
     for (const fn of listeners) fn()
     notify()
 }

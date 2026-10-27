@@ -9,7 +9,6 @@ import { BUCKET, NAME } from './accounts.js';
 import { SPACE_NAME, noteStmt, undoneStmt } from './activity.js';
 
 /** The most live tasks a project holds (spec §3 Limits). */
-export const TASK_LIMIT = 200;
 
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
 const SPACE_ID = /^[a-z0-9]{12}$/;

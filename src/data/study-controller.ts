@@ -13,7 +13,7 @@ import { launch as fireworks } from "@/lib/fireworks"
 import { notify } from "@/bridge"
 import * as run from "./run"
 import { openFocus } from "./study-timer"
-import { toast } from "./toast"
+import { toast, TOAST_LONG_MS, TOAST_MS } from "./toast"
 import { ui, rememberUi } from "./ui"
 import { effectiveCourses, effectiveItems, forAchievements } from "./effective"
 import { keyedAchievements, keyedCourses, keyedItems, keyedSessions } from "./refs"
@@ -30,7 +30,7 @@ export function setView(view: View) {
 /* A delete waits six seconds so Undo (the History card's, undoSessionDelete in
    study.ts) can take it back; the session is only hidden meanwhile. Another
    delete, or leaving the page, makes the waiting one final. */
-const UNDO_MS = 6000
+const UNDO_MS = TOAST_MS
 export function deleteWithUndo(id: string) {
     const session = data.study_sessions.find((x) => x.id === id)
     if (!session) return
@@ -112,7 +112,7 @@ export function celebrateAchievements({ quiet = false }: { quiet?: boolean } = {
     const b = fresh[0], more = fresh.length - 1
     toast("Achievement unlocked: " + b.name + (more ? " and " + more + " more" : ""), {
         badge: { sticker: b.sticker, group: b.group, tier: b.tier },
-        label: "See", undo: () => showAchievement(b.id), ms: 8000,
+        label: "See", undo: () => showAchievement(b.id), ms: TOAST_LONG_MS,
     })
     if (studyPrefs().celebrate) fireworks(window.innerWidth / 2, window.innerHeight * 0.7, { rockets: 5 })
 }

@@ -6,8 +6,7 @@ import { assertAllowed, editorGuard, memberGuard, parseScope, scopeOf, writerGua
 import { SPACE_LIMIT } from './spaces.js';
 import { MEANINGFUL, autoKeep } from './leaving.js';
 import { KEEP_MS } from './activity.js';
-import { TASK_LIMIT } from './projects.js';
-import { MARK_DEFAULTS, stable } from '../src/core/shared.ts';
+import { MARK_DEFAULTS, TASK_LIMIT, stable } from '../src/core/shared.ts';
 import { DAY_MS } from './time.js';
 
 const PROFILE_COLS =

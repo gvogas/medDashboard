@@ -15,6 +15,7 @@ import { answerRequest, askFriend, friendsNow, friendsStale, loadFriends, remove
 import { joinRoomRun, openTogether, useRun } from "@/data/study-timer"
 import { inviteMore, isHost, useRoom } from "@/data/room"
 import type { FriendMatch, FriendPerson, FriendState, Friends as FriendList } from "@/data/types"
+import { MINUTE_MS } from "@/lib/time"
 
 const ROW = "flex flex-wrap items-center gap-3 border-b border-line-2 py-2.5 last:border-b-0"
 const SMALL = "text-[12.5px] text-muted-foreground"
@@ -161,7 +162,7 @@ function Friends({ bar }: { bar: boolean }) {
 
 /** "12 min in", "1h 05m in". */
 function sinceText(since: number, now = Date.now()): string {
-    const m = Math.max(0, Math.floor((now - since) / 60_000))
+    const m = Math.max(0, Math.floor((now - since) / MINUTE_MS))
     return (m >= 60 ? Math.floor(m / 60) + "h " + String(m % 60).padStart(2, "0") + "m" : m + " min") + " in"
 }
 

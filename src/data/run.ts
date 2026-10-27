@@ -10,6 +10,7 @@ import * as timer from "@/core/timer"
 import { uid } from "@/core/model"
 import { refOf } from "./refs"
 import type { Flow, StepKind } from "./types"
+import { MINUTE_MS } from "@/lib/time"
 
 /** A run's place in a room: the room, when you first joined (on this device's clock), the room's
     study time when you last joined, and what earlier stints in it came to. */
@@ -37,7 +38,7 @@ export function read(now = Date.now()): RunRead | null {
 
 /** Whole rounds of study in `ms`: a room run logs the rounds' worth you studied, not the room's. */
 const roundsIn = (flow: Flow, ms: number) => {
-    const per = flow.steps.reduce((a, [k, m]) => a + (k === "study" ? m * 60_000 : 0), 0)
+    const per = flow.steps.reduce((a, [k, m]) => a + (k === "study" ? m * MINUTE_MS : 0), 0)
     return Math.min(flow.rounds, Math.floor(ms / per))
 }
 

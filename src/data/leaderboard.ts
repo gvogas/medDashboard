@@ -10,9 +10,10 @@ import { monday } from "@/core/dates"
 import { useStudySessions } from "./store"
 import { ui } from "./ui"
 import type { Leaderboard, LbRow, LbTab, StudySession } from "./types"
+import { MINUTE_MS } from "@/lib/time"
 
 /** The totals are asked for again when the Study page opens after a minute. */
-export const STALE_MS = 60_000
+export const STALE_MS = MINUTE_MS
 
 export const LOAD_ERROR = "Could not load the leaderboard. Try again in a minute."
 export const SAVE_ERROR = "That did not go through. Try again when you are online."

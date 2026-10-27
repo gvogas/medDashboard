@@ -2,7 +2,8 @@
 // where it was dragged and how far it was zoomed, and kept small enough to sync as a
 // data: URL (WebP when the browser can write it, else PNG, smaller until it fits).
 
-const STICKER_MAX = 90_000;   /* characters; worker/validate.js holds the same line */
+import { STICKER_MAX } from './shared.ts';
+
 const EDGE = 0.07;            /* the white edge, as a share of the size */
 
 /** Where the picture sits in the circle: x, y from -1 to 1, zoom from 1. */

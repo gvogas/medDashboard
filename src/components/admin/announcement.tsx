@@ -4,6 +4,7 @@
 
 import { useId, useState } from "react"
 import { api } from "@/core/api"
+import { MESSAGE_MAX } from "@/core/shared"
 import type { Announcement } from "@/core/types"
 import { toast } from "@/data/toast"
 import { Panel, Empty } from "@/components/views/bits"
@@ -11,7 +12,6 @@ import { Button, Label, Note, Select, TextArea } from "@/components/sheet/fields
 import { problem, useLoad, when } from "./use-admin"
 
 const LASTS: [string, number][] = [["1 hour", 1], ["6 hours", 6], ["1 day", 24], ["3 days", 72], ["1 week", 168], ["30 days", 720]]
-const MAX = 280
 
 export function AnnouncementTab() {
     const id = useId()
@@ -49,8 +49,8 @@ export function AnnouncementTab() {
                 }}>
                     <div className="grid gap-1">
                         <Label htmlFor={id + "t"}>Message</Label>
-                        <TextArea id={id + "t"} value={text} onChange={(e) => setText(e.target.value)} maxLength={MAX} rows={3} placeholder="e.g. Term will be down for maintenance tonight from 9 to 10 pm." />
-                        <Note>{text.length} / {MAX}</Note>
+                        <TextArea id={id + "t"} value={text} onChange={(e) => setText(e.target.value)} maxLength={MESSAGE_MAX} rows={3} placeholder="e.g. Term will be down for maintenance tonight from 9 to 10 pm." />
+                        <Note>{text.length} / {MESSAGE_MAX}</Note>
                     </div>
                     <div className="flex flex-wrap items-end gap-3">
                         <div className="grid gap-1">

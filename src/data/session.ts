@@ -13,7 +13,7 @@ import { forgetReads, keepReadsFor } from "./ai-cache"
 import { resetFriends } from "./friends"
 import { resetRoom } from "./room"
 import { resetRecords } from "./record"
-import { toast } from "./toast"
+import { toast, TOAST_LONG_MS } from "./toast"
 import { applyCoat } from "./settings"
 import { openSettings } from "./actions"
 import { showApp, showSignInState } from "./signin"
@@ -123,7 +123,7 @@ export async function signOut({ everywhere = false, force = false }: { everywher
     catch {
         sync.init()
         spotify.start()
-        toast("Sign-out failed. Check your connection and try again.", { error: true, ms: 8000 })
+        toast("Sign-out failed. Check your connection and try again.", { error: true, ms: TOAST_LONG_MS })
         return
     }
     await sync.drain()

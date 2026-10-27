@@ -6,6 +6,7 @@ import { diffDays, today, parse, addDays, iso } from './dates.ts';
 import { MAX_CATEGORIES, MAX_DROP } from './grades.ts';
 import type { GradeCategory } from './grades.ts';
 import type { Achievement, ChecklistEntry, Course, Flow, Item, ItemType, Mark, Meeting, Quote, SpacePref, StepKind, StudyPrefs, StudySession, TypePref } from './types.ts';
+import { CHECKLIST_MAX, MEETINGS_MAX } from './shared.ts';
 
 /** How a type looks: its name, its plural and its colour. */
 export interface TypeMeta { label: string; plural: string; color: string }
@@ -259,7 +260,7 @@ export function normalizeItem(raw: RawItem): Item {
     grade: typeof raw.grade === 'number' ? raw.grade : null,
     weight: typeof raw.weight === 'number' ? raw.weight : null,
     notes: cut(raw.notes, 5000),
-    checklist: Array.isArray(raw.checklist) ? raw.checklist.slice(0, 50).map((c) => ({ id: c.id || uid(), text: cut(c.text, 140), done: !!c.done })) : [],
+    checklist: Array.isArray(raw.checklist) ? raw.checklist.slice(0, CHECKLIST_MAX).map((c) => ({ id: c.id || uid(), text: cut(c.text, 140), done: !!c.done })) : [],
     links: Array.isArray(raw.links)
       ? raw.links.filter((l): l is { label?: unknown; url: string } => !!l && httpUrl(l.url)).slice(0, 20).map((l) => ({ label: cut(l.label, 60), url: l.url }))
       : [],
@@ -289,7 +290,7 @@ export function normalizeCourse(raw: RawCourse, index = 0): Course {
     archived: !!raw.archived,
     target: isInt(raw.target) && raw.target >= 1 && raw.target <= 100 ? raw.target : null,
     meetings: Array.isArray(raw.meetings)
-      ? raw.meetings.slice(0, 12).map((m) => {
+      ? raw.meetings.slice(0, MEETINGS_MAX).map((m) => {
           const start = m.start || '09:00';
           return {
             id: m.id || uid(),
@@ -406,7 +407,7 @@ export function normalizeAchievement(raw: Raw<Achievement>): Achievement {
 }
 
 const checklistOf = (raw: unknown): ChecklistEntry[] => Array.isArray(raw)
-  ? raw.slice(0, 50).map((c: { id?: unknown; text?: unknown; done?: unknown }) => ({ id: typeof c?.id === 'string' && c.id ? c.id : uid(), text: cut(c?.text, 140), done: !!c?.done }))
+  ? raw.slice(0, CHECKLIST_MAX).map((c: { id?: unknown; text?: unknown; done?: unknown }) => ({ id: typeof c?.id === 'string' && c.id ? c.id : uid(), text: cut(c?.text, 140), done: !!c?.done }))
   : [];
 
 /** Your mark as stored or received: its id is '<space id>:<item id>', split at the first ':'. */

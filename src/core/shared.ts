@@ -25,6 +25,19 @@ export function stable(v: unknown): string {
 /** What each field of a mark holds before you touch the item: what a first write merges against. */
 export const MARK_DEFAULTS: Record<string, unknown> = { status: 'todo', grade: null, weight: null, notes: '', checklist: [], completedAt: null, hidden: false }
 
+/* Limits the Worker holds every write to (worker/validate.js, projects.js, admin.js,
+   maintenance.js) and the client keeps to before it asks. */
+/** Characters in a sticker's data: URL. */
+export const STICKER_MAX = 90_000
+/** Characters in an announcement or a maintenance message. */
+export const MESSAGE_MAX = 280
+/** Tasks in one project. */
+export const TASK_LIMIT = 200
+/** Steps in an item's checklist. */
+export const CHECKLIST_MAX = 50
+/** Meetings in a course's week. */
+export const MEETINGS_MAX = 12
+
 /** The most the inbox's unread count says (spec §12): the Worker counts no higher, the bell reads it as "99+". */
 export const UNREAD_CAP = 99
 

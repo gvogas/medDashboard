@@ -14,11 +14,12 @@ import * as run from "./run"
 import { toast } from "./toast"
 import { openRecord } from "./record"
 import type { Flow, RoomRun, RoomView } from "./types"
+import { MINUTE_MS } from "@/lib/time"
 
 export const VISIBLE_MS = 5_000
 export const HIDDEN_MS = 30_000
 /** No poll for this long and the server takes you out (worker/rooms.js GONE_MS). */
-const GONE_MS = 10 * 60_000
+const GONE_MS = 10 * MINUTE_MS
 /** Friends one room can invite at a time: the room holds 8, you included. */
 export const ROOM_INVITES = 7
 
@@ -247,7 +248,7 @@ export async function setRoomPick(courseId: string, itemId: string | null, cours
 /** Minutes so far for someone in the room, from the record on this device's clock. */
 export function memberMinutes(m: RoomView["members"][number], clock: RoomRun, now = Date.now()): number {
     const studied = run.roomStudyMs({ ...clock, room: { id: "", joinedAt: 0, joinedStudyMs: m.joinedStudyMs, earlierMs: m.earlierMs } }, m.state === "in" ? now : (m.leftAt ?? now))
-    return Math.floor((m.state === "in" ? studied : m.earlierMs) / 60_000)
+    return Math.floor((m.state === "in" ? studied : m.earlierMs) / MINUTE_MS)
 }
 
 /** The record on this device's clock, for drawing. */

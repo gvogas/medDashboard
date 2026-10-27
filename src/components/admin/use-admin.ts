@@ -4,6 +4,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react"
 import { ApiError } from "@/core/api"
+import { MESSAGE_MAX } from "@/core/shared"
 
 export interface Loaded<T> { data: T | null; error: string | null; loading: boolean; reload: () => Promise<void> }
 
@@ -43,9 +44,9 @@ const FIELDS: Record<string, string> = {
     username: "Usernames are 3 to 32 letters, digits, dots, dashes or underscores.",
     password: "Passwords are 8 to 200 characters.",
     confirm: "Type the username exactly to confirm.",
-    text: "Write a message of up to 280 characters.",
+    text: `Write a message of up to ${MESSAGE_MAX} characters.`,
     until: "Pick an end within the next 30 days.",
-    message: "Write a message of up to 280 characters.",
+    message: `Write a message of up to ${MESSAGE_MAX} characters.`,
     features: "Reload the page: this app doesn't know one of those features.",
 }
 

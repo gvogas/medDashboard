@@ -37,6 +37,7 @@ import { ICONS } from "./prop-icons"
 import { Checklist, Links } from "./item-parts"
 import { ShareItem } from "./share-item"
 import { WeightProp } from "./grade-setup"
+import { CHECKLIST_MAX } from "@/core/shared"
 
 /** Fields saved once typing pauses; the rest save at once. */
 const TYPED: ItemField[] = ["title", "notes", "where", "dept", "checklist"]
@@ -256,8 +257,8 @@ export function ItemSheet({ id, draft }: { id?: string; draft?: Item }) {
                             const r = fillTopics({ ...it, courseId: itemCourseKey(it) }, c, keyedItems(items), termStart(), schoolCal())
                             if (r.added) void editNow(it.id, { checklist: r.checklist })
                             setFillNote(r.added
-                                ? "Added " + r.added + " lecture" + (r.added === 1 ? "" : "s") + "." + (r.left ? " " + r.left + " more did not fit under the 50-step limit." : "")
-                                : r.left ? "The list is full: 50 steps is the most an item can hold." : "Every lecture before this " + m.label.toLowerCase() + " is already listed.")
+                                ? "Added " + r.added + " lecture" + (r.added === 1 ? "" : "s") + "." + (r.left ? " " + r.left + " more did not fit under the " + CHECKLIST_MAX + "-step limit." : "")
+                                : r.left ? "The list is full: " + CHECKLIST_MAX + " steps is the most an item can hold." : "Every lecture before this " + m.label.toLowerCase() + " is already listed.")
                         } : null}
                         fillNote={fillNote}
                     />
