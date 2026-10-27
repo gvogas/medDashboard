@@ -14,9 +14,9 @@ const HOURLY = '0 * * * *';   /* the digests' schedule in wrangler.jsonc */
 const NIGHTLY = '0 3 * * *';  /* the purge's: any other schedule runs nothing, so a changed cron can't purge hourly */
 
 export default {
-  async fetch(request, env) {
+  async fetch(request, env, ctx) {
     const url = new URL(request.url);
-    if (url.pathname === '/api' || url.pathname.startsWith('/api/')) return handleApi(request, env, url);
+    if (url.pathname === '/api' || url.pathname.startsWith('/api/')) return handleApi(request, env, url, ctx);
     return env.ASSETS.fetch(request);
   },
 

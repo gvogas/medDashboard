@@ -312,6 +312,19 @@ describe('every kind of error', () => {
     await env.DB.prepare('DELETE FROM error_log WHERE at < ?').bind(day + 24 * 60 * 60 * 1000).run();
   });
 
+  it('does not count again once a kind has reached its cap for the day', async () => {
+    const day = Date.UTC(2020, 5, 1, 12);
+    await env.DB.prepare("INSERT INTO error_log (at, method, status, message) SELECT ?, 'GET', 404, 'flood' FROM (WITH RECURSIVE n(i) AS (SELECT 1 UNION ALL SELECT i + 1 FROM n WHERE i < ?) SELECT i FROM n)")
+      .bind(day, CAPS.request).run();
+    await logError(env.DB, { method: 'GET', route: '/full/1', status: 404, message: 'x', userId: 'u-x' }, day + 1000);
+    const prepared = [];
+    const spy = { prepare: (sql) => { prepared.push(sql); return env.DB.prepare(sql); } };
+    await logError(spy, { method: 'GET', route: '/full/2', status: 404, message: 'x', userId: 'u-x' }, day + 2000);
+    expect(prepared).toEqual([]);
+    expect((await rows('/full/2')).length).toBe(0);
+    await env.DB.prepare('DELETE FROM error_log WHERE at < ?').bind(day + 24 * 60 * 60 * 1000).run();
+  });
+
   it('keeps room for signed-in people when strangers send a flood', async () => {
     const day = Date.UTC(2020, 2, 1, 12);
     await env.DB.prepare("INSERT INTO error_log (at, method, status, message) SELECT ?, 'GET', 404, 'flood' FROM (WITH RECURSIVE n(i) AS (SELECT 1 UNION ALL SELECT i + 1 FROM n WHERE i < ?) SELECT i FROM n)")
