@@ -36,7 +36,7 @@ export function previewImport(text: string, name = ""): string {
     let events
     try { events = isIcs ? parseIcs(text) : parseCsv(text) } catch { return "That file could not be read." }
     if (!events.length) return isIcs ? "No events were found in that calendar." : "No rows were found. The first line must be a header such as type,course,title,date,start,end,room,weight."
-    const plan = planImport(events, data, isIcs ? "ics" : "csv") as ImportPlan
+    const plan = planImport(events, data) as ImportPlan
     if (!plan.courses.length && !plan.items.length) return "Nothing in that file could be imported." + (plan.notes[0] ? " " + plan.notes[0] : "")
     openSheet({ kind: "import", plan, name })
     return ""
