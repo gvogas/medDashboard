@@ -241,9 +241,10 @@ export function buildCalendar({ courses, items, termStart = null, school = null,
       if (!m || !Number.isInteger(m.weekday) || !/^\d\d:\d\d$/.test(m.start || '') || !/^\d\d:\d\d$/.test(m.end || '')) continue;
       if (school) { lines.push(...schoolClasses(c, m, school, stamp)); continue; }
       const day = onOrAfter(from, m.weekday);
+      if (until(m) && day > m.until) continue;
       lines.push('BEGIN:VEVENT', 'UID:class-' + c.id + '-' + bare(m.id) + '@rounds', 'DTSTAMP:' + stamp,
         ...when(day, m.start, m.end),
-        'RRULE:FREQ=WEEKLY;BYDAY=' + DAYS[m.weekday],
+        'RRULE:FREQ=WEEKLY;BYDAY=' + DAYS[m.weekday] + (until(m) ? ';UNTIL=' + compact(m.until) + 'T235959' : ''),
         'SUMMARY:' + text(c.code + ' ' + (m.kind || 'Class')),
         'CATEGORIES:Class');
       if (m.room) lines.push('LOCATION:' + text(m.room));
@@ -269,22 +270,27 @@ function schoolClasses(c, m, school, stamp) {
   const only = courseTerm(school, c.term);
   for (const term of school.terms) {
     if (only && term !== only) continue;
+    /* the class's own last day cuts the term short */
+    const last = until(m) && m.until < term.end ? m.until : term.end;
     const first = onOrAfter(term.start, m.weekday), id = 'class-' + c.id + '-' + bare(m.id) + '-' + term.start;
-    if (first <= term.end) {
+    if (first <= last) {
       const skip = [];
-      for (let d = first; d <= term.end; d = addDays(d, 7)) if (classWeekday(school, d) !== m.weekday) skip.push(d);
-      event(id, first, ['RRULE:FREQ=WEEKLY;BYDAY=' + DAYS[m.weekday] + ';UNTIL=' + compact(term.end) + 'T235959',
+      for (let d = first; d <= last; d = addDays(d, 7)) if (classWeekday(school, d) !== m.weekday) skip.push(d);
+      event(id, first, ['RRULE:FREQ=WEEKLY;BYDAY=' + DAYS[m.weekday] + ';UNTIL=' + compact(last) + 'T235959',
         ...(skip.length ? ['EXDATE:' + skip.map(at).join(',')] : [])]);
     }
     for (const d of school.days) {
       if (d.kind !== 'swap' || d.follows !== m.weekday) continue;
       for (let day = d.from; day <= d.to; day = addDays(day, 1)) {
-        if (weekdayOf(day) !== m.weekday && dayInfo(school, day).kind === 'swap' && day >= term.start && day <= term.end) event(id + '-' + day, day, []);
+        if (weekdayOf(day) !== m.weekday && dayInfo(school, day).kind === 'swap' && day >= term.start && day <= last) event(id + '-' + day, day, []);
       }
     }
   }
   return out;
 }
+
+/** A meeting's last day, if it has a real one. */
+const until = (m) => typeof m.until === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(m.until);
 
 /** DTSTART/DTEND: timed and floating, or a whole day. A timed item with no end lasts an hour. */
 function when(day, start, end) {

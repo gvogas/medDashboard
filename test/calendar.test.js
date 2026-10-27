@@ -67,6 +67,14 @@ describe('the .ics file', () => {
     expect(buildCalendar({ courses: [{ ...course, archived: 1 }], items: [] })).not.toContain('BEGIN:VEVENT');
   });
 
+  it("ends a class's weekly rule on its last day, and leaves out one that ended before it began", () => {
+    const meet = (until) => ({ ...course, meetings: JSON.stringify([{ id: 'm1', kind: 'Lecture', weekday: 1, start: '09:00', end: '10:30', room: '', until }]) });
+    const [cls] = events(buildCalendar({ courses: [meet('2026-11-16')], items: [], termStart: '2026-09-02' }));
+    expect(cls).toContain('RRULE:FREQ=WEEKLY;BYDAY=MO;UNTIL=20261116T235959');
+    expect(buildCalendar({ courses: [meet('2026-09-01')], items: [], termStart: '2026-09-02' })).not.toContain('BEGIN:VEVENT');
+    expect(events(buildCalendar({ courses: [meet('')], items: [], termStart: '2026-09-02' }))[0]).not.toContain('UNTIL');
+  });
+
   it('uses the names of the person\'s own types and adds a time zone only when given', () => {
     const ics = buildCalendar({ courses: [], items: [item({ type: 'c-osce', course_id: null })], types: [{ id: 'c-osce', label: 'OSCE' }], tz: 'America/Toronto' });
     expect(ics).toContain('CATEGORIES:OSCE');

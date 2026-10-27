@@ -431,6 +431,19 @@ describe("the course sheet", () => {
         expect(fake.data.courses[0]).toHaveProperty("meetings.length", 2)
     })
 
+    it("sets a class's last day, and clearing it takes the end away", async () => {
+        show()
+        open({ kind: "course", id: "anat" })
+        fireEvent.change(screen.getByLabelText("Last day"), { target: { value: "2026-11-18" } })
+        await act(async () => fireEvent.click(screen.getByRole("button", { name: "Save course" })))
+        expect(fake.data.courses[0]).toHaveProperty("meetings.0.until", "2026-11-18")
+        open({ kind: "course", id: "anat" })
+        expect((screen.getByLabelText("Last day") as HTMLInputElement).value).toBe("2026-11-18")
+        fireEvent.change(screen.getByLabelText("Last day"), { target: { value: "" } })
+        await act(async () => fireEvent.click(screen.getByRole("button", { name: "Save course" })))
+        expect(fake.data.courses[0]).not.toHaveProperty("meetings.0.until")
+    })
+
     it("asks before throwing changes away; asked, Escape discards", () => {
         show()
         open({ kind: "course", id: "anat" })

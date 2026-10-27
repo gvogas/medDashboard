@@ -16,7 +16,7 @@ import { commitSchedule, plural, scheduleCount, semesterChanges } from "@/data/s
 import { closeSheet, openSheet } from "@/data/overlay"
 import type { ImportPlan } from "@/data/import-edit"
 import { accent } from "@/components/views/bits"
-import { Button, QUIET, Segmented, Select, SheetBody, SheetFoot, SheetHead, TextInput, Warning } from "./fields"
+import { Button, DateInput, QUIET, Segmented, Select, SheetBody, SheetFoot, SheetHead, TextInput, Warning } from "./fields"
 import { TimeField } from "./time-field"
 
 /** "Fall 2026: 8 Sep – 18 Dec · Winter 2027: 11 Jan – 23 Apr · Both semesters: all year." */
@@ -121,6 +121,7 @@ const WEEK = [1, 2, 3, 4, 5, 6, 0]
 function ClassRow({ code, m, redraw }: { code: string; m: PlanMeeting; redraw: () => void }) {
     const what = code + " " + m.kind + " " + DOW[m.weekday] + " " + m.start
     const set = (patch: Partial<PlanMeeting>) => { Object.assign(m, patch); redraw() }
+    const setUntil = (until: string) => { if (until) m.until = until; else delete m.until; redraw() }
     return (
         <div role="group" aria-label={what} className={cn(ROW, !m.include && "opacity-50")}>
             <input type="checkbox" checked={m.include} aria-label={"Add " + what}
@@ -137,9 +138,13 @@ function ClassRow({ code, m, redraw }: { code: string; m: PlanMeeting; redraw: (
                 <TimeField label={"End of " + what} value={m.end} onChange={(end) => set({ end })} className={cn(QUIET, "h-8 w-[62px] px-1 text-[12.5px]")} />
             </span>
             <TextInput aria-label={"Room of " + what} value={m.room} maxLength={40} onChange={(e) => set({ room: e.target.value })} placeholder="Room" className={cn(QUIET, "h-8 min-w-0 px-1.5 py-0 text-[13px]")} />
+            <label className="col-span-full flex items-center gap-1.5 pl-[26px] text-[12px] text-muted-foreground">
+                Ends
+                <DateInput aria-label={"Last day of " + what} value={m.until ?? ""} onChange={(e) => setUntil(e.target.value)} className={cn(QUIET, "h-8 w-auto px-1.5 py-0 text-[12.5px]")} />
+            </label>
         </div>
     )
 }
 
 /* tick · kind · day · times · room; at phone width the room goes under the rest */
-const ROW = "grid min-h-9 grid-cols-[18px_96px_64px_auto_minmax(0,1fr)] items-center gap-1.5 rounded-md px-1 text-[13px] text-foreground hover:bg-muted max-[520px]:grid-cols-[18px_minmax(0,1fr)_64px_auto] max-[520px]:[&>input:last-child]:col-start-2 max-[520px]:[&>input:last-child]:col-span-3"
+const ROW = "grid min-h-9 grid-cols-[18px_96px_64px_auto_minmax(0,1fr)] items-center gap-1.5 rounded-md px-1 text-[13px] text-foreground hover:bg-muted max-[520px]:grid-cols-[18px_minmax(0,1fr)_64px_auto] max-[520px]:[&>input:nth-last-child(2)]:col-start-2 max-[520px]:[&>input:nth-last-child(2)]:col-span-3"

@@ -42,7 +42,8 @@ export interface Item extends Synced {
     category?: string | null
 }
 
-export interface Meeting { id: string; kind: string; weekday: number; start: string; end: string; room: string }
+/** `until`: the last day the class meets, YYYY-MM-DD, inclusive; absent or '' is no end. */
+export interface Meeting { id: string; kind: string; weekday: number; start: string; end: string; room: string; until?: string }
 
 export interface Course extends Synced {
     id: string

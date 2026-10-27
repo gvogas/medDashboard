@@ -16,6 +16,12 @@ export const newCourse = (count: number): Course =>
 /** A class to add: a lecture, Monday 0900–1000. */
 export const newClass = (): Meeting => ({ id: uid(), kind: "Lecture", weekday: 1, start: "09:00", end: "10:00", room: "" })
 
+/** A class with a change applied; an emptied `until` leaves the key off, so the class has no end. */
+export function changeClass(m: Meeting, change: Partial<Meeting>): Meeting {
+    const { until, ...rest } = { ...m, ...change }
+    return until ? { ...rest, until } : rest
+}
+
 /** The draft holds edits not yet saved: it differs from the stored course, or, new, has anything in it. */
 export function courseChanged(draft: Course, stored: Course | null): boolean {
     if (!stored) return !!(draft.name.trim() || draft.code.trim() || (draft.instructor || "").trim() || (draft.meetings || []).length)

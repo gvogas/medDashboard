@@ -399,14 +399,23 @@ describe('planImport: how a weekly class ends', () => {
     expect(p.notes).toEqual(['Skipped ANAT101 Lecture: it repeats every 2 weeks, and classes can only repeat weekly.']);
   });
 
-  it('keeps a series that ends as a weekly class and says it has no end date', () => {
+  it('keeps a series that ends as a weekly class with its last day, and no note', () => {
     const p = plan('FREQ=WEEKLY;BYDAY=MO;COUNT=10');
     expect(p.courses[0].meetings).toHaveLength(1);
-    expect(p.notes).toHaveLength(1);
-    expect(p.notes[0]).toContain('ANAT101 Lecture ends 2026-11-16');
+    expect(p.courses[0].meetings[0].until).toBe('2026-11-16');
+    expect(p.notes).toEqual([]);
+    expect(plan('FREQ=WEEKLY;BYDAY=MO;UNTIL=20261207T235959').courses[0].meetings[0].until).toBe('2026-12-07');
   });
 
-  it('adds no note for a series without an end', () => {
-    expect(plan('FREQ=WEEKLY;BYDAY=MO').notes).toEqual([]);
+  it('leaves until off a series without an end', () => {
+    const p = plan('FREQ=WEEKLY;BYDAY=MO');
+    expect(p.notes).toEqual([]);
+    expect('until' in p.courses[0].meetings[0]).toBe(false);
+  });
+
+  it('counts a class already there as the same even when its last day differs', () => {
+    const had = { id: 'x', code: 'ANAT101', name: 'Anatomy', color: '#E4749B', meetings: [{ id: 'm', kind: 'Lecture', weekday: 1, start: '09:00', end: '10:00', room: '' }] };
+    const p = planImport(parseIcs(ics('FREQ=WEEKLY;BYDAY=MO;COUNT=10')), { courses: [had], items: [] });
+    expect(p.courses.flatMap((c) => c.meetings)).toEqual([]);
   });
 });

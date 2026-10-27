@@ -3,7 +3,7 @@
 // Nothing here writes; the import sheet saves the ticked rows after the preview.
 //
 // plan = {
-//   courses: [{ id, code, name, color, isNew, meetings: [{ id, kind, weekday, start, end, room, include }] }],
+//   courses: [{ id, code, name, color, isNew, meetings: [{ id, kind, weekday, start, end, room, until?, include }] }],
 //   items:   [{ include, duplicate, row }],       row is ready for normalizeItem()
 //   notes:   ['…'],                               what was trimmed or dropped, and why
 // }
@@ -52,7 +52,7 @@ export interface Schedule {
 }
 
 /* A class or a single item on its way into the plan. */
-interface PlanClass { code: string; name: string; title: string; weekdays: number[]; start: string; end: string; room?: string; kind: string }
+interface PlanClass { code: string; name: string; title: string; weekdays: number[]; start: string; end: string; room?: string; kind: string; until: string }
 interface PlanSingle { code: string; name?: string; explicit: boolean; title: string; date: string; start: string; end: string; room?: string; weight: number | null; type: string }
 
 const ITEM_TYPES = Object.keys(TYPES);
@@ -114,13 +114,12 @@ export function planImport(events: (IcsEvent | ImportRow)[], data: PlanData): Pl
   };
 
   const classes: PlanClass[] = [], singles: PlanSingle[] = [];
-  const endings = new Map<string, string>();   /* a series with an UNTIL or COUNT: classes have no end date, so say so */
   /* each event is a CSV or outline row, or a calendar event (only it has a summary) */
   for (const ev of events) {
     if (!('summary' in ev)) {
       const t = ev.type;
       const weekday = Number.isInteger(ev.weekday) ? ev.weekday as number : ev.date ? parse(ev.date).getDay() : -1;
-      if (CLASS_TYPES[t] && weekday >= 0) classes.push({ code: clip(ev.course, 8).toUpperCase(), name: ev.courseName || ev.course, title: ev.title, weekdays: [weekday], start: ev.start, end: ev.end, room: ev.room, kind: KINDS.includes(ev.kind as string) ? ev.kind as string : t === 'class' ? guessKind(ev.title) : CLASS_TYPES[t] });
+      if (CLASS_TYPES[t] && weekday >= 0) classes.push({ code: clip(ev.course, 8).toUpperCase(), name: ev.courseName || ev.course, title: ev.title, weekdays: [weekday], start: ev.start, end: ev.end, room: ev.room, kind: KINDS.includes(ev.kind as string) ? ev.kind as string : t === 'class' ? guessKind(ev.title) : CLASS_TYPES[t], until: '' });
       else if (ev.title && ev.date) singles.push({ code: clip(ev.course, 8).toUpperCase(), name: ev.courseName, explicit: !!ev.course, title: ev.title, date: ev.date, start: ev.start, end: ev.end, room: ev.room, weight: ev.weight, type: ITEM_TYPES.includes(t) ? t : guessType(ev.title) });
       else notes.push('Skipped a row without a title or a readable date.');
     } else if (ev.weekly) {
@@ -128,21 +127,18 @@ export function planImport(events: (IcsEvent | ImportRow)[], data: PlanData): Pl
       const rest = ev.summary.trim().slice(code.length).trim();
       /* a class is weekly with no end date, so every 2 weeks cannot be said: skipped, not made weekly */
       if (ev.interval > 1) { notes.push('Skipped ' + clip(ev.summary, 60) + ': it repeats every ' + ev.interval + ' weeks, and classes can only repeat weekly.'); continue; }
-      if (ev.until) endings.set(code + '|' + ev.until, clip(ev.summary, 60) + ' ends ' + ev.until);
-      classes.push({ code, name: rest || ev.summary, title: ev.summary, weekdays: ev.weekdays, start: ev.start, end: ev.end, room: ev.location, kind: guessKind(ev.summary) });
+      classes.push({ code, name: rest || ev.summary, title: ev.summary, weekdays: ev.weekdays, start: ev.start, end: ev.end, room: ev.location, kind: guessKind(ev.summary), until: ev.until });
     } else {
       singles.push({ code: codeToken(ev.summary), explicit: false, title: ev.summary, date: ev.date, start: ev.start, end: ev.end, room: ev.location, weight: null, type: guessType(ev.summary) });
     }
   }
-
-  if (endings.size) notes.push('Classes repeat every week with no end date, so these carry on past their last day in the calendar (delete them then): ' + [...endings.values()].join('; ') + '.');
 
   for (const cl of classes) {
     if (!cl.code) { notes.push('Skipped a class with no course code: ' + clip(cl.title, 60) + '.'); continue; }
     if (!cl.start) { notes.push('Skipped a class with no start time: ' + clip(cl.title, 60) + '.'); continue; }
     const pc = findCourse(cl.code) || proposeCourse(cl.code, cl.name);
     for (const weekday of cl.weekdays) {
-      /* as saved, so a class already imported without an end is known again */
+      /* as saved, so a class already imported without an end is known again; a different last day is still the same class */
       const end = classEnd(cl.start, cl.end);
       const same = (m: Meeting) => m.weekday === weekday && m.start === cl.start && m.end === end;
       if (pc.existing!.some(same) || pc.meetings.some(same)) continue;
@@ -150,7 +146,7 @@ export function planImport(events: (IcsEvent | ImportRow)[], data: PlanData): Pl
         notes.push(pc.code + ' already has ' + MEETINGS_MAX + ' classes; dropped ' + DOW[weekday] + ' ' + cl.start + '.');
         continue;
       }
-      pc.meetings.push({ id: uid(), kind: KINDS.includes(cl.kind) ? cl.kind : 'Lecture', weekday, start: cl.start, end, room: clip(cl.room, 40), include: true });
+      pc.meetings.push({ id: uid(), kind: KINDS.includes(cl.kind) ? cl.kind : 'Lecture', weekday, start: cl.start, end, room: clip(cl.room, 40), ...(cl.until ? { until: cl.until } : {}), include: true });
     }
   }
 
