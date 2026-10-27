@@ -18,7 +18,7 @@ import { DAY_MS } from './time.js';
 import { MESSAGE_MAX } from '../src/core/shared.ts';
 
 /* The newest file in migrations/; a test keeps it in step. */
-export const LATEST_MIGRATION = '0003_presence.sql';
+export const LATEST_MIGRATION = '0004_space_indexes.sql';
 const AUDIT_KEEP_MS = 90 * DAY_MS;
 export const MIN_PASSWORD = 8;
 const MAX_PASSWORD = 200;

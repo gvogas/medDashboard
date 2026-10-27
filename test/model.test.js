@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { normalizeItem, normalizeCourse, normalizeAchievement, shiftEnd, typeList } from '../src/core/model.ts';
+import { normalizeItem, normalizeCourse, normalizeAchievement, shiftEnd, typeList, isOpen, isComplete } from '../src/core/model.ts';
+import { ago } from '../src/core/dates.ts';
 import { validateItem, validateCourse } from '../worker/validate.js';
 
 describe('normalizeItem keeps times and dates the server accepts', () => {
@@ -67,6 +68,25 @@ describe('rows from storage or the network are made safe', () => {
   it('reads a course code that is not text as none, rather than failing every reload', () => {
     expect(normalizeCourse({ code: 12345 }).code).toBe('');
     expect(normalizeCourse({ code: 'PHARM1010' }).code).toBe('PHARM101');
+  });
+  it('drops a null step or class rather than failing every reload', () => {
+    expect(normalizeItem({ date: '2026-09-24', checklist: [null, { text: 'Read ch. 3' }] }).checklist.map((c) => c.text)).toEqual(['', 'Read ch. 3']);
+    expect(normalizeCourse({ meetings: [null, { weekday: 2, start: '10:00' }] }).meetings).toHaveLength(1);
+  });
+  it('takes no built-in object key for a type or a status', () => {
+    expect(normalizeItem({ date: '2026-09-24', type: 'constructor' }).type).toBe('task');
+    expect(isOpen({ status: 'constructor' })).toBe(true);
+    expect(isComplete({ status: 'toString' })).toBe(false);
+  });
+});
+
+describe('ago', () => {
+  const now = Date.UTC(2026, 9, 27, 12);
+  it('says whole units, one day in the singular', () => {
+    expect(ago(now - 3599_000, now)).toBe('59 min ago');
+    expect(ago(now - 86399_000, now)).toBe('23 h ago');
+    expect(ago(now - 86400_000, now)).toBe('1 day ago');
+    expect(ago(now - 3 * 86400_000, now)).toBe('3 days ago');
   });
 });
 

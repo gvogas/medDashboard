@@ -150,8 +150,8 @@ async function finish() {
     releaseScreen()
     fullscreen(false)
     // Another tab of this device may have logged this run already.
-    const stored = await store.meta.get(KEY) as StoredRun | null | undefined
     try {
+        const stored = await store.meta.get(KEY) as StoredRun | null | undefined
         if (stored?.id === ended.id) {
             /* a solo run's clock as kept: another tab of this device may have paused or skipped it since this one read it */
             const clock = ended.room ? ended : { ...ended, ...pick(stored) }
