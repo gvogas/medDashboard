@@ -7,33 +7,24 @@ import { cn } from "@/lib/utils"
 import { duration } from "@/lib/time"
 import { closeSheet } from "@/data/overlay"
 import { useUi } from "@/data/ui"
-import { useMaintenance } from "@/data/maintenance"
 import { friendsStale, loadFriends, useFriends } from "@/data/friends"
 import { ROOM_INVITES } from "@/data/room"
 import {
     flowTotals, pickCourse, pickItem, presetsFor, sameFlow, startRoomRun, useFlow, useRun, useStudyPick,
 } from "@/data/study-timer"
-import { MaintenancePage } from "@/components/maintenance"
+import { MaintenanceBar } from "@/components/maintenance"
 import { Avatar } from "@/components/study/friends"
 import type { Flow } from "@/data/types"
 import { Button, Note, Section, Select, SheetBody, SheetFoot, SheetHead } from "./fields"
+import { ClassesGate } from "./gate"
 
 export function TogetherSheet({ invite }: { invite: string[] }) {
-    const maintenance = useMaintenance("friends")
-    if (maintenance === "blocked") {
-        return (
-            <>
-                <SheetHead kind="Study together" onClose={closeSheet} />
-                <SheetBody><MaintenancePage feature="friends" inSheet /></SheetBody>
-            </>
-        )
-    }
-    return <Together initial={invite} />
+    return <ClassesGate kind="Study together" feature="friends">{(bar) => <Together initial={invite} bar={bar} />}</ClassesGate>
 }
 
 const CHIP = "hit cursor-pointer rounded-full border px-[11px] py-1 font-[inherit] text-[12px] font-semibold outline-none focus-visible:shadow-[0_0_0_2px_var(--accent)]"
 
-function Together({ initial }: { initial: string[] }) {
+function Together({ initial, bar }: { initial: string[]; bar: boolean }) {
     const own = useFlow()
     const bg = useUi((u) => u.bg)
     const presets = presetsFor(bg)
@@ -66,6 +57,7 @@ function Together({ initial }: { initial: string[] }) {
         <>
             <SheetHead kind="Study together" onClose={closeSheet} />
             <SheetBody>
+                {bar && <MaintenanceBar className="mb-0" />}
                 <p className="m-0 text-[12.5px] leading-[1.5] text-ink-2">
                     One shared timer. You're the host: Pause, Skip and End act for everyone. Each person's minutes go into their own sessions.
                 </p>
