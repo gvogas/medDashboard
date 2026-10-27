@@ -156,9 +156,9 @@ function AccountTable({ accounts, me, onChanged }: { accounts: Account[]; me: st
                                 <td className="py-2 pl-3 pr-5">
                                     <div className="flex flex-wrap justify-end gap-1">
                                         <Small onClick={() => setOpen(open?.id === a.id && open.kind === "password" ? null : { id: a.id, kind: "password" })} aria-expanded={open?.id === a.id && open.kind === "password"}>New password</Small>
-                                        <Small disabled={busy === a.id + "r"} onClick={() => void run(a.id + "r", () => api.admin.revoke(a.id), a.username + " is signed out everywhere.")}>Sign out</Small>
+                                        <Small disabled={busy === a.id + "r"} onClick={() => void run(a.id + "r", () => api.admin.revoke(a.id), a.username + " is signed out everywhere.")} aria-label={"Sign out " + a.username}>Sign out</Small>
                                         {!self && <Small disabled={busy === a.id + "a"} onClick={() => void run(a.id + "a", () => api.admin.setAdmin(a.id, !a.admin), a.admin ? a.username + " is no longer an admin." : a.username + " is now an admin.")}>{a.admin ? "Remove admin" : "Make admin"}</Small>}
-                                        {!self && <Small danger onClick={() => setOpen(open?.id === a.id && open.kind === "delete" ? null : { id: a.id, kind: "delete" })} aria-expanded={open?.id === a.id && open.kind === "delete"}>Delete</Small>}
+                                        {!self && <Small danger onClick={() => setOpen(open?.id === a.id && open.kind === "delete" ? null : { id: a.id, kind: "delete" })} aria-expanded={open?.id === a.id && open.kind === "delete"} aria-label={"Delete " + a.username}>Delete</Small>}
                                     </div>
                                 </td>
                             </tr>,

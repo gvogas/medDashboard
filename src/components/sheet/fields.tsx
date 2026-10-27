@@ -229,7 +229,7 @@ export function Segmented<T extends string>({ value, options, onChange, label, i
 export const Checkbox = ({ id, checked, onChange, children }: { id: string; checked: boolean; onChange: (on: boolean) => void; children: ReactNode }) => (
     <span className="flex items-center gap-1.5">
         <input id={id} type="checkbox" checked={checked} onChange={(e) => onChange(e.target.checked)} className="size-3.5 accent-[var(--accent)]" />
-        <span className="text-[11px] text-muted-foreground">{children}</span>
+        <label htmlFor={id} className="cursor-pointer text-[11px] text-muted-foreground">{children}</label>
     </span>
 )
 

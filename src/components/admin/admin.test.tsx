@@ -76,7 +76,10 @@ describe("the Admin page", () => {
         expect(screen.getByText("2.1 h")).toBeTruthy()
         expect(screen.getByText("Spotify, Leaderboard")).toBeTruthy()
         /* no delete or demote on your own row */
-        expect(screen.getAllByRole("button", { name: "Delete" })).toHaveLength(1)
+        expect(screen.getAllByRole("button", { name: /^Delete / })).toHaveLength(1)
+        /* each row button says whose it is */
+        expect(screen.getByRole("button", { name: "Delete sam" })).toBeTruthy()
+        expect(screen.getByRole("button", { name: "Sign out sam" })).toBeTruthy()
         expect(screen.getByRole("button", { name: "Unlock" })).toBeTruthy()
     })
 
@@ -121,7 +124,7 @@ describe("the Admin page", () => {
         admin.remove.mockResolvedValue(null)
         render(<AdminPage />)
         fireEvent.click(screen.getByRole("tab", { name: "Accounts" }))
-        fireEvent.click(await screen.findByRole("button", { name: "Delete" }))
+        fireEvent.click(await screen.findByRole("button", { name: "Delete sam" }))
         const go = screen.getByRole("button", { name: "Delete forever" }) as HTMLButtonElement
         expect(go.disabled).toBe(true)
         fireEvent.change(screen.getByLabelText(/to delete the account/), { target: { value: "sam" } })
