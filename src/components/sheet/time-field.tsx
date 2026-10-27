@@ -3,7 +3,7 @@
 // list of quarter hours; ↑/↓ nudge by fifteen minutes; Enter or Escape confirms. The
 // list is drawn on <body>: the sheet's slide would otherwise clip and offset it.
 
-import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from "react"
+import { useEffect, useId, useLayoutEffect, useRef, useState, type CSSProperties } from "react"
 import { createPortal } from "react-dom"
 import { cn } from "@/lib/utils"
 import { nearestSlot, parseTime, SLOTS, stepTime } from "@/lib/time"
@@ -19,6 +19,9 @@ export function TimeField({ value, onChange, id, label, className }: {
     const [open, setOpen] = useState(false)
     const [bad, setBad] = useState(false)
     const input = useRef<HTMLInputElement>(null)
+    const listId = useId()
+    const optionId = (t: string) => listId + "-" + t.replace(":", "")
+    const near = nearestSlot(text)
 
     /* the stored time changed from elsewhere (a sync, the start moving the end) */
     useEffect(() => { if (document.activeElement !== input.current) { setText(value); setBad(false) } }, [value])
@@ -45,6 +48,11 @@ export function TimeField({ value, onChange, id, label, className }: {
                 autoComplete="off"
                 placeholder="--:--"
                 aria-label={label}
+                role="combobox"
+                aria-autocomplete="none"
+                aria-expanded={open}
+                aria-controls={open ? listId : undefined}
+                aria-activedescendant={open && near ? optionId(near) : undefined}
                 aria-invalid={bad || undefined}
                 value={text}
                 onFocus={() => setOpen(true)}
@@ -63,15 +71,14 @@ export function TimeField({ value, onChange, id, label, className }: {
                 }}
                 className={cn(CONTROL, "w-[72px] flex-none text-center font-mono tabular-nums tracking-[.02em]", bad && "border-destructive text-destructive", className)}
             />
-            {open && input.current && createPortal(<Slots anchor={input.current} value={text} onPick={(v) => { commit(v); input.current?.blur() }} />, document.body)}
+            {open && input.current && createPortal(<Slots anchor={input.current} id={listId} near={near} optionId={optionId} onPick={(v) => { commit(v); input.current?.blur() }} />, document.body)}
         </>
     )
 }
 
-function Slots({ anchor, value, onPick }: { anchor: HTMLInputElement; value: string; onPick: (v: string) => void }) {
+function Slots({ anchor, id, near, optionId, onPick }: { anchor: HTMLInputElement; id: string; near: string | null; optionId: (t: string) => string; onPick: (v: string) => void }) {
     const list = useRef<HTMLDivElement>(null)
     const [place, setPlace] = useState<CSSProperties>({})
-    const near = nearestSlot(value)
 
     /* under the field, kept there as the sheet scrolls or the window resizes */
     useLayoutEffect(() => {
@@ -92,6 +99,7 @@ function Slots({ anchor, value, onPick }: { anchor: HTMLInputElement; value: str
     return (
         <div
             ref={list}
+            id={id}
             role="listbox"
             aria-label="Times"
             style={place}
@@ -101,6 +109,7 @@ function Slots({ anchor, value, onPick }: { anchor: HTMLInputElement; value: str
             {SLOTS.map((t) => (
                 <button
                     key={t}
+                    id={optionId(t)}
                     type="button"
                     role="option"
                     aria-selected={t === near}

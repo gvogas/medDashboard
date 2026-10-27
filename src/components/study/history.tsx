@@ -466,7 +466,8 @@ function HeatColumn({ week, tabbable, onPick, onFocusDay }: { week: HeatWeek; ta
                         onFocus={() => onFocusDay(d.date)}
                         onClick={() => onPick(d.date)}
                         className={cn(
-                            square, "cursor-pointer border-0", HEAT[d.level] ?? HEAT[0],
+                            /* the ::after grows the hit area to 24px (WCAG 2.5.8) without moving the 16px squares */
+                            square, "relative cursor-pointer border-0 after:absolute after:-inset-1 after:content-['']", HEAT[d.level] ?? HEAT[0],
                             "hover:shadow-[0_0_0_2px_var(--ink-3)] focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-[var(--accent)]",
                             d.isToday && "shadow-[0_0_0_2px_var(--ink)]",
                             d.picked && "shadow-[0_0_0_2px_var(--accent)]",

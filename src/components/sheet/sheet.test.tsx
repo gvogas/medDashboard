@@ -186,7 +186,7 @@ describe("the item sheet", () => {
         show()
         open({ kind: "item", id: "i1" })
         expect((screen.getByRole("combobox", { name: "Course" }) as HTMLSelectElement).value).toBe("anat")
-        expect(screen.getByRole("textbox", { name: "Start time" })).toBeTruthy()
+        expect(screen.getByRole("combobox", { name: "Start time" })).toBeTruthy()
         expect(screen.getByRole("textbox", { name: "Room" })).toBeTruthy()
         await act(async () => fireEvent.change(screen.getByRole("spinbutton", { name: "Weight" }), { target: { value: "15" } }))
         expect(fake.data.items[0]).toMatchObject({ weight: 15 })
@@ -308,7 +308,7 @@ describe("the item sheet", () => {
     it("moves the end with the start", async () => {
         show()
         open({ kind: "item", id: "i1" })
-        const start = screen.getByRole("textbox", { name: "Start time" })
+        const start = screen.getByRole("combobox", { name: "Start time" })
         fireEvent.focus(start)
         fireEvent.change(start, { target: { value: "13" } })
         await act(async () => fireEvent.blur(start))
@@ -471,7 +471,7 @@ describe("the time field", () => {
     it("reads what is typed, picks from the list, nudges, and marks nonsense", async () => {
         show()
         open({ kind: "item", id: "i1" })
-        const end = screen.getByRole("textbox", { name: "End time" })
+        const end = screen.getByRole("combobox", { name: "End time" })
         fireEvent.focus(end)
         const list = screen.getByRole("listbox", { name: "Times" })
         await act(async () => fireEvent.click(within(list).getByRole("option", { name: "11:45" })))
