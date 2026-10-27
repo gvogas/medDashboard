@@ -16,7 +16,7 @@ import { readMaintenance, validateMaintenance } from './maintenance.js';
 import { handOnStmts } from './leaving.js';
 
 /* The newest file in migrations/; a test keeps it in step. */
-export const LATEST_MIGRATION = '0003_presence.sql';
+export const LATEST_MIGRATION = '0004_space_indexes.sql';
 const AUDIT_KEEP_MS = 90 * 24 * 60 * 60 * 1000;
 const DAY_MS = 24 * 60 * 60 * 1000;
 export const MIN_PASSWORD = 8;
