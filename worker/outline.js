@@ -14,6 +14,7 @@
 
 import { HttpError } from './http.js';
 import { askJson, knownContext, modelJson, tidyText, timeLeft } from './ai.js';
+import { DAY_MS } from './time.js';
 
 export const MODEL = '@cf/openai/gpt-oss-120b';
 export const MAX_BYTES = 5 * 1024 * 1024;
@@ -187,7 +188,7 @@ export function cleanOutline(raw, { today } = {}) {
   const o = modelJson(raw);
   if (!o) throw new HttpError(502, { error: 'outline_unreadable' });
   /* a date more than 18 months from today is a misread year: it shows as "no date" in the preview's notes */
-  const near = (d) => !d || !today || Math.abs(Date.parse(d) - Date.parse(today)) <= 548 * 86_400_000;
+  const near = (d) => !d || !today || Math.abs(Date.parse(d) - Date.parse(today)) <= 548 * DAY_MS;
   const code = cleanCode(o.code);
   const classes = cleanClasses(o.classes);
   const assessments = (Array.isArray(o.assessments) ? o.assessments : []).map((a) => {

@@ -12,9 +12,8 @@ import { randomId } from './spaces.js';
 import { studyFlow } from './validate.js';
 import { logError, messageOf } from './errors.js';
 import * as timer from '../src/core/timer.ts';
+import { MINUTE_MS, DAY_MS } from './time.js';
 
-const MIN = 60_000;
-const DAY_MS = 24 * 60 * MIN;
 export const ROOM_SIZE = 8;
 /** Rows a room may hold in all: the people in it and those invited. */
 export const ROOM_ROWS = 24;
@@ -22,8 +21,8 @@ export const ROOMS_PER_DAY = 30;
 export const FEED_KEEP = 20;
 export const LABEL_MAX = 60;
 /** No poll for this long: shown as away. For GONE_MS: taken out of the room. */
-export const AWAY_MS = 2 * MIN;
-export const GONE_MS = 10 * MIN;
+export const AWAY_MS = 2 * MINUTE_MS;
+export const GONE_MS = 10 * MINUTE_MS;
 /** last_seen is written at most this often. */
 export const SEEN_EVERY_MS = 30_000;
 const TRIES = 4;
@@ -247,7 +246,7 @@ async function leaveOthers(db, me, keep, now) {
 }
 
 /** Someone who said Not now gets asked again only after this long. */
-export const REINVITE_MS = 10 * MIN;
+export const REINVITE_MS = 10 * MINUTE_MS;
 
 function invite(room, members, host, ids, now) {
   for (const id of ids) {
@@ -437,7 +436,7 @@ export async function friendsLastStudied(db, me) {
 /* ── presence: a solo run, so friends see you studying ── */
 
 /** How long past its planned end a solo run still shows (a pause, a slow tab). */
-export const PRESENCE_SLACK_MS = 10 * MIN;
+export const PRESENCE_SLACK_MS = 10 * MINUTE_MS;
 
 /** A solo run started or resumed: {courseLabel, startedAt, endsAt}. Nothing is kept while you
     hide that you are studying. */
@@ -479,7 +478,7 @@ export async function groupRecord(db, me, roomId) {
 
 /* ── the nightly cron ── */
 
-export const STALE_MS = 30 * MIN;
+export const STALE_MS = 30 * MINUTE_MS;
 export const ROOM_KEEP_MS = 90 * DAY_MS;
 
 /** End rooms nobody has polled for 30 minutes (their people taken out, minutes kept), drop presence

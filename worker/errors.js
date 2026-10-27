@@ -11,6 +11,7 @@
 import { readJson, HttpError } from './http.js';
 import { claimLimit, rateLimited } from './limits.js';
 import { sessionUserId } from './auth.js';
+import { HOUR_MS, DAY_MS } from './time.js';
 
 export const KINDS = ['server', 'request', 'browser', 'nightly'];
 export const CAPS = { server: 500, request: 500, browser: 300, nightly: 100 };
@@ -18,8 +19,7 @@ export const CAPS = { server: 500, request: 500, browser: 300, nightly: 100 };
 export const ANON_CAPS = { request: 100, browser: 100 };
 /** The server kind's cap, as before kinds. */
 export const DAILY_CAP = CAPS.server;
-const KEEP_MS = 30 * 24 * 60 * 60 * 1000;
-const HOUR_MS = 60 * 60 * 1000;
+const KEEP_MS = 30 * DAY_MS;
 /** Browser reports one person (or address) may send an hour. */
 export const BROWSER_PER_HOUR = 30;
 
@@ -29,7 +29,7 @@ const KIND_SQL = kindSql();
 export const kindOf = ({ method = '', status = 500 }) =>
   method === 'BROWSER' ? 'browser' : method === 'CRON' ? 'nightly' : status >= 400 && status <= 499 ? 'request' : 'server';
 
-const dayStart = (now) => now - (now % (24 * 60 * 60 * 1000));
+const dayStart = (now) => now - (now % DAY_MS);
 
 /** A route as the log keeps it: a calendar feed's link is its password, so it never goes in. */
 export const routeForLog = (route) => String(route).replace(/^\/api\/calendar\/[^/]+\/[^/]+\.ics$/, '/api/calendar/…/….ics');

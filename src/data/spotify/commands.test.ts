@@ -62,7 +62,7 @@ describe("shuffle and repeat", () => {
 
 describe("play", () => {
     it("plays a track in a list Spotify has no context for from the loaded tracks onward", async () => {
-        const { commands, library, calls, settle } = await fresh()
+        const { commands, library, calls } = await fresh()
         library.cache.tracks.liked = { items: ["a", "b", "c"].map((id) => ({ uri: "spotify:track:" + id })) as never, total: 3, next: false, nextOffset: null }
         const p = commands.play("spotify:track:b", null, "liked")
         await vi.advanceTimersByTimeAsync(0)   /* the first call does not wait */
@@ -97,7 +97,7 @@ describe("play", () => {
 
 describe("the queue", () => {
     it("adds a track, ticks it for a moment, and forgets the stale queue", async () => {
-        const { commands, library, calls, settle } = await fresh()
+        const { commands, library, calls } = await fresh()
         library.cache.queue = { current: null, queue: [] }
         const p = commands.queueAdd("spotify:track:t2")
         await vi.advanceTimersByTimeAsync(0)
@@ -120,7 +120,7 @@ describe("the queue", () => {
     })
 
     it("says why it could not, and returns false", async () => {
-        const { commands, library, settle } = await fresh(() => json({ error: "not_allowed" }, 403))
+        const { commands, library } = await fresh(() => json({ error: "not_allowed" }, 403))
         const p = commands.queueAdd("spotify:track:t2")
         await vi.advanceTimersByTimeAsync(0)
         expect(await p).toBe(false)

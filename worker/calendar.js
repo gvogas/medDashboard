@@ -19,9 +19,9 @@ import { claimLimit, rateLimited } from './limits.js';
 import { sameString, hex } from './auth.js';
 import { personal } from './db.js';
 import { normalizeSchool, classWeekday, courseTerm, dayInfo, weekdayOf } from '../src/core/school.ts';
+import { HOUR_MS } from './time.js';
 
 const FEED_LIMIT = 60;                     /* fetches an hour per link; calendars poll a few times a day */
-const HOUR_MS = 60 * 60 * 1000;
 const LABELS = { exam: 'Exam', quiz: 'Quiz', assignment: 'Assignment', lab: 'Lab', tutoring: 'Tutorial', office: 'Office hours', task: 'Task', project: 'Project' };
 const COMPLETE = { done: 1, graded: 1, submitted: 1 };
 /* What gets reminders in the feed: deadlines and tests, while still open. */

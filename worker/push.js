@@ -14,12 +14,12 @@ import { HttpError, json, readJson } from './http.js';
 import { requireUser } from './auth.js';
 import { claimLimit, rateLimited } from './limits.js';
 import { readRows } from './calendar.js';
+import { HOUR_MS } from './time.js';
 
 const MAX_DEVICES = 5;                    /* per person; the oldest goes when a sixth comes */
 const MAX_PUSHES = 40;                    /* per cron run, under the free plan's 50 outside requests */
 const MAX_FAILURES = 5;                   /* in a row, then the device is dropped */
 const TEST_LIMIT = 5;                     /* test pushes an hour */
-const HOUR_MS = 60 * 60 * 1000;
 const SEND_FROM = 7, SEND_UNTIL = 9;      /* local hours the digest may go out in */
 const OVERDUE_DAYS = 14;                  /* older than this, an open item is not news */
 /* Events, not deadlines: they never make a digest. */

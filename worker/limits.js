@@ -1,10 +1,10 @@
 import { HttpError } from './http.js';
+import { DAY_MS } from './time.js';
 
 export const API_LIMIT = 600;
 export const SPOTIFY_LIMIT = 60;
 // Course outlines use Workers AI's free daily allowance; a few a day each is plenty.
 export const OUTLINE_DAILY_LIMIT = 10;
-const DAY_MS = 24 * 60 * 60 * 1000;
 const LOGIN_IP_LIMIT = 30;
 const WINDOW_MS = 60_000;
 const SPOTIFY_EXEMPT = ['/api/spotify/token', '/api/spotify/status', '/api/spotify/connect', '/api/spotify/callback'];

@@ -26,25 +26,24 @@ describe("the effective lists", () => {
         expect(effectiveItems()).toBe(effectiveItems())
     })
 
-    it("leave shared rows out until they are shown, and key them by scope when they are", () => {
+    it("key shared rows by scope", () => {
         const own = [item({ id: "a" })], shared = [{ ...item({ id: "a" }), scope: WEB }]
-        expect(mergeItems(own, shared, false)).toBe(own)
-        const both = mergeItems(own, shared, true)
+        const both = mergeItems(own, shared)
         expect(both.map(keyOf)).toEqual(["a", WEB + "/a"])
         expect(both.map((it) => it.source ?? "personal")).toEqual(["personal", "class"])
     })
 
     it("lets project rows into the views (Stage 9), but never a deleted task (spec §13: no Keep as mine)", () => {
         const task = { ...item({ id: "t1", type: "task" }), scope: "p:fire00000001" }
-        const [t] = mergeItems([], [task], true)
+        const [t] = mergeItems([], [task])
         expect(t).toMatchObject({ key: "p:fire00000001/t1", source: "project", spaceId: "fire00000001" })
         const own = [item({ id: "a" })]
-        expect(mergeItems(own, [], true, { removed: [{ ...task, deletedAt: 5 }], marks: new Map([["fire00000001:t1", { notes: "mine" } as Mark]]) })).toEqual(own)
+        expect(mergeItems(own, [], { removed: [{ ...task, deletedAt: 5 }], marks: new Map([["fire00000001:t1", { notes: "mine" } as Mark]]) })).toEqual(own)
     })
 
     it("keep a class course and a personal course with the same id apart in every view", () => {
-        const courses = mergeCourses([course({ id: "bio", name: "Biology" })], [{ ...course({ id: "bio", name: "Biology (class)" }), scope: WEB }], true)
-        const items = mergeItems([item({ id: "mine", courseId: "bio" })], [{ ...item({ id: "theirs", courseId: "bio" }), scope: WEB }], true)
+        const courses = mergeCourses([course({ id: "bio", name: "Biology" })], [{ ...course({ id: "bio", name: "Biology (class)" }), scope: WEB }])
+        const items = mergeItems([item({ id: "mine", courseId: "bio" })], [{ ...item({ id: "theirs", courseId: "bio" }), scope: WEB }])
         expect(courses.map(keyOf)).toEqual(["bio", WEB + "/bio"])
         expect(items.map(courseKeyOf)).toEqual(["bio", WEB + "/bio"])
         const ids = (picked: string) => instances(items, courses, { ...ALL, course: picked }, "2026-09-21", "2026-09-27").map((x) => x.item.id)
@@ -66,24 +65,24 @@ describe("your layer over a class", () => {
     it("puts your status, grade, weight, checklist and notes on a class item, and leaves out what you hid", () => {
         const shared = [{ ...item({ id: "a1", weight: 20, notes: "Teams of 3", courseId: "web" }), scope: WEB }, { ...item({ id: "h1", courseId: "web" }), scope: WEB }]
         const marks = new Map([[SID + ":a1", mark("a1", { status: "graded", grade: 87, notes: "mine", weight: 25 })], [SID + ":h1", mark("h1", { hidden: true })]])
-        const out = mergeItems([], shared, true, { marks })
+        const out = mergeItems([], shared, { marks })
         expect(out.map(keyOf)).toEqual([WEB + "/a1"])
         expect(out[0]).toMatchObject({ status: "graded", grade: 87, weight: 25, notes: "mine", classWeight: 20, classNotes: "Teams of 3", spaceId: SID, courseKey: WEB + "/web" })
-        expect(mergeItems([], [shared[0]], true)[0]).toMatchObject({ status: "todo", grade: null, weight: 20, notes: "", checklist: [] })
+        expect(mergeItems([], [shared[0]])[0]).toMatchObject({ status: "todo", grade: null, weight: 20, notes: "", checklist: [] })
     })
 
     it("shows your items filed under a class at the class course's key, and keeps today's arrays when nothing is", () => {
         const own = [item({ id: "x" }), item({ id: "y", classId: SID })]
-        const out = mergeItems(own, [], true, { classCourse: new Map([[SID, WEB + "/web"]]) })
+        const out = mergeItems(own, [], { classCourse: new Map([[SID, WEB + "/web"]]) })
         expect(out.map(courseKeyOf)).toEqual([null, WEB + "/web"])
         expect(out[0]).toBe(own[0])
         const plain = [item({ id: "x" })]
-        expect(mergeItems(plain, [], true)).toBe(plain)
+        expect(mergeItems(plain, [])).toBe(plain)
     })
 
     it("gives a class course your colour, target, semester and archive flag", () => {
         const pref: SpacePref = { id: SID, spaceId: SID, color: "#B8457E", target: 75, term: "Spring 2027", archived: true }
-        const [c] = mergeCourses([], [{ ...course({ id: "web", color: "#17B3AE", term: "Fall 2026" }), scope: WEB }], true, { prefs: new Map([[SID, pref]]) })
+        const [c] = mergeCourses([], [{ ...course({ id: "web", color: "#17B3AE", term: "Fall 2026" }), scope: WEB }], { prefs: new Map([[SID, pref]]) })
         expect(c).toMatchObject({ key: WEB + "/web", spaceId: SID, color: "#B8457E", target: 75, term: "Spring 2027", archived: true })
     })
 
@@ -132,8 +131,8 @@ describe("your layer over a class", () => {
     })
 
     it("leaves hidden sources off the calendar, and returns the lists themselves with none hidden", () => {
-        const items = mergeItems([item({ id: "p" }), item({ id: "b", courseId: "bio" }), item({ id: "f", classId: SID })], [{ ...item({ id: "a1", courseId: "web" }), scope: WEB }], true)
-        const courses = mergeCourses([course({ id: "bio" })], [{ ...course({ id: "web" }), scope: WEB }], true)
+        const items = mergeItems([item({ id: "p" }), item({ id: "b", courseId: "bio" }), item({ id: "f", classId: SID })], [{ ...item({ id: "a1", courseId: "web" }), scope: WEB }])
+        const courses = mergeCourses([course({ id: "bio" })], [{ ...course({ id: "web" }), scope: WEB }])
         expect(onCalendar(items, courses, [])).toEqual({ items, courses })
         expect(onCalendar(items, courses, []).items).toBe(items)
         const shown = onCalendar(items, courses, ["space:" + SID, "personal"])
@@ -154,7 +153,7 @@ const spaces = [{ id: "fire00000001", scope: P, kind: "project", name: "Fire Res
 describe("project rows in the views (Stage 9 plan, Decisions 1-2)", () => {
     it("lets project rows into the effective list, with only your notes as your layer", () => {
         const shared = [{ ...team({ id: "t1", status: "done", notes: "team notes" }), scope: P }] as (Item & { scope: string })[]
-        const [t] = mergeItems([], shared, true)
+        const [t] = mergeItems([], shared)
         expect(t).toMatchObject({ key: P + "/t1", source: "project", status: "done", notes: "", classNotes: "team notes" })
     })
 
