@@ -14,14 +14,13 @@ import { openClass } from "./classes"
 import { openProject } from "./projects"
 import { openSheet } from "./overlay"
 import { maintenanceState } from "./maintenance"
+import { createEmitter } from "@/lib/store"
 import type { ActivityRow, Inbox } from "./types"
 
 let unread = 0
 let box: Inbox | null = null
 let offline = false
-const listeners = new Set<() => void>()
-const emit = () => { for (const fn of listeners) fn() }
-const subscribe = (fn: () => void) => { listeners.add(fn); return () => { listeners.delete(fn) } }
+const { subscribe, emit } = createEmitter()
 
 export const useUnread = () => useSyncExternalStore(subscribe, () => unread)
 export const useInbox = () => useSyncExternalStore(subscribe, () => box)

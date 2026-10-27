@@ -9,6 +9,7 @@
 
 import { useMemo, useSyncExternalStore } from "react"
 import { addDays, iso, monday, parse, shortDate } from "@/core/dates"
+import { createEmitter } from "@/lib/store"
 import { useWeekInput, weekDays, type Day, type ViewInput } from "./views"
 
 /** Days in the Agenda before Show more, and what Show more adds. */
@@ -70,15 +71,15 @@ try {
     const v = localStorage.getItem(KEY)
     if (v === "agenda" || v === "week") chosen = v
 } catch {}
-const listeners = new Set<() => void>()
+const layoutChange = createEmitter()
 
 const media = () => (typeof window !== "undefined" && typeof window.matchMedia === "function" ? window.matchMedia(QUERY) : null)
 
 function subscribe(fn: () => void) {
-    listeners.add(fn)
+    const off = layoutChange.subscribe(fn)
     const m = media()
     m?.addEventListener?.("change", fn)
-    return () => { listeners.delete(fn); m?.removeEventListener?.("change", fn) }
+    return () => { off(); m?.removeEventListener?.("change", fn) }
 }
 
 /** The screen is phone-sized: the Agenda is offered (and the default). */
@@ -90,7 +91,7 @@ export const weekLayout = (): WeekLayout => (isPhone() ? chosen ?? "agenda" : "w
 export function setWeekLayout(layout: WeekLayout) {
     chosen = layout
     try { localStorage.setItem(KEY, layout) } catch {}
-    for (const fn of listeners) fn()
+    layoutChange.emit()
 }
 
 export const useWeekLayout = () => useSyncExternalStore(subscribe, weekLayout, () => "week" as WeekLayout)

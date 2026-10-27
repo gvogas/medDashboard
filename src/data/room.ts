@@ -7,7 +7,6 @@
 // host ending the room). The room ending, or the server having taken you out, ends the run,
 // which logs your minutes. study-timer.ts wraps these for the buttons, with the class picked.
 
-import { useSyncExternalStore } from "react"
 import { api, ApiError } from "@/core/api"
 import { data } from "@/core/store"
 import * as run from "./run"
@@ -15,6 +14,7 @@ import { toast } from "./toast"
 import { openRecord } from "./record"
 import type { Flow, RoomRun, RoomView } from "./types"
 import { MINUTE_MS } from "@/lib/time"
+import { createStore } from "@/lib/store"
 
 export const VISIBLE_MS = 5_000
 export const HIDDEN_MS = 30_000
@@ -30,20 +30,18 @@ interface State {
     /** The last poll failed: the clock runs on from the last record. */
     reconnecting: boolean
 }
-let state: State = { view: null, offset: 0, reconnecting: false }
-const listeners = new Set<() => void>()
-const set = (patch: Partial<State>) => { state = { ...state, ...patch }; for (const fn of listeners) fn() }
-const subscribe = (fn: () => void) => { listeners.add(fn); return () => { listeners.delete(fn) } }
+const store = createStore<State>({ view: null, offset: 0, reconnecting: false })
+const set = store.patch
 
-export const roomNow = () => state
-export const useRoom = () => useSyncExternalStore(subscribe, roomNow)
+export const roomNow = store.get
+export const useRoom = store.use
 
 /** The room this device's run is in, or null. */
 export const roomId = (): string | null => run.read()?.room?.id ?? null
 const me = () => data.profile?.id ?? ""
 
 /** Whether you are the room's host, as the last answer said. */
-export const isHost = (s: State = state) => !!s.view && s.view.room.hostId === me()
+export const isHost = (s: State = roomNow()) => !!s.view && s.view.room.hostId === me()
 
 /* ── applying an answer ── */
 
@@ -101,9 +99,10 @@ export async function poll(): Promise<void> {
     if (!id) { stop(); return }
     const sentAt = Date.now()
     try {
-        const view = await api.rooms.get(id, state.view?.room.id === id ? state.view.tag : undefined)
+        const known = roomNow().view
+        const view = await api.rooms.get(id, known?.room.id === id ? known.tag : undefined)
         if (view) await apply(view, sentAt)
-        else if (state.reconnecting) set({ reconnecting: false })
+        else if (roomNow().reconnecting) set({ reconnecting: false })
     } catch (e) {
         if ((e as Error)?.name === "AbortError") return
         if (e instanceof ApiError && e.status === 404) {
@@ -144,7 +143,7 @@ run.onTick((s, event) => {
         if (id && data.study_sessions.some((x) => x.id === "r-" + id)) openRecord(id, true)
         return
     }
-    if (s?.room && polling !== s.room.id) { tellLeave = s.room.id; startPolling(); if (!state.view) void poll() }
+    if (s?.room && polling !== s.room.id) { tellLeave = s.room.id; startPolling(); if (!roomNow().view) void poll() }
 })
 document.addEventListener("visibilitychange", () => { if (polling && document.visibilityState === "visible") void poll() })
 
@@ -252,7 +251,7 @@ export function memberMinutes(m: RoomView["members"][number], clock: RoomRun, no
 }
 
 /** The record on this device's clock, for drawing. */
-export const localClock = (s: State = state): RoomRun | null => (s.view ? local(s.view.room.run, s.offset) : null)
+export const localClock = (s: State = roomNow()): RoomRun | null => (s.view ? local(s.view.room.run, s.offset) : null)
 
 /** For tests and sign-out. */
 export function resetRoom() { stop(); tellLeave = null; applied = { id: "", version: 0 }; set({ view: null, offset: 0, reconnecting: false }) }

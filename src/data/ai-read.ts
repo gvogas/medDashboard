@@ -12,16 +12,16 @@ import { cacheKey, cached, remember } from "./ai-cache"
 import { cover } from "./overlay"
 import { maintenanceMessage } from "./maintenance"
 import { ui } from "./ui"
+import { createEmitter } from "@/lib/store"
 import type { Note, Ui } from "./types"
 
 export interface Busy { title: string; file: string; steps: readonly string[]; step: number; started: number; cancel: () => void }
 
 let busy: Busy | null = null
-const listeners = new Set<() => void>()
-const emit = () => { for (const fn of listeners) fn() }
+const { subscribe, emit } = createEmitter()
 
 export const getBusy = () => busy
-export const useBusy = () => useSyncExternalStore((fn) => { listeners.add(fn); return () => { listeners.delete(fn) } }, getBusy)
+export const useBusy = () => useSyncExternalStore(subscribe, getBusy)
 
 function showBusy(next: Omit<Busy, "started">) {
     if (!busy) cover(true)

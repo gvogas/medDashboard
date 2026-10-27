@@ -8,6 +8,7 @@ import * as store from "@/core/store"
 import { data } from "@/core/store"
 import { isOpen } from "@/core/model"
 import type { Row } from "@/core/db"
+import { createEmitter } from "@/lib/store"
 import { celebrate, TYPING_MS } from "./item-edit"
 import { itemByKey } from "./effective"
 import { splitKey } from "./refs"
@@ -21,9 +22,8 @@ export const markFor = (key: string): Mark | null => (data.marks ?? []).find((m)
 /* ── typing: one row's text waits for the pause ── */
 
 let version = 0
-const listeners = new Set<() => void>()
-const bump = () => { version++; for (const fn of listeners) fn() }
-const subscribe = (fn: () => void) => { listeners.add(fn); return () => { listeners.delete(fn) } }
+const { subscribe, emit } = createEmitter()
+const bump = () => { version++; emit() }
 /** Redraws while text is waiting to save, and when it has. */
 export const useTyping = () => useSyncExternalStore(subscribe, () => version)
 

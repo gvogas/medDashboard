@@ -2,36 +2,34 @@
 // has them. Fetched when the Study page opens (and again after a minute); nothing is pushed.
 // Each change updates the list at once and then asks the server again.
 
-import { useSyncExternalStore } from "react"
 import { api, ApiError } from "@/core/api"
 import * as sync from "@/core/sync"
 import { dropFriendRequest } from "./inbox"
 import { maintenanceState } from "./maintenance"
 import type { FriendMatch, FriendSettings, Friends } from "./types"
 import { MINUTE_MS } from "@/lib/time"
+import { createStore } from "@/lib/store"
 
 export const STALE_MS = MINUTE_MS
 export const LOAD_ERROR = "Could not load your friends. Try again in a minute."
 
 interface State { list: Friends | null; at: number; loading: boolean; offline: boolean; error: string }
-let state: State = { list: null, at: 0, loading: false, offline: false, error: "" }
-const listeners = new Set<() => void>()
-const set = (patch: Partial<State>) => { state = { ...state, ...patch }; for (const fn of listeners) fn() }
-const subscribe = (fn: () => void) => { listeners.add(fn); return () => { listeners.delete(fn) } }
+const store = createStore<State>({ list: null, at: 0, loading: false, offline: false, error: "" })
+const set = store.patch
 
-export const friendsNow = () => state
-export const useFriends = () => useSyncExternalStore(subscribe, friendsNow)
+export const friendsNow = store.get
+export const useFriends = store.use
 /** For tests and sign-out. */
 export const resetFriends = () => set({ list: null, at: 0, loading: false, offline: false, error: "" })
 
-export const friendsStale = (now = Date.now()) => !state.list || (!state.loading && now - state.at > STALE_MS)
+export const friendsStale = (now = Date.now()) => !friendsNow().list || (!friendsNow().loading && now - friendsNow().at > STALE_MS)
 
 /* Bumped by every local edit: an answer that began before one is older than what is shown. */
 let generation = 0
 
 /** Fetch the list; an answer that a local change has overtaken is dropped and fetched once more. */
 export async function loadFriends(again = true): Promise<void> {
-    if (state.loading || maintenanceState("friends") === "blocked") return
+    if (friendsNow().loading || maintenanceState("friends") === "blocked") return
     set({ loading: true })
     const started = generation
     try {
@@ -61,7 +59,7 @@ export function friendMessage(e: unknown): string {
     return "That did not go through. Try again."
 }
 
-const edit = (fn: (l: Friends) => Friends) => { generation++; if (state.list) set({ list: fn(state.list) }) }
+const edit = (fn: (l: Friends) => Friends) => { generation++; const { list } = friendsNow(); if (list) set({ list: fn(list) }) }
 const after = () => { void loadFriends(); sync.syncNow().catch(() => {}) }
 
 /** Ask someone by username. Returns an error message, or "" when it went through. */
@@ -111,11 +109,11 @@ export async function removeFriend(userId: string): Promise<string> {
 
 /** Save the two switches; they show the change at once and go back if the server refuses it. */
 export async function saveFriendSettings(s: FriendSettings): Promise<string> {
-    const before = state.list?.settings
+    const before = friendsNow().list?.settings
     edit((l) => ({ ...l, settings: s }))
     try { await api.friends.settings(s); return "" } catch (e) {
         /* only if no later toggle has replaced it */
-        if (before && state.list?.settings === s) edit((l) => ({ ...l, settings: before }))
+        if (before && friendsNow().list?.settings === s) edit((l) => ({ ...l, settings: before }))
         return friendMessage(e)
     }
 }

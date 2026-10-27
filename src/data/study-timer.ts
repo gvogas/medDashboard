@@ -18,6 +18,7 @@ import { rememberUi } from "@/data/ui"
 import { notify, setStudyBadge, subscribe as subscribeBridge } from "@/bridge"
 import { getSheet, openSheet } from "./overlay"
 import { toast } from "./toast"
+import { createEmitter } from "@/lib/store"
 import { useCourses, useItems, useProfile, useStudySessions } from "./store"
 import { shownSessions } from "./study"
 import { ui, useUi } from "./ui"
@@ -60,7 +61,7 @@ export interface Run {
    getSnapshot returns the same object. */
 let run: Run | null = null
 let runKey = ""
-const listeners = new Set<() => void>()
+const runChange = createEmitter()
 
 function readRun(): Run | null {
     const now = Date.now()
@@ -81,7 +82,7 @@ function refresh(force: boolean) {
     runKey = key
     document.title = tickTitle(run, THEMES[ui.bg].studyWord)
     setStudyBadge(run ? timeText(run.leftMs) : null)
-    for (const fn of listeners) fn()
+    runChange.emit()
 }
 
 /* The title carries the theme's study word, so a theme change retitles the tab even while paused. */
@@ -118,9 +119,9 @@ function getRun(): Run | null {
 }
 
 function subscribeRun(fn: () => void) {
-    listeners.add(fn)
+    const offRun = runChange.subscribe(fn)
     const off = subscribeBridge(fn)
-    return () => { listeners.delete(fn); off() }
+    return () => { offRun(); off() }
 }
 
 /** The running study run, or null; redraws as it ticks. */
