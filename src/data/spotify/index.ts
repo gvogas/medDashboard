@@ -10,7 +10,7 @@ import { state as player } from "./player"
 import { state as web, playTarget } from "./web-player"
 import { busy, cache, note, type Cache } from "./library"
 import { justQueued, shownVolume } from "./commands"
-import { getVersion, subscribe } from "./signal"
+import { getSteady, getVersion, subscribe } from "./signal"
 import type { PlayerState, SpotifyNote, SpotifyPlace, WebState } from "./types"
 
 export interface SpotifySnapshot {
@@ -38,14 +38,20 @@ export interface SpotifySnapshot {
     isNow: (uri: string | null | undefined) => boolean
 }
 
-let built = -1
+let built = -1, builtSteady = -1
 let snapshot: SpotifySnapshot
 
 function read(): SpotifySnapshot {
-    const version = getVersion()
+    const version = getVersion(), steady = getSteady()
     if (version === built) return snapshot
     built = version
     const now = player.track
+    /* a progress tick moved only the player's track: the rest of the snapshot stays as it was */
+    if (steady === builtSteady && snapshot) {
+        snapshot = { ...snapshot, player: { ...player, track: now ? { ...now } : null }, isNow: (uri) => !!(now && now.uri && now.uri === uri) }
+        return snapshot
+    }
+    builtSteady = steady
     snapshot = {
         player: { ...player, track: now ? { ...now } : null },
         web: { ...web },

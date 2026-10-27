@@ -81,8 +81,20 @@ export function rememberUi() {
     try { localStorage.setItem("rounds.bg", ui.bg) } catch {}
 }
 
-/** Read from the UI state; the component redraws after every notify(). */
+/**
+ * Read from the UI state. The component redraws when the selected value changes, not on
+ * every notify(): `ui` is changed in place, so a primitive is compared as it is. A selected
+ * object may have been changed in place too, so it redraws after every notify() as it did.
+ */
 export function useUi<T>(select: (ui: Ui) => T): T {
-    useSyncExternalStore(subscribe, getVersion)
+    useSyncExternalStore(subscribe, () => {
+        const v: unknown = select(ui)
+        return v !== null && typeof v === "object" ? getVersion() : v
+    })
     return select(ui)
+}
+
+/** Redraws after every notify(), for a component that reads state `ui` does not hold. */
+export function useNotified(): void {
+    useSyncExternalStore(subscribe, getVersion)
 }

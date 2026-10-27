@@ -11,7 +11,7 @@ import { pushState, testPush, turnOff, turnOn, type PushState } from "@/data/pus
 import { notify } from "@/bridge"
 import { SpotifyMark } from "@/components/spotify/mark"
 import { useProfile } from "@/data/store"
-import { ui, useUi } from "@/data/ui"
+import { ui, useNotified, useUi } from "@/data/ui"
 import { feedLink, timeZone } from "@/data/settings"
 import { disconnectSpotify } from "@/data/actions"
 import type { Feed, Profile } from "@/data/types"
@@ -171,7 +171,7 @@ function FeedGroup() {
 
 function SpotifyGroup() {
     const note = useUi((u) => u.spotifyNote)
-    useUi((u) => u.view)   /* redrawn as the player's state changes (boot.ts notifies) */
+    useNotified()   /* redrawn as the player's state changes (boot.ts notifies) */
     const on = spotify.connected, retry = spotifyRetryAt()
     let who: ReactNode, action: ReactNode = null
     if (!spotify.loaded) {

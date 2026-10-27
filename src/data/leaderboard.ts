@@ -108,11 +108,10 @@ export function setLbTab(tab: LbTab) {
 /** What the card shows: the state, the tab, and the tab's ranked rows. */
 export function useLeaderboard() {
     const sessions = useStudySessions()
-    const version = useSyncExternalStore(subscribe, getVersion)
+    useSyncExternalStore(subscribe, getVersion)
+    const { lb, lbTab } = ui   /* changed in place, so the fields are the key */
     return useMemo(() => {
-        const tab: LbTab = ui.lbTab === "all" ? "all" : "week"
-        return { lb: ui.lb, tab, rows: lbRows(ui.lb, tab, sessions) }
-    },
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- `version` stands for the ui
-    [sessions, version])
+        const tab: LbTab = lbTab === "all" ? "all" : "week"
+        return { lb, tab, rows: lbRows(lb, tab, sessions) }
+    }, [sessions, lb, lbTab])
 }

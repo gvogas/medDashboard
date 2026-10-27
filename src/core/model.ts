@@ -176,9 +176,15 @@ export function classRoom(it: Pick<Item, 'type' | 'recur' | 'date' | 'start'>, c
   return hit ? hit.room : '';
 }
 
+/* The type list by id for the prefs it was built from; the profile's prefs are a new array when the store reloads. */
+const NO_PREFS: TypePref[] = [];
+let metaOf: { prefs: unknown; byId: Map<string, ItemType> } | null = null;
+
 export function tmeta(t: string): TypeMeta {
-  const hit = typeList('cs').find((x) => x.id === t);
-  return hit || (CUSTOM_TYPE.test(t) ? FALLBACK : TYPES.task);
+  const raw = prefsOf();
+  const prefs = raw && raw.length ? raw : NO_PREFS;
+  if (!metaOf || metaOf.prefs !== prefs) metaOf = { prefs, byId: new Map(typeList('cs').map((x) => [x.id, x])) };
+  return metaOf.byId.get(t) || (CUSTOM_TYPE.test(t) ? FALLBACK : TYPES.task);
 }
 export function statusLabel(it: Pick<Item, 'type' | 'status'>): string {
   const list = statusesFor(it.type);

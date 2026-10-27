@@ -23,13 +23,13 @@ export function workRows<I extends EffectiveItem, C extends EffectiveCourse>(ite
 /** An Up next row with its course, for the panel. */
 export interface NextEntry extends NextRow<EffectiveItem> { course: EffectiveCourse | null }
 
-/** The live rows; `version` catches the day rolling over on a redraw. */
+/** The live rows; today catches the day rolling over on a redraw. */
 function useWork(): { rows: EffectiveItem[]; today: string } {
     const items = useItems(), courses = useCourses(), profile = useProfile()
-    const version = useSyncExternalStore(subscribe, getVersion)
-    return useMemo(() => ({ rows: workRows(items, courses, profile?.hiddenSources ?? [], profile?.id ?? ""), today: todayIso() }),
-        // eslint-disable-next-line react-hooks/exhaustive-deps -- `version` stands for the day
-        [items, courses, profile, version])
+    useSyncExternalStore(subscribe, getVersion)
+    const today = todayIso()
+    return useMemo(() => ({ rows: workRows(items, courses, profile?.hiddenSources ?? [], profile?.id ?? ""), today }),
+        [items, courses, profile, today])
 }
 
 /** The Up next panel's rows, best first. */
