@@ -36,7 +36,7 @@ vi.mock("@/core/sticker", () => ({
     dragCrop: vi.fn((crop: { x: number }, _pic: unknown, dx: number) => ({ ...crop, x: crop.x + dx / 100 })),
     stickerData: vi.fn(() => "data:image/webp;base64,AAAA"),
 }))
-vi.mock("@/data/toast", () => ({ toast: vi.fn() }))
+vi.mock("@/data/toast", () => ({ TOAST_MS: 6000, TOAST_LONG_MS: 8000, toast: vi.fn() }))
 /* what Settings reads, for the sheet to load */
 vi.mock("@/data/theme", () => ({ setTheme: vi.fn(), setBg: vi.fn() }))
 vi.mock("@/data/spotify/player", () => ({ state: { loaded: true, connected: false } }))

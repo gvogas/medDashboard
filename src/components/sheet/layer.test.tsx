@@ -27,7 +27,7 @@ vi.mock("@/core/api", () => {
 })
 vi.mock("@/core/sync", () => ({ syncNow: fake.syncNow, status: { state: "idle", pending: 0, message: "" }, onStatus: () => {} }))
 vi.mock("@/data/overlay", () => fake.overlay)
-vi.mock("@/data/toast", () => ({ toast: fake.toast }))
+vi.mock("@/data/toast", () => ({ TOAST_MS: 6000, TOAST_LONG_MS: 8000, toast: fake.toast }))
 vi.mock("@/data/study-controller", () => ({ setView: vi.fn(), deleteLater: vi.fn(), deleteWithUndo: vi.fn() }))
 vi.mock("@/data/sidebar", () => ({ setSide: vi.fn() }))
 vi.mock("@/data/actions", () => ({ deleteCourse: vi.fn(), openCourse: vi.fn() }))

@@ -35,7 +35,7 @@ vi.mock("@/core/api", () => {
 })
 vi.mock("@/core/sync", () => ({ syncNow: fake.syncNow }))
 vi.mock("@/data/overlay", () => fake.overlay)
-vi.mock("@/data/toast", () => ({ toast: fake.toast }))
+vi.mock("@/data/toast", () => ({ TOAST_MS: 6000, TOAST_LONG_MS: 8000, toast: fake.toast }))
 vi.mock("@/data/class-import", async (real) => ({ ...(await real<typeof import("@/data/class-import")>()), commitToClass: fakeImport.commitToClass, commitNewClass: fakeImport.commitNewClass }))
 vi.mock("@/data/import-edit", async (real) => ({ ...(await real<typeof import("@/data/import-edit")>()), commitImport: fakeImport.commitImport, readOutlineFile: fakeImport.readOutlineFile }))
 
