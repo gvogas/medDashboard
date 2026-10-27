@@ -12,13 +12,10 @@ import { toast } from "@/data/toast"
 import { Panel, HeadNote, Empty } from "@/components/views/bits"
 import { Button, Checkbox, Label, Note, TextInput } from "@/components/sheet/fields"
 import { problem, useLoad, when } from "./use-admin"
+import type { AdminAccount as Account, AdminAccounts as List, AdminLock as Lock } from "@/core/types"
 
-export interface Account {
-    id: string; username: string; displayName: string; admin: boolean; lastSeen: string | null; createdAt: number
-    feed: boolean; leaderboard: boolean; spotify: boolean; courses: number; items: number; studyMinutes: number
-}
-interface Lock { key: string; username: string; device: boolean; fails: number; lockedUntil: number }
-interface List { accounts: Account[]; locks: Lock[] }
+export type { Account }
+
 
 export function Accounts() {
     const list = useLoad<List>(api.admin.accounts)
@@ -50,7 +47,7 @@ function CreateAccount({ onCreated }: { onCreated: () => Promise<void> }) {
         e.preventDefault()
         setBusy(true); setError(null); setMade(null)
         try {
-            const res = await api.admin.create({ username, displayName, password, admin }) as { username: string }
+            const res = await api.admin.create({ username, displayName, password, admin })
             setMade(res.username)
             setUsername(""); setDisplayName(""); setPassword(""); setAdmin(false)
             await onCreated()

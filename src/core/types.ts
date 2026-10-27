@@ -2,7 +2,7 @@
 // adds its own bookkeeping to every row (revision, updatedAt, deletedAt); only what the
 // app reads is typed, and a row may carry more.
 
-import type { Maintenance } from "./maintenance"
+import type { Feature, Maintenance } from "./maintenance"
 import type { GradeCategory } from "./grades"
 
 export type ItemStatus = "todo" | "submitted" | "graded" | "done" | "missed" | (string & {})
@@ -275,3 +275,34 @@ export interface Mark extends Synced {
 
 /** Your settings for a space: your colour, grade target, semester and sidebar archive for it. Its id is the space id. */
 export interface SpacePref extends Synced { id: string; spaceId: string; color: string; target: number | null; term: string; archived: boolean }
+
+/** The Admin page's answers (worker/admin.js). */
+export interface AdminAccount {
+  id: string; username: string; displayName: string; admin: boolean; lastSeen: string | null; createdAt: number;
+  feed: boolean; leaderboard: boolean; spotify: boolean; courses: number; items: number; studyMinutes: number;
+}
+export interface AdminLock { key: string; username: string; device: boolean; fails: number; lockedUntil: number }
+export interface AdminAccounts { accounts: AdminAccount[]; locks: AdminLock[] }
+export interface AuditEntry { at: number; admin: string; action: string; target: string; detail: string }
+export type ErrorKind = 'server' | 'request' | 'browser' | 'nightly';
+export interface ErrorGroup { kind: ErrorKind; method: string; route: string; status: number; message: string; count: number; last: number; first: number; users: number }
+export interface ErrorRow { at: number; kind: ErrorKind; method: string; route: string; status: number; message: string; username: string | null }
+export interface MaintenanceState { features: Feature[]; message: string; updatedAt: number | null; updatedBy: string }
+export interface TrafficHour { hour: string; requests: number; errors: number }
+export interface AdminTraffic {
+  configured: boolean;
+  free: { requests: number; neurons: number; rowsRead: number; rowsWritten: number; storageBytes: number };
+  hours?: TrafficHour[] | null;
+  today?: { requests: number | null; neurons: number | null; rowsRead: number | null; rowsWritten: number | null; storageBytes: number | null };
+  failed?: Record<string, string>;
+}
+export interface AdminHealth {
+  migrations: { latest: string; applied: string | null; ok: boolean };
+  cronLastRun: number | null;
+  secrets: Record<string, boolean>;
+  ai: boolean;
+  accounts: number;
+  errors24h: number;
+}
+/** The calendar feed's state, as /api/calendar answers. */
+export interface CalendarFeed { on: boolean; url?: string }

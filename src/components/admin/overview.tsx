@@ -9,23 +9,7 @@ import { api } from "@/core/api"
 import { Panel, HeadNote, Empty } from "@/components/views/bits"
 import { Button, Note } from "@/components/sheet/fields"
 import { ago, useLoad, when } from "./use-admin"
-
-interface Hour { hour: string; requests: number; errors: number }
-interface Traffic {
-    configured: boolean
-    free: { requests: number; neurons: number; rowsRead: number; rowsWritten: number; storageBytes: number }
-    hours?: Hour[] | null
-    today?: { requests: number | null; neurons: number | null; rowsRead: number | null; rowsWritten: number | null; storageBytes: number | null }
-    failed?: Record<string, string>
-}
-interface Health {
-    migrations: { latest: string; applied: string | null; ok: boolean }
-    cronLastRun: number | null
-    secrets: Record<string, boolean>
-    ai: boolean
-    accounts: number
-    errors24h: number
-}
+import type { AdminTraffic as Traffic, AdminHealth as Health, TrafficHour as Hour } from "@/core/types"
 
 export function Overview() {
     const traffic = useLoad<Traffic>(api.admin.traffic)
