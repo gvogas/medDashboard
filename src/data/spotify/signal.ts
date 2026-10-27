@@ -5,16 +5,21 @@
 
 const listeners = new Set<() => void>()
 let version = 0
+let steady = 0
 
 export function subscribe(fn: () => void) {
     listeners.add(fn)
     return () => { listeners.delete(fn) }
 }
 
-export function changed() {
+/** `progressOnly`: the progress line moved and nothing else, so a snapshot can keep the rest. */
+export function changed(progressOnly = false) {
     version++
+    if (!progressOnly) steady++
     for (const fn of listeners) fn()
 }
 
 /** Bumped by every changed(), so a hook over the engine's objects has a snapshot. */
 export const getVersion = () => version
+/** Bumped by every changed() but a progress tick's. */
+export const getSteady = () => steady
