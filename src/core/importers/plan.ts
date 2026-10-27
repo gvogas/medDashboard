@@ -114,6 +114,7 @@ export function planImport(events: (IcsEvent | ImportRow)[], data: PlanData, sou
   };
 
   const classes: PlanClass[] = [], singles: PlanSingle[] = [];
+  const endings = new Map<string, string>();   /* a series with an UNTIL or COUNT: classes have no end date, so say so */
   /* the source says which each event is: a CSV or outline row, or a calendar event */
   for (const ev of events as (ImportRow & IcsEvent)[]) {
     if (source === 'csv') {
@@ -125,11 +126,16 @@ export function planImport(events: (IcsEvent | ImportRow)[], data: PlanData, sou
     } else if (ev.weekly) {
       const code = codeToken(ev.summary);
       const rest = ev.summary.trim().slice(code.length).trim();
+      /* a class is weekly with no end date, so every 2 weeks cannot be said: skipped, not made weekly */
+      if (ev.interval > 1) { notes.push('Skipped ' + clip(ev.summary, 60) + ': it repeats every ' + ev.interval + ' weeks, and classes can only repeat weekly.'); continue; }
+      if (ev.until) endings.set(code + '|' + ev.until, clip(ev.summary, 60) + ' ends ' + ev.until);
       classes.push({ code, name: rest || ev.summary, title: ev.summary, weekdays: ev.weekdays, start: ev.start, end: ev.end, room: ev.location, kind: guessKind(ev.summary) });
     } else {
       singles.push({ code: codeToken(ev.summary), explicit: false, title: ev.summary, date: ev.date, start: ev.start, end: ev.end, room: ev.location, weight: null, type: guessType(ev.summary) });
     }
   }
+
+  if (endings.size) notes.push('Classes repeat every week with no end date, so these carry on past their last day in the calendar (delete them then): ' + [...endings.values()].join('; ') + '.');
 
   for (const cl of classes) {
     if (!cl.code) { notes.push('Skipped a class with no course code: ' + clip(cl.title, 60) + '.'); continue; }
