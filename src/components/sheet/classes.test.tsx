@@ -128,8 +128,8 @@ describe("the Activity tab", () => {
         expect(fake.api.spaces.activity).toHaveBeenLastCalledWith(SID, 11)
         expect(screen.getAllByText(/^Gabriel added Lab/)).toHaveLength(30)
         expect(screen.queryByRole("button", { name: "Show older" })).toBeNull()
-        /* the button went with the last page: focus moves on to the row it brought */
-        expect(document.activeElement).toBe(screen.getByText("Sam joined").closest("li"))
+        /* the button went with the last page: focus moves on to the row it brought (in an effect after the row shows) */
+        await waitFor(() => expect(document.activeElement).toBe(screen.getByText("Sam joined").closest("li")))
         fake.api.spaces.activity.mockRejectedValueOnce(new TypeError("Failed to fetch"))
         rerender(<ClassSheet spaceId={SID} tab="details" />)
         rerender(<ClassSheet spaceId={SID} tab="activity" />)
