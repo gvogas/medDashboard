@@ -12,8 +12,7 @@
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { hashPassword, normalizeUsername } from '../worker/password.js';
-import { throttleRowsFor } from '../worker/throttle.js';
-import { DELETE_ACCOUNT, LAST_ADMIN } from '../worker/accounts.js';
+import { DELETE_ACCOUNT, LAST_ADMIN, UNLOCK } from '../worker/accounts.js';
 import { target } from './lib/target.js';
 
 const args = process.argv.slice(2);
@@ -124,7 +123,7 @@ if (admin) {
   sql = reset
     // A new password also lifts any sign-in lock on the name.
     ? `UPDATE users SET password_hash = '${hash}', pw_gen = pw_gen + 1, updated_at = ${now} WHERE username = '${username}';
-       DELETE FROM login_throttle WHERE ${throttleRowsFor(username)};`
+       ${UNLOCK(`'${username}'`)};`
     : `INSERT INTO users (id, username, password_hash, display_name, created_at, updated_at) VALUES ('${id}', '${username}', '${hash}', '${displayName.replace(/'/g, "''")}', ${now}, ${now});`;
 }
 
