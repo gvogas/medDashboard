@@ -55,7 +55,7 @@ export function onUnauthenticated(fn: () => void) { onSignedOut = fn }
 
 function emit(kind: StateKind) {
     listener(state, kind)
-    changed()
+    changed(kind === "tick")
 }
 
 function canPoll() {
@@ -111,17 +111,32 @@ export async function poll() {
     }
 }
 
-/* Between polls the progress line keeps moving on its own. */
+/* Between polls the progress line keeps moving on its own, while the tab is in sight: it
+   is worked out from the last poll, so a tab that comes back shows the right place at once. */
 function tick() {
+    if (document.visibilityState === "hidden") return
     if (!state.playing || !state.track || state.stale) return
     state.track.progressMs = Math.min(state.track.durationMs, baseProgress + (Date.now() - polledAt))
     emit("tick")
 }
 
+function startTicker() {
+    if (ticker === null) ticker = setInterval(tick, 1000)
+}
+
+function stopTicker() {
+    if (ticker !== null) clearInterval(ticker)
+    ticker = null
+}
+
 function wire() {
     if (wired) return
     wired = true
-    document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") poll() })
+    document.addEventListener("visibilitychange", () => {
+        if (document.visibilityState === "hidden") { stopTicker(); return }
+        if (active) { startTicker(); tick() }
+        poll()
+    })
     window.addEventListener("online", poll)
     /* the music coming into sight asks at once, rather than at the slower pace's next turn */
     let shown = musicShown()
@@ -136,8 +151,8 @@ export function start() {
     if (active) return
     active = true
     wire()
-    if (ticker !== null) clearInterval(ticker)
-    ticker = setInterval(tick, 1000)
+    stopTicker()
+    if (document.visibilityState !== "hidden") startTicker()
     poll()
 }
 
@@ -146,8 +161,7 @@ export function stop() {
     active = false
     if (timer !== null) clearTimeout(timer)
     timer = null
-    if (ticker !== null) clearInterval(ticker)
-    ticker = null
+    stopTicker()
     if (errorTimer !== null) clearTimeout(errorTimer)
     errorTimer = null
     Object.assign(state, { connected: false, playing: false, track: null, device: null, deviceId: null, volume: null, supportsVolume: false, shuffle: false, repeat: "off", stale: false, error: null, loaded: false })

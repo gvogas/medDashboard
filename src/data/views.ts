@@ -366,7 +366,6 @@ export function quoteAt(quotes: Quote[], ix: number): { quote: Quote; ix: number
 
 /* ── hooks: the selectors over the live data, redone after any change ── */
 
-const filtersOf = (): Filters => ({ search: ui.search, course: ui.course })
 
 /** The table's filters. A stat tile's list leaves out the course, the search and the source, as the tile does. */
 export const tableFiltersOf = (spaces: { id: string }[]): TableFilters => {
@@ -375,23 +374,24 @@ export const tableFiltersOf = (spaces: { id: string }[]): TableFilters => {
 }
 
 /**
- * The live input for the views. The `ui` object is changed in place, so the version the
- * bridge bumps on every redraw is part of the key; the collections are new arrays when
- * the store reloads. The Week and the Month (`calendar`) leave out what you hid with an eye
+ * The live input for the views. The `ui` object is changed in place, so the key names the
+ * fields read from it, and today for a page left open past midnight; the collections are
+ * new arrays when the store reloads. A redraw on any change still happens (the subscription),
+ * but the input is rebuilt only when something it holds changed. The Week and the Month (`calendar`) leave out what you hid with an eye
  * toggle (spec §9), and of a project's rows keep only your tasks, folding a project into its
  * assignment on the same day (forCalendar); All items does not.
  */
 function useViewInput(calendar = false): ViewInput {
     const items = useItems(), courses = useCourses(), profile = useProfile(), spaces = useSpaces()
-    const version = useSyncExternalStore(subscribe, getVersion)
+    useSyncExternalStore(subscribe, getVersion)
+    const { search, course, schedule, anchor } = ui, today = todayIso()
     return useMemo(
         () => {
             const hidden = profile?.hiddenSources ?? []
             const shown = calendar ? onCalendar(items, courses, hidden) : { items, courses }
-            return { items: calendar ? forCalendar(shown.items, profile?.id ?? "", spaces) : shown.items, courses: shown.courses, total: items.length, filters: filtersOf(), schedule: ui.schedule, anchor: ui.anchor, today: todayIso(), cal: schoolCal() }
+            return { items: calendar ? forCalendar(shown.items, profile?.id ?? "", spaces) : shown.items, courses: shown.courses, total: items.length, filters: { search, course }, schedule, anchor, today, cal: schoolCal() }
         },
-        // eslint-disable-next-line react-hooks/exhaustive-deps -- `version` stands for the ui
-        [items, courses, profile, spaces, version, calendar],
+        [items, courses, profile, spaces, search, course, schedule, anchor, today, calendar],
     )
 }
 
@@ -420,18 +420,21 @@ export const useMonth = () => {
  */
 export function tableView(items: Item[], courses: Course[], f: TableFilters, sort: { key: SortKey; dir: 1 | -1 }, tile: boolean, me: string) {
     const list = tile ? forStats(items as EffectiveItem[], me) : items
+    const rows = tableRows(list, courses, f, sort)
+    /* overdue items are open ones, so the count is read off the rows already filtered */
     return {
-        rows: tableRows(list, courses, f, sort),
-        overdue: tableRows(list, courses, { ...f, show: "overdue" }, sort).length,
+        rows,
+        overdue: f.show === "overdue" ? rows.length : rows.filter(isOverdue).length,
         perType: typeCounts(list, f.course, f.source),
     }
 }
 
 export const useTable = () => {
     const input = useViewInput(), spaces = useSpaces(), profile = useProfile()
-    const sort = { key: ui.sort.key, dir: ui.sort.dir }
+    /* the table's own ui fields; the types are changed in place, so their JSON is the key */
+    const { key, dir } = ui.sort, { show, source, listFrom, search, course } = ui, types = JSON.stringify(ui.types)
     return useMemo(() => {
-        const f = tableFiltersOf(spaces)
+        const sort = { key, dir }, f = tableFiltersOf(spaces)
         return {
             ...tableView(input.items, input.courses, f, sort, ui.listFrom === "tile", profile?.id ?? ""),
             total: input.items.length,
@@ -439,16 +442,16 @@ export const useTable = () => {
             filters: f,
         }
     },
-        // eslint-disable-next-line react-hooks/exhaustive-deps -- the sort is part of the ui, keyed by `input`
-        [input, spaces, profile])
+        // eslint-disable-next-line react-hooks/exhaustive-deps -- tableFiltersOf reads the ui fields named here
+        [input, spaces, profile, key, dir, show, source, listFrom, search, course, types])
 }
 
 export const useStats = () => {
     const items = useItems(), sessions = useStudySessions(), profile = useProfile(), quotes = useQuotes()
-    const version = useSyncExternalStore(subscribe, getVersion)
+    useSyncExternalStore(subscribe, getVersion)
+    const today = todayIso()   /* the day rolling over on a redraw */
     /* of a project's rows, only your tasks count (forStats) */
     const numbers = useMemo(() => stats(forStats(items, profile?.id ?? ""), sessions, profile?.studyPrefs, todayIso()),
-        // eslint-disable-next-line react-hooks/exhaustive-deps -- `version` catches the day rolling over on a redraw
-        [items, sessions, profile, version])
+        [items, sessions, profile, today])
     return { ...numbers, quote: quoteAt(quotes, ui.quoteIx), quoteCount: quotes.length }
 }

@@ -49,6 +49,24 @@ describe("useSpotify", () => {
         expect(seen.at(-1)).toBe(before)
     })
 
+    it("keeps the rest of the snapshot through a progress tick", () => {
+        const seen: SpotifySnapshot[] = []
+        render(<Probe seen={seen} />)
+        act(() => { Object.assign(player, { connected: true, playing: true, track: { uri: "spotify:track:t2", title: "Tick", artists: "", album: "", art: null, url: null, durationMs: 9000, progressMs: 0 } }); changed() })
+        const was = seen.at(-1)!
+        act(() => { player.track!.progressMs = 1000; changed(true) })
+        const now = seen.at(-1)!
+        expect(now).not.toBe(was)
+        expect(now.player.track?.progressMs).toBe(1000)
+        expect(now.web).toBe(was.web)
+        expect(now.cache).toBe(was.cache)
+        expect(now.place).toBe(was.place)
+        expect(now.busy).toBe(was.busy)
+        /* any other change rebuilds it all */
+        act(() => { changed() })
+        expect(seen.at(-1)!.web).not.toBe(was.web)
+    })
+
     it("shows a note and clears it when it expires", () => {
         vi.useFakeTimers()
         render(<Probe seen={[]} />)

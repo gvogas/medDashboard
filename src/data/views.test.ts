@@ -293,6 +293,16 @@ describe("the table", () => {
         expect(all.rows).toHaveLength(4)
         expect(all.overdue).toBe(4)
     })
+
+    it("counts the overdue items the same whatever the status chip", () => {
+        const rows = [item({ id: "late", date: "2026-09-21" }), item({ id: "done", date: "2026-09-21", status: "done" }), item({ id: "ahead", date: "2026-09-30" })]
+        const sort = { key: "date" as const, dir: 1 as const }
+        for (const show of ["all", "open", "overdue"] as const) {
+            const view = tableView(rows, [], { ...TABLE, show }, sort, false, "me")
+            expect(view.overdue).toBe(1)
+            expect(view.rows).toHaveLength(show === "all" ? 3 : show === "open" ? 2 : 1)
+        }
+    })
 })
 
 describe("the stat tiles", () => {

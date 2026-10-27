@@ -295,22 +295,22 @@ export function badges(sessions: StudySession[], items: Item[], prefs: StudyPref
 
 /**
  * The sessions shown, the prefs, the term start and today. The History card's state is
- * the `ui` object, changed in place, so the bridge's version is part of the key; it
- * also catches the day rolling over on a redraw.
+ * the `ui` object, changed in place, so the key names the fields read from it; today
+ * catches the day rolling over on a redraw.
  */
 function useStudyInput() {
     const sessions = useStudySessions(), profile = useProfile()
-    const version = useSyncExternalStore(subscribe, getVersion)
+    useSyncExternalStore(subscribe, getVersion)
+    const { weekOffset, tab, monthOffset, focusDay, undo } = ui.hist, today = todayIso()
     return useMemo(() => ({
         /* in key space (refs.ts): a session on a class's course is told apart from one on yours */
-        sessions: keyedSessions(shownSessions(sessions, ui.hist.undo)),
+        sessions: keyedSessions(shownSessions(sessions, undo)),
         prefs: normalizePrefs(profile?.studyPrefs) as StudyPrefs,
         termStart: currentTermStart() as string | null,
-        today: todayIso(),
-        hist: { ...ui.hist },
+        today,
+        hist: { weekOffset, tab, monthOffset, focusDay, undo },
     }),
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- `version` stands for the ui
-    [sessions, profile, version])
+    [sessions, profile, today, weekOffset, tab, monthOffset, focusDay, undo])
 }
 
 export const useStudyTiles = () => {

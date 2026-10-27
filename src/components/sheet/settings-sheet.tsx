@@ -22,7 +22,7 @@ import { setBg, setTheme } from "@/data/theme"
 import { notify } from "@/bridge"
 import { useConflicts, useItems, useCourses, useProfile, useQuotes } from "@/data/store"
 import { useSyncStatus } from "@/data/sync"
-import { ui, useUi } from "@/data/ui"
+import { ui, useNotified, useUi } from "@/data/ui"
 import { beforeSheetClose, closeSheet } from "@/data/overlay"
 import { coatColour, feedLink, GOAL_MAX, GOALS, hm, REST_DAYS, savedValues, syncLine, TABS, themeLabel, timeZone, toggleRest, type SettingsTab } from "@/data/settings"
 import { openSchool, removeSchool } from "@/data/school-edit"
@@ -546,7 +546,7 @@ const SpotifyMark = () => (
 
 function SpotifyGroup() {
     const note = useUi((u) => u.spotifyNote)
-    useUi((u) => u.view)   /* redrawn as the player's state changes (boot.ts notifies) */
+    useNotified()   /* redrawn as the player's state changes (boot.ts notifies) */
     const on = spotify.connected, retry = spotifyRetryAt()
     let who: ReactNode, action: ReactNode = null
     if (!spotify.loaded) {

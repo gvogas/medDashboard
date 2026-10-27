@@ -110,6 +110,28 @@ describe("the poller", () => {
         expect(kinds.filter((k) => k === "tick")).toHaveLength(3)
     })
 
+    it("holds the progress line while the tab is hidden, and catches up when it is shown", async () => {
+        vi.useFakeTimers()
+        const { player } = await fresh((path) => path === "/api/spotify/status" ? json({ connected: true }) : json(PLAYING))
+        const kinds: string[] = []
+        player.onState((_, kind) => kinds.push(kind))
+        player.start()
+        await vi.advanceTimersByTimeAsync(2000)
+        const ticks = kinds.filter((k) => k === "tick").length
+        setVisible(false)
+        document.dispatchEvent(new Event("visibilitychange"))
+        await vi.advanceTimersByTimeAsync(5000)
+        expect(kinds.filter((k) => k === "tick")).toHaveLength(ticks)
+        const held = player.state.track!.progressMs
+        setVisible(true)
+        document.dispatchEvent(new Event("visibilitychange"))
+        /* the position is worked out from the last poll, so it has moved on at once */
+        expect(player.state.track!.progressMs).toBeGreaterThanOrEqual(held + 5000)
+        await vi.advanceTimersByTimeAsync(2000)
+        expect(kinds.filter((k) => k === "tick").length).toBeGreaterThan(ticks)
+        player.stop()
+    })
+
     it("stops asking once not connected", async () => {
         vi.useFakeTimers()
         const { player, paths } = await fresh(() => json({ connected: false }))
