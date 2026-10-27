@@ -79,3 +79,16 @@ describe('AI reads left', () => {
     expect(await readsLeft(env.DB, 'u-reads-left', Date.now() + 61000)).toEqual({ left: OUTLINE_DAILY_LIMIT, limit: OUTLINE_DAILY_LIMIT });
   });
 });
+
+describe('the error log on the response path', () => {
+  it('is written after the answer, through ctx.waitUntil', async () => {
+    const waits = [];
+    const ctx = { waitUntil: (p) => waits.push(p) };
+    const path = '/api/no-such-route-waituntil';
+    const res = await handleApi(new Request(BASE + path), env, new URL(BASE + path), ctx);
+    expect(res.status).toBe(404);
+    expect(waits).toHaveLength(1);
+    await Promise.all(waits);
+    expect(await env.DB.prepare('SELECT count(*) AS n FROM error_log WHERE route = ?').bind(path).first()).toEqual({ n: 1 });
+  });
+});

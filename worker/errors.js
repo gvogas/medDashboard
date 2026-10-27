@@ -34,17 +34,30 @@ const dayStart = (now) => now - (now % DAY_MS);
 /** A route as the log keeps it: a calendar feed's link is its password, so it never goes in. */
 export const routeForLog = (route) => String(route).replace(/^\/api\/calendar\/[^/]+\/[^/]+\.ics$/, '/api/calendar/…/….ics');
 
+/* Caps already reached, per isolate: "<kind>" or "<kind>:anon" on a UTC day. Once a cap is
+   reached, nothing more is written that day, so the count (up to 500 rows) is not run again. */
+const full = new Set();
+const fullKey = (kind, anon, now) => `${kind}${anon ? ':anon' : ''}@${dayStart(now)}`;
+
 /** Record one error. Never throws. */
 export async function logError(db, { method = '', route = '', status = 500, message = '', userId = null }, now = Date.now()) {
   route = routeForLog(route);
   const kind = kindOf({ method, status });
   const anonCap = userId === null ? ANON_CAPS[kind] ?? null : null;
   try {
-    await db.prepare(
+    if (full.has(fullKey(kind, false, now)) || (anonCap !== null && full.has(fullKey(kind, true, now)))) return;
+    const res = await db.prepare(
       `INSERT INTO error_log (at, method, route, status, message, user_id)
        SELECT ?1, ?2, ?3, ?4, ?5, ?6 WHERE (SELECT count(*) FROM error_log WHERE at >= ?7 AND ${KIND_SQL} = ?9) < ?8
          AND (?10 IS NULL OR (SELECT count(*) FROM error_log WHERE at >= ?7 AND ${KIND_SQL} = ?9 AND user_id IS NULL) < ?10)`,
     ).bind(now, String(method).slice(0, 8), String(route).slice(0, 200), status, String(message).slice(0, 500), userId, dayStart(now), CAPS[kind], kind, anonCap).run();
+    if (res?.meta?.changes === 0) {
+      // Refused: find which cap was reached, and remember it for the day.
+      const row = await db.prepare(`SELECT count(*) AS n, count(user_id) AS signed FROM error_log WHERE at >= ? AND ${KIND_SQL} = ?`).bind(dayStart(now), kind).first();
+      if (row.n >= CAPS[kind]) full.add(fullKey(kind, false, now));
+      else if (anonCap !== null && row.n - row.signed >= anonCap) full.add(fullKey(kind, true, now));
+      if (full.size > 64) full.clear();
+    }
   } catch (e) {
     console.error('error_log:', e?.message || e);
   }

@@ -484,8 +484,16 @@ function assertSameOrigin(request, url) {
 
 const API_HEADERS = { 'cache-control': 'no-store', 'x-content-type-options': 'nosniff' };
 
-export async function handleApi(request, env, url) {
+export async function handleApi(request, env, url, ctx = null) {
   let res = null;
+  /* The error log is written after the answer is sent (ctx.waitUntil); without a ctx, before. */
+  const record = (entry) => {
+    const done = sessionUserId(request, env)
+      .then((userId) => logError(env.DB, { method: request.method, route: url.pathname, ...entry, userId }))
+      .catch((e) => console.error('error_log:', e?.message || e));
+    if (ctx?.waitUntil) ctx.waitUntil(done);
+    else return done;
+  };
   try {
     assertSameOrigin(request, url);
     for (const [method, pattern, handler] of routes) {
@@ -513,13 +521,13 @@ export async function handleApi(request, env, url) {
       const signedOut = e.status === 401 && e.body?.error === 'unauthenticated' && !hasSessionCookie(request);
       if (e.status >= 400 && e.status <= 499 && !e.logged && !signedOut && url.pathname !== '/api/errors') {
         const detail = Object.entries(e.body || {}).map(([k, v]) => (k === 'error' ? String(v) : `${k}: ${v}`)).join(' · ');
-        await logError(env.DB, { method: request.method, route: url.pathname, status: e.status, message: detail, userId: await sessionUserId(request, env) });
+        await record({ status: e.status, message: detail });
       }
     } else {
       // A schema the code expects but D1 lacks means a migration was not applied remotely.
       if (/no such (table|column)/i.test(e?.message || '')) console.error('D1 schema is behind the code; run `npm run db:remote`.');
       console.error(e);
-      await logError(env.DB, { method: request.method, route: url.pathname, status: 500, message: messageOf(e), userId: await sessionUserId(request, env) });
+      await record({ status: 500, message: messageOf(e) });
       res = json({ error: 'internal' }, 500);
     }
   }
