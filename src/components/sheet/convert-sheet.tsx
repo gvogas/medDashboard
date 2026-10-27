@@ -11,19 +11,12 @@ import { shortDate } from "@/core/dates"
 import { useCourses, useItems } from "@/data/store"
 import { closeSheet } from "@/data/overlay"
 import { convert, convertChoice, messageFor } from "@/data/classes"
-import { useMaintenance } from "@/data/maintenance"
-import { MaintenanceBar, MaintenancePage } from "@/components/maintenance"
+import { MaintenanceBar } from "@/components/maintenance"
 import { Button, Note, SheetBody, SheetFoot, SheetHead, Warning } from "./fields"
+import { ClassesGate } from "./gate"
 
 export function ConvertSheet({ courseId }: { courseId: string }) {
-    const maintenance = useMaintenance("classes")
-    if (maintenance !== "blocked") return <Picker courseId={courseId} bar={maintenance === "admin"} />
-    return (
-        <>
-            <SheetHead kind="Convert to shared class" onClose={closeSheet} />
-            <SheetBody><MaintenancePage feature="classes" inSheet /></SheetBody>
-        </>
-    )
+    return <ClassesGate kind="Convert to shared class">{(bar) => <Picker courseId={courseId} bar={bar} />}</ClassesGate>
 }
 
 function Picker({ courseId, bar }: { courseId: string; bar: boolean }) {

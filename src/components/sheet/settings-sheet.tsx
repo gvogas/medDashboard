@@ -23,7 +23,7 @@ import { notify } from "@/bridge"
 import { useConflicts, useItems, useCourses, useProfile, useQuotes } from "@/data/store"
 import { useSyncStatus } from "@/data/sync"
 import { ui, useUi } from "@/data/ui"
-import { beforeSheetClose, closeSheet } from "@/data/overlay"
+import { closeSheet } from "@/data/overlay"
 import { coatColour, feedLink, GOAL_MAX, GOALS, hm, REST_DAYS, savedValues, syncLine, TABS, themeLabel, timeZone, toggleRest, type SettingsTab } from "@/data/settings"
 import { openSchool, removeSchool } from "@/data/school-edit"
 import {
@@ -35,6 +35,7 @@ import { radioKeys, rovingTab } from "./radio-keys"
 import { ExportData } from "./export-data"
 import { GradingGroup } from "./grading-settings"
 import { Button, CONTROL, RemoveButton, SheetBody, SheetFoot, SheetHead, Swatches, TextInput } from "./fields"
+import { useFlushOnClose } from "./gate"
 
 export function SettingsSheet({ tab, focus }: { tab: SettingsTab; focus: string | null }) {
     const profile = useProfile()
@@ -42,15 +43,11 @@ export function SettingsSheet({ tab, focus }: { tab: SettingsTab; focus: string 
     const sync = useSyncStatus()
 
     /* what was said and asked goes when Settings closes */
-    useEffect(() => {
-        const forget = () => {
-            ui.schoolNote = null; ui.spotifyNote = null
-            ui.signoutAsk = null; ui.schoolAsk = false
-            if (ui.feed) ui.feed.confirm = null
-        }
-        beforeSheetClose.add(forget)
-        return () => { beforeSheetClose.delete(forget) }
-    }, [])
+    useFlushOnClose(() => {
+        ui.schoolNote = null; ui.spotifyNote = null
+        ui.signoutAsk = null; ui.schoolAsk = false
+        if (ui.feed) ui.feed.confirm = null
+    })
 
     /* a deep link: the field or group, focused and in view */
     useEffect(() => {

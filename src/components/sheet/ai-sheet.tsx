@@ -10,10 +10,10 @@ import { refreshReads } from "@/data/ai-read"
 import { OUTLINE_ACCEPT, importFile, previewImport, readOutlineFile } from "@/data/import-edit"
 import { readSchoolFile } from "@/data/school-edit"
 import { readScheduleFile } from "@/data/schedule-edit"
-import { beforeSheetClose, closeSheet } from "@/data/overlay"
-import { useMaintenance } from "@/data/maintenance"
-import { MaintenanceBar, MaintenancePage } from "@/components/maintenance"
+import { closeSheet } from "@/data/overlay"
+import { MaintenanceBar } from "@/components/maintenance"
 import { Button, SheetBody, SheetHead, TextArea } from "./fields"
+import { ClassesGate, useFlushOnClose } from "./gate"
 
 const KINDS = [
     {
@@ -42,14 +42,7 @@ const KINDS = [
 /** The card; while the admins have Import with AI switched off, their message instead
     (an admin keeps the card, under the bar). */
 export function AiSheet() {
-    const maintenance = useMaintenance("import")
-    if (maintenance !== "blocked") return <Importer bar={maintenance === "admin"} />
-    return (
-        <>
-            <SheetHead kind="Import with AI" onClose={closeSheet} />
-            <SheetBody><MaintenancePage feature="import" inSheet /></SheetBody>
-        </>
-    )
+    return <ClassesGate kind="Import with AI" feature="import">{(bar) => <Importer bar={bar} />}</ClassesGate>
 }
 
 function Importer({ bar }: { bar: boolean }) {
@@ -72,11 +65,9 @@ function Importer({ bar }: { bar: boolean }) {
 
     useEffect(() => {
         void refreshReads()
-        /* what the card said goes when it closes */
-        const forget = () => { ui.aiNote = null }
-        beforeSheetClose.add(forget)
-        return () => { beforeSheetClose.delete(forget) }
     }, [])
+    /* what the card said goes when it closes */
+    useFlushOnClose(() => { ui.aiNote = null })
 
     const paste = () => {
         if (!text.trim()) return

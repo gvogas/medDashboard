@@ -11,8 +11,9 @@ import { makeBlank, messageFor, openConvert } from "@/data/classes"
 import { OUTLINE_ACCEPT, readOutlineFile } from "@/data/import-edit"
 import { ui, useUi } from "@/data/ui"
 import { useMaintenance } from "@/data/maintenance"
-import { MaintenanceBar, MaintenancePage } from "@/components/maintenance"
+import { MaintenanceBar } from "@/components/maintenance"
 import { Button, Fields, Label, Note, Select, SheetBody, SheetFoot, SheetHead, TextInput } from "./fields"
+import { ClassesGate } from "./gate"
 
 type Start = "blank" | "convert" | "outline"
 const OPTIONS: readonly [Start, string, string][] = [
@@ -22,14 +23,7 @@ const OPTIONS: readonly [Start, string, string][] = [
 ]
 
 export function NewClassSheet() {
-    const maintenance = useMaintenance("classes")
-    if (maintenance !== "blocked") return <NewClass bar={maintenance === "admin"} />
-    return (
-        <>
-            <SheetHead kind="New shared class" onClose={closeSheet} />
-            <SheetBody><MaintenancePage feature="classes" inSheet /></SheetBody>
-        </>
-    )
+    return <ClassesGate kind="New shared class">{(bar) => <NewClass bar={bar} />}</ClassesGate>
 }
 
 function NewClass({ bar }: { bar: boolean }) {

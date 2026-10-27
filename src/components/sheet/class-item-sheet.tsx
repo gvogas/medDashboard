@@ -17,19 +17,19 @@ import { schoolCal, termStart } from "@/data/query"
 import { duration } from "@/lib/time"
 import { useItems, useMarks, useProfile, useRemovedItems, useSharedCourses, useSharedItems, useSpaces, useStudySessions } from "@/data/store"
 import { useUi } from "@/data/ui"
-import { beforeSheetClose, closeSheet } from "@/data/overlay"
+import { closeSheet } from "@/data/overlay"
 import { busyDays, countdown, deriveEdit, REPEAT_CHOICES, REPEATS, untilLabel, type ItemField } from "@/data/item-edit"
 import { courseByKey } from "@/data/effective"
 import { keyedItems, keyedSessions, splitKey } from "@/data/refs"
 import { studiedFor } from "@/data/study"
 import { editedBy, editMark, editRow, flushTyping, hideAsks, markIdOf, markStatus, pendingMark, pendingRow, setHidden, typeMark, typeRow, useTyping } from "@/data/marks"
 import { toast } from "@/data/toast"
-import { useMaintenance } from "@/data/maintenance"
 import { StatusChip } from "@/components/views/bits"
 import { SharedGlyph } from "@/components/shared-glyph"
-import { MaintenanceBar, MaintenancePage } from "@/components/maintenance"
+import { MaintenanceBar } from "@/components/maintenance"
 import type { Course, Item, Mark } from "@/data/types"
 import { Button, Chips, DateInput, KeptNumberInput, Note, Prop, Props, QUIET, Section, Segmented, Select, SheetBody, SheetFoot, SheetHead, TextArea, TextInput, TitleArea } from "./fields"
+import { ClassesGate, useFlushOnClose } from "./gate"
 import { TimeField } from "./time-field"
 import { DatePicker } from "./date-picker"
 import { ICONS } from "./prop-icons"
@@ -44,14 +44,7 @@ const KEY = "text-muted-foreground"
 /* While the admins have shared classes switched off, everyone else gets the maintenance page
    (an admin keeps the card, under the bar), as for the class sheet. */
 export function ClassItemSheet({ itemKey }: { itemKey: string }) {
-    const maintenance = useMaintenance("classes")
-    if (maintenance !== "blocked") return <ClassItemCard itemKey={itemKey} bar={maintenance === "admin"} />
-    return (
-        <>
-            <SheetHead kind="Class item" onClose={closeSheet} />
-            <SheetBody><MaintenancePage feature="classes" inSheet /></SheetBody>
-        </>
-    )
+    return <ClassesGate kind="Class item">{(bar) => <ClassItemCard itemKey={itemKey} bar={bar} />}</ClassesGate>
 }
 
 function ClassItemCard({ itemKey, bar }: { itemKey: string; bar: boolean }) {
@@ -72,11 +65,7 @@ function ClassItemCard({ itemKey, bar }: { itemKey: string; bar: boolean }) {
     const f = useId()
 
     /* closing, or switching to another item, saves what is being typed */
-    useEffect(() => {
-        const save = () => { void flushTyping() }
-        beforeSheetClose.add(save)
-        return () => { beforeSheetClose.delete(save) }
-    }, [])
+    useFlushOnClose(() => { void flushTyping() })
     /* deleted for good, or the class gone from this device, while open; a removed item keeps its card */
     useEffect(() => { if ((!row && !gone) || !space) closeSheet() }, [row, gone, space])
 

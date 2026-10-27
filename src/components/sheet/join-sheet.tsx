@@ -20,10 +20,10 @@ import { openProject } from "@/data/projects"
 import { schoolCal } from "@/data/query"
 import { semesterOptions } from "@/data/course-edit"
 import { adoptSchool } from "@/data/school-edit"
-import { useMaintenance } from "@/data/maintenance"
-import { MaintenanceBar, MaintenancePage } from "@/components/maintenance"
+import { MaintenanceBar } from "@/components/maintenance"
 import type { SpaceSummary } from "@/data/types"
 import { Button, Fields, Label, Note, Select, SheetBody, SheetFoot, SheetHead, Swatches, TextInput } from "./fields"
+import { ClassesGate } from "./gate"
 
 type Stage = { at: "code" } | { at: "loading"; space: SpaceSummary } | { at: "done"; space: SpaceSummary; here: boolean }
 const TITLE = "m-0 text-[22px] leading-[1.22] font-[750] tracking-[-.02em] text-foreground"
@@ -36,14 +36,7 @@ export function joinTerm(classTerm: string, cal: SchoolCalendar | null, day = to
 }
 
 export function JoinSheet({ code, space }: { code: string; space: SpaceSummary | null }) {
-    const maintenance = useMaintenance("classes")
-    if (maintenance !== "blocked") return <Join given={code} space={space} bar={maintenance === "admin"} />
-    return (
-        <>
-            <SheetHead kind="Join a class" onClose={closeSheet} />
-            <SheetBody><MaintenancePage feature="classes" inSheet /></SheetBody>
-        </>
-    )
+    return <ClassesGate kind="Join a class">{(bar) => <Join given={code} space={space} bar={bar} />}</ClassesGate>
 }
 
 function Join({ given, space, bar }: { given: string; space: SpaceSummary | null; bar: boolean }) {

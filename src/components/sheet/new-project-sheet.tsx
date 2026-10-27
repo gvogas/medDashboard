@@ -9,20 +9,13 @@ import { closeSheet } from "@/data/overlay"
 import { messageFor } from "@/data/classes"
 import { linkable, makeProject } from "@/data/projects"
 import { useSharedItems, useSpaces } from "@/data/store"
-import { useMaintenance } from "@/data/maintenance"
-import { MaintenanceBar, MaintenancePage } from "@/components/maintenance"
+import { MaintenanceBar } from "@/components/maintenance"
 import type { ParentRef } from "@/data/types"
 import { Button, DateInput, Fields, Label, Note, Select, SheetBody, SheetFoot, SheetHead, TextInput } from "./fields"
+import { ClassesGate } from "./gate"
 
 export function NewProjectSheet({ parent }: { parent: ParentRef | null }) {
-    const maintenance = useMaintenance("classes")
-    if (maintenance !== "blocked") return <NewProject parent={parent} bar={maintenance === "admin"} />
-    return (
-        <>
-            <SheetHead kind="New team project" onClose={closeSheet} />
-            <SheetBody><MaintenancePage feature="classes" inSheet /></SheetBody>
-        </>
-    )
+    return <ClassesGate kind="New team project">{(bar) => <NewProject parent={parent} bar={bar} />}</ClassesGate>
 }
 
 const keyOf = (o: ParentRef) => o.space + "/" + o.item

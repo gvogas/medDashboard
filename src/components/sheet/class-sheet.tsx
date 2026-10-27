@@ -20,12 +20,12 @@ import { matchFor, openMerge } from "@/data/merge"
 import { savePref } from "@/data/classes"
 import { schoolCal } from "@/data/query"
 import { semesterOptions } from "@/data/course-edit"
-import { useMaintenance } from "@/data/maintenance"
 import type { SharedCourse, SharedItem, Space, SpacePref } from "@/data/types"
 import { SharedGlyph } from "@/components/shared-glyph"
-import { MaintenanceBar, MaintenancePage } from "@/components/maintenance"
+import { MaintenanceBar } from "@/components/maintenance"
 import { tabKeys } from "./radio-keys"
 import { Button, Checkbox, Fields, Label, Note, Section, Select, SheetBody, SheetFoot, SheetHead, Swatches } from "./fields"
+import { ClassesGate } from "./gate"
 import { Grades } from "./grades"
 import { MembersTab } from "./members-tab"
 import { ActivityList } from "./activity-list"
@@ -40,14 +40,7 @@ const ROW = "flex items-baseline gap-2 rounded-lg bg-muted px-2.5 py-1.5 text-[1
 
 /* While the admins have shared classes switched off, everyone else gets the maintenance page instead. */
 export function ClassSheet({ spaceId, tab }: { spaceId: string; tab: ClassTab }) {
-    const maintenance = useMaintenance("classes")
-    if (maintenance !== "blocked") return <ClassCard spaceId={spaceId} tab={tab} bar={maintenance === "admin"} />
-    return (
-        <>
-            <SheetHead kind="Class" onClose={closeSheet} />
-            <SheetBody><MaintenancePage feature="classes" inSheet /></SheetBody>
-        </>
-    )
+    return <ClassesGate kind="Class">{(bar) => <ClassCard spaceId={spaceId} tab={tab} bar={bar} />}</ClassesGate>
 }
 
 function ClassCard({ spaceId, tab, bar }: { spaceId: string; tab: ClassTab; bar: boolean }) {
