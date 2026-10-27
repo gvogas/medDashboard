@@ -6,6 +6,7 @@
 // useSheet() and useCovered().
 
 import { useSyncExternalStore } from "react"
+import { createEmitter } from "@/lib/store"
 import type { Item, ParentRef, SpaceSummary } from "./types"
 import type { ProjectTab } from "./projects"
 import type { SettingsTab } from "./settings"
@@ -47,11 +48,7 @@ let sheet: SheetState = null
 /* what had focus when the sheet opened, for focus to go back to */
 let opener: Element | null = null
 let covers = 0
-const listeners = new Set<() => void>()
-
-function emit() {
-    for (const fn of listeners) fn()
-}
+const { subscribe, emit } = createEmitter()
 
 /** An overlay opens (`true`) or closes over the page and the sheet. */
 export function cover(on: boolean) {
@@ -66,10 +63,6 @@ export const useCovered = () => useSyncExternalStore(subscribe, () => covers > 0
 
 export const getSheet = () => sheet
 export const useSheet = () => useSyncExternalStore(subscribe, getSheet)
-export function subscribe(fn: () => void) {
-    listeners.add(fn)
-    return () => { listeners.delete(fn) }
-}
 
 /** Run before the sheet closes or changes, e.g. to save what is still being typed. */
 export const beforeSheetClose = new Set<() => void>()

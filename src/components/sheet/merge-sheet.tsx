@@ -11,10 +11,10 @@ import { useCourses, useItems, useSharedItems, useSpaces } from "@/data/store"
 import { closeSheet } from "@/data/overlay"
 import { mergeCourse, pairItems } from "@/data/merge"
 import { messageFor } from "@/data/classes"
-import { useMaintenance } from "@/data/maintenance"
 import type { EffectiveCourse, EffectiveItem } from "@/data/effective"
-import { MaintenanceBar, MaintenancePage } from "@/components/maintenance"
+import { MaintenanceBar } from "@/components/maintenance"
 import { Button, Note, Section, SheetBody, SheetFoot, SheetHead } from "./fields"
+import { ClassesGate } from "./gate"
 
 const TITLE = "m-0 text-[22px] leading-[1.22] font-[750] tracking-[-.02em] text-foreground"
 const ROW = "flex items-center gap-2 rounded-lg bg-muted px-2.5 py-1.5 text-[12.5px]"
@@ -22,14 +22,7 @@ const ROW = "flex items-center gap-2 rounded-lg bg-muted px-2.5 py-1.5 text-[12.
 type Props = { spaceId: string; courseId: string; fromCourse: boolean }
 
 export function MergeSheet(props: Props) {
-    const maintenance = useMaintenance("classes")
-    if (maintenance !== "blocked") return <Merge {...props} bar={maintenance === "admin"} />
-    return (
-        <>
-            <SheetHead kind="Merge into the class" onClose={closeSheet} />
-            <SheetBody><MaintenancePage feature="classes" inSheet /></SheetBody>
-        </>
-    )
+    return <ClassesGate kind="Merge into the class">{(bar) => <Merge {...props} bar={bar} />}</ClassesGate>
 }
 
 function Merge({ spaceId, courseId, fromCourse, bar }: Props & { bar: boolean }) {

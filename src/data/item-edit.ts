@@ -9,6 +9,7 @@ import { dayMonth, diffDays, parse, today, DOW } from "@/core/dates"
 import { repeatEnds, type SchoolCalendar, type Term } from "@/core/school"
 import { nextReview } from "@/core/reviews"
 import { launch as fireworks } from "@/lib/fireworks"
+import { createEmitter } from "@/lib/store"
 import { effectiveItems } from "./effective"
 import { useItems } from "./store"
 import type { Course, Item } from "./types"
@@ -132,9 +133,8 @@ export function linkUrl(raw: string, isHttp: (u: string) => boolean): string | n
 export const TYPING_MS = 400
 let pending: { id: string; patch: Partial<Item>; timer: ReturnType<typeof setTimeout> } | null = null
 let version = 0
-const listeners = new Set<() => void>()
-const emit = () => { version++; for (const fn of listeners) fn() }
-const subscribePending = (fn: () => void) => { listeners.add(fn); return () => { listeners.delete(fn) } }
+const { subscribe: subscribePending, emit: notifyPending } = createEmitter()
+const emit = () => { version++; notifyPending() }
 
 /** What is typed but not saved yet for an item. */
 export const pendingFor = (id: string): Partial<Item> | null => (pending?.id === id ? pending.patch : null)

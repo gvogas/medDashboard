@@ -11,18 +11,18 @@ import { cn } from "@/lib/utils"
 import { httpUrl, tmeta } from "@/core/model"
 import { shortDate } from "@/core/dates"
 import { useItems, useMarks, useProfile, useSharedItems, useSpaces } from "@/data/store"
-import { beforeSheetClose, closeSheet } from "@/data/overlay"
+import { closeSheet } from "@/data/overlay"
 import { busyDays, celebrate, countdown } from "@/data/item-edit"
 import { splitKey } from "@/data/refs"
 import { editedBy, editRow, flushTyping, markIdOf, pendingMark, pendingRow, setHidden, typeMark, typeRow, useTyping } from "@/data/marks"
 import { assigneeNames, canClaim, canEdit, canFinish, claim, deleteTask, openProject, setDone } from "@/data/projects"
 import { toast } from "@/data/toast"
-import { useMaintenance } from "@/data/maintenance"
 import { StatusChip } from "@/components/views/bits"
 import { TeamGlyph } from "@/components/shared-glyph"
-import { MaintenanceBar, MaintenancePage } from "@/components/maintenance"
+import { MaintenanceBar } from "@/components/maintenance"
 import type { Item, Mark, SharedItem } from "@/data/types"
 import { Button, Note, Prop, Props, QUIET, Section, SheetBody, SheetFoot, SheetHead, TextArea, TitleArea } from "./fields"
+import { ClassesGate, useFlushOnClose } from "./gate"
 import { TimeField } from "./time-field"
 import { DatePicker } from "./date-picker"
 import { ICONS } from "./prop-icons"
@@ -34,14 +34,7 @@ const BOX = "size-3.5 shrink-0 accent-[var(--accent)]"
 /* While the admins have shared classes switched off, everyone else gets the maintenance page
    (an admin keeps the card, under the bar), as for the project sheet. */
 export function TaskSheet({ itemKey }: { itemKey: string }) {
-    const maintenance = useMaintenance("classes")
-    if (maintenance !== "blocked") return <TaskCard itemKey={itemKey} bar={maintenance === "admin"} />
-    return (
-        <>
-            <SheetHead kind="Team task" onClose={closeSheet} />
-            <SheetBody><MaintenancePage feature="classes" inSheet /></SheetBody>
-        </>
-    )
+    return <ClassesGate kind="Team task">{(bar) => <TaskCard itemKey={itemKey} bar={bar} />}</ClassesGate>
 }
 
 function TaskCard({ itemKey, bar }: { itemKey: string; bar: boolean }) {
@@ -57,11 +50,7 @@ function TaskCard({ itemKey, bar }: { itemKey: string; bar: boolean }) {
     const [asking, setAsking] = useState(false)
 
     /* closing, or switching to another item, saves what is being typed */
-    useEffect(() => {
-        const save = () => { void flushTyping() }
-        beforeSheetClose.add(save)
-        return () => { beforeSheetClose.delete(save) }
-    }, [])
+    useFlushOnClose(() => { void flushTyping() })
     /* deleted, or the project gone from this device, while open */
     useEffect(() => { if (!row || !space) closeSheet() }, [row, space])
     if (!row || !space) return null

@@ -17,7 +17,7 @@ import { duration } from "@/lib/time"
 import { useCourses, useItems, useStudySessions } from "@/data/store"
 import { studiedFor } from "@/data/study"
 import { useUi } from "@/data/ui"
-import { beforeSheetClose, closeSheet, updateDraft } from "@/data/overlay"
+import { closeSheet, updateDraft } from "@/data/overlay"
 import { busyDays, celebrate, chainReview, countdown, deriveEdit, editNow, flush, REPEAT_CHOICES, REPEATS, typeInto, untilLabel, useItemView, type ItemField } from "@/data/item-edit"
 import { deleteItem, openCourse } from "@/data/actions"
 import { courseByKey, keyOf } from "@/data/effective"
@@ -31,6 +31,7 @@ import {
     AddButton, Button, Checkbox, Chips, DateInput, IconButton, NumberInput, Prop, Props, QUIET, Section, Segmented, Select,
     SheetBody, SheetFoot, SheetHead, TextArea, TextInput, TitleArea,
 } from "./fields"
+import { useFlushOnClose } from "./gate"
 import { TimeField } from "./time-field"
 import { DatePicker } from "./date-picker"
 import { ICONS } from "./prop-icons"
@@ -68,11 +69,7 @@ export function ItemSheet({ id, draft }: { id?: string; draft?: Item }) {
     useEffect(() => { if (focus) setFocus(null) }, [focus])
 
     /* closing, or switching to another item, saves what is being typed */
-    useEffect(() => {
-        const save = () => { void flush() }
-        beforeSheetClose.add(save)
-        return () => { beforeSheetClose.delete(save) }
-    }, [])
+    useFlushOnClose(() => { void flush() })
     /* deleted on another device while open */
     useEffect(() => { if (!it) closeSheet() }, [it])
     if (!it) return null

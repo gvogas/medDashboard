@@ -7,13 +7,12 @@ import { useEffect, useSyncExternalStore } from "react"
 import { api } from "@/core/api"
 import { data } from "@/core/store"
 import { openSheet } from "./overlay"
+import { createEmitter } from "@/lib/store"
 import type { GroupRecord } from "./types"
 
 type Entry = { record: GroupRecord | null; error: boolean; at: number }
 const cache = new Map<string, Entry>()
-const listeners = new Set<() => void>()
-const emit = () => { for (const fn of listeners) fn() }
-const subscribe = (fn: () => void) => { listeners.add(fn); return () => { listeners.delete(fn) } }
+const { subscribe, emit } = createEmitter()
 const loading = new Set<string>()
 
 /** Fetch a room's record (again, when `fresh`). */

@@ -3,6 +3,7 @@
 // <Toaster /> shows it. A new one replaces the old.
 
 import { useSyncExternalStore } from "react"
+import { createEmitter } from "@/lib/store"
 
 export interface ToastOptions {
     /** A button (Undo, or `label`) that hides the toast and calls this. */
@@ -32,11 +33,7 @@ export const TOAST_MS = 6000, TOAST_LONG_MS = 8000
 let current: Toast | null = null
 let timer: ReturnType<typeof setTimeout> | undefined
 let nextId = 1
-const listeners = new Set<() => void>()
-
-function emit() {
-    for (const fn of listeners) fn()
-}
+const { subscribe, emit } = createEmitter()
 
 export function toast(text: string, { undo = null, label = "Undo", badge = null, error = false, ms = TOAST_MS }: ToastOptions = {}) {
     clearTimeout(timer)
@@ -60,11 +57,6 @@ export function runToastAction() {
     const fn = current?.undo
     hideToast()
     fn?.()
-}
-
-function subscribe(fn: () => void) {
-    listeners.add(fn)
-    return () => { listeners.delete(fn) }
 }
 
 export function useToast(): Toast | null {

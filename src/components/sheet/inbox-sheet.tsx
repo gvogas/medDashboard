@@ -18,19 +18,13 @@ import { joinRoomRun } from "@/data/study-timer"
 import { read as readClock } from "@/core/timer"
 import type { RoomInvite } from "@/data/types"
 import { useMaintenance } from "@/data/maintenance"
-import { MaintenanceBar, MaintenancePage } from "@/components/maintenance"
+import { MaintenanceBar } from "@/components/maintenance"
 import type { ActivityRow, Invite } from "@/data/types"
 import { Button, Note, SheetBody, SheetFoot, SheetHead } from "./fields"
+import { ClassesGate } from "./gate"
 
 export function InboxSheet() {
-    const maintenance = useMaintenance("classes")
-    if (maintenance !== "blocked") return <InboxCard bar={maintenance === "admin"} />
-    return (
-        <>
-            <SheetHead kind="Inbox" onClose={closeSheet} />
-            <SheetBody><MaintenancePage feature="classes" inSheet /></SheetBody>
-        </>
-    )
+    return <ClassesGate kind="Inbox">{(bar) => <InboxCard bar={bar} />}</ClassesGate>
 }
 
 const LIST = "m-0 flex list-none flex-col gap-1.5 p-0"

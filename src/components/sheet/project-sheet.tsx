@@ -17,12 +17,12 @@ import { closeSheet, replaceSheet } from "@/data/overlay"
 import { addTask, assignmentOf, canEdit, leaveProject, link, linkable, progress, projectItem, removeProject, takeAssignmentDate, tasksOf, workload, type Assignment, type ProjectTab } from "@/data/projects"
 import { messageFor } from "@/data/classes"
 import { setArchived } from "@/data/leave"
-import { useMaintenance } from "@/data/maintenance"
 import type { SharedItem, Space } from "@/data/types"
 import { TeamGlyph } from "@/components/shared-glyph"
-import { MaintenanceBar, MaintenancePage } from "@/components/maintenance"
+import { MaintenanceBar } from "@/components/maintenance"
 import { tabKeys } from "./radio-keys"
 import { Button, DateInput, Note, Section, Select, SheetBody, SheetFoot, SheetHead, TextInput } from "./fields"
+import { ClassesGate } from "./gate"
 import { MembersTab } from "./members-tab"
 import { ActivityList } from "./activity-list"
 import { TaskRow } from "./task-row"
@@ -33,14 +33,7 @@ const BANNER = "flex flex-wrap items-center gap-2 rounded-lg border border-[var(
 
 /* While the admins have shared classes switched off, everyone else gets the maintenance page instead. */
 export function ProjectSheet({ spaceId, tab }: { spaceId: string; tab: ProjectTab }) {
-    const maintenance = useMaintenance("classes")
-    if (maintenance !== "blocked") return <ProjectCard spaceId={spaceId} tab={tab} bar={maintenance === "admin"} />
-    return (
-        <>
-            <SheetHead kind="Project" onClose={closeSheet} />
-            <SheetBody><MaintenancePage feature="classes" inSheet /></SheetBody>
-        </>
-    )
+    return <ClassesGate kind="Project">{(bar) => <ProjectCard spaceId={spaceId} tab={tab} bar={bar} />}</ClassesGate>
 }
 
 function ProjectCard({ spaceId, tab, bar }: { spaceId: string; tab: ProjectTab; bar: boolean }) {

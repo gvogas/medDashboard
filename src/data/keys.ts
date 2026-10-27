@@ -5,15 +5,15 @@
 import { useSyncExternalStore } from "react"
 import { flushSync } from "react-dom"
 import { refind } from "@/lib/dom"
+import { createEmitter } from "@/lib/store"
 import { cover } from "./overlay"
 
 let open = false
 let back: Element | null = null
-const listeners = new Set<() => void>()
-const emit = () => { for (const fn of listeners) fn() }
+const { subscribe, emit } = createEmitter()
 
 export const keysOpen = () => open
-export const useKeys = () => useSyncExternalStore((fn) => { listeners.add(fn); return () => { listeners.delete(fn) } }, keysOpen)
+export const useKeys = () => useSyncExternalStore(subscribe, keysOpen)
 
 export function openKeys() {
     if (open) return

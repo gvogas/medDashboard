@@ -4,6 +4,7 @@
 // <SignIn /> reads the form's part.
 
 import { useSyncExternalStore } from "react"
+import { createStore } from "@/lib/store"
 
 export type Screen = "none" | "signin" | "app"
 
@@ -15,35 +16,23 @@ export interface SignInState {
     shown: number
 }
 
-let state: SignInState = { screen: "none", error: "", username: "", shown: 0 }
-const listeners = new Set<() => void>()
-
-function set(next: SignInState) {
-    state = next
-    for (const fn of listeners) fn()
-}
+const store = createStore<SignInState>({ screen: "none", error: "", username: "", shown: 0 })
+const { get, set } = store
 
 /** Show the sign-in form, with a reason and the username to keep. */
 export function showSignInState({ error = "", username = "" }: { error?: string; username?: string } = {}) {
-    set({ screen: "signin", error, username, shown: state.shown + 1 })
+    set({ screen: "signin", error, username, shown: get().shown + 1 })
 }
 
 /** Signed in: the app shows. */
 export function showApp() {
-    set({ ...state, screen: "app" })
+    set({ ...get(), screen: "app" })
 }
 
-export const getScreen = () => state.screen
-
-function subscribe(fn: () => void) {
-    listeners.add(fn)
-    return () => { listeners.delete(fn) }
-}
+export const getScreen = () => get().screen
 
 export function useScreen(): Screen {
-    return useSyncExternalStore(subscribe, getScreen)
+    return useSyncExternalStore(store.subscribe, getScreen)
 }
 
-export function useSignInState(): SignInState {
-    return useSyncExternalStore(subscribe, () => state)
-}
+export const useSignInState = store.use
