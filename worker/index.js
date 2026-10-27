@@ -10,6 +10,7 @@ import { sendDigests } from './push.js';
 import { TOMBSTONE_TTL_MS } from '../src/core/shared.ts';
 
 const HOURLY = '0 * * * *';   /* the digests' schedule in wrangler.jsonc */
+const NIGHTLY = '0 3 * * *';  /* the purge's: any other schedule runs nothing, so a changed cron can't purge hourly */
 
 export default {
   async fetch(request, env) {
@@ -26,6 +27,7 @@ export default {
       ctx.waitUntil(cronJob(env.DB, 'digests', () => sendDigests(env, controller.scheduledTime || Date.now())));
       return;
     }
+    if (controller.cron !== NIGHTLY) { console.error('scheduled: unknown cron', controller.cron); return; }
     /* each job on its own: one failing is logged (Admin → Errors, nightly) and the rest still run */
     const job = (name, fn) => ctx.waitUntil(cronJob(env.DB, name, fn));
     job('tombstones', () => purgeTombstones(env.DB, Date.now() - TOMBSTONE_TTL_MS));

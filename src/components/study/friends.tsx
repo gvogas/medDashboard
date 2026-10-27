@@ -49,8 +49,9 @@ function Friends({ bar }: { bar: boolean }) {
     /* one change at a time; its error shows below */
     const run = async (p: Promise<string>) => {
         setBusy(true); setMsg("")
-        setMsg(await p)
-        setBusy(false)
+        try { setMsg(await p) }
+        catch { setMsg("That didn't work. Try again.") }
+        finally { setBusy(false) }   /* a failed change must not leave every button disabled */
     }
     const off = busy || offline
     const myRoom = useRun()?.room?.id ?? null

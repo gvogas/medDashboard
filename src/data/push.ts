@@ -17,7 +17,8 @@ const iosBrowser = () =>
     typeof navigator !== "undefined" && /iPad|iPhone|iPod/.test(navigator.userAgent)
     && !(window.matchMedia?.("(display-mode: standalone)").matches || (navigator as { standalone?: boolean }).standalone)
 
-const subscription = async () => (await navigator.serviceWorker.ready).pushManager.getSubscription()
+/* getRegistration, not .ready: .ready never settles when registering failed, and sign-out waits on this */
+const subscription = async () => (await navigator.serviceWorker.getRegistration())?.pushManager.getSubscription() ?? null
 
 /** The VAPID key as the bytes pushManager.subscribe wants. */
 export function keyBytes(key: string): Uint8Array {

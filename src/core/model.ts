@@ -51,7 +51,7 @@ export function useTypePrefs(get: TypePrefs): void { prefsOf = get; }
 /* A stored row may carry anything here; like a property lookup, it is read as a string. */
 function isTypeId(t: unknown): boolean {
   const k = String(t);
-  return !!TYPES[k] || CUSTOM_TYPE.test(k);
+  return Object.hasOwn(TYPES, k) || CUSTOM_TYPE.test(k);   /* own keys only: "constructor" is no type */
 }
 
 const isInt = (v: unknown): v is number => Number.isInteger(v);
@@ -185,10 +185,10 @@ export function statusLabel(it: Pick<Item, 'type' | 'status'>): string {
   return (hit || list[0])[1];
 }
 export function isOpen(it: Pick<Item, 'status'>): boolean {
-  return !CLOSED[it.status];
+  return !Object.hasOwn(CLOSED, it.status);
 }
 export function isComplete(it: Pick<Item, 'status'>): boolean {
-  return !!COMPLETE[it.status];
+  return Object.hasOwn(COMPLETE, it.status);
 }
 export function isOverdue(it: Pick<Item, 'status' | 'recur' | 'date'>): boolean {
   return isOpen(it) && it.recur !== 'weekly' && diffDays(today(), it.date) < 0;
@@ -259,7 +259,7 @@ export function normalizeItem(raw: RawItem): Item {
     grade: typeof raw.grade === 'number' ? raw.grade : null,
     weight: typeof raw.weight === 'number' ? raw.weight : null,
     notes: cut(raw.notes, 5000),
-    checklist: Array.isArray(raw.checklist) ? raw.checklist.slice(0, 50).map((c) => ({ id: c.id || uid(), text: cut(c.text, 140), done: !!c.done })) : [],
+    checklist: checklistOf(raw.checklist),
     links: Array.isArray(raw.links)
       ? raw.links.filter((l): l is { label?: unknown; url: string } => !!l && httpUrl(l.url)).slice(0, 20).map((l) => ({ label: cut(l.label, 60), url: l.url }))
       : [],
@@ -289,7 +289,7 @@ export function normalizeCourse(raw: RawCourse, index = 0): Course {
     archived: !!raw.archived,
     target: isInt(raw.target) && raw.target >= 1 && raw.target <= 100 ? raw.target : null,
     meetings: Array.isArray(raw.meetings)
-      ? raw.meetings.slice(0, 12).map((m) => {
+      ? raw.meetings.filter((m) => !!m && typeof m === 'object').slice(0, 12).map((m) => {   /* a null entry would stop reload() */
           const start = m.start || '09:00';
           return {
             id: m.id || uid(),

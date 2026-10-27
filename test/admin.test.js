@@ -230,6 +230,12 @@ describe('errors', () => {
     expect(recent.length).toBeGreaterThanOrEqual(2);
   });
 
+  it('never keeps a calendar feed link: its token is the password', async () => {
+    await logError(env.DB, { method: 'GET', route: '/api/calendar/u1/s3cr3tt0ken.ics', status: 429, message: 'rate_limited' });
+    const rows = await env.DB.prepare("SELECT route FROM error_log WHERE route LIKE '/api/calendar/%'").all();
+    expect(rows.results.map((r) => r.route)).toEqual(['/api/calendar/…/….ics']);
+  });
+
   it('writes at most the daily cap, and the nightly run forgets old ones', async () => {
     const day = Date.UTC(2020, 0, 1, 12);
     await env.DB.prepare('INSERT INTO error_log (at, message) SELECT ?, ? FROM (WITH RECURSIVE n(i) AS (SELECT 1 UNION ALL SELECT i + 1 FROM n WHERE i < ?) SELECT i FROM n)')

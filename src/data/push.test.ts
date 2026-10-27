@@ -26,7 +26,7 @@ beforeEach(() => {
     sub = null
     perm.now = "default"
     perm.answer = "granted"
-    Object.defineProperty(navigator, "serviceWorker", { configurable: true, value: { ready: Promise.resolve({ pushManager }) } })
+    Object.defineProperty(navigator, "serviceWorker", { configurable: true, value: { ready: Promise.resolve({ pushManager }), getRegistration: async () => ({ pushManager }) } })
     vi.stubGlobal("PushManager", function PushManager() {})
     vi.stubGlobal("Notification", { get permission() { return perm.now }, requestPermission: vi.fn(async () => (perm.now = perm.answer)) })
 })
@@ -77,5 +77,11 @@ describe("push reminders on this device", () => {
         delete (navigator as { serviceWorker?: unknown }).serviceWorker
         expect(await pushState()).toBe("unsupported")
         await expect(forgetDevice()).resolves.toBeUndefined()
+    })
+
+    it("lets sign-out go on when the service worker never registered", async () => {
+        Object.defineProperty(navigator, "serviceWorker", { configurable: true, value: { ready: new Promise(() => {}), getRegistration: async () => undefined } })
+        await expect(forgetDevice()).resolves.toBeUndefined()
+        expect(api.pushOff).not.toHaveBeenCalled()
     })
 })
