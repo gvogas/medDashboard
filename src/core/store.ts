@@ -110,13 +110,17 @@ export async function hide(key: string, on = true): Promise<void> {
 export async function reload(): Promise<void> {
   const handle = db;
   if (!handle) return;
-  const snapshot = await handle.transaction(stores, 'readonly', async (a) => ({
-    courses: await a('courses').all(), items: await a('items').all(), quotes: await a('quotes').all(), study_sessions: await a('study_sessions').all(), achievements: await a('achievements').all(),
-    marks: await a('marks').all(), space_prefs: await a('space_prefs').all(),
-    shared_courses: await a('shared_courses').all(), shared_items: await a('shared_items').all(), spaces: await a('spaces').all(),
-    profile: (await a('meta').get('profile'))?.value as Profile | undefined,
-    pending: await a('pending').all(), conflicts: await a('conflicts').all(),
-  }));
+  /* one transaction, every read issued at once rather than each waiting for the last */
+  const snapshot = await handle.transaction(stores, 'readonly', async (a) => {
+    const [courses, items, quotes, study_sessions, achievements, marks, space_prefs, shared_courses, shared_items, spaces, meta, pending, conflicts] = await Promise.all([
+      a('courses').all(), a('items').all(), a('quotes').all(), a('study_sessions').all(), a('achievements').all(),
+      a('marks').all(), a('space_prefs').all(),
+      a('shared_courses').all(), a('shared_items').all(), a('spaces').all(),
+      a('meta').get('profile'),
+      a('pending').all(), a('conflicts').all(),
+    ]);
+    return { courses, items, quotes, study_sessions, achievements, marks, space_prefs, shared_courses, shared_items, spaces, profile: meta?.value as Profile | undefined, pending, conflicts };
+  });
   if (db !== handle) return;
   for (const kind of kinds) (data as Record<Kind, Rows[Kind][]>)[kind] = snapshot[kind].filter((r) => !hidden.has(kind + ':' + r.id)).map(normalizer(kind));
   data.shared_courses = snapshot.shared_courses.filter((r) => !hidden.has(sharedKey('shared_courses', r.scope, r.id))).map((r) => normalShared.shared_courses(r as unknown as Row));
