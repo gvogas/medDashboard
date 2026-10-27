@@ -2,8 +2,8 @@
 // run inside the statement that reads or writes, so there is no gap between the check and
 // the act. A scope and a user id always come from the route and the session, never a body.
 import { HttpError } from './http.js';
+import { SPACE_ID } from './validate.js';
 
-const SPACE_ID = /^[a-z0-9]{12}$/;
 const PREFIX = { class: 'c', project: 'p' };
 
 /**

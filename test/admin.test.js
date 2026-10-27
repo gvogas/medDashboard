@@ -5,7 +5,8 @@ import { LATEST_MIGRATION, adminHousekeeping } from '../worker/admin.js';
 import { ANON_CAPS, BROWSER_PER_HOUR, CAPS, DAILY_CAP, cronJob, logError, purgeErrors } from '../worker/errors.js';
 import { trafficReport } from '../worker/analytics.js';
 import { upsertRow } from '../worker/db.js';
-import { NEXT_SPACE_REVISION as COPIED_REVISION } from '../worker/accounts.js';
+import { DELETE_ACCOUNT, LAST_ADMIN, NEXT_SPACE_REVISION as COPIED_REVISION } from '../worker/accounts.js';
+import { deleteAccountStmts } from '../worker/leaving.js';
 import { NEXT_SPACE_REVISION } from '../worker/spaces.js';
 
 const makeAdmin = (username) => env.DB.prepare('UPDATE users SET is_admin = 1 WHERE username = ?').bind(username).run();
@@ -108,6 +109,30 @@ describe('accounts', () => {
     expect(await env.DB.prepare("SELECT count(*) AS n FROM courses WHERE scope = 'u:' || ?").bind(id).first()).toEqual({ n: 0 });
     expect(await env.DB.prepare("SELECT count(*) AS n FROM changes WHERE scope = 'u:' || ?").bind(id).first()).toEqual({ n: 0 });
     expect((await admin('/api/admin/accounts/u-gone1', { method: 'DELETE', body: { confirm: 'gone1' } })).status).toBe(404);
+  });
+
+  it('deletes through the shared statements for a script too: audit as the CLI, limits cleared, last admin refused', async () => {
+    await signInAdmin('bossscript');
+    const id = await createUser('gone2');
+    await env.DB.prepare("INSERT INTO request_limits (key, hits, reset_at) VALUES ('api:' || ?, 1, 1)").bind(id).run();
+    /* the script binds the same text itself, value by value */
+    const values = [`'${id}'`, '5', "'gone2'", "'cli'", "'scripts/add-user.mjs'"];
+    for (const sql of DELETE_ACCOUNT) await env.DB.prepare(sql.replace(/\?(\d+)/g, (_, n) => values[n - 1])).run();
+    expect(await env.DB.prepare('SELECT count(*) AS n FROM users WHERE id = ?').bind(id).first()).toEqual({ n: 0 });
+    expect(await env.DB.prepare("SELECT count(*) AS n FROM request_limits WHERE key = 'api:' || ?").bind(id).first()).toEqual({ n: 0 });
+    expect(await env.DB.prepare("SELECT admin, target, detail FROM admin_log WHERE action = 'delete' AND target = 'gone2'").first())
+      .toEqual({ admin: 'cli', target: 'gone2', detail: 'scripts/add-user.mjs' });
+    /* the Worker's binding writes the same entry for an admin */
+    const other = await createUser('gone3');
+    await env.DB.batch(deleteAccountStmts(env.DB, { id: other, username: 'gone3', actor: 'bossscript' }));
+    expect(await env.DB.prepare("SELECT admin FROM admin_log WHERE target = 'gone3'").first()).toEqual({ admin: 'bossscript' });
+    /* only one admin: a row means it may not go */
+    const { results: admins } = await env.DB.prepare("SELECT id FROM users WHERE is_admin = 1 AND id != 'u-bossscript'").all();
+    expect(await env.DB.prepare(LAST_ADMIN).bind('u-bossscript').first()).toBeNull();
+    await env.DB.prepare("UPDATE users SET is_admin = 0 WHERE id != 'u-bossscript'").run();
+    expect(await env.DB.prepare(LAST_ADMIN).bind('u-bossscript').first()).toEqual({ x: 1 });
+    await env.DB.batch(admins.map((a) => env.DB.prepare('UPDATE users SET is_admin = 1 WHERE id = ?').bind(a.id)));
+    expect(await env.DB.prepare(LAST_ADMIN).bind(id).first()).toBeNull();
   });
 
   it("keeps worker/accounts.js's copy of the next space revision in step with worker/spaces.js", () => {

@@ -18,7 +18,7 @@ const TYPE_KINDS = ['todo', 'event', 'graded'];
 const KINDS = ['Lecture', 'Lab', 'Seminar', 'Tutorial', 'PBL', 'Clinical'];
 const THEMES = ['light', 'dark', 'system'];
 const BACKGROUNDS = ['med', 'cs', 'law', 'pilot', 'sports', 'eng'];
-const DATE = /^[0-9]{4}-[0-9]{2}-[0-9]{2}$/;
+export const DATE = /^\d{4}-\d{2}-\d{2}$/;
 const TIME = /^(?:[01][0-9]|2[0-3]):[0-5][0-9]$/;
 
 function fail(field) {
@@ -92,7 +92,7 @@ function list(v, field, max, each) {
   return v.map((entry, i) => each(obj(entry, `${field}[${i}]`), `${field}[${i}]`));
 }
 
-const SPACE_ID = /^[a-z0-9]{12}$/;
+export const SPACE_ID = /^[a-z0-9]{12}$/;
 /* A label on your own row naming a space (spec §5): its shape only, since it opens nothing.
    Absent (an old client) is undefined, and the stored value stays (spec §16); null clears. */
 function spaceLabel(v, field) {
@@ -367,7 +367,7 @@ export function validateStudySession(body) {
 function roomLabel(v) {
   if (v === undefined) return undefined;
   if (v === null) return null;
-  if (typeof v !== 'string' || !/^[a-z0-9]{12}$/.test(v)) fail('roomId');
+  if (typeof v !== 'string' || !SPACE_ID.test(v)) fail('roomId');
   return v;
 }
 

@@ -6,12 +6,11 @@ import { HttpError } from './http.js';
 import { assertKeeper, assertOwner, keeperGuard, memberGuard, ownerGuard } from './access.js';
 import { MY_SPACES, NEXT_ROW_REVISION, NEXT_SPACE_REVISION, SPACE_LIMIT, joinPrefs, randomId, spaceSummary, touchSpace } from './spaces.js';
 import { BUCKET, NAME } from './accounts.js';
+import { DATE, SPACE_ID } from './validate.js';
 import { SPACE_NAME, noteStmt, undoneStmt } from './activity.js';
 
 /** The most live tasks a project holds (spec §3 Limits). */
 
-const DATE = /^\d{4}-\d{2}-\d{2}$/;
-const SPACE_ID = /^[a-z0-9]{12}$/;
 const bad = (field) => new HttpError(400, { error: 'invalid', field });
 
 /** {space, item} of a class assignment, or null; anything else is a 400 on `parent`. */

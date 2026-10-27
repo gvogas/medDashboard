@@ -7,6 +7,7 @@ import { claimLimit, rateLimited } from './limits.js';
 import { normalizeUsername } from './password.js';
 import { clearPresence, friendsLastStudied, friendsLive } from './rooms.js';
 import { DAY_MS } from './time.js';
+import { DISPLAY_NAME, pairOf } from './accounts.js';
 
 export const FRIEND_LIMIT = 200;
 /** Requests one person may send in a day, and searches in a minute. */
@@ -14,10 +15,7 @@ export const REQUEST_LIMIT = 20;
 export const SEARCHES_PER_MINUTE = 30;
 export const RESULTS = 8;
 export const DECLINE_KEEP_MS = 30 * DAY_MS;
-const NAME = "COALESCE(NULLIF(u.display_name, ''), u.username)";
 
-/** The pair's key: smaller id first. */
-export const pairOf = (a, b) => (a < b ? [a, b] : [b, a]);
 /* the other person in a row read with ?1 = me */
 const OTHER = 'CASE WHEN f.user_lo = ?1 THEN f.user_hi ELSE f.user_lo END';
 
@@ -29,7 +27,7 @@ const person = (r) => ({ userId: r.id, username: r.username, name: r.name });
 export async function listFriends(db, userId, now = Date.now()) {
   const [live, last] = await Promise.all([friendsLive(db, userId, now), friendsLastStudied(db, userId)]);
   const [rows, settings] = await db.batch([
-    db.prepare(`SELECT u.id, u.username, ${NAME} AS name, f.status, f.requested_by, f.created_at, f.accepted_at, f.cancelled_at
+    db.prepare(`SELECT u.id, u.username, ${DISPLAY_NAME} AS name, f.status, f.requested_by, f.created_at, f.accepted_at, f.cancelled_at
       FROM friendships AS f JOIN users AS u ON u.id = ${OTHER}
       WHERE (f.user_lo = ?1 OR f.user_hi = ?1) AND (f.status != 'declined' OR f.requested_by = ?1)
       ORDER BY COALESCE(f.accepted_at, f.created_at) DESC`).bind(userId),
@@ -52,7 +50,7 @@ export async function listFriends(db, userId, now = Date.now()) {
 
 /** Requests waiting for your answer, for the inbox: newest first. */
 export async function incomingRequests(db, userId) {
-  const { results } = await db.prepare(`SELECT u.id, u.username, ${NAME} AS name, f.created_at
+  const { results } = await db.prepare(`SELECT u.id, u.username, ${DISPLAY_NAME} AS name, f.created_at
     FROM friendships AS f JOIN users AS u ON u.id = f.requested_by
     WHERE (f.user_lo = ?1 OR f.user_hi = ?1) AND f.status = 'pending' AND f.requested_by != ?1
     ORDER BY f.created_at DESC LIMIT 50`).bind(userId).all();
@@ -95,7 +93,7 @@ export async function requestFriend(db, me, body, now = Date.now()) {
   const wait = await claimLimit(db, `friend-req:${me}`, REQUEST_LIMIT, now, DAY_MS);
   if (wait) throw rateLimited(wait);
   const name = normalizeUsername(body?.username);
-  const who = name && await db.prepare(`SELECT u.id, u.username, ${NAME} AS name FROM users AS u WHERE u.username = ?`).bind(name).first();
+  const who = name && await db.prepare(`SELECT u.id, u.username, ${DISPLAY_NAME} AS name FROM users AS u WHERE u.username = ?`).bind(name).first();
   if (!who) throw new HttpError(404, { error: 'no_user' });
   if (who.id === me) throw new HttpError(400, { error: 'invalid', field: 'username' });
   const [lo, hi] = pairOf(me, who.id);
@@ -157,7 +155,7 @@ export async function searchPeople(db, me, raw, now = Date.now()) {
   if (wait) throw rateLimited(wait);
   /* LIKE ignores case for ASCII letters only; accented letters must match exactly */
   const like = '%' + q.replace(/[\\%_]/g, (c) => '\\' + c) + '%';
-  const { results } = await db.prepare(`SELECT u.id, u.username, ${NAME} AS name, ${STATE} AS state
+  const { results } = await db.prepare(`SELECT u.id, u.username, ${DISPLAY_NAME} AS name, ${STATE} AS state
     FROM users AS u
     LEFT JOIN friend_settings AS s ON s.user_id = u.id
     LEFT JOIN friendships AS f ON f.user_lo = min(?1, u.id) AND f.user_hi = max(?1, u.id)

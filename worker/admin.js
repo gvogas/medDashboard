@@ -11,9 +11,9 @@ import { hashPassword, normalizeUsername } from './password.js';
 import { errorGroups, recentErrors } from './errors.js';
 import { cachedTrafficReport, configured as analyticsConfigured } from './analytics.js';
 import { configured as spotifyConfigured } from './spotify.js';
-import { ACCOUNT_TABLES } from './accounts.js';
+import { LAST_ADMIN, UNLOCK } from './accounts.js';
 import { readMaintenance, validateMaintenance } from './maintenance.js';
-import { handOnStmts } from './leaving.js';
+import { deleteAccountStmts } from './leaving.js';
 import { DAY_MS } from './time.js';
 import { MESSAGE_MAX } from '../src/core/shared.ts';
 
@@ -52,8 +52,7 @@ async function target(db, id) {
 
 /* Every throttle row of a name: its own and its trusted devices' (`name#device`). Not
    LIKE, where `_` is a wildcard. */
-const throttleRows = (db, username) =>
-  db.prepare('DELETE FROM login_throttle WHERE username = ?1 OR substr(username, 1, length(?1) + 1) = ?1 || \'#\'').bind(username);
+const throttleRows = (db, username) => db.prepare(UNLOCK('?1')).bind(username);
 
 export async function listAccounts(db) {
   const { results } = await db.prepare(
@@ -204,19 +203,9 @@ export const adminRoutes = [
     if (id === admin.id) throw new HttpError(400, { error: 'self' });
     if (confirm !== user.username) throw new HttpError(400, { error: 'invalid', field: 'confirm' });
     const db = env.DB;
-    if (user.is_admin === 1) {
-      const { n } = await db.prepare('SELECT count(*) AS n FROM users WHERE is_admin = 1').first();
-      if (n <= 1) throw new HttpError(409, { error: 'last_admin' });
-    }
+    if (await db.prepare(LAST_ADMIN).bind(id).first()) throw new HttpError(409, { error: 'last_admin' });
     /* Its classes pass on (or go, with nobody else in them) in the same batch as the deletion. */
-    await db.batch([
-      ...handOnStmts(db, id),
-      ...ACCOUNT_TABLES.map(([table, owner]) => db.prepare(`DELETE FROM ${table} WHERE ${owner}`).bind(id)),
-      db.prepare('DELETE FROM users WHERE id = ?').bind(id),
-      throttleRows(db, user.username),
-      db.prepare("DELETE FROM request_limits WHERE key IN ('api:' || ?1, 'spotify:' || ?1, 'outline:' || ?1, 'invite:' || ?1, 'join:' || ?1)").bind(id),
-      audit(db, admin, 'delete', user.username),
-    ]);
+    await db.batch(deleteAccountStmts(db, { id, username: user.username, actor: admin.username }));
     return done();
   }],
 

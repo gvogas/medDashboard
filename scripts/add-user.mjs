@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 // Create an account: `npm run user:add -- <username> [--remote] [--name "Display Name"]`
 // Change a password:  `npm run user:add -- <username> --reset [--remote]`
-// Delete an account:  `npm run user:add -- <username> --delete [--remote]` (and all its data)
+// Delete an account:  `npm run user:add -- <username> --delete [--remote]` (and all its data; as the Admin page does it,
+//                     refusing the last admin and logging it as `cli`)
 // Make an admin:      `npm run user:add -- <username> --admin [--remote]` (opens the Admin page;
 //                     `--admin --off` takes it away). After the first, the page does the rest.
 // Prompts for the password without echoing it, hashes it exactly as the Worker does,
@@ -11,8 +12,7 @@
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { hashPassword, normalizeUsername } from '../worker/password.js';
-import { throttleRowsFor } from '../worker/throttle.js';
-import { ACCOUNT_TABLES, HAND_ON } from '../worker/accounts.js';
+import { DELETE_ACCOUNT, LAST_ADMIN, UNLOCK } from '../worker/accounts.js';
 import { target } from './lib/target.js';
 
 const args = process.argv.slice(2);
@@ -69,41 +69,6 @@ async function ask(prompt) {
   });
 }
 
-let sql;
-if (admin) {
-  sql = `UPDATE users SET is_admin = ${off ? 0 : 1} WHERE username = '${username}';`;
-} else if (remove) {
-  const typed = await ask(`This deletes ${username} and every course, item, quote, study session and achievement it owns. Type the username to confirm: `);
-  if (typed.trim().toLowerCase() !== username) { console.error('Not deleted.'); process.exit(1); }
-  // It comes off its projects' tasks and its spaces pass on first (HAND_ON), as the Admin
-  // page's deletion does. ?N becomes the Nth value, whole numbers only (so ?10 is never read
-  // as ?1 and a 0); any other is an error.
-  const values = [`(SELECT id FROM users WHERE username = '${username}')`, String(Date.now())];
-  const bind = (text) => text.replace(/\?(\d+)/g, (_, n) => {
-    if (values[n - 1] === undefined) throw new Error(`No value for ?${n}`);
-    return values[n - 1];
-  });
-  // wrangler d1 execute ran a multi-statement --command as one transaction on the local
-  // database (a failing statement undid the earlier ones; checked 2026-10-09). Not checked
-  // with --remote.
-  sql = `${HAND_ON.map((s) => bind(s) + ';').join(' ')}
-         ${ACCOUNT_TABLES.map(([table, owner]) => `DELETE FROM ${table} WHERE ${bind(owner)};`).join(' ')}
-         DELETE FROM users WHERE username = '${username}';
-         DELETE FROM login_throttle WHERE ${throttleRowsFor(username)};`;
-} else {
-  const password = await ask(`Password for ${username}: `);
-  if (password.length < 8) { console.error('Use at least 8 characters.'); process.exit(1); }
-  if (password !== await ask('Again: ')) { console.error('They did not match.'); process.exit(1); }
-  const hash = await hashPassword(password);
-  const now = Date.now();
-  const id = crypto.randomUUID();
-  sql = reset
-    // A new password also lifts any sign-in lock on the name.
-    ? `UPDATE users SET password_hash = '${hash}', pw_gen = pw_gen + 1, updated_at = ${now} WHERE username = '${username}';
-       DELETE FROM login_throttle WHERE ${throttleRowsFor(username)};`
-    : `INSERT INTO users (id, username, password_hash, display_name, created_at, updated_at) VALUES ('${id}', '${username}', '${hash}', '${displayName.replace(/'/g, "''")}', ${now}, ${now});`;
-}
-
 // Judge by wrangler's JSON result, not its exit code: on Windows it sometimes trips an
 // assertion while shutting down, after the statement has already run.
 // Run the local wrangler with this same Node, no shell, and without handing it our
@@ -123,7 +88,46 @@ function run(statement) {
   return null;
 }
 
-if (reset || remove || admin) {
+let sql;
+if (admin) {
+  sql = `UPDATE users SET is_admin = ${off ? 0 : 1} WHERE username = '${username}';`;
+} else if (remove) {
+  const typed = await ask(`This deletes ${username} and every course, item, quote, study session and achievement it owns. Type the username to confirm: `);
+  if (typed.trim().toLowerCase() !== username) { console.error('Not deleted.'); process.exit(1); }
+  // The Admin page's deletion (DELETE_ACCOUNT), logged as the CLI's. ?N becomes the Nth value,
+  // whole numbers only (so ?10 is never read as ?1 and a 0); any other is an error. The id is
+  // read first, since the user row goes before the later statements.
+  const quote = (v) => `'${String(v).replace(/'/g, "''")}'`;
+  const found = run(`SELECT id FROM users WHERE username = ${quote(username)};`);
+  if (!found || found[0].results.length !== 1) { console.error(`No account called ${username}.`); process.exit(1); }
+  const id = found[0].results[0].id;
+  const last = run(LAST_ADMIN.replace('?1', quote(id)));
+  if (!last) process.exit(1);
+  if (last[0].results.length) { console.error(`${username} is the last admin. Make another admin first.`); process.exit(1); }
+  const values = [quote(id), String(Date.now()), quote(username), quote('cli'), quote('scripts/add-user.mjs')];
+  const bind = (text) => text.replace(/\?(\d+)/g, (_, n) => {
+    if (values[n - 1] === undefined) throw new Error(`No value for ?${n}`);
+    return values[n - 1];
+  });
+  // wrangler d1 execute ran a multi-statement --command as one transaction on the local
+  // database (a failing statement undid the earlier ones; checked 2026-10-09). Not checked
+  // with --remote.
+  sql = DELETE_ACCOUNT.map((s) => bind(s) + ';').join(' ');
+} else {
+  const password = await ask(`Password for ${username}: `);
+  if (password.length < 8) { console.error('Use at least 8 characters.'); process.exit(1); }
+  if (password !== await ask('Again: ')) { console.error('They did not match.'); process.exit(1); }
+  const hash = await hashPassword(password);
+  const now = Date.now();
+  const id = crypto.randomUUID();
+  sql = reset
+    // A new password also lifts any sign-in lock on the name.
+    ? `UPDATE users SET password_hash = '${hash}', pw_gen = pw_gen + 1, updated_at = ${now} WHERE username = '${username}';
+       ${UNLOCK(`'${username}'`)};`
+    : `INSERT INTO users (id, username, password_hash, display_name, created_at, updated_at) VALUES ('${id}', '${username}', '${hash}', '${displayName.replace(/'/g, "''")}', ${now}, ${now});`;
+}
+
+if (reset || admin) {
   const found = run(`SELECT 1 AS x FROM users WHERE username = '${username}';`);
   if (!found || found[0].results.length !== 1) { console.error(`No account called ${username}.`); process.exit(1); }
 }

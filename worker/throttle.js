@@ -48,15 +48,6 @@ export async function recordSuccess(db, username) {
   await db.prepare('DELETE FROM login_throttle WHERE username = ?').bind(username).run();
 }
 
-/**
- * SQL matching every throttle row of a normalised name: its own and its trusted devices'
- * (`name#device`). For scripts/add-user.mjs, which runs SQL text through wrangler.
- * Not LIKE: `_` is a wildcard there, and usernames may contain it.
- */
-export function throttleRowsFor(username) {
-  return `username = '${username}' OR substr(username, 1, ${username.length + 1}) = '${username}#'`;
-}
-
 /** Nightly housekeeping: forget names whose lock has long expired. */
 export async function purgeThrottle(db, before) {
   await db.prepare('DELETE FROM login_throttle WHERE updated_at < ? AND locked_until < ?').bind(before, before).run();
