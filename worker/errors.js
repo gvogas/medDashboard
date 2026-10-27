@@ -31,8 +31,12 @@ export const kindOf = ({ method = '', status = 500 }) =>
 
 const dayStart = (now) => now - (now % (24 * 60 * 60 * 1000));
 
+/** A route as the log keeps it: a calendar feed's link is its password, so it never goes in. */
+export const routeForLog = (route) => String(route).replace(/^\/api\/calendar\/[^/]+\/[^/]+\.ics$/, '/api/calendar/…/….ics');
+
 /** Record one error. Never throws. */
 export async function logError(db, { method = '', route = '', status = 500, message = '', userId = null }, now = Date.now()) {
+  route = routeForLog(route);
   const kind = kindOf({ method, status });
   const anonCap = userId === null ? ANON_CAPS[kind] ?? null : null;
   try {

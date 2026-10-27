@@ -39,11 +39,12 @@ export const dayMonth = (d: string | null | undefined): string => { const x = pa
 /** "Mon 14 Sep" */
 export const shortDate = (d: string | null | undefined): string => DOW[parse(d).getDay()] + ' ' + dayMonth(d);
 
-/** "5 min ago", "3 h ago", "2 days ago". */
+/** "5 min ago", "3 h ago", "1 day ago", "2 days ago": whole units, so never "60 min" or "24 h". */
 export function ago(ms: number, now = Date.now()): string {
-  const s = Math.max(0, Math.round((now - ms) / 1000));
+  const s = Math.max(0, Math.floor((now - ms) / 1000));
   if (s < 60) return 'just now';
-  if (s < 3600) return Math.round(s / 60) + ' min ago';
-  if (s < 86400) return Math.round(s / 3600) + ' h ago';
-  return Math.round(s / 86400) + ' days ago';
+  if (s < 3600) return Math.floor(s / 60) + ' min ago';
+  if (s < 86400) return Math.floor(s / 3600) + ' h ago';
+  const d = Math.floor(s / 86400);
+  return d + (d === 1 ? ' day ago' : ' days ago');
 }
