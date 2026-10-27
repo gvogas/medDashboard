@@ -12,7 +12,7 @@ import { logError, messageOf } from './errors.js';
 import { assertAllowed, assertKeeper, keeperGuard, roleOf } from './access.js';
 import { LIVE_MEMBERS, NEXT_ROW_REVISION, NEXT_SPACE_REVISION, touchSpace } from './spaces.js';
 import { REVIEW_ID } from '../src/core/shared.ts';
-import { HAND_ON } from './accounts.js';
+import { DELETE_ACCOUNT, HAND_ON } from './accounts.js';
 import { noteStmt, undoneStmt } from './activity.js';
 import { leaveProject } from './projects.js';
 
@@ -377,3 +377,7 @@ export async function autoKeep(db, before, now = Date.now()) {
  * (its spaces passed on, or deleted with nobody else in them), bound to the user and now.
  */
 export const handOnStmts = (db, userId, now = Date.now()) => HAND_ON.map((sql) => prepare(db, sql, [userId, now]));
+
+/** worker/accounts.js DELETE_ACCOUNT bound for one batch: the account `id`/`username` removed by `actor`, with an audit note. */
+export const deleteAccountStmts = (db, { id, username, actor, detail = '', now = Date.now() }) =>
+  DELETE_ACCOUNT.map((sql) => prepare(db, sql, [id, now, username, actor, detail]));

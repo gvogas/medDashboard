@@ -1,6 +1,6 @@
 // What deleting an account does, shared by the Admin page (worker/admin.js, through
 // worker/leaving.js handOnStmts) and scripts/add-user.mjs, so no imports: the script runs it
-// under Node. Both run HAND_ON, then the ACCOUNT_TABLES deletes, then the user row's.
+// under Node. Both run DELETE_ACCOUNT (below), so what a deletion does lives here once.
 //
 // HAND_ON takes the account off its live projects' tasks and passes the spaces it owns on
 // (spec §13); ?1 is the user id, ?2 now.
@@ -85,4 +85,24 @@ export const ACCOUNT_TABLES = [
   ['courses', "scope = 'u:' || ?1"],
   ['spotify_tokens', 'user_id = ?1'],
   ['changes', "scope = 'u:' || ?1"],
+];
+
+/** Whether ?1 is the only admin left (a row when so): neither the Admin page nor the script may delete it. */
+export const LAST_ADMIN = 'SELECT 1 AS x FROM users WHERE id = ?1 AND is_admin = 1 AND (SELECT count(*) FROM users WHERE is_admin = 1) <= 1';
+
+/** Deletes a username's sign-in lock rows (the name itself and its `name#device` ones); `name` is SQL. Not LIKE: `_` is a wildcard there. */
+export const UNLOCK = (name) => `DELETE FROM login_throttle WHERE username = ${name} OR substr(username, 1, length(${name}) + 1) = ${name} || '#'`;
+
+/*
+ * Every statement of an account's deletion, in order, for one batch: ?1 the user id, ?2 now,
+ * ?3 the username, ?4 who did it (the admin's username, or 'cli'), ?5 a note for the audit log.
+ * It ends with the audit entry, so a deletion that fails leaves none.
+ */
+export const DELETE_ACCOUNT = [
+  ...HAND_ON,
+  ...ACCOUNT_TABLES.map(([table, owner]) => `DELETE FROM ${table} WHERE ${owner}`),
+  'DELETE FROM users WHERE id = ?1',
+  UNLOCK('?3'),
+  "DELETE FROM request_limits WHERE key IN ('api:' || ?1, 'spotify:' || ?1, 'outline:' || ?1, 'invite:' || ?1, 'join:' || ?1)",
+  "INSERT INTO admin_log (at, admin, action, target, detail) VALUES (?2, ?4, 'delete', ?3, ?5)",
 ];

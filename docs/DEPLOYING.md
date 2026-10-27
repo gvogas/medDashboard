@@ -428,7 +428,7 @@ Add `--remote` to act on the live site; leave it off to act on your local databa
 | --- | --- |
 | Create an account | `npm run user:add -- username --remote --name "Their Name"` |
 | Change a password | `npm run user:add -- username --reset --remote` |
-| Delete an account and all its data | `npm run user:add -- username --delete --remote` |
+| Delete an account and all its data | `npm run user:add -- username --delete --remote` (the same statements as the Admin page: refuses the last admin, writes an audit entry by `cli`) |
 | Give someone the Admin page | `npm run user:add -- username --admin --remote` (`--admin --off` takes it away) |
 
 Create and reset ask for the password twice and hide what you type. Delete asks you to
