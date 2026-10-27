@@ -4,7 +4,7 @@ import type { Row } from './db.ts';
 import type { Outline, Schedule } from './importers/plan.ts';
 import { UNREAD_CAP } from './shared.ts';
 import type { Cursor, Page, ServerProfile } from './store.ts';
-import type { Album, Device, Page as SpotifyPage, PlayerState, Playlist, SearchResults, Track } from '../data/spotify/types.ts';
+import type { Album, Device, Page as SpotifyPage, PlayerState, Playlist, SearchResults, Track } from './spotify-types.ts';
 import type { ActivityRow, AdminAccounts, AdminHealth, AdminTraffic, Announcement, AuditEntry, CalendarFeed, ErrorGroup, ErrorRow, MaintenanceState, Flow, FriendMatch, FriendSettings, Friends, GroupRecord, Inbox, JoinCode, ParentRef, RoomView, Space, SpaceDetails, SpaceInvite, SpaceSummary } from './types.ts';
 
 /** An error's body as the Worker sends it: its code, and for some the server's copy or a wait. */
