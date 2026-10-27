@@ -21,6 +21,19 @@ describe('nightly purge', () => {
     const { results } = await env.DB.prepare("SELECT id FROM quotes WHERE id IN ('old', 'new') ORDER BY id").all();
     expect(results.map((r) => r.id)).toEqual(['new']);
   });
+
+  it('runs on no schedule but the nightly one', async () => {
+    const api = await signIn();
+    await api('/api/quotes/stale', { method: 'PUT', body: { text: 'stale', source: '' } });
+    await api('/api/quotes/stale', { method: 'DELETE' });
+    await env.DB.prepare("UPDATE quotes SET deleted_at = ? WHERE id = 'stale'").bind(Date.now() - 31 * 24 * 60 * 60 * 1000).run();
+
+    const ctx = createExecutionContext();
+    await worker.scheduled(createScheduledController({ cron: '*/5 * * * *' }), env, ctx);
+    await waitOnExecutionContext(ctx);
+
+    expect(await env.DB.prepare("SELECT id FROM quotes WHERE id = 'stale'").first()).not.toBeNull();
+  });
 });
 
 const DAY = 24 * 60 * 60 * 1000;
