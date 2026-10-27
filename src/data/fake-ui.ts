@@ -14,5 +14,8 @@ export function fakeUi(fake: object) {
             useSyncExternalStore(subscribe, getVersion)
             return select(ui)
         },
+        useNotified() {
+            useSyncExternalStore(subscribe, getVersion)
+        },
     }
 }
