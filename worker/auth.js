@@ -5,10 +5,11 @@
 
 import { HttpError } from './http.js';
 import { limitUser } from './limits.js';
+import { DAY_MS } from './time.js';
 
 const COOKIE = 'rounds_session';
-const SESSION_MS = 30 * 24 * 60 * 60 * 1000;
-export const RENEW_WITHIN_MS = 7 * 24 * 60 * 60 * 1000;
+const SESSION_MS = 30 * DAY_MS;
+export const RENEW_WITHIN_MS = 7 * DAY_MS;
 
 // Imported once per isolate rather than on every request; keyed by the secret so a
 // rotated SESSION_SECRET is picked up.
@@ -59,7 +60,7 @@ export function sameString(a, b) {
 // signed over the name. Sign-ins from it are throttled on their own, so failures from
 // anywhere else cannot lock its owner out (see worker/throttle.js).
 const DEVICE_COOKIE = 'rounds_device';
-const DEVICE_MS = 365 * 24 * 60 * 60 * 1000;
+const DEVICE_MS = 365 * DAY_MS;
 
 export async function deviceCookie(username, secret, url) {
   const nonce = hex(crypto.getRandomValues(new Uint8Array(12)));

@@ -1,14 +1,14 @@
 // The study leaderboard: total study minutes this week and all-time for every user
 // who has joined it. Opt-in both ways: a user who has not joined sees nobody.
 import { HttpError } from './http.js';
+import { DAY_MS } from './time.js';
 
-const DAY = 86_400_000;
 
 /* The viewer's Monday 00:00, from their browser. A week back is at most 7 days
    (plus a day of time-zone slack), so a bad value cannot turn this into all-time. */
 function weekStart(raw, now) {
   const since = /^\d{1,16}$/.test(raw || '') ? Number(raw) : NaN;
-  if (!Number.isSafeInteger(since) || since < now - 8 * DAY || since > now + DAY) throw new HttpError(400, { error: 'invalid', field: 'since' });
+  if (!Number.isSafeInteger(since) || since < now - 8 * DAY_MS || since > now + DAY_MS) throw new HttpError(400, { error: 'invalid', field: 'since' });
   return since;
 }
 

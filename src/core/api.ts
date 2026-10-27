@@ -156,16 +156,6 @@ async function empty(response: Promise<unknown>): Promise<null> {
   if (await response !== null) throw invalidResponse();
   return null;
 }
-async function changes(cursor: number): Promise<Page & { reset: boolean; more: boolean }> {
-  const page = await request('GET', `/api/sync?v=2&cursor=${cursor}`);
-  if (!page || typeof page.reset !== 'boolean' || typeof page.more !== 'boolean'
-    || !Number.isSafeInteger(page.cursor) || page.cursor < 0 || !Array.isArray(page.changes)
-    || !page.changes.every((change: { kind: string; row: Row } | null) => change && ['courses', 'items', 'quotes', 'study_sessions', 'achievements'].includes(change.kind) && validRecord(change.row))) throw invalidResponse();
-  if (page.reset
-    ? cursor === 0 || page.cursor !== 0 || page.more || page.changes.length > 0
-    : page.cursor < cursor || (page.more && page.cursor === cursor)) throw invalidResponse();
-  return page;
-}
 /** A v3 page (spec §6): changes across your own scope and your spaces', a cursor per scope. */
 export interface PageV3 extends Page { cursors: Record<string, Cursor>; scopes: Space[]; more: boolean; reset: string[]; revoked: string[]; unread?: number }
 const SCOPE = /^(u:[^,]+|[cp]:[a-z0-9]{12})$/;
@@ -222,7 +212,6 @@ export const api = {
   saveMe: (profile: Record<string, unknown> & { id?: string; revision?: number }) => record<ServerProfile & Row>(request('PUT', '/api/me', profile, match(profile.revision)), accountId || profile.id, profile.revision),
   login: (username: string, password: string) => record<ServerProfile & Row>(request('POST', '/api/login', { username, password })),
   signOut: () => empty(request('DELETE', '/api/session')),
-  sync: changes,
   syncV3: changesV3,
   /* a class's or a project's course or item; `changed` is {field: value before} (spec §6 Push) */
   shared: {

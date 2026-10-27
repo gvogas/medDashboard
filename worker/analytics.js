@@ -7,11 +7,11 @@
 // permission) leaves the others showing. Answers are cached for a minute per isolate's
 // colo, which keeps a reloading page well inside the API's own limits.
 
+import { HOUR_MS, DAY_MS } from './time.js';
+
 const ENDPOINT = 'https://api.cloudflare.com/client/v4/graphql';
 const SCRIPT = 'rounds';
 const CACHE_S = 60;
-const HOUR_MS = 60 * 60 * 1000;
-const DAY_MS = 24 * HOUR_MS;
 
 /* The free plan's daily allowances, account-wide; each resets at 00:00 UTC. Storage is the total. */
 export const FREE = { requests: 100_000, neurons: 10_000, rowsRead: 5_000_000, rowsWritten: 100_000, storageBytes: 5 * 1024 ** 3 };

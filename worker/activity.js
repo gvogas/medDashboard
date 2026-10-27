@@ -6,6 +6,7 @@ import { memberGuard, assertAllowed } from './access.js';
 import { BUCKET, BUCKET_MS, NAME, SPACE_NAME } from './accounts.js';
 import { UNREAD_CAP } from '../src/core/shared.ts';
 import { ROOM_INVITES_COUNT } from './rooms.js';
+import { DAY_MS } from './time.js';
 
 export { BUCKET_MS, SPACE_NAME };
 
@@ -39,7 +40,7 @@ const CONCERNS = `(a.verb IN ('item.created', 'item.deleted', 'item.date', 'cour
   OR (a.verb = 'task.status' AND EXISTS (SELECT 1 FROM json_each(a.detail, '$.assignees') AS j WHERE j.value IN (?1, '*'))))`;
 const COLS = 'a.seq, a.space_id, a.actor_id, a.verb, a.subject, a.subject_user, a.old_value, a.new_value, a.detail, a.n, a.at';
 /** How long activity is kept (spec §12): the reads hold to it, so the window does not wait on the nightly purge. */
-export const KEEP_MS = 90 * 24 * 60 * 60 * 1000;
+export const KEEP_MS = 90 * DAY_MS;
 /*
  * The inbox's newest `limit` rows above `since` (SQL) from each branch: about you anywhere,
  * and what concerns you in your live spaces since you joined; ?2 is now. The first branch

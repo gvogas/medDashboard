@@ -9,9 +9,8 @@ import { assertAllowed, assertOwner, editorGuard, ownerGuard } from './access.js
 import { LIVE_MEMBERS, MEMBER_LIMIT, MY_SPACES, NEXT_SPACE_REVISION, SPACE_LIMIT, joinPrefs, spaceSummary, touchSpace } from './spaces.js';
 import { normalizeCode } from '../src/core/shared.ts';
 import { noteStmt } from './activity.js';
+import { HOUR_MS, DAY_MS } from './time.js';
 
-const HOUR_MS = 60 * 60 * 1000;
-const DAY_MS = 24 * HOUR_MS;
 /** Invites one person may send in an hour, and how long an invite stays open (spec §11). */
 export const INVITE_LIMIT = 20;
 export const INVITE_TTL_MS = 30 * DAY_MS;

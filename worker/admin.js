@@ -14,11 +14,11 @@ import { configured as spotifyConfigured } from './spotify.js';
 import { ACCOUNT_TABLES } from './accounts.js';
 import { readMaintenance, validateMaintenance } from './maintenance.js';
 import { handOnStmts } from './leaving.js';
+import { DAY_MS } from './time.js';
 
 /* The newest file in migrations/; a test keeps it in step. */
 export const LATEST_MIGRATION = '0003_presence.sql';
-const AUDIT_KEEP_MS = 90 * 24 * 60 * 60 * 1000;
-const DAY_MS = 24 * 60 * 60 * 1000;
+const AUDIT_KEEP_MS = 90 * DAY_MS;
 export const MIN_PASSWORD = 8;
 const MAX_PASSWORD = 200;
 const ANNOUNCE_MAX = 280;

@@ -6,8 +6,8 @@ import { requireUser } from './auth.js';
 import { claimLimit, rateLimited } from './limits.js';
 import { normalizeUsername } from './password.js';
 import { clearPresence, friendsLastStudied, friendsLive } from './rooms.js';
+import { DAY_MS } from './time.js';
 
-const DAY_MS = 24 * 60 * 60 * 1000;
 export const FRIEND_LIMIT = 200;
 /** Requests one person may send in a day, and searches in a minute. */
 export const REQUEST_LIMIT = 20;

@@ -7,7 +7,7 @@ import { cn } from "@/lib/utils"
 import { uid } from "@/core/model"
 import { DEFAULT_CREDITS, MAX_CATEGORIES, MAX_DROP, shareOf, type GradeCategory } from "@/core/grades"
 import type { Course, Item } from "@/data/types"
-import { Button, KeptNumberInput, Note, NumberInput, Prop, QUIET, RemoveButton, Section, Select, TextInput, Warning, CONTROL } from "./fields"
+import { Button, KeptNumberInput, Note, NumberInput, Prop, QUIET, RemoveButton, Section, Select, Warning, CONTROL } from "./fields"
 import { ICONS } from "./prop-icons"
 
 const clampNum = (v: string, lo: number, hi: number): number | null => {

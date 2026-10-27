@@ -8,6 +8,7 @@ import { purgeFriends } from './friends.js';
 import { purgeRooms } from './rooms.js';
 import { sendDigests } from './push.js';
 import { TOMBSTONE_TTL_MS } from '../src/core/shared.ts';
+import { DAY_MS } from './time.js';
 
 const HOURLY = '0 * * * *';   /* the digests' schedule in wrangler.jsonc */
 
@@ -29,7 +30,7 @@ export default {
     /* each job on its own: one failing is logged (Admin → Errors, nightly) and the rest still run */
     const job = (name, fn) => ctx.waitUntil(cronJob(env.DB, name, fn));
     job('tombstones', () => purgeTombstones(env.DB, Date.now() - TOMBSTONE_TTL_MS));
-    job('throttle', () => purgeThrottle(env.DB, Date.now() - 24 * 60 * 60 * 1000));
+    job('throttle', () => purgeThrottle(env.DB, Date.now() - DAY_MS));
     job('limits', () => purgeLimits(env.DB));
     job('errors', () => purgeErrors(env.DB));
     job('housekeeping', () => adminHousekeeping(env.DB));

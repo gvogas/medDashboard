@@ -8,6 +8,7 @@ import { MEANINGFUL, autoKeep } from './leaving.js';
 import { KEEP_MS } from './activity.js';
 import { TASK_LIMIT } from './projects.js';
 import { MARK_DEFAULTS, stable } from '../src/core/shared.ts';
+import { DAY_MS } from './time.js';
 
 const PROFILE_COLS =
   'id, username, display_name, coat_name, coat_role, coat_color, theme, bg, types, study_flow, study_prefs, school_calendar, hidden_sources, grading, term_start, is_admin, created_at, updated_at, revision';
@@ -267,7 +268,7 @@ export async function purgeTombstones(db, before, now = Date.now()) {
       WHERE m.space_id = substr(items.scope, 3) AND m.item_id = items.id AND m.deleted_at IS NULL AND ${MEANINGFUL('m')}))`).bind(before),
     tombstones('quotes'),
     tombstones('courses'),
-    db.prepare('DELETE FROM invites WHERE created_at < ?').bind(now - INVITE_DAYS * 24 * 60 * 60 * 1000),
+    db.prepare('DELETE FROM invites WHERE created_at < ?').bind(now - INVITE_DAYS * DAY_MS),
     db.prepare('DELETE FROM activity WHERE at < ?').bind(now - KEEP_MS),
   ]);
   await autoKeep(db, before, now);
