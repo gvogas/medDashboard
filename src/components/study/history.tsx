@@ -9,7 +9,7 @@ import { duration } from "@/lib/time"
 import { dayOf } from "@/core/history"
 import { shortDate } from "@/core/dates"
 import { Panel } from "@/components/views/bits"
-import { Segmented } from "@/components/sheet/fields"
+import { Button, Segmented } from "@/components/sheet/fields"
 import { pickDay, setHistTab, stepHist, undoSessionDelete, useHistory } from "@/data/study"
 import { deleteSession, openSession } from "@/data/actions"
 import type { HistTab, SessionUndo } from "@/data/types"
@@ -68,11 +68,11 @@ export function HistoryCard() {
                     {h.week && <Stepper unit="week" offset={h.week.offset} range={h.week.range} />}
                     {h.month && <Stepper unit="month" offset={h.month.offset} range={h.month.title} />}
                     {h.term && <span className="font-mono text-[12px] text-ink-2">{h.term.title} · {h.term.range}</span>}
-                    <button type="button" onClick={() => openSession(null)} data-log
-                        className="ml-auto inline-flex cursor-pointer items-center gap-1.5 rounded-[9px] border border-border bg-[linear-gradient(var(--panel),var(--panel-2))] px-2.5 py-1 font-[inherit] text-[12px] font-semibold text-ink-2 shadow-[var(--shadow-1),inset_0_1px_0_var(--rim-hi)] hover:border-[color-mix(in_srgb,var(--accent)_50%,var(--line))] hover:text-accent-foreground">
+                    <Button variant="ghost" onClick={() => openSession(null)} data-log
+                        className="ml-auto gap-1.5 rounded-[9px] px-2.5 py-1 text-[12px] font-semibold hover:text-accent-foreground">
                         <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden="true" className="size-3.5"><path d="M8 3v10M3 8h10" /></svg>
                         Log study
-                    </button>
+                    </Button>
                 </>}
             >
                 <div className="@container flex flex-col gap-3.5 p-3.5">

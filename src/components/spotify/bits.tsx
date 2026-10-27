@@ -19,12 +19,7 @@ export const FX = cn(
 /** The glass surface itself, over the focus screen's glow. */
 export const GLASS = "border border-white/10 bg-[color-mix(in_srgb,var(--fx-study-bg)_78%,transparent)] shadow-[0_20px_50px_-10px_rgba(0,0,0,.7)] backdrop-blur-[14px]"
 
-export const SpotifyMark = ({ className }: { className?: string }) => (
-    <svg viewBox="0 0 24 24" aria-hidden="true" className={cn("size-3.5 flex-none text-[color:var(--spotify)]", className)}>
-        <circle cx="12" cy="12" r="12" fill="currentColor" />
-        <path d="M6.2 9.4c3.9-1.1 8.4-.8 11.7 1.2M6.9 12.5c3.2-.9 6.9-.6 9.7 1M7.5 15.4c2.5-.7 5.3-.5 7.6.8" fill="none" stroke="#fff" strokeWidth="1.7" strokeLinecap="round" />
-    </svg>
-)
+export { SpotifyMark } from "./mark"
 
 /* The prototype's icons. Filled: the transport and the heart; stroked: the rest. */
 const FILLED = {

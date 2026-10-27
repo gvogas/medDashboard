@@ -9,6 +9,7 @@ import { api, spotifyRetryAt } from "@/core/api"
 import { savePrefs } from "@/data/study-controller"
 import { pushState, testPush, turnOff, turnOn, type PushState } from "@/data/push"
 import { notify } from "@/bridge"
+import { SpotifyMark } from "@/components/spotify/mark"
 import { useProfile } from "@/data/store"
 import { ui, useUi } from "@/data/ui"
 import { feedLink, timeZone } from "@/data/settings"
@@ -168,13 +169,6 @@ function FeedGroup() {
     )
 }
 
-const SpotifyMark = () => (
-    <svg viewBox="0 0 24 24" aria-hidden="true" className="size-4 flex-none text-[var(--spotify)]">
-        <circle cx="12" cy="12" r="12" fill="currentColor" />
-        <path d="M6.2 9.4c3.9-1.1 8.4-.8 11.7 1.2M6.9 12.5c3.2-.9 6.9-.6 9.7 1M7.5 15.4c2.5-.7 5.3-.5 7.6.8" fill="none" stroke="#fff" strokeWidth="1.7" strokeLinecap="round" />
-    </svg>
-)
-
 function SpotifyGroup() {
     const note = useUi((u) => u.spotifyNote)
     useUi((u) => u.view)   /* redrawn as the player's state changes (boot.ts notifies) */
@@ -192,7 +186,7 @@ function SpotifyGroup() {
     return (
         <Group title="Spotify" state={!spotify.loaded ? "Checking connection" : on ? "Connected" : "Not connected"} id="spotifyGrp">
             <div className="flex items-center gap-2.5 text-[12.5px]">
-                <SpotifyMark />
+                <SpotifyMark className="size-4" />
                 <div className="flex min-w-0 flex-1 flex-col [&>b]:font-semibold [&>b]:text-foreground [&>span]:text-[11px] [&>span]:text-muted-foreground">{who}</div>
                 {action}
             </div>
