@@ -388,3 +388,25 @@ describe('a timetable course put on another of yours', () => {
     expect(remapCourse(remapCourse(plan, 0, null, data), 0, 'gp', data).courses[0]).toMatchObject({ id: 'gp', replace: true });
   });
 });
+
+describe('planImport: how a weekly class ends', () => {
+  const ics = (rrule) => ['BEGIN:VCALENDAR', 'BEGIN:VEVENT', 'SUMMARY:ANAT101 Lecture', 'DTSTART:20260914T090000', 'DTEND:20260914T100000', 'RRULE:' + rrule, 'END:VEVENT', 'END:VCALENDAR'].join('\n');
+  const plan = (rrule) => planImport(parseIcs(ics(rrule)), { courses: [], items: [] }, 'ics');
+
+  it('skips every 2 weeks with a note, not as a weekly class', () => {
+    const p = plan('FREQ=WEEKLY;INTERVAL=2;BYDAY=MO');
+    expect(p.courses).toEqual([]);
+    expect(p.notes).toEqual(['Skipped ANAT101 Lecture: it repeats every 2 weeks, and classes can only repeat weekly.']);
+  });
+
+  it('keeps a series that ends as a weekly class and says it has no end date', () => {
+    const p = plan('FREQ=WEEKLY;BYDAY=MO;COUNT=10');
+    expect(p.courses[0].meetings).toHaveLength(1);
+    expect(p.notes).toHaveLength(1);
+    expect(p.notes[0]).toContain('ANAT101 Lecture ends 2026-11-16');
+  });
+
+  it('adds no note for a series without an end', () => {
+    expect(plan('FREQ=WEEKLY;BYDAY=MO').notes).toEqual([]);
+  });
+});

@@ -2,10 +2,11 @@
 // parseIcs(text) → [{ summary, location, date, start, end, weekly, weekdays }]
 // Dates are YYYY-MM-DD in the local calendar and times HH:MM, like the rest of the app.
 
-import { iso } from '../dates.ts';
+import { addDays, iso, monday, parse } from '../dates.ts';
 
-/** An event as read: dates YYYY-MM-DD, times HH:MM, and for a weekly one its weekdays (0 = Sunday). */
-export interface IcsEvent { summary: string; location: string; date: string; start: string; end: string; weekly: boolean; weekdays: number[] }
+/** An event as read: dates YYYY-MM-DD, times HH:MM, and for a weekly one its weekdays (0 = Sunday),
+ *  its INTERVAL (1 = every week) and the date of its last occurrence from UNTIL or COUNT ('' = no end). */
+export interface IcsEvent { summary: string; location: string; date: string; start: string; end: string; weekly: boolean; weekdays: number[]; interval: number; until: string }
 
 interface Property { name: string; params: Record<string, string>; value: string }
 /* shift: days the local date is from the written one (a UTC time moved to local), which RRULE's BYDAY moves with */
@@ -55,6 +56,22 @@ function when(prop: Property): When | null {
   return { date: m[1] + '-' + m[2] + '-' + m[3], time: m[4] + ':' + m[5] };
 }
 
+/** The date of the COUNT-th occurrence of a weekly rule, counting from the written start (Monday-based weeks). */
+function nthWeekly(start: string, days: number[], interval: number, count: number): string {
+  const first = monday(parse(start));
+  const order = [...new Set(days)].map((d) => (d + 6) % 7).sort((a, b) => a - b);
+  let n = 0, last = start;
+  for (let w = 0; w < 5200 && n < count; w++) {
+    for (const o of order) {
+      const date = iso(addDays(first, w * 7 * interval + o));
+      if (date < start) continue;
+      last = date;
+      if (++n === count) break;
+    }
+  }
+  return last;
+}
+
 export function parseIcs(text: string): IcsEvent[] {
   const out: IcsEvent[] = [];
   let ev: Draft | null = null, inner = 0;   /* inner: depth inside an event's own parts, like a VALARM */
@@ -94,6 +111,17 @@ function finish(ev: Draft & { start: When }): IcsEvent {
       .map((d) => (d + (ev.start.shift ?? 0) + 7) % 7)
     : [];
   const [y, mo, d] = ev.start.date.split('-').map(Number);
+  const interval = weekly ? Math.max(1, parseInt(rule.INTERVAL, 10) || 1) : 1;
+  let until = '';
+  if (weekly && rule.UNTIL) until = when({ name: 'UNTIL', params: {}, value: rule.UNTIL })?.date ?? '';
+  else if (weekly && parseInt(rule.COUNT, 10) > 0) {
+    /* counted in the written frame, then moved to local with the start */
+    const shift = ev.start.shift ?? 0;
+    const written = iso(addDays(parse(ev.start.date), -shift));
+    const raw = rule.BYDAY ? rule.BYDAY.split(',').map((x) => DAY[x.replace(/^[+-]?\d+/, '')]).filter((x) => x !== undefined) : [];
+    const days = raw.length ? raw : [parse(written).getDay()];
+    until = iso(addDays(parse(nthWeekly(written, days, interval, parseInt(rule.COUNT, 10))), shift));
+  }
   return {
     summary: ev.summary || '',
     location: ev.location || '',
@@ -102,5 +130,7 @@ function finish(ev: Draft & { start: When }): IcsEvent {
     end: ev.end && ev.end.date === ev.start.date ? ev.end.time : '',
     weekly,
     weekdays: weekly ? (weekdays.length ? weekdays : [new Date(y, mo - 1, d).getDay()]) : [],
+    interval,
+    until,
   };
 }
