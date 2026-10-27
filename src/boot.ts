@@ -51,7 +51,7 @@ export function boot() {
 
     /* ═════════ sync ═════════ */
     /* The status shows in the top bar and Settings (src/data/sync.ts listens). */
-    sync.onPulled(async () => {
+    sync.setOnPulled(async () => {
         await runReviews()
         refreshAfterSync()
     })

@@ -15,10 +15,12 @@ const listeners = new Set<(s: typeof status) => void>();
 let initialized = false, paused = false, running: Promise<boolean> | null = null, controller: AbortController | null = null, timer: ReturnType<typeof setTimeout> | undefined;
 let signedOut: () => void = () => {}, pulled: () => unknown = () => {};
 export const onStatus = (fn: (s: typeof status) => void) => listeners.add(fn);
-export const onPulled = (fn: () => unknown): void => { pulled = fn; };
+/** The one listener for a finished pull (boot.ts); setting it again replaces it. */
+export const setOnPulled = (fn: () => unknown): void => { pulled = fn; };
 let unreadFn: (n: number) => void = () => {};
-/** The inbox's unread count, as the last page of each complete pull carries it (spec §12). */
-export const onUnread = (fn: (n: number) => void): void => { unreadFn = fn; };
+/** The inbox's unread count, as the last page of each complete pull carries it (spec §12). One listener:
+    each sign-in sets it again, replacing the last. */
+export const setOnUnread = (fn: (n: number) => void): void => { unreadFn = fn; };
 export const onUnauthenticated = (fn: () => void): void => { signedOut = fn; };
 function state(value: SyncState, message = '') {
   Object.assign(status, { state: value, message, pending: store.pendingCount() });

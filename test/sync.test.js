@@ -45,7 +45,7 @@ describe('persisted operation synchronization', () => {
  });
  it('hands on the unread count the last page of a complete pull carries, and none from an incomplete one', async () => {
    const counts = [];
-   sync.onUnread((n) => counts.push(n));
+   sync.setOnUnread((n) => counts.push(n));
    const page = (over) => ({ changes: [], scopes: [], cursors: { 'u:u1': 2 }, more: false, reset: [], revoked: [], ...over });
    api.syncV3.mockResolvedValueOnce(page({ more: true, unread: 9 })).mockResolvedValueOnce(page({ unread: 4 }));
    await sync.syncNow();
@@ -53,7 +53,7 @@ describe('persisted operation synchronization', () => {
    api.syncV3.mockResolvedValue(page({ more: true, unread: 7 }));
    await sync.syncNow();
    expect(counts).toEqual([4]);
-   sync.onUnread(() => {});
+   sync.setOnUnread(() => {});
  });
  it('acknowledges exactly the uploaded operation', async () => {
    await sync.syncNow();
@@ -200,7 +200,7 @@ describe('persisted operation synchronization', () => {
  it('does not apply a delayed change page after stop', async () => {
    let finish;
    api.syncV3.mockImplementation(() => new Promise((resolve) => { finish = resolve; }));
-   const pulled = vi.fn(); sync.onPulled(pulled);
+   const pulled = vi.fn(); sync.setOnPulled(pulled);
    const running = sync.syncNow();
    await vi.waitFor(() => expect(finish).toBeTypeOf('function'));
    sync.stop();
