@@ -26,6 +26,9 @@ export interface Toast {
     error: boolean
 }
 
+/** How long a toast stays up, and a longer stay for an error worth reading. */
+export const TOAST_MS = 6000, TOAST_LONG_MS = 8000
+
 let current: Toast | null = null
 let timer: ReturnType<typeof setTimeout> | undefined
 let nextId = 1
@@ -35,7 +38,7 @@ function emit() {
     for (const fn of listeners) fn()
 }
 
-export function toast(text: string, { undo = null, label = "Undo", badge = null, error = false, ms = 6000 }: ToastOptions = {}) {
+export function toast(text: string, { undo = null, label = "Undo", badge = null, error = false, ms = TOAST_MS }: ToastOptions = {}) {
     clearTimeout(timer)
     current = { id: nextId++, text, undo, label, badge, error }
     timer = setTimeout(hideToast, ms)

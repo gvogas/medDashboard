@@ -14,6 +14,7 @@ import { closeSheet } from "./overlay"
 import { courseRefKey, itemRefKey, keyedCourses, refOf } from "./refs"
 import { ui } from "./ui"
 import type { StudyPrefs, StudySession } from "./types"
+import { MINUTE_MS } from "@/lib/time"
 
 export interface SessionDraft {
     isNew: boolean
@@ -37,7 +38,7 @@ const clock = (d: Date) => pad(d.getHours()) + ":" + pad(d.getMinutes())
 
 /** A new session for the last half hour, on `courseId`, else the timer's course, else the first live one. */
 export function newSession(courseId?: string | null, now = new Date()): SessionDraft {
-    const start = new Date(now.getTime() - 30 * 60_000)
+    const start = new Date(now.getTime() - 30 * MINUTE_MS)
     const live = keyedCourses(effectiveCourses()).find((c) => !c.archived)
     return {
         isNew: true, base: null, id: uid(), date: iso(start), time: clock(start), minutes: 30,

@@ -5,7 +5,7 @@
 
 import { useState } from "react"
 import { cn } from "@/lib/utils"
-import { duration } from "@/lib/time"
+import { duration, MINUTE_MS } from "@/lib/time"
 import { data } from "@/core/store"
 import { useFriends } from "@/data/friends"
 import { inviteMore, isHost, localClock, memberMinutes, useRoom } from "@/data/room"
@@ -20,7 +20,7 @@ function useMinutes(run: Run) {
     const clock = localClock(state)
     const me = data.profile?.id ?? ""
     return (m: RoomMember) => m.userId === me
-        ? Math.floor(((run.room?.earlierMs ?? 0) + Math.max(0, run.studyMs - (run.room?.joinedStudyMs ?? 0))) / 60_000)
+        ? Math.floor(((run.room?.earlierMs ?? 0) + Math.max(0, run.studyMs - (run.room?.joinedStudyMs ?? 0))) / MINUTE_MS)
         : clock ? memberMinutes(m, clock, run.at) : 0
 }
 

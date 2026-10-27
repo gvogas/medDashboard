@@ -2,7 +2,7 @@
 import { api, ApiError, retryDelayMs } from './api.ts';
 import * as store from './store.ts';
 import { untouchedReview } from './reviews.ts';
-import { changedFields, MARK_DEFAULTS, parseKey } from './shared.ts';
+import { changedFields, MARK_DEFAULTS, parseKey, TASK_LIMIT } from './shared.ts';
 import type { PendingOp, Row } from './db.ts';
 import type { Cursor, ServerProfile } from './store.ts';
 import type { SyncState, SyncStatus } from './types.ts';
@@ -68,7 +68,7 @@ function reasonFor(e: ApiError, op: PendingOp): string {
   const body = e.body || {};
   if (body.error === 'legacy_edit') return 'This edit was saved before conflict protection. Review it before restoring.';
   if (body.error === 'conflict') return Array.isArray(body.fields) ? `Someone else changed ${(body.fields as string[]).join(', ')}.` : 'A newer version was saved on another device.';
-  if (body.error === 'limit') return 'A project holds 200 tasks at most.';
+  if (body.error === 'limit') return `A project holds ${TASK_LIMIT} tasks at most.`;
   if (body.error === 'archived') return `This ${parseKey(op.key).scope?.startsWith('p:') ? 'project' : 'class'} is archived, so it is read-only.`;
   if (e.status === 403) return 'You no longer have permission to change this.';
   return 'The server could not accept this edit.';

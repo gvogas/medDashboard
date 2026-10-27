@@ -14,7 +14,7 @@ vi.mock("@/core/api", () => ({
 }))
 vi.mock("@/core/sync", () => ({ syncNow: fake.syncNow }))
 vi.mock("@/data/overlay", () => ({ closeSheet: fake.closeSheet, openSheet: vi.fn() }))
-vi.mock("@/data/toast", () => ({ toast: fake.toast }))
+vi.mock("@/data/toast", () => ({ TOAST_MS: 6000, TOAST_LONG_MS: 8000, toast: fake.toast }))
 vi.mock("@/data/query", () => ({ schoolCal: () => null }))
 
 import { normalizeItem } from "@/core/model"

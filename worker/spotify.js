@@ -116,9 +116,9 @@ async function readFailure(res, what, forbidden = null) {
 
 export const SEARCH_TYPES = ['track', 'artist', 'album', 'playlist'];
 const KINDS = SEARCH_TYPES.map((t) => t + 's');
-const SEARCH_LIMIT = 10;       /* Spotify's most for a development-mode app */
+const PAGE_SIZE = 10;       /* Spotify's most for a development-mode app */
 /* Spotify pages search results no further than 1000 in, offset plus limit. */
-export const SEARCH_MAX_OFFSET = 1000 - SEARCH_LIMIT;
+export const SEARCH_MAX_OFFSET = 1000 - PAGE_SIZE;
 
 /**
  * Tracks, artists, albums and playlists matching `q`, ten of each; or, with `type`, the
@@ -126,7 +126,7 @@ export const SEARCH_MAX_OFFSET = 1000 - SEARCH_LIMIT;
  */
 export async function search(env, userId, q, type = null, offset = 0) {
   const types = type ? [type] : SEARCH_TYPES;
-  const res = await spotifyFetch(env, userId, 'GET', `/search?type=${types.join(',')}&limit=${SEARCH_LIMIT}&offset=${offset}&q=${encodeURIComponent(q)}`);
+  const res = await spotifyFetch(env, userId, 'GET', `/search?type=${types.join(',')}&limit=${PAGE_SIZE}&offset=${offset}&q=${encodeURIComponent(q)}`);
   if (!res.ok) throw await readFailure(res, 'search');
   const b = await bodyOf(res);
   const list = (key, map) => (b[key]?.items || []).filter(Boolean).map(map);
@@ -170,7 +170,7 @@ export async function albumTracks(env, userId, id, offset = 0) {
 
 /** An artist's albums and singles, newest first as Spotify gives them. */
 export async function artistAlbums(env, userId, id, offset = 0) {
-  const res = await spotifyFetch(env, userId, 'GET', `/artists/${id}/albums?include_groups=album,single&limit=${SEARCH_LIMIT}&offset=${offset}`);
+  const res = await spotifyFetch(env, userId, 'GET', `/artists/${id}/albums?include_groups=album,single&limit=${PAGE_SIZE}&offset=${offset}`);
   if (await missing(res)) throw new HttpError(404, { error: 'not_found' });
   if (!res.ok) throw await readFailure(res, 'artist albums');
   const b = await bodyOf(res);

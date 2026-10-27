@@ -82,10 +82,10 @@ function subscribe(fn: () => void) {
 }
 
 /** The screen is phone-sized: the Agenda is offered (and the default). */
-export const isNarrow = () => !!media()?.matches
+export const isPhone = () => !!media()?.matches
 
 /** What the Week page shows: on a wide screen always the Week; on a phone the person's choice, the Agenda by default. */
-export const weekLayout = (): WeekLayout => (isNarrow() ? chosen ?? "agenda" : "week")
+export const weekLayout = (): WeekLayout => (isPhone() ? chosen ?? "agenda" : "week")
 
 export function setWeekLayout(layout: WeekLayout) {
     chosen = layout
@@ -94,7 +94,7 @@ export function setWeekLayout(layout: WeekLayout) {
 }
 
 export const useWeekLayout = () => useSyncExternalStore(subscribe, weekLayout, () => "week" as WeekLayout)
-export const useNarrow = () => useSyncExternalStore(subscribe, isNarrow, () => false)
+export const useNarrow = () => useSyncExternalStore(subscribe, isPhone, () => false)
 
 /** The Agenda over the live data, `days` long. */
 export const useAgenda = (days = AGENDA_DAYS) => {

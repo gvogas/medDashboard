@@ -22,6 +22,7 @@ import { followToday } from "@/data/ui"
 // Listen to the store and sync from the start, before any component mounts.
 import "@/data/store"
 import "@/data/sync"
+import { MINUTE_MS } from "@/lib/time"
 
 let booted = false
 
@@ -42,7 +43,7 @@ export function boot() {
     /* a page left open overnight moves to the new day: when it is shown again, or within a minute while it stays shown */
     const newDay = () => { if (followToday()) notify() }
     document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") newDay() })
-    setInterval(() => { if (document.visibilityState === "visible") newDay() }, 60_000)
+    setInterval(() => { if (document.visibilityState === "visible") newDay() }, MINUTE_MS)
 
     /* ═════════ theme ═════════ */
     useTypePrefs(() => data.profile?.types || [])

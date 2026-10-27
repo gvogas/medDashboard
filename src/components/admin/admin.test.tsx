@@ -8,7 +8,7 @@ vi.mock("@/data/ui", async () => (await import("@/data/fake-ui")).fakeUi(ui))
 vi.mock("@/data/study-controller", () => ({ setView: vi.fn() }))
 vi.mock("@/data/sidebar", () => ({ sideOpen: () => false, setSide: vi.fn() }))
 const toast = vi.hoisted(() => vi.fn())
-vi.mock("@/data/toast", () => ({ toast }))
+vi.mock("@/data/toast", () => ({ TOAST_MS: 6000, TOAST_LONG_MS: 8000, toast }))
 const admin = vi.hoisted(() => ({
     accounts: vi.fn(), create: vi.fn(), resetPassword: vi.fn(), revoke: vi.fn(), setAdmin: vi.fn(), remove: vi.fn(), unlock: vi.fn(),
     errors: vi.fn(), audit: vi.fn(), traffic: vi.fn(), health: vi.fn(), announcement: vi.fn(), announce: vi.fn(), unannounce: vi.fn(),

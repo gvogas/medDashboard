@@ -4,7 +4,7 @@
 
 import { HttpError } from './http.js';
 import { SCHOOL_KINDS, SCHOOL_LIMITS, validDate } from '../src/core/school.ts';
-import { MARK_DEFAULTS, SHARED_FIELDS, stable } from '../src/core/shared.ts';
+import { CHECKLIST_MAX, MARK_DEFAULTS, MEETINGS_MAX, SHARED_FIELDS, STICKER_MAX, stable } from '../src/core/shared.ts';
 import { MAX_CATEGORIES, MAX_DROP, MAX_PASS, MAX_STEPS } from '../src/core/grades.ts';
 
 const COLOURS = ['#E4749B', '#8B5CC7', '#17B3AE', '#79B6EA', '#BCA6E6'];   /* the coat's */
@@ -296,7 +296,7 @@ export function validateCourse(body) {
     instructor: str(body.instructor ?? '', 'instructor', 60),
     term: str(body.term ?? '', 'term', 40),
     archived: bool(body.archived ?? false, 'archived'),
-    meetings: list(body.meetings ?? [], 'meetings', 12, meeting),
+    meetings: list(body.meetings ?? [], 'meetings', MEETINGS_MAX, meeting),
     target: body.target === null || body.target === undefined ? null : int(body.target, 'target', 1, 100),
     credits: kept(body.credits, (v) => optNum(v, 'credits', 0, 30)),
     gradeCategories: categories(body.gradeCategories),
@@ -328,7 +328,7 @@ export function validateItem(body) {
     grade: optNum(body.grade, 'grade', 0, 100),
     weight: optNum(body.weight, 'weight', 0, 100),
     notes: str(body.notes ?? '', 'notes', 5000),
-    checklist: list(body.checklist ?? [], 'checklist', 50, checklistEntry),
+    checklist: list(body.checklist ?? [], 'checklist', CHECKLIST_MAX, checklistEntry),
     links: list(body.links ?? [], 'links', 20, linkEntry),
     recur: body.recur === null || body.recur === undefined ? null : oneOf(body.recur, 'recur', ['weekly']),
     weekday: body.weekday === null || body.weekday === undefined ? null : int(body.weekday, 'weekday', 0, 6),
@@ -382,7 +382,6 @@ export function validateQuote(body) {
 /* Your own achievement: a sticker picture as a small data: URL, a name, and what earns
    it, hours on a course (1–1000) or a grade on one exam or quiz (1–100). */
 const STICKER = /^data:image\/(?:webp|png|jpeg);base64,[A-Za-z0-9+/]+={0,2}$/;
-const STICKER_MAX = 90_000;
 export function validateAchievement(body) {
   obj(body, 'body');
   const sticker = str(body.sticker, 'sticker', STICKER_MAX, 1);
@@ -453,7 +452,7 @@ export function validateMark(body, kind) {
     grade: optNum(body.grade, 'grade', 0, 100),
     weight: optNum(body.weight, 'weight', 0, 100),
     notes: str(body.notes ?? '', 'notes', 5000),
-    checklist: list(body.checklist ?? [], 'checklist', 50, checklistEntry),
+    checklist: list(body.checklist ?? [], 'checklist', CHECKLIST_MAX, checklistEntry),
     completedAt: optInt(body.completedAt, 'completedAt'),
     hidden: bool(body.hidden ?? false, 'hidden'),
   };

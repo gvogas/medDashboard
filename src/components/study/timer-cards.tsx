@@ -28,8 +28,8 @@ import type { Flow } from "@/data/types"
 import { FlipClock } from "./flip-clock"
 import { PhaseLabel, PlayIcon, RoundStrip } from "./timer-bits"
 import { TodayCard } from "./today-card"
+import { MINUTE_MS } from "@/lib/time"
 
-const MIN = 60_000
 
 export function TimerCards() {
     const flow = useFlow()
@@ -63,7 +63,7 @@ function ReadyCard({ flow }: { flow: Flow }) {
                 {THEMES[bg].studyWord} · round 1 of {flow.rounds}
             </PhaseLabel>
             <div className="flex flex-col items-start gap-3.5">
-                <FlipClock ms={flow.steps[0][1] * MIN} running={false} size="ready" />
+                <FlipClock ms={flow.steps[0][1] * MINUTE_MS} running={false} size="ready" />
                 <div className="flex flex-wrap gap-x-3.5 gap-y-1 text-[13px] text-[var(--fx-ink-2)] tabular-nums">
                     <span>{flowName(flow, bg)}</span>
                     <span>{duration(totals.study)} study · {duration(totals.total)} total</span>

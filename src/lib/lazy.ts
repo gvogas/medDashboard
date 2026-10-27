@@ -3,6 +3,7 @@
 // one when the browser is idle after the app shows (src/data/session.ts).
 
 import { createElement, use, type ComponentType } from "react"
+import { MINUTE_MS } from "./time"
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any -- each page and sheet has its own props
 type Any = ComponentType<any>
@@ -41,7 +42,7 @@ export function preloadIdle() {
 if (typeof window !== "undefined") {
     window.addEventListener("vite:preloadError", (e) => {
         try {
-            if (Date.now() - Number(sessionStorage.getItem("rounds.reloadedAt") || 0) < 60_000) return
+            if (Date.now() - Number(sessionStorage.getItem("rounds.reloadedAt") || 0) < MINUTE_MS) return
             sessionStorage.setItem("rounds.reloadedAt", String(Date.now()))
         } catch { return }
         e.preventDefault()

@@ -26,8 +26,8 @@ import { keyedCourses, keyedItems } from "./refs"
 import { withProjects } from "./projects"
 import { THEMES, type Bg } from "./themes"
 import type { Course, Flow, Item, StepKind, StudySession } from "./types"
+import { MINUTE_MS } from "@/lib/time"
 
-const MIN = 60_000
 export const MAX_STEPS = 12
 export const MAX_ROUNDS = 12
 export const MAX_MINUTES = 180
@@ -418,7 +418,7 @@ export const doneAt = (r: Run, now = Date.now()) => (r.paused ? now : r.at) + r.
     on the day it started, so one begun before midnight counts toward that day, not today. */
 export function todaySoFar(sessions: StudySession[], r: Run | null, today: string): number {
     const logged = minutesByDay(sessions).get(today) || 0
-    return logged + (r && iso(new Date(r.startedAt)) === today ? Math.floor(r.studyMs / MIN) : 0)
+    return logged + (r && iso(new Date(r.startedAt)) === today ? Math.floor(r.studyMs / MINUTE_MS) : 0)
 }
 
 /** Today's study against the daily goal (0 with none), with this run's study so far. */

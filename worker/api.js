@@ -13,7 +13,7 @@ import { parseScope, roleOf, scopeOf } from './access.js';
 import * as spotify from './spotify.js';
 import { feedState, renewFeed, stopFeed, serveFeed } from './calendar.js';
 import { leaderboard, setJoined } from './leaderboard.js';
-import { adminRoutes, markSeen, readAnnouncement } from './admin.js';
+import { adminRoutes, markSeenToday, readAnnouncement } from './admin.js';
 import { classRoutes } from './classes.js';
 import { layerRoutes } from './layer.js';
 import { inboxRoutes } from './inbox.js';
@@ -287,7 +287,7 @@ const routes = [
     const session = await requireSession(request, env);
     const [profile, announcement, maintenance] = await Promise.all([getProfile(env.DB, session.userId), readAnnouncement(env.DB), publicMaintenance(env.DB)]);
     if (!profile) throw new HttpError(401, { error: 'unauthenticated' });
-    await markSeen(env.DB, session.userId);
+    await markSeenToday(env.DB, session.userId);
     // Keep a regular user signed in: a cookie in its last week is re-issued.
     const headers = {};
     if (session.expiresAt - Date.now() < RENEW_WITHIN_MS) {

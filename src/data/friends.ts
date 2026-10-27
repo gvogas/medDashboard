@@ -8,8 +8,9 @@ import * as sync from "@/core/sync"
 import { dropFriendRequest } from "./inbox"
 import { maintenanceState } from "./maintenance"
 import type { FriendMatch, FriendSettings, Friends } from "./types"
+import { MINUTE_MS } from "@/lib/time"
 
-export const STALE_MS = 60_000
+export const STALE_MS = MINUTE_MS
 export const LOAD_ERROR = "Could not load your friends. Try again in a minute."
 
 interface State { list: Friends | null; at: number; loading: boolean; offline: boolean; error: string }

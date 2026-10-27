@@ -6,6 +6,7 @@ import { lectureDates } from './reviews.ts';
 import { uid } from './model.ts';
 import type { SchoolCalendar } from './school.ts';
 import type { ChecklistEntry, Course, Item } from './types.ts';
+import { CHECKLIST_MAX } from './shared.ts';
 
 /** How an exam's prep is going, from prepPace. */
 export interface Pace { done: number; total: number; days: number; pace: number; hot: boolean }
@@ -13,7 +14,6 @@ export interface Pace { done: number; total: number; days: number; pace: number;
 /** What an exam window reads of an item. */
 type Dated = Pick<Item, 'id' | 'type' | 'date' | 'courseId'>;
 
-const MAX_STEPS = 50;
 const LOOKBACK_DAYS = 70;
 
 /**
@@ -46,7 +46,7 @@ export function fillTopics(exam: Dated & Pick<Item, 'checklist'>, course: Pick<C
     const text = course.code + ' Lecture · ' + shortDate(date);
     if (have.has(text.toLowerCase())) continue;
     have.add(text.toLowerCase());
-    if (list.length >= MAX_STEPS) { left++; continue; }
+    if (list.length >= CHECKLIST_MAX) { left++; continue; }
     list.push({ id: uid(), text, done: false });
     added++;
   }
