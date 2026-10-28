@@ -14,7 +14,7 @@ const fake = vi.hoisted(() => {
         },
         conflicts: [] as unknown[],
         cal: null as unknown,
-        ui: { view: "week", bg: "med", theme: "dark", settingsTab: "you", importNote: null, schoolNote: null, spotifyNote: null, outlineBusy: false, schoolBusy: false, schoolAsk: false, signoutAsk: null as null | { everywhere: boolean }, feed: null as unknown, course: "all", search: "", types: {} },
+        ui: { view: "week", bg: "med", theme: "dark", settingsTab: "you", importNote: null, schoolNote: null, spotifyNote: null, outlineBusy: false, schoolBusy: false, schoolAsk: false, signoutAsk: null as null | { everywhere: boolean; unsynced: boolean; timer: boolean }, feed: null as unknown, course: "all", search: "", types: {} },
         spotify: { loaded: true, connected: true, device: "Kitchen", stale: false, track: null },
         review: { on: false, through: null as string | null },
         saved: [] as unknown[],
@@ -44,7 +44,7 @@ vi.mock("@/core/store", () => ({
 vi.mock("@/data/ui", async () => (await import("@/data/fake-ui")).fakeUi(fake.ui))
 vi.mock("@/data/query", () => ({ schoolCal: () => fake.cal, termStart: () => null }))
 vi.mock("@/core/sync", () => ({ status: { state: "idle", pending: 0, message: "", lastPull: null }, onStatus: () => {} }))
-vi.mock("@/data/spotify/player", () => ({ state: fake.spotify }))
+vi.mock("@/data/spotify/player", () => ({ state: fake.spotify, account: { noPremium: false, reconnect: false, lost: false }, premiumMissing: () => false }))
 vi.mock("@/data/spotify/web-player", () => ({ state: { status: "ready" } }))
 vi.mock("@/core/api", () => ({ api, spotifyRetryAt: () => 0 }))
 vi.mock("@/core/reviews", () => ({ readSetting: () => fake.review, writeSetting: legacy.writeSetting, nextReview: () => null }))
@@ -178,6 +178,16 @@ describe("Settings", () => {
         expect(legacy.savePrefs).toHaveBeenLastCalledWith({ celebrate: false })
     })
 
+  it("the day minimum shows its range while invalid, and reverts on blur", () => {
+    settings("study")
+    const input = screen.getByLabelText(/A day counts from/) as HTMLInputElement
+    fireEvent.change(input, { target: { value: "300" } })
+    expect(screen.getByText("Enter a number from 1 to 240.")).toBeTruthy()
+    fireEvent.blur(input)
+    expect(legacy.savePrefs).not.toHaveBeenCalledWith({ dayMin: 300 })
+    expect(input.value).toBe("15")
+  })
+
     it("switches reviews on for the account from today, or off, and runs them", async () => {
         settings("study")
         const box = () => screen.getByRole("checkbox", { name: /review tasks/ }) as HTMLInputElement
@@ -231,7 +241,7 @@ describe("Settings", () => {
     it("turns the feed's alerts and this device's morning reminders on and off, and sends a test", async () => {
         settings("connections")
         const group = within(document.getElementById("remindersGrp")!)
-        fireEvent.click(group.getByRole("checkbox", { name: /Alerts in the calendar feed/ }))
+        fireEvent.click(group.getByRole("checkbox", { name: /Alerts in Apple Calendar only/ }))
         expect(legacy.savePrefs).toHaveBeenCalledWith({ alarms: false })
         const morning = await waitFor(() => {
             const box = group.getByRole("checkbox", { name: "Morning reminders on this device" }) as HTMLInputElement
@@ -275,6 +285,8 @@ describe("Settings", () => {
         fireEvent.click(screen.getByRole("button", { name: "Restore my edit" }))
         expect(actions.resolveConflict).toHaveBeenCalledWith("c1", true)
         fireEvent.click(screen.getByRole("button", { name: "Discard saved copy" }))
+        expect(actions.resolveConflict).not.toHaveBeenCalledWith("c1", false)
+        fireEvent.click(screen.getByRole("button", { name: "Discard for good" }))
         expect(actions.resolveConflict).toHaveBeenCalledWith("c1", false)
 
         fireEvent.click(screen.getByRole("button", { name: "Download my data" }))
@@ -284,11 +296,20 @@ describe("Settings", () => {
 
         fireEvent.click(screen.getByRole("button", { name: "Sign out" }))
         expect(actions.signOut).toHaveBeenCalled()
-        fake.ui.signoutAsk = { everywhere: true }
+        fake.ui.signoutAsk = { everywhere: true, unsynced: true, timer: false }
         act(() => notify())
         expect(screen.getByRole("alert")).toBeTruthy()
         fireEvent.click(screen.getByRole("button", { name: "Sign out and erase" }))
         expect(actions.signOut).toHaveBeenLastCalledWith({ everywhere: true, force: true })
+    })
+
+    it("on sign-out with only a timer running, says it will be logged and does not promise erasing", () => {
+        settings("account")
+        fake.ui.signoutAsk = { everywhere: false, unsynced: false, timer: true }
+        act(() => notify())
+        expect(screen.getByText(/study timer is running/)).toBeTruthy()
+        expect(screen.queryByText(/erases them/)).toBeNull()
+        expect(screen.getByRole("button", { name: "Sign out" })).toBeTruthy()
     })
 })
 

@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { api, ApiError } from '../src/core/api.ts';
 import * as store from '../src/core/store.ts';
 import * as sync from '../src/core/sync.ts';
+import { CHECK_TEXT } from '../src/core/sync-text.ts';
 vi.mock('../src/core/store.ts', () => ({
  data: { profile: { id: 'u1' } }, conflicts: [], pending: vi.fn(), pendingCount: vi.fn(() => 0),
  settleOperation: vi.fn(), rejectOperation: vi.fn(), applyPage: vi.fn(), applyServerProfile: vi.fn(),
@@ -224,7 +225,7 @@ describe('persisted operation synchronization', () => {
    store.withSyncLock.mockRejectedValue(new Error('Lock unavailable'));
    expect(await sync.syncNow()).toBe(false);
    expect(api.put).not.toHaveBeenCalled();
-   expect(sync.status.message).toBe('Lock unavailable');
+   expect(sync.status.message).toBe(CHECK_TEXT);
  });
  it('cancels a queued cross-tab lock so sign-out can drain', async () => {
    store.withSyncLock.mockImplementation((fn, { signal } = {}) => new Promise((resolve, reject) => {

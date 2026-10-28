@@ -1,14 +1,15 @@
-// History, Term: a heatmap from the term's start, whose days open their month.
+// History, Term: a heatmap from the term's start, whose days list their sessions under it.
 
 import { useRef, useState, type KeyboardEvent } from "react"
 import { cn } from "@/lib/utils"
 import { type HeatWeek, type TermHist } from "@/data/study"
 import { plural, HEAT, SubHead } from "./history-bits"
 import { CourseBars } from "./history-week"
+import { DayPanel } from "./history-month"
 
 const DAY_NAMES = ["Mon", "", "Wed", "", "Fri", "", "Sun"]
 
-export function TermPane({ t, onPick }: { t: TermHist; onPick: (date: string) => void }) {
+export function TermPane({ t, onPick, onDelete }: { t: TermHist; onPick: (date: string) => void; onDelete: (id: string) => void }) {
     const grid = useRef<HTMLDivElement>(null)
     const past = t.weeks.flatMap((w) => w.days).filter((d) => !d.future)
     /* one day takes Tab (the picked one, else today); the arrows move between days */
@@ -51,6 +52,7 @@ export function TermPane({ t, onPick }: { t: TermHist; onPick: (date: string) =>
                 {HEAT.map((tone, i) => <span key={i} aria-hidden="true" className={cn("block size-3 rounded-[3px]", tone)} />)}
                 <span>More</span>
             </div>
+            {t.picked && <DayPanel p={t.picked} onDelete={onDelete} />}
             {t.perCourse.length > 0 && <>
                 <SubHead>By course</SubHead>
                 <CourseBars list={t.perCourse} />

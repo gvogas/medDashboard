@@ -65,12 +65,12 @@ async function start(profile: ServerProfile) {
     if (join) openJoin(join)
 }
 
-/* Spotify's consent page sends the browser back to /#spotify=connected or =error. */
-function spotifyReturn(): "connected" | "error" | null {
-    const m = location.hash.match(/^#spotify=(connected|error)$/)
+/* Spotify's consent page sends the browser back to /#spotify=connected, =error or =denied. */
+function spotifyReturn(): "connected" | "error" | "denied" | null {
+    const m = location.hash.match(/^#spotify=(connected|error|denied)$/)
     if (!m) return null
     history.replaceState(null, "", location.pathname + location.search)
-    return m[1] as "connected" | "error"
+    return m[1] as "connected" | "error" | "denied"
 }
 
 /* A join link, /#join=<code> (spec §11): read once and cleared, so the code stays out of the
@@ -102,8 +102,8 @@ export function onStorage(event: StorageEvent) {
     }
 }
 
-export function showSignIn(error = "", username = "") {
-    showSignInState({ error, username })
+export function showSignIn(error = "", username = "", lockedUntil = 0, captchaSiteKey = "") {
+    showSignInState({ error, username, lockedUntil, captchaSiteKey })
 }
 
 /* With unsynced edits or saved copies on this device, the first press asks in Settings;
@@ -112,8 +112,14 @@ export async function signOut({ everywhere = false, force = false }: { everywher
     await commitUndo()
     await finishDelete()
     await store.reload()
-    if (!force && (store.pendingCount() || store.conflicts.length)) { ui.signoutAsk = { everywhere }; notify(); return }
+    const unsynced = Boolean(store.pendingCount() || store.conflicts.length), timer = run.active()
+    if (!force && (unsynced || timer)) { ui.signoutAsk = { everywhere, unsynced, timer }; notify(); return }
     ui.signoutAsk = null
+    /* a run in progress is saved, and its session uploaded, while the account still works: after the revoke nothing can be sent, and the wipe takes the local copy. A sign-out that then fails keeps the saved session. */
+    await run.stop()
+    await sync.syncNow()
+    /* the timer prompt never said its time would be erased: if anything is still unsynced after the upload (it failed, or maintenance holds an edit), ask again before the revoke */
+    if (!unsynced && (store.pendingCount() || store.conflicts.length)) { ui.signoutAsk = { everywhere, unsynced: true, timer: false }; notify(); return }
     sync.stop()
     spotify.stop()
     resetRequests()
@@ -126,7 +132,6 @@ export async function signOut({ everywhere = false, force = false }: { everywher
         toast("Sign-out failed. Check your connection and try again.", { error: true, ms: TOAST_LONG_MS })
         return
     }
-    await sync.drain()
     run.reset()
     const id = data.profile?.id
     spotify.stop()
@@ -135,26 +140,43 @@ export async function signOut({ everywhere = false, force = false }: { everywher
     forgetReads(); resetFriends(); resetRoom(); resetRecords()
     if (id) {
         try { await store.wipe(id) }
-        catch (e) { alert("You are signed out, but local cleanup is still pending. " + (e as Error).message) }
+        catch {
+            toast("You are signed out, but this device still holds this account's data. It will be cleared on your next visit.", { error: true, ms: TOAST_LONG_MS })
+            setTimeout(() => location.reload(), TOAST_LONG_MS)
+            return
+        }
     } else await store.close()
     location.reload() // Clear every in-memory account cache at the session boundary.
 }
 
+/* The worker says how many tries are left once they are few (worker/throttle.js). */
+function badLogin(triesLeft: unknown): string {
+    if (triesLeft === 0) return "Wrong username or password. Sign-in is locked for a short time now."
+    if (typeof triesLeft === "number") return "Wrong username or password. " + triesLeft + (triesLeft === 1 ? " try" : " tries") + " left before sign-in locks for a short time."
+    return "Wrong username or password."
+}
+
 /** The sign-in form's submit (src/components/sign-in.tsx). Success reloads the page;
- * a failure shows the form again with the reason. */
-export async function signIn(username: string, password: string) {
+ * a failure shows the form again with the reason. `captcha` is the Turnstile token, sent only
+ * while the name is locked (worker/throttle.js). */
+export async function signIn(username: string, password: string, captcha?: string) {
     username = username.trim()
     try {
         sync.stop()
         spotify.stop()
         resetRequests()
-        await api.login(username, password)
+        await api.login(username, password, captcha)
         location.reload()
     } catch (err) {
-        showSignIn(!(err instanceof ApiError) ? "You seem to be offline."
-            : err.status === 401 ? "Wrong username or password."
-            : err.status === 429 ? "Too many attempts. Try again in " + Math.max(1, Math.ceil((Number(err.body?.retryAfter) || 60) / 60)) + " min."
-            : err.status === 403 ? "Sign in from the app itself, not from another site."
-            : "Sign-in failed (" + (err.body?.error || err.status) + ").", username)
+        if (!(err instanceof ApiError)) showSignIn(navigator.onLine === false ? "You seem to be offline." : "Term could not be reached. Try again in a moment.", username)
+        else if (err.status === 401) showSignIn(badLogin(err.body?.triesLeft), username)
+        else if (err.status === 429) {
+            const secs = Number(err.body?.retryAfter) || 60
+            const siteKey = typeof err.body?.captchaSiteKey === "string" ? err.body.captchaSiteKey : ""
+            const wait = "Sign-in for " + username + " is locked for " + Math.max(1, Math.ceil(secs / 60)) + " min. "
+            showSignIn(siteKey ? wait + "Complete the check below to try again now." : wait + "The correct password will not work until then.", username, Date.now() + secs * 1000, siteKey)
+        }
+        else if (err.status === 403) showSignIn("Sign in from the app itself, not from another site.", username)
+        else showSignIn("Sign-in failed (" + (err.body?.error || err.status) + ").", username)
     }
 }

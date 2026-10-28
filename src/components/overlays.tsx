@@ -109,7 +109,7 @@ function BusyCard({ busy }: { busy: Busy }) {
                     <span style={{ width: pct + "%" }} className="block h-1 bg-primary transition-[width] duration-1000 ease-out motion-reduce:transition-none" />
                 </span>
                 <div className="flex items-center justify-between gap-3">
-                    <span id="busyNote" className="text-[12px] tabular-nums text-muted-foreground">Usually under half a minute{s >= 1 ? " · " + s + "s" : ""}</span>
+                    <span id="busyNote" className="text-[12px] tabular-nums text-muted-foreground">{s >= 30 ? "Still reading." : "Usually under half a minute"}{s >= 1 ? " · " + s + "s" : ""}</span>
                     <Button variant="ghost" onClick={busy.cancel}>Cancel</Button>
                 </div>
             </div>

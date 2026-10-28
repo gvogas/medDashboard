@@ -5,6 +5,7 @@
 import { useState } from "react"
 import { cn } from "@/lib/utils"
 import { isTest, tmeta } from "@/core/model"
+import { NEXT_SHOWN } from "@/core/next"
 import { useUpNext, type NextEntry } from "@/data/next"
 import { openItem, toggleTask } from "@/data/actions"
 import { keyOf } from "@/data/effective"
@@ -17,17 +18,18 @@ const readFolded = () => { try { return localStorage.getItem(KEY) === "1" } catc
 const writeFolded = (on: boolean) => { try { if (on) localStorage.setItem(KEY, "1"); else localStorage.removeItem(KEY) } catch { /* private window: it just won't be remembered */ } }
 
 export function UpNext({ className }: { className?: string }) {
-    const rows = useUpNext()
+    const all = useUpNext()
+    const rows = all.slice(0, NEXT_SHOWN)
     const [folded, setFolded] = useState(readFolded)
     const fold = () => { setFolded(!folded); writeFolded(!folded) }
-    const late = rows.filter((r) => r.days < 0).length
+    const late = all.filter((r) => r.days < 0).length
     return (
         <Panel
             label="Up next"
             title="Up next"
             className={className}
             head={<>
-                <HeadNote>{rows.length ? (late ? late + " overdue · " : "") + rows.length + " to do" : "all clear"}</HeadNote>
+                <HeadNote>{all.length ? (late ? late + " overdue · " : "") + all.length + " to do" : "all clear"}</HeadNote>
                 <button type="button" onClick={fold} aria-expanded={!folded} aria-controls={folded ? undefined : "up-next-list"}
                     className="cursor-pointer rounded-md border-0 bg-transparent px-2 py-1 text-[11.5px] font-semibold text-ink-2 hover:text-foreground pointer-coarse:min-h-10">
                     {folded ? "Show" : "Hide"}

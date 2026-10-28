@@ -48,7 +48,7 @@ describe("hooks over the store and the ui", () => {
     })
 
     it("keep Up next's rows across an unrelated redraw", () => {
-        const next = renderHook(() => useUpNext(3)), was = next.result.current
+        const next = renderHook(() => useUpNext()), was = next.result.current
         act(() => { ui.focusMusic = !ui.focusMusic; notify() })
         expect(next.result.current).toBe(was)
     })

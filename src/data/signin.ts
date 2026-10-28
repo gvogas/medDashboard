@@ -12,16 +12,20 @@ export interface SignInState {
     screen: Screen
     error: string
     username: string
+    /** Epoch ms until which the form is locked after too many attempts; 0 when it is not. */
+    lockedUntil: number
+    /** The Turnstile site key, when a locked sign-in can be unlocked with a CAPTCHA; "" otherwise. */
+    captchaSiteKey: string
     /** Bumped each time the screen is shown, so the form resets and takes focus again. */
     shown: number
 }
 
-const store = createStore<SignInState>({ screen: "none", error: "", username: "", shown: 0 })
+const store = createStore<SignInState>({ screen: "none", error: "", username: "", lockedUntil: 0, captchaSiteKey: "", shown: 0 })
 const { get, set } = store
 
-/** Show the sign-in form, with a reason and the username to keep. */
-export function showSignInState({ error = "", username = "" }: { error?: string; username?: string } = {}) {
-    set({ screen: "signin", error, username, shown: get().shown + 1 })
+/** Show the sign-in form, with a reason, the username to keep, any lock, and the CAPTCHA that can lift it. */
+export function showSignInState({ error = "", username = "", lockedUntil = 0, captchaSiteKey = "" }: { error?: string; username?: string; lockedUntil?: number; captchaSiteKey?: string } = {}) {
+    set({ screen: "signin", error, username, lockedUntil, captchaSiteKey, shown: get().shown + 1 })
 }
 
 /** Signed in: the app shows. */

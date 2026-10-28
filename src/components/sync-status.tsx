@@ -5,8 +5,11 @@
 
 import { cn } from "@/lib/utils"
 import { syncLabel, useSyncAnnouncement, useSyncStatus } from "@/data/sync"
-import { syncNow } from "@/data/actions"
+import { openSettings, setSettingsTab, syncNow } from "@/data/actions"
 import type { SyncState } from "@/data/types"
+
+/** Saved copies wait: Settings opens on the Account tab, where they are reviewed. */
+const reviewSaved = () => { setSettingsTab("account"); openSettings() }
 
 export const DOT: Record<SyncState, string> = {
     idle: "bg-[var(--good)]",
@@ -24,7 +27,7 @@ export function SyncStatus({ className }: { className?: string }) {
         <button
             type="button"
             title={title}
-            onClick={syncNow}
+            onClick={s.conflicts ? reviewSaved : syncNow}
             data-state={s.state}
             className={cn(
                 "flex shrink-0 cursor-pointer items-center gap-1.5 whitespace-nowrap rounded-full border border-border bg-card px-2.5 py-1 text-[11.5px] text-ink-2 hover:text-foreground max-[700px]:py-1.5",

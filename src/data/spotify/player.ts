@@ -34,6 +34,10 @@ let onSignedOut = () => {}
 let wired = false
 let generation = 0
 
+/** What Spotify has said about this account, beyond what plays. Each holds until the page
+    reloads or the user signs out; Settings and the sidebar say so. */
+export const account = { noPremium: false, reconnect: false, lost: false }
+
 /** 10 s while playing (the progress line ticks locally between polls), 20 s when
     connected but quiet, null when not connected. Each poll is a D1 write, so with the music
     out of sight (only the sidebar's player shows) it is 30 s and 60 s, and while playing it
@@ -48,6 +52,9 @@ export function nextDelayMs(s: { connected: boolean; playing?: boolean; track?: 
 
 /** The Music page or the focus screen's music panel is up. */
 const musicShown = () => ui.view === "spotify" || ui.focusMusic
+
+/** Premium is known to be missing: a command said so, or the Rounds device did. */
+export const premiumMissing = () => account.noPremium || web.state.status === "no_premium"
 
 /** boot.ts's one callback; React reads through useSpotify(). */
 export function onState(fn: (s: PlayerState, kind: StateKind) => void) { listener = fn }
@@ -87,7 +94,7 @@ function apply(s: Answer) {
 
 export async function poll() {
     if (timer !== null) clearTimeout(timer)
-    if (!canPoll()) return
+    if (!canPoll() || account.reconnect) return
     const started = generation
     try {
         if (!state.loaded) {
@@ -99,12 +106,21 @@ export async function poll() {
         }
         const result = await api.spotifyPlayer()
         if (started !== generation || !active) return
+        const was = state.connected
         apply(result)
+        if (was && !state.connected) account.lost = true
         emit("state")
         schedule(nextDelayMs(state, musicShown()))
     } catch (e) {
         if (started !== generation || !active) return
         if (e instanceof ApiError && e.status === 401) { stop(); onSignedOut(); return }
+        if (e instanceof ApiError && e.body?.error === "reconnect_needed") {
+            account.reconnect = true
+            apply({ connected: true })
+            emit("state")
+            schedule(null)
+            return
+        }
         state.stale = true
         emit("state")
         schedule(retryDelayMs(e))
@@ -165,6 +181,9 @@ export function stop() {
     if (errorTimer !== null) clearTimeout(errorTimer)
     errorTimer = null
     Object.assign(state, { connected: false, playing: false, track: null, device: null, deviceId: null, volume: null, supportsVolume: false, shuffle: false, repeat: "off", stale: false, error: null, loaded: false })
+    account.noPremium = false
+    account.reconnect = false
+    account.lost = false
     changed()
 }
 
@@ -201,10 +220,11 @@ export async function onRoundsIfIdle<T>(send: (deviceId: string | null) => Promi
     }
 }
 
-/* A command failed: sign out, forget the connection, or say why in the badge. False when there is nothing more to do. */
+/* A command failed: sign out, forget the connection, or say why in the badge. A missing Premium is kept on screen instead. False when there is nothing more to do. */
 function failed(e: unknown) {
     if (e instanceof ApiError && e.status === 401) { stop(); onSignedOut(); return false }
-    if (e instanceof ApiError && e.status === 409) { disconnected(); return false }
+    if (e instanceof ApiError && e.status === 409) { account.lost = true; disconnected(); return false }
+    if (e instanceof ApiError && e.body?.error === "premium_required") { account.noPremium = true; emit("state"); return false }
     showError(e instanceof ApiError ? (e.body?.error || "spotify_unavailable") : "offline")
     return true
 }

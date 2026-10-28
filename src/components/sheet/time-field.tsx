@@ -9,8 +9,8 @@ import { cn } from "@/lib/utils"
 import { nearestSlot, parseTime, SLOTS, stepTime } from "@/lib/time"
 import { CONTROL } from "./fields"
 
-export function TimeField({ value, onChange, id, label, className }: {
-    value: string; onChange: (v: string) => void; id?: string; label?: string; className?: string
+export function TimeField({ value, onChange, id, label, className, invalid = false }: {
+    value: string; onChange: (v: string) => void; id?: string; label?: string; className?: string; invalid?: boolean
 }) {
     const [text, setShown] = useState(value)
     /* read on blur, which can follow a pick before React has redrawn */
@@ -53,7 +53,7 @@ export function TimeField({ value, onChange, id, label, className }: {
                 aria-expanded={open}
                 aria-controls={open ? listId : undefined}
                 aria-activedescendant={open && near ? optionId(near) : undefined}
-                aria-invalid={bad || undefined}
+                aria-invalid={bad || invalid || undefined}
                 value={text}
                 onFocus={() => setOpen(true)}
                 onBlur={() => { settle(); setOpen(false) }}
@@ -63,14 +63,16 @@ export function TimeField({ value, onChange, id, label, className }: {
                         e.preventDefault()
                         commit(stepTime(typed.current, e.key === "ArrowUp" ? 1 : -1))
                     } else if (e.key === "Enter" || e.key === "Escape") {
-                        /* the sheet must not close on this Escape */
+                        /* the sheet must not close on this Escape; Escape gives back the stored time */
                         e.preventDefault()
                         e.stopPropagation()
+                        if (e.key === "Escape") setText(value)
                         e.currentTarget.blur()
                     }
                 }}
-                className={cn(CONTROL, "w-[72px] flex-none text-center font-mono tabular-nums tracking-[.02em]", bad && "border-destructive text-destructive", className)}
+                className={cn(CONTROL, "w-[72px] flex-none text-center font-mono tabular-nums tracking-[.02em]", (bad || invalid) && "border-destructive text-destructive", className)}
             />
+            {bad && <span className="text-[11px] text-destructive">e.g. 8:30 or 8pm</span>}
             {open && input.current && createPortal(<Slots anchor={input.current} id={listId} near={near} optionId={optionId} onPick={(v) => { commit(v); input.current?.blur() }} />, document.body)}
         </>
     )

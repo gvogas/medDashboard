@@ -34,7 +34,7 @@ describe("the tiles", () => {
         const t = studyTiles([], prefs(), null, TODAY)
         expect(t.streak).toEqual({ days: 0, sub: "Longest 0 · a day counts from 15 min" })
         expect(t.today).toEqual({ minutes: 0, goal: 0, sub: "" })
-        expect(t.term).toEqual({ label: "Last 12 weeks", minutes: 0, sub: "0 sessions" })
+        expect(t.term).toEqual({ label: "Last 16 weeks", minutes: 0, sub: "0 sessions" })
     })
 
     it("add With friends this week once you have studied in a room", () => {
@@ -57,11 +57,11 @@ describe("the tiles", () => {
         expect(studyTiles([at(TODAY, 65), at(TODAY, 60)], prefs({ goal: 120 }), null, TODAY).today.sub).toBe("Daily goal reached")
     })
 
-    it("count the term from its start, or the last 12 weeks", () => {
+    it("count the term from its start, or the last 16 weeks", () => {
         const list = [at("2026-08-31", 40), at("2026-09-02", 50), at("2026-09-22", 30), at("2026-06-01", 99)]
         expect(studyTiles(list, prefs(), "2026-09-01", TODAY).term).toEqual({ label: "This term", minutes: 120, sub: "3 sessions since 1 Sep" })
         /* the term counts from its first Monday; twelve weeks back from this Monday is 29 June */
-        expect(studyTiles(list, prefs(), null, TODAY).term).toEqual({ label: "Last 12 weeks", minutes: 120, sub: "3 sessions" })
+        expect(studyTiles(list, prefs(), null, TODAY).term).toEqual({ label: "Last 16 weeks", minutes: 120, sub: "3 sessions" })
         expect(studyTiles([at(TODAY, 5)], prefs(), "2026-09-01", TODAY).term.sub).toBe("1 session since 1 Sep")
     })
 })
@@ -76,12 +76,12 @@ describe("the week", () => {
         const w = weekOf(list, 0, TODAY)
         expect(w.range).toBe("21 – 27 Sep")
         expect(w.total).toBe(135)
-        expect(w.summary).toBe("in 3 sessions · 55m more than the week before")
+        expect(w.summary).toBe("in 3 sessions · 55m more than last week to this day")
         expect(w.sessions.map((s) => s.studyMinutes)).toEqual([60, 30, 45])
         expect(w.perCourse).toEqual([["", 60], ["anat", 45], ["phys", 30]])
         expect(weekOf(list, -1, TODAY).summary).toBe("in 1 session")
-        expect(weekOf([at("2026-09-14", 30), at("2026-09-21", 30)], 0, TODAY).summary).toBe("in 1 session · same as the week before")
-        expect(weekOf([at("2026-09-14", 90), at("2026-09-21", 30)], 0, TODAY).summary).toBe("in 1 session · 1h 00m less than the week before")
+        expect(weekOf([at("2026-09-14", 30), at("2026-09-21", 30)], 0, TODAY).summary).toBe("in 1 session · same as last week to this day")
+        expect(weekOf([at("2026-09-14", 90), at("2026-09-21", 30)], 0, TODAY).summary).toBe("in 1 session · 1h 00m less than last week to this day")
     })
 
     it("draws a bar a day by course, future days marked, and the goal line", () => {
@@ -125,7 +125,7 @@ describe("the month", () => {
         expect(m.title).toBe("September 2026")
         expect(m.lead).toBe(1)   /* 1 September 2026 is a Tuesday */
         expect(m.cells).toHaveLength(30)
-        expect(m.stats).toEqual({ total: 225, count: 4, daysStudied: 3, daysSoFar: 23, average: 10 })
+        expect(m.stats).toEqual({ total: 225, count: 4, daysStudied: 3, daysSoFar: 22, average: 10, from: "2026-09-02" })
         const two = m.cells[1]
         expect(two).toMatchObject({ date: "2026-09-02", minutes: 75, split: [["anat", 30], ["phys", 45]].reverse(), level: 2, met: false, label: "Wed 2 Sep, 1h 15m" })
         expect(m.cells[13]).toMatchObject({ minutes: 130, met: true, level: 3 })
@@ -142,11 +142,11 @@ describe("the month", () => {
         expect(aug.title).toBe("August 2026")
         expect(aug.picked).toMatchObject({ date: "2026-08-30", total: 10 })
         expect(aug.picked?.sessions).toHaveLength(1)
-        expect(aug.stats.daysSoFar).toBe(31)
+        expect(aug.stats).toMatchObject({ daysSoFar: 2, from: "2026-08-30" })
         expect(aug.cells.filter((c) => c.picked).map((c) => c.date)).toEqual(["2026-08-30"])
         /* a month with no study picks nothing */
         expect(monthOf(list, -2, null, TODAY).picked).toBeNull()
-        expect(monthOf(list, -2, null, TODAY).stats).toEqual({ total: 0, count: 0, daysStudied: 0, daysSoFar: 31, average: 0 })
+        expect(monthOf(list, -2, null, TODAY).stats).toEqual({ total: 0, count: 0, daysStudied: 0, daysSoFar: 0, average: 0, from: null })
     })
 
     it("steps back across the year and the clocks changing", () => {
@@ -178,16 +178,16 @@ describe("the term", () => {
         expect(t.daysStudied).toBe(2)
     })
 
-    it("falls back to the last 12 weeks, levelled by the hour with no goal", () => {
+    it("falls back to the last 16 weeks, levelled by the hour with no goal", () => {
         const t = termOf([at("2026-07-01", 100)], prefs(), null, TODAY)
-        expect(t.title).toBe("Last 12 weeks")
+        expect(t.title).toBe("Last 16 weeks")
         expect(t.weeks[0].monday).toBe("2026-06-29")
         expect(t.weeks[0].month).toBe("Jul")   /* 1 July is in the first week */
         expect(t.weeks).toHaveLength(16)
         expect(t.weeks[0].days[2]).toMatchObject({ date: "2026-07-01", level: 3 })
         /* a term start in the future or over half a year back is left out */
-        expect(termOf([], prefs(), "2026-10-01", TODAY).title).toBe("Last 12 weeks")
-        expect(termOf([], prefs(), "2026-01-05", TODAY).title).toBe("Last 12 weeks")
+        expect(termOf([], prefs(), "2026-10-01", TODAY).title).toBe("Last 16 weeks")
+        expect(termOf([], prefs(), "2026-01-05", TODAY).title).toBe("Last 16 weeks")
     })
 
     it("spans the new year", () => {
@@ -254,13 +254,14 @@ describe("the History card's actions", () => {
         expect(fake.ui.hist).toMatchObject({ monthOffset: 0, weekOffset: 0 })
     })
 
-    it("pick a day: the Month tab on its month, across the year", () => {
+    it("pick a day: it is picked on the tab showing, and the tab and month stay", () => {
+        Object.assign(fake.ui.hist, { tab: "month", monthOffset: -2 })
         pickDay("2026-07-14")
         expect(fake.ui.hist).toMatchObject({ tab: "month", monthOffset: -2, focusDay: "2026-07-14" })
         pickDay("2025-12-31")
-        expect(fake.ui.hist.monthOffset).toBe(-9)
+        expect(fake.ui.hist).toMatchObject({ tab: "month", monthOffset: -2, focusDay: "2025-12-31" })
         pickDay(TODAY)
-        expect(fake.ui.hist.monthOffset).toBe(0)
+        expect(fake.ui.hist).toMatchObject({ tab: "month", monthOffset: -2, focusDay: TODAY })
     })
 
     it("undo a delete: the session shows again and is not deleted", () => {

@@ -2,8 +2,9 @@
 //
 // The link is /api/calendar/<userId>/<token>.ics, where the token is an HMAC of the
 // user id and users.feed_gen under a key derived from SESSION_SECRET. Nothing secret
-// is stored: turning the feed off clears feed_gen, and a new link bumps it, so every
-// earlier link stops working. Rotating SESSION_SECRET retires every link too.
+// is stored: turning the feed off sets feed_off, and a new link counts feed_gen up from the last
+// value and clears feed_off, so every earlier link stops working and no number is ever used twice. Rotating
+// SESSION_SECRET retires every link too.
 //
 // Times are floating (no zone): a class at 09:00 is 09:00 wherever the calendar is.
 // A `tz` query parameter, added by the app from the browser's zone, becomes
@@ -50,20 +51,20 @@ async function feedUrl(origin, userId, gen, secret) {
 
 /** The feed's state for the signed-in user: { on, url }. */
 export async function feedState(env, origin, userId) {
-  const row = await env.DB.prepare('SELECT feed_gen FROM users WHERE id = ?').bind(userId).first();
+  const row = await env.DB.prepare('SELECT feed_gen, feed_off FROM users WHERE id = ?').bind(userId).first();
   const gen = row?.feed_gen;
-  return gen ? { on: true, url: await feedUrl(origin, userId, gen, env.SESSION_SECRET) } : { on: false, url: null };
+  return gen > 0 && !row.feed_off ? { on: true, url: await feedUrl(origin, userId, gen, env.SESSION_SECRET) } : { on: false, url: null };
 }
 
-/** Turn the feed on, or give it a new link: the old one stops working. */
+/** Turn the feed on, or give it a new link: the old one stops working. The number counts up from the last one, never back down, so no link is issued twice. */
 export async function renewFeed(env, origin, userId) {
-  const row = await env.DB.prepare('UPDATE users SET feed_gen = COALESCE(feed_gen, 0) + 1 WHERE id = ? RETURNING feed_gen').bind(userId).first();
+  const row = await env.DB.prepare('UPDATE users SET feed_gen = COALESCE(feed_gen, 0) + 1, feed_off = 0 WHERE id = ? RETURNING feed_gen').bind(userId).first();
   if (!row) throw new HttpError(401, { error: 'unauthenticated' });
   return { on: true, url: await feedUrl(origin, userId, row.feed_gen, env.SESSION_SECRET) };
 }
 
 export async function stopFeed(env, userId) {
-  await env.DB.prepare('UPDATE users SET feed_gen = NULL WHERE id = ?').bind(userId).run();
+  await env.DB.prepare('UPDATE users SET feed_off = 1 WHERE id = ?').bind(userId).run();
 }
 
 /* Your live projects (?1 = you): their own item and their live tasks assigned to you or to everyone,
@@ -82,8 +83,8 @@ export const PROJECT_ROWS = `SELECT s.id AS sid, (SELECT title FROM items WHERE 
 export async function serveFeed(env, url, userId, token) {
   const gone = () => new HttpError(404, { error: 'not_found' });
   if (!/^[0-9a-f]{32}$/.test(token)) throw gone();
-  const user = await env.DB.prepare('SELECT feed_gen, term_start, types, school_calendar, hidden_sources, study_prefs FROM users WHERE id = ?').bind(userId).first();
-  if (!user?.feed_gen || !sameString(await feedToken(userId, user.feed_gen, env.SESSION_SECRET), token)) throw gone();
+  const user = await env.DB.prepare('SELECT feed_gen, feed_off, term_start, types, school_calendar, hidden_sources, study_prefs FROM users WHERE id = ?').bind(userId).first();
+  if (!(user?.feed_gen > 0) || user.feed_off || !sameString(await feedToken(userId, user.feed_gen, env.SESSION_SECRET), token)) throw gone();
   const wait = await claimLimit(env.DB, `feed:${userId}`, FEED_LIMIT, Date.now(), HOUR_MS);
   if (wait) throw rateLimited(wait);
 

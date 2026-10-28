@@ -62,6 +62,7 @@ function ClassItemCard({ itemKey, bar }: { itemKey: string; bar: boolean }) {
     const bg = useUi((u) => u.bg)
     const [asking, setAsking] = useState<"hide" | "delete" | null>(null)
     const [fillNote, setFillNote] = useState("")
+    const [weightNote, setWeightNote] = useState("")
     const f = useId()
 
     /* closing, or switching to another item, saves what is being typed */
@@ -155,7 +156,7 @@ function ClassItemCard({ itemKey, bar }: { itemKey: string; bar: boolean }) {
                             <Prop icon={ICONS.weight} label="Your weight" htmlFor={f + "mine"}>
                                 <span className="flex items-center gap-1">
                                     <KeptNumberInput id={f + "mine"} className={cn(QUIET, "w-16")} min={0} max={100} step="any" placeholder={it.weight == null ? "—" : String(it.weight)} value={mark.weight ?? ""}
-                                        onChange={(e) => { const n = Number(e.target.value); void editMark(itemKey, { weight: e.target.value === "" || !(n >= 0) ? null : Math.min(100, n) }) }} />
+                                        onChange={(e) => { const n = Number(e.target.value); setWeightNote(e.target.value !== "" && (!(n >= 0) || n > 100) ? "Weight must be between 0% and 100%." : ""); void editMark(itemKey, { weight: e.target.value === "" || !(n >= 0) ? null : Math.min(100, n) }) }} />
                                     <span className="text-muted-foreground">% · empty uses the class's</span>
                                 </span>
                             </Prop>
@@ -164,6 +165,7 @@ function ClassItemCard({ itemKey, bar }: { itemKey: string; bar: boolean }) {
                             <Prop icon={ICONS.studied} label="Studied"><span className="font-mono text-[12.5px] text-ink-2">{duration(studied)}</span></Prop>
                         )}
                     </Props>
+                    {weightNote && <span role="status" className="text-[12px] text-destructive">{weightNote}</span>}
                     {mark.weight != null && mark.weight !== it.weight && (
                         <div className="flex flex-wrap items-center gap-2">
                             <Note>The class weight is {it.weight == null ? "not set" : it.weight + "%"}.</Note>

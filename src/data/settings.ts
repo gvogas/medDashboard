@@ -3,6 +3,7 @@
 // colour. From legacy views/drawer-settings.js.
 
 import { DEFAULT_COAT } from "@/core/model"
+import { CHECK_TEXT, HOLD_TEXT, changesWaiting } from "@/core/sync-text"
 import type { Profile } from "./types"
 
 export type SettingsTab = "you" | "study" | "connections" | "account"
@@ -14,8 +15,9 @@ export const TAB_OF: Record<string, SettingsTab> = { "o-name": "you", "o-goal": 
 /** The sync status in a sentence, for the Account tab. */
 export function syncLine(s: { state: string; pending: number; message: string; lastPull?: number | null }, now = Date.now()): string {
     const n = s.pending
-    if (s.state === "offline") return "Offline — " + (n ? n + " change" + (n === 1 ? "" : "s") + " waiting to sync." : "everything is saved on this device.")
-    if (s.state === "error") return "Sync problem: " + (s.message || "unknown") + "."
+    if (s.state === "offline") return "Offline — " + (n ? changesWaiting(n) + " to sync." : "everything is saved on this device.")
+    if (s.state === "error") return "Sync problem. " + (s.message || CHECK_TEXT)
+    if (s.state === "pending" && s.message === HOLD_TEXT) return "Waiting for shared edits."
     if (s.state === "syncing" || s.state === "pending") return "Syncing…"
     return s.lastPull ? "Synced " + Math.max(0, Math.round((now - s.lastPull) / 60000)) + " min ago." : "Synced."
 }

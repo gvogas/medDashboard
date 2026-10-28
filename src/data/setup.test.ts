@@ -5,7 +5,7 @@ vi.mock("@/core/store", () => ({ data: { profile: null, courses: [], items: [], 
 vi.mock("@/core/sync", () => ({ status: { lastPull: null } }))
 vi.mock("./study-controller", () => ({ savePrefs: async (p: unknown) => { saved.push(p) } }))
 
-import { finishSetup, isFresh, needsSetup, resetSetup } from "./setup"
+import { finishSetup, isFresh, needsSetup, reopenSetup, resetSetup } from "./setup"
 
 const profile = (studyPrefs: Record<string, unknown> = {}) => ({ id: "u1", studyPrefs }) as never
 const holdings = (over: Record<string, unknown> = {}) => ({ profile: profile(), courses: [], items: [], spaces: [], ...over }) as never
@@ -37,5 +37,12 @@ describe("the first-run setup", () => {
         await finishSetup()
         expect(needsSetup(holdings(), true)).toBe(false)
         expect(saved).toEqual([{ setupDone: true }])
+    })
+
+    it("can be opened again from Settings, and saved for every device", async () => {
+        expect(needsSetup(holdings({ profile: profile({ setupDone: true }) }), true)).toBe(false)
+        await reopenSetup()
+        expect(needsSetup(holdings({ profile: profile({ setupDone: true }) }), true)).toBe(true)
+        expect(saved).toEqual([{ setupDone: false }])
     })
 })

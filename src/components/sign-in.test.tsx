@@ -9,6 +9,11 @@ import { stubMatchMedia } from "./test-media"
 // one answers a failure by showing the form again with the reason, as this fake does.
 const signIn = vi.hoisted(() => vi.fn())
 vi.mock("@/data/session", () => ({ signIn }))
+vi.mock("@/components/sign-in-check", () => ({
+    SignInCheck: ({ onToken }: { onToken: (token: string) => void }) => (
+        <button type="button" onClick={() => onToken("tok")}>Solve check</button>
+    ),
+}))
 
 stubMatchMedia({ reducedMotion: false })
 
@@ -70,6 +75,22 @@ describe("sign-in", () => {
         expect(screen.getByRole("alert").textContent).toBe("Wrong username or password.")
         expect((screen.getByLabelText("Password") as HTMLInputElement).value).toBe("")
         expect(document.activeElement?.id).toBe("loginPass")
+    })
+
+    it("says how to recover a forgotten password", () => {
+      render(<SignIn />)
+      expect(screen.getByText("Forgot your password? Ask whoever runs Term to reset it.")).toBeTruthy()
+    })
+    it("a locked sign-in waits for the CAPTCHA token, then sends it with the login", () => {
+        render(<SignIn />)
+        act(() => showSignInState({ error: "locked", username: "maya", lockedUntil: Date.now() + 60_000, captchaSiteKey: "site-key" }))
+        fireEvent.change(screen.getByLabelText("Password"), { target: { value: "secret" } })
+        const submit = () => screen.getByRole("button", { name: "Sign in" }) as HTMLButtonElement
+        expect(submit().disabled).toBe(true)
+        fireEvent.click(screen.getByRole("button", { name: "Solve check" }))
+        expect(submit().disabled).toBe(false)
+        fireEvent.click(submit())
+        expect(signIn).toHaveBeenCalledWith("maya", "secret", "tok")
     })
 })
 

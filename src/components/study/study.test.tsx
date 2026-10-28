@@ -227,7 +227,7 @@ describe("the tiles", () => {
         expect(tile("This term").textContent).toContain("3 sessions since 1 Sep")
     })
 
-    it("offer to set a goal without one, and count 12 weeks without a term", async () => {
+    it("offer to set a goal without one, and count 16 weeks without a term", async () => {
         fake.data.profile = null
         fake.termStart = null
         fake.data.study_sessions = []
@@ -235,7 +235,7 @@ describe("the tiles", () => {
         expect(screen.queryByRole("meter")).toBeNull()
         fireEvent.click(within(tile("Today")).getByRole("button", { name: "Set a daily goal" }))
         expect(actions.openSettings).toHaveBeenCalledWith("goalGrp")
-        expect(tile("Last 12 weeks").textContent).toContain("0 sessions")
+        expect(tile("Last 16 weeks").textContent).toContain("0 sessions")
         expect(tile("Streak").textContent).toContain("0 days")
     })
 })
@@ -312,18 +312,18 @@ describe("History", () => {
         expect(within(h).getByRole("button", { name: "Month" }).getAttribute("aria-pressed")).toBe("true")
         const cal = within(h).getByRole("group", { name: "September 2026" })
         expect(h.textContent).toContain("2h 15m" + "studied")
-        expect(h.textContent).toContain("3/23days studied")
+        expect(h.textContent).toContain("3/22days studied")
         /* today is picked, with nothing logged */
         expect(within(cal).getByRole("button", { name: "Wed 23 Sep, no study" }).getAttribute("aria-pressed")).toBe("true")
         expect(h.textContent).toContain("Wed 23 Sep · today")
-        expect(document.getElementById("hday-2026-09-23")!.textContent).toContain("Nothing logged this day.")
-        fireEvent.click(within(document.getElementById("hday-2026-09-23")!).getByRole("button", { name: "Log study" }))
+        expect(h.querySelector("[data-picked]")!.textContent).toContain("Nothing logged this day.")
+        fireEvent.click(within(h.querySelector<HTMLElement>("[data-picked]")!).getByRole("button", { name: "Log study" }))
         expect(actions.openSession).toHaveBeenCalledWith(null)
 
         const day = within(cal).getByRole("button", { name: "Wed 2 Sep, 1h 00m, goal reached" })
         fireEvent.click(day)
         expect(day.getAttribute("aria-pressed")).toBe("true")
-        expect(document.getElementById("hday-2026-09-02")!.textContent).toContain("1h 00m · 1 session")
+        expect(h.querySelector("[data-picked]")!.textContent).toContain("1h 00m · 1 session")
         expect(within(cal).queryByRole("button", { name: /Thu 24 Sep/ })).toBeNull()   /* the future is not a button */
 
         fireEvent.click(within(h).getByRole("button", { name: "Previous month" }))
@@ -333,7 +333,7 @@ describe("History", () => {
         expect(within(h).getByRole("group", { name: "September 2026" })).toBeTruthy()
     })
 
-    it("shows the term; a day opens its month with it picked, in view, and focused", async () => {
+    it("shows the term; a day lists its sessions under the heatmap", async () => {
         await show("History")
         const h = history()
         fireEvent.click(within(h).getByRole("button", { name: "Term" }))
@@ -352,13 +352,10 @@ describe("History", () => {
         expect(document.activeElement!.getAttribute("aria-label")).toBe("Thu 17 Sep, no study")
 
         fireEvent.click(within(heat).getByRole("button", { name: "Tue 22 Sep, 45m" }))
-        expect(fake.ui.hist).toMatchObject({ tab: "month", focusDay: "2026-09-22", monthOffset: 0 })
-        const picked = document.getElementById("hday-2026-09-22")!
-        expect(picked.textContent).toContain("Tue 22 Sep")
-        expect(picked.textContent).toContain("45m · 1 session")
-        expect(Element.prototype.scrollIntoView).toHaveBeenCalled()
-        expect(document.activeElement!.getAttribute("aria-label")).toBe("Tue 22 Sep, 45m")
-        expect(document.activeElement!.getAttribute("aria-pressed")).toBe("true")
+        expect(fake.ui.hist).toMatchObject({ tab: "term", focusDay: "2026-09-22" })
+        const panel = h.querySelector<HTMLElement>("[data-picked]")!
+        expect(panel.textContent).toContain("Tue 22 Sep")
+        expect(panel.textContent).toContain("45m · 1 session")
     })
 
     it("edits a session, deletes it with Undo in the foot on any tab, and Undo brings it back", async () => {

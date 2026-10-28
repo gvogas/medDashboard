@@ -89,6 +89,6 @@ describe('the error log on the response path', () => {
     expect(res.status).toBe(404);
     expect(waits).toHaveLength(1);
     await Promise.all(waits);
-    expect(await env.DB.prepare('SELECT count(*) AS n FROM error_log WHERE route = ?').bind(path).first()).toEqual({ n: 1 });
+    expect(await env.DB.prepare("SELECT count(*) AS n FROM error_log WHERE route = '(unknown route)' AND message = 'not_found'").first()).toEqual({ n: 1 });
   });
 });

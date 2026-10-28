@@ -16,11 +16,11 @@ const LASTS: [string, number][] = [["1 hour", 1], ["6 hours", 6], ["1 day", 24],
 export function AnnouncementTab() {
     const id = useId()
     const current = useLoad<{ announcement: Announcement | null }>(api.admin.announcement)
-    const [text, setText] = useState(""), [lasts, setLasts] = useState(24)
+    const [text, setText] = useState(""), [lasts, setLasts] = useState(24), [down, setDown] = useState(false)
     const [busy, setBusy] = useState(false), [error, setError] = useState<string | null>(null)
     const act = async (call: () => Promise<unknown>, done: string) => {
         setBusy(true); setError(null)
-        try { await call(); toast(done); setText(""); await current.reload() }
+        try { await call(); toast(done); setText(""); setDown(false); await current.reload() }
         catch (e) { setError(problem(e)) }
         finally { setBusy(false) }
     }
@@ -36,8 +36,12 @@ export function AnnouncementTab() {
                             <p className="m-0 whitespace-pre-wrap text-[13.5px] text-foreground">{live.text}</p>
                             <div className="flex flex-wrap items-center gap-3">
                                 <Note>Until {when(live.until)}</Note>
-                                <Button variant="ghost" className="ml-auto h-8 px-3 text-[12.5px]" disabled={busy}
-                                    onClick={() => void act(() => api.admin.unannounce(), "The announcement is down.")}>Take down</Button>
+                                {down ? <>
+                                    <Note>People stop seeing it within 5 minutes.</Note>
+                                    <Button variant="danger" className="ml-auto h-8 px-3 text-[12.5px]" disabled={busy}
+                                        onClick={() => void act(() => api.admin.unannounce(), "The announcement is down.")}>Take it down</Button>
+                                    <Button variant="ghost" className="h-8 px-3 text-[12.5px]" onClick={() => setDown(false)}>Keep it</Button>
+                                </> : <Button variant="ghost" className="ml-auto h-8 px-3 text-[12.5px]" onClick={() => setDown(true)}>Take down</Button>}
                             </div>
                         </div>
                     )}
@@ -45,7 +49,7 @@ export function AnnouncementTab() {
             <Panel title={live ? "Replace it" : "New announcement"}>
                 <form className="grid gap-3 px-5 py-4" onSubmit={(e) => {
                     e.preventDefault()
-                    void act(() => api.admin.announce(text.trim(), Date.now() + lasts * 3_600_000), "Announced. Everyone sees it on their next sync.")
+                    void act(() => api.admin.announce(text.trim(), Date.now() + lasts * 3_600_000), "Announced. Everyone sees it within 5 minutes.")
                 }}>
                     <div className="grid gap-1">
                         <Label htmlFor={id + "t"}>Message</Label>

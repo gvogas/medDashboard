@@ -21,7 +21,7 @@ import { useScreen } from "@/data/signin"
 import { Button, Note } from "@/components/sheet/fields"
 import { THEMES } from "@/data/themes"
 import {
-    addStep, applyPreset, delStep, flowName, flowTotals, joinRoomRun, MAX_MINUTES, MAX_ROUNDS, MAX_STEPS, openFocus, openTogether, pickCourse, pickItem, presetsFor,
+    addStep, applyPreset, delStep, flowName, flowTotals, joinRoomRun, JOIN_ENDS_FIRST, MAX_MINUTES, MAX_ROUNDS, MAX_STEPS, openFocus, openTogether, pickCourse, pickItem, presetsFor,
     sameFlow, setRounds, setStepKind, setStepMinutes, startRun, stripSegments, useFlow, useRun, useStudyPick,
 } from "@/data/study-timer"
 import type { Flow } from "@/data/types"
@@ -117,13 +117,16 @@ function TogetherCard() {
     const { list } = useFriends()
     const screen = useScreen()
     const [err, setErr] = useState("")
+    const [ask, setAsk] = useState("")
     const [busy, setBusy] = useState(false)
     useEffect(() => { if (screen === "app" && maintenance !== "blocked" && friendsStale()) void loadFriends() }, [screen, maintenance])
     if (maintenance === "blocked") return null
     const inRooms = (list?.friends ?? []).filter((f) => f.room)
-    const join = async (id: string) => {
-        setBusy(true); setErr("")
-        setErr(await joinRoomRun(id))
+    const join = async (id: string, anyway = false) => {
+        setBusy(true); setErr(""); setAsk("")
+        const e = await joinRoomRun(id, anyway)
+        if (e === JOIN_ENDS_FIRST) setAsk(id)
+        else setErr(e)
         setBusy(false)
     }
     return (
@@ -149,6 +152,12 @@ function TogetherCard() {
                         )}
                         <div><Button onClick={() => openTogether()}>Start a group session</Button></div>
                     </>
+                )}
+                {ask && (
+                    <div role="status" className="flex flex-wrap items-center gap-2">
+                        <Note>{JOIN_ENDS_FIRST}</Note>
+                        <Button variant="ghost" disabled={busy} onClick={() => void join(ask, true)}>Join anyway</Button>
+                    </div>
                 )}
                 {err && <div role="alert"><Note tone="bad">{err}</Note></div>}
             </div>

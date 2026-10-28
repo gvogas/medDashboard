@@ -41,7 +41,7 @@ import {
     joinRoomRun, JOIN_ENDS_FIRST, stopRun, stripSegments, tickTitle, timeText, todaySoFar, toggleMusic, togglePause, useFlow, useRun, type Run,
 } from "./study-timer"
 import { ui } from "./ui"
-import { hideToast, runToastAction } from "./toast"
+import { currentToast, hideToast, runToastAction } from "./toast"
 import type { Course, Flow, Item, StudySession } from "./types"
 
 /* every redraw goes through the bridge */
@@ -357,6 +357,11 @@ describe("a run", () => {
         expect(fake.sessions).toEqual([])
     })
 
+    it("joins anyway once the Join is confirmed", async () => {
+        expect(await begin(CLASSIC)).toBe(true)
+        expect(await joinRoomRun("room00000001", true)).not.toBe(JOIN_ENDS_FIRST)
+    })
+
     it("is none until one starts", () => {
         const { result } = renderHook(() => useRun())
         expect(result.current).toBeNull()
@@ -429,13 +434,18 @@ describe("a run", () => {
         await tickFor(3 * MIN)
         fake.failSaves = true
         try { await act(() => stopRun()) } finally { fake.failSaves = false }
-        expect(result.current).toBeNull()
+        /* nothing is logged; the run stays in memory, paused, with an error toast saying so */
+        expect(result.current).not.toBeNull()
+        expect(result.current).toMatchObject({ paused: true, studyMs: 3 * MIN })
         expect(fake.sessions).toEqual([])
+        expect(currentToast()).toMatchObject({ error: true })
         expect(fake.meta.get("studyRun")).toMatchObject({ pausedAt: T0 + 3 * MIN })
         await tickFor(10 * MIN)                        /* time away adds nothing */
         await act(() => focus.load())
         expect(result.current).toMatchObject({ paused: true, studyMs: 3 * MIN })
+        /* the retry, with saves working again, logs the run and clears it */
         await act(() => stopRun())
+        expect(result.current).toBeNull()
         expect(fake.sessions).toEqual([expect.objectContaining({ studyMinutes: 3 })])
         expect(fake.meta.get("studyRun")).toBeNull()
     })

@@ -273,7 +273,7 @@ describe("eye toggles", () => {
     it("hide a course or Personal items from anyone's calendar, and show a hidden one again", () => {
         fake.data.profile = { ...(fake.data.profile as object), isAdmin: false, hiddenSources: ["course:anat"] }
         render(<Sidebar />)
-        const show = coursesNav().getByRole("button", { name: "Show Anatomy on your calendar" })
+        const show = coursesNav().getByRole("button", { name: "Hide Anatomy on your calendar" })
         expect(show.getAttribute("aria-pressed")).toBe("true")
         fireEvent.click(show)
         expect(saveProfile).toHaveBeenCalledWith({ hiddenSources: [] })

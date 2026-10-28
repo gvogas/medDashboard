@@ -437,7 +437,7 @@ describe("the project sheet (spec §10, §15)", () => {
         expect(within(group).queryByRole("img")).toBeNull()
         await act(async () => { fireEvent.click(within(group).getByRole("button", { name: "Hide Fire Response API on your calendar" })) })
         expect(fake.data.profile?.hiddenSources).toEqual(["space:" + PID])
-        expect(within(group).getByRole("button", { name: "Show Fire Response API on your calendar" })).toBeTruthy()
+        expect(within(group).getByRole("button", { name: "Hide Fire Response API on your calendar" }).getAttribute("aria-pressed")).toBe("true")
     })
 
     it("removing a member from a project says nothing is copied", async () => {

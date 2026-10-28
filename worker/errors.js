@@ -6,21 +6,21 @@
 // Writing one must never fail the request it describes, and a bug that fails every request
 // must not spend the day's free D1 writes, so each kind writes at most its cap per UTC day;
 // the rest only reach Workers Logs. A flood of 4xx cannot crowd out the 500s, and refused
-// requests and browser reports from no account (anyone on the internet) have a smaller cap
-// inside their kind's, so they cannot crowd out those from people signed in.
+// requests from no account (anyone on the internet) have a smaller cap inside their kind's, so
+// they cannot crowd out those from people signed in. Browser reports need a signed-in session.
 import { readJson, HttpError } from './http.js';
 import { claimLimit, rateLimited } from './limits.js';
-import { sessionUserId } from './auth.js';
+import { requireUser } from './auth.js';
 import { HOUR_MS, DAY_MS } from './time.js';
 
 export const KINDS = ['server', 'request', 'browser', 'nightly'];
 export const CAPS = { server: 500, request: 500, browser: 300, nightly: 100 };
-/** Of the cap, how many may come from no account. */
-export const ANON_CAPS = { request: 100, browser: 100 };
+/** Of the cap, how many refused requests from no account may take. */
+export const ANON_CAPS = { request: 100 };
 /** The server kind's cap, as before kinds. */
 export const DAILY_CAP = CAPS.server;
 const KEEP_MS = 30 * DAY_MS;
-/** Browser reports one person (or address) may send an hour. */
+/** Browser reports one person may send an hour. */
 export const BROWSER_PER_HOUR = 30;
 
 const kindSql = (t = '') => `CASE WHEN ${t}method = 'BROWSER' THEN 'browser' WHEN ${t}method = 'CRON' THEN 'nightly'
@@ -31,8 +31,31 @@ export const kindOf = ({ method = '', status = 500 }) =>
 
 const dayStart = (now) => now - (now % DAY_MS);
 
-/** A route as the log keeps it: a calendar feed's link is its password, so it never goes in. */
-export const routeForLog = (route) => String(route).replace(/^\/api\/calendar\/[^/]+\/[^/]+\.ics$/, '/api/calendar/…/….ics');
+/* patterns with their own indices, built once per pattern */
+const indexed = new WeakMap();
+
+/**
+ * A request's route as the log keeps it: the route table's template, with every captured
+ * value (ids, tokens, a calendar feed's link) replaced by `:param`. A path no route matches
+ * is one fixed label, so arbitrary text from the request never reaches the log.
+ */
+export function routeLabel(pathname, routes) {
+  for (const [, pattern] of routes) {
+    let re = indexed.get(pattern);
+    if (!re) { re = new RegExp(pattern.source, pattern.flags + 'd'); indexed.set(pattern, re); }
+    const m = re.exec(pathname);
+    if (!m) continue;
+    const spans = m.indices.slice(1).filter(Boolean).sort((a, b) => a[0] - b[0]);
+    let label = '', at = 0;
+    for (const [start, end] of spans) {
+      if (start < at) continue;
+      label += pathname.slice(at, start) + ':param';
+      at = end;
+    }
+    return label + pathname.slice(at);
+  }
+  return '(unknown route)';
+}
 
 /* Caps already reached, per isolate: "<kind>" or "<kind>:anon" on a UTC day. Once a cap is
    reached, nothing more is written that day, so the count (up to 500 rows) is not run again. */
@@ -41,7 +64,7 @@ const fullKey = (kind, anon, now) => `${kind}${anon ? ':anon' : ''}@${dayStart(n
 
 /** Record one error. Never throws. */
 export async function logError(db, { method = '', route = '', status = 500, message = '', userId = null }, now = Date.now()) {
-  route = routeForLog(route);
+  // callers pass a label from routeLabel (or a fixed name for CRON and BROWSER rows)
   const kind = kindOf({ method, status });
   const anonCap = userId === null ? ANON_CAPS[kind] ?? null : null;
   try {
@@ -83,7 +106,7 @@ export async function cronJob(db, name, job) {
 export async function errorGroups(db, since) {
   const { results } = await db.prepare(
     `SELECT ${KIND_SQL} AS kind, method, route, status, message, count(*) AS count, max(at) AS last, min(at) AS first,
-            count(DISTINCT user_id) AS users
+            count(DISTINCT user_id) AS users, count(*) - count(user_id) AS anon
      FROM error_log WHERE at >= ? GROUP BY method, route, status, message ORDER BY last DESC LIMIT 400`,
   ).bind(since).all();
   return results;
@@ -110,17 +133,24 @@ export async function purgeErrors(db, now = Date.now()) {
 
 const text = (v, max) => (typeof v === 'string' ? v.replace(/[\x00-\x1f\x7f]/g, ' ').trim().slice(0, max) : '');
 
-/** A crash in someone's browser: {message, where, kind}. Signed in or not; a few an hour each. */
+/** The kinds the crash reporter sends (src/core/report.ts). Any other kind is refused, so a kind cannot pose as a label. */
+const BROWSER_KINDS = ['error', 'rejection', 'react'];
+/** A page path as location.pathname gives it: no scheme, host or spaces, so a report cannot carry a link. */
+const PAGE_PATH = /^\/(?!\/)[A-Za-z0-9\-._~!$&()*+,;=@%\/]{0,199}$/;
+
+/** A crash in someone's browser: {message, where, kind}. Signed in only: a few an hour each. */
 export async function reportBrowserError(request, env, now = Date.now()) {
+  const userId = await requireUser(request, env);
   const body = await readJson(request);
   const message = text(body?.message, 500);
   if (!message) throw new HttpError(400, { error: 'invalid', field: 'message' });
-  const userId = await sessionUserId(request, env);
-  const who = userId ?? 'ip:' + (request.headers.get('cf-connecting-ip') || 'unknown');
-  const wait = await claimLimit(env.DB, `browser-error:${who}`, BROWSER_PER_HOUR, now, HOUR_MS);
+  const kind = body?.kind ?? '';
+  if (kind !== '' && !BROWSER_KINDS.includes(kind)) throw new HttpError(400, { error: 'invalid', field: 'kind' });
+  const where = body?.where ?? '';
+  if (where !== '' && !(typeof where === 'string' && PAGE_PATH.test(where))) throw new HttpError(400, { error: 'invalid', field: 'where' });
+  const wait = await claimLimit(env.DB, `browser-error:${userId}`, BROWSER_PER_HOUR, now, HOUR_MS);
   if (wait) throw rateLimited(wait);
-  const what = text(body?.kind, 20);
-  await logError(env.DB, { method: 'BROWSER', route: text(body?.where, 200), status: 0, message: (what ? what + ': ' : '') + message, userId }, now);
+  await logError(env.DB, { method: 'BROWSER', route: where, status: 0, message: (kind ? kind + ': ' : '') + message, userId }, now);
 }
 
 export const errorRoutes = [

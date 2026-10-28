@@ -123,7 +123,7 @@ describe("starting", () => {
         expect(screenEl()!.dataset.phase).toBe("study")
         expect(dock()).toBeNull()
         /* the top line: Leave, the course chip, today against the goal */
-        expect(stage().getByRole("button", { name: "Leave" })).toBeTruthy()
+        expect(stage().getByRole("button", { name: "Hide" })).toBeTruthy()
         expect(stage().getByText("ANAT").parentElement!.textContent).toBe("ANAT · Brachial plexus quiz")
         expect(stage().getByRole("meter", { name: "Daily goal" }).getAttribute("aria-valuenow")).toBe("20")
         expect(stage().getByText("of 1h 00m today").parentElement!.textContent).toBe("20m of 1h 00m today")
@@ -239,9 +239,9 @@ describe("the run on the focus screen", () => {
 })
 
 describe("leaving and coming back", () => {
-    it("Leave and Esc go off the focus screen to the dock, and the dock's Focus comes back", async () => {
+    it("Hide and Esc go off the focus screen to the dock, and the dock's Focus comes back", async () => {
         await begin()
-        fireEvent.click(stage().getByRole("button", { name: "Leave" }))
+        fireEvent.click(stage().getByRole("button", { name: "Hide" }))
         expect(screenEl()).toBeNull()
         expect(document.documentElement.classList.contains("focusing")).toBe(false)
         /* the Study page would open the focus screen again, so you land on the week */

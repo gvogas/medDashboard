@@ -97,7 +97,7 @@ function seen(day: string | null) {
     return days === 1 ? "yesterday" : days + " days ago"
 }
 
-type Action = { id: string; kind: "password" | "delete" } | null
+type Action = { id: string; kind: "password" | "delete" | "admin" | "revoke" } | null
 
 function AccountTable({ accounts, me, onChanged }: { accounts: Account[]; me: string | undefined; onChanged: () => Promise<void> }) {
     const [open, setOpen] = useState<Action>(null)
@@ -152,9 +152,9 @@ function AccountTable({ accounts, me, onChanged }: { accounts: Account[]; me: st
                                 <td className="px-3 py-2.5 text-[12px] text-ink-2">{using || "—"}</td>
                                 <td className="py-2 pl-3 pr-5">
                                     <div className="flex flex-wrap justify-end gap-1">
-                                        <Small onClick={() => setOpen(open?.id === a.id && open.kind === "password" ? null : { id: a.id, kind: "password" })} aria-expanded={open?.id === a.id && open.kind === "password"}>New password</Small>
-                                        <Small disabled={busy === a.id + "r"} onClick={() => void run(a.id + "r", () => api.admin.revoke(a.id), a.username + " is signed out everywhere.")} aria-label={"Sign out " + a.username}>Sign out</Small>
-                                        {!self && <Small disabled={busy === a.id + "a"} onClick={() => void run(a.id + "a", () => api.admin.setAdmin(a.id, !a.admin), a.admin ? a.username + " is no longer an admin." : a.username + " is now an admin.")}>{a.admin ? "Remove admin" : "Make admin"}</Small>}
+                                        {!self && <Small onClick={() => setOpen(open?.id === a.id && open.kind === "password" ? null : { id: a.id, kind: "password" })} aria-expanded={open?.id === a.id && open.kind === "password"} aria-label={"New password " + a.username}>New password</Small>}
+                                        {!self && <Small onClick={() => setOpen(open?.id === a.id && open.kind === "revoke" ? null : { id: a.id, kind: "revoke" })} aria-expanded={open?.id === a.id && open.kind === "revoke"} aria-label={"Sign out " + a.username}>Sign out</Small>}
+                                        {!self && <Small onClick={() => setOpen(open?.id === a.id && open.kind === "admin" ? null : { id: a.id, kind: "admin" })} aria-expanded={open?.id === a.id && open.kind === "admin"}>{a.admin ? "Remove admin" : "Make admin"}</Small>}
                                         {!self && <Small danger onClick={() => setOpen(open?.id === a.id && open.kind === "delete" ? null : { id: a.id, kind: "delete" })} aria-expanded={open?.id === a.id && open.kind === "delete"} aria-label={"Delete " + a.username}>Delete</Small>}
                                     </div>
                                 </td>
@@ -164,9 +164,17 @@ function AccountTable({ accounts, me, onChanged }: { accounts: Account[]; me: st
                                     <td colSpan={7} className="px-5 py-3">
                                         {open.kind === "password"
                                             ? <NewPassword account={a} busy={busy === a.id + "p"} onCancel={() => setOpen(null)}
-                                                onSave={(pw) => run(a.id + "p", () => api.admin.resetPassword(a.id, pw), "New password set for " + a.username + ". Their other sessions ended.")} />
-                                            : <ConfirmDelete account={a} busy={busy === a.id + "d"} onCancel={() => setOpen(null)}
-                                                onDelete={(typed) => run(a.id + "d", () => api.admin.remove(a.id, typed), a.username + " and their data were deleted.")} />}
+                                                onSave={(pw) => run(a.id + "p", () => api.admin.resetPassword(a.id, pw), "New password set for " + a.username + ". They're signed out everywhere.")} />
+                                            : open.kind === "delete"
+                                            ? <ConfirmDelete account={a} busy={busy === a.id + "d"} onCancel={() => setOpen(null)}
+                                                onDelete={(typed) => run(a.id + "d", () => api.admin.remove(a.id, typed), a.username + " and their data were deleted.")} />
+                                            : open.kind === "admin"
+                                            ? <Confirm busy={busy === a.id + "a"} onCancel={() => setOpen(null)} label={a.admin ? "Remove admin" : "Make admin"}
+                                                text={a.admin ? a.username + " loses access to this Admin page and to changing accounts." : a.username + " can open this Admin page and change accounts."}
+                                                onConfirm={() => run(a.id + "a", () => api.admin.setAdmin(a.id, !a.admin), a.admin ? a.username + " is no longer an admin." : a.username + " is now an admin.")} />
+                                            : <Confirm busy={busy === a.id + "r"} onCancel={() => setOpen(null)} label="Sign out everywhere"
+                                                text={a.username + " is signed out on every device. Their data stays."}
+                                                onConfirm={() => run(a.id + "r", () => api.admin.revoke(a.id), a.username + " is signed out everywhere.")} />}
                                     </td>
                                 </tr>
                             ),
@@ -192,6 +200,7 @@ function NewPassword({ account, busy, onSave, onCancel }: { account: Account; bu
             <div className="grid min-w-[220px] flex-1 gap-1">
                 <Label htmlFor={id}>New password for {account.username}</Label>
                 <TextInput id={id} type="password" value={pw} onChange={(e) => setPw(e.target.value)} minLength={8} maxLength={200} autoComplete="new-password" autoFocus />
+                <Note>{pw.length < 8 ? `Set password stays off until it has at least 8 characters (${pw.length} so far).` : "8 to 200 characters."}</Note>
             </div>
             <Button type="submit" className="h-8 px-3 text-[12.5px]" disabled={busy || pw.length < 8}>Set password</Button>
             <Button variant="ghost" className="h-8 px-3 text-[12.5px]" onClick={onCancel}>Cancel</Button>
@@ -212,6 +221,16 @@ function ConfirmDelete({ account, busy, onDelete, onCancel }: { account: Account
             <Button variant="danger" type="submit" className="h-8 px-3 text-[12.5px]" disabled={busy || typed !== account.username}>Delete forever</Button>
             <Button variant="ghost" className="h-8 px-3 text-[12.5px]" onClick={onCancel}>Cancel</Button>
         </form>
+    )
+}
+
+function Confirm({ text, label, busy, onConfirm, onCancel }: { text: string; label: string; busy: boolean; onConfirm: () => Promise<void>; onCancel: () => void }) {
+    return (
+        <div className="flex flex-wrap items-center gap-2">
+            <Note>{text}</Note>
+            <Button type="button" className="ml-auto h-8 px-3 text-[12.5px]" disabled={busy} onClick={() => void onConfirm()}>{label}</Button>
+            <Button variant="ghost" className="h-8 px-3 text-[12.5px]" onClick={onCancel}>Cancel</Button>
+        </div>
     )
 }
 

@@ -46,7 +46,7 @@ export function MaintenanceTab() {
         try {
             const order = SWITCHES.map(([f]) => f).filter((f) => on.includes(f))
             await api.admin.setMaintenance(order, message.trim())
-            toast(order.length ? "Saved. Everyone else sees it on their next sync." : "Saved. Everything is back on their next sync.")
+            toast(order.length ? "Saved. Everyone else sees it within 5 minutes." : "Saved. Everything is back for everyone within 5 minutes.")
             await current.reload()
             void syncNow().catch(() => {})   /* your own bars, without waiting */
         } catch (e) { setError(problem(e)) }
@@ -69,7 +69,7 @@ export function MaintenanceTab() {
             </Panel>
             <Panel title="Switches">
                 <form className="grid gap-3 px-5 py-4" onSubmit={(e) => { e.preventDefault(); void save() }}>
-                    <p className="m-0 text-[12.5px] leading-normal text-ink-2">A feature switched on shows everyone else a maintenance page in its place. You keep using it, under a bar only admins see. Data keeps syncing.</p>
+                    <p className="m-0 text-[12.5px] leading-normal text-ink-2">A feature switched on shows everyone else a maintenance page in its place. You keep using it, under a bar only admins see. Data keeps syncing. People already in the app see the change within 5 minutes.</p>
                     <ul className="m-0 grid list-none gap-0 p-0">
                         {SWITCHES.map(([f, name, hint]) => (
                             <li key={f} className="flex items-start gap-3 border-t border-border py-2.5 first:border-t-0">
@@ -90,9 +90,17 @@ export function MaintenanceTab() {
                             placeholder="Optional. e.g. Music is getting a new player. Back by 9 pm." />
                         <Note>{message.length} / {MESSAGE_MAX} · empty shows “We’re fixing something here. Your data is safe and keeps syncing. Check back soon.”</Note>
                     </div>
-                    <div className="flex items-center">
-                        <Button type="submit" className="ml-auto h-8 px-3.5 text-[12.5px]" disabled={busy || !stored}>Save</Button>
-                    </div>
+                    {on.includes("app") && !stored?.features.includes("app") ? (
+                        <div className="flex flex-wrap items-center gap-2">
+                            <Note>Everyone except admins sees the maintenance page instead of the app, within 5 minutes.</Note>
+                            <Button variant="danger" type="button" className="ml-auto h-8 px-3.5 text-[12.5px]" disabled={busy} onClick={() => void save()}>Turn on for everyone</Button>
+                            <Button variant="ghost" type="button" className="h-8 px-3 text-[12.5px]" onClick={() => flip("app", false)}>Cancel</Button>
+                        </div>
+                    ) : (
+                        <div className="flex items-center">
+                            <Button type="submit" className="ml-auto h-8 px-3.5 text-[12.5px]" disabled={busy || !stored}>Save</Button>
+                        </div>
+                    )}
                     {error && <p role="alert" className="m-0 text-[12.5px] text-destructive">{error}</p>}
                 </form>
             </Panel>

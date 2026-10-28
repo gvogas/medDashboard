@@ -8,7 +8,7 @@ const item = (type, date, extra = {}) => ({ id: 'i' + ++n, type, date, status: '
 describe('crunches', () => {
   it('finds a day with two tests', () => {
     const list = crunches([item('exam', '2026-10-13'), item('quiz', '2026-10-13'), item('quiz', '2026-10-14')], '2026-10-12', '2026-10-18');
-    expect(list).toEqual([{ kind: 'day', from: '2026-10-13', to: '2026-10-13', count: 2, text: '2 tests on Tue 13 Oct' }]);
+    expect(list).toEqual([{ kind: 'day', from: '2026-10-13', to: '2026-10-13', count: 2, text: '2 exams or quizzes on Tue 13 Oct' }]);
   });
 
   it('finds a week with three exams, counting the whole week, not quizzes', () => {
@@ -43,7 +43,7 @@ describe('crunchHint', () => {
 
   it('says when a new item makes a crunch', () => {
     expect(crunchHint(exams, item('exam', '2026-10-14'))).toBe('This makes 3 exams the week of 12 Oct');
-    expect(crunchHint(exams, item('quiz', '2026-10-12'))).toBe('This makes 2 tests on Mon 12 Oct');
+    expect(crunchHint(exams, item('quiz', '2026-10-12'))).toBe('This makes 2 exams or quizzes on Mon 12 Oct');
     expect(crunchHint(exams, item('exam', '2026-10-21'))).toBeNull();
     expect(crunchHint(exams, item('task', '2026-10-12'))).toBeNull();
   });

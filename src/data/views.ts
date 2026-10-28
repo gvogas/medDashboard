@@ -4,7 +4,7 @@
 
 import { useMemo, useSyncExternalStore } from "react"
 import { getVersion, subscribe } from "@/bridge"
-import { heldOn, isOpen, isOverdue, isTest, normalizePrefs, occurrences, statusLabel, tmeta } from "@/core/model"
+import { heldOn, isOpen, isOverdue, isTest, normalizePrefs, occurrences, statusesFor, tmeta } from "@/core/model"
 import { addDays, diffDays, dur, iso, monday, parse, today as todayIso, DOW, MON } from "@/core/dates"
 import { classWeekday, courseRunsOn, currentTerm, dayInfo, inTerm, weekOf } from "@/core/school"
 import type { SchoolCalendar } from "@/core/school"
@@ -153,7 +153,7 @@ export interface ViewInput {
     total?: number
 }
 
-export interface Week { days: Day[]; count: number; any: boolean }
+export interface Week { days: Day[]; count: number; any: boolean; start: string }
 
 /**
  * The week holding the anchor, Monday to Sunday. Each day's classes and items are one
@@ -178,7 +178,7 @@ export function weekDays({ items, courses, filters, schedule, anchor, today, cal
         any = any || entries.length > 0
         days.push({ date, dow: DOW[d.getDay()], day: d.getDate(), mon: MON[d.getMonth()].slice(0, 3), isToday: date === today, info: infoOf(cal, date), entries })
     }
-    return { days, count: list.length, any }
+    return { days, count: list.length, any, start: from }
 }
 
 /** The weekly office hours that pass the course filter and search, Monday first. */
@@ -189,14 +189,41 @@ export function officeHours(items: Item[], courses: Course[], f: Filters): Item[
         .sort((a, b) => ((a.weekday ?? 0) + 6) % 7 - ((b.weekday ?? 0) + 6) % 7 || (a.start < b.start ? -1 : 1))
 }
 
+/** The office hour whose next meeting comes first after `now`: its key, or null when none is coming. */
+export function nextOfficeHour(rows: Item[], now: Date): string | null {
+    let best: { at: number; key: string } | null = null
+    for (const it of rows) {
+        const at = nextMeeting(it, now)
+        if (at !== null && (!best || at < best.at)) best = { at, key: keyOf(it) }
+    }
+    return best ? best.key : null
+}
+
+/** When an office hour next starts after `now` (ms): a weekly one on its weekday, a dated one on its date. */
+function nextMeeting(it: Item, now: Date): number | null {
+    const [h, m] = (it.start || "00:00").split(":").map(Number)
+    if (it.recur === "weekly") {
+        for (let k = 0; k <= 7; k++) {
+            const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() + k, h, m)
+            if (d.getDay() === (it.weekday ?? 0) && d > now) return d.getTime()
+        }
+        return null
+    }
+    if (!it.date) return null
+    const d = parse(it.date)
+    d.setHours(h, m, 0, 0)
+    return d > now ? d.getTime() : null
+}
+
 export const TASKS_SHOWN = 9
 
-/** Tasks for the side panel: open ones first, then by date; the first nine, and the open count. */
+/** Tasks for the side panel: overdue first, then dated, then undated, done last; the first nine, and the open and total counts. */
 export function tasks(items: Item[], courses: Course[], f: Filters): { shown: Item[]; open: number; total: number } {
     const byId = courseMap(courses)
+    const rank = (it: Item) => (!isOpen(it) ? 3 : isOverdue(it) ? 0 : it.date ? 1 : 2)
     const all = items
         .filter((it) => it.type === "task" && (f.course === "all" || courseKeyOf(it) === f.course) && matchSearch(it, byId, f.search))
-        .sort((a, b) => (isOpen(a) ? 0 : 1) - (isOpen(b) ? 0 : 1) || (a.date < b.date ? -1 : 1))
+        .sort((a, b) => rank(a) - rank(b) || (a.date || "").localeCompare(b.date || ""))
     return { shown: all.slice(0, TASKS_SHOWN), open: all.filter(isOpen).length, total: all.length }
 }
 
@@ -257,7 +284,7 @@ export function monthCells({ items, courses, filters, schedule, anchor, today, c
         })
     }
     const rows = [0, 1, 2, 3, 4, 5].map((w) => iso(addDays(start, 7 * w)))
-    return { title: MONTH_TITLE[schedule], range: weekRange(cal, rows), classCount: all.length, cells }
+    return { title: MONTH_TITLE[schedule], range: weekRange(cal, rows), classCount: classes(semesterCourses(courses, cal, anchor), filters).length, cells }
 }
 
 /** A month cell's name for a screen reader: "Wed 2026-09-23, Study break, 2 due, 3 classes". */
@@ -267,6 +294,12 @@ export function cellLabel(c: Cell): string {
     return c.dow + " " + c.date + note + (c.due ? ", " + c.due + " due" : "") + (c.classes ? ", " + c.classes + " class" + (c.classes === 1 ? "" : "es") : "")
 }
 
+/** The courses of the semester holding the anchor (the current one between semesters), and all-year ones. */
+function semesterCourses(courses: Course[], cal: SchoolCal, anchor: string): Course[] {
+    const term = cal ? dayInfo(cal, anchor).term ?? currentTerm(cal, anchor) : null
+    return courses.filter((c) => inTerm(cal, c.term, term))
+}
+
 export interface TimetableDay { weekday: number; dow: string; hours: number; slots: ClassSlot[] }
 
 /**
@@ -274,8 +307,7 @@ export interface TimetableDay { weekday: number; dow: string; hours: number; slo
  * calendar it holds the anchor's semester (the current one between semesters) and all-year courses.
  */
 export function timetable(courses: Course[], f: Filters, cal: SchoolCal = null, anchor = ""): TimetableDay[] {
-    const term = cal ? dayInfo(cal, anchor).term ?? currentTerm(cal, anchor) : null
-    const slots = byWeekday(classes(courses.filter((c) => inTerm(cal, c.term, term)), f))
+    const slots = byWeekday(classes(semesterCourses(courses, cal, anchor), f))
     return [1, 2, 3, 4, 5, 6, 0]
         .filter((w) => (w !== 0 && w !== 6) || (slots.get(w) || []).length)
         .map((w) => {
@@ -293,16 +325,24 @@ export function timetable(courses: Course[], f: Filters, cal: SchoolCal = null, 
  */
 export function tableRows(items: Item[], courses: Course[], f: TableFilters, sort: { key: SortKey; dir: 1 | -1 }): Item[] {
     const byId = courseMap(courses)
-    const value = (it: Item): string => {
+    /* no course, or a status its type does not have, sorts last whichever way it goes */
+    const value = (it: Item): string | null => {
         switch (sort.key) {
             case "title": return it.title.toLowerCase()
             case "type": return it.type
-            case "course": { const key = courseKeyOf(it); return (key && byId.get(key)?.name) || "zz" }
-            case "status": return statusLabel(it)
+            case "course": { const key = courseKeyOf(it); return (key && byId.get(key)?.name) || null }
+            case "status": { const i = statusesFor(it.type).findIndex((x) => x[0] === it.status); return i < 0 ? null : String(i).padStart(2, "0") }
             default: return it.date
         }
     }
-    return items.filter((it) => fromSource(it, f.source) && typeOn(f, it.type) && passShow(it, f.show) && passFilters(it, f, byId)).sort((a, b) => cmp(value(a), value(b)) * sort.dir)
+    /* the same value, then the start time, then the title */
+    const tie = (a: Item, b: Item) => cmp(a.start || "", b.start || "") || cmp(a.title.toLowerCase(), b.title.toLowerCase())
+    return items.filter((it) => fromSource(it, f.source) && typeOn(f, it.type) && passShow(it, f.show) && passFilters(it, f, byId)).sort((a, b) => {
+        const x = value(a), y = value(b)
+        if (x === y) return tie(a, b)
+        if (x === null || y === null) return x === null ? 1 : -1
+        return cmp(x, y) * sort.dir
+    })
 }
 
 /**
@@ -405,6 +445,7 @@ export const useWeek = () => {
         officeHours: officeHours(input.items, input.courses, input.filters),
         tasks: tasks(input.items, input.courses, input.filters),
         empty: (input.total ?? input.items.length) === 0,
+        filtered: !!input.filters.search || input.filters.course !== "all",
         schedule: input.schedule,
     }), [input])
 }

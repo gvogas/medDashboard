@@ -53,23 +53,25 @@ function Goal({ profile }: { profile: Profile }) {
     )
 }
 
+/** A day minimum the streak can use: a whole number of minutes from 1 to 240. */
+const dayMinOk = (s: string) => { const v = Math.round(+s); return v >= 1 && v <= 240 }
+
 function Streak({ profile }: { profile: Profile }) {
     const p = normalizePrefs(profile.studyPrefs)
     const [min, setMin] = useState(String(p.dayMin))
     useEffect(() => setMin(String(p.dayMin)), [p.dayMin])
+    const ok = dayMinOk(min)
     const f = useId()
     return (
         <Group title="Streak">
             <label className="flex items-center gap-2 text-[12.5px] text-ink-2">
                 <span>A day counts from</span>
-                <input id={f} type="number" inputMode="numeric" min={1} max={240} value={min} className={cn(CONTROL, "w-20 border-border")}
+                <input id={f} type="number" inputMode="numeric" min={1} max={240} value={min} aria-invalid={!ok} className={cn(CONTROL, "w-20 border-border")}
                     onChange={(e) => setMin(e.target.value)}
-                    onBlur={() => {
-                        const v = Math.round(+min)
-                        if (v >= 1 && v <= 240) void savePrefs({ dayMin: v }); else setMin(String(p.dayMin))
-                    }} />
+                    onBlur={() => { if (ok) void savePrefs({ dayMin: Math.round(+min) }); else setMin(String(p.dayMin)) }} />
                 <span>min</span>
             </label>
+            {!ok && <Hint error>Enter a number from 1 to 240.</Hint>}
             <Hint>Rest days never break it: study on one and it counts, skip it and nothing resets.</Hint>
             <span role="group" aria-label="Rest days" className="flex flex-wrap gap-1.5">
                 {REST_DAYS.map(([d, label]) => <Chip key={d} on={p.rest.includes(d)} onClick={() => void savePrefs({ rest: toggleRest(p.rest, d) })}>{label}</Chip>)}

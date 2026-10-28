@@ -56,6 +56,14 @@ describe("a class item, for a member", () => {
         await waitFor(() => expect(fake.store.saveMark).toHaveBeenCalledWith(expect.objectContaining({ weight: null })))
     })
 
+    it("says so when your own weight is outside 0-100%", async () => {
+        fake.data.marks = [graded]
+        render(<ClassItemSheet itemKey={KEY} />)
+        fireEvent.change(screen.getByRole("spinbutton", { name: "Your weight" }), { target: { value: "150" } })
+        expect(screen.getByText("Weight must be between 0% and 100%.")).toBeTruthy()
+        await waitFor(() => expect(fake.store.saveMark).toHaveBeenCalledWith(expect.objectContaining({ weight: 100 })))
+    })
+
     it("asks before hiding a graded item, then hides it", async () => {
         fake.data.marks = [graded]
         render(<ClassItemSheet itemKey={KEY} />)

@@ -79,7 +79,8 @@ export function deriveEdit(it: Item, field: ItemField, value: unknown, courseOf:
         Object.assign(patch, withStatus(it, value as string))
     } else if (field === "start") {
         patch.start = value as string
-        if (patch.start && it.start) patch.end = shiftEnd(it.start, it.end, patch.start)
+        if (!patch.start) patch.end = ""
+        else if (it.start) patch.end = shiftEnd(it.start, it.end, patch.start)
     } else if (field === "type") {
         patch.type = value as string
         patch.title = autoTitle({ ...it, type: patch.type }, courseOf(it.courseId), courseOf(it.courseId))

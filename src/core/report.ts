@@ -1,9 +1,10 @@
 // Crashes in this browser go to the error log (POST /api/errors → Admin → Errors, browser): an
 // uncaught error, a promise nobody caught, or React failing to draw. A failed API answer is
 // not sent: the server logged it already. Nor is a lost connection, or an extension's error.
-// At most MAX a page load, each message once; sending one never throws.
+// At most MAX a page load, each message once; sending one never throws. Only signed in: the
+// server refuses a report from no session, so a signed-out page sends nothing and counts nothing.
 
-import { ApiError } from "./api"
+import { ApiError, signedIn } from "./api"
 
 export const MAX = 10
 let sent = 0
@@ -21,7 +22,7 @@ function whereIn(e: Error): string {
 /** Send one error; `kind` says how it was caught. */
 export function reportError(kind: "error" | "rejection" | "react", e: unknown): void {
     try {
-        if (e instanceof ApiError || (e as Error)?.name === "AbortError") return
+        if (!signedIn() || e instanceof ApiError || (e as Error)?.name === "AbortError") return
         const err = e instanceof Error ? e : null
         const text = err ? `${err.name}: ${err.message}` : String(e)
         if (err && NETWORK.test(err.message)) return

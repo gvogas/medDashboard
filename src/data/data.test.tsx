@@ -88,7 +88,7 @@ describe("sync status", () => {
         act(() => fake.setStatus({ state: "pending" }))
         expect(screen.getByTestId("label").textContent).toBe("Saving…")
         act(() => fake.setStatus({ state: "offline", pending: 3 }))
-        expect(screen.getByTestId("label").textContent).toBe("Offline · 3")
+        expect(screen.getByTestId("label").textContent).toBe("Offline · 3 changes waiting")
     })
 
     it("announces trouble and its end, not every save", () => {

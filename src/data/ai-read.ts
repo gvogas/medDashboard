@@ -45,15 +45,17 @@ function hideBusy() {
 /** The AI reads a day: the Worker's limit once it has said, else 10. */
 const readsLimit = () => ui.aiLimit ?? 10
 
+/* the Worker's wait is a 24-hour window from the first read: say when it ends */
+const readLimit = (seconds: number | null) => "That is the limit of " + readsLimit() + " AI reads in 24 hours (outlines, timetables and calendars)." + (seconds ? " Try again after " + new Date(Date.now() + seconds * 1000).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" }) + "." : "")
+
 /* The Worker's answers shared by every read. */
 const AI_ERRORS: Record<string, string> = {
     outline_unsupported: "That kind of file cannot be read. Try a PDF or Word document.",
     outline_unavailable: "The reader is not available right now. Try again later.",
-    get outline_limit() { return "That is the limit of " + readsLimit() + " AI reads for today (outlines, timetables and calendars). Try again tomorrow." },
-    outline_quota: "The free AI allowance for today is used up. It resets at midnight UTC (7 or 8 pm Eastern).",
+    outline_quota: "The free AI allowance is used up for today. Try again tomorrow.",
     too_large: "That file is over 5 MB.",
     ai_timeout: "The AI took too long to answer. Try again in a minute.",
-    image_unsupported: "That is a picture. Outlines and calendars need a PDF, Word or text file; a timetable screenshot goes under Class schedule.",
+    image_unsupported: "That is a picture. Pictures and scans cannot be read. For an outline or calendar, export a text PDF or Word file and try again. A timetable screenshot goes under Class schedule.",
     /* the admins switched Import with AI off (worker/maintenance.js): their words */
     get maintenance() { return maintenanceMessage() },
 }
@@ -121,7 +123,11 @@ function untilAborted<T>(work: Promise<T>, signal: AbortSignal): Promise<T> {
  */
 export async function readWithAi<T>(file: File, { what, title, steps, flag, note, errors, prepare = asSent, maxBytes = MAX_FILE, cache, call, done, refresh }: AiRead<T>) {
     const u = ui as Ui & Record<NoteKey, Note | null> & Record<Flag, boolean>
-    if (file.size > maxBytes) { u[note] = { text: "That file is over " + Math.round(maxBytes / 1048576) + " MB.", error: true }; refresh(); return }
+    if (file.size > maxBytes) {
+        const picture = file.type.startsWith("image/")
+        u[note] = { text: picture ? "That picture is too large to read. Try a smaller screenshot." : "That file is over " + Math.round(maxBytes / 1048576) + " MB.", error: true }
+        refresh(); return
+    }
     const stop = new AbortController()
     const show = (step: number) => showBusy({ title, file: file.name, steps, step, cancel: () => stop.abort(new DOMException("Stopped reading", "AbortError")) })
     u[flag] = true; u[note] = null; refresh()
@@ -144,7 +150,7 @@ export async function readWithAi<T>(file: File, { what, title, steps, flag, note
         try { done(answer) } catch (e) {
             /* the answer came but the preview could not be made from it: not the network's fault */
             console.error("ai read preview:", e)
-            throw Object.assign(new Error("The " + what + " was read, but its preview could not be shown. Try again, or another file. (code: preview_failed)"), { name: "FileError" })
+            throw Object.assign(new Error("The " + what + " was read, but its preview could not be shown. Try again, or use another file."), { name: "FileError" })
         }
         /* only an answer the preview could use is kept: one that made `done` throw is read afresh next time */
         if (key && hit == null) remember(key, answer)
@@ -153,15 +159,16 @@ export async function readWithAi<T>(file: File, { what, title, steps, flag, note
         const failed = err instanceof ApiError ? err as ApiError & { body?: { error?: string }; status: number } : null
         const code = failed?.body?.error ?? ""
         const stopped = stop.signal.aborted || (err as Error)?.name === "AbortError"
-        /* every message ends with its code, so a person reporting it says exactly what happened */
-        const tagged = (text: string, c: string) => text + " (code: " + c + ")"
+        /* the code and status go to the console; the person reads the words */
+        const seconds = [failed?.retryAfter, failed?.body?.retryAfter].map(Number).find((s) => Number.isFinite(s) && s > 0) ?? null
+        if (!stopped) console.warn("ai read " + what + ":", code || failed?.status || (err as Error)?.name)
         u[note] = stopped ? { text: "Stopped reading.", error: false }
             : (err as Error)?.name === "FileError" ? { text: (err as Error).message, error: true }
-            : (err as Error)?.name === "TimeoutError" ? { text: tagged("The " + what + " took too long to read. Try again in a minute.", "client_timeout"), error: true }
+            : (err as Error)?.name === "TimeoutError" ? { text: "The " + what + " took too long to read. Try again in a minute.", error: true }
             : {
                 text: failed
-                    ? tagged(errors[code] || AI_ERRORS[code] || "The " + what + " could not be read.", code || String(failed.status))
-                    : tagged("You seem to be offline. Reading " + what + "s needs a connection.", "network"),
+                    ? code === "outline_limit" ? readLimit(seconds) : errors[code] || AI_ERRORS[code] || "The " + what + " could not be read. Try again in a minute, or use a different file."
+                    : "You seem to be offline. Reading " + what + "s needs a connection. Check it and try again.",
                 error: true,
             }
         refresh()

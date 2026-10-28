@@ -1,7 +1,8 @@
 import { json, readJson, readBytes, revisionOf, HttpError } from './http.js';
 import { requireUser, requireSession, signSession, sessionCookie, clearCookie, deviceCookie, trustedDevice, parseCookies, secureFlag, sameString, hex, RENEW_WITHIN_MS, sessionUserId, hasSessionCookie } from './auth.js';
 import { verifyPassword, normalizeUsername } from './password.js';
-import { claimAttempt, recordSuccess } from './throttle.js';
+import { claimAttempt, recordSuccess, WARN_LEFT } from './throttle.js';
+import { passesCaptcha } from './captcha.js';
 import { giveBackOutline, limitLogin, limitOutline, readsLeft } from './limits.js';
 import { readOutline, cleanCode, MAX_BYTES } from './outline.js';
 import { readSchool } from './school.js';
@@ -21,7 +22,7 @@ import { friendRoutes } from './friends.js';
 import { roomRoutes } from './rooms.js';
 import { pushRoutes } from './push.js';
 import { unreadStmt } from './activity.js';
-import { errorRoutes, logError, messageOf } from './errors.js';
+import { errorRoutes, logError, messageOf, routeLabel } from './errors.js';
 import { guardMaintenance, publicMaintenance } from './maintenance.js';
 
 /** `cursors=u:<me>:812,c:<space id>:r640.700`: each entry split at its last ':', a sequence or a
@@ -168,6 +169,7 @@ async function spotifyCallback({ request, env, url }) {
   try { userId = await requireUser(request, env); } catch { return redirect(url, 'error', clear); }
   const state = url.searchParams.get('state'), code = url.searchParams.get('code');
   const expected = parseCookies(request.headers.get('cookie'))[STATE_COOKIE];
+  if (url.searchParams.get('error') === 'access_denied') return redirect(url, 'denied', clear);
   if (!state || !expected || !sameString(state, expected) || !code || url.searchParams.get('error') || !spotify.configured(env)) {
     return redirect(url, 'error', clear);
   }
@@ -234,7 +236,7 @@ const aiRead = (read, what) => async ({ request, env, url }) => {
     if (claimed && GIVEN_BACK.has(code)) await giveBackOutline(env, userId).catch(() => {});
     const message = [code, what, (type.split(';')[0] || 'no type') + ' ' + size + ' bytes', (Date.now() - t0) + ' ms',
       claimed && GIVEN_BACK.has(code) ? 'read given back' : '', known ? e.detail : messageOf(e)].filter(Boolean).join(' · ');
-    await logError(env.DB, { method: request.method, route: url.pathname, status: known ? e.status : 503, message, userId });
+    await logError(env.DB, { method: request.method, route: routeLabel(url.pathname, routes), status: known ? e.status : 503, message, userId });
     if (known) e.logged = true;   /* not again as a refused request */
     throw known ? e : new HttpError(503, { error: 'outline_unavailable' });
   }
@@ -252,19 +254,25 @@ const routes = [
     if (typeof body.username !== 'string' || typeof body.password !== 'string') {
       throw new HttpError(400, { error: 'invalid', field: 'username' });
     }
-    const bad = () => new HttpError(401, { error: 'bad_login' });
+    const bad = (triesLeft) => new HttpError(401, { error: 'bad_login', ...(triesLeft <= WARN_LEFT && { triesLeft }) });
     const username = normalizeUsername(body.username);
     if (!username) throw bad();
     // Counted before the password is checked; see worker/throttle.js. A browser that has
     // signed in as this name before counts on its own, so strangers cannot lock it out.
     const device = await trustedDevice(request, username, env.SESSION_SECRET);
     const throttleKey = device ? `${username}#${device}` : username;
-    const wait = await claimAttempt(env.DB, throttleKey);
-    if (wait) throw new HttpError(429, { error: 'too_many_attempts', retryAfter: wait }, { 'retry-after': String(wait) });
+    let { wait, left } = await claimAttempt(env.DB, throttleKey);
+    if (wait) {
+      // Locked. A CAPTCHA the user has solved lets this one attempt through; the lock still counts it.
+      if (!(await passesCaptcha(env, body.captcha, request))) {
+        throw new HttpError(429, { error: 'too_many_attempts', retryAfter: wait, ...(env.TURNSTILE_SITE_KEY && { captchaSiteKey: env.TURNSTILE_SITE_KEY }) }, { 'retry-after': String(wait) });
+      }
+      ({ wait, left } = await claimAttempt(env.DB, throttleKey, Date.now(), { pastLock: true }));
+    }
     const user = await getUserForLogin(env.DB, username);
     // Verify even when the user is unknown, so timing does not reveal which usernames exist.
     const ok = await verifyPassword(body.password, user ? user.password_hash : 'pbkdf2$100000$AAAAAAAAAAAAAAAAAAAAAA$AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA');
-    if (!user || !ok) throw bad();
+    if (!user || !ok) throw bad(left);
     await recordSuccess(env.DB, throttleKey);
     const token = await signSession(user.profile.id, user.pw_gen, env.SESSION_SECRET);
     const res = json(user.profile, 200, { 'set-cookie': sessionCookie(token, url) });
@@ -488,7 +496,7 @@ export async function handleApi(request, env, url, ctx = null) {
   /* The error log is written after the answer is sent (ctx.waitUntil); without a ctx, before. */
   const record = (entry) => {
     const done = sessionUserId(request, env)
-      .then((userId) => logError(env.DB, { method: request.method, route: url.pathname, ...entry, userId }))
+      .then((userId) => logError(env.DB, { method: request.method, route: routeLabel(url.pathname, routes), ...entry, userId }))
       .catch((e) => console.error('error_log:', e?.message || e));
     if (ctx?.waitUntil) ctx.waitUntil(done);
     else return done;

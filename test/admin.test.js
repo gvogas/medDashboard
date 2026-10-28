@@ -2,7 +2,7 @@ import { env, SELF } from 'cloudflare:test';
 import { describe, expect, it } from 'vitest';
 import { BASE, createUser, login, signIn } from './helpers.js';
 import { LATEST_MIGRATION, adminHousekeeping } from '../worker/admin.js';
-import { ANON_CAPS, BROWSER_PER_HOUR, CAPS, DAILY_CAP, cronJob, logError, purgeErrors } from '../worker/errors.js';
+import { ANON_CAPS, CAPS, DAILY_CAP, cronJob, logError, purgeErrors } from '../worker/errors.js';
 import { trafficReport } from '../worker/analytics.js';
 import { upsertRow } from '../worker/db.js';
 import { DELETE_ACCOUNT, LAST_ADMIN, NEXT_SPACE_REVISION as COPIED_REVISION } from '../worker/accounts.js';
@@ -237,6 +237,13 @@ describe('accounts', () => {
     expect((await admin('/api/admin/accounts/u-boss7/admin', { method: 'PUT', body: { admin: false } })).status).toBe(400);
   });
 
+  it('will not let an admin reset their own password or sign themselves out', async () => {
+    const admin = await signInAdmin('boss-self');
+    expect((await admin('/api/admin/accounts/u-boss-self/password', { method: 'POST', body: { password: 'brand new pw' } })).status).toBe(400);
+    expect((await admin('/api/admin/accounts/u-boss-self/revoke', { method: 'POST' })).status).toBe(400);
+    expect((await admin('/api/me')).status).toBe(200);
+  });
+
   it('promotes and demotes', async () => {
     const admin = await signInAdmin('boss8');
     await createUser('helper1');
@@ -271,10 +278,21 @@ describe('errors', () => {
     expect(recent.length).toBeGreaterThanOrEqual(2);
   });
 
-  it('never keeps a calendar feed link: its token is the password', async () => {
-    await logError(env.DB, { method: 'GET', route: '/api/calendar/u1/s3cr3tt0ken.ics', status: 429, message: 'rate_limited' });
+  it('logs a calendar feed request by its route template, never its link', async () => {
+    const res = await SELF.fetch(`${BASE}/api/calendar/u1/s3cr3tt0ken.ics`);
+    expect(res.status).toBe(404);
     const rows = await env.DB.prepare("SELECT route FROM error_log WHERE route LIKE '/api/calendar/%'").all();
-    expect(rows.results.map((r) => r.route)).toEqual(['/api/calendar/…/….ics']);
+    expect(rows.results.map((r) => r.route)).toEqual(['/api/calendar/:param/:param.ics']);
+  });
+
+  it('stores an unmatched path with no session under the fixed placeholder, never its text', async () => {
+    const count = () => env.DB.prepare("SELECT count(*) AS n FROM error_log WHERE route = '(unknown route)' AND message = 'not_found' AND user_id IS NULL").first().then((r) => r.n);
+    const before = await count();
+    const res = await SELF.fetch(`${BASE}/api/%3Cscript%3Ealert(1)%3C%2Fscript%3E`);
+    expect(res.status).toBe(404);
+    expect(await count()).toBe(before + 1);
+    const leaked = await env.DB.prepare("SELECT count(*) AS n FROM error_log WHERE route LIKE '%script%'").first();
+    expect(leaked).toEqual({ n: 0 });
   });
 
   it('writes at most the daily cap, and the nightly run forgets old ones', async () => {
@@ -298,9 +316,9 @@ describe('every kind of error', () => {
     const before = (await (await admin('/api/admin/health')).json()).errors24h;
     expect((await admin('/api/items/nope', { method: 'PUT', body: {} })).status).toBeGreaterThanOrEqual(400);
     expect((await admin('/api/no-such-thing')).status).toBe(404);
-    expect(await rows('/api/no-such-thing')).toEqual([{ method: 'GET', status: 404, message: 'not_found', user_id: 'u-boss20' }]);
+    expect(await env.DB.prepare("SELECT method, status, message, user_id FROM error_log WHERE route = '(unknown route)' AND user_id = 'u-boss20' ORDER BY id").all().then((r) => r.results)).toEqual([{ method: 'GET', status: 404, message: 'not_found', user_id: 'u-boss20' }]);
     const { groups } = await (await admin('/api/admin/errors')).json();
-    expect(groups.find((g) => g.route === '/api/no-such-thing')).toMatchObject({ kind: 'request', users: 1 });
+    expect(groups.find((g) => g.route === '(unknown route)')).toMatchObject({ kind: 'request', users: 1 });
     expect((await (await admin('/api/admin/health')).json()).errors24h).toBe(before);
   });
 
@@ -314,18 +332,40 @@ describe('every kind of error', () => {
     expect((await rows('/api/me')).slice(before)).toEqual([{ method: 'GET', status: 401, message: 'unauthenticated', user_id: null }]);
   });
 
-  it('takes a crash from a browser, signed in or not, a few an hour each', async () => {
+  it('takes a crash from a browser only from a signed-in person, and logs it against them', async () => {
+    const anon = (body) => SELF.fetch(`${BASE}/api/errors`, { method: 'POST', headers: { 'content-type': 'application/json', 'cf-connecting-ip': '10.9.9.9' }, body: JSON.stringify(body) });
+    expect((await anon({ message: 'boom', where: '/signin' })).status).toBe(401);
+    expect(await rows('/signin')).toEqual([]);
     const person = await signIn('crash1');
     expect((await person('/api/errors', { method: 'POST', body: { kind: 'react', message: 'TypeError: x is undefined @ /assets/a.js:1:2', where: '/study' } })).status).toBe(204);
     expect(await rows('/study')).toEqual([{ method: 'BROWSER', status: 0, message: 'react: TypeError: x is undefined @ /assets/a.js:1:2', user_id: 'u-crash1' }]);
-    const anon = (body) => SELF.fetch(`${BASE}/api/errors`, { method: 'POST', headers: { 'content-type': 'application/json', 'cf-connecting-ip': '10.9.9.9' }, body: JSON.stringify(body) });
-    expect((await anon({ message: 'boom', where: '/signin' })).status).toBe(204);
-    expect(await rows('/signin')).toEqual([expect.objectContaining({ method: 'BROWSER', user_id: null })]);
-    expect((await anon({ message: '' })).status).toBe(400);
-    for (let i = 1; i < BROWSER_PER_HOUR; i++) await anon({ message: 'again ' + i });
-    expect((await anon({ message: 'one too many' })).status).toBe(429);
-    /* a refused report is not logged again as a refused request */
-    expect(await rows('/api/errors')).toEqual([]);
+    expect((await person('/api/errors', { method: 'POST', body: { message: '' } })).status).toBe(400);
+  });
+
+  it('refuses a browser report whose kind or where is not one the reporter sends', async () => {
+    const person = await signIn('crash2');
+    const send = (body) => person('/api/errors', { method: 'POST', body });
+    expect((await send({ kind: 'Session expired', message: 'boom', where: '/kinds' })).status).toBe(400);
+    expect((await send({ message: 'boom', where: 'https://evil.example/login' })).status).toBe(400);
+    expect((await send({ message: 'boom', where: '/a b' })).status).toBe(400);
+    expect((await send({ message: 'boom', where: '//evil.example/login' })).status).toBe(400);
+    expect(await rows('https://evil.example/login')).toEqual([]);
+    expect((await send({ kind: 'react', message: 'boom', where: '/kinds' })).status).toBe(204);
+    expect(await rows('/kinds')).toEqual([{ method: 'BROWSER', status: 0, message: 'react: boom', user_id: 'u-crash2' }]);
+    const boss = await signInAdmin('boss22');
+    const { groups } = await (await boss('/api/admin/errors')).json();
+    expect(groups.find((g) => g.route === '/kinds')).toMatchObject({ users: 1, anon: 0 });
+  });
+  it('caps a browser report at 500 characters with control characters blanked, and allows each account 30 an hour', async () => {
+    const person = await signIn('crash3');
+    const send = (body) => person('/api/errors', { method: 'POST', body });
+    expect((await send({ message: 'a\u0007b\nc' + 'x'.repeat(600), where: '/cap' })).status).toBe(204);
+    expect(await rows('/cap')).toEqual([{ method: 'BROWSER', status: 0, message: ('a b c' + 'x'.repeat(600)).slice(0, 500), user_id: 'u-crash3' }]);
+    for (let i = 1; i < 30; i++) expect((await send({ message: 'm' + i, where: '/cap' })).status).toBe(204);
+    const over = await send({ message: 'one too many', where: '/cap' });
+    expect(over.status).toBe(429);
+    expect(await over.json()).toMatchObject({ error: 'rate_limited' });
+    expect(await rows('/cap')).toHaveLength(30);
   });
 
   it('logs a nightly job that fails, and the jobs after it still run', async () => {

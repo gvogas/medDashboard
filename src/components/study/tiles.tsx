@@ -1,5 +1,5 @@
 // The Study page's three tiles: the streak, today against the daily goal, and the term
-// so far (the last 12 weeks with no term start), the numbers in serif. With no goal,
+// so far (the last 16 weeks with no term start), the numbers in serif. With no goal,
 // Today offers to set one. Once you have studied in a room, a fourth: With friends this week.
 
 import type { ReactNode } from "react"

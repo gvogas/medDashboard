@@ -34,7 +34,7 @@ import { useTypePrefs } from "@/core/model"
 import { addType, deleteType, itemTypes, removeQuote } from "./actions"
 import { removeSchool } from "./school-edit"
 import { finishDelete } from "./study-controller"
-import { runToastAction, hideToast } from "./toast"
+import { runToastAction, hideToast, toast } from "./toast"
 
 beforeEach(() => {
     useTypePrefs(() => fake.data.profile.types as never)
@@ -82,5 +82,26 @@ describe("undo", () => {
         runToastAction()
         await Promise.resolve()
         expect((fake.cal as { name: string }).name).toBe("Other")
+    })
+
+    it("keeps every delete's Undo: an Undo takes back only its own delete", async () => {
+        await removeQuote("q1")
+        await removeQuote("q2")
+        expect(fake.hidden.has("quotes:q1") && fake.hidden.has("quotes:q2")).toBe(true)
+        runToastAction()
+        await vi.waitFor(() => expect(fake.hidden.has("quotes:q2")).toBe(false))
+        expect(fake.hidden.has("quotes:q1")).toBe(true)
+        await finishDelete()
+        expect(store.deleteQuote).toHaveBeenCalledTimes(1)
+        expect(store.deleteQuote).toHaveBeenCalledWith("q1")
+    })
+
+    it("an informational toast does not take a delete's Undo away", async () => {
+        await removeQuote("q1")
+        toast("Saved")
+        runToastAction()
+        await vi.waitFor(() => expect(fake.hidden.has("quotes:q1")).toBe(false))
+        await finishDelete()
+        expect(store.deleteQuote).not.toHaveBeenCalled()
     })
 })

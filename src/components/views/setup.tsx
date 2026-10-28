@@ -35,7 +35,7 @@ export function Setup() {
 
     return (
         <Panel label="Set up Term" title="Welcome to Term" head={
-            <button type="button" onClick={() => void finishSetup()}
+            <button type="button" title="You can set it up again in Settings." onClick={() => void finishSetup()}
                 className="hit cursor-pointer border-0 bg-transparent px-1 font-[inherit] text-[12.5px] text-muted-foreground underline underline-offset-2 hover:text-foreground">
                 Skip setup
             </button>

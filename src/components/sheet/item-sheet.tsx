@@ -4,7 +4,7 @@
 // pauses); a new one is a draft until Save. The rules for what an edit brings along are in
 // data/item-edit.ts.
 
-import { useEffect, useId, useState } from "react"
+import { useEffect, useId, useRef, useState } from "react"
 import { cn } from "@/lib/utils"
 import { baseOf, heldOn, isComplete, isOpen, isTest, normalizeItem, statusesFor, tmeta, typeList } from "@/core/model"
 import { shortDate, today, DOW } from "@/core/dates"
@@ -17,7 +17,7 @@ import { duration } from "@/lib/time"
 import { useCourses, useItems, useStudySessions } from "@/data/store"
 import { studiedFor } from "@/data/study"
 import { useUi } from "@/data/ui"
-import { closeSheet, updateDraft } from "@/data/overlay"
+import { closeSheet, onRequestClose, requestCloseSheet, updateDraft } from "@/data/overlay"
 import { busyDays, celebrate, chainReview, countdown, deriveEdit, editNow, flush, REPEAT_CHOICES, REPEATS, typeInto, untilLabel, useItemView, type ItemField } from "@/data/item-edit"
 import { deleteItem, openCourse } from "@/data/actions"
 import { courseByKey, keyOf } from "@/data/effective"
@@ -56,6 +56,10 @@ export function ItemSheet({ id, draft }: { id?: string; draft?: Item }) {
     const sessions = useStudySessions()
     const bg = useUi((u) => u.bg)
     const [fillNote, setFillNote] = useState("")
+    const [endBad, setEndBad] = useState(false)
+    const [weightNote, setWeightNote] = useState("")
+    const [asking, setAsking] = useState(false)
+    const keep = useRef<HTMLButtonElement>(null)
     /* a new item with a class picked goes into the class, for its owner or an editor, unless unticked */
     const [shareNew, setShareNew] = useState(true)
     const f = useId()
@@ -72,6 +76,14 @@ export function ItemSheet({ id, draft }: { id?: string; draft?: Item }) {
     useFlushOnClose(() => { void flush() })
     /* deleted on another device while open */
     useEffect(() => { if (!it) closeSheet() }, [it])
+    /* ✕, Escape and the scrim: a new item with something in it asks before it is thrown away; asked, they discard */
+    const typedSomething = isNew && !!it && !!(it.title.trim() || it.where || it.dept || it.notes || it.checklist?.length || it.links?.length)
+    useEffect(() => {
+        onRequestClose(() => { if (!typedSomething) closeSheet(); else setAsking(!asking) })
+        return () => onRequestClose(null)
+    }, [typedSomething, asking])
+    /* asked, the keyboard goes to Keep editing */
+    useEffect(() => { if (asking) keep.current?.focus() }, [asking])
     if (!it) return null
 
     const m = tmeta(it.type)
@@ -126,7 +138,7 @@ export function ItemSheet({ id, draft }: { id?: string; draft?: Item }) {
 
     return (
         <>
-            <SheetHead color={m.color} kind={isNew ? "New " + m.label.toLowerCase() : m.label} onClose={closeSheet}>
+            <SheetHead color={m.color} kind={isNew ? "New " + m.label.toLowerCase() : m.label} onClose={requestCloseSheet}>
                 {!isNew && <StatusChip item={it} />}
                 <span className="font-mono text-[11px] text-muted-foreground">{countdown(it)}</span>
                 {prep && (
@@ -178,10 +190,16 @@ export function ItemSheet({ id, draft }: { id?: string; draft?: Item }) {
                     </Prop>
 
                     <Prop icon={ICONS.time} label="Time" htmlFor={f + "start"}>
-                        <span className="flex items-center gap-1.5">
+                        <span className="flex flex-wrap items-center gap-1.5">
                             <TimeField id={f + "start"} label="Start time" className={QUIET} value={it.start} onChange={(v) => set("start", v)} />
                             <span className="text-[12px] text-muted-foreground">to</span>
-                            <TimeField label="End time" className={QUIET} value={it.end} onChange={(v) => set("end", v)} />
+                            <TimeField label="End time" className={QUIET} value={it.end} invalid={endBad} onChange={(v) => {
+                                /* an end not after the start is refused, not rewritten: the field says so */
+                                const early = !!v && !!it.start && v <= it.start
+                                setEndBad(early)
+                                if (!early) set("end", v)
+                            }} />
+                            {endBad && <span role="status" className="text-[12px] text-destructive">Ends before it starts</span>}
                         </span>
                     </Prop>
 
@@ -221,8 +239,9 @@ export function ItemSheet({ id, draft }: { id?: string; draft?: Item }) {
 
                     {gradable && (
                         <WeightProp item={it} course={c} items={items.filter((x) => itemCourseKey(x) === itemCourseKey(it))}
-                            onWeight={(v) => set("weight", v)} onCategory={(id) => set("category", id)} />
+                            onWeight={(v) => { setWeightNote(Number(v) > 100 ? "Weight is capped at 100%." : ""); set("weight", v) }} onCategory={(id) => set("category", id)} />
                     )}
+                    {weightNote && <span role="status" className="text-[12px] text-destructive">{weightNote}</span>}
 
                     {it.status === "graded" && (
                         <Prop icon={ICONS.grade} label="Grade" htmlFor={f + "grade"}>
@@ -281,7 +300,12 @@ export function ItemSheet({ id, draft }: { id?: string; draft?: Item }) {
                 {!isNew && it.classId && <ShareItem item={it} />}
             </SheetBody>
 
-            {isNew ? (
+            {isNew && asking ? (
+                <SheetFoot hint="Discard this new item?">
+                    <Button ref={keep} variant="ghost" onClick={() => setAsking(false)}>Keep editing</Button>
+                    <Button variant="danger" onClick={closeSheet}>Discard</Button>
+                </SheetFoot>
+            ) : isNew ? (
                 <SheetFoot hint={crunch ? <span role="status" className="text-[var(--warn)]">{crunch}</span> : it.title.trim() ? <span className="text-[var(--done-ink)]">Ready to save</span> : "Give it a name to save"}>
                     <Button variant="ghost" onClick={closeSheet}>Cancel</Button>
                     <Button disabled={!it.title.trim()} onClick={() => void save()}>Save item</Button>

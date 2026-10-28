@@ -37,7 +37,7 @@
   // `wrangler secret put SPOTIFY_CLIENT_SECRET`. Both empty means the player is off.
   // CF_ACCOUNT_ID is public; the Admin page's traffic also needs CF_ANALYTICS_TOKEN, a
   // secret API token with only "Account Analytics: Read" (see worker/analytics.js).
-  "vars": { "SPOTIFY_CLIENT_ID": "e553fc57814a408c946519bda5263f5e", "CF_ACCOUNT_ID": "2c6057041650be9d99932b4013571adb" },
+  "vars": { "SPOTIFY_CLIENT_ID": "e553fc57814a408c946519bda5263f5e", "CF_ACCOUNT_ID": "2c6057041650be9d99932b4013571adb", "TURNSTILE_SITE_KEY": "0x4AAAAAAFqKDv8zUmJcnyVj" },
 
   // Workers AI reads uploaded course outlines (free daily allowance; see worker/outline.js).
   // Workers AI always runs remotely, even under `wrangler dev`; saying so silences the warning.

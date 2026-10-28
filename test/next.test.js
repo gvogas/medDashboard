@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { upNext, reasonFor, whenText, isReview, NEXT_SHOWN } from '../src/core/next.ts';
+import { upNext, reasonFor, whenText, isReview } from '../src/core/next.ts';
 
 /* 2026-10-12 is a Monday; today is Wednesday the 14th */
 const TODAY = '2026-10-14';
@@ -55,14 +55,11 @@ describe('upNext', () => {
     expect(rows[0].reason).toBe('Due today · lecture review');
   });
 
-  it('keeps at most seven, breaking ties by date then time then title', () => {
+  it('ranks every open item, breaking ties by date then time then title', () => {
     const list = Array.from({ length: 10 }, (_, i) => item('task', '2026-10-15', { title: 'T' + (9 - i) }));
-    const rows = upNext(list, TODAY);
-    expect(rows).toHaveLength(NEXT_SHOWN);
-    expect(rows.map((r) => r.item.title)).toEqual(['T0', 'T1', 'T2', 'T3', 'T4', 'T5', 'T6']);
+    expect(upNext(list, TODAY).map((r) => r.item.title)).toEqual(['T0', 'T1', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'T8', 'T9']);
     const early = item('task', '2026-10-15', { title: 'Z', start: '08:00' }), late = item('task', '2026-10-15', { title: 'A', start: '17:00' });
     expect(upNext([late, early], TODAY).map((r) => r.item)).toEqual([early, late]);
-    expect(upNext(list, TODAY, 3)).toHaveLength(3);
   });
 });
 

@@ -3,7 +3,8 @@
 import { type ReactNode } from "react"
 import { cn } from "@/lib/utils"
 import { duration } from "@/lib/time"
-import { pickDay, type MonthHist } from "@/data/study"
+import { pickDay, type MonthHist, type PickedDay } from "@/data/study"
+import { shortDate } from "@/core/dates"
 import { openSession } from "@/data/actions"
 import { courseColour, plural, DAY_TINT, Hint } from "./history-bits"
 import { Sessions } from "./history-session"
@@ -16,7 +17,7 @@ export function MonthPane({ m, onDelete }: { m: MonthHist; onDelete: (id: string
                 <Stat value={duration(s.total)} label="studied" />
                 <Stat value={s.count} label={s.count === 1 ? "session" : "sessions"} />
                 <Stat value={<>{s.daysStudied}<small>/{s.daysSoFar}</small></>} label="days studied" />
-                <Stat value={duration(s.average)} label="a day on average" />
+            <Stat value={duration(s.average)} label={"a day on average" + (s.from ? " from " + shortDate(s.from) : "")} />
             </div>
             <div role="group" aria-label={m.title} className="grid grid-cols-7 gap-[5px] @max-[520px]:gap-[3px]">
                 {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((d) => (
@@ -58,26 +59,30 @@ export function MonthPane({ m, onDelete }: { m: MonthHist; onDelete: (id: string
                     )
                 })}
             </div>
-            {p && (
-                <div id={"hday-" + p.date}>
-                    <div className="flex items-baseline justify-between gap-3 rounded-lg bg-muted px-2.5 py-2 text-[13px] text-foreground">
-                        <b className={cn(p.isToday && "text-[var(--study-ink)]")}>{p.label}{p.isToday && " · today"}</b>
-                        <span className="font-mono font-bold">{p.sessions.length ? duration(p.total) + " · " + plural(p.sessions.length, "session") : "No study"}</span>
-                    </div>
-                    {p.sessions.length
-                        ? <Sessions list={p.sessions} withDay={false} onDelete={onDelete} />
-                        : (
-                            <Hint>
-                                Nothing logged this day.{" "}
-                                <button type="button" onClick={() => openSession(null)}
-                                    className="cursor-pointer border-0 bg-transparent p-0 font-[inherit] text-[12.5px] font-semibold text-accent-foreground underline underline-offset-2">
-                                    Log study
-                                </button>
-                            </Hint>
-                        )}
-                </div>
-            )}
+            {p && <DayPanel p={p} onDelete={onDelete} />}
         </>
+    )
+}
+
+export function DayPanel({ p, onDelete }: { p: PickedDay; onDelete: (id: string) => void }) {
+    return (
+        <div data-picked>
+            <div className="flex items-baseline justify-between gap-3 rounded-lg bg-muted px-2.5 py-2 text-[13px] text-foreground">
+                <b className={cn(p.isToday && "text-[var(--study-ink)]")}>{p.label}{p.isToday && " · today"}</b>
+                <span className="font-mono font-bold">{p.sessions.length ? duration(p.total) + " · " + plural(p.sessions.length, "session") : "No study"}</span>
+            </div>
+            {p.sessions.length
+                ? <Sessions list={p.sessions} withDay={false} onDelete={onDelete} />
+                : (
+                    <Hint>
+                        Nothing logged this day.{" "}
+                        <button type="button" onClick={() => openSession(null)}
+                            className="cursor-pointer border-0 bg-transparent p-0 font-[inherit] text-[12.5px] font-semibold text-accent-foreground underline underline-offset-2">
+                            Log study
+                        </button>
+                    </Hint>
+                )}
+        </div>
     )
 }
 

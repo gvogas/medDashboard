@@ -74,7 +74,7 @@ export interface Ui {
     settingsTab: "you" | "study" | "connections" | "account"
     importNote: Note | null
     schoolNote: Note | null
-    spotifyNote: "connected" | "error" | null
+    spotifyNote: "connected" | "error" | "denied" | null
     outlineBusy: boolean
     schoolBusy: boolean
     /* a class schedule is being read */
@@ -86,7 +86,7 @@ export interface Ui {
     /* what the Import with AI card has to say: a read stopped or gone wrong */
     aiNote: Note | null
     schoolAsk: boolean
-    signoutAsk: { everywhere: boolean } | null
+    signoutAsk: { everywhere: boolean; unsynced: boolean; timer: boolean } | null
     feed: Feed | null
 }
 

@@ -315,3 +315,40 @@ describe("the controls", () => {
         expect(JSON.parse(String(init?.body))).toEqual({ deviceId: "roundsdev", play: true })
     })
 })
+
+describe("Premium and reconnect", () => {
+    async function connectedPlayer(route: Route) {
+        vi.useFakeTimers()
+        const got = await fresh((path, init) => path === "/api/spotify/status" ? json({ connected: true }) : route(path, init))
+        got.player.start()
+        await vi.advanceTimersByTimeAsync(0)
+        got.fetcher.mockClear()
+        return got
+    }
+
+    it("keeps Premium missing after a command says premium_required", async () => {
+        const { player } = await connectedPlayer((path) => path === "/api/spotify/player" ? json(QUIET) : json({ error: "premium_required" }, 403))
+        const p = player.control("play")
+        await vi.advanceTimersByTimeAsync(1500)
+        await p
+        expect(player.account.noPremium).toBe(true)
+        expect(player.premiumMissing()).toBe(true)
+        await vi.advanceTimersByTimeAsync(10000)
+        expect(player.premiumMissing()).toBe(true)
+    })
+
+    it("reports Premium missing when the Rounds device says no_premium", async () => {
+        const { player, web } = await connectedPlayer(() => json(QUIET))
+        Object.assign(web.state, { status: "no_premium" })
+        expect(player.premiumMissing()).toBe(true)
+    })
+
+    it("stops polling and asks for a reconnect when Spotify refuses the grant", async () => {
+        const { player, paths } = await connectedPlayer(() => json({ error: "reconnect_needed" }, 403))
+        await vi.advanceTimersByTimeAsync(0)
+        expect(player.account.reconnect).toBe(true)
+        const asked = paths().length
+        await vi.advanceTimersByTimeAsync(60000)
+        expect(paths().length).toBe(asked)
+    })
+})

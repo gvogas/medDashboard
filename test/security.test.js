@@ -40,6 +40,37 @@ describe('login throttling', () => {
     expect(statuses.filter((s) => s === 429).length).toBe(7);
   });
 
+  // The CAPTCHA only lets one attempt through a lock; that attempt is still counted.
+  function attempt(username, password, captcha) {
+    return SELF.fetch(`${BASE}/api/login`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ username, password, ...(captcha !== undefined && { captcha }) }),
+    });
+  }
+
+  it('a passed CAPTCHA lets the right password through a lock', { timeout: 20000 }, async () => {
+    await createUser('bolted');
+    for (let i = 0; i < 5; i++) await login('bolted', 'wrong');
+    expect((await attempt('bolted', PASSWORD)).status).toBe(429);
+    expect((await attempt('bolted', PASSWORD, 'pass')).status).toBe(200);
+  });
+
+  it('a CAPTCHA-passed attempt that fails re-locks the name', { timeout: 20000 }, async () => {
+    await createUser('relock');
+    for (let i = 0; i < 5; i++) await login('relock', 'wrong');
+    expect((await attempt('relock', 'wrong', 'pass')).status).toBe(401);
+    expect((await attempt('relock', PASSWORD)).status).toBe(429);
+  });
+
+  it('an unverified CAPTCHA keeps the lock and offers the widget', { timeout: 20000 }, async () => {
+    await createUser('guarded');
+    for (let i = 0; i < 5; i++) await login('guarded', 'wrong');
+    const res = await attempt('guarded', PASSWORD, 'nope');
+    expect(res.status).toBe(429);
+    expect(await res.json()).toMatchObject({ error: 'too_many_attempts', captchaSiteKey: 'test-turnstile-site-key' });
+  });
+
   it('a stranger cannot lock you out of a browser you have signed in from', { timeout: 30000 }, async () => {
     await createUser('trusted');
     const first = await login('trusted');

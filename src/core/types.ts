@@ -286,7 +286,7 @@ export interface AdminLock { key: string; username: string; device: boolean; fai
 export interface AdminAccounts { accounts: AdminAccount[]; locks: AdminLock[] }
 export interface AuditEntry { at: number; admin: string; action: string; target: string; detail: string }
 export type ErrorKind = 'server' | 'request' | 'browser' | 'nightly';
-export interface ErrorGroup { kind: ErrorKind; method: string; route: string; status: number; message: string; count: number; last: number; first: number; users: number }
+export interface ErrorGroup { kind: ErrorKind; method: string; route: string; status: number; message: string; count: number; last: number; first: number; users: number; anon: number }
 export interface ErrorRow { at: number; kind: ErrorKind; method: string; route: string; status: number; message: string; username: string | null }
 export interface MaintenanceState { features: Feature[]; message: string; updatedAt: number | null; updatedBy: string }
 export interface TrafficHour { hour: string; requests: number; errors: number }

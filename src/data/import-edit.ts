@@ -12,7 +12,7 @@ import { schoolCal, termStart } from "@/data/query"
 import { parseIcs } from "@/core/importers/ics"
 import { parseCsv } from "@/core/importers/csv"
 import { planImport } from "@/core/importers/plan"
-import type { Outline, Plan } from "@/core/importers/plan"
+import type { Outline, Plan, PlanItem } from "@/core/importers/plan"
 import { planForClass, planMine } from "./class-import"
 import { api } from "@/core/api"
 import { readWithAi, type NoteKey } from "./ai-read"
@@ -58,7 +58,7 @@ export function readOutlineFile(file: File, note: NoteKey = "aiNote", { forNewCl
         steps: ["Reading the document", "Finding dates and deadlines", "Matching it to your courses"],
         flag: "outlineBusy", note, refresh: notify,
         errors: {
-            outline_empty: "No text was found in that file. A scanned outline needs to be a text PDF.",
+            outline_empty: "No text was found in that file. Scans and pictures cannot be read: export a text PDF or Word file from the original and try again.",
             outline_unreadable: "The outline could not be understood. Try again, or import a CSV instead.",
         },
         cache: ["outline", String(data.profile?.id ?? ""), today().slice(0, 7), termStart() || "", JSON.stringify(readContext())],
@@ -75,13 +75,33 @@ export const importCount = (plan: ImportPlan) =>
     plan.courses.reduce((n, c) => n + c.meetings.filter((m) => m.include).length + (c.keep && c.isNew ? 1 : 0), 0)
     + plan.items.filter((i) => i.include).length
 
+/** A rebuilt plan (another class, or a new target) keeps the Type edits made on the old one, and the ticks the person set by hand (`edited`). A tick left at the planner's default is not carried: the new plan decides it. Rows match by title, meetings by day and time. */
+export function carryEdits(from: ImportPlan, to: ImportPlan) {
+    const old = new Map<string, PlanItem[]>()
+    for (const it of from.items) old.set(it.row.title, [...(old.get(it.row.title) ?? []), it])
+    for (const it of to.items) {
+        const was = old.get(it.row.title)?.shift()
+        if (!was) continue
+        if (was.edited) { it.include = was.include; it.edited = true }
+        it.row.type = was.row.type
+    }
+    for (const c of to.courses) {
+        const was = from.courses.find((x) => x.code === c.code)
+        if (!was) continue
+        for (const m of c.meetings) {
+            const same = was.meetings.find((x) => x.weekday === m.weekday && x.start === m.start && x.end === m.end)
+            if (same && same.edited) { m.include = same.include; m.edited = true }
+        }
+    }
+}
+
 /** Write the ticked rows in one save, courses first so the items can point at them. Returns a summary line. */
 export async function commitImport(plan: ImportPlan): Promise<string> {
     let classes = 0, items = 0, terms = 0
     const rows: { kind: "courses" | "items"; row: Course | Item }[] = []
     const wanted = new Set(plan.items.filter((i) => i.include).map((i) => i.row.courseId).filter(Boolean))
     for (const c of plan.courses) {
-        const add = c.meetings.filter((m) => m.include).map(({ include: _, ...m }) => m)
+        const add = c.meetings.filter((m) => m.include).map(({ include: _, edited: _edited, ...m }) => m)
         if (c.isNew) {
             if (!add.length && !(c.keep || wanted.has(c.id))) continue
             rows.push({ kind: "courses", row: normalizeCourse({ id: c.id, code: c.code, name: c.name, color: c.color, instructor: c.instructor || "", term: c.term || "", meetings: add }) as Course })

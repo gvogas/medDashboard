@@ -6,11 +6,13 @@ import { changedFields, MARK_DEFAULTS, parseKey, TASK_LIMIT } from './shared.ts'
 import type { PendingOp, Row } from './db.ts';
 import type { Cursor, ServerProfile } from './store.ts';
 import type { SyncState, SyncStatus } from './types.ts';
+import { HOLD_TEXT, plainError, REVIEW_TEXT } from './sync-text.ts';
 
 /** One sync cycle: its cancel signal, the account it is for, the edits it held back, the mark
-    edits refused as not found (settled after the pull), and whether any waits on a feature in maintenance. */
-interface Cycle { signal: AbortSignal; account: string; failed: PendingOp[]; deferred: PendingOp[]; waiting: boolean }
-export const status: SyncStatus & { lastPull: number | null } = { state: 'idle', pending: 0, lastPull: null, message: '' };
+    edits refused as not found (settled after the pull), whether any waits on a feature in maintenance,
+    and whether an edit was refused (its reason goes on the status once). */
+interface Cycle { signal: AbortSignal; account: string; failed: PendingOp[]; deferred: PendingOp[]; waiting: boolean; refused: boolean }
+export const status: SyncStatus & { lastPull: number | null; conflicts?: number; refusal?: { reason: string } } = { state: 'idle', pending: 0, lastPull: null, message: '' };
 const listeners = new Set<(s: typeof status) => void>();
 let initialized = false, paused = false, running: Promise<boolean> | null = null, controller: AbortController | null = null, timer: ReturnType<typeof setTimeout> | undefined;
 let signedOut: () => void = () => {}, pulled: () => unknown = () => {};
@@ -22,9 +24,10 @@ let unreadFn: (n: number) => void = () => {};
     each sign-in sets it again, replacing the last. */
 export const setOnUnread = (fn: (n: number) => void): void => { unreadFn = fn; };
 export const onUnauthenticated = (fn: () => void): void => { signedOut = fn; };
+function publish() { for (const fn of listeners) fn(status); }
 function state(value: SyncState, message = '') {
-  Object.assign(status, { state: value, message, pending: store.pendingCount() });
-  for (const fn of listeners) fn(status);
+  Object.assign(status, { state: value, message, pending: store.pendingCount(), conflicts: store.conflicts.length });
+  publish();
 }
 function schedule(ms = 600) {
   if (paused) return;
@@ -126,7 +129,9 @@ async function pushAll(cycle: Cycle): Promise<boolean> {
         if (!active(cycle)) return false;
         // A review step another device made first, or already deleted: its copy stands.
         if (e.status === 409 && untouchedReview(op)) { await store.rejectOperation(op, current, '', { quiet: true }); continue; }
-        await store.rejectOperation(op, current, reasonFor(e, op));
+        const reason = reasonFor(e, op);
+        await store.rejectOperation(op, current, reason);
+        if (!cycle.refused) { cycle.refused = true; status.refusal = { reason }; publish(); }
       } else if (e instanceof ApiError && !STOPS.includes(e.status)) {
         cycle.failed.push(op);
         // Items after a new course may belong to it: they wait for it.
@@ -212,7 +217,7 @@ export async function syncNow(): Promise<boolean> {
   if (running) return running;
   clearTimeout(timer);
   controller = new AbortController();
-  const cycle: Cycle = { signal: controller.signal, account: store.data.profile.id, failed: [], deferred: [], waiting: false };
+  const cycle: Cycle = { signal: controller.signal, account: store.data.profile.id, failed: [], deferred: [], waiting: false, refused: false };
   running = (async () => {
     try {
       return await store.withSyncLock(async () => {
@@ -231,8 +236,8 @@ export async function syncNow(): Promise<boolean> {
           return false;
         }
         state(store.conflicts.length ? 'error' : store.pendingCount() || !complete ? 'pending' : 'idle',
-          store.conflicts.length ? 'Saved copies need review in Settings.' : !complete ? 'Downloading remaining changes.'
-            : cycle.waiting ? 'Shared edits are waiting: classes and projects are being worked on.' : '');
+          store.conflicts.length ? REVIEW_TEXT : !complete ? 'Downloading remaining changes.'
+            : cycle.waiting ? HOLD_TEXT : '');
         if (!complete) schedule(1000);
         /* edits held back by maintenance are asked about again in a minute, not at once */
         else if (cycle.waiting) schedule(60000);
@@ -243,7 +248,7 @@ export async function syncNow(): Promise<boolean> {
       if (!active(cycle)) return false;
       if (e instanceof ApiError && e.status === 401) { stop(); state('signed-out'); signedOut(); }
       else if (e instanceof ApiError && e.status === 428) { state('error', 'Reload Term to finish the update. Your edits are saved.'); }
-      else { state(e instanceof ApiError ? 'error' : 'offline', (e as Error).message); schedule(retryDelayMs(e)); }
+      else { state(e instanceof ApiError ? 'error' : 'offline', plainError(e)); schedule(retryDelayMs(e)); }
       return false;
     }
   })();

@@ -5,6 +5,8 @@ import { useSyncExternalStore } from "react"
 import * as sync from "@/core/sync"
 import { notify, subscribe } from "@/bridge"
 import type { SyncState, SyncStatus } from "./types"
+import { HOLD_TEXT, changesWaiting } from "@/core/sync-text"
+import { toast } from "./toast"
 
 export const SYNC_LABELS: Record<SyncState, string> = {
     idle: "Synced",
@@ -15,10 +17,12 @@ export const SYNC_LABELS: Record<SyncState, string> = {
     "signed-out": "Signed out",
 }
 
-const copy = (s: SyncStatus): SyncStatus => ({ state: s.state, pending: s.pending, message: s.message })
+/** The sync status as the hooks see it; `conflicts` counts saved copies waiting for a decision. */
+type Shown = SyncStatus & { conflicts?: number }
+const copy = (s: Shown): Shown => ({ state: s.state, pending: s.pending, message: s.message, conflicts: s.conflicts ?? 0 })
 const isTrouble = (s: SyncStatus) => s.state === "offline" || s.state === "error" || s.state === "signed-out"
 
-let status: SyncStatus = copy(sync.status as SyncStatus)
+let status: Shown = copy(sync.status as Shown)
 let troubled = false
 let announcement = ""
 
@@ -30,15 +34,23 @@ function announce(s: SyncStatus) {
     troubled = bad
 }
 
+/* The refusal a toast has named: core makes a new object for each cycle's first refused edit. */
+let named: object | null = null
 sync.onStatus((s: SyncStatus) => {
+    const refusal = (s as SyncStatus & { refusal?: { reason: string } }).refusal
+    if (refusal && refusal !== named) { named = refusal; toast(refusal.reason + " Review it in Settings.", { error: true }) }
     status = copy(s)
     announce(status)
     notify()
 })
 
-/** "Offline · 3" when edits wait on this device. */
-export function syncLabel(s: SyncStatus): string {
-    return SYNC_LABELS[s.state] + (s.state === "offline" && s.pending ? " · " + s.pending : "")
+/** "Offline · 3 changes waiting" when edits wait on this device; saved copies and a
+    maintenance hold get words of their own. */
+export function syncLabel(s: Shown): string {
+    if (s.conflicts) return "Review saved changes"
+    if (s.state === "pending" && s.message === HOLD_TEXT) return "Waiting for shared edits"
+    if (s.state === "offline" && s.pending) return "Offline · " + changesWaiting(s.pending)
+    return SYNC_LABELS[s.state]
 }
 
 export const useSyncStatus = () => useSyncExternalStore(subscribe, () => status)

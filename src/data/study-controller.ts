@@ -13,11 +13,12 @@ import { launch as fireworks } from "@/lib/fireworks"
 import { notify } from "@/bridge"
 import * as run from "./run"
 import { openFocus } from "./study-timer"
-import { toast, TOAST_LONG_MS, TOAST_MS } from "./toast"
+import { hideToast, toast, TOAST_LONG_MS, TOAST_MS } from "./toast"
 import { ui, rememberUi } from "./ui"
 import { effectiveCourses, effectiveItems, forAchievements } from "./effective"
 import { keyedAchievements, keyedCourses, keyedItems, keyedSessions } from "./refs"
 import type { StudyPrefs, View } from "./types"
+import { pendingUndos, type PendingUndo } from "./study"
 
 /** Show a view: the side nav and the 1–5 keys. Study while a run is going opens its focus screen. */
 export function setView(view: View) {
@@ -28,51 +29,73 @@ export function setView(view: View) {
 /* ── the history: deletes that can be undone, the goal ── */
 
 /* A delete waits six seconds so Undo (the History card's, undoSessionDelete in
-   study.ts) can take it back; the session is only hidden meanwhile. Another
-   delete, or leaving the page, makes the waiting one final. */
+   study.ts) can take it back; the session is only hidden meanwhile. A delete made while
+   another waits does not finish that one: each keeps its own six seconds, and the card
+   shows the newest one's Undo. Leaving the page, or signing out, makes every waiting
+   delete final. */
 const UNDO_MS = TOAST_MS
 export function deleteWithUndo(id: string) {
     const session = data.study_sessions.find((x) => x.id === id)
-    if (!session) return
-    commitUndo()
-    ui.hist.undo = { session, timer: setTimeout(commitUndo, UNDO_MS) }
+    if (!session || pendingUndos(ui.hist.undo).some((u) => u.session.id === id)) return
+    const entry: PendingUndo = { session, timer: setTimeout(() => expireUndo(id), UNDO_MS), earlier: ui.hist.undo ?? undefined }
+    ui.hist.undo = entry
     notify()
 }
+/** Make every waiting delete final now. */
 export function commitUndo(): Promise<void> {
-    const u = ui.hist.undo
-    if (!u) return Promise.resolve()
-    clearTimeout(u.timer)
+    const all = pendingUndos(ui.hist.undo)
+    if (!all.length) return Promise.resolve()
+    for (const u of all) clearTimeout(u.timer)
     ui.hist.undo = null
-    /* a failed save already shows its own toast */
-    return store.deleteStudySession(u.session.id).then(() => { if (ui.view === "study") notify() }, () => {})
+    return Promise.all(all.map((u) => store.deleteStudySession(u.session.id).then(() => { if (ui.view === "study") notify() }, () => {}))).then(() => {})
+}
+/** A delete's window ran out: it is final, and the deletes after it keep waiting. */
+function expireUndo(id: string) {
+    const all = pendingUndos(ui.hist.undo)
+    if (!all.some((u) => u.session.id === id)) return
+    const rest = all.filter((u) => u.session.id !== id)
+    ui.hist.undo = rest.reduceRight<PendingUndo | undefined>((earlier, u) => ({ ...u, earlier }), undefined) ?? null
+    notify()
+    /* A failed save already shows its own toast. */
+    store.deleteStudySession(id).then(() => { if (ui.view === "study") notify() }, () => {})
 }
 
-/* An item or course delete waits the same six seconds, the row hidden from every view
-   meanwhile, so the toast's Undo only has to show it again. */
-let doomed: { key: string; commit: () => Promise<unknown>; timer: ReturnType<typeof setTimeout> } | null = null
+/* An item, course, quote or other delete waits the same six seconds, the row hidden from
+   every view meanwhile. Each delete has its own Undo toast: several can wait at once, and
+   a toast going (its time up, or dismissed) makes its delete final. */
+interface Doomed { key: string; commit: () => Promise<unknown>; toastId: number }
+let doomed: Doomed[] = []
 export async function deleteLater(kind: string, id: string, what: string, commit: () => Promise<unknown>) {
-    /* a failed save already shows its own toast; it must not stop this delete */
-    const settle = () => finishDelete().catch(() => {})
-    await settle()
-    const key = kind + ":" + id
-    doomed = { key, commit, timer: setTimeout(settle, UNDO_MS) }
-    await store.hide(key)
+    const entry: Doomed = { key: kind + ":" + id, commit, toastId: 0 }
+    doomed = [...doomed, entry]
+    await store.hide(entry.key)
     notify()
-    toast(what + " deleted", { undo: undoLater, ms: UNDO_MS })
+    entry.toastId = toast(what + " deleted", {
+        undo: () => undoLater(entry),
+        ms: UNDO_MS,
+        onGone: () => { settleOne(entry).catch(() => {}) },
+    })
 }
+/** Make one delete final: its commit runs, and a failed save puts its row back. */
+async function settleOne(entry: Doomed) {
+    if (!doomed.includes(entry)) return
+    doomed = doomed.filter((x) => x !== entry)
+    await commitEntry(entry)
+}
+async function commitEntry(entry: Doomed) {
+    try { await entry.commit() } finally { await store.hide(entry.key, false) }
+}
+/** Make every waiting delete final now (the page is leaving, or signing out). */
 export async function finishDelete() {
-    const d = doomed
-    if (!d) return
-    doomed = null
-    clearTimeout(d.timer)
-    try { await d.commit() } finally { await store.hide(d.key, false) }
+    const all = doomed
+    doomed = []
+    for (const entry of all) hideToast(entry.toastId)
+    await Promise.all(all.map(commitEntry))
 }
-async function undoLater() {
-    const d = doomed
-    if (!d) return
-    doomed = null
-    clearTimeout(d.timer)
-    await store.hide(d.key, false)
+async function undoLater(entry: Doomed) {
+    if (!doomed.includes(entry)) return
+    doomed = doomed.filter((x) => x !== entry)
+    await store.hide(entry.key, false)
     notify()
 }
 

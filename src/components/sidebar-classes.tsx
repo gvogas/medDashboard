@@ -44,7 +44,7 @@ export function NewMenu() {
                 aria-haspopup="menu"
                 aria-expanded={open}
                 onClick={() => setOpen((o) => !o)}
-                className="w-full rounded-[9px] border border-dashed border-border bg-transparent px-2 py-1.5 text-left text-[12px] text-ink-2 hover:border-primary hover:text-primary"
+                className="w-full rounded-[9px] border border-dashed border-border bg-transparent px-2 py-1.5 text-left text-[12px] text-ink-2 hover:border-primary hover:text-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)]"
             >
                 + New
             </button>
@@ -58,7 +58,7 @@ export function NewMenu() {
                             role="menuitem"
                             tabIndex={-1}
                             onClick={() => { setOpen(false); act() }}
-                            className="flex w-full cursor-pointer flex-col items-start gap-px rounded-md border-0 bg-transparent px-2.5 py-1.5 text-left font-[inherit] text-[12.5px] text-foreground outline-none hover:bg-muted focus-visible:bg-muted"
+                            className="flex w-full cursor-pointer flex-col items-start gap-px rounded-md border-0 bg-transparent px-2.5 py-1.5 text-left font-[inherit] text-[12.5px] text-foreground hover:bg-muted focus-visible:bg-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)]"
                         >
                             {label}
                             <span className="text-[11px] text-muted-foreground">{sub}</span>

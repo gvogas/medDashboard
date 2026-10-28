@@ -34,6 +34,8 @@ export default defineConfig(async () => {
                   SPOTIFY_TOKEN_KEYS: JSON.stringify({ current: 'v1', keys: { v1: 'test-spotify-encryption-key-at-least-32-characters' } }),
                   SPOTIFY_CLIENT_ID: 'test-client-id',
                   SPOTIFY_CLIENT_SECRET: 'test-client-secret',
+                  TURNSTILE_SECRET: 'test-turnstile-secret',
+                  TURNSTILE_SITE_KEY: 'test-turnstile-site-key',
                   // A throwaway P-256 pair for push (test/push.test.js); never used anywhere else.
                   VAPID_PUBLIC_KEY: 'BFaIBBOLQ70QXU1DzpjiDtY5IdvjKKRcBmXhZW_HOz295FnevL7DEwFro64p2aPruAH4rFAr087Ups4PvWDDr58',
                   VAPID_PRIVATE_KEY: 'Cs4HmTxBoYcKMWGFRyhND7H91ITnKlmxKkjnh7h9sxo',
@@ -65,8 +67,10 @@ export default defineConfig(async () => {
             setupFiles: ['./src/test-setup.ts'],
             // The first test in a file waits for React and Framer Motion to load, and the run
             // tests play whole flows on a clock that ticks four times a second: twenty minutes of
-            // it takes about as many seconds on a busy machine.
+            // it takes about as many seconds on a busy machine. The loading now happens in
+            // src/test-setup.ts's beforeAll, so hooks get the same allowance.
             testTimeout: 60_000,
+            hookTimeout: 60_000,
           },
         },
       ],

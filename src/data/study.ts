@@ -35,9 +35,21 @@ export const NO_COURSE = "#7D8A99"
 export const studiedFor = (sessions: StudySession[], itemId: string) =>
     sessions.reduce((a, s) => a + (s.itemId === itemId ? s.studyMinutes : 0), 0)
 
-/** Sessions shown: every one but a delete that Undo can still take back. */
-export const shownSessions = (sessions: StudySession[], undo: SessionUndo | null) =>
-    undo ? sessions.filter((s) => s.id !== undo.session.id) : sessions
+/* A session delete Undo can still take back: `ui.hist.undo` is the newest, and `earlier`
+   the delete it came after, still waiting. Each runs out on its own timer. */
+export type PendingUndo = SessionUndo & { earlier?: PendingUndo }
+/** Every delete still waiting, newest first. */
+export function pendingUndos(undo: SessionUndo | null): PendingUndo[] {
+    const out: PendingUndo[] = []
+    for (let u = undo as PendingUndo | null; u; u = u.earlier ?? null) out.push(u)
+    return out
+}
+/** Sessions shown: every one but the deletes that Undo can still take back. */
+export const shownSessions = (sessions: StudySession[], undo: SessionUndo | null) => {
+    if (!undo) return sessions
+    const hidden = new Set(pendingUndos(undo).map((u) => u.session.id))
+    return sessions.filter((s) => !hidden.has(s.id))
+}
 
 /** "14 – 20 Sep", or "28 Sep – 4 Oct" across two months. */
 export const rangeLabel = (a: string, b: string) => (a.slice(0, 7) === b.slice(0, 7) ? String(parse(a).getDate()) : dayMonth(a)) + " – " + dayMonth(b)
@@ -64,7 +76,7 @@ export interface Tiles {
     together: { minutes: number; sub: string } | null
 }
 
-/** The streak, today against the goal, and the term so far (the last 12 weeks with no term start). */
+/** The streak, today against the goal, and the term so far (the last 16 weeks with no term start). */
 export function studyTiles(sessions: StudySession[], prefs: StudyPrefs, termStart: string | null, today: string): Tiles {
     const byDay = minutesByDay(sessions), st = streak(byDay, today, prefs), minutes = byDay.get(today) || 0
     const range = heatRange(termStart, today), term = inRange(sessions, range.from, today)
@@ -76,7 +88,7 @@ export function studyTiles(sessions: StudySession[], prefs: StudyPrefs, termStar
         },
         today: { minutes, goal: prefs.goal, sub: prefs.goal ? (left ? left + " min to your daily goal" : "Daily goal reached") : "" },
         term: {
-            label: range.since ? "This term" : "Last 12 weeks",
+        label: range.since ? "This term" : "Last " + range.weeks + " weeks",
             minutes: sum(term),
             sub: plural(term.length, "session") + (range.since ? " since " + dayMonth(range.since) : ""),
         },
@@ -145,10 +157,15 @@ export interface WeekHist {
  */
 export function weekOf(sessions: StudySession[], offset: number, today: string, goal = 0): WeekHist {
     const anchor = iso(addDays(parse(today), 7 * offset))
-    const w = week(sessions, anchor), before = week(sessions, iso(addDays(parse(anchor), -7)))
+    const w = week(sessions, anchor)
+    /* a week so far is set against the same days of the week before */
+    const days = offset === 0 ? (parse(today).getDay() + 6) % 7 + 1 : 7
+    const before = week(sessions, iso(addDays(parse(anchor), -7)))
+    const beforeTotal = before.days.slice(0, days).reduce((a, d) => a + d.total, 0)
     const max = Math.max(60, goal ? goal * 1.25 : 0, ...w.days.map((d) => d.total))
-    const diff = w.total - before.total
-    const compare = !before.total ? "" : " · " + (diff === 0 ? "same as" : duration(Math.abs(diff)) + (diff > 0 ? " more than" : " less than")) + " the week before"
+    const diff = w.total - beforeTotal
+    const ref = days === 7 ? "the week before" : "last week to this day"
+    const compare = !beforeTotal ? "" : " · " + (diff === 0 ? "same as " : duration(Math.abs(diff)) + (diff > 0 ? " more than " : " less than ")) + ref
     return {
         offset,
         range: rangeLabel(w.from, w.to),
@@ -193,7 +210,7 @@ export interface MonthHist {
     /* blank cells before the 1st, Monday first */
     lead: number
     cells: MonthCell[]
-    stats: { total: number; count: number; daysStudied: number; daysSoFar: number; average: number }
+    stats: { total: number; count: number; daysStudied: number; daysSoFar: number; average: number; from: string | null }
     picked: PickedDay | null
 }
 
@@ -209,7 +226,9 @@ export function monthOf(sessions: StudySession[], offset: number, focusDay: stri
     const first = iso(at), last = iso(new Date(at.getFullYear(), at.getMonth() + 1, 0)), ym = first.slice(0, 7)
     const byDate = new Map(m.groups.map((g) => [g.date, g]))
     const pick = focusDay && focusDay.startsWith(ym) ? focusDay : today.startsWith(ym) ? today : m.groups[0]?.date ?? null
-    const daysSoFar = first > today ? 0 : parse(last < today ? last : today).getDate()
+    const studied = m.groups.map((g) => g.date).sort()
+    const from = studied[0] ?? null, end = last < today ? last : today
+    const daysSoFar = from && from <= end ? parse(end).getDate() - parse(from).getDate() + 1 : 0
 
     const cells: MonthCell[] = []
     for (let d = 1; d <= parse(last).getDate(); d++) {
@@ -226,7 +245,7 @@ export function monthOf(sessions: StudySession[], offset: number, focusDay: stri
         title: MON[at.getMonth()] + " " + at.getFullYear(),
         lead: (at.getDay() + 6) % 7,
         cells,
-        stats: { total: m.total, count: m.count, daysStudied: m.daysStudied, daysSoFar, average: daysSoFar ? Math.round(m.total / daysSoFar) : 0 },
+        stats: { total: m.total, count: m.count, daysStudied: m.daysStudied, daysSoFar, average: daysSoFar ? Math.round(m.total / daysSoFar) : 0, from },
         picked: pick ? { date: pick, isToday: pick === today, label: shortDate(pick), total: g?.total || 0, sessions: g?.sessions || [] } : null,
     }
 }
@@ -237,13 +256,15 @@ export interface HeatDay { date: string; future: boolean; minutes: number; level
 export interface HeatWeek { monday: string; month: string; days: HeatDay[] }
 
 export interface TermHist {
-    /* "Term", or "Last 12 weeks" with no term start */
+    /* "Term", or "Last 16 weeks" with no term start */
     title: string
     range: string
     weeks: HeatWeek[]
     perCourse: Split
     /* days in the range with any study */
     daysStudied: number
+    /* the day picked on the heatmap, with its sessions */
+    picked: PickedDay | null
 }
 
 /**
@@ -270,13 +291,21 @@ export function termOf(sessions: StudySession[], prefs: StudyPrefs, termStart: s
             }),
         })
     }
+    const day = focusDay && focusDay >= range.from && focusDay <= today ? focusDay : null
     return {
-        title: range.since ? "Term" : "Last 12 weeks",
+        title: range.since ? "Term" : "Last " + range.weeks + " weeks",
         range: dayMonth(range.from) + " – " + dayMonth(range.to),
         weeks,
         perCourse: perCourse(inRange(sessions, range.from, today)),
         daysStudied: [...byDay].filter(([d, m]) => d >= range.from && d <= today && m > 0).length,
+        picked: day ? dayPanel(sessions, day, today) : null,
     }
+}
+
+/** The sessions of one day, newest first, for the day panel. */
+function dayPanel(sessions: StudySession[], date: string, today: string): PickedDay {
+    const list = sessions.filter((s) => dayOf(s) === date).sort((a, b) => new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime())
+    return { date, isToday: date === today, label: shortDate(date), total: sum(list), sessions: list }
 }
 
 /* ── achievements ── */
@@ -377,21 +406,18 @@ export function stepHist(dir: -1 | 0 | 1) {
     notify()
 }
 
-/** A day on the month's calendar or the heatmap: the Month tab, on its month, with it picked. */
+/** A day on the heatmap or the month's calendar: it is picked, and its sessions show under it. */
 export function pickDay(date: string) {
-    const d = parse(date), now = parse(todayIso())
-    ui.hist.tab = "month"
-    ui.hist.monthOffset = Math.min(0, (d.getFullYear() - now.getFullYear()) * 12 + d.getMonth() - now.getMonth())
     ui.hist.focusDay = date
     notify()
 }
 
-/** Undo: the deleted session comes back; it was only hidden while it waited. */
+/** Undo: the deleted session comes back, and the delete it came after shows its Undo. */
 export function undoSessionDelete() {
-    const u = ui.hist.undo
+    const u = ui.hist.undo as PendingUndo | null
     if (!u) return
     clearTimeout(u.timer)
-    ui.hist.undo = null
+    ui.hist.undo = u.earlier ?? null
     notify()
 }
 

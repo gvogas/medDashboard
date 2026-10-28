@@ -11,6 +11,7 @@ import { uid } from "@/core/model"
 import { refOf } from "./refs"
 import type { Flow, StepKind } from "./types"
 import { MINUTE_MS } from "@/lib/time"
+import { toast, TOAST_LONG_MS } from "./toast"
 
 /** A run's place in a room: the room, when you first joined (on this device's clock), the room's
     study time when you last joined, and what earlier stints in it came to. */
@@ -150,6 +151,7 @@ async function finish() {
     releaseScreen()
     fullscreen(false)
     // Another tab of this device may have logged this run already.
+    let failed = false
     try {
         const stored = await store.meta.get(KEY) as StoredRun | null | undefined
         if (stored?.id === ended.id) {
@@ -168,15 +170,22 @@ async function finish() {
                     startedAt: ended.room ? ended.room.joinedAt : ended.startedAt, studyMinutes: minutes, roundsDone: ended.room ? roundsIn(ended.flow, roomStudyMs(ended)) : s.roundsDone,
                     ...(ended.room ? { roomId: ended.room.id } : {}),
                 })
+            } else {
+                /* under a minute: nothing to log, and this says so rather than vanishing */
+                toast("Under a minute, so nothing was logged.")
             }
             await store.meta.set(KEY, null)
         }
         if (!ended.pausedAt && timer.read(ended).done) chime("done")
     } catch {
-        /* kept paused where it stopped, so it neither loses nor gains minutes before it is logged */
-        if (ended.pausedAt === null) await store.meta.set(KEY, timer.pause(ended)).catch(() => {})
+        failed = true
+        /* kept paused where it stopped, so it neither loses nor gains minutes before it is logged; kept in memory too, so Stop & log can be tried again */
+        const kept = ended.pausedAt === null ? { ...ended, ...timer.pause(ended) } : ended
+        run = kept
+        await store.meta.set(KEY, kept).catch(() => {})
+        toast("Your study time could not be saved, so the run is kept paused. Try Stop & log again.", { error: true, ms: TOAST_LONG_MS })
     } finally {
-        emit("end")   /* the page leaves the run behind either way */
+        emit(failed ? "tick" : "end")   /* the page leaves the run behind, unless it is still there to try again */
     }
 }
 

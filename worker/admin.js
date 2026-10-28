@@ -2,8 +2,8 @@
 // logs, traffic, health, the announcement and maintenance mode. Every route checks users.is_admin on
 // the server; the sidebar hiding the page is only a convenience.
 //
-// Guards: an admin cannot delete or demote their own account, and the last admin
-// cannot be removed. Each change is written to admin_log in the same batch.
+// Guards: an admin cannot delete, demote, sign out or reset the password of their own
+// account, and the last admin cannot be removed. Each change is written to admin_log in the same batch.
 
 import { json, readJson, HttpError } from './http.js';
 import { requireUser } from './auth.js';
@@ -18,7 +18,7 @@ import { DAY_MS } from './time.js';
 import { MESSAGE_MAX } from '../src/core/shared.ts';
 
 /* The newest file in migrations/; a test keeps it in step. */
-export const LATEST_MIGRATION = '0004_space_indexes.sql';
+export const LATEST_MIGRATION = '0005_feed_off.sql';
 const AUDIT_KEEP_MS = 90 * DAY_MS;
 export const MIN_PASSWORD = 8;
 const MAX_PASSWORD = 200;
@@ -57,7 +57,7 @@ const throttleRows = (db, username) => db.prepare(UNLOCK('?1')).bind(username);
 export async function listAccounts(db) {
   const { results } = await db.prepare(
     `SELECT u.id, u.username, u.display_name AS displayName, u.is_admin AS admin, u.last_seen_day AS lastSeen,
-            u.created_at AS createdAt, u.feed_gen IS NOT NULL AS feed, u.leaderboard,
+            u.created_at AS createdAt, (u.feed_gen > 0 AND u.feed_off = 0) AS feed, u.leaderboard,
             (SELECT count(*) FROM courses AS c WHERE c.scope = 'u:' || u.id AND c.deleted_at IS NULL) AS courses,
             (SELECT count(*) FROM items AS i WHERE i.scope = 'u:' || u.id AND i.deleted_at IS NULL) AS items,
             (SELECT COALESCE(sum(s.study_minutes), 0) FROM study_sessions AS s WHERE s.user_id = u.id AND s.deleted_at IS NULL) AS studyMinutes,
@@ -156,6 +156,7 @@ export const adminRoutes = [
 
   ['POST', /^\/api\/admin\/accounts\/([^/]{1,64})\/password$/, async ({ request, env, params: [id] }) => {
     const admin = await requireAdmin(request, env);
+    if (id === admin.id) throw new HttpError(400, { error: 'self' });
     const body = await readJson(request);
     const hash = await hashPassword(password(body.password));
     const user = await target(env.DB, id);
@@ -171,6 +172,7 @@ export const adminRoutes = [
 
   ['POST', /^\/api\/admin\/accounts\/([^/]{1,64})\/revoke$/, async ({ request, env, params: [id] }) => {
     const admin = await requireAdmin(request, env);
+    if (id === admin.id) throw new HttpError(400, { error: 'self' });
     const user = await target(env.DB, id);
     await env.DB.batch([
       env.DB.prepare('UPDATE users SET pw_gen = pw_gen + 1 WHERE id = ?').bind(id),

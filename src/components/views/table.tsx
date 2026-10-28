@@ -101,7 +101,7 @@ export function TableView() {
                                     )}
                                 >
                                     <td className={td}>
-                                        <b className={cn("font-semibold", isComplete(it) ? "text-[var(--done-ink)]" : "text-foreground")}>{it.title}</b>{" "}
+                                        <b className={cn("inline-block max-w-[260px] align-top font-semibold break-words", isComplete(it) ? "text-[var(--done-ink)]" : "text-foreground")}>{it.title || "Untitled item"}</b>{" "}
                                         <SourceMark item={it} course={c} />
                                         {team && <span className="text-[11px] text-muted-foreground"> · {assigneeNames(team, spaces.find((s) => s.id === team.spaceId), me)}</span>}
                                         <Steps item={it} className="mt-1" />

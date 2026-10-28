@@ -5,10 +5,11 @@
 
 import { cn } from "@/lib/utils"
 import { activate, control, playHere, previous, useSpotify } from "@/data/spotify"
+import { account, premiumMissing } from "@/data/spotify/player"
 import { controlError, Icon, SpotifyMark } from "./bits"
 
-const ctl = "grid size-7 flex-none cursor-pointer place-items-center rounded-full border border-border bg-card p-0 text-ink-2 hover:border-primary hover:text-primary"
-const pp = "grid flex-none cursor-pointer place-items-center rounded-full border-0 bg-foreground p-0 text-card hover:bg-primary hover:text-primary-foreground"
+const ctl = "grid size-7 flex-none cursor-pointer place-items-center rounded-full border border-border bg-card p-0 text-ink-2 hover:border-primary hover:text-primary disabled:cursor-default disabled:opacity-45 disabled:hover:border-border disabled:hover:text-ink-2"
+const pp = "grid flex-none cursor-pointer place-items-center rounded-full border-0 bg-foreground p-0 text-card hover:bg-primary hover:text-primary-foreground disabled:cursor-default disabled:opacity-45"
 
 export function SidebarPlayer() {
     const s = useSpotify()
@@ -16,25 +17,33 @@ export function SidebarPlayer() {
     if (!p.loaded) return null
     const state = !p.connected ? "off" : !t ? "idle" : p.playing ? "playing" : "paused"
     const error = controlError(p.error)
-    const message = error && (
-        <div role="status" className="rounded-md border border-[var(--warn-line)] bg-[var(--warn-bg)] px-[7px] py-[3px] text-center text-[10.5px] leading-[1.35] text-[var(--warn-ink)]">{error}</div>
+    const noPremium = premiumMissing()
+    const notice = account.reconnect ? "Spotify needs a fresh connection. Reconnect in Settings." : account.lost ? "Spotify disconnected. Connect again to keep playing." : null
+    const warn = (text: string) => (
+        <div role="status" className="rounded-md border border-[var(--warn-line)] bg-[var(--warn-bg)] px-[7px] py-[3px] text-center text-[10.5px] leading-[1.35] text-[var(--warn-ink)]">{text}</div>
     )
+    const message = <>
+        {notice && warn(notice)}
+        {noPremium && warn("Controls need Spotify Premium")}
+        {error && warn(error)}
+    </>
 
     let body
     if (!p.connected) {
-        body = (
+        body = <>
             <a href="/api/spotify/connect" className="group/connect flex w-full items-center gap-2 rounded-md py-px text-left text-[12px] text-muted-foreground no-underline hover:text-primary">
                 <SpotifyMark className="text-muted-foreground group-hover/connect:text-[var(--spotify)]" />
                 Connect Spotify
             </a>
-        )
+            {notice && warn(notice)}
+        </>
     } else if (!t) {
         body = <>
             <div className="flex items-center gap-2 py-px text-[12px] text-muted-foreground">
                 <SpotifyMark className="text-muted-foreground" />
                 Nothing playing
                 {s.target === "here" && (
-                    <button type="button" aria-label="Play in Term" title="Play in Term" className={cn(pp, "ml-auto size-[26px]")} onClick={() => { activate(); void control("play") }}>
+                    <button type="button" aria-label="Play in Term" title="Play in Term" disabled={noPremium} className={cn(pp, "ml-auto size-[26px]")} onClick={() => { activate(); void control("play") }}>
                         <Icon name="play" className="size-[11px]" />
                     </button>
                 )}
@@ -65,11 +74,11 @@ export function SidebarPlayer() {
                 <i className="block h-full rounded-full bg-primary" style={{ width: pct + "%" }} />
             </span>
             <div className="flex items-center justify-center gap-2.5">
-                <button type="button" aria-label="Previous" className={ctl} onClick={() => { activate(); void previous() }}><Icon name="prev" /></button>
-                <button type="button" aria-label={p.playing ? "Pause" : "Play"} className={cn(pp, "size-[34px]")} onClick={() => { activate(); void control(p.playing ? "pause" : "play") }}>
+                <button type="button" aria-label="Previous" disabled={noPremium} className={ctl} onClick={() => { activate(); void previous() }}><Icon name="prev" /></button>
+                <button type="button" aria-label={p.playing ? "Pause" : "Play"} disabled={noPremium} className={cn(pp, "size-[34px]")} onClick={() => { activate(); void control(p.playing ? "pause" : "play") }}>
                     <Icon name={p.playing ? "pause" : "play"} className="size-[13px]" />
                 </button>
-                <button type="button" aria-label="Next" className={ctl} onClick={() => { activate(); void control("next") }}><Icon name="next" /></button>
+                <button type="button" aria-label="Next" disabled={noPremium} className={ctl} onClick={() => { activate(); void control("next") }}><Icon name="next" /></button>
             </div>
             {message}
             {p.device && (
@@ -77,7 +86,7 @@ export function SidebarPlayer() {
                     on <b className="font-medium text-ink-2">{p.device}</b>
                     {s.target === "offer" && <>
                         {" · "}
-                        <button type="button" title="Move the music into this tab" onClick={() => { activate(); void playHere() }}
+                        <button type="button" title="Move the music into this tab" disabled={noPremium} onClick={() => { activate(); void playHere() }}
                             className="cursor-pointer border-0 bg-transparent p-0 font-[inherit] tracking-[inherit] text-primary underline underline-offset-2">Play here</button>
                     </>}
                 </div>

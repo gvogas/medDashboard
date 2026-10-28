@@ -161,6 +161,17 @@ describe('the feed endpoints', () => {
     expect(await (await api('/api/calendar')).json()).toEqual({ on: false, url: null });
   });
 
+  it('keeps every retired link dead when the feed is turned off and on again', async () => {
+    const api = await signIn();
+    const first = (await (await api('/api/calendar', { method: 'POST' })).json()).url;
+    const second = (await (await api('/api/calendar', { method: 'POST' })).json()).url;
+    expect((await api('/api/calendar', { method: 'DELETE' })).status).toBe(204);
+    const third = (await (await api('/api/calendar', { method: 'POST' })).json()).url;
+    expect((await SELF.fetch(first)).status).toBe(404);
+    expect((await SELF.fetch(second)).status).toBe(404);
+    expect((await SELF.fetch(third)).status).toBe(200);
+  });
+
   it('refuses a forged or malformed token, and another person\'s id with your token', async () => {
     const api = await signIn(), other = await signIn();
     const url = (await (await api('/api/calendar', { method: 'POST' })).json()).url;

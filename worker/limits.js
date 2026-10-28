@@ -49,13 +49,18 @@ export async function setCooldown(db, key, seconds, now = Date.now()) {
     .bind(key, now + seconds * 1000).run();
 }
 
-export async function limitLogin(request, env) {
+export async function ipKey(request) {
   // Cloudflare supplies this header. Do not trust X-Forwarded-For supplied by a client.
   const ip = request.headers.get('cf-connecting-ip');
-  if (!ip) return; // Local development and direct unit tests have no edge address.
+  if (!ip) return null; // Local development and direct unit tests have no edge address.
   const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(ip));
-  const key = 'login-ip:' + [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, '0')).join('');
-  const wait = await claimLimit(env.DB, key, LOGIN_IP_LIMIT);
+  return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, '0')).join('');
+}
+
+export async function limitLogin(request, env) {
+  const ip = await ipKey(request);
+  if (!ip) return;
+  const wait = await claimLimit(env.DB, 'login-ip:' + ip, LOGIN_IP_LIMIT);
   if (wait) throw rateLimited(wait, 'too_many_attempts');
 }
 

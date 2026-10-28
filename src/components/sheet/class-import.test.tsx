@@ -112,11 +112,37 @@ describe("importing an outline", () => {
         render(<ImportSheet plan={planMine(outline)} name="web.pdf" />)
         fireEvent.click(checkbox("Midterm"))
         pick("class:" + SID)
-        expect(checkbox("Midterm").checked).toBe(true)
+        /* the untick made on the old plan carries over to the new one */
+        expect(checkbox("Midterm").checked).toBe(false)
         pick("mine")
         expect(screen.queryByText(/changed/)).toBeNull()
         expect(checkbox("Quiz 1").checked).toBe(true)
-        expect(checkbox("Midterm").checked).toBe(true)
+        expect(checkbox("Midterm").checked).toBe(false)
+    })
+
+    it("keeps a tick set by hand on a matched row when the target changes to another class that also defaults it unticked", () => {
+        const SID2 = "sp0000000002"
+        fake.data.spaces = [space("owner"), { ...space("owner"), id: SID2, scope: "c:" + SID2, name: "Databases" }]
+        fake.data.shared_courses = [course, { ...course, scope: "c:" + SID2, id: "db", code: "CS 340", name: "Databases" }]
+        fake.data.shared_items = [quiz1, { ...quiz1, id: "q2", scope: "c:" + SID2, courseId: "db" }]
+        render(<ImportSheet plan={planMine(outline)} name="web.pdf" />)
+        pick("class:" + SID)
+        expect(checkbox("Quiz 1").checked).toBe(false)
+        fireEvent.click(checkbox("Quiz 1"))
+        pick("class:" + SID2)
+        expect(checkbox("Quiz 1").checked).toBe(true)
+    })
+
+    it("gives a row the person did not touch the new target's default", () => {
+        fake.data.spaces = [space("owner")]
+        fake.data.shared_courses = [course]
+        fake.data.shared_items = [quiz1]
+        render(<ImportSheet plan={planMine(outline)} name="web.pdf" />)
+        expect(checkbox("Quiz 1").checked).toBe(true)
+        pick("class:" + SID)
+        expect(checkbox("Quiz 1").checked).toBe(false)
+        pick("mine")
+        expect(checkbox("Quiz 1").checked).toBe(true)
     })
 
     it("against a class, week 1 leaves a row the class has unticked, and a new target keeps week 1", () => {
@@ -255,6 +281,18 @@ describe("importing an outline", () => {
         expect(fakeImport.commitToClass).not.toHaveBeenCalled()
         expect(fake.overlay.closeSheet).toHaveBeenCalled()
         expect(fake.toast).toHaveBeenCalledWith("Imported 0 classes and 2 items.", { error: false })
+    })
+
+    it("keeps the preview with its ticks when My courses fails to save", async () => {
+        fake.data.spaces = [space("owner")]
+        fake.data.shared_courses = [course]
+        fakeImport.commitImport.mockRejectedValueOnce(new Error("The save was refused."))
+        render(<ImportSheet plan={planMine(outline)} name="web.pdf" />)
+        fireEvent.click(importButton())
+        expect(await screen.findByText(/^Nothing was saved\. The save was refused\./)).toBeTruthy()
+        expect(fake.overlay.closeSheet).not.toHaveBeenCalled()
+        /* the two items, and the new course they go under (kept, so imported too) */
+        expect(screen.getByRole("button", { name: "Import 3" })).toBeTruthy()
     })
 })
 

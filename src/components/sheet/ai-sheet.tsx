@@ -114,7 +114,7 @@ function Importer({ bar }: { bar: boolean }) {
                             className="block h-[5px] w-[60px] flex-none overflow-hidden rounded-[3px] bg-border">
                             <span style={{ width: Math.min(100, Math.round((left / reads) * 100)) + "%" }} className="block h-[5px] bg-primary" />
                         </span>
-                        <span>{none ? "No AI reads left today. They come back within a day of the first one." : left + " of " + reads + " AI reads left today · pasting a calendar or CSV doesn’t count"}</span>
+                        <span>{none ? "No AI reads left today. They come back 24 hours after your first read." : left + " of " + reads + " AI reads left today · pasting a calendar or CSV doesn’t count"}</span>
                     </div>
                 )}
                 <details className="text-[12.5px] text-ink-2">

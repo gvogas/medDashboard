@@ -7,9 +7,10 @@ const fake = vi.hoisted(() => ({
     sync: {} as { signedOut?: () => void },
     spotify: {} as { signedOut?: () => void },
     forgetReads: vi.fn(),
-    showSignIn: vi.fn(),
+  showSignIn: vi.fn(),
+  pending: 0,
 }))
-vi.mock("@/core/store", () => ({ data: {}, subscribe: vi.fn() }))
+vi.mock("@/core/store", () => ({ data: {}, subscribe: vi.fn(), pendingCount: () => fake.pending }))
 vi.mock("@/core/sync", () => ({ setOnPulled: vi.fn(), onUnauthenticated: (fn: () => void) => { fake.sync.signedOut = fn } }))
 vi.mock("@/core/model", () => ({ useTypePrefs: vi.fn() }))
 vi.mock("@/bridge", () => ({ notify: vi.fn() }))
@@ -40,4 +41,11 @@ describe("a session that ends on the server", () => {
             expect(fake.showSignIn).toHaveBeenCalledWith("Your session has ended. Sign in again.")
         })
     }
+  it("says edits not yet synced are kept here", () => {
+    fake.pending = 2
+    fake.showSignIn.mockClear()
+    fake.sync.signedOut!()
+    expect(fake.showSignIn).toHaveBeenCalledWith(expect.stringContaining("Edits not yet synced are kept on this device"))
+    fake.pending = 0
+  })
 })

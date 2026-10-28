@@ -30,7 +30,7 @@ describe("what Settings says", () => {
     it("puts the sync status in a sentence", () => {
         expect(syncLine({ state: "offline", pending: 2, message: "" })).toBe("Offline — 2 changes waiting to sync.")
         expect(syncLine({ state: "offline", pending: 0, message: "" })).toBe("Offline — everything is saved on this device.")
-        expect(syncLine({ state: "error", pending: 0, message: "server down" })).toBe("Sync problem: server down.")
+        expect(syncLine({ state: "error", pending: 0, message: "Check your connection and try again." })).toBe("Sync problem. Check your connection and try again.")
         expect(syncLine({ state: "syncing", pending: 1, message: "" })).toBe("Syncing…")
         expect(syncLine({ state: "idle", pending: 0, message: "", lastPull: 1_000_000 }, 1_000_000 + 5 * 60_000)).toBe("Synced 5 min ago.")
         expect(syncLine({ state: "idle", pending: 0, message: "" })).toBe("Synced.")

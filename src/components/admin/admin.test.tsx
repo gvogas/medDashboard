@@ -80,12 +80,15 @@ describe("the Admin page", () => {
         /* each row button says whose it is */
         expect(screen.getByRole("button", { name: "Delete sam" })).toBeTruthy()
         expect(screen.getByRole("button", { name: "Sign out sam" })).toBeTruthy()
+        /* no sign-out or new password on your own row */
+        expect(screen.queryByRole("button", { name: "Sign out george" })).toBeNull()
+        expect(screen.queryByRole("button", { name: "New password" })).toBeNull()
         expect(screen.getByRole("button", { name: "Unlock" })).toBeTruthy()
     })
 
     it("shows every kind of error, and picks out one kind", async () => {
         const at = Date.now() - 60_000
-        const g = (kind: string, method: string, route: string, status: number, message: string) => ({ kind, method, route, status, message, count: 2, last: at, first: at - 1, users: 1 })
+        const g = (kind: string, method: string, route: string, status: number, message: string) => ({ kind, method, route, status, message, count: 2, last: at, first: at - 1, users: 1, anon: 0 })
         admin.errors.mockResolvedValue({
             groups: [g("server", "GET", "/api/items", 500, "D1 is down"), g("request", "POST", "/api/rooms", 429, "rate_limited"),
                 g("browser", "BROWSER", "/study", 0, "react: TypeError: x is undefined"), g("nightly", "CRON", "cron/rooms", 500, "busy")],
@@ -133,6 +136,16 @@ describe("the Admin page", () => {
         await waitFor(() => expect(admin.remove).toHaveBeenCalledWith("u-sam", "sam"))
     })
 
+    it("signs someone out only after a second click", async () => {
+        admin.revoke.mockResolvedValue(null)
+        render(<AdminPage />)
+        fireEvent.click(screen.getByRole("tab", { name: "Accounts" }))
+        fireEvent.click(await screen.findByRole("button", { name: "Sign out sam" }))
+        expect(admin.revoke).not.toHaveBeenCalled()
+        fireEvent.click(screen.getByRole("button", { name: "Sign out everywhere" }))
+        await waitFor(() => expect(admin.revoke).toHaveBeenCalledWith("u-sam"))
+    })
+
     it("switches features into maintenance with a message, and says which are on", async () => {
         admin.maintenance.mockResolvedValue({ maintenance: { features: ["week"], message: "", updatedAt: Date.now() - 60_000, updatedBy: "george" } })
         render(<AdminPage />)
@@ -151,7 +164,7 @@ describe("the Admin page", () => {
         fireEvent.click(screen.getByRole("button", { name: "Save" }))
         await waitFor(() => expect(admin.setMaintenance).toHaveBeenCalledWith(["spotify"], "Back by 9 pm."))
         expect(await screen.findByText(/On now: Music/)).toBeTruthy()
-        expect(toast).toHaveBeenCalledWith(expect.stringMatching(/next sync/))
+        expect(toast).toHaveBeenCalledWith(expect.stringMatching(/5 minutes/))
     })
 
     it("says when nothing is in maintenance, and why a save was refused", async () => {
@@ -161,7 +174,7 @@ describe("the Admin page", () => {
         fireEvent.click(screen.getByRole("tab", { name: "Maintenance" }))
         expect(await screen.findByText("Nothing is in maintenance.")).toBeTruthy()
         fireEvent.click(screen.getByRole("switch", { name: "Whole app" }))
-        fireEvent.click(screen.getByRole("button", { name: "Save" }))
+        fireEvent.click(await screen.findByRole("button", { name: "Turn on for everyone" }))
         expect(await screen.findByRole("alert")).toBeTruthy()
         expect(screen.getByRole("alert").textContent).toMatch(/280 characters/)
     })

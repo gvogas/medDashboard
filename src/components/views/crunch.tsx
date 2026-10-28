@@ -4,7 +4,7 @@
 import { cn } from "@/lib/utils"
 import type { Crunch } from "@/core/workload"
 
-/** One line under a panel's header: "Heavy stretch: 3 exams the week of 12 Oct · 2 tests on Tue 13 Oct". */
+/** One line under a panel's header: "Heavy stretch: 3 exams the week of 12 Oct · 2 exams or quizzes on Tue 13 Oct". */
 export function CrunchBand({ list, className }: { list: Crunch[]; className?: string }) {
     if (!list.length) return null
     const lines = [...new Set(list.map((c) => c.text))]

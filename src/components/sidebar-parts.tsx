@@ -74,7 +74,7 @@ export function Eye({ source, name, off }: { source: string; name: string; off: 
         <button
             type="button"
             aria-pressed={off}
-            aria-label={(off ? "Show " : "Hide ") + name + " on your calendar"}
+            aria-label={"Hide " + name + " on your calendar"}
             title={off ? "Hidden from your Week and Month" : "Hide from your Week and Month"}
             onClick={() => void toggleSource(source)}
             className={cn(

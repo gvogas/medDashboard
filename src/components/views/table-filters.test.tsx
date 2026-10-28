@@ -86,7 +86,7 @@ describe("the type chips", () => {
     it("with every type showing, a click shows only that one, and the table follows", () => {
         fake.data.items = [item("an exam", "exam", "todo"), item("a lab", "lab", "todo")]
         render(<TableView />)
-        expect(rowIds()).toEqual(["an exam", "a lab"])
+        expect(rowIds().sort()).toEqual(["a lab", "an exam"])
         fireEvent.click(typeChips().getByRole("button", { name: /Labs/ }))
         expect(pressedTypes()).toEqual(["Labs"])
         expect(rowIds()).toEqual(["a lab"])
@@ -205,7 +205,7 @@ describe("the Source select", () => {
     it("a space you are no longer in shows every row, and the select says Everything", () => {
         fake.ui.source = "space:gone00000001"
         render(<TableView />)
-        expect(rowIds()).toEqual(["mine", "filed"])
+        expect(rowIds().sort()).toEqual(["filed", "mine"])
         expect(source().value).toBe("all")
     })
 

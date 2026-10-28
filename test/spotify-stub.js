@@ -208,10 +208,17 @@ async function pushService(request, url) {
   return new Response(null, { status: ok ? 201 : 500 });
 }
 
+// Turnstile's siteverify: only the test secret, with the token 'pass', succeeds.
+async function turnstile(request) {
+  const form = await request.formData();
+  return Response.json({ success: form.get('secret') === 'test-turnstile-secret' && form.get('response') === 'pass' });
+}
+
 export async function spotifyStub(request) {
   const url = new URL(request.url);
   if (url.host === 'fcm.googleapis.com' && request.method === 'POST') return pushService(request, url);
   if (url.host === 'accounts.spotify.com' && url.pathname === '/api/token' && request.method === 'POST') return token(request);
+  if (url.host === 'challenges.cloudflare.com' && url.pathname === '/turnstile/v0/siteverify' && request.method === 'POST') return turnstile(request);
   if (url.host === 'api.spotify.com') return player(request, url);
   return new Response('outbound fetch blocked in tests: ' + request.url, { status: 502 });
 }

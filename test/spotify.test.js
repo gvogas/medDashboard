@@ -96,7 +96,7 @@ describe('GET /api/spotify/callback', () => {
   it('handles Spotify saying no, and a bad code, without storing anything', async () => {
     const { api, id, state, stateCookie } = await start('cb-denied');
     let res = await api(`/api/spotify/callback?error=access_denied&state=${state}`, { redirect: 'manual', headers: { cookie: stateCookie } });
-    expect(res.headers.get('location')).toBe(`${BASE}/#spotify=error`);
+    expect(res.headers.get('location')).toBe(`${BASE}/#spotify=denied`);
     res = await api(`/api/spotify/callback?code=bad&state=${state}`, { redirect: 'manual', headers: { cookie: stateCookie } });
     expect(res.headers.get('location')).toBe(`${BASE}/#spotify=error`);
     expect(await tokenRow(id)).toBeNull();

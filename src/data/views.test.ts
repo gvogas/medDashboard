@@ -228,7 +228,7 @@ describe("the table", () => {
         expect(ids("title")).toEqual(["a", "b", "c"])
         expect(ids("type")).toEqual(["a", "c", "b"])
         expect(ids("course")).toEqual(["a", "b", "c"])   /* no course sorts last */
-        expect(ids("status")).toEqual(["c", "b", "a"])   /* Open, Scheduled, Submitted */
+        expect(ids("status")).toEqual(["b", "c", "a"])   /* To do first (Scheduled and Open tie, then the title), then Submitted */
     })
 
     const rows = (f: Partial<TableFilters>) => tableRows(list, [anat, phys], { ...TABLE, ...f }, { key: "date", dir: 1 }).map((x) => x.id)

@@ -48,7 +48,7 @@ export function SettingsSheet({ tab, focus }: { tab: SettingsTab; focus: string 
     return (
         <>
             <SheetHead kind="Settings" onClose={closeSheet}>
-                <span className="text-[11px] text-muted-foreground">saved as you type</span>
+                <span className="text-[11px] text-muted-foreground">saved as you change; quotes need Add</span>
             </SheetHead>
             <div role="group" aria-label="Settings sections" className="mx-4 mt-2.5 flex gap-0.5 rounded-[10px] bg-muted p-0.5">
                 {TABS.map(([id, label]) => (

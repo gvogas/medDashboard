@@ -3,7 +3,7 @@
 import { useEffect, useState, type ReactNode } from "react"
 import { cn } from "@/lib/utils"
 import { normalizePrefs } from "@/core/model"
-import { state as spotify } from "@/data/spotify/player"
+import { account, state as spotify, premiumMissing } from "@/data/spotify/player"
 import { state as web } from "@/data/spotify/web-player"
 import { api, spotifyRetryAt } from "@/core/api"
 import { savePrefs } from "@/data/study-controller"
@@ -64,7 +64,7 @@ function RemindersGroup({ profile }: { profile: Profile }) {
         <Group title="Reminders" state={state === "on" ? "on this device" : null} id="remindersGrp">
             <label className="flex items-center gap-2 text-[12.5px] text-ink-2">
                 <input type="checkbox" checked={p.alarms} className="accent-[var(--accent)]" onChange={(e) => void savePrefs({ alarms: e.target.checked })} />
-                <span>Alerts in the calendar feed: a day and an hour before each exam, quiz and deadline</span>
+                <span>Alerts in Apple Calendar only: a day and an hour before each exam, quiz and deadline</span>
             </label>
             <label className="flex items-center gap-2 text-[12.5px] text-ink-2">
                 <input type="checkbox" checked={state === "on"} disabled={!canSwitch || busy} className="accent-[var(--accent)]"
@@ -96,13 +96,15 @@ function RemindersGroup({ profile }: { profile: Profile }) {
 function FeedGroup() {
     const f = useUi((u) => u.feed)
     const set = (next: Feed | null) => { ui.feed = next; notify() }
-    useEffect(() => {
-        if (ui.feed) return
+    const load = () => {
         set({ loading: true })
         api.calendarFeed().then(
             (r: Feed) => set({ ...r }),
-            () => set({ on: false, error: "Could not check the calendar feed. Try again when you are online." }),
+            () => set({ error: "Could not check the calendar link. Try again when you are online." }),
         )
+    }
+    useEffect(() => {
+        if (!ui.feed) load()
     }, [])
     const change = async (call: () => Promise<unknown>, off: boolean) => {
         const was = ui.feed || {}
@@ -115,15 +117,22 @@ function FeedGroup() {
         }
     }
     const copy = async (link: string) => {
-        try { await navigator.clipboard.writeText(link) } catch { (document.getElementById("feedUrl") as HTMLInputElement | null)?.select() }
+        try {
+            await navigator.clipboard.writeText(link)
+        } catch {
+            (document.getElementById("feedUrl") as HTMLInputElement | null)?.select()
+            set({ ...ui.feed, error: "Could not copy the link. It is selected: copy it by hand." })
+            return
+        }
         const now = ui.feed
         set({ ...now, copied: true })
         setTimeout(() => { if (ui.feed && ui.feed.url === now?.url) set({ ...ui.feed, copied: false }) }, 2000)
     }
 
-    const state = !f || f.loading ? "checking" : f.on ? "on" : "off"
+    const state = !f || f.loading ? "checking" : f.on ? "on" : f.on === false ? "off" : null
     let body: ReactNode
     if (!f || f.loading) body = <Hint>Checking…</Hint>
+    else if (f.on === undefined) body = <Row><Button variant="ghost" onClick={() => load()}>Try again</Button></Row>
     else if (f.on && f.url) {
         const link = feedLink(f.url, timeZone()), webcal = link.replace(/^https?:/, "webcal:")
         body = <>
@@ -153,11 +162,11 @@ function FeedGroup() {
                     <Button variant="ghost" onClick={() => set({ ...f, confirm: "stop" })}>Turn off</Button>
                 </Row>
             )}
-            <Hint>Deadlines, exams, quizzes and your weekly classes. Keep the link private: anyone who has it can see your schedule. Google refreshes it every few hours, so changes can take up to a day to show there.</Hint>
+            <Hint>Deadlines, exams, quizzes, labs, tutorials, office hours, tasks, team projects and your weekly classes. Keep the link private: anyone who has it can see your schedule. Google refreshes it every few hours, so changes can take up to a day to show there.</Hint>
         </>
     } else {
         body = <>
-            <Hint>See your deadlines, exams, quizzes and classes in Google or Apple Calendar. It updates by itself as you change things here.</Hint>
+            <Hint>See your deadlines, exams, quizzes, labs, tutorials, office hours, tasks, team projects and your weekly classes in Google or Apple Calendar.</Hint>
             <Row><Button disabled={!!f.busy} onClick={() => void change(() => api.calendarRenew(), false)}>Create a calendar link</Button></Row>
         </>
     }
@@ -193,9 +202,13 @@ function SpotifyGroup() {
             {on && retry > 0 && <Hint>Your account is connected. Spotify requests are paused until {new Date(retry).toLocaleString()}.</Hint>}
             {on && web.status === "needs_reconnect" && <Hint error>Reconnect Spotify to play in this browser. <a href="/api/spotify/connect">Reconnect</a></Hint>}
             {on && web.status === "ready" && <Hint>This tab is a Spotify device called <b>Term</b>: press play here and it plays here.</Hint>}
-            {note === "error" && <Hint error>Spotify did not connect. Try again.</Hint>}
+            {note === "error" && <Hint error>Spotify did not connect. Make sure your Spotify email is on the app's allowlist. Trying again alone will not help.</Hint>}
+            {note === "denied" && <Hint>You said no to Spotify, so nothing changed. Connect again whenever you like.</Hint>}
             {note === "connected" && <span className="text-[11.5px] text-[var(--good)]">Connected. The badge on the coat shows what is playing.</span>}
-            <Hint>Controls need Spotify Premium; free accounts still see what is playing.{on ? "" : " The owner of the Term app has to add your Spotify email to it first, so ask before connecting."}</Hint>
+            {account.lost && <Hint error>Spotify disconnected. Connect again to keep playing.</Hint>}
+            {on && account.reconnect && <Hint error>Spotify needs a fresh connection. <a href="/api/spotify/connect">Reconnect</a></Hint>}
+            {on && web.status === "unsupported" && <Hint>Spotify cannot play in this browser. Use a desktop browser or the Spotify app.</Hint>}
+            {premiumMissing() ? <Hint error>Controls need Spotify Premium. Free accounts still see what is playing.</Hint> : <Hint>Controls need Spotify Premium; free accounts still see what is playing.{on ? "" : " The owner of the Term app has to add your Spotify email to it first, so ask before connecting."}</Hint>}
         </Group>
     )
 }

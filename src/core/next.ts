@@ -81,10 +81,10 @@ export function reasonFor(it: Ranked, days: number, prep: Pace | null): string {
 }
 
 /**
- * The open items worth doing now, best first, at most `limit`. Ties go to the earlier
- * date, then the earlier time, then the title.
+ * Every open item worth doing now, best first. Ties go to the earlier date, then the
+ * earlier time, then the title.
  */
-export function upNext<T extends Ranked>(items: T[], today: string, limit = NEXT_SHOWN): NextRow<T>[] {
+export function upNext<T extends Ranked>(items: T[], today: string): NextRow<T>[] {
   const rows: NextRow<T>[] = [];
   for (const it of items) {
     if (!it.date || it.recur === 'weekly' || it.type === 'office' || !isOpen(it)) continue;
@@ -102,5 +102,4 @@ export function upNext<T extends Ranked>(items: T[], today: string, limit = NEXT
   return rows
     .sort((a, b) => b.score - a.score || a.item.date.localeCompare(b.item.date)
       || (a.item.start || a.item.end || '~').localeCompare(b.item.start || b.item.end || '~') || a.item.title.localeCompare(b.item.title))
-    .slice(0, limit);
 }

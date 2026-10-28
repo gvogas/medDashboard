@@ -360,7 +360,7 @@ describe("the item sheet", () => {
         fake.data.items = [...fake.data.items, item({ id: "e1", type: "exam", title: "Anatomy midterm" })]
         show()
         open({ kind: "new-item", draft: item({ id: "n4", type: "quiz", title: "Histo quiz" }) })
-        expect(within(dialog()).getByText("This makes 2 tests on Wed 23 Sep").getAttribute("role")).toBe("status")
+        expect(within(dialog()).getByText("This makes 2 exams or quizzes on Wed 23 Sep").getAttribute("role")).toBe("status")
         await act(async () => fireEvent.click(screen.getByRole("button", { name: "Save item" })))
         expect(fake.data.items.map((x) => x.id)).toContain("n4")
     })

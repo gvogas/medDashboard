@@ -20,7 +20,8 @@ export interface ImportRow { type: string; course: string; courseName?: string; 
 /** What the plan is checked against: the store's courses and items. */
 export interface PlanData { courses?: (Pick<Course, 'id' | 'code' | 'name' | 'color' | 'meetings'> & { term?: string; archived?: boolean })[]; items?: Pick<Item, 'type' | 'title' | 'date' | 'start' | 'courseId' | 'recur' | 'weekday'>[] }
 
-export interface PlanMeeting extends Meeting { include: boolean }
+/* edited: the person set include by hand; a rebuilt plan carries only those ticks */
+export interface PlanMeeting extends Meeting { include: boolean; edited?: boolean }
 export interface PlanCourse {
   id: string; code: string; name: string; color: string; isNew: boolean; meetings: PlanMeeting[];
   /* the classes it already has, while planning */
@@ -34,7 +35,7 @@ export interface PlanCourse {
 /** An item to create, ready for normalizeItem(). */
 export interface PlanRow { type: string; title: string; courseId: string | null; date: string; start: string; end: string; where: string; status: string; weight: number | null; recur?: 'weekly'; weekday?: number }
 /** An item to create; against a class (src/data/class-import.ts), `match` is the class's item it would change and `was` what that item says now. */
-export interface PlanItem { include: boolean; duplicate?: boolean; week?: number; row: PlanRow; match?: string; was?: string }
+export interface PlanItem { include: boolean; edited?: boolean; duplicate?: boolean; week?: number; row: PlanRow; match?: string; was?: string }
 export interface Plan { courses: PlanCourse[]; items: PlanItem[]; notes: string[]; week1?: string; termStart?: string; kind?: 'outline' | 'schedule'; outline?: Outline }
 
 /** A course outline as the Worker reads it (worker/outline.js). */

@@ -35,7 +35,7 @@ describe("the sync button", () => {
             [{ state: "idle" }, "Synced"],
             [{ state: "pending" }, "Saving…"],
             [{ state: "syncing" }, "Syncing…"],
-            [{ state: "offline", pending: 3 }, "Offline · 3"],
+            [{ state: "offline", pending: 3 }, "Offline · 3 changes waiting"],
             [{ state: "error", message: "Server said no" }, "Sync problem"],
             [{ state: "signed-out" }, "Signed out"],
         ]

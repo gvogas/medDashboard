@@ -4,15 +4,15 @@
 import { useState } from "react"
 import { cn } from "@/lib/utils"
 import { isOpen, isOverdue, isTest, tmeta } from "@/core/model"
-import { addDays, hhmm, iso, monday, parse, today, DOW } from "@/core/dates"
+import { addDays, hhmm, iso, parse, DOW } from "@/core/dates"
 import { crunchesOn, type Crunch } from "@/core/workload"
 import { courseByKey, courseKeyOf, keyOf } from "@/data/effective"
 import { SourceMark } from "./source-mark"
-import { useWeek, tintOf, type Day, type Entry } from "@/data/views"
+import { nextOfficeHour, useWeek, tintOf, type Day, type Entry } from "@/data/views"
 import { useCrunches } from "@/data/next"
 import { CrunchBand, CrunchTag } from "./crunch"
 import { UpNext } from "./up-next"
-import { newItemOn, openItem, quickAddTask, toggleTask } from "@/data/actions"
+import { newItemOn, openItem, quickAddTask, setView, toggleTask } from "@/data/actions"
 import type { Item } from "@/data/types"
 import { accent, classTitle, Empty, hasSchoolTags, HeadNote, Panel, ScheduleTabs, SchoolTags, statusText, Steps, TINT } from "./bits"
 import { useWeekLayout } from "@/data/agenda"
@@ -21,17 +21,17 @@ import { useNeedsSetup } from "@/data/setup"
 import { Setup } from "./setup"
 
 export function WeekView() {
-    const { week, officeHours, tasks, empty, schedule } = useWeek()
+    const { week, officeHours, tasks, empty, filtered, schedule } = useWeek()
     const layout = useWeekLayout()
     const setup = useNeedsSetup()
     const n = week.count
     /* the whole week's crunches, even while a search leaves days out */
-    const from = iso(monday(parse(week.days[0]?.date ?? today())))
+    const from = week.start
     const crunch = useCrunches(from, iso(addDays(parse(from), 6)))
     const side = (
         <div className="grid min-w-0 gap-[13px]">
             <OfficeHours rows={officeHours} />
-            <Tasks list={tasks.shown} open={tasks.open} />
+            <Tasks list={tasks.shown} open={tasks.open} total={tasks.total} />
         </div>
     )
 
@@ -56,7 +56,9 @@ export function WeekView() {
                 {week.days.map((d) => <DayRow key={d.date} day={d} crunch={crunchesOn(crunch, d.date).filter((c) => c.kind !== "week")} />)}
                 {!week.any && (empty
                     ? <Empty title="Nothing here yet">Add a course from the sidebar, then a first item with “New item”.</Empty>
-                    : <Empty title="No matches this week">Try clearing the search or a filter.</Empty>)}
+                    : filtered
+                        ? <Empty title="No matches this week">Try clearing the search or a filter.</Empty>
+                        : <Empty title="Nothing scheduled this week" />)}
             </Panel>
 
             {side}
@@ -158,6 +160,7 @@ function EntryRow({ entry }: { entry: Entry }) {
 }
 
 function OfficeHours({ rows }: { rows: Item[] }) {
+    const next = nextOfficeHour(rows, new Date())
     return (
         <Panel label="Office hours" title="Office hours" head={<HeadNote>weekly</HeadNote>}>
             {rows.length === 0 && <Empty>None yet</Empty>}
@@ -169,7 +172,7 @@ function OfficeHours({ rows }: { rows: Item[] }) {
                         <li key={keyOf(it)}>
                             <button type="button" onClick={() => openItem(keyOf(it))}
                                 className="flex w-full cursor-pointer items-start gap-2 border-0 border-b border-line-2 bg-transparent px-3.5 py-2 text-left font-[inherit] last:border-b-0 hover:bg-muted">
-                                {i === 0 && <NextMark />}
+                                {keyOf(it) === next && <NextMark />}
                                 <span className="min-w-0 flex-1">
                                     <span className="block text-[12.5px] font-semibold text-foreground">{it.title.replace(" — office hours", "")}</span>
                                     <span className="block text-[11px] text-muted-foreground">{it.dept || c?.code || ""}</span>
@@ -187,7 +190,7 @@ function OfficeHours({ rows }: { rows: Item[] }) {
     )
 }
 
-function Tasks({ list, open }: { list: Item[]; open: number }) {
+function Tasks({ list, open, total }: { list: Item[]; open: number; total: number }) {
     const [text, setText] = useState("")
     return (
         <Panel label="Tasks" title="Tasks" head={<HeadNote>{open} open</HeadNote>}>
@@ -218,6 +221,12 @@ function Tasks({ list, open }: { list: Item[]; open: number }) {
                     )
                 })}
             </ul>
+            {total > list.length && (
+                <button type="button" onClick={() => setView("table")}
+                    className="block w-full cursor-pointer border-0 bg-transparent px-3.5 pt-1.5 pb-0 text-left font-[inherit] text-[11.5px] text-muted-foreground hover:text-foreground">
+                    +{total - list.length} more in All items
+                </button>
+            )}
             <div className="px-3.5 pt-1.5 pb-3">
                 <input
                     type="text"
@@ -233,7 +242,7 @@ function Tasks({ list, open }: { list: Item[]; open: number }) {
                         setText("")
                         void quickAddTask(title)
                     }}
-                    className="w-full rounded-lg border border-border bg-card px-2.5 py-1.5 font-[inherit] text-[12.5px] text-foreground outline-none placeholder:text-muted-foreground focus:border-[var(--accent)]"
+                    className="w-full rounded-lg border border-border bg-card px-2.5 py-1.5 font-[inherit] text-[12.5px] text-foreground placeholder:text-muted-foreground focus:border-[var(--accent)]"
                 />
             </div>
         </Panel>

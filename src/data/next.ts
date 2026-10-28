@@ -8,7 +8,7 @@
 import { useMemo, useSyncExternalStore } from "react"
 import { getVersion, subscribe } from "@/bridge"
 import { today as todayIso } from "@/core/dates"
-import { upNext, NEXT_SHOWN, type NextRow } from "@/core/next"
+import { upNext, type NextRow } from "@/core/next"
 import { crunches, crunchHint, type Crunch } from "@/core/workload"
 import { useItems, useCourses, useProfile } from "./store"
 import { courseByKey, courseKeyOf, effectiveItems, forStats, onCalendar, type EffectiveCourse, type EffectiveItem } from "./effective"
@@ -32,10 +32,10 @@ function useWork(): { rows: EffectiveItem[]; today: string } {
         [items, courses, profile, today])
 }
 
-/** The Up next panel's rows, best first. */
-export function useUpNext(limit = NEXT_SHOWN): NextEntry[] {
-    const { rows, today } = useWork()
-    return useMemo(() => upNext(rows, today, limit).map((r) => ({ ...r, course: courseByKey(courseKeyOf(r.item)) })), [rows, today, limit])
+/** The Up next panel's rows, best first: every one that qualifies. */
+export function useUpNext(): NextEntry[] {
+  const { rows, today } = useWork()
+  return useMemo(() => upNext(rows, today).map((r) => ({ ...r, course: courseByKey(courseKeyOf(r.item)) })), [rows, today])
 }
 
 /** The crunches touching [from, to]. */

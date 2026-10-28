@@ -2,21 +2,36 @@
 // the last error (src/data/signin.ts); submitting calls
 // its signIn(), which reloads on success or shows the form again with the reason.
 
-import { useEffect, useRef, useState, type FormEvent } from "react"
+import { useEffect, useReducer, useRef, useState, type FormEvent } from "react"
 import { signIn } from "@/data/session"
 import { useSignInState } from "@/data/signin"
 import { Card } from "@/components/ui/card"
 import { TextureButton } from "@/components/ui/texture-button"
+import { SignInCheck } from "@/components/sign-in-check"
 
 const field =
     "w-full rounded-[10px] border border-border bg-card px-3 py-2 text-[15px] text-foreground outline-none transition-colors focus:border-primary focus:ring-2 focus:ring-primary/25"
 const label = "mt-1 text-left text-xs font-medium text-muted-foreground"
 
 export function SignIn() {
-    const { error, username: kept, shown } = useSignInState()
+    const { error, username: kept, shown, lockedUntil, captchaSiteKey } = useSignInState()
     const [username, setUsername] = useState(kept)
     const [password, setPassword] = useState("")
     const [busy, setBusy] = useState(false)
+    // The CAPTCHA token for a locked sign-in: single use, so the check is redrawn after each submit.
+    const [captcha, setCaptcha] = useState("")
+    const [round, setRound] = useState(0)
+    const [, tick] = useReducer((n: number) => n + 1, 0)
+    const locked = lockedUntil > Date.now()
+    const checkShown = locked && captchaSiteKey !== ""
+    // Re-render when the lock ends, so the form re-enables itself. A little past the wait,
+    // so a timer that fires a hair early still finds the lock over.
+    useEffect(() => {
+        const wait = lockedUntil - Date.now()
+        if (wait <= 0) return
+        const timer = setTimeout(tick, wait + 100)
+        return () => clearTimeout(timer)
+    }, [lockedUntil])
     const userRef = useRef<HTMLInputElement>(null)
     const passRef = useRef<HTMLInputElement>(null)
 
@@ -26,14 +41,18 @@ export function SignIn() {
         setUsername(kept)
         setPassword("")
         setBusy(false)
+        setCaptcha("")
+        setRound((r) => r + 1)
         ;(kept ? passRef : userRef).current?.focus()
     }, [shown, kept])
 
     function submit(e: FormEvent) {
         e.preventDefault()
-        if (busy) return
+        if (busy || (locked && !captcha)) return
         setBusy(true)
-        void signIn(username, password)
+        setCaptcha("")
+        if (locked) void signIn(username, password, captcha)
+        else void signIn(username, password)
     }
 
     return (
@@ -72,9 +91,11 @@ export function SignIn() {
                     className={field}
                 />
                 {error && <p role="alert" className="m-0 mt-1 text-left text-sm text-destructive">{error}</p>}
-                <TextureButton type="submit" variant="accent" size="lg" disabled={busy} className="mt-3 w-full disabled:opacity-70">
+                {checkShown && <SignInCheck key={round} siteKey={captchaSiteKey} onToken={setCaptcha} />}
+                <TextureButton type="submit" variant="accent" size="lg" disabled={busy || (locked && !captcha)} className="mt-3 w-full disabled:opacity-70">
                     {busy ? "Signing in…" : "Sign in"}
                 </TextureButton>
+                <p className="m-0 mt-2 text-center text-xs text-muted-foreground">Forgot your password? Ask whoever runs Term to reset it.</p>
             </form>
         </Card>
     )

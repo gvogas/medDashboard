@@ -20,7 +20,7 @@ export interface Crunch {
   from: string;
   to: string;
   count: number;
-  /** "2 tests on Tue 13 Oct", "3 exams the week of 12 Oct", "3 weighted deadlines in 48 hours" */
+  /** "2 exams or quizzes on Tue 13 Oct", "3 exams the week of 12 Oct", "3 weighted deadlines in 48 hours" */
   text: string;
 }
 
@@ -46,7 +46,7 @@ export function crunches(items: Loaded[], from: string, to: string): Crunch[] {
   /* day: tests by date */
   const tests = new Map<string, number>();
   for (const it of live) if (isTest(it.type) && it.date >= from && it.date <= to) tests.set(it.date, (tests.get(it.date) || 0) + 1);
-  for (const [date, n] of tests) if (n >= DAY_TESTS) out.push({ kind: 'day', from: date, to: date, count: n, text: n + ' tests on ' + shortDate(date) });
+  for (const [date, n] of tests) if (n >= DAY_TESTS) out.push({ kind: 'day', from: date, to: date, count: n, text: n + ' exams or quizzes on ' + shortDate(date) });
 
   /* week: exams by Monday, over the weeks the range touches */
   const lo = iso(monday(parse(from))), hi = to;
@@ -98,7 +98,7 @@ export function crunchHint(items: Loaded[], draft: Loaded): string | null {
   const mine = now.filter((c) => (c.kind === 'day' && isTest(draft.type)) || (c.kind === 'week' && isExam(draft)) || (c.kind === 'burst' && weighted(draft)));
   const hit = mine.find((c) => !was.some((w) => w.kind === c.kind && w.from === c.from && w.count >= c.count)) ?? null;
   if (!hit) return null;
-  if (hit.kind === 'day') return 'This makes ' + hit.count + ' tests on ' + shortDate(hit.from);
+  if (hit.kind === 'day') return 'This makes ' + hit.count + ' exams or quizzes on ' + shortDate(hit.from);
   if (hit.kind === 'week') return 'This makes ' + hit.count + ' exams the week of ' + dayMonth(hit.from);
   return 'This makes ' + hit.count + ' weighted deadlines within 48 hours';
 }

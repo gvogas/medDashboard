@@ -84,11 +84,16 @@ export function Sheet() {
         } else {
             /* back to what opened it, or its successor if a redraw replaced it */
             ;(refind(takeOpener()) as HTMLElement | null)?.focus()
+            /* nothing slides under reduced motion, so no transitionend comes: let go of what it showed now */
+            if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) setShown(null)
         }
     }, [open, state?.kind, state?.kind === "item" || state?.kind === "course" ? state.id : state?.kind === "session" || state?.kind === "achievement" ? state.draft.id : null])
 
     /* the item card is wider, with a smaller radius (spec §7); the other sheets keep theirs */
     const card = shown?.kind === "item" || shown?.kind === "new-item"
+
+    /* closed and let go: under reduced motion nothing slides, so the sheet leaves the DOM; otherwise it stays off-screen so the next open slides in */
+    if (shown === null && window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) return null
 
     return (
         <div

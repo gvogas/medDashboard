@@ -70,6 +70,16 @@ describe('POST /api/login', () => {
     });
     expect(res.status).toBe(400);
   });
+
+  it('says how many tries are left from the third wrong password, and not before', async () => {
+    await createUser('tries_left', 'Tries Left');
+    const bodies = [];
+    for (let i = 0; i < 5; i++) bodies.push(await (await login('tries_left', 'nope')).json());
+    expect(bodies[0]).toEqual({ error: 'bad_login' });
+    expect(bodies[1]).toEqual({ error: 'bad_login' });
+    expect(bodies[2]).toEqual({ error: 'bad_login', triesLeft: 2 });
+    expect(bodies[4]).toEqual({ error: 'bad_login', triesLeft: 0 });
+  });
 });
 
 describe('npm run user:add -- --reset / --delete', () => {

@@ -26,6 +26,9 @@
         : choice === 'light' ? false
         : !!(window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
       document.documentElement.setAttribute('data-app', dark ? 'dark' : 'light');
+      /* the browser's chrome takes the page background of the appearance (styles/tokens.css --bg) */
+      var meta = document.querySelector('meta[name="theme-color"]');
+      if (meta) meta.setAttribute('content', dark ? '#121312' : '#F6F5F1');
     };
     window.__roundsApplyTheme(pref);
   })();

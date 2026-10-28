@@ -62,7 +62,7 @@ export function Checklist({ item, onChange, fill, fillNote, autoFocus = false, o
                                 aria-label="Step"
                                 onChange={(e) => onChange(replace(s.id, { text: e.target.value }), true)}
                                 onBlur={onLeave}
-                                className={cn("min-w-0 flex-1 border-0 bg-transparent p-px font-[inherit] text-[12.5px] outline-none", s.done ? "text-[var(--done-ink)] line-through" : "text-foreground")}
+                                className={cn("min-w-0 flex-1 border-0 bg-transparent p-px font-[inherit] text-[12.5px]", s.done ? "text-[var(--done-ink)] line-through" : "text-foreground")}
                             />
                             <RemoveButton aria-label="Remove step" className="opacity-0 group-focus-within:opacity-100 group-hover:opacity-100 focus-visible:opacity-100 [@media(hover:none)]:opacity-100"
                                 onClick={() => remove(s)} />

@@ -1,7 +1,7 @@
 // The History card on the Study page's History tab: Week, Month and Term. The week is a
 // bar a day, split by course, against the goal, beside its sessions when the card is wide;
 // the month a calendar whose days open their sessions; the term a heatmap from its start,
-// whose days open their month. A deleted session waits in the card's foot for Undo,
+// whose picked day lists its sessions below. A deleted session waits in the card's foot for Undo,
 // whichever tab is showing.
 
 import { useEffect, useRef } from "react"
@@ -13,7 +13,7 @@ import { Button, Segmented } from "@/components/sheet/fields"
 import { pickDay, setHistTab, stepHist, undoSessionDelete, useHistory } from "@/data/study"
 import { deleteSession, openSession } from "@/data/actions"
 import type { HistTab, SessionUndo } from "@/data/types"
-import { courseCode, reduced, NavButton } from "./history-bits"
+import { courseCode, NavButton } from "./history-bits"
 import { WeekPane } from "./history-week"
 import { MonthPane } from "./history-month"
 import { TermPane } from "./history-term"
@@ -23,8 +23,6 @@ const TABS = [["week", "Week"], ["month", "Month"], ["term", "Term"]] as const
 export function HistoryCard() {
     const h = useHistory()
     const card = useRef<HTMLDivElement>(null)
-    /* a heatmap day, to bring into view once its month is drawn */
-    const reveal = useRef<string | null>(null)
     /* after ✕, focus goes to Undo; after Undo, to the session back in its place */
     const focusUndo = useRef(false)
     const restored = useRef<string | null>(null)
@@ -32,17 +30,11 @@ export function HistoryCard() {
     useEffect(() => {
         const root = card.current
         if (!root) return
-        if (reveal.current && h.tab === "month") {
-            const day = reveal.current
-            reveal.current = null
-            document.getElementById("hday-" + day)?.scrollIntoView({ block: "center", behavior: reduced() ? "auto" : "smooth" })
-            root.querySelector<HTMLElement>('[data-day="' + day + '"]')?.focus({ preventScroll: true })
-        }
         if (focusUndo.current && h.undo) {
             focusUndo.current = false
             root.querySelector<HTMLElement>("[data-undo]")?.focus()
         }
-        if (restored.current && !h.undo) {
+        if (restored.current && h.undo?.session.id !== restored.current) {
             const id = restored.current
             restored.current = null
             root.querySelector<HTMLElement>('[data-session="' + CSS.escape(id) + '"] [data-edit]')?.focus()
@@ -78,7 +70,7 @@ export function HistoryCard() {
                 <div className="@container flex flex-col gap-3.5 p-3.5">
                     {h.week && <WeekPane w={h.week} goal={h.goal} onDelete={remove} />}
                     {h.month && <MonthPane m={h.month} onDelete={remove} />}
-                    {h.term && <TermPane t={h.term} onPick={(date) => { reveal.current = date; pickDay(date) }} />}
+                    {h.term && <TermPane t={h.term} onPick={pickDay} onDelete={remove} />}
                 </div>
                 <div role="status">{h.undo && <UndoBar undo={h.undo} onUndo={undo} />}</div>
             </Panel>

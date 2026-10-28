@@ -29,6 +29,7 @@ vi.mock("@/core/store", () => ({
 
 import { notify } from "@/bridge"
 import { normalizeCourse, normalizeItem } from "@/core/model"
+import { NEXT_SHOWN } from "@/core/next"
 import { Views } from "./views"
 import { Stats } from "./stats"
 import { StatsHost, ViewsHost } from "@/components/shell"
@@ -374,6 +375,13 @@ describe("up next", () => {
         expect(upNext().queryByRole("button", { name: "Done: Lab report" })).toBeNull()
     })
 
+    it("shows at most NEXT_SHOWN rows, however many are due", () => {
+        fake.data.items = [...fake.data.items, ...Array.from({ length: 9 }, (_, i) =>
+            item({ id: "cap" + i, type: "task", title: "Extra task " + i, date: "2026-09-23" }))]
+        show(<Views />)
+        expect(upNext().getAllByRole("listitem")).toHaveLength(NEXT_SHOWN)
+    })
+
     it("folds away and remembers it, and says when nothing is urgent", () => {
         show(<Views />)
         const fold = upNext().getByRole("button", { name: "Hide" })
@@ -397,11 +405,11 @@ describe("up next", () => {
             item({ id: "e1", type: "exam", title: "Anatomy midterm", date: "2026-09-24" }),
             item({ id: "q1", type: "quiz", title: "Histo quiz", date: "2026-09-24" })]
         show(<Views />)
-        expect(schedule().getByRole("note").textContent).toBe("Heavy stretch:2 tests on Thu 24 Sep")
-        expect(schedule().getAllByRole("img", { name: "Busy: 2 tests on Thu 24 Sep" })).toHaveLength(1)
+        expect(schedule().getByRole("note").textContent).toBe("Heavy stretch:2 exams or quizzes on Thu 24 Sep")
+        expect(schedule().getAllByRole("img", { name: "Busy: 2 exams or quizzes on Thu 24 Sep" })).toHaveLength(1)
         set({ view: "month" })
-        expect(screen.getByRole("note").textContent).toContain("2 tests on Thu 24 Sep")
-        expect(screen.getByRole("button", { name: /^Thu 2026-09-24.*busy: 2 tests on Thu 24 Sep$/ })).toBeTruthy()
+        expect(screen.getByRole("note").textContent).toContain("2 exams or quizzes on Thu 24 Sep")
+        expect(screen.getByRole("button", { name: /^Thu 2026-09-24.*busy: 2 exams or quizzes on Thu 24 Sep$/ })).toBeTruthy()
     })
 
     it("marks a crowded day on the phone's Agenda too", () => {
@@ -413,8 +421,8 @@ describe("up next", () => {
                 item({ id: "q1", type: "quiz", title: "Histo quiz", date: "2026-09-24" })]
             show(<Views />)
             const agenda = within(screen.getByRole("region", { name: "Agenda" }))
-            expect(agenda.getByRole("note").textContent).toBe("Heavy stretch:2 tests on Thu 24 Sep")
-            expect(within(agenda.getByRole("listitem", { name: "Thu 24 Sep" })).getByRole("img", { name: "Busy: 2 tests on Thu 24 Sep" })).toBeTruthy()
+            expect(agenda.getByRole("note").textContent).toBe("Heavy stretch:2 exams or quizzes on Thu 24 Sep")
+            expect(within(agenda.getByRole("listitem", { name: "Thu 24 Sep" })).getByRole("img", { name: "Busy: 2 exams or quizzes on Thu 24 Sep" })).toBeTruthy()
         } finally {
             window.matchMedia = before
         }

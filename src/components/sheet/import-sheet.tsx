@@ -12,7 +12,7 @@ import { planSummary } from "@/core/importers/plan"
 import { notify } from "@/bridge"
 import { useUi } from "@/data/ui"
 import { effectiveItems } from "@/data/effective"
-import { commitImport, importCount, type ImportPlan, type PlanItem } from "@/data/import-edit"
+import { carryEdits, commitImport, importCount, type ImportPlan, type PlanItem } from "@/data/import-edit"
 import { classRows, commitNewClass, commitToClass, importTargets, NotDownloaded, planForClass, planMine, setWeekOne, type Target } from "@/data/class-import"
 import { ApiError } from "@/core/api"
 import { download, messageFor, openClass } from "@/data/classes"
@@ -52,6 +52,7 @@ export function ImportSheet({ plan: initial, name, target: given = { kind: "mine
         if (next.kind === "class") { const { course, items } = classRows(next.spaceId); fresh = planForClass(outline, course, items) }
         else fresh = planMine(outline)
         if (plan.week1 && plan.week1 !== fresh.week1 && fresh.items.some((i) => i.week)) setWeekOne(fresh, plan.week1, next)
+        carryEdits(plan, fresh)
         setTarget(next)
         setPlan(fresh)
     }
@@ -82,14 +83,13 @@ export function ImportSheet({ plan: initial, name, target: given = { kind: "mine
                 setBusy(false)
                 return
             }
-            if (target.kind === "mine") note = { text: "The import stopped part-way: " + (error as Error).message, error: true }
-            else {
-                /* the server's refusal or no connection, said as the class sheets say them; else what went wrong */
-                const text = error instanceof ApiError || error instanceof TypeError ? messageFor(error) : (error as Error).message
-                /* a new class that wasn't made: keep the preview, to try again */
-                if (target.kind === "new-class") { setSaid(text); setBusy(false); return }
-                note = { text, error: true }
-            }
+            /* the preview stays, with its ticks and edits, so the import can be tried again */
+            if (target.kind === "mine") { setSaid("Nothing was saved. " + (error as Error).message + " Your ticks are still here, so you can try again."); setBusy(false); return }
+            /* the server's refusal or no connection, said as the class sheets say them; else what went wrong */
+            const text = error instanceof ApiError || error instanceof TypeError ? messageFor(error) : (error as Error).message
+            /* a new class that wasn't made: keep the preview, to try again */
+            if (target.kind === "new-class") { setSaid(text); setBusy(false); return }
+            note = { text, error: true }
         }
         notify()
         /* a new class has opened its own sheet; one made here but downloaded late opens now */
@@ -154,7 +154,7 @@ export function ImportSheet({ plan: initial, name, target: given = { kind: "mine
                             <div>
                                 {c.meetings.map((m) => (
                                     <label key={m.id} className={ROW}>
-                                        <input type="checkbox" checked={m.include} onChange={(e) => { m.include = e.target.checked; redraw() }} />
+                                        <input type="checkbox" checked={m.include} onChange={(e) => { m.include = e.target.checked; m.edited = true; redraw() }} />
                                         <span className="min-w-[62px] flex-none text-ink-2">{m.kind}</span>
                                         <span>{DOW[m.weekday]} {m.start}–{m.end}{m.until ? " · ends " + dayMonth(m.until) : ""}</span>
                                         <span className={WHERE}>{m.room}</span>
@@ -186,7 +186,7 @@ function ItemRow({ it, types, onChange, toClass }: { it: PlanItem; types: { id: 
     const when = r.recur === "weekly" ? "every " + DOW[r.weekday ?? 0] : r.date ? shortDate(r.date) + (it.week ? " · wk " + it.week : "") : "week " + it.week
     return (
         <div className={ROW}>
-            <input type="checkbox" checked={it.include} disabled={!r.date} aria-label={"Import " + r.title} onChange={(e) => { it.include = e.target.checked; onChange() }} />
+            <input type="checkbox" checked={it.include} disabled={!r.date} aria-label={"Import " + r.title} onChange={(e) => { it.include = e.target.checked; it.edited = true; onChange() }} />
             <select aria-label="Type" value={r.type} onChange={(e) => { r.type = e.target.value; onChange() }}
                 className="max-w-[110px] flex-none rounded-md border border-transparent bg-muted px-1 py-0.5 font-[inherit] text-[12px] text-foreground hover:border-border">
                 {types.filter((t) => t.id === r.type || !t.hidden).map((t) => <option key={t.id} value={t.id}>{t.label}</option>)}

@@ -130,10 +130,10 @@ function FocusScreen({ run }: { run: Run }) {
                         type="button"
                         onClick={leaveFocus}
                         aria-keyshortcuts="Escape"
-                        title="Leave focus (Esc)"
+                        title="Hide focus (Esc)"
                         className="inline-flex cursor-pointer items-center gap-1.5 border-0 bg-transparent px-0.5 py-1 font-[inherit] text-[12.5px] font-semibold text-[var(--fx-ink-3)] hover:text-[var(--fx-ink)] [&_svg]:size-[15px]"
                     >
-                        <BackIcon />{inRoom ? "Back" : "Leave"}
+                        <BackIcon />Hide
                     </button>
                     {inRoom ? (
                         <label className="inline-flex max-w-full min-w-0 items-center gap-2 text-[12.5px] text-[var(--fx-ink-2)]">
@@ -203,7 +203,7 @@ function FocusScreen({ run }: { run: Run }) {
                         {inRoom && host && (ending
                             ? <GhostButton onClick={() => { setEnding(false); void hostClock("end") }} className={cn(music && "max-[700px]:hidden")}>End for everyone?</GhostButton>
                             : <GhostButton onClick={() => setEnding(true)} className={cn(music && "max-[700px]:hidden")}><StopIcon />End for everyone</GhostButton>)}
-                        <GhostButton onClick={() => void stopRun()} className={cn(music && "max-[700px]:hidden")}>{inRoom ? "Leave" : <><StopIcon />Stop &amp; log</>}</GhostButton>
+                        <GhostButton onClick={() => void stopRun()} className={cn(music && "max-[700px]:hidden")}>{inRoom ? "Leave room" : <><StopIcon />Stop &amp; log</>}</GhostButton>
                     </div>
                     {inRoom && <RoomLine run={run} />}
                     {inRoom && (

@@ -143,7 +143,8 @@ Conventions used throughout:
 | `study_flow` | JSON object | | The study timer's steps and rounds, below. |
 | `study_prefs` | JSON object | `{}` = defaults | Daily goal, streak rules, celebrations, feed alarms, lecture reviews and the first-run setup, below. |
 | `grading` | JSON object | `{}` = defaults | Your grading scale and pass marks, below. |
-| `feed_gen` | int \| null | > 0 | The calendar feed: a number while it is on, null when off. The feed URL carries an HMAC of the user id and this number, so bumping it retires every old link. |
+| `feed_gen` | int \| null | > 0 | The calendar feed's link number: it counts up each time a new link is made, and never goes back down. The feed URL carries an HMAC of the user id and this number, so making a new link retires every old one. |
+| `feed_off` | int 0/1 | default 0 | 1 while the calendar feed is turned off. Turning it off sets this flag and keeps `feed_gen`, so the number is never reused. |
 | `leaderboard` | int 0/1 | default 0 | Joined the study leaderboard (opt-in; only those who joined see it or are listed). |
 | `is_admin` | int 0/1 | default 0 | May open the Admin page. The first admin is made with `npm run user:add -- <name> --admin --remote`. |
 | `last_seen_day` | text \| null | `YYYY-MM-DD` | Last UTC day the person opened the app; written by `GET /api/me` at most once a day. |
@@ -984,6 +985,7 @@ purge below.
    | Every signed-in request | 600 a minute per account | `API_LIMITER`, keyed by the user id, after the session check |
    | Spotify routes | 60 a minute per account | `SPOTIFY_LIMITER`, counted only when the 600 admitted the request; `token`, `status`, `connect`, `callback` and the `GET player` poll are exempt (still under the 600) |
    | AI reads (outline, school calendar, schedule) | 10 a day per account (`outline_limit`) | `outline:<user>`, counted before the model runs |
+   | Browser crash reports | 30 an hour per account | `browser-error:<user>`, after the session check; no session gets `401` |
    | Calendar feed | 60 fetches an hour per link | |
    | Invites, join codes | 20 invites an hour, 10 join tries an hour | |
 

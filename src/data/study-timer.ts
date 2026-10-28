@@ -7,7 +7,7 @@ export {
     useRun, pickFor, useStudyPick, pickCourse, pickItem, startRun, togglePause, skip, stopRun, openFocus, leaveFocus, escapeFocus, toggleMusic,
 } from "./study-run"
 export {
-    labelOf, openTogether, startRoomRun, JOIN_SURE_MS, JOIN_ENDS_FIRST, joinRoomRun, pickRoomClass,
+    labelOf, openTogether, startRoomRun, JOIN_ENDS_FIRST, joinRoomRun, pickRoomClass,
 } from "./study-room"
 export type { Segment, NextLine } from "./study-flow"
 export {

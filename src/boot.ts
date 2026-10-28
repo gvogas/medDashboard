@@ -29,7 +29,8 @@ let booted = false
 /* The server ended the session (a 401): the sign-in, and the AI answers kept here go, as on any sign-out. */
 function sessionEnded() {
     forgetReads()
-    showSignIn("Your session has ended. Sign in again.")
+    const kept = store.pendingCount() > 0
+    showSignIn("Your session has ended. Sign in again." + (kept ? " Edits not yet synced are kept on this device and upload after you sign in as the same person." : ""))
 }
 
 /** Everything the page listens to, and then the account opens. Runs once. */

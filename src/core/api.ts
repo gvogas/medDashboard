@@ -50,6 +50,8 @@ export function bindAccount(id: string | null): void {
   if (accountId !== id) resetRequests();
   accountId = id;
 }
+/** Whether this page load has an account bound: a reload signs out, so it is false until sign-in. */
+export function signedIn(): boolean { return accountId !== null }
 
 /** Cancel in-flight and queued calls before changing accounts. */
 export function resetRequests(): void {
@@ -216,7 +218,7 @@ type ReadQuery = { name: string; today: string; termStart?: string; terms?: stri
 export const api = {
   me: () => record<ServerProfile & Row>(request('GET', '/api/me'), accountId),
   saveMe: (profile: Record<string, unknown> & { id?: string; revision?: number }) => record<ServerProfile & Row>(request('PUT', '/api/me', profile, match(profile.revision)), accountId || profile.id, profile.revision),
-  login: (username: string, password: string) => record<ServerProfile & Row>(request('POST', '/api/login', { username, password })),
+  login: (username: string, password: string, captcha?: string) => record<ServerProfile & Row>(request('POST', '/api/login', { username, password, ...(captcha !== undefined && { captcha }) })),
   signOut: () => empty(request('DELETE', '/api/session')),
   syncV3: changesV3,
   /* a class's or a project's course or item; `changed` is {field: value before} (spec §6 Push) */

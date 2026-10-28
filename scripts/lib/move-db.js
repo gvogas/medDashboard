@@ -7,7 +7,7 @@
    scripts/move-db.mjs refuses a target that holds any user, so a run that failed partway
    is never continued on top of itself. */
 export const TABLES = {
-  users: ['id', 'username', 'password_hash', 'pw_gen', 'display_name', 'coat_name', 'coat_role', 'coat_color', 'theme', 'bg', 'term_start', 'types', 'study_flow', 'feed_gen', 'study_prefs', 'school_calendar', 'leaderboard', 'is_admin', 'last_seen_day', 'hidden_sources', 'created_at', 'updated_at', 'revision', 'grading'],
+  users: ['id', 'username', 'password_hash', 'pw_gen', 'display_name', 'coat_name', 'coat_role', 'coat_color', 'theme', 'bg', 'term_start', 'types', 'study_flow', 'feed_gen', 'feed_off', 'study_prefs', 'school_calendar', 'leaderboard', 'is_admin', 'last_seen_day', 'hidden_sources', 'created_at', 'updated_at', 'revision', 'grading'],
   spaces: ['id', 'kind', 'archived', 'school_calendar', 'parent_space', 'parent_item', 'code_hash', 'code_expires', 'code_uses_left', 'created_at', 'updated_at', 'deleted_at', 'revision'],
   members: ['space_id', 'user_id', 'role', 'joined_at', 'updated_at', 'deleted_at', 'revision'],
   invites: ['space_id', 'user_id', 'invited_by', 'role', 'status', 'created_at', 'expires_at'],

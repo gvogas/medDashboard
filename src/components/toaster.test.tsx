@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest"
-import { act, cleanup, fireEvent, render, screen } from "@testing-library/react"
+import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react"
 import { Toaster } from "@/components/toaster"
 import { toast, hideToast } from "@/data/toast"
 import { stubMatchMedia } from "./test-media"
@@ -7,7 +7,8 @@ import { stubMatchMedia } from "./test-media"
 stubMatchMedia({ reducedMotion: false })
 
 afterEach(() => {
-    act(() => hideToast())
+    /* one hideToast takes one toast, and several can be up: clear them all */
+    act(() => { for (let i = 0; i < 10; i++) hideToast() })
     cleanup()
     vi.useRealTimers()
 })
@@ -36,9 +37,11 @@ describe("the toaster", () => {
         expect(screen.getByText("I").getAttribute("aria-hidden")).toBe("true")
         act(() => toast("Achievement unlocked: Mine", { badge: { sticker: "/s.png", group: "own", tier: "" } }))
         expect(document.querySelector('img[src="/s.png"]')).toBeTruthy()
-        act(() => toast("Achievement unlocked: Early bird", { undo: () => {}, label: "See", badge: { group: "days", tier: "I" } }))
-        expect(screen.getByRole("status").textContent).toContain("Early bird")
-        fireEvent.click(screen.getByRole("button", { name: "Dismiss" }))
+        /* each toast's own row: its ✕ takes that toast down and no other */
+        fireEvent.click(within(screen.getByText("Achievement unlocked: Mine").parentElement!).getByRole("button", { name: "Dismiss" }))
+        expect(screen.queryByText("Achievement unlocked: Mine")).toBeNull()
+        expect(screen.getByText("Achievement unlocked: Early bird")).toBeTruthy()
+        fireEvent.click(within(screen.getByText("Achievement unlocked: Early bird").parentElement!).getByRole("button", { name: "Dismiss" }))
         expect(screen.queryByText(/Early bird/)).toBeNull()
     })
 
