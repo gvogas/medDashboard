@@ -3,7 +3,7 @@
 // their next sync (GET /api/me); the Worker also refuses them Import with AI's reads and the
 // shared classes' routes (worker/maintenance.js). Their data keeps syncing throughout.
 
-import { useEffect, useId, useState } from "react"
+import { useId, useState } from "react"
 import { api } from "@/core/api"
 import { syncNow } from "@/core/sync"
 import type { Feature } from "@/core/maintenance"
@@ -34,11 +34,12 @@ export function MaintenanceTab() {
     const stored = current.data?.maintenance
     const [on, setOn] = useState<Feature[]>([]), [message, setMessage] = useState("")
     const [busy, setBusy] = useState(false), [error, setError] = useState<string | null>(null)
-    /* the form starts from what is saved, and again after each save */
-    useEffect(() => {
-        if (!stored) return
-        setOn(stored.features); setMessage(stored.message)
-    }, [stored])
+    /* the form starts from what is saved, and again after each save. Set during the render that
+       first shows it, not in an effect after: a switch flipped before such an effect ran was undone */
+    const [shown, setShown] = useState<Stored | undefined>()
+    if (stored && stored !== shown) {
+        setShown(stored); setOn(stored.features); setMessage(stored.message)
+    }
 
     const flip = (f: Feature, value: boolean) => setOn((list) => (value ? [...list, f] : list.filter((x) => x !== f)))
     const save = async () => {

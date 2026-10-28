@@ -240,11 +240,19 @@ describe('readSchedule, a screenshot', () => {
   });
 
   it('gives the picture model only what is left of the read deadline', async () => {
-    const ai = { run: vi.fn(() => new Promise(() => {})) };
-    const t0 = Date.now();
-    await expect(readSchedule(ai, { bytes: jpeg, type: 'image/png', today: '2026-09-01', deadline: t0 + 60 }))
-      .rejects.toMatchObject({ status: 504, body: { error: 'ai_timeout' } });
-    expect(Date.now() - t0).toBeLessThan(150);
+    /* on a fake clock: a wall-clock bound fails on a busy machine */
+    vi.useFakeTimers();
+    try {
+      const ai = { run: vi.fn(() => new Promise(() => {})) };
+      let err;
+      readSchedule(ai, { bytes: jpeg, type: 'image/png', today: '2026-09-01', deadline: Date.now() + 60 }).catch((e) => { err = e; });
+      await vi.advanceTimersByTimeAsync(59);
+      expect(err).toBeUndefined();
+      await vi.advanceTimersByTimeAsync(1);
+      expect(err).toMatchObject({ status: 504, body: { error: 'ai_timeout' } });
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('takes a type with parameters and image/jpg, and builds the data URI from the bare type', async () => {
