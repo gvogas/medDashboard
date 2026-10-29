@@ -49,6 +49,7 @@ export function SignInCheck({ siteKey, onToken }: { siteKey: string; onToken: (t
                 api,
                 id: api.render(ref.current, {
                     sitekey: siteKey,
+                    action: "login",   /* worker/captcha.js accepts only this action */
                     callback: report,
                     "expired-callback": () => report(""),
                     "error-callback": () => report(""),

@@ -92,6 +92,23 @@ describe("sign-in", () => {
         fireEvent.click(submit())
         expect(signIn).toHaveBeenCalledWith("maya", "secret", "tok")
     })
+
+    it("drops the lock's message and its check when the lock ends", () => {
+        vi.useFakeTimers()
+        try {
+            render(<SignIn />)
+            act(() => showSignInState({ error: "Sign-in for maya is locked for 1 min. Complete the check below to try again now.", username: "maya", lockedUntil: Date.now() + 60_000, captchaSiteKey: "site-key" }))
+            expect(screen.getByRole("alert").textContent).toMatch(/locked for 1 min/)
+            expect(screen.getByRole("button", { name: "Solve check" })).toBeTruthy()
+            act(() => { vi.advanceTimersByTime(60_200) })
+            expect(screen.queryByRole("alert")).toBeNull()
+            expect(screen.queryByRole("button", { name: "Solve check" })).toBeNull()
+            fireEvent.change(screen.getByLabelText("Password"), { target: { value: "secret" } })
+            expect((screen.getByRole("button", { name: "Sign in" }) as HTMLButtonElement).disabled).toBe(false)
+        } finally {
+            vi.useRealTimers()
+        }
+    })
 })
 
 describe("the sign-in screen and the app", () => {

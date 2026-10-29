@@ -36,6 +36,7 @@ export default defineConfig(async () => {
                   SPOTIFY_CLIENT_SECRET: 'test-client-secret',
                   TURNSTILE_SECRET: 'test-turnstile-secret',
                   TURNSTILE_SITE_KEY: 'test-turnstile-site-key',
+                  TURNSTILE_HOSTNAMES: 'rounds.test',
                   // A throwaway P-256 pair for push (test/push.test.js); never used anywhere else.
                   VAPID_PUBLIC_KEY: 'BFaIBBOLQ70QXU1DzpjiDtY5IdvjKKRcBmXhZW_HOz295FnevL7DEwFro64p2aPruAH4rFAr087Ups4PvWDDr58',
                   VAPID_PRIVATE_KEY: 'Cs4HmTxBoYcKMWGFRyhND7H91ITnKlmxKkjnh7h9sxo',

@@ -419,6 +419,30 @@ reminders off and on again. A device the push service says is gone, or that fail
 times in a row, is dropped. On an iPhone or iPad, push works only in the app added to
 the Home Screen.
 
+## Sign-in CAPTCHA (Turnstile)
+
+After five wrong passwords a username is locked (1 minute, doubling to an hour). A
+Cloudflare Turnstile check lets the real owner through the lock with the right password;
+nobody sees it otherwise. The widget was made in the Cloudflare dashboard (Turnstile →
+the Rounds widget, Managed mode). It needs three settings:
+
+- `TURNSTILE_SITE_KEY` in `wrangler.jsonc` `vars`: public, shown to the browser.
+- `TURNSTILE_HOSTNAMES` in `wrangler.jsonc` `vars`: the site's own hostnames, comma
+  separated. A token issued anywhere else is refused. Never list `localhost` here.
+- `TURNSTILE_SECRET`, set once with `npx wrangler secret put TURNSTILE_SECRET`.
+
+The Worker (`worker/captcha.js`) asks Cloudflare about each token and accepts it only for
+the sign-in widget (action `login`) on one of those hostnames. A token works once. Without
+the secret, a locked name simply stays locked until the wait is over.
+
+If a refused check is a puzzle, Workers Logs show `turnstile refused:` with Cloudflare's
+error codes: `invalid-input-secret` means the secret is wrong, `invalid-input-response` a
+bad or reused token. A different `hostname` there means `TURNSTILE_HOSTNAMES` (or the
+widget's domains in the dashboard) needs the new address.
+
+Locally `.dev.vars` has no `TURNSTILE_SECRET`, so a locked name stays locked until the
+wait is over, even if the check appears.
+
 ## Managing accounts
 
 There's no sign-up page, so you create every account yourself from the command line.

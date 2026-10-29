@@ -208,10 +208,15 @@ async function pushService(request, url) {
   return new Response(null, { status: ok ? 201 : 500 });
 }
 
-// Turnstile's siteverify: only the test secret, with the token 'pass', succeeds.
+// Turnstile's siteverify: only the test secret passes. Token 'pass' is a sign-in token from the
+// test site (action login, host rounds.test); 'pass-signup' has another action, 'pass-elsewhere'
+// another host. Anything else is an invalid token, as Cloudflare answers one.
 async function turnstile(request) {
   const form = await request.formData();
-  return Response.json({ success: form.get('secret') === 'test-turnstile-secret' && form.get('response') === 'pass' });
+  if (form.get('secret') !== 'test-turnstile-secret') return Response.json({ success: false, 'error-codes': ['invalid-input-secret'] });
+  const issued = { pass: ['login', 'rounds.test'], 'pass-signup': ['signup', 'rounds.test'], 'pass-elsewhere': ['login', 'evil.example'] }[form.get('response')];
+  if (!issued) return Response.json({ success: false, 'error-codes': ['invalid-input-response'] });
+  return Response.json({ success: true, action: issued[0], hostname: issued[1], 'error-codes': [] });
 }
 
 export async function spotifyStub(request) {

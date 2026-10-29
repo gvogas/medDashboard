@@ -24,6 +24,8 @@ export function SignIn() {
     const [, tick] = useReducer((n: number) => n + 1, 0)
     const locked = lockedUntil > Date.now()
     const checkShown = locked && captchaSiteKey !== ""
+    // A lock's message (it comes with lockedUntil) is out of date once the lock has passed.
+    const message = lockedUntil && !locked ? "" : error
     // Re-render when the lock ends, so the form re-enables itself. A little past the wait,
     // so a timer that fires a hair early still finds the lock over.
     useEffect(() => {
@@ -90,7 +92,7 @@ export function SignIn() {
                     onChange={(e) => setPassword(e.target.value)}
                     className={field}
                 />
-                {error && <p role="alert" className="m-0 mt-1 text-left text-sm text-destructive">{error}</p>}
+                {message && <p role="alert" className="m-0 mt-1 text-left text-sm text-destructive">{message}</p>}
                 {checkShown && <SignInCheck key={round} siteKey={captchaSiteKey} onToken={setCaptcha} />}
                 <TextureButton type="submit" variant="accent" size="lg" disabled={busy || (locked && !captcha)} className="mt-3 w-full disabled:opacity-70">
                     {busy ? "Signing in…" : "Sign in"}

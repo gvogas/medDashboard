@@ -71,6 +71,14 @@ describe('login throttling', () => {
     expect(await res.json()).toMatchObject({ error: 'too_many_attempts', captchaSiteKey: 'test-turnstile-site-key' });
   });
 
+  it('a CAPTCHA from another widget action or another site keeps the lock', { timeout: 20000 }, async () => {
+    await createUser('elsewhere');
+    for (let i = 0; i < 5; i++) await login('elsewhere', 'wrong');
+    expect((await attempt('elsewhere', PASSWORD, 'pass-signup')).status).toBe(429);
+    expect((await attempt('elsewhere', PASSWORD, 'pass-elsewhere')).status).toBe(429);
+    expect((await attempt('elsewhere', PASSWORD, 'pass')).status).toBe(200);
+  });
+
   it('a stranger cannot lock you out of a browser you have signed in from', { timeout: 30000 }, async () => {
     await createUser('trusted');
     const first = await login('trusted');
