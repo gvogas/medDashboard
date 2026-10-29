@@ -182,7 +182,7 @@ view shows and can be tested on their own.
   count rides on the last page of `GET /sync?v=3`.
 - **Your layer:** `GET|PUT|DELETE /marks/:sid/:itemId`, `GET|PUT|DELETE /space_prefs/:sid`.
 - **AI reads:** `POST /outline`, `POST /school-calendar`, `POST /ai/schedule`, `GET /ai/reads`.
-- **Calendar feed:** `GET|POST|DELETE /calendar`, `GET /calendar/:userId/:token.ics` (no session).
+- **Calendar feed:** `GET|POST|DELETE /calendar`, `GET /calendar.ics?u=<userId>&t=<token>` (no session).
 - **Leaderboard:** `GET|PUT /leaderboard`.
 - **Push reminders:** `GET /push/key`, `POST|DELETE /push`, `POST /push/test`, `GET /digest?tz=`.
 - **Spotify:** `/spotify/connect|callback|status|player|token|devices|search|playlists|queue|volume|…`.

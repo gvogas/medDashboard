@@ -18,7 +18,7 @@ import { DAY_MS } from './time.js';
 import { MESSAGE_MAX } from '../src/core/shared.ts';
 
 /* The newest file in migrations/; a test keeps it in step. */
-export const LATEST_MIGRATION = '0005_feed_off.sql';
+export const LATEST_MIGRATION = '0008_push_device_session.sql';
 const AUDIT_KEEP_MS = 90 * DAY_MS;
 export const MIN_PASSWORD = 8;
 const MAX_PASSWORD = 200;
@@ -163,7 +163,7 @@ export const adminRoutes = [
     const now = Date.now();
     /* a new password signs the person out everywhere and lifts any lock on the name */
     await env.DB.batch([
-      env.DB.prepare('UPDATE users SET password_hash = ?, pw_gen = pw_gen + 1, updated_at = ? WHERE id = ?').bind(hash, now, id),
+      env.DB.prepare('UPDATE users SET password_hash = ?, pw_gen = pw_gen + 1, feed_gen = feed_gen + 1, updated_at = ? WHERE id = ?').bind(hash, now, id),
       throttleRows(env.DB, user.username),
       audit(env.DB, admin, 'reset', user.username, '', now),
     ]);
@@ -175,7 +175,7 @@ export const adminRoutes = [
     if (id === admin.id) throw new HttpError(400, { error: 'self' });
     const user = await target(env.DB, id);
     await env.DB.batch([
-      env.DB.prepare('UPDATE users SET pw_gen = pw_gen + 1 WHERE id = ?').bind(id),
+      env.DB.prepare('UPDATE users SET pw_gen = pw_gen + 1, feed_gen = feed_gen + 1 WHERE id = ?').bind(id),
       audit(env.DB, admin, 'revoke', user.username),
     ]);
     return done();

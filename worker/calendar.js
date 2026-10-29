@@ -1,10 +1,11 @@
 // The calendar feed: a private .ics link that Google or Apple Calendar subscribes to.
 //
-// The link is /api/calendar/<userId>/<token>.ics, where the token is an HMAC of the
+// The link is /api/calendar.ics?u=<userId>&t=<token>, where the token is an HMAC of the
 // user id and users.feed_gen under a key derived from SESSION_SECRET. Nothing secret
 // is stored: turning the feed off sets feed_off, and a new link counts feed_gen up from the last
 // value and clears feed_off, so every earlier link stops working and no number is ever used twice. Rotating
-// SESSION_SECRET retires every link too.
+// SESSION_SECRET retires every link too. The token sits in the query, not the path, and the error
+// log keeps only a route's template, so it never records a token.
 //
 // Times are floating (no zone): a class at 09:00 is 09:00 wherever the calendar is.
 // A `tz` query parameter, added by the app from the browser's zone, becomes
@@ -46,7 +47,7 @@ export async function feedToken(userId, gen, secret) {
 }
 
 async function feedUrl(origin, userId, gen, secret) {
-  return `${origin}/api/calendar/${encodeURIComponent(userId)}/${await feedToken(userId, gen, secret)}.ics`;
+  return `${origin}/api/calendar.ics?u=${encodeURIComponent(userId)}&t=${await feedToken(userId, gen, secret)}`;
 }
 
 /** The feed's state for the signed-in user: { on, url }. */

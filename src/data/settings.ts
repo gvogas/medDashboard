@@ -39,7 +39,7 @@ export const REST_DAYS: readonly [number, string][] = [[1, "Mon"], [2, "Tue"], [
 export const toggleRest = (rest: number[], day: number) => (rest.includes(day) ? rest.filter((x) => x !== day) : rest.length < 6 ? [...rest, day] : rest)
 
 /** The feed's link as calendars get it: with the time zone, so Google places class times right. */
-export const feedLink = (url: string, tz: string) => (tz ? url + "?tz=" + encodeURIComponent(tz) : url)
+export const feedLink = (url: string, tz: string) => (tz ? url + (url.includes("?") ? "&" : "?") + "tz=" + encodeURIComponent(tz) : url)
 
 /** This browser's time zone, or "" when it cannot say. */
 export function timeZone(): string {

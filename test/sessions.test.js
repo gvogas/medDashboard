@@ -1,6 +1,7 @@
 import { SELF, env } from 'cloudflare:test';
 import { describe, it, expect } from 'vitest';
 import { signSession } from '../worker/auth.js';
+import { purgeLimits } from '../worker/limits.js';
 import { createUser, login, signIn, PASSWORD } from './helpers.js';
 
 const BASE = 'http://localhost';
@@ -49,7 +50,45 @@ describe('session renewal', () => {
     const res = await SELF.fetch(`${BASE}/api/me`, { headers: { cookie: `rounds_session=${old}` } });
     expect(res.status).toBe(401);
   });
+
+  it('a session past its absolute lifetime is not renewed, even in its last week', async () => {
+    const id = await createUser('ageing');
+    const old = await signSession(id, 0, env.SESSION_SECRET, Date.now(), { issuedAt: Date.now() - 89 * DAY });   // 1 day of life left, at the cap
+    const res = await SELF.fetch(`${BASE}/api/me`, { headers: { cookie: `rounds_session=${old}` } });
+    expect(res.status).toBe(200);
+    expect(res.headers.get('set-cookie')).toBeNull();
+  });
 });
+
+describe('sign out', () => {
+  it('a signed-out cookie stops working, even if it was copied before logout', async () => {
+    await createUser('leaver');
+    const cookie = await cookieFor('leaver');
+    expect((await SELF.fetch(`${BASE}/api/me`, { headers: { cookie } })).status).toBe(200);
+    expect((await SELF.fetch(`${BASE}/api/session`, { method: 'DELETE', headers: { cookie } })).status).toBe(204);
+    expect((await SELF.fetch(`${BASE}/api/me`, { headers: { cookie } })).status).toBe(401);
+  });
+
+  it('a copy renewed before sign-out stops working too, once the first copy would have expired', async () => {
+    const id = await createUser('renewed-copy');
+    const now = Date.now();
+    const sid = 'a'.repeat(24);
+    const issuedAt = now - 20 * DAY;
+    const older = await signSession(id, 0, env.SESSION_SECRET, issuedAt, { issuedAt, sid });   // expires 10 days from now
+    const renewed = await signSession(id, 0, env.SESSION_SECRET, now, { issuedAt, sid });   // expires 30 days from now
+    expect((await SELF.fetch(`${BASE}/api/session`, { method: 'DELETE', headers: { cookie: `rounds_session=${older}` } })).status).toBe(204);
+    await purgeLimits(env.DB, now + 15 * DAY);
+    expect((await SELF.fetch(`${BASE}/api/me`, { headers: { cookie: `rounds_session=${renewed}` } })).status).toBe(401);
+  });
+
+  it('signing out here leaves the same person signed in on another device', async () => {
+    await createUser('two-devices');
+    const phone = await cookieFor('two-devices');
+    const laptop = await cookieFor('two-devices');
+    await SELF.fetch(`${BASE}/api/session`, { method: 'DELETE', headers: { cookie: laptop } });
+    expect((await SELF.fetch(`${BASE}/api/me`, { headers: { cookie: phone } })).status).toBe(200);
+  });
+ });
 
 describe('password generation', () => {
   it('a password reset signs every existing session out', async () => {

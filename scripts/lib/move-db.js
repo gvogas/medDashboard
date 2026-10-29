@@ -27,13 +27,17 @@ export const TABLES = {
   room_members: ['room_id', 'user_id', 'state', 'invited_by', 'invited_at', 'joined_at', 'joined_study_ms', 'earlier_ms', 'left_at', 'last_seen', 'course_label'],
   /* Each device keeps its morning digest, and the day it last went out, so nobody turns
      reminders on again or gets a second digest on the day of the move. No trigger. */
-  push_subscriptions: ['endpoint', 'user_id', 'tz', 'created_at', 'last_ok_at', 'last_sent_day', 'failures'],
+  push_subscriptions: ['endpoint', 'user_id', 'tz', 'created_at', 'last_ok_at', 'last_sent_day', 'failures', 'sid'],
   spotify_tokens: ['user_id', 'refresh_token', 'access_token', 'expires_at', 'updated_at'],
   changes: ['seq', 'scope', 'kind', 'row_id', 'payload', 'deleted_at'],
   admin_log: ['id', 'at', 'admin', 'action', 'target', 'detail'],
+  /* Sign-outs, kept until each session would have expired anyway, so a move does not revive them. */
+  revoked_sessions: ['sid', 'expires_at'],
+  /* The sessions a browser holds, copied so a move signs nobody out. */
+  sessions: ['sid', 'user_id', 'gen', 'expires_at'],
 };
 
-const ORDER_BY = { users: 'id', spaces: 'id', members: 'space_id, user_id', invites: 'space_id, user_id', courses: 'scope, id', items: 'scope, id', activity: 'seq', inbox_seen: 'user_id', friendships: 'user_lo, user_hi', friend_settings: 'user_id', rooms: 'id', room_members: 'room_id, user_id', presence: 'user_id', push_subscriptions: 'endpoint', changes: 'seq', spotify_tokens: 'user_id', admin_log: 'id' };
+const ORDER_BY = { users: 'id', spaces: 'id', members: 'space_id, user_id', invites: 'space_id, user_id', courses: 'scope, id', items: 'scope, id', activity: 'seq', inbox_seen: 'user_id', friendships: 'user_lo, user_hi', friend_settings: 'user_id', rooms: 'id', room_members: 'room_id, user_id', presence: 'user_id', push_subscriptions: 'endpoint', changes: 'seq', spotify_tokens: 'user_id', admin_log: 'id', revoked_sessions: 'sid', sessions: 'sid' };
 /* Written by triggers as the rows above go in, then replaced by the source's own. */
 const REBUILT = ['activity', 'changes'];
 

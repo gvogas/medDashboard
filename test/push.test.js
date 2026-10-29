@@ -2,7 +2,7 @@ import { SELF, env, createScheduledController, createExecutionContext, waitOnExe
 import { describe, expect, it } from 'vitest';
 import worker from '../worker/index.js';
 import { b64u, digest, localNow, pushOnce, sendDigests, unb64u, validTz, vapidAuth } from '../worker/push.js';
-import { BASE, signIn } from './helpers.js';
+import { BASE, login, signIn } from './helpers.js';
 
 const FCM = 'https://fcm.googleapis.com/fcm/send/';
 const subs = (userId) => env.DB.prepare('SELECT endpoint, tz, failures, last_sent_day, last_ok_at FROM push_subscriptions WHERE user_id = ? ORDER BY endpoint').bind(userId).all().then((r) => r.results);
@@ -94,12 +94,15 @@ describe('the push routes', () => {
     expect(await subs(me)).toEqual([]);
   });
 
-  it('keep the newest five devices, move a device to whoever signs in on it, and leave others\' alone', async () => {
+  it('keep the newest five devices, hold a device while its owner is signed in, and move it once they sign out', async () => {
     const api = await signIn(), other = await signIn(), me = await idOf(api), them = await idOf(other);
     for (const n of [1, 2, 3, 4, 5, 6]) await api('/api/push', { method: 'POST', body: { endpoint: FCM + 'ok-five-' + n, tz: 'UTC' } });
     expect((await subs(me)).map((s) => s.endpoint.slice(-1))).toEqual(['2', '3', '4', '5', '6']);
     await other('/api/push', { method: 'DELETE', body: { endpoint: FCM + 'ok-five-6' } });
     expect(await subs(me)).toHaveLength(5);
+    expect((await other('/api/push', { method: 'POST', body: { endpoint: FCM + 'ok-five-6', tz: 'UTC' } })).status).toBe(409);
+    expect(await subs(me)).toHaveLength(5);
+    await api('/api/session', { method: 'DELETE' });
     await other('/api/push', { method: 'POST', body: { endpoint: FCM + 'ok-five-6', tz: 'UTC' } });
     expect(await subs(me)).toHaveLength(4);
     expect((await subs(them)).map((s) => s.endpoint)).toEqual([FCM + 'ok-five-6']);
@@ -115,6 +118,17 @@ describe('the push routes', () => {
     const left = await subs(me);
     expect(left.map((s) => s.endpoint)).toEqual([FCM + 'ok-test']);
     expect(left[0].last_ok_at).toBeGreaterThan(0);
+  });
+
+  it('holds a device to the session that subscribed it: signing out there frees it while the same person stays signed in elsewhere', async () => {
+    const phone = await signIn('device-owner'), other = await signIn();
+    const laptop = (await login('device-owner')).headers.get('set-cookie').split(';')[0];
+    const device = FCM + 'held-by-session';
+    await phone('/api/push', { method: 'POST', body: { endpoint: device, tz: 'UTC' } });
+    expect((await other('/api/push', { method: 'POST', body: { endpoint: device, tz: 'UTC' } })).status).toBe(409);
+    await phone('/api/session', { method: 'DELETE' });
+    expect((await SELF.fetch(`${BASE}/api/me`, { headers: { cookie: laptop } })).status).toBe(200);
+    expect((await other('/api/push', { method: 'POST', body: { endpoint: device, tz: 'UTC' } })).status).toBe(204);
   });
 
   it('give the digest in the device\'s zone, from your own items', async () => {

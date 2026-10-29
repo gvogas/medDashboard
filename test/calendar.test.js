@@ -1,7 +1,8 @@
 import { SELF, env } from 'cloudflare:test';
 import { describe, expect, it } from 'vitest';
 import { buildCalendar, feedToken, onOrAfter } from '../worker/calendar.js';
-import { BASE, signIn, unfold } from './helpers.js';
+import { BASE, login, signIn, unfold } from './helpers.js';
+import { signInAdmin } from './spaces.js';
 
 /* 2026-09-21 is a Monday */
 const course = { id: 'bio', code: 'BIO', name: 'Biology, cells; and more', archived: 0, created_at: Date.UTC(2026, 8, 1),
@@ -137,10 +138,10 @@ describe('the feed endpoints', () => {
 
     const on = await (await api('/api/calendar', { method: 'POST' })).json();
     expect(on.on).toBe(true);
-    expect(on.url).toMatch(/^http:\/\/localhost\/api\/calendar\/u-user\d+\/[0-9a-f]{32}\.ics$/);
+    expect(on.url).toMatch(/^http:\/\/localhost\/api\/calendar\.ics\?u=u-user\d+&t=[0-9a-f]{32}$/);
     expect(await (await api('/api/calendar')).json()).toEqual(on);
 
-    const res = await SELF.fetch(on.url + '?tz=Europe/London');   /* no cookie: a calendar fetching it */
+    const res = await SELF.fetch(on.url + '&tz=Europe/London');   /* no cookie: a calendar fetching it */
     expect(res.status).toBe(200);
     expect(res.headers.get('content-type')).toBe('text/calendar; charset=utf-8');
     const ics = unfold(await res.text());
@@ -172,16 +173,40 @@ describe('the feed endpoints', () => {
     expect((await SELF.fetch(third)).status).toBe(200);
   });
 
+  it('kills the link on sign-out everywhere', async () => {
+    const api = await signIn();
+    const url = (await (await api('/api/calendar', { method: 'POST' })).json()).url;
+    expect((await SELF.fetch(url)).status).toBe(200);
+    expect((await api('/api/session/revoke-all', { method: 'POST' })).status).toBe(204);
+    expect((await SELF.fetch(url)).status).toBe(404);
+  });
+
+  it('kills the link when an admin resets the password, or revokes the sessions', async () => {
+    const api = await signIn('feed-reset');
+    const url = (await (await api('/api/calendar', { method: 'POST' })).json()).url;
+    expect((await SELF.fetch(url)).status).toBe(200);
+    const admin = await signInAdmin('feed-boss');
+    expect((await admin('/api/admin/accounts/u-feed-reset/password', { method: 'POST', body: { password: 'brand new pw' } })).status).toBe(204);
+    expect((await SELF.fetch(url)).status).toBe(404);
+    const relogin = await login('feed-reset', 'brand new pw');
+    expect(relogin.status).toBe(200);
+    const cookie = relogin.headers.get('set-cookie').split(';')[0];
+    const fresh = await (await SELF.fetch(`${BASE}/api/calendar`, { method: 'POST', headers: { cookie } })).json();
+    expect((await SELF.fetch(fresh.url)).status).toBe(200);
+    expect((await admin('/api/admin/accounts/u-feed-reset/revoke', { method: 'POST' })).status).toBe(204);
+    expect((await SELF.fetch(fresh.url)).status).toBe(404);
+  });
+
   it('refuses a forged or malformed token, and another person\'s id with your token', async () => {
     const api = await signIn(), other = await signIn();
     const url = (await (await api('/api/calendar', { method: 'POST' })).json()).url;
     await other('/api/calendar', { method: 'POST' });
-    const [, id, token] = url.match(/calendar\/([^/]+)\/([0-9a-f]+)\.ics$/);
-    const otherId = (await (await other('/api/me')).json()).id;
-    for (const path of [`${id}/${'0'.repeat(32)}.ics`, `${id}/${token.slice(1)}.ics`, `${id}/NOTHEX${token.slice(6)}.ics`, `${otherId}/${token}.ics`, `nobody/${token}.ics`]) {
-      expect((await SELF.fetch(`${BASE}/api/calendar/${path}`)).status, path).toBe(404);
-    }
-    expect(await feedToken(id, 1, env.SESSION_SECRET)).toBe(token);
+  const [, id, token] = url.match(/\?u=([^&]+)&t=([0-9a-f]+)$/);
+  const otherId = (await (await other('/api/me')).json()).id;
+  for (const q of [`u=${id}&t=${'0'.repeat(32)}`, `u=${id}&t=${token.slice(1)}`, `u=${id}&t=NOTHEX${token.slice(6)}`, `u=${otherId}&t=${token}`, `u=nobody&t=${token}`, `t=${token}`]) {
+    expect((await SELF.fetch(`${BASE}/api/calendar.ics?${q}`)).status, q).toBe(404);
+  }
+  expect(await feedToken(id, 1, env.SESSION_SECRET)).toBe(token);
   });
 
   it('needs a session to see, create or stop the link', async () => {
@@ -193,7 +218,7 @@ describe('the feed endpoints', () => {
   it('ignores a time zone that is not one', async () => {
     const api = await signIn();
     const url = (await (await api('/api/calendar', { method: 'POST' })).json()).url;
-    const ics = await (await SELF.fetch(url + '?tz=' + encodeURIComponent('Evil\r\nX-INJECT:1'))).text();
+    const ics = await (await SELF.fetch(url + '&tz=' + encodeURIComponent('Evil\r\nX-INJECT:1'))).text();
     expect(ics).not.toContain('X-WR-TIMEZONE');
     expect(ics).not.toContain('X-INJECT');
   });

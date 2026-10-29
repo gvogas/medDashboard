@@ -53,16 +53,19 @@ export async function invite(db, userId, spaceId, { username, role = null }, now
         AND NOT EXISTS (SELECT 1 FROM members WHERE space_id = ? AND user_id = ? AND deleted_at IS NULL)
       ON CONFLICT (space_id, user_id) DO UPDATE SET invited_by = excluded.invited_by, role = excluded.role, status = 'pending',
         created_at = excluded.created_at, expires_at = excluded.expires_at
-      RETURNING user_id`).bind(spaceId, who.id, userId, give, now, expires, ...g.binds, spaceId, who.id).first();
+      WHERE invites.status != 'pending' OR invites.invited_by = excluded.invited_by
+        OR EXISTS (SELECT 1 FROM members WHERE space_id = ? AND user_id = ? AND role = 'owner' AND deleted_at IS NULL)
+      RETURNING user_id`).bind(spaceId, who.id, userId, give, now, expires, ...g.binds, spaceId, who.id, spaceId, userId).first();
   if (!saved) {
-    /* since the checks above: lost access, lost the owner's role, or they joined */
+    /* since the checks above: lost access, lost the owner's role, a pending invite of someone else's, or they joined */
     const again = await assertAllowed(db, userId, spaceId, 'editor');
-    throw other && again.role !== 'owner' ? new HttpError(403, { error: 'forbidden' }) : new HttpError(409, { error: 'member' });
+    const member = await db.prepare('SELECT 1 AS x FROM members WHERE space_id = ? AND user_id = ? AND deleted_at IS NULL').bind(spaceId, who.id).first();
+    throw other && again.role !== 'owner' || !member ? new HttpError(403, { error: 'forbidden' }) : new HttpError(409, { error: 'member' });
   }
   return { userId: who.id, username: who.username, name: who.name, role: give, status: 'pending', createdAt: now, expiresAt: expires, invitedBy: userId };
 }
 
-/** Withdraw an invite not yet accepted: whoever sent it, or the owner. 403 for someone else's; 404 when there is none. */
+/** Withdraw an invite not yet accepted: whoever sent it, or the owner. 404 whether it is someone else's or there is none. */
 export async function revokeInvite(db, userId, spaceId, targetId) {
   await assertAllowed(db, userId, spaceId, 'editor');
   const g = editorGuard(spaceId, userId);
@@ -70,8 +73,7 @@ export async function revokeInvite(db, userId, spaceId, targetId) {
       AND (invited_by = ? OR EXISTS (SELECT 1 FROM members WHERE space_id = ? AND user_id = ? AND role = 'owner' AND deleted_at IS NULL))
     RETURNING user_id`).bind(spaceId, targetId, ...g.binds, userId, spaceId, userId).first();
   if (gone) return;
-  const there = await db.prepare("SELECT 1 AS x FROM invites WHERE space_id = ? AND user_id = ? AND status != 'accepted'").bind(spaceId, targetId).first();
-  throw there ? new HttpError(403, { error: 'forbidden' }) : new HttpError(404, { error: 'not_found' });
+  throw new HttpError(404, { error: 'not_found' });
 }
 
 /** Your invites not yet answered, newest first: the space's name, who sent it, and whether it has expired. */

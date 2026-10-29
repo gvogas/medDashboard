@@ -11,7 +11,7 @@
 // requests per run, so one run sends at most MAX_PUSHES; the rest go the next hour.
 
 import { HttpError, json, readJson } from './http.js';
-import { requireUser } from './auth.js';
+import { requireSession, requireUser } from './auth.js';
 import { claimLimit, rateLimited } from './limits.js';
 import { readRows } from './calendar.js';
 import { HOUR_MS, TZ, addDays } from './time.js';
@@ -171,18 +171,22 @@ function endpointOf(body) {
 }
 
 async function subscribe({ request, env }) {
-  const userId = await requireUser(request, env);
+  const { userId, sid } = await requireSession(request, env);
   const body = await readJson(request);
   const endpoint = endpointOf(body);
   const tz = validTz(body.tz);
   if (!tz) throw new HttpError(400, { error: 'invalid', field: 'tz' });
   if (!pushReady(env)) throw new HttpError(503, { error: 'push_off' });
   const now = Date.now();
+  /* a device stays with the session that subscribed it until that session ends; a row from before sid was recorded falls back to its owner's live sessions */
+  const holder = await env.DB.prepare(`SELECT 1 FROM push_subscriptions AS p WHERE p.endpoint = ? AND p.user_id != ?
+    AND EXISTS (SELECT 1 FROM sessions AS s JOIN users AS u ON u.id = s.user_id WHERE s.user_id = p.user_id AND s.gen = u.pw_gen AND s.expires_at > ? AND (p.sid IS NULL OR s.sid = p.sid))`).bind(endpoint, userId, now).first();
+  if (holder) throw new HttpError(409, { error: 'device_in_use' });
   await env.DB.batch([
-    /* a device that changed hands moves to whoever signed in on it */
-    env.DB.prepare(`INSERT INTO push_subscriptions (endpoint, user_id, tz, created_at) VALUES (?, ?, ?, ?)
-      ON CONFLICT (endpoint) DO UPDATE SET user_id = excluded.user_id, tz = excluded.tz, created_at = excluded.created_at, failures = 0,
-        last_sent_day = CASE WHEN push_subscriptions.user_id = excluded.user_id THEN push_subscriptions.last_sent_day END`).bind(endpoint, userId, tz, now),
+    /* a device whose previous owner has signed out or expired moves to whoever signed in on it */
+    env.DB.prepare(`INSERT INTO push_subscriptions (endpoint, user_id, tz, created_at, sid) VALUES (?, ?, ?, ?, ?)
+      ON CONFLICT (endpoint) DO UPDATE SET user_id = excluded.user_id, tz = excluded.tz, created_at = excluded.created_at, sid = excluded.sid, failures = 0,
+        last_sent_day = CASE WHEN push_subscriptions.user_id = excluded.user_id THEN push_subscriptions.last_sent_day END`).bind(endpoint, userId, tz, now, sid),
     env.DB.prepare(`DELETE FROM push_subscriptions WHERE user_id = ?1 AND endpoint NOT IN
       (SELECT endpoint FROM push_subscriptions WHERE user_id = ?1 ORDER BY created_at DESC, endpoint LIMIT ${MAX_DEVICES})`).bind(userId),
   ]);

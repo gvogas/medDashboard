@@ -1,5 +1,5 @@
 import { json, readJson, readBytes, revisionOf, HttpError } from './http.js';
-import { requireUser, requireSession, signSession, sessionCookie, clearCookie, deviceCookie, trustedDevice, parseCookies, secureFlag, sameString, hex, RENEW_WITHIN_MS, sessionUserId, hasSessionCookie } from './auth.js';
+import { requireUser, requireSession, issueSession, sessionCookie, clearCookie, deviceCookie, trustedDevice, parseCookies, secureFlag, sameString, hex, renewedCookie, revokeSession, sessionUserId, hasSessionCookie } from './auth.js';
 import { verifyPassword, normalizeUsername } from './password.js';
 import { claimAttempt, recordSuccess, WARN_LEFT } from './throttle.js';
 import { captchaSiteKey, passesCaptcha } from './captcha.js';
@@ -275,7 +275,7 @@ const routes = [
     const ok = await verifyPassword(body.password, user ? user.password_hash : 'pbkdf2$100000$AAAAAAAAAAAAAAAAAAAAAA$AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA');
     if (!user || !ok) throw bad(left);
     await recordSuccess(env.DB, throttleKey);
-    const token = await signSession(user.profile.id, user.pw_gen, env.SESSION_SECRET);
+    const token = await issueSession(env, user.profile.id, user.pw_gen);
     const res = json(user.profile, 200, { 'set-cookie': sessionCookie(token, url) });
     if (!device) res.headers.append('set-cookie', await deviceCookie(username, env.SESSION_SECRET, url));
     return res;
@@ -288,19 +288,20 @@ const routes = [
     return new Response(null, { status: 204, headers: { 'set-cookie': clearCookie(url) } });
   }],
 
-  ['DELETE', /^\/api\/session$/, async ({ url }) =>
-    new Response(null, { status: 204, headers: { 'set-cookie': clearCookie(url) } })],
+  ['DELETE', /^\/api\/session$/, async ({ request, env, url }) => {
+    await revokeSession(request, env);
+    return new Response(null, { status: 204, headers: { 'set-cookie': clearCookie(url) } });
+  }],
 
   ['GET', /^\/api\/me$/, async ({ request, env, url }) => {
     const session = await requireSession(request, env);
     const [profile, announcement, maintenance] = await Promise.all([getProfile(env.DB, session.userId), readAnnouncement(env.DB), publicMaintenance(env.DB)]);
     if (!profile) throw new HttpError(401, { error: 'unauthenticated' });
     await markSeenToday(env.DB, session.userId);
-    // Keep a regular user signed in: a cookie in its last week is re-issued.
+    // Keep a regular user signed in: a cookie in its last week is re-issued, up to the absolute lifetime.
     const headers = {};
-    if (session.expiresAt - Date.now() < RENEW_WITHIN_MS) {
-      headers['set-cookie'] = sessionCookie(await signSession(session.userId, session.gen, env.SESSION_SECRET), url);
-    }
+    const renewed = await renewedCookie(env, session, url);
+    if (renewed) headers['set-cookie'] = renewed;
     return json({ ...profile, announcement, maintenance }, 200, headers);
   }],
 
@@ -329,7 +330,7 @@ const routes = [
     await stopFeed(env, await requireUser(request, env));
     return new Response(null, { status: 204 });
   }],
-  ['GET', /^\/api\/calendar\/([^/]{1,64})\/([^/]{1,64})\.ics$/, ({ env, url, params: [userId, token] }) => serveFeed(env, url, userId, token)],
+  ['GET', /^\/api\/calendar\.ics$/, ({ env, url }) => serveFeed(env, url, url.searchParams.get('u') ?? '', url.searchParams.get('t') ?? '')],
 
   // The study leaderboard; `since` is the viewer's Monday 00:00 in epoch ms.
   ['GET', /^\/api\/leaderboard$/, async ({ request, env, url }) =>

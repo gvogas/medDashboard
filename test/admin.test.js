@@ -278,11 +278,11 @@ describe('errors', () => {
     expect(recent.length).toBeGreaterThanOrEqual(2);
   });
 
-  it('logs a calendar feed request by its route template, never its link', async () => {
-    const res = await SELF.fetch(`${BASE}/api/calendar/u1/s3cr3tt0ken.ics`);
+  it('logs a calendar feed request by its route, never its link', async () => {
+    const res = await SELF.fetch(`${BASE}/api/calendar.ics?u=u1&t=s3cr3tt0ken`);
     expect(res.status).toBe(404);
-    const rows = await env.DB.prepare("SELECT route FROM error_log WHERE route LIKE '/api/calendar/%'").all();
-    expect(rows.results.map((r) => r.route)).toEqual(['/api/calendar/:param/:param.ics']);
+    const rows = await env.DB.prepare("SELECT route FROM error_log WHERE route LIKE '/api/calendar%'").all();
+    expect(rows.results.map((r) => r.route)).toEqual(['/api/calendar.ics']);
   });
 
   it('stores an unmatched path with no session under the fixed placeholder, never its text', async () => {

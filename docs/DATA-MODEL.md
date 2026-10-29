@@ -423,6 +423,7 @@ worker fetches `GET /api/digest` itself when the push arrives.
 | `tz` | text | 1–64, default `UTC` | The device's IANA time zone, so the digest comes in its morning. |
 | `created_at`, `last_ok_at` | int \| null | | |
 | `last_sent_day` | text \| null | `YYYY-MM-DD` | The local day the digest last went, so the hourly cron sends once a day. |
+| `sid` | text \| null | | The session the device subscribed under. The device stays held by that session: it moves to another person once that session has signed out or expired. Null on rows from before migration `0008`; those are held by their owner's live sessions until they subscribe again. |
 | `failures` | int | 0–100 | In a row; the row goes at 5, or at once when the push service answers 404 or 410. |
 
 A device also goes when its owner signs out on it or turns the digest off there.
@@ -439,7 +440,7 @@ A shared class (`kind = 'class'`, its rows in scope `c:<id>`) or team project (`
 
 ## `invites`
 
-`(space_id, user_id)`: an invitation to a space by username (spec §11). `invited_by` (NULL once that account is gone), `role` given on accepting (`editor` or `member`; never `owner`, which moves only by a transfer), `status` `pending` | `accepted` | `declined`, `created_at`, `expires_at` (30 days on). A repeat invite refreshes the one row; accepting makes or revives the membership and marks the row `accepted`. Deleted with its space or the invited account, and by the nightly purge 90 days after `created_at`.
+`(space_id, user_id)`: an invitation to a space by username (spec §11). `invited_by` (NULL once that account is gone), `role` given on accepting (`editor` or `member`; never `owner`, which moves only by a transfer), `status` `pending` | `accepted` | `declined`, `created_at`, `expires_at` (30 days on). A repeat invite refreshes the one row when it comes from the same sender or the owner; an editor's invite never overwrites another sender's pending one (`403 forbidden`). Accepting makes or revives the membership and marks the row `accepted`. Deleted with its space or the invited account, and by the nightly purge 90 days after `created_at`.
 
 ## `marks`
 
@@ -479,7 +480,7 @@ A study room (study together, `worker/rooms.js`): `id` (12 characters), `host_id
 
 ## `room_members`
 
-`(room_id, user_id)`, both `ON DELETE CASCADE`. `state` is `invited`, `in` or `left`. `joined_at` is your first join; `joined_study_ms` is the room's study time when you last joined; `earlier_ms` is what earlier stints came to. Your minutes are `earlier_ms` + the room's study now − `joined_study_ms`. `last_seen` is written at most every 30 s by any request of yours: 2 minutes without one shows you as away, 10 takes you out (by the next request on the room). Up to 8 `in`; one open room at a time (joining another leaves the first). Someone not in the room may see or join it only while they are a friend of the host, or of whoever invited them. `course_label` (60 characters) is what the room sees you studying.
+`(room_id, user_id)`, both `ON DELETE CASCADE`. `state` is `invited`, `in` or `left`. `joined_at` is your first join; `joined_study_ms` is the room's study time when you last joined; `earlier_ms` is what earlier stints came to. Your minutes are `earlier_ms` + the room's study now − `joined_study_ms`. `last_seen` is written at most every 30 s by any request of yours: 2 minutes without one shows you as away, 10 takes you out (by the next request on the room). Up to 8 `in`; one open room at a time (joining another leaves the first). Someone not in the room may see or join it only while they are a friend of the host, or of whoever invited them (and that invite still stands with a friend), or, if they were in it before, a friend of anyone in it now. An invite or an earlier stint alone is not enough once the friendship ends. `course_label` (60 characters) is what the room sees you studying.
 
 ## `presence`
 
@@ -587,13 +588,13 @@ All routes are under `/api`, speak JSON, and require the session cookie except
 | `PUT /api/study_sessions/:id` · `DELETE /api/study_sessions/:id` | `{courseId, itemId, startedAt, studyMinutes, roundsDone, note, manual}`, as above |
 | `PUT /api/achievements/:id` · `DELETE /api/achievements/:id` | `{name, sticker, rule, courseId, itemId, target}`, as above; `400 too_many` past 30. `classId` (items), `spaceId` (sessions, achievements) and `hiddenSources` (profile) left out of a body keep their stored values. |
 | `GET /api/calendar` · `POST /api/calendar` · `DELETE /api/calendar` | the calendar feed: → `{on, url}`; POST turns it on or makes a new link (the old one stops working); DELETE turns it off. See `worker/calendar.js`. |
-| `GET /api/calendar/:userId/:token.ics?tz=` | no session: the feed itself, `text/calendar`. The token is an HMAC of the user id and `users.feed_gen`; a wrong one is `404`. At most 60 fetches an hour per link. Carries your classes and team projects too: see The calendar feed below. |
+| `GET /api/calendar.ics?u=<userId>&t=<token>` | no session: the feed itself, `text/calendar`. The token is an HMAC of the user id and `users.feed_gen`; a wrong one is `404`. At most 60 fetches an hour per link. Carries your classes and team projects too: see The calendar feed below. An optional `&tz=` is appended to the link by the app. |
 | `POST /api/spaces` | `{kind:'class', course}` (blank) or `{kind:'class', convertCourseId, items:[id]}` → `201 {space}`; you become the owner, with prefs from the course, and the class takes a copy of your school calendar (see `spaces`). Anyone signed in; a `kind` other than `'class'` or `'project'` is `400`. There is no hourly limit on making classes, only the 20 live spaces. A convert **moves** your course and the items named into the class in class shape: your status, grade, checklist, notes and completion into marks, your colour, target, term and archive into prefs; your course and those items are soft-deleted, the course's other items filed under the class (`classId`), your sessions and achievements on them labelled with the space. Converting the same course again answers the class it made (`200`). `409 limit` past 20 spaces. |
 | `POST /api/spaces` (project) | `{kind:'project', title, date?, parent?: {space, item}}` → `201 {space}`: a team project with you as its owner, its `project` item (the title, trimmed, 1–140 characters, no NUL; the date given, else the parent's) and your prefs, in one batch. Anyone signed in. `parent` is any live item of a class you are a live member of (`400 {field:'parent'}` otherwise); with no `parent`, `date` is required (`400 {field:'date'}`). `409 limit` past 20 spaces. See Team projects. |
 | `POST /api/spaces/:sid/link` | the owner of an unarchived project: `{parent: {space, item}}` links it to that class item and sets the project's date to the item's; `{parent: null}`, or no `parent` at all, unlinks it and keeps the date → `204`. `400 {field:'parent'}` for an item you can't see, `404` on a class. Writes `space.linked`. (The spec's `PATCH`.) |
 | `GET /api/spaces/:sid` | → `{id, scope, kind, role, archived, members, invites, code, schoolCalendar}`: the members and the class's school-calendar snapshot (or `null`) for everyone in the space, its invites for the owner and editors, the join code's expiry and uses left for the owner. `404` outside it. |
 | `POST /api/spaces/:sid/school` | the owner, archived or not: copy your school calendar into the class again → `{schoolCalendar}` (what the class now holds). With no calendar of yours that has a semester, the old snapshot stays. Classes only (`404` otherwise). The app syncs first and says so when your calendar has not reached the server yet. |
-| `POST /api/spaces/:sid/invites` · `DELETE /api/spaces/:sid/invites/:userId` | `{username, role?}` → `201` the invite (30 days; a repeat refreshes it). The owner or an editor; only the owner gives a role other than the default. `404 no_user`, `409 member`; 20 an hour. So anyone in a class can learn whether a username exists by inviting it, at most 20 names an hour. DELETE withdraws it: whoever sent it, or the owner. |
+| `POST /api/spaces/:sid/invites` · `DELETE /api/spaces/:sid/invites/:userId` | `{username, role?}` → `201` the invite (30 days; a repeat refreshes it, unless it would overwrite another sender's pending invite: `403 forbidden`). The owner or an editor; only the owner gives a role other than the default. `404 no_user`, `409 member`; 20 an hour. So anyone in a class can learn whether a username exists by inviting it, at most 20 names an hour. DELETE withdraws a pending invite: whoever sent it, or the owner. Anyone else, or no pending invite, is `404 not_found`. |
 | `GET /api/friends` | → `{friends, incoming, sent, settings}`: `friends` `[{userId, username, name, since}]`, requests to you and from you `[{userId, username, name, at}]` (a request the other person declined stays in `sent`), `settings` `{findable, showStudying}`. |
 | `GET /api/friends/search?q=` | 2–40 characters → `{people: [{userId, username, name, state}]}`: up to 8 people whose username or display name contains `q` (ASCII case ignored), never you, and someone hidden from search only for their exact username. `state` is `none`, `friends`, `requested` (you asked, or they declined) or `asked` (they asked you). 30 a minute. |
 | `POST /api/friends` · `PUT /api/friends/:userId` · `DELETE /api/friends/:userId` | POST `{username}` → `{userId, username, name, state}`: a request, or a friendship when they had already asked you (`404 no_user`, `409 friends`, `409 friend_limit`, `429` past 20 a day). PUT `{accept}` answers a request sent to you → `204` (`404` when there is none). DELETE removes a friend or cancels your request → `204` (`404` otherwise). |
@@ -616,12 +617,13 @@ All routes are under `/api`, speak JSON, and require the session cookie except
 | `GET\|PUT\|DELETE /api/space_prefs/:sid` | your prefs for a space you are in: `{color, target, term, archived}`, whole-row `If-Match`. |
 | `GET\|PUT\|DELETE /api/spaces/:sid/{courses,items}/:id` | a shared row of a space you are in; see Sync v3 for how a `PUT` merges. |
 | `GET /api/push/key` | → `{enabled, key}`: whether push is set up (the three `VAPID_*` secrets) and the public key to subscribe with. |
-| `POST /api/push` · `DELETE /api/push` | `{endpoint, tz}` → `204`: this device gets the morning digest (a known push service's `https://` address and an IANA zone; `400 {field}` otherwise, `503 push_off` without the secrets); DELETE `{endpoint}` → `204` stops it. See `push_subscriptions`. |
+| `POST /api/push` · `DELETE /api/push` | `{endpoint, tz}` → `204`: this device gets the morning digest (a known push service's `https://` address and an IANA zone; `400 {field}` otherwise, `503 push_off` without the secrets). A device is held by the session that subscribed it: another person can take it only once that session has signed out or expired, else `409 device_in_use`. DELETE `{endpoint}` → `204` stops it. See `push_subscriptions`. |
 | `POST /api/push/test` | `{endpoint}` → `{result}`: a test push to one of your devices now, and how the push service answered. 5 an hour; `404` for a device not yours, `503 push_off` without the secrets. |
 | `GET /api/digest?tz=` | → `{title, body, today, tomorrow, overdue}`: what the morning notification says, from the same rows as the calendar feed (your hidden sources left out). Open, dated, one-off items due today or tomorrow, and overdue ones from the last 14 days; office hours and tutorials never count. The service worker calls it when a push arrives. |
 | `GET /api/leaderboard?since=<ms>` · `PUT /api/leaderboard` | → `{joined, week, all}`, each list `[{name, minutes, me}]`, empty until you join; `since` is your Monday 00:00. PUT `{joined: true\|false}` → `204`. See `worker/leaderboard.js`. |
 | `/api/spotify/…` | the Music player: `connect` and `callback` (OAuth), `status`, `token` (for the Web Playback SDK), `player` and its controls, `devices`, `transfer`, `shuffle`, `repeat`, `volume`, `queue`, `play`, `search`, `recent`, `me`, `playlists`, `albums/:id/tracks`, `artists/:id/albums`; `DELETE /api/spotify` disconnects. Compact answers, never raw Spotify JSON. See `worker/api.js` and `worker/spotify/`. |
 | `/api/admin/…` | admins only (`403 forbidden` otherwise): `accounts` (list, create, `:id/password`, `:id/revoke`, `:id/admin`, delete), `locks/:key` (clear a login lockout), `errors`, `audit`, `traffic`, `health`, `announcement`, `maintenance`. See `worker/admin.js`. |
+| `POST /api/errors` | `{kind?, message, where?}` → `204`: a crash in your browser, for the Admin page's error log (browser kind). Signed in only (`401` otherwise). `kind` is `error`, `rejection` or `react`, or left out; `where` is a page path such as `/study` (no scheme, host or spaces), or left out; `message` is required. Each is `400 {field}` when wrong. Control characters become spaces and the message is kept to 500 characters. 30 an hour per person (`429 rate_limited`). |
 
 Errors are `{error, field?}`: `400` bad shape (with the field), `401` no session,
 `404` a row that isn't yours, `413` body over 1 MB.
@@ -877,8 +879,12 @@ holding `userId.generation.expiry.signature`, signed with `SESSION_SECRET`, vali
 30 days and re-issued by `GET /api/me` once it is in its last week, so a regular
 user stays signed in. The generation is `users.pw_gen`: a password reset and
 `POST /api/session/revoke-all` ("sign out everywhere") bump it, and every older
-cookie for that user stops working. There is no sessions table; rotating the secret
-signs everyone out.
+cookie for that user stops working. A sign-out (`DELETE /api/session`) is the one
+exception: its session id goes into `revoked_sessions` until the latest any copy of it
+could be valid (the absolute lifetime from its first sign-in), and the nightly purge
+drops it after that. Each signed-in session also has a row in `sessions` (migration 0007),
+written at sign-in and renewal and deleted on sign-out; the nightly purge drops expired
+rows. Rotating the secret signs everyone out.
 
 ---
 

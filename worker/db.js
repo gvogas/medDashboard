@@ -43,9 +43,9 @@ export async function getUserForLogin(db, username) {
   return row ? { password_hash: row.password_hash, pw_gen: row.pw_gen, profile: profileFromRow(row) } : null;
 }
 
-/** Invalidate every session of this user. */
+/** Invalidate every session of this user, and the calendar feed link (its token is keyed by feed_gen). */
 export async function bumpPasswordGen(db, userId) {
-  await db.prepare('UPDATE users SET pw_gen = pw_gen + 1 WHERE id = ?').bind(userId).run();
+  await db.prepare('UPDATE users SET pw_gen = pw_gen + 1, feed_gen = feed_gen + 1 WHERE id = ?').bind(userId).run();
 }
 
 export async function getProfile(db, userId) {

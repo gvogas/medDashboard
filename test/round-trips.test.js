@@ -53,7 +53,8 @@ describe('a signed-in request', () => {
     const e = { ...countedEnv(), API_LIMITER: limiter(), SPOTIFY_LIMITER: limiter() };
     expect((await requireSession(request(api, '/api/me'), e)).userId).toBe('u-trip-session');
     await requireSession(request(api, '/api/spotify/devices'), e);
-    expect(e.log).toEqual(['SELECT pw_gen FROM users WHERE id = ?', 'SELECT pw_gen FROM users WHERE id = ?']);
+    const state = 'SELECT pw_gen, EXISTS (SELECT 1 FROM revoked_sessions WHERE sid = ?1) AS revoked FROM users WHERE id = ?2';
+    expect(e.log).toEqual([state, state]);
     expect(e.API_LIMITER.keys).toEqual(['u-trip-session', 'u-trip-session']);
     expect(e.SPOTIFY_LIMITER.keys).toEqual(['u-trip-session']);
     expect((await env.DB.prepare('SELECT count(*) AS n FROM request_limits WHERE key LIKE ?').bind('%:u-trip-session').first()).n).toBe(0);
@@ -118,7 +119,7 @@ describe('the player poll', () => {
     const res = await handleApi(request(api, '/api/spotify/player'), e, new URL(BASE + '/api/spotify/player'));
     expect((await res.json()).connected).toBe(true);
     // The session; the token row and the upstream cooldown together.
-    expect(e.log).toEqual(['SELECT pw_gen FROM users WHERE id = ?', 'batch']);
+    expect(e.log).toEqual(['SELECT pw_gen, EXISTS (SELECT 1 FROM revoked_sessions WHERE sid = ?1) AS revoked FROM users WHERE id = ?2', 'batch']);
   });
 
   it('does not read the row back after a refresh', async () => {

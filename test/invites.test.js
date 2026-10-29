@@ -81,7 +81,7 @@ describe('invites', () => {
     expect(await row(s, guest3.id)).toMatchObject({ status: 'pending' });
     /* withdrawn: by the one who sent it, or the owner */
     expect((await invite(owner, 'iv-guest3')).status).toBe(201);
-    expect(await (await withdraw(editor, guest3.id)).json()).toEqual({ error: 'forbidden' });
+    expect(await (await withdraw(editor, guest3.id)).json()).toEqual({ error: 'not_found' });
     expect((await withdraw(member, guest3.id)).status).toBe(403);
     expect((await withdraw(owner, guest3.id)).status).toBe(204);
     expect((await withdraw(owner, guest3.id)).status).toBe(404);
@@ -93,6 +93,13 @@ describe('invites', () => {
     expect((await invite(owner, 'iv-guest3', null, t)).status).toBe(201);
     await env.DB.prepare('UPDATE spaces SET deleted_at = 5 WHERE id = ?').bind(t.id).run();
     expect((await accept(guest3, t)).status).toBe(404);
+  });
+
+  it('an editor cannot re-invite over the owner\'s pending invite, so the role the owner gave stays', async () => {
+    expect((await invite(owner, 'iv-guest3', 'editor')).status).toBe(201);
+    expect((await invite(editor, 'iv-guest3')).status).toBe(403);
+    expect(await row(s, guest3.id)).toMatchObject({ status: 'pending', role: 'editor' });
+    expect((await withdraw(owner, guest3.id)).status).toBe(204);
   });
 
   it('refuse to be accepted while the class is archived (403 archived); the invite stays pending for when it is unarchived', async () => {

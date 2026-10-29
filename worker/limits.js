@@ -81,11 +81,11 @@ function spotifyCounted(request) {
  * location and settle in the background, so a burst can pass the limit a little: they bound
  * abuse, not exact use. Without them (a config that leaves them out) the windows are D1 rows.
  */
-export async function limitUser(request, env, userId, gen, now = Date.now()) {
+export async function limitUser(request, env, session, now = Date.now()) {
+  const { userId, gen } = session;
   const spotify = spotifyCounted(request);
-  if (!env.API_LIMITER || (spotify && !env.SPOTIFY_LIMITER)) return limitUserInD1(env.DB, userId, gen, spotify, now);
-  const user = await env.DB.prepare('SELECT pw_gen FROM users WHERE id = ?').bind(userId).first();
-  if (user?.pw_gen !== gen) return false;
+  if (!env.API_LIMITER || (spotify && !env.SPOTIFY_LIMITER)) return limitUserInD1(env.DB, session, spotify, now);
+  if (!isLive(await sessionState(env.DB, session).first(), gen)) return false;
   if (!(await env.API_LIMITER.limit({ key: userId })).success) throw rateLimited(WINDOW_MS / 1000);
   // Counted only when the API hit was.
   if (spotify && !(await env.SPOTIFY_LIMITER.limit({ key: userId })).success) throw rateLimited(WINDOW_MS / 1000);
@@ -93,20 +93,31 @@ export async function limitUser(request, env, userId, gen, now = Date.now()) {
 }
 
 /* The same in D1: the generation check and the windows in one round trip, one write each. */
-async function limitUserInD1(db, userId, gen, spotify, now) {
+async function limitUserInD1(db, session, spotify, now) {
+  const { userId, gen } = session;
   const keys = [`api:${userId}`, ...(spotify ? [`spotify:${userId}`] : [])];
   const [user, api, spotifyClaim, windows] = await db.batch([
-    db.prepare('SELECT pw_gen FROM users WHERE id = ?').bind(userId),
+    sessionState(db, session),
     claimStmt(db, keys[0], API_LIMIT, now, WINDOW_MS, 'EXISTS (SELECT 1 FROM users WHERE id = ?5 AND pw_gen = ?6)', userId, gen),
     // Counted only when the API hit above was: changes() is that statement's row count.
     spotify ? claimStmt(db, keys[1], SPOTIFY_LIMIT, now, WINDOW_MS, 'changes() > 0') : db.prepare('SELECT 1'),
     db.prepare(`SELECT key, reset_at FROM request_limits WHERE key IN (${keys.map(() => '?').join(', ')})`).bind(...keys),
   ]);
-  if (user.results[0]?.pw_gen !== gen) return false;
+  if (!isLive(user.results[0], gen)) return false;
   const wait = (key) => Math.max(1, Math.ceil(((windows.results.find((r) => r.key === key)?.reset_at || 0) - now) / 1000));
   if (!api.results.length) throw rateLimited(wait(keys[0]));
   if (spotify && !spotifyClaim.results.length) throw rateLimited(wait(keys[1]));
   return true;
+}
+
+/* The session's generation and whether it was signed out, from one read. */
+function sessionState(db, session) {
+  return db.prepare('SELECT pw_gen, EXISTS (SELECT 1 FROM revoked_sessions WHERE sid = ?1) AS revoked FROM users WHERE id = ?2').bind(session.sid, session.userId);
+}
+
+/* A session is live while its user keeps its generation and the session was not signed out. */
+function isLive(row, gen) {
+  return row?.pw_gen === gen && !row.revoked;
 }
 
 export async function limitOutline(env, userId) {
@@ -132,5 +143,7 @@ export async function purgeLimits(db, now = Date.now()) {
     db.prepare('DELETE FROM request_limits WHERE reset_at <= ?').bind(now),
     db.prepare('DELETE FROM spotify_oauth_states WHERE expires_at <= ?').bind(now),
     db.prepare('DELETE FROM spotify_refresh_locks WHERE expires_at <= ?').bind(now),
+    db.prepare('DELETE FROM revoked_sessions WHERE expires_at <= ?').bind(now),
+    db.prepare('DELETE FROM sessions WHERE expires_at <= ?').bind(now),
   ]);
 }
