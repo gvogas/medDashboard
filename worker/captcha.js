@@ -12,10 +12,15 @@ const VERIFY_TIMEOUT_MS = 10_000;
 
 const hostnames = (env) => new Set(String(env.TURNSTILE_HOSTNAMES || '').split(',').map((h) => h.trim()).filter(Boolean));
 
+/** The site key to offer a locked sign-in, or null: only when a solved check could actually pass. */
+export function captchaSiteKey(env) {
+  return env.TURNSTILE_SITE_KEY && env.TURNSTILE_SECRET && hostnames(env).size ? env.TURNSTILE_SITE_KEY : null;
+}
+
 /** True when `token` is a Turnstile answer that Cloudflare accepts for this request. */
 export async function passesCaptcha(env, token, request) {
   const allowed = hostnames(env);
-  if (!env.TURNSTILE_SECRET || typeof token !== 'string' || !token || token.length > 2048 || !allowed.size) return false;
+  if (!captchaSiteKey(env) || typeof token !== 'string' || !token || token.length > 2048) return false;
   const form = new URLSearchParams({ secret: env.TURNSTILE_SECRET, response: token });
   const ip = request.headers.get('cf-connecting-ip');
   if (ip) form.set('remoteip', ip);

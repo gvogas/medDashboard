@@ -2,7 +2,7 @@ import { json, readJson, readBytes, revisionOf, HttpError } from './http.js';
 import { requireUser, requireSession, signSession, sessionCookie, clearCookie, deviceCookie, trustedDevice, parseCookies, secureFlag, sameString, hex, RENEW_WITHIN_MS, sessionUserId, hasSessionCookie } from './auth.js';
 import { verifyPassword, normalizeUsername } from './password.js';
 import { claimAttempt, recordSuccess, WARN_LEFT } from './throttle.js';
-import { passesCaptcha } from './captcha.js';
+import { captchaSiteKey, passesCaptcha } from './captcha.js';
 import { giveBackOutline, limitLogin, limitOutline, readsLeft } from './limits.js';
 import { readOutline, cleanCode, MAX_BYTES } from './outline.js';
 import { readSchool } from './school.js';
@@ -265,7 +265,8 @@ const routes = [
     if (wait) {
       // Locked. A CAPTCHA the user has solved lets this one attempt through; the lock still counts it.
       if (!(await passesCaptcha(env, body.captcha, request))) {
-        throw new HttpError(429, { error: 'too_many_attempts', retryAfter: wait, ...(env.TURNSTILE_SITE_KEY && { captchaSiteKey: env.TURNSTILE_SITE_KEY }) }, { 'retry-after': String(wait) });
+        const siteKey = captchaSiteKey(env);
+        throw new HttpError(429, { error: 'too_many_attempts', retryAfter: wait, ...(siteKey && { captchaSiteKey: siteKey }) }, { 'retry-after': String(wait) });
       }
       ({ wait, left } = await claimAttempt(env.DB, throttleKey, Date.now(), { pastLock: true }));
     }

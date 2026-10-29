@@ -1,6 +1,7 @@
 import { SELF } from 'cloudflare:test';
 import { describe, it, expect } from 'vitest';
 import { createUser, login, signIn, PASSWORD } from './helpers.js';
+import { captchaSiteKey, passesCaptcha } from '../worker/captcha.js';
 
 const BASE = 'http://localhost';
 
@@ -77,6 +78,16 @@ describe('login throttling', () => {
     expect((await attempt('elsewhere', PASSWORD, 'pass-signup')).status).toBe(429);
     expect((await attempt('elsewhere', PASSWORD, 'pass-elsewhere')).status).toBe(429);
     expect((await attempt('elsewhere', PASSWORD, 'pass')).status).toBe(200);
+  });
+
+  it('offers the check only when a solved one could pass', async () => {
+    const full = { TURNSTILE_SITE_KEY: 'k', TURNSTILE_SECRET: 's', TURNSTILE_HOSTNAMES: 'rounds.test' };
+    expect(captchaSiteKey(full)).toBe('k');
+    for (const missing of ['TURNSTILE_SITE_KEY', 'TURNSTILE_SECRET', 'TURNSTILE_HOSTNAMES']) {
+      const env = { ...full, [missing]: '' };
+      expect(captchaSiteKey(env), missing).toBeNull();
+      expect(await passesCaptcha(env, 'pass', new Request('http://rounds.test/')), missing).toBe(false);
+    }
   });
 
   it('a stranger cannot lock you out of a browser you have signed in from', { timeout: 30000 }, async () => {
