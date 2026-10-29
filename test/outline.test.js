@@ -247,13 +247,21 @@ describe('POST /api/outline', () => {
 
 describe('one deadline for the whole read', () => {
   it('gives the model only what the conversion left of it', async () => {
-    const ai = fakeAi(MODEL_REPLY);
-    ai.toMarkdown = () => new Promise((ok) => setTimeout(() => ok([{ format: 'markdown', data: OUTLINE }]), 80));
-    ai.run = () => new Promise(() => {});
-    const t0 = Date.now();
-    await expect(readOutline(ai, { bytes: new Uint8Array(4), type: 'application/pdf', today: '2026-09-23', deadline: t0 + 150 }))
-      .rejects.toMatchObject({ status: 504, body: { error: 'ai_timeout' } });
-    expect(Date.now() - t0).toBeLessThan(230);
+    /* on a fake clock: a wall-clock bound fails on a busy machine */
+    vi.useFakeTimers();
+    try {
+      const ai = fakeAi(MODEL_REPLY);
+      ai.toMarkdown = () => new Promise((ok) => setTimeout(() => ok([{ format: 'markdown', data: OUTLINE }]), 80));
+      ai.run = () => new Promise(() => {});
+      let err;
+      readOutline(ai, { bytes: new Uint8Array(4), type: 'application/pdf', today: '2026-09-23', deadline: Date.now() + 150 }).catch((e) => { err = e; });
+      await vi.advanceTimersByTimeAsync(149);
+      expect(err).toBeUndefined();
+      await vi.advanceTimersByTimeAsync(1);
+      expect(err).toMatchObject({ status: 504, body: { error: 'ai_timeout' } });
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('claims no read when the conversion used it all up', async () => {

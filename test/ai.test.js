@@ -81,14 +81,22 @@ describe('askJson', () => {
   });
 
   it('gives the retry only what is left of one deadline', async () => {
-    const ai = { run: vi.fn()
-      .mockImplementationOnce(() => new Promise((ok) => setTimeout(() => ok({ response: 'no' }), 120)))
-      .mockImplementationOnce(() => new Promise(() => {})) };
-    const t0 = Date.now();
-    await expect(askJson(ai, '@cf/m', { messages: [] }, clean, 'x', { timeoutMs: 200, minRetryMs: 10 }))
-      .rejects.toMatchObject({ status: 504, body: { error: 'ai_timeout' } });
-    expect(ai.run).toHaveBeenCalledTimes(2);
-    expect(Date.now() - t0).toBeLessThan(280);
+    /* on a fake clock: under load a real 120 ms answer can come too late for any retry */
+    vi.useFakeTimers();
+    try {
+      const ai = { run: vi.fn()
+        .mockImplementationOnce(() => new Promise((ok) => setTimeout(() => ok({ response: 'no' }), 120)))
+        .mockImplementationOnce(() => new Promise(() => {})) };
+      let err;
+      askJson(ai, '@cf/m', { messages: [] }, clean, 'x', { timeoutMs: 200, minRetryMs: 10 }).catch((e) => { err = e; });
+      await vi.advanceTimersByTimeAsync(199);
+      expect(ai.run).toHaveBeenCalledTimes(2);
+      expect(err).toBeUndefined();
+      await vi.advanceTimersByTimeAsync(1);
+      expect(err).toMatchObject({ status: 504, body: { error: 'ai_timeout' } });
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
 
