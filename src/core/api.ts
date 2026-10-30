@@ -5,7 +5,7 @@ import type { Outline, Schedule } from './importers/plan.ts';
 import { UNREAD_CAP } from './shared.ts';
 import type { Cursor, Page, ServerProfile } from './store.ts';
 import type { Album, Device, Page as SpotifyPage, PlayerState, Playlist, SearchResults, Track } from './spotify-types.ts';
-import type { ActivityRow, AdminAccounts, AdminHealth, AdminTraffic, Announcement, AuditEntry, CalendarFeed, ErrorGroup, ErrorRow, MaintenanceState, Flow, FriendMatch, FriendSettings, Friends, GroupRecord, Inbox, JoinCode, ParentRef, RoomView, Space, SpaceDetails, SpaceInvite, SpaceSummary } from './types.ts';
+import type { ActivityRow, AdminAccounts, AdminHealth, AdminTraffic, Announcement, AuditEntry, CalendarFeed, ErrorGroup, ErrorRow, MaintenanceState, Flow, FriendMatch, FriendSettings, Friends, GroupRecord, Inbox, JoinCode, ParentRef, RoomMessage, RoomView, Space, SpaceDetails, SpaceInvite, SpaceSummary } from './types.ts';
 
 /** An error's body as the Worker sends it: its code, and for some the server's copy or a wait. */
 export interface ErrorBody { error?: string; retryAfter?: unknown; current?: Row | null; [field: string]: unknown }
@@ -287,6 +287,8 @@ export const api = {
     invite: (id: string, userIds: string[]) => empty(request('POST', `/api/rooms/${id}/invite`, { userIds })),
     label: (id: string, courseLabel: string): Promise<RoomView> => request('PUT', `/api/rooms/${id}/me`, { courseLabel }),
     record: (id: string): Promise<GroupRecord> => request('GET', `/api/rooms/${id}/record`),
+    messages: (id: string, after = 0): Promise<{ messages: RoomMessage[] }> => request('GET', `/api/rooms/${id}/messages${after ? `?after=${after}` : ''}`),
+    say: (id: string, body: string): Promise<RoomMessage> => request('POST', `/api/rooms/${id}/messages`, { body }),
   },
   /* a solo run, so friends see you studying (worker/rooms.js setPresence) */
   presence: {

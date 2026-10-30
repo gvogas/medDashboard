@@ -257,6 +257,8 @@ export interface RoomView {
 export interface GroupRecord { roomId: string; startedAt: number; endedAt: number | null; members: { userId: string; username: string; name: string; minutes: number }[] }
 /** An invite to a room that is still open, for the inbox. */
 export interface RoomInvite { roomId: string; hostId: string | null; name: string; username: string; run: RoomRun; size: number; at: number }
+/** A message in a room's chat: between the people in the room now. `id` only goes up, so a poll can ask for what is newer. */
+export interface RoomMessage { id: number; userId: string; name: string; body: string; at: number }
 
 /** Your layer on a shared item (spec §4): yours alone. Its id is '<space id>:<item id>'. */
 export interface Mark extends Synced {

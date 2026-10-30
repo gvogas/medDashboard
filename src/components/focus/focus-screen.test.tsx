@@ -46,6 +46,7 @@ import { ui } from "@/data/ui"
 import { closeSheet, openSheet } from "@/data/overlay"
 import { closeKeys, openKeys } from "@/data/keys"
 import { leaveFocus } from "@/data/study-timer"
+import { joinRoom, poll, resetRoom } from "@/data/room"
 import { fakeApi, resetEngine, track } from "@/components/spotify/test-spotify"
 import { TimerCards } from "@/components/study/timer-cards"
 import { StudyDock } from "@/components/study/study-dock"
@@ -77,6 +78,7 @@ beforeEach(() => {
     resetEngine({ track: track("t1", { title: "Weightless" }), playing: true, device: "MacBook", deviceId: "mac" })
 })
 afterEach(() => {
+    resetRoom()
     cleanup()
     closeSheet()
     closeKeys()
@@ -404,5 +406,32 @@ describe("motion", () => {
         await tickFor(1000)
         expect(flip().querySelector(".fc-flipping")).toBeNull()
         expect(stage().getByRole("timer").textContent).toContain("24 minutes 59 seconds left")
+    })
+})
+
+describe("the room chat in music mode", () => {
+    const at = T0
+    const roomView = {
+        room: { id: "room00000001", hostId: "host", endedAt: null, feed: [], run: { flow: CLASSIC, startedAt: at, pausedAt: null, pausedMs: 0, skippedMs: 0, skippedStudyMs: 0 } },
+        members: ["host", "me"].map((userId) => ({ userId, username: userId, name: userId.toUpperCase(), state: "in", joinedAt: at, joinedStudyMs: 0, earlierMs: 0, leftAt: null, courseLabel: "", away: false })),
+        tag: "1.0", now: at,
+    }
+
+    it("shows the room's chat beside the music, with the messages in it", async () => {
+        Object.assign(api, { rooms: {
+            join: vi.fn(async () => roomView), get: vi.fn(async () => null), leave: vi.fn(async () => null), clock: vi.fn(), invite: vi.fn(), label: vi.fn(), say: vi.fn(),
+            messages: vi.fn(async () => ({ messages: [{ id: 1, userId: "host", name: "HOST", body: "Ready when you are", at }] })),
+        } })
+        page()
+        await act(() => joinRoom("room00000001", "anat", null, "Anatomy"))
+        await act(() => poll())
+        key("m")
+        const chat = within(screenEl()!).getByRole("region", { name: "Room chat" })
+        expect(chat.textContent).toContain("Ready when you are")
+        /* jsdom applies no media queries: the wrapper's classes are what the layout rule reads */
+        const wrapper = chat.parentElement!
+        expect(wrapper.classList.contains("block")).toBe(true)
+        expect(wrapper.classList.contains("hidden")).toBe(false)
+        expect(panel()).not.toBeNull()
     })
 })

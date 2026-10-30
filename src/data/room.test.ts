@@ -7,7 +7,7 @@ const fake = vi.hoisted(() => ({
     sessions: [] as Record<string, unknown>[],
     data: { study_sessions: [] as Record<string, unknown>[], profile: { id: "me" } as Record<string, unknown> | null },
     rooms: {
-        create: vi.fn(), get: vi.fn(), join: vi.fn(), leave: vi.fn(async () => null), clock: vi.fn(), invite: vi.fn(), label: vi.fn(),
+        create: vi.fn(), get: vi.fn(), join: vi.fn(), leave: vi.fn(async () => null), clock: vi.fn(), invite: vi.fn(), label: vi.fn(), messages: vi.fn(), say: vi.fn(),
     },
 }))
 vi.mock("@/core/store", () => ({
@@ -25,7 +25,7 @@ vi.mock("@/core/store", () => ({
 vi.mock("@/core/api", async (orig) => ({ ...(await orig<typeof import("@/core/api")>()), api: { rooms: fake.rooms } }))
 
 import * as run from "./run"
-import { hostClock, joinRoom, leaveRoom, poll, resetRoom, roomNow, startRoom } from "./room"
+import { hostClock, joinRoom, leaveRoom, poll, resetRoom, roomNow, sendChat, startRoom } from "./room"
 import { currentToast, hideToast } from "./toast"
 import { ApiError } from "@/core/api"
 import type { RoomMember, RoomView } from "./types"
@@ -184,5 +184,74 @@ describe("the host's controls", () => {
         await hostClock("pause")
         expect(fake.rooms.clock).toHaveBeenCalledWith("room00000001", "pause")
         expect(run.read()?.paused).toBe(true)
+    })
+})
+
+describe("the room's chat", () => {
+    const msg = (id: number, body: string, userId = "pal") => ({ id, userId, name: userId.toUpperCase(), body, at: T0 + id })
+
+    it("takes the messages newer than the last one seen, in order", async () => {
+        fake.rooms.join.mockResolvedValue(view())
+        await joinRoom("room00000001", "bio", null, "BIO")
+        fake.rooms.get.mockResolvedValue(null)
+        fake.rooms.messages.mockResolvedValueOnce({ messages: [msg(1, "hi")] })
+        await poll()
+        expect(fake.rooms.messages).toHaveBeenLastCalledWith("room00000001", 0)
+        expect(roomNow().chat.map((m) => m.body)).toEqual(["hi"])
+        fake.rooms.messages.mockResolvedValueOnce({ messages: [msg(2, "hello", "me")] })
+        await poll()
+        expect(fake.rooms.messages).toHaveBeenLastCalledWith("room00000001", 1)
+        expect(roomNow().chat.map((m) => [m.id, m.body])).toEqual([[1, "hi"], [2, "hello"]])
+    })
+
+    it("sends a message, shows it, and clears nothing on success", async () => {
+        fake.rooms.join.mockResolvedValue(view())
+        await joinRoom("room00000001", "bio", null, "BIO")
+        fake.rooms.say.mockResolvedValue(msg(3, "ready?", "me"))
+        fake.rooms.messages.mockResolvedValue({ messages: [msg(3, "ready?", "me")] })
+        expect(await sendChat("  ready?  ")).toBe("")
+        expect(fake.rooms.say).toHaveBeenCalledWith("room00000001", "ready?")
+        expect(roomNow().chat).toEqual([expect.objectContaining({ id: 3, body: "ready?" })])
+    })
+
+    it("says why a message did not go, and does nothing for an empty one", async () => {
+        fake.rooms.join.mockResolvedValue(view())
+        await joinRoom("room00000001", "bio", null, "BIO")
+        fake.rooms.say.mockRejectedValue(new ApiError(429, { error: "chat_limit" }))
+        expect(await sendChat("too fast")).not.toBe("")
+        expect(await sendChat("   ")).toBe("")
+        expect(fake.rooms.say).toHaveBeenCalledTimes(1)
+    })
+
+    it("clears the chat when you leave the room", async () => {
+        fake.rooms.join.mockResolvedValue(view())
+        await joinRoom("room00000001", "bio", null, "BIO")
+        fake.rooms.messages.mockResolvedValue({ messages: [msg(1, "hi")] })
+        await poll()
+        expect(roomNow().chat.map((m) => m.body)).toEqual(["hi"])
+        await leaveRoom()
+        expect(roomNow().chat).toEqual([])
+    })
+
+    it("keeps what it has when a read fails, and does not call the room unreachable", async () => {
+        fake.rooms.join.mockResolvedValue(view())
+        await joinRoom("room00000001", "bio", null, "BIO")
+        fake.rooms.get.mockResolvedValue(null)
+        fake.rooms.messages.mockResolvedValueOnce({ messages: [msg(1, "kept")] })
+        await poll()
+        fake.rooms.messages.mockRejectedValueOnce(new ApiError(500, null))
+        await poll()
+        expect(roomNow().chat.map((m) => m.body)).toEqual(["kept"])
+        expect(roomNow().reconnecting).toBe(false)
+    })
+
+    it("empties the chat on sign-out (resetRoom)", async () => {
+        fake.rooms.join.mockResolvedValue(view())
+        await joinRoom("room00000001", "bio", null, "BIO")
+        fake.rooms.get.mockResolvedValue(null)
+        fake.rooms.messages.mockResolvedValueOnce({ messages: [msg(1, "old")] })
+        await poll()
+        resetRoom()
+        expect(roomNow().chat).toEqual([])
     })
 })

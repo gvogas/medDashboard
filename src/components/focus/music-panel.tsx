@@ -16,9 +16,11 @@ export interface MusicPanelProps {
     /** ✕: close the panel. */
     onClose: () => void
     className?: string
+    /** Shown under the header (the room chat, on a phone with music open). */
+    top?: ReactNode
 }
 
-export function MusicPanel({ onClose, className }: MusicPanelProps) {
+export function MusicPanel({ onClose, className, top }: MusicPanelProps) {
     const s = useSpotify()
     const cooling = useCooling(s.retryAt)
     useFollowTrack(s)
@@ -33,6 +35,7 @@ export function MusicPanel({ onClose, className }: MusicPanelProps) {
                     <Icon name="close" className="size-[15px]" />
                 </button>
             </div>
+            {top}
             {!p.loaded
                 ? <Message title="Spotify">Checking your connection…</Message>
                 : !p.connected

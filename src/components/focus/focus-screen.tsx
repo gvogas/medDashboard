@@ -30,7 +30,7 @@ import {
     clockTime, doneAt, leaveFocus, nextLine, pickRoomClass, skip, stopRun, stripSegments, toggleMusic, togglePause, useRun, useToday, type Run,
 } from "@/data/study-timer"
 import { hostClock, isHost, useRoom } from "@/data/room"
-import { RoomLine, RoomPanel } from "./room-panel"
+import { RoomChat, RoomLine, RoomPanel } from "./room-panel"
 import { MusicPill } from "./music-pill"
 import { MusicPanel } from "./music-panel"
 
@@ -206,6 +206,7 @@ function FocusScreen({ run }: { run: Run }) {
                         <GhostButton onClick={() => void stopRun()} className={cn(music && "max-[700px]:hidden")}>{inRoom ? "Leave room" : <><StopIcon />Stop &amp; log</>}</GhostButton>
                     </div>
                     {inRoom && <RoomLine run={run} />}
+                    {inRoom && !music && <div className="hidden max-[900px]:block"><RoomChat /></div>}
                     {inRoom && (
                         <p className={cn("m-0 text-center text-[12.5px] text-[var(--fx-ink-3)]", music && "max-[700px]:hidden")}>
                             {host ? "You're the host: Pause, Skip and End act for everyone." : hostName + " controls the timer. Your minutes count from when you joined."}
@@ -225,6 +226,7 @@ function FocusScreen({ run }: { run: Run }) {
             {music && (
                 <MusicPanel
                     onClose={() => toggleMusic(false)}
+                    top={inRoom ? <div className="block border-b border-white/10 px-4 py-2.5"><RoomChat /></div> : undefined}
                     className={cn(
                         "relative z-[1] m-3 ml-0 w-[38%] max-w-[560px] min-w-[320px] flex-none rounded-2xl bg-[color-mix(in_srgb,var(--fx-bg)_70%,transparent)]",
                         "animate-[focus-panel-in_.28s_ease-out] motion-reduce:animate-none",
