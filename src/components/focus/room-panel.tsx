@@ -3,12 +3,12 @@
 // Invite more, and the activity (joined, left, paused, skipped). On a phone it is a short line
 // of names under the controls instead (RoomLine).
 
-import { useState } from "react"
+import { useEffect, useRef, useState, type FormEvent } from "react"
 import { cn } from "@/lib/utils"
 import { duration, MINUTE_MS } from "@/lib/time"
 import { data } from "@/core/store"
 import { useFriends } from "@/data/friends"
-import { inviteMore, isHost, localClock, memberMinutes, useRoom } from "@/data/room"
+import { inviteMore, isHost, localClock, memberMinutes, sendChat, useRoom } from "@/data/room"
 import type { Run } from "@/data/study-timer"
 import type { RoomEvent, RoomMember } from "@/data/types"
 
@@ -50,6 +50,7 @@ export function RoomPanel({ run }: { run: Run }) {
                 ))}
             </ul>
             {view && isHost(state) && <InviteMore inside={view.members.filter((m) => m.state === "in").map((m) => m.userId)} />}
+            {view && <RoomChat />}
             {view && view.room.feed.length > 0 && (
                 <>
                     <h3 className={H3}><span>Activity</span></h3>
@@ -109,6 +110,47 @@ function InviteMore({ inside }: { inside: string[] }) {
             ))}
             {err && <p role="alert" className="m-0 text-[12px] text-[#F3A497]">{err}</p>}
         </div>
+    )
+}
+
+/** The room's chat: the people in it talk to each other. In the panel, under the controls on a phone, and in the music sheet on a phone while music is open. */
+export function RoomChat() {
+    const state = useRoom()
+    const me = data.profile?.id ?? ""
+    const [draft, setDraft] = useState("")
+    const [busy, setBusy] = useState(false)
+    const [err, setErr] = useState("")
+    const list = useRef<HTMLOListElement>(null)
+    useEffect(() => { const el = list.current; if (el) el.scrollTop = el.scrollHeight }, [state.chat.length])
+    if (!state.view) return null
+    const send = async (e: FormEvent) => {
+        e.preventDefault()
+        if (busy || !draft.trim()) return
+        setBusy(true); setErr("")
+        const failed = await sendChat(draft)
+        setBusy(false)
+        if (failed) setErr(failed); else setDraft("")
+    }
+    return (
+        <section aria-label="Room chat" className="flex flex-col gap-2">
+            <h3 className={H3}><span>Chat</span></h3>
+            <ol ref={list} aria-label="Messages" className="m-0 flex max-h-[220px] min-h-[40px] list-none flex-col gap-1.5 overflow-y-auto p-0 text-[13px]">
+                {state.chat.length === 0 && <li className="text-[12.5px] text-[var(--fx-ink-3)]">No messages yet.</li>}
+                {state.chat.map((m) => (
+                    <li key={m.id} className="break-words">
+                        <span className="font-semibold text-[var(--fx-ink-2)]">{m.userId === me ? "You" : m.name}: </span>
+                        <span>{m.body}</span>
+                    </li>
+                ))}
+            </ol>
+            <form onSubmit={send} className="flex gap-2">
+                <input aria-label="Message the room" value={draft} maxLength={500} onChange={(e) => setDraft(e.target.value)} placeholder="Say something"
+                    className="min-w-0 flex-1 rounded-full border border-white/10 bg-white/5 px-3 py-1.5 font-[inherit] text-[13px] text-[var(--fx-ink)]" />
+                <button type="submit" disabled={busy || !draft.trim()}
+                    className="cursor-pointer rounded-full border border-white/10 bg-white/5 px-3 py-1.5 font-[inherit] text-[12.5px] font-semibold text-[var(--fx-ink-2)] hover:text-[var(--fx-ink)] disabled:opacity-50">Send</button>
+            </form>
+            {err && <p role="alert" className="m-0 text-[12px] text-[#F3A497]">{err}</p>}
+        </section>
     )
 }
 

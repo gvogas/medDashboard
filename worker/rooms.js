@@ -474,6 +474,60 @@ export async function groupRecord(db, me, roomId) {
   };
 }
 
+/* ── room chat ── */
+
+export const CHAT_KEEP = 50;
+export const MESSAGE_MAX = 500;
+/** Messages one person may send a minute: well above talk, well below a flood. */
+export const CHAT_PER_MINUTE = 30;
+
+const chatOf = (r) => ({ id: r.id, userId: r.user_id, name: r.name, body: r.body, at: r.at });
+const CHAT_SQL = `SELECT msg.id, msg.user_id, ${DISPLAY_NAME} AS name, msg.body, msg.created_at AS at
+  FROM room_messages AS msg JOIN users AS u ON u.id = msg.user_id`;
+
+/** Whether `me` is in the room now (state 'in'). Past members and strangers get 404. */
+async function inRoomNow(db, me, roomId) {
+  const row = await db.prepare("SELECT 1 AS ok FROM room_members WHERE room_id = ? AND user_id = ? AND state = 'in'").bind(roomId, me).first();
+  if (!row) throw notFound();
+}
+
+/** The room's latest messages, oldest first; with `after` (an id), the ones after it, so a poll
+    reads only what is new. Only people in the room now may read it. */
+export async function listMessages(db, me, roomId, after = null) {
+  await inRoomNow(db, me, roomId);
+  const cursor = Number.parseInt(after ?? '0', 10);
+  if (!Number.isInteger(cursor) || cursor < 0) throw new HttpError(400, { error: 'invalid', field: 'after' });
+  if (cursor > 0) {
+    const { results } = await db.prepare(`${CHAT_SQL} WHERE msg.room_id = ? AND msg.id > ? ORDER BY msg.id LIMIT ?`)
+      .bind(roomId, cursor, CHAT_KEEP).all();
+    return { messages: results.map(chatOf) };
+  }
+  const { results } = await db.prepare(`SELECT * FROM (${CHAT_SQL} WHERE msg.room_id = ? ORDER BY msg.id DESC LIMIT ?) ORDER BY id`)
+    .bind(roomId, CHAT_KEEP).all();
+  return { messages: results.map(chatOf) };
+}
+
+/** Send a message to the room: you must be in it and it must be open. Refused if the room has
+    already taken you out for being away (settled as a poll would). */
+export async function sendMessage(db, me, roomId, body, now = Date.now()) {
+  const text = typeof body?.body === 'string' ? body.body.replace(/[\x00-\x08\x0b-\x1f\x7f]/g, '').trim() : '';
+  if (!text || text.length > MESSAGE_MAX) throw new HttpError(400, { error: 'invalid', field: 'body' });
+  const first = await load(db, roomId);
+  if (!first) throw notFound();
+  if (!first.members.some((m) => m.userId === me && m.state === 'in')) throw notFound();
+  const { room, members } = structuredClone(first);
+  settle(room, members, now);
+  if (room.endedAt !== null) throw ended();
+  const m = members.find((x) => x.userId === me);
+  if (!m || m.state !== 'in') throw notFound();
+  const wait = await claimLimit(db, `chat:${me}`, CHAT_PER_MINUTE, now, MINUTE_MS);
+  if (wait) throw rateLimited(wait, 'chat_limit');
+  const row = await db.prepare('INSERT INTO room_messages (room_id, user_id, body, created_at) VALUES (?, ?, ?, ?) RETURNING id, created_at')
+    .bind(roomId, me, text, now).first();
+  await touch(db, room, m, now);
+  return { id: row.id, userId: me, name: m.name, body: text, at: row.created_at };
+}
+
 /* ── the nightly cron ── */
 
 export const STALE_MS = 30 * MINUTE_MS;
@@ -522,6 +576,10 @@ export const roomRoutes = [
     json(await setRoomLabel(env.DB, await requireUser(request, env), id, await readJson(request)))],
   ['GET', route(`rooms/${ID}/record`), async ({ request, env, params: [id] }) =>
     json(await groupRecord(env.DB, await requireUser(request, env), id))],
+  ['GET', route(`rooms/${ID}/messages`), async ({ request, env, url, params: [id] }) =>
+    json(await listMessages(env.DB, await requireUser(request, env), id, url.searchParams.get('after')))],
+  ['POST', route(`rooms/${ID}/messages`), async ({ request, env, params: [id] }) =>
+    json(await sendMessage(env.DB, await requireUser(request, env), id, await readJson(request)), 201)],
   ['PUT', route('presence'), async ({ request, env }) => {
     await setPresence(env.DB, await requireUser(request, env), await readJson(request));
     return noContent();

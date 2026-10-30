@@ -12,7 +12,7 @@ import { data } from "@/core/store"
 import * as run from "./run"
 import { toast } from "./toast"
 import { openRecord } from "./record"
-import type { Flow, RoomRun, RoomView } from "./types"
+import type { Flow, RoomMessage, RoomRun, RoomView } from "./types"
 import { MINUTE_MS } from "@/lib/time"
 import { createStore } from "@/lib/store"
 
@@ -22,6 +22,8 @@ export const HIDDEN_MS = 30_000
 const GONE_MS = 10 * MINUTE_MS
 /** Friends one room can invite at a time: the room holds 8, you included. */
 export const ROOM_INVITES = 7
+/** Chat messages kept on this device (the server keeps the same number to send). */
+export const CHAT_KEEP = 50
 
 interface State {
     view: RoomView | null
@@ -29,8 +31,10 @@ interface State {
     offset: number
     /** The last poll failed: the clock runs on from the last record. */
     reconnecting: boolean
+    /** The room's chat, oldest first: the last CHAT_KEEP messages. */
+    chat: RoomMessage[]
 }
-const store = createStore<State>({ view: null, offset: 0, reconnecting: false })
+const store = createStore<State>({ view: null, offset: 0, reconnecting: false, chat: [] })
 const set = store.patch
 
 export const roomNow = store.get
@@ -103,6 +107,7 @@ export async function poll(): Promise<void> {
         const view = await api.rooms.get(id, known?.room.id === id ? known.tag : undefined)
         if (view) await apply(view, sentAt)
         else if (roomNow().reconnecting) set({ reconnecting: false })
+        if (roomId() === id) await pollChat(id)
     } catch (e) {
         if ((e as Error)?.name === "AbortError") return
         if (e instanceof ApiError && e.status === 404) {
@@ -114,6 +119,48 @@ export async function poll(): Promise<void> {
         set({ reconnecting: true })
     }
     if (polling === id) schedule()
+}
+
+/* ── chat ── */
+
+let chatRoom = ""
+let lastChat = 0
+
+/** Forget the chat: it belongs to a room this device is no longer in, or has left. */
+function clearChat() { chatRoom = ""; lastChat = 0; set({ chat: [] }) }
+
+/** The messages newer than the last one seen (the last page the first time). A failed read keeps
+    what the chat has and never marks the room as reconnecting: the room is still there. */
+async function pollChat(id: string): Promise<void> {
+    const fresh = chatRoom === id
+    try {
+        const { messages } = await api.rooms.messages(id, fresh ? lastChat : 0)
+        if (roomId() !== id) return
+        if (fresh && messages.length === 0) return
+        const have = fresh ? roomNow().chat : []
+        const seen = new Set(have.map((m) => m.id))
+        const chat = [...have, ...messages.filter((m) => !seen.has(m.id))].slice(-CHAT_KEEP)
+        chatRoom = id
+        lastChat = chat.reduce((max, m) => Math.max(max, m.id), 0)
+        set({ chat })
+    } catch { /* the next poll catches up */ }
+}
+
+/** Say something in the room's chat. Returns an error message or "". */
+export async function sendChat(text: string): Promise<string> {
+    const id = roomId()
+    const body = text.trim()
+    if (!id || !body) return ""
+    try { await api.rooms.say(id, body) } catch (e) { return chatMessage(e) }
+    await pollChat(id)
+    return ""
+}
+
+/** What a failed chat send says: the chat's own limits first, then the room's. */
+function chatMessage(e: unknown): string {
+    if (e instanceof ApiError && e.body?.error === "chat_limit") return "You're sending messages fast. Wait a moment."
+    if (e instanceof ApiError && e.status === 400) return "Messages can be up to 500 characters."
+    return roomMessage(e)
 }
 
 function startPolling() {
@@ -137,6 +184,7 @@ run.onTick((s, event) => {
         const id = polling ?? tellLeave
         stop()
         set({ view: null, reconnecting: false })
+        clearChat()
         if (id && tellLeave === id) sendLeave(id)
         tellLeave = null
         /* the session is saved before the end is told: with a minute or more, the summary */
@@ -182,11 +230,13 @@ async function enter(view: RoomView, sentAt: number, courseId: string, itemId: s
     const offset = view.now - (sentAt + Date.now()) / 2
     const mine = view.members.find((m) => m.userId === me())!
     applied = { id: view.room.id, version: versionOf(view) }
+    if (chatRoom !== view.room.id) clearChat()
     set({ view, offset, reconnecting: false })
     await run.begin(view.room.run.flow, courseId, itemId, {
         link: { id: view.room.id, joinedAt: mine.joinedAt - offset, joinedStudyMs: mine.joinedStudyMs, earlierMs: mine.earlierMs },
         clock: local(view.room.run, offset),
     })
+    void pollChat(view.room.id)
 }
 
 /** Start a room as its host, inviting `invite`. A run already going ends once the room is made (it
@@ -254,4 +304,4 @@ export function memberMinutes(m: RoomView["members"][number], clock: RoomRun, no
 export const localClock = (s: State = roomNow()): RoomRun | null => (s.view ? local(s.view.room.run, s.offset) : null)
 
 /** For tests and sign-out. */
-export function resetRoom() { stop(); tellLeave = null; applied = { id: "", version: 0 }; set({ view: null, offset: 0, reconnecting: false }) }
+export function resetRoom() { stop(); tellLeave = null; applied = { id: "", version: 0 }; clearChat(); set({ view: null, offset: 0, reconnecting: false }) }
