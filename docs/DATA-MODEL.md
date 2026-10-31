@@ -49,7 +49,7 @@ database (the older ones were deleted after each move was confirmed). The later 
 change triggers in their last form. The chain `rounds-v7` was built from
 (`0001_schema.sql` to `0009_friend_cancel.sql`) is kept as a test fixture in
 `test/fixtures/legacy-migrations/`, for the move's test. Later changes are new numbered
-files. The next one is `0002`.
+files. The next one is `0010`, after `0009_room_chat.sql`.
 
 ## Structure at a glance
 
@@ -60,7 +60,7 @@ files. The next one is `0002`.
 | Your layer on shared rows | `marks`, `space_prefs` | Your status, grade and notes on a shared item; your settings for a space |
 | Activity and the inbox | `activity`, `inbox_seen` | What members did in each space (90 days), and how far each person has read |
 | Friends | `friendships`, `friend_settings` | Friend requests and friendships; whether you show in search |
-| Study rooms | `rooms`, `room_members`, `presence` | Shared timers and who is in them (`0002_rooms.sql`); a solo run friends can see (`0003_presence.sql`) |
+| Study rooms | `rooms`, `room_members`, `presence`, `room_messages` | Shared timers and who is in them (`0002_rooms.sql`); a solo run friends can see (`0003_presence.sql`); chat between the people in a room (`0009_room_chat.sql`) |
 | Synchronization | `changes`, `sync_state` | Latest record changes, ordered cursors per scope, and the retention floor |
 | Authentication and request control | `login_throttle`, `request_limits` | Temporary attempt counts and cooldowns |
 | Spotify connection | `spotify_tokens`, `spotify_oauth_states`, `spotify_refresh_locks` | Credentials, one-use consent attempts, and refresh leases |
@@ -481,6 +481,10 @@ A study room (study together, `worker/rooms.js`): `id` (12 characters), `host_id
 ## `room_members`
 
 `(room_id, user_id)`, both `ON DELETE CASCADE`. `state` is `invited`, `in` or `left`. `joined_at` is your first join; `joined_study_ms` is the room's study time when you last joined; `earlier_ms` is what earlier stints came to. Your minutes are `earlier_ms` + the room's study now − `joined_study_ms`. `last_seen` is written at most every 30 s by any request of yours: 2 minutes without one shows you as away, 10 takes you out (by the next request on the room). Up to 8 `in`; one open room at a time (joining another leaves the first). Someone not in the room may see or join it only while they are a friend of the host, or of whoever invited them (and that invite still stands with a friend), or, if they were in it before, a friend of anyone in it now. An invite or an earlier stint alone is not enough once the friendship ends. `course_label` (60 characters) is what the room sees you studying.
+
+## `room_messages`
+
+Chat between the people in a room (`0009_room_chat.sql`): `id`, `room_id` and `user_id` (both `ON DELETE CASCADE`), `body` (1 to 500 characters) and `created_at`. Not synced and not in the change feed. The messages go when the room does: the nightly cron deletes a room 90 days after it ended.
 
 ## `presence`
 
