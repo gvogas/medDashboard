@@ -2,7 +2,7 @@ import path from 'node:path';
 import { availableParallelism } from 'node:os';
 import { defineConfig } from 'vitest/config';
 import react from '@vitejs/plugin-react';
-import { cloudflareTest, readD1Migrations } from '@cloudflare/vitest-pool-workers';
+import { cloudflareTest, readD1Migrations } from '@cloudflare/vitest-plugin';
 import { spotifyStub } from './test/spotify-stub.js';
 
 export default defineConfig(async () => {
