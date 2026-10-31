@@ -231,6 +231,16 @@ runs once per database.
 | File | What it adds |
 | --- | --- |
 | `0001_schema.sql` | The whole schema: users, courses, items, quotes, study, Spotify tokens, the change feed, the Admin page's tables, shared spaces (classes and projects) with their members and invites, marks and space prefs, activity and the inbox, push devices, grades and friends (see [DATA-MODEL.md](DATA-MODEL.md)) |
+| `0002_rooms.sql` | Study rooms: the shared timer and who is in each room (`rooms`, `room_members`) |
+| `0003_presence.sql` | A solo run friends can see (`presence`) |
+| `0004_space_indexes.sql` | Indexes on `marks` and `space_prefs` for lookups by class or project |
+| `0005_feed_off.sql` | The calendar feed's off switch (`users.feed_off`) |
+| `0006_revoked_sessions.sql` | Sessions signed out of, until they would have expired (`revoked_sessions`) |
+| `0007_session_registry.sql` | The sessions a browser holds right now (`sessions`) |
+| `0008_push_device_session.sql` | The session a push device subscribed under (`push_subscriptions.sid`) |
+| `0009_room_chat.sql` | Room chat between the people in a room (`room_messages`) |
+
+The rows above are the files in `migrations/` after `0001_schema.sql`, in the order they run. The chain they replaced (`0002_spaces.sql` to `0009_friend_cancel.sql`) is kept only as a test fixture in `test/fixtures/legacy-migrations/`.
 
 The files that used to follow it (`0002_spaces.sql` to `0009_friend_cancel.sql`) were
 folded into `0001_schema.sql` for the move of `rounds-v7` into `rounds-v8` (see
@@ -249,7 +259,7 @@ the feed, open to everyone) adds no migration either.
 
 To change the database:
 
-1. Add a new file with the next number, `0002_something.sql`. Never edit a file that
+1. Add a new file with the next number, `0010_something.sql`. Never edit a file that
    has already run.
 2. Apply it locally with `npm run db:local`, then test.
 3. Push it with the code that needs it. The Deploy workflow applies it to live and runs
