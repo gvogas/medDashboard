@@ -240,14 +240,13 @@ runs once per database.
 | `0008_push_device_session.sql` | The session a push device subscribed under (`push_subscriptions.sid`) |
 | `0009_room_chat.sql` | Room chat between the people in a room (`room_messages`) |
 
-The rows above are the files in `migrations/` after `0001_schema.sql`, in the order they run. The chain they replaced (`0002_spaces.sql` to `0009_friend_cancel.sql`) is kept only as a test fixture in `test/fixtures/legacy-migrations/`.
-
 The files that used to follow it (`0002_spaces.sql` to `0009_friend_cancel.sql`) were
 folded into `0001_schema.sql` for the move of `rounds-v7` into `rounds-v8` (see
 [Moving to a fresh database](#moving-to-a-fresh-database)). `rounds-v7` was built from
 `0001_schema.sql` to `0009_friend_cancel.sql`, kept in
 `test/fixtures/legacy-migrations/`.
 Its schema and the folded one are the same, table for table and column for column.
+The `0002`–`0009` files listed above came after the fold, so they are not in that fixture.
 
 Collaboration Stages 5 (leaving and removal) and 6 (the feed, outline imports, classes
 open to everyone) added no migration: deploying them is a plain push of `main`. Stage 6
