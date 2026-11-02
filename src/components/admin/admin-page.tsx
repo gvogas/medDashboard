@@ -15,9 +15,10 @@ import { Errors } from "./errors"
 import { AuditLog } from "./audit"
 import { AnnouncementTab } from "./announcement"
 import { MaintenanceTab } from "./maintenance"
+import { StudyAiTab } from "./study-ai"
 
-type Tab = "overview" | "accounts" | "errors" | "audit" | "announcement" | "maintenance"
-const TABS: readonly [Tab, string][] = [["overview", "Overview"], ["accounts", "Accounts"], ["errors", "Errors"], ["audit", "Audit log"], ["announcement", "Announcement"], ["maintenance", "Maintenance"]]
+type Tab = "overview" | "accounts" | "errors" | "audit" | "announcement" | "maintenance" | "studyai"
+const TABS: readonly [Tab, string][] = [["overview", "Overview"], ["accounts", "Accounts"], ["errors", "Errors"], ["audit", "Audit log"], ["announcement", "Announcement"], ["maintenance", "Maintenance"], ["studyai", "Study AI"]]
 const KEY = "rounds.adminTab"
 
 function savedTab(): Tab {
@@ -66,6 +67,7 @@ export function AdminPage() {
                 {open === "audit" && <AuditLog />}
                 {open === "announcement" && <AnnouncementTab />}
                 {open === "maintenance" && <MaintenanceTab />}
+                {open === "studyai" && <StudyAiTab />}
             </div>
         </div>
     )

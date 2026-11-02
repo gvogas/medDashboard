@@ -20,6 +20,8 @@ import type { Profile } from "@/data/types"
 import { activeBuddy, loadBuddy, setCardsInFeed, setGameplay, useBuddy } from "@/data/buddy"
 import { maintenanceState } from "@/data/maintenance"
 import { GradingGroup } from "./grading-settings"
+import { loadStudyAiStatus, useStudyAiStatus } from "@/data/study-ai"
+import { useMaintenance } from "@/data/maintenance"
 import { Button, CONTROL } from "./fields"
 import { Group, Hint, Row, Chip } from "./settings-parts"
 
@@ -31,6 +33,7 @@ export function StudyTab({ profile }: { profile: Profile }) {
             <Goal profile={profile} />
             <Streak profile={profile} />
             <Gameplay profile={profile} />
+            <StudyAi />
             <Reviews profile={profile} />
             <School />
             <GradingGroup profile={profile} />
@@ -130,6 +133,21 @@ export function Gameplay({ profile }: { profile: Profile }) {
             )}
             {error && <Hint error>{error}</Hint>}
             <Hint>{on ? "Turning it off hides your buddy and keeps everything it has earned. Cards in your calendar adds a daily \u201cFlashcards: N due\u201d to the calendar feed." : "A pixel buddy for your theme that hatches and evolves as you study. Off by default."}</Hint>
+        </Group>
+    )
+}
+
+/* AI for study (spec §9): today's free generations; Use your own AI always works */
+function StudyAi() {
+    const status = useStudyAiStatus()
+    const off = useMaintenance("studyai") === "blocked"
+    useEffect(() => { void loadStudyAiStatus() }, [])
+    const here = off ? "Generate here is switched off for a moment."
+        : !status ? "Generate here: checking today's free generations…"
+        : `Generate here: ${status.left} of ${status.perUser} free generations left today.`
+    return (
+        <Group title="AI for study" state={off ? "off" : "on"}>
+            <Hint>{here} Use your own AI works with any chat you already use (ChatGPT, Claude, Gemini) and has no limit: Study › Cards › Make cards with AI.</Hint>
         </Group>
     )
 }

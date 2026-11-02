@@ -20,6 +20,7 @@ import { layerRoutes } from './layer.js';
 import { inboxRoutes } from './inbox.js';
 import { friendRoutes } from './friends.js';
 import { buddyRoutes } from './buddy.js';
+import { studyAiRoutes } from './study-ai.js';
 import { roomRoutes } from './rooms.js';
 import { pushRoutes } from './push.js';
 import { unreadStmt } from './activity.js';
@@ -483,6 +484,7 @@ const routes = [
   ...inboxRoutes,
   ...friendRoutes,
   ...buddyRoutes,
+  ...studyAiRoutes,
   ...roomRoutes,
   ...pushRoutes,
   ...adminRoutes,

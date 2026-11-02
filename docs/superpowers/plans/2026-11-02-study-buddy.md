@@ -646,3 +646,26 @@ Fill in the four sketched tests in the same style before Step 3. Each one is an 
 - **Tests:** component tests for the editor, review keys and chip; a calendar feed test.
 
 ### Task 7: Docs, `npm run check`, try it in the dev app, PR.
+
+---
+
+# Stage 4: AI gateway and Use your own AI (as built, `buddy-4-ai`)
+
+No migration. Issue #39.
+
+- **Shared rules:**
+  - `src/core/study-prompts.ts` holds `cardsPrompt`, `classContext`, `cutText` (page and slide boundaries), and `HERE_LIMIT` 12k / `OWN_LIMIT` 30k.
+  - `src/core/study-answers.ts` holds `parseLoose` (moved from `worker/ai.js`), `checkCards` and `readAnswer`.
+  - The browser and the Worker both import them; one test table (`src/core/study-ai.test.ts`).
+- **Worker (`worker/study-ai.js`):**
+  - `PROVIDERS = [workersProvider]` (gpt-oss-120b through `askJson`, which now reports token usage).
+  - Caps from `app_meta` `studyai_caps`. `claimLimit` on `studyai:<user>` with perUser + extras bought today (`buy:ai:<day>:<n>`, 60 coins each, sold in the Buddy shop up to extraMax).
+  - The neuron ceiling is checked before each call; a failed call gives the use back.
+  - Usage goes to `studyai_usage:<UTC day>`, and the call is logged.
+  - Admin routes; the `studyai` maintenance switch.
+- **App:**
+  - `src/data/study-ai.ts`: reading files (PDF via `pdftext`, PowerPoint via the new `src/core/pptxtext.ts`, TXT/MD), Generate here with the on-device cache, Use your own AI's prompt and pasted-answer reading, saving drafts into a deck.
+  - `src/components/study/generate.tsx`: sources, count and level, the two ways, the preview with edit and drop, save into a new or existing deck.
+  - Entry points: Cards home and each group, Make cards on an exam's sheet (yours and a class's), and the toast after a lecture review with notes.
+  - Admin › Study AI tab; Settings › AI for study.
+- **Not done here:** the measured 20-card Workers AI run needs a deploy with a Cloudflare account; record it in the neuron log after the first real run. Applying for Sign in with ChatGPT is #44.

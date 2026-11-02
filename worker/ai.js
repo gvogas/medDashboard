@@ -6,6 +6,7 @@
 //   Llama 4 Scout 24,545 in, 77,273 out          (developers.cloudflare.com/workers-ai/platform/pricing)
 
 import { HttpError } from './http.js';
+import { parseLoose } from '../src/core/study-answers.ts';
 
 /* Longer than any read seen so far (30 s), shorter than the browser's 120 s. A read's deadline:
    it starts with the request (api.js), so the file's conversion, the model and its retry
@@ -67,19 +68,6 @@ export function modelAnswer(raw) {
   return Array.isArray(o) && o.length && o.every((p) => p && typeof p === 'object' && typeof p.text === 'string') ? o.map(partText).join('') : o;
 }
 const partText = (p) => (typeof p === 'string' ? p : typeof p?.text === 'string' ? p.text : '');
-
-/* the first {...} or [...] that parses, after any code fence: models wrap JSON in prose or ```json */
-function parseLoose(text) {
-  const s = text.replace(/```(?:json)?/gi, '');
-  /* whichever opens first: a list of objects is a list, not its first object */
-  const pairs = [['{', '}'], ['[', ']']].sort((a, b) => (s.indexOf(a[0]) + 1 || Infinity) - (s.indexOf(b[0]) + 1 || Infinity));
-  for (const [open, close] of pairs) {
-    const from = s.indexOf(open), to = s.lastIndexOf(close);
-    if (from < 0 || to <= from) continue;
-    try { return JSON.parse(s.slice(from, to + 1)); } catch { /* the next shape */ }
-  }
-  return null;
-}
 
 /**
  * The model's answer as an object, or null: gpt-oss answers in JSON text, sometimes wrapped;
@@ -196,23 +184,26 @@ function cutOff(out, input) {
  * retry is part of the same read (no second claim) and of its one deadline, `timeoutMs`
  * (the browser gives up at 120 s). No retry when less than `minRetryMs` is left, or when the
  * answer was cut off at max_tokens (the retry would be too). JSON that `clean` finds empty is
- * not retried: the same document would give the same answer at the same cost.
+ * not retried: the same document would give the same answer at the same cost. `onUsage` hears
+ * each call's token usage.
  */
-export async function askJson(ai, model, input, clean, what = 'ai', { timeoutMs = TIMEOUT_MS, minRetryMs = MIN_RETRY_MS } = {}) {
+export async function askJson(ai, model, input, clean, what = 'ai', { timeoutMs = TIMEOUT_MS, minRetryMs = MIN_RETRY_MS, onUsage = null } = {}) {
   const start = Date.now();
-  const out = await runModel(ai, model, input, what, timeoutMs);
+  /* each call's tokens, for a caller that counts them (study-ai.js's neuron estimate) */
+  const counted = (o) => { if (onUsage && o?.usage) onUsage(o.usage); return o; };
+  const out = counted(await runModel(ai, model, input, what, timeoutMs));
   const answer = reply(out);
   if (modelJson(answer)) return cleaned(clean, answer, model);
   const left = timeoutMs - (Date.now() - start);
   if (left < minRetryMs || cutOff(out, input)) return cleaned(clean, answer, model);
   const text = modelAnswer(answer);
   const said = typeof text === 'string' ? text : JSON.stringify(text ?? null);
-  const again = reply(await runModel(ai, model, {
+  const again = reply(counted(await runModel(ai, model, {
     ...input,
     messages: [...input.messages,
       { role: 'assistant', content: said.slice(0, 2000) },
       { role: 'user', content: 'That was not one valid JSON object. Answer again with only the JSON object, nothing else.' }],
-  }, what + ' retry', left));
+  }, what + ' retry', left)));
   return cleaned(clean, again, model);
 }
 

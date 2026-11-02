@@ -13,6 +13,7 @@ import { json, readJson, HttpError } from './http.js';
 import { requireUser } from './auth.js';
 import { localNow, validTz } from './push.js';
 import { DAY_MS, addDays } from './time.js';
+import { readCaps } from './study-ai.js';
 
 /** The local YYYY-MM-DD of a time in the zone `tz`. */
 export const dayOf = (ms, tz) => localNow(tz, ms).day;
@@ -375,6 +376,11 @@ const SHOP = [
   ...UPGRADES.filter((u) => u.open).map((u) => ({ sku: u.sku, kind: 'upgrade', name: u.name, effect: u.effect, max: u.max, cost: (n) => upgradeCost(u, n) })),
   ...COSMETICS.map((c) => ({ sku: c.sku, kind: c.kind, name: c.name, effect: 'Cosmetic', max: 1, cost: () => c.cost })),
 ];
+/* an extra Generate here use, for today only (spec §6): bought per day, up to the caps' extraMax */
+export const AI_EXTRA_COST = 60;
+const aiItem = (bought, max) => ({ sku: 'ai', kind: 'ai', name: 'Extra AI use', effect: '+1 Generate here today', level: bought, max, cost: bought < max ? AI_EXTRA_COST : null });
+const aiBoughtToday = async (db, userId, day) =>
+  (await db.prepare("SELECT count(*) AS n FROM buddy_ledger WHERE user_id = ? AND source GLOB ?").bind(userId, `buy:ai:${day}:*`).first())?.n ?? 0;
 const shopItem = (it, level) => ({ sku: it.sku, kind: it.kind, name: it.name, effect: it.effect, level, max: it.max, cost: level < it.max ? it.cost(level + 1) : null });
 
 /** The shop: each item with the level you have and the next level's cost (null at the top). */
@@ -382,7 +388,9 @@ export async function shopState(db, userId, now = Date.now()) {
   await enabledSettings(db, userId);
   const state = await buddyState(db, userId, now);
   const levels = new Map((await db.prepare('SELECT sku, level FROM buddy_owned WHERE user_id = ?').bind(userId).all()).results.map((r) => [r.sku, r.level]));
-  return { coins: state.coins, items: SHOP.map((it) => shopItem(it, levels.get(it.sku) ?? 0)) };
+  const s = await settingsStmt(db, userId).first();
+  const ai = aiItem(await aiBoughtToday(db, userId, dayOf(now, s.tz)), (await readCaps(db)).extraMax);
+  return { coins: state.coins, items: [...SHOP.map((it) => shopItem(it, levels.get(it.sku) ?? 0)), ai] };
 }
 
 /**
@@ -392,6 +400,7 @@ export async function shopState(db, userId, now = Date.now()) {
  */
 export async function buy(db, userId, body, now = Date.now()) {
   const s = await enabledSettings(db, userId);
+  if (body.sku === 'ai') return buyAiUse(db, userId, s, body, now);
   const it = SHOP.find((x) => x.sku === body.sku);
   if (!it) throw new HttpError(400, { error: 'invalid', field: 'sku' });
   if (!Number.isSafeInteger(body.level) || body.level < 1 || body.level > it.max) throw new HttpError(400, { error: 'invalid', field: 'level' });
@@ -418,6 +427,26 @@ export async function buy(db, userId, body, now = Date.now()) {
     throw new HttpError(409, { error: 'not_enough_coins', coins, cost });
   }
   return { coins, item: shopItem(it, level) };
+}
+
+/** Buy today's `level`-th extra AI use: written only while the balance covers it and it is the next one today. */
+async function buyAiUse(db, userId, s, body, now) {
+  const max = (await readCaps(db)).extraMax;
+  if (!Number.isSafeInteger(body.level) || body.level < 1 || body.level > max) throw new HttpError(400, { error: 'invalid', field: 'level' });
+  await reconcile(db, userId, now);
+  const day = dayOf(now, s.tz), source = `buy:ai:${day}:${body.level}`;
+  const spent = await db.prepare(`INSERT INTO buddy_ledger (user_id, source, kind, amount, day, at)
+      SELECT ?1, ?2, 'spend', -?3, ?4, ?5
+      WHERE (SELECT COALESCE(SUM(amount), 0) FROM buddy_ledger WHERE user_id = ?1) >= ?3
+        AND (SELECT count(*) FROM buddy_ledger WHERE user_id = ?1 AND source GLOB ?6) = ?7 - 1
+      ON CONFLICT (user_id, source) DO NOTHING`).bind(userId, source, AI_EXTRA_COST, day, now, `buy:ai:${day}:*`, body.level).run();
+  const coins = (await db.prepare('SELECT COALESCE(SUM(amount), 0) AS coins FROM buddy_ledger WHERE user_id = ?').bind(userId).first()).coins;
+  const bought = await aiBoughtToday(db, userId, day);
+  if (!spent.meta.changes) {
+    if (bought !== body.level - 1) throw new HttpError(409, { error: 'stale_level', level: bought });
+    throw new HttpError(409, { error: 'not_enough_coins', coins, cost: AI_EXTRA_COST });
+  }
+  return { coins, item: aiItem(bought, max) };
 }
 
 const route = (path) => new RegExp(`^/api/${path}$`);
