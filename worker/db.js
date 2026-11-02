@@ -588,7 +588,11 @@ export async function readMemberships(db, userId, sv) {
  * scopes the guard refused, checked in the same batch. `also`, a statement to run in the same
  * batch, answers in `extra` (its first row).
  */
-export async function readPage(db, userId, wanted, limit = 100, also = null) {
+/** The kinds sync v3 sends: a v3 client rejects a whole page holding any other (src/core/api.ts). */
+export const V3_KINDS = ['courses', 'items', 'quotes', 'study_sessions', 'achievements', 'marks', 'space_prefs'];
+
+export async function readPage(db, userId, wanted, limit = 100, also = null, kinds = V3_KINDS) {
+  const only = `kind IN (${kinds.map((k) => `'${k}'`).join(', ')})`;
   const guards = wanted.map(([scope]) => {
     const p = parseScope(scope);
     return p.kind === 'user' ? { sql: p.userId === userId ? '1' : '0', binds: [] } : memberGuard(p.spaceId, userId);
@@ -597,7 +601,7 @@ export async function readPage(db, userId, wanted, limit = 100, also = null) {
     db.prepare("SELECT floor, COALESCE((SELECT seq FROM sqlite_sequence WHERE name = 'changes'), 0) AS head FROM sync_state WHERE id = 1"),
     db.prepare(`SELECT ${guards.map((g, i) => `(${g.sql}) AS a${i}`).join(', ') || '1 AS none'}`).bind(...guards.flatMap((g) => g.binds)),
     ...wanted.map(([scope, cursor], i) =>
-      db.prepare(`SELECT seq, scope, kind, payload FROM changes WHERE scope = ? AND seq > ? AND ${guards[i].sql} ORDER BY seq LIMIT ?`)
+      db.prepare(`SELECT seq, scope, kind, payload FROM changes WHERE scope = ? AND seq > ? AND ${only} AND ${guards[i].sql} ORDER BY seq LIMIT ?`)
         .bind(scope, cursor, ...guards[i].binds, limit + 1)),
     ...(also ? [also] : []),
   ]);
