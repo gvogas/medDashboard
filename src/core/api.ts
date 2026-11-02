@@ -3,9 +3,10 @@
 import type { Row } from './db.ts';
 import type { Outline, Schedule } from './importers/plan.ts';
 import { UNREAD_CAP } from './shared.ts';
+import { checkCustom, type CustomBuddy } from './buddy-rules.ts';
 import type { Cursor, Page, ServerProfile } from './store.ts';
 import type { Album, Device, Page as SpotifyPage, PlayerState, Playlist, SearchResults, Track } from './spotify-types.ts';
-import type { ActivityRow, AdminAccounts, BuddyAnswer, BuddyLook, AdminHealth, AdminTraffic, Announcement, AuditEntry, CalendarFeed, ErrorGroup, ErrorRow, MaintenanceState, Flow, FriendMatch, FriendSettings, Friends, GroupRecord, Inbox, JoinCode, ParentRef, RoomMessage, RoomView, Space, SpaceDetails, SpaceInvite, SpaceSummary } from './types.ts';
+import type { ActivityRow, AdminAccounts, BuddyAnswer, BuddyLook, Shop, ShopItem, AdminHealth, AdminTraffic, Announcement, AuditEntry, CalendarFeed, ErrorGroup, ErrorRow, MaintenanceState, Flow, FriendMatch, FriendSettings, Friends, GroupRecord, Inbox, JoinCode, ParentRef, RoomMessage, RoomView, Space, SpaceDetails, SpaceInvite, SpaceSummary } from './types.ts';
 
 /** An error's body as the Worker sends it: its code, and for some the server's copy or a wait. */
 export interface ErrorBody { error?: string; retryAfter?: unknown; current?: Row | null; [field: string]: unknown }
@@ -224,11 +225,25 @@ async function buddyOf(response: Promise<unknown>): Promise<BuddyAnswer> {
   const ok = !!b && b.enabled === true && count(b.xp) && typeof b.tier === 'string' && count(b.health, 100) && MOOD_NAMES.includes(b.mood)
     && count(b.streak) && Number.isSafeInteger(b.coins) && count(b.due)
     && (b.next === null || (!!b.next && typeof b.next.tier === 'string' && count(b.next.xp)))
-    && !!b.look && typeof b.look.buddy === 'string' && typeof b.look.bg === 'string' && typeof b.look.name === 'string'
+    && !!b.look && typeof b.look.buddy === 'string' && typeof b.look.bg === 'string' && typeof b.look.frame === 'string' && typeof b.look.name === 'string'
+    && (b.custom === null || checkCustom(b.custom) !== null) && Array.isArray(b.owned) && b.owned.every((o: unknown) => typeof o === 'string')
     && Array.isArray(b.tiers) && b.tiers.length === 7 && b.tiers.every((t: any) => t && typeof t.id === 'string' && count(t.minXp) && count(t.reward) && typeof t.reached === 'boolean' && typeof t.claimed === 'boolean')
     && Array.isArray(b.recent) && b.recent.every((r: any) => r && typeof r.source === 'string' && Number.isSafeInteger(r.amount) && count(r.at));
   if (!ok) throw invalidResponse();
   return b as BuddyAnswer;
+}
+const SHOP_KINDS = ['upgrade', 'bg', 'frame'];
+const shopItemOk = (i: any) => !!i && typeof i.sku === 'string' && SHOP_KINDS.includes(i.kind) && typeof i.name === 'string' && typeof i.effect === 'string'
+  && count(i.level) && count(i.max) && i.level <= i.max && (i.cost === null || count(i.cost));
+async function shopOf(response: Promise<unknown>): Promise<Shop> {
+  const s = await response as any;
+  if (!s || !Number.isSafeInteger(s.coins) || !Array.isArray(s.items) || !s.items.every(shopItemOk)) throw invalidResponse();
+  return s as Shop;
+}
+async function boughtOf(response: Promise<unknown>): Promise<{ coins: number; item: ShopItem }> {
+  const b = await response as any;
+  if (!b || !Number.isSafeInteger(b.coins) || !shopItemOk(b.item)) throw invalidResponse();
+  return b;
 }
 
 export const api = {
@@ -313,6 +328,10 @@ export const api = {
     claim: (tier: string) => buddyOf(request('POST', '/api/buddy/claim', { tier })),
     look: (look: Partial<BuddyLook>) => buddyOf(request('PUT', '/api/buddy/look', look)),
     grant: (userId: string, g: { coins?: number; xp?: number }) => empty(request('POST', '/api/admin/buddy/grant', { userId, ...g })),
+    shop: () => shopOf(request('GET', '/api/buddy/shop')),
+    buy: (sku: string, level: number) => boughtOf(request('POST', '/api/buddy/buy', { sku, level })),
+    saveCustom: (custom: CustomBuddy) => buddyOf(request('PUT', '/api/buddy/custom', custom)),
+    deleteCustom: () => buddyOf(request('DELETE', '/api/buddy/custom')),
   },
   /* a solo run, so friends see you studying (worker/rooms.js setPresence) */
   presence: {

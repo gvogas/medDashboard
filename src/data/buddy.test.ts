@@ -19,7 +19,7 @@ import { activeBuddy, buddyNow, claimTier, gainSince, loadBuddy, resetBuddy, set
 
 export const state = (over = {}) => ({
     enabled: true, xp: 130, tier: "hatchling", next: { tier: "r3", xp: 300 }, health: 100, mood: "happy", streak: 2, coins: 30,
-    look: { buddy: "auto", bg: "none", name: "" }, tz: "UTC",
+    look: { buddy: "auto", bg: "none", frame: "none", name: "" }, tz: "UTC", custom: null, owned: [],
     tiers: ["egg", "hatchling", "r3", "r4", "r5", "r6", "legend"].map((id, i) => ({ id, minXp: [0, 120, 300, 700, 1400, 2500, 4000][i], reward: 5, reached: i < 2, claimed: i === 0 })),
     recent: [{ source: "session:s1", amount: 5, at: 1 }], due: 0, ...over,
 })

@@ -1,18 +1,21 @@
 // The Buddy page, in #views while gameplay is on: the buddy at its rank and mood, the XP and
-// health bars, the streak and coins; then the ranks with Claim, the buddy picker, and the last
-// coins earned. Everything comes from GET /api/buddy (data/buddy.ts); nothing is worked out here.
+// health bars, the streak and coins; then the ranks with Claim, the buddy picker and its name,
+// making your own from a picture, the shop, and the last coins earned. Everything comes from
+// GET /api/buddy (data/buddy.ts); nothing is worked out here.
 
 import { useEffect, useState } from "react"
 import { cn } from "@/lib/utils"
 import { Panel, HeadNote } from "@/components/views/bits"
-import { Button, Note } from "@/components/sheet/fields"
-import { BUDDIES, BUDDY_ORDER, buddyFor, rankName, type BuddyId } from "@/core/buddy-art"
-import { TIERS, moodOf } from "@/core/buddy-rules"
-import { activeBuddy, buddyStale, claimTier, loadBuddy, pickBuddy, STALE_MS, useBuddy } from "@/data/buddy"
+import { Button, Note, TextInput } from "@/components/sheet/fields"
+import { BUDDIES, BUDDY_ORDER, buddyFor, buddyName, rankName, shownFor, type Shown } from "@/core/buddy-art"
+import { NAME_MAX, TIERS, moodOf } from "@/core/buddy-rules"
+import { activeBuddy, buddyStale, claimTier, loadBuddy, pickBuddy, setLook, STALE_MS, useBuddy } from "@/data/buddy"
 import { openSettings } from "@/data/actions"
 import { useProfile } from "@/data/store"
 import { useScreen } from "@/data/signin"
 import { BuddySprite } from "./buddy-sprite"
+import { BuddyShop } from "./buddy-shop"
+import { BuddyCustom } from "./buddy-custom"
 
 export const MOOD_WORD = { happy: "Happy", tired: "Tired", sick: "Sick", hurt: "Bandaged" } as const
 const SMALL = "text-[12.5px] text-muted-foreground"
@@ -23,15 +26,33 @@ export function earnedFor(source: string): string {
     if (source.startsWith("session:")) return "Study session"
     if (source.startsWith("item:")) return "Finished item"
     if (source.startsWith("streak:")) return "Streak day"
+    if (source.startsWith("grade80:") || source.startsWith("grade90:")) return "Grade bonus"
     if (source.startsWith("claim:")) return "Rank claimed"
+    if (source.startsWith("buy:")) return "Shop"
     if (source.startsWith("admin:")) return "Admin grant"
     return "Coins"
 }
 /* what each tier adds, for the rank list */
-const adds = (b: BuddyId, i: number) => [
-    "An egg in your theme's pattern", "Hatches", "A face of its own",
-    BUDDIES[b].gear.hat, BUDDIES[b].gear.item, BUDDIES[b].gear.outfit, "Cape, crown, gold glow and sparkles",
-][i]
+const adds = (b: Shown, i: number) => b === "custom"
+    ? ["An egg", "Hatches", "Your picture, small", "A little bigger", "Bigger still", "Full size", "Crown, gold glow and sparkles"][i]
+    : [
+        "An egg in your theme's pattern", "Hatches", "A face of its own",
+        BUDDIES[b].gear.hat, BUDDIES[b].gear.item, BUDDIES[b].gear.outfit, "Cape, crown, gold glow and sparkles",
+    ][i]
+
+/* rename the buddy; empty gives it back its own name */
+function NameForm({ name, own, busy, onSave }: { name: string; own: string; busy: boolean; onSave: (name: string) => void }) {
+    const [value, setValue] = useState(name)
+    useEffect(() => setValue(name), [name])
+    const changed = value.trim() !== name
+    return (
+        <form className="flex items-center gap-2 border-t border-line-2 px-3 py-3" onSubmit={(e) => { e.preventDefault(); if (changed) onSave(value.trim()) }}>
+            <label htmlFor="buddy-name" className="text-[12.5px] font-semibold text-foreground">Name</label>
+            <TextInput id="buddy-name" value={value} maxLength={NAME_MAX} placeholder={own} autoComplete="off" onChange={(e) => setValue(e.target.value)} className="min-w-0 flex-1" />
+            <Button variant="ghost" type="submit" disabled={busy || !changed}>Save</Button>
+        </form>
+    )
+}
 
 function Bar({ value, max, label, tone }: { value: number; max: number; label: string; tone: "study" | "good" | "warn" | "crit" }) {
     const pct = max > 0 ? Math.max(0, Math.min(100, (value / max) * 100)) : 100
@@ -70,9 +91,9 @@ export function BuddyPage() {
         </Panel>
     )
 
-    const who = buddyFor(b.look, bg)
+    const who = shownFor(b.look, bg, b.custom)
     const tierIx = Math.max(0, TIERS.findIndex((t) => t.id === b.tier))
-    const name = b.look.name || BUDDIES[who].name
+    const name = b.look.name || buddyName(who)
     const title = rankName(who, tierIx)
     const from = TIERS[tierIx].minXp
     const act = async (key: string, run: () => Promise<string>) => { setBusy(key); setError(await run()); setBusy("") }
@@ -84,7 +105,8 @@ export function BuddyPage() {
                     head={<HeadNote>{b.coins.toLocaleString()} coins</HeadNote>}>
                     <div className="flex flex-col items-center gap-4 p-5">
                         <div className="flex justify-center rounded-xl bg-[var(--study-soft)] p-3">
-                            <BuddySprite buddy={who} tier={tierIx} mood={b.mood} scale={8} label={`${name}, ${title}, ${MOOD_WORD[b.mood].toLowerCase()}`} className="max-w-full" />
+                            <BuddySprite buddy={who} tier={tierIx} mood={b.mood} scale={8} label={`${name}, ${title}, ${MOOD_WORD[b.mood].toLowerCase()}`} className="max-w-full"
+                                custom={b.custom} bg={b.look.bg} frame={b.look.frame} />
                         </div>
                         <div className="grid w-full max-w-md gap-3">
                             <div className="grid gap-1">
@@ -128,21 +150,24 @@ export function BuddyPage() {
                 {error && <Note tone="bad">{error}</Note>}
                 <Panel title="Pick a buddy" label="Pick a buddy">
                     <div role="radiogroup" aria-label="Buddy" className="grid grid-cols-3 gap-2 p-3">
-                        {(["auto", ...BUDDY_ORDER] as const).map((id) => {
-                            const shown = id === "auto" ? buddyFor(null, bg) : id
+                        {(["auto", ...BUDDY_ORDER, ...(b.custom ? ["custom" as const] : [])] as const).map((id) => {
+                            const shown: Shown = id === "auto" ? buddyFor(null, bg) : id
                             const on = (b.look.buddy || "auto") === id
                             return (
                                 <button key={id} type="button" role="radio" aria-checked={on} disabled={!!busy}
                                     onClick={() => { if (!on) void act("look", () => pickBuddy(id)) }}
                                     className={cn("flex cursor-pointer flex-col items-center gap-1 rounded-lg border bg-muted px-1 py-2 font-[inherit] text-[11.5px] text-ink-2",
                                         on ? "border-[var(--study)] font-semibold text-foreground" : "border-border hover:text-foreground")}>
-                                    <BuddySprite buddy={shown} tier={tierIx} mood="happy" scale={2} animate={false} label="" />
-                                    <span>{id === "auto" ? "Your theme" : BUDDIES[id].name}</span>
+                                    <BuddySprite buddy={shown} tier={tierIx} mood="happy" scale={2} animate={false} label="" custom={b.custom} />
+                                    <span>{id === "auto" ? "Your theme" : id === "custom" ? "Your own" : BUDDIES[id].name}</span>
                                 </button>
                             )
                         })}
                     </div>
+                    <NameForm name={b.look.name} own={buddyName(who)} busy={!!busy} onSave={(n) => void act("name", () => setLook({ name: n }))} />
                 </Panel>
+                <BuddyCustom saved={b.custom} />
+                <BuddyShop b={b} who={who} tier={tierIx} custom={b.custom} />
                 <Panel title="Recent coins" label="Recent coins">
                     <div className="px-4 py-1.5">
                         {b.recent.length === 0 && <p className={cn(SMALL, "py-3")}>Nothing yet. Start a timed session to earn your first coins.</p>}

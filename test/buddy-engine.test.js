@@ -1,6 +1,6 @@
 // The Study Buddy's rules on plain rows: counted minutes, finishes, XP, health, streak.
 import { describe, expect, it } from 'vitest';
-import { countSessions, sessionAwards, finishAwards, xpOf, healthOf, streakAwards } from '../worker/buddy.js';
+import { countSessions, sessionAwards, finishAwards, xpOf, healthOf, streakAwards, gradeAwards, levelAt } from '../worker/buddy.js';
 
 const H = 3_600_000, MIN = 60_000;
 const T = Date.UTC(2026, 10, 2, 12);                  /* 2026-11-02 12:00 UTC */
@@ -89,5 +89,27 @@ describe('streak', () => {
     const { awards, streak } = streakAwards(m, '2026-10-01', '2026-10-13');
     expect(streak).toBe(12);
     expect(awards.at(-1)).toEqual({ source: 'streak:2026-10-12', amount: 20, day: '2026-10-12' });
+  });
+});
+
+describe('Stage 2 rules', () => {
+  it('Focus Engine: +20% a level on the coins, rounded down', async () => {
+    const c = [{ id: 'a', day: '2026-11-02', counted: 47 }];
+    expect(sessionAwards(c, () => 1)[0].amount).toBe(10);             /* 9 × 1.2 = 10.8 */
+    expect(sessionAwards(c, () => 5)[0].amount).toBe(18);             /* 9 × 2 */
+  });
+  it('a level counts from the spend that bought it', async () => {
+    const ledger = [{ source: 'buy:focus:1', at: 10 }, { source: 'buy:focus:2', at: 20 }, { source: 'buy:finisher:1', at: 5 }];
+    expect([5, 10, 15, 25].map((t) => levelAt(ledger, 'focus', t))).toEqual([0, 1, 1, 2]);
+  });
+  it('the grade bonus pays each step once', async () => {
+    const rows = [{ key: 'c:s:1', grade: 92 }, { key: 'c:s:2', grade: 81 }, { key: 'c:s:3', grade: 79.9 }];
+    expect(gradeAwards(rows, new Set(['grade80:c:s:1']), '2026-11-02').map((a) => [a.source, a.amount]))
+      .toEqual([['grade90:c:s:1', 15], ['grade80:c:s:2', 10]]);
+  });
+  it('Finisher adds to paying finishes only', async () => {
+    const rows = Array.from({ length: 6 }, (_, i) => ({ key: 'u:t' + i, scope: 'u', id: 't' + i, type: 'task', title: 't', completed_at: Date.UTC(2026, 10, 2, 12) }));
+    const out = finishAwards(rows, { tz: 'UTC', from: 0, now: Date.UTC(2026, 10, 2, 13), finisher: 2 });
+    expect(out.map((a) => a.amount)).toEqual([9, 9, 9, 9, 9, 0]);
   });
 });

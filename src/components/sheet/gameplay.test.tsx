@@ -20,7 +20,7 @@ import { resetBuddy } from "@/data/buddy"
 import type { Profile } from "@/data/types"
 
 const on = { enabled: true, xp: 0, tier: "egg", next: { tier: "hatchling", xp: 120 }, health: 100, mood: "happy", streak: 0, coins: 0,
-    look: { buddy: "auto", bg: "none", name: "" }, tz: "UTC", tiers: [], recent: [], due: 0 }
+    look: { buddy: "auto", bg: "none", frame: "none", name: "" }, tz: "UTC", custom: null, owned: [], tiers: [], recent: [], due: 0 }
 const profile = { id: "u-gp" } as Profile
 
 beforeEach(() => {

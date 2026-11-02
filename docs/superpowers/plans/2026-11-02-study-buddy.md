@@ -66,6 +66,13 @@ Smaller points: health skips recurring items (`recur IS NOT NULL`: one status, m
 - `src/core/pixelate.ts` (ported from `downscale` and `pixelate` in `design/study-buddies-prototype.html`): halving downscale, background flood from the commonest edge colour, k-means to 3–16 colours, crop to the shape on the bottom row. Tests on small fixture images: a red square on white loses the white; a transparent PNG keeps its alpha; 3 colours give at most 3 palette entries; a blank picture returns null.
 - Buddy page › Custom: upload, drop or paste; picture and pixel version side by side; Detail, Colours, Remove the background; the three error messages from spec §9; Save sends only the grid. `look.name` (≤ 16) for any buddy.
 
+### Stage 2 as built (`buddy-2-shop`)
+- **Shop items** live in `src/core/buddy-rules.ts`: `UPGRADES` (buying level n costs base + step × n; Card Foundry and Quiz Magnet are listed with `open: false` until Stages 3 and 5 give them something to raise) and `COSMETICS` (five backgrounds, 30–300 coins, and three frames, 40–250). The look gained `frame` beside `bg`.
+- **Focus Engine never re-pays old sessions:** a session's coins use the level it had when the session was first paid, counted from the `buy:focus:<n>` spends' times (`levelAt`). Finisher adds 2 a level to each paying finish.
+- **Grade bonus:** a class mark's grade ≥ 80 / ≥ 90 pays `grade80:` / `grade90:` once, only for marks changed while gameplay was on (`marks.updated_at ≥ on_at`).
+- **Buy** is one `INSERT … SELECT … WHERE balance ≥ cost AND level = next` plus the `buddy_owned` upsert in the same batch, so too few coins writes nothing and two taps buy one level.
+- **Custom buddy:** `checkCustom()` (shared by the browser and the Worker) checks the shape and the 1 KB limit on what was sent; `src/core/pixelate.ts` makes the grid; `buddy-art.ts` draws it at each rank (`customSprite`) and draws the backgrounds and frames (`backdrop`, `framed`).
+
 ### What Stage 3 must cover
 - `0012_decks.sql`: `decks`, `cards`, `card_state`, `card_reviews` with `changes` triggers like `marks`; `buddy_settings.cards_in_feed`.
 - `worker/db.js`: first an explicit kind list in `syncPageV3` (`db.js:635`) for v3, with a test that a new kind never reaches v3. Then `v=4` serves the new kinds; `src/core/api.ts:170-188` accepts them, shared ones included.

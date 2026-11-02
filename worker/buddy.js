@@ -1,13 +1,13 @@
 // Study Buddy (docs/superpowers/specs/2026-10-14-study-buddy-spec.md §4): the Gameplay switch,
-// coins, XP, tier, health and streak. XP, health and streak are worked out on every read from
+// coins, XP, tier, health and streak, the shop and the custom buddy. XP, health and streak are worked out on every read from
 // synced rows; coins are ledger rows that the same read writes for anything not yet paid, keyed
 // by source so nothing pays twice. The first half is the rules on plain rows, with no D1; the second
 // reads and writes D1 and serves /api/buddy.
 
 import {
-  BIG_FINISH_COINS, BIG_TYPES, DAY_MINUTES, FINISH_COINS, FINISH_XP, FINISHED, HEALTH, HEALTH_DAYS, LOG_WINDOW_MS, LOOK_BUDDIES,
-  MINUTES_PER_COIN, PERSONAL_FINISH_LIMIT, REVIEW_FINISH_LIMIT, REVIEW_ID, STREAK_COINS, STREAK_MAX, STREAK_MINUTES, TIERS,
-  isReview, moodOf, nextTier, tierOf,
+  BIG_FINISH_COINS, BIG_TYPES, COSMETICS, DAY_MINUTES, FINISH_COINS, FINISH_XP, FINISHED, FINISHER_COINS, FOCUS_RATE, GRADE_BONUS,
+  HEALTH, HEALTH_DAYS, LOG_WINDOW_MS, LOOK_BUDDIES, MINUTES_PER_COIN, NAME_MAX, PERSONAL_FINISH_LIMIT, REVIEW_FINISH_LIMIT, REVIEW_ID,
+  STREAK_COINS, STREAK_MAX, STREAK_MINUTES, TIERS, UPGRADES, checkCustom, isReview, moodOf, nextTier, tierOf, upgradeCost,
 } from '../src/core/buddy-rules.ts';
 import { json, readJson, HttpError } from './http.js';
 import { requireUser } from './auth.js';
@@ -38,12 +38,32 @@ export function countSessions(rows, tz, since) {
   return out;
 }
 
-/** Coins for counted sessions: one per MINUTES_PER_COIN minutes, scaled by `rate` (Focus Engine, Stage 2). */
-export function sessionAwards(counted, rate = 1) {
+/**
+ * Coins for counted sessions: one per MINUTES_PER_COIN minutes, plus FOCUS_RATE for each Focus
+ * Engine level `focusOf(id)` returns (the level when that session was first paid).
+ */
+export function sessionAwards(counted, focusOf = () => 0) {
+  const pct = Math.round(FOCUS_RATE * 100);
   return counted
-    .map(({ id, day, counted: m }) => ({ source: 'session:' + id, amount: Math.floor(Math.floor(m / MINUTES_PER_COIN) * rate), day }))
+    .map(({ id, day, counted: m }) => ({ source: 'session:' + id, amount: Math.floor((Math.floor(m / MINUTES_PER_COIN) * (100 + pct * focusOf(id))) / 100), day }))
     .filter((a) => a.amount > 0);
 }
+
+/**
+ * Grade bonuses not yet paid for class items: rows {key: 'c:<space>:<id>', grade}; each step of
+ * GRADE_BONUS the grade has reached pays once (`grade80:<key>`, `grade90:<key>`).
+ */
+export function gradeAwards(rows, paid, day) {
+  const out = [];
+  for (const r of rows) for (const g of GRADE_BONUS) {
+    const source = `${g.key}:${r.key}`;
+    if (r.grade >= g.min && !paid.has(source)) out.push({ source, amount: g.coins, day });
+  }
+  return out;
+}
+
+/** An upgrade's level at time `t`, from its buy:<sku>:<level> spends: one level per spend written by then. */
+export const levelAt = (ledger, sku, t) => ledger.filter((l) => l.source.startsWith(`buy:${sku}:`) && l.at <= t).length;
 
 /**
  * Coins for finishes not yet paid. Rows: {key, scope: 'u'|'c', id, type, title, completed_at};
@@ -51,9 +71,10 @@ export function sessionAwards(counted, rate = 1) {
  * so it can't be backdated past the Worker's last look. Personal finishes share
  * PERSONAL_FINISH_LIMIT a day and lecture reviews have REVIEW_FINISH_LIMIT apart from that, both
  * counted on from `used` ({day: {personal, review}}, what earlier reads already paid); class
- * finishes have no limit. Over a limit the amount is 0, which still records the finish.
+ * finishes have no limit. Each paying finish gets FINISHER_COINS per Finisher level. Over a limit
+ * the amount is 0, which still records the finish.
  */
-export function finishAwards(rows, { tz, from, now, used = {} }) {
+export function finishAwards(rows, { tz, from, now, used = {}, finisher = 0 }) {
   const dated = rows
     .map((r) => ({ ...r, t: Math.min(now, Math.max(from, r.completed_at ?? now)) }))
     .sort((a, b) => a.t - b.t || (a.key < b.key ? -1 : a.key > b.key ? 1 : 0));
@@ -61,7 +82,7 @@ export function finishAwards(rows, { tz, from, now, used = {} }) {
   return dated.map((r) => {
     const day = dayOf(r.t, tz);
     const c = (count[day] ||= { personal: 0, review: 0 });
-    let amount = r.scope === 'c' && BIG_TYPES.includes(r.type) ? BIG_FINISH_COINS : FINISH_COINS;
+    let amount = (r.scope === 'c' && BIG_TYPES.includes(r.type) ? BIG_FINISH_COINS : FINISH_COINS) + FINISHER_COINS * finisher;
     if (r.scope === 'u') {
       const kind = isReview(r.id, r.title || '') ? 'review' : 'personal';
       const limit = kind === 'review' ? REVIEW_FINISH_LIMIT : PERSONAL_FINISH_LIMIT;
@@ -116,9 +137,10 @@ export function streakAwards(minutesByDay, fromDay, today) {
 
 // ── D1: settings, reconcile, the Buddy read, claim and look ─────────────────────────────────
 
-const DEFAULT_LOOK = { buddy: 'auto', bg: 'none', name: '' };
+const DEFAULT_LOOK = { buddy: 'auto', bg: 'none', frame: 'none', name: '' };
 const DONE_SQL = `(${FINISHED.map((s) => `'${s}'`).join(', ')})`;
 const off = () => new HttpError(409, { error: 'gameplay_off' });
+const parseCustom = (v) => { try { return v ? checkCustom(JSON.parse(v)) : null; } catch { return null; } };
 const parseLook = (v) => { try { const l = JSON.parse(v); return l && typeof l === 'object' ? { ...DEFAULT_LOOK, ...l } : DEFAULT_LOOK; } catch { return DEFAULT_LOOK; } };
 
 export const settingsStmt = (db, userId) => db.prepare('SELECT * FROM buddy_settings WHERE user_id = ?').bind(userId);
@@ -143,6 +165,11 @@ function reads(db, userId, s, from, to) {
           AND i.type IN ('lab', 'office', 'assignment') AND i.date BETWEEN ?2 AND ?3
         LEFT JOIN marks AS m ON m.user_id = ?1 AND m.space_id = mb.space_id AND m.item_id = i.id AND m.deleted_at IS NULL
         WHERE mb.user_id = ?1 AND mb.deleted_at IS NULL AND COALESCE(m.hidden, 0) = 0`).bind(userId, from, to),
+    /* grade bonus: your grades on a class's items, set or changed while gameplay was on */
+    db.prepare(`SELECT m.space_id, m.item_id AS id, m.grade FROM marks AS m
+        JOIN items AS i ON i.scope = 'c:' || m.space_id AND i.id = m.item_id AND i.deleted_at IS NULL
+        WHERE m.user_id = ? AND m.deleted_at IS NULL AND m.grade >= ? AND m.updated_at >= ?`).bind(userId, GRADE_BONUS[0].min, s.on_at),
+    db.prepare('SELECT sku, level FROM buddy_owned WHERE user_id = ?').bind(userId),
   ]);
 }
 
@@ -165,13 +192,15 @@ export async function reconcile(db, userId, now = Date.now()) {
   if (!s || !s.enabled) return null;
   const tz = s.tz, today = dayOf(now, tz);
   const startDay = dayOf(Math.max(s.since, now - (HEALTH_DAYS - 1) * DAY_MS), tz);
-  const [sessions, personal, marks, ledger, ownHealth, classHealth] = (await reads(db, userId, s, startDay, today)).map((r) => r.results);
+  const [sessions, personal, marks, ledger, ownHealth, classHealth, grades, owned] = (await reads(db, userId, s, startDay, today)).map((r) => r.results);
   const paid = new Map(ledger.map((l) => [l.source, l]));
 
   /* sessions: XP counts every timed minute since `since`; coins only from when gameplay was last turned on */
   const counted = countSessions(sessions, tz, s.since);
   const startedOf = new Map(sessions.map((x) => [x.id, x.started_at]));
-  const sessionPay = sessionAwards(counted.filter((c) => startedOf.get(c.id) >= s.on_at))
+  /* Focus Engine at the level it had when each session was first paid, so buying it never re-pays old sessions */
+  const focusOf = (id) => levelAt(ledger, 'focus', paid.get('session:' + id)?.at ?? now);
+  const sessionPay = sessionAwards(counted.filter((c) => startedOf.get(c.id) >= s.on_at), focusOf)
     .filter((a) => !paid.has(a.source) || paid.get(a.source).amount < a.amount);
 
   /* finishes not yet recorded; one finished while gameplay was off never pays */
@@ -186,7 +215,9 @@ export async function reconcile(db, userId, now = Date.now()) {
     const kind = REVIEW_ID.test(l.source.slice(7)) ? 'review' : 'personal';
     (used[l.day] ||= { personal: 0, review: 0 })[kind]++;
   }
-  const finishPay = finishAwards(fresh, { tz, from: Math.max(s.reconciled_at, s.on_at), now, used });
+  const finisher = owned.find((o) => o.sku === 'finisher')?.level ?? 0;
+  const finishPay = finishAwards(fresh, { tz, from: Math.max(s.reconciled_at, s.on_at), now, used, finisher });
+  const gradePay = gradeAwards(grades.map((g) => ({ key: `c:${g.space_id}:${g.id}`, grade: g.grade })), paid, today);
 
   /* the streak runs from `since`; its coins only for days from when gameplay was last turned on */
   const minutesByDay = {};
@@ -195,7 +226,7 @@ export async function reconcile(db, userId, now = Date.now()) {
   const { awards: streakAll, streak } = streakAwards(minutesByDay, dayOf(s.since, tz), today);
   const streakPay = streakAll.filter((a) => a.day >= onDay && !paid.has(a.source));
 
-  const pay = [...sessionPay, ...finishPay, ...streakPay];
+  const pay = [...sessionPay, ...finishPay, ...gradePay, ...streakPay];
   if (pay.length) {
     await db.batch([
       db.prepare(`INSERT INTO buddy_ledger (user_id, source, kind, amount, day, at)
@@ -224,6 +255,8 @@ export async function reconcile(db, userId, now = Date.now()) {
     health, mood: moodOf(health), streak,
     coins: rows.reduce((sum, r) => sum + r.amount, 0),
     look: parseLook(s.look), tz,
+    custom: parseCustom(s.custom),
+    owned: owned.filter((o) => COSMETICS.some((c) => c.sku === o.sku)).map((o) => o.sku).sort(),
     tiers: TIERS.map((t) => ({ id: t.id, minXp: t.minXp, reward: t.reward, reached: xp >= t.minXp, claimed: claimed.has(t.id) })),
     recent: rows.filter((r) => r.amount !== 0).slice(0, 10).map((r) => ({ source: r.source, amount: r.amount, at: r.at })),
     due: 0,
@@ -267,19 +300,98 @@ export async function claimTier(db, userId, body, now = Date.now()) {
   return buddyState(db, userId, now);
 }
 
-/** Pick a buddy: 'auto' or a theme's. Custom buddies, backgrounds and names come in Stage 2. */
+const ownedSkus = async (db, userId) => new Set((await db.prepare('SELECT sku FROM buddy_owned WHERE user_id = ?').bind(userId).all()).results.map((r) => r.sku));
+const CONTROL = /[\u0000-\u001f\u007f-\u009f\u2028\u2029]/;
+
+/** The look: which buddy ('auto', a theme's or 'custom'), a background and a frame you own, and a name. */
 export async function saveLook(db, userId, body, now = Date.now()) {
   const s = await enabledSettings(db, userId);
   const look = parseLook(s.look);
   if (body.buddy !== undefined) {
-    if (body.buddy === 'custom') throw new HttpError(409, { error: 'not_owned', field: 'buddy' });
     if (!LOOK_BUDDIES.includes(body.buddy)) throw new HttpError(400, { error: 'invalid', field: 'buddy' });
+    if (body.buddy === 'custom' && !parseCustom(s.custom)) throw new HttpError(409, { error: 'not_owned', field: 'buddy' });
     look.buddy = body.buddy;
   }
-  if (body.bg !== undefined && body.bg !== 'none') throw new HttpError(409, { error: 'not_owned', field: 'bg' });
-  if (body.name !== undefined && body.name !== '') throw new HttpError(400, { error: 'invalid', field: 'name' });
+  for (const kind of ['bg', 'frame']) {
+    const v = body[kind];
+    if (v === undefined) continue;
+    if (v !== 'none' && !COSMETICS.some((c) => c.sku === v && c.kind === kind)) throw new HttpError(400, { error: 'invalid', field: kind });
+    if (v !== 'none' && !(await ownedSkus(db, userId)).has(v)) throw new HttpError(409, { error: 'not_owned', field: kind });
+    look[kind] = v;
+  }
+  if (body.name !== undefined) {
+    const name = typeof body.name === 'string' ? body.name.trim() : null;
+    if (name === null || [...name].length > NAME_MAX || CONTROL.test(name)) throw new HttpError(400, { error: 'invalid', field: 'name' });
+    look.name = name;
+  }
   await db.prepare('UPDATE buddy_settings SET look = ? WHERE user_id = ?').bind(JSON.stringify(look), userId).run();
   return buddyState(db, userId, now);
+}
+
+/** Save the custom buddy made in the browser (only its grid and palette), or delete it. */
+export async function saveCustom(db, userId, body, now = Date.now()) {
+  await enabledSettings(db, userId);
+  const custom = checkCustom(body);
+  if (!custom) throw new HttpError(400, { error: 'invalid', field: 'custom' });
+  await db.prepare('UPDATE buddy_settings SET custom = ? WHERE user_id = ?').bind(JSON.stringify(custom), userId).run();
+  return buddyState(db, userId, now);
+}
+export async function deleteCustom(db, userId, now = Date.now()) {
+  const s = await enabledSettings(db, userId);
+  const look = parseLook(s.look);
+  if (look.buddy === 'custom') look.buddy = 'auto';
+  await db.prepare('UPDATE buddy_settings SET custom = NULL, look = ? WHERE user_id = ?').bind(JSON.stringify(look), userId).run();
+  return buddyState(db, userId, now);
+}
+
+/* ── the shop ── */
+const SHOP = [
+  ...UPGRADES.filter((u) => u.open).map((u) => ({ sku: u.sku, kind: 'upgrade', name: u.name, effect: u.effect, max: u.max, cost: (n) => upgradeCost(u, n) })),
+  ...COSMETICS.map((c) => ({ sku: c.sku, kind: c.kind, name: c.name, effect: 'Cosmetic', max: 1, cost: () => c.cost })),
+];
+const shopItem = (it, level) => ({ sku: it.sku, kind: it.kind, name: it.name, effect: it.effect, level, max: it.max, cost: level < it.max ? it.cost(level + 1) : null });
+
+/** The shop: each item with the level you have and the next level's cost (null at the top). */
+export async function shopState(db, userId, now = Date.now()) {
+  await enabledSettings(db, userId);
+  const state = await buddyState(db, userId, now);
+  const levels = new Map((await db.prepare('SELECT sku, level FROM buddy_owned WHERE user_id = ?').bind(userId).all()).results.map((r) => [r.sku, r.level]));
+  return { coins: state.coins, items: SHOP.map((it) => shopItem(it, levels.get(it.sku) ?? 0)) };
+}
+
+/**
+ * Buy `level` of `sku`. One statement writes the spend only while the balance covers it and the
+ * level is the next one, so too few coins writes nothing and two quick taps buy one level; the
+ * owned row follows in the same batch, only if that spend is there.
+ */
+export async function buy(db, userId, body, now = Date.now()) {
+  const s = await enabledSettings(db, userId);
+  const it = SHOP.find((x) => x.sku === body.sku);
+  if (!it) throw new HttpError(400, { error: 'invalid', field: 'sku' });
+  if (!Number.isSafeInteger(body.level) || body.level < 1 || body.level > it.max) throw new HttpError(400, { error: 'invalid', field: 'level' });
+  await reconcile(db, userId, now);                 /* pay what is due first, so the balance is current */
+  const cost = it.cost(body.level), source = `buy:${it.sku}:${body.level}`;
+  const [spent] = await db.batch([
+    db.prepare(`INSERT INTO buddy_ledger (user_id, source, kind, amount, day, at)
+        SELECT ?1, ?2, 'spend', -?3, ?4, ?5
+        WHERE (SELECT COALESCE(SUM(amount), 0) FROM buddy_ledger WHERE user_id = ?1) >= ?3
+          AND COALESCE((SELECT level FROM buddy_owned WHERE user_id = ?1 AND sku = ?6), 0) = ?7 - 1
+        ON CONFLICT (user_id, source) DO NOTHING`).bind(userId, source, cost, dayOf(now, s.tz), now, it.sku, body.level),
+    db.prepare(`INSERT INTO buddy_owned (user_id, sku, level, at)
+        SELECT ?1, ?2, ?3, ?4 WHERE EXISTS (SELECT 1 FROM buddy_ledger WHERE user_id = ?1 AND source = ?5)
+        ON CONFLICT (user_id, sku) DO UPDATE SET level = excluded.level, at = excluded.at WHERE excluded.level > buddy_owned.level`)
+      .bind(userId, it.sku, body.level, now, source),
+  ]);
+  const [{ coins }, own] = await Promise.all([
+    db.prepare('SELECT COALESCE(SUM(amount), 0) AS coins FROM buddy_ledger WHERE user_id = ?').bind(userId).first(),
+    db.prepare('SELECT level FROM buddy_owned WHERE user_id = ? AND sku = ?').bind(userId, it.sku).first(),
+  ]);
+  const level = own?.level ?? 0;
+  if (!spent.meta.changes) {
+    if (level !== body.level - 1) throw new HttpError(409, { error: 'stale_level', level });
+    throw new HttpError(409, { error: 'not_enough_coins', coins, cost });
+  }
+  return { coins, item: shopItem(it, level) };
 }
 
 const route = (path) => new RegExp(`^/api/${path}$`);
@@ -291,4 +403,10 @@ export const buddyRoutes = [
     json(await claimTier(env.DB, await requireUser(request, env), await readJson(request)))],
   ['PUT', route('buddy/look'), async ({ request, env }) =>
     json(await saveLook(env.DB, await requireUser(request, env), await readJson(request)))],
+  ['PUT', route('buddy/custom'), async ({ request, env }) =>
+    json(await saveCustom(env.DB, await requireUser(request, env), await readJson(request)))],
+  ['DELETE', route('buddy/custom'), async ({ request, env }) => json(await deleteCustom(env.DB, await requireUser(request, env)))],
+  ['GET', route('buddy/shop'), async ({ request, env }) => json(await shopState(env.DB, await requireUser(request, env)))],
+  ['POST', route('buddy/buy'), async ({ request, env }) =>
+    json(await buy(env.DB, await requireUser(request, env), await readJson(request)))],
 ];

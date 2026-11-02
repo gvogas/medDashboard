@@ -31,7 +31,7 @@ Seven migrations (`0010`–`0016`: Stages 1–3, 5–8; Stage 4 has none) add a 
 | `on_at` | 1 | INTEGER ms, NULL | The latest time it became 1; events before it never pay |
 | `reconciled_at` | 1 | INTEGER ms | The last time the Worker looked for new awards; a finish is dated no earlier than this |
 | `tz` | 1 | TEXT | The browser's IANA zone, checked with `validTz` (`worker/push.js`); days are counted in it. Default `UTC` |
-| `look` | 1 | TEXT JSON | `{buddy, bg, name}`: `buddy` is `auto` (follows the profile's theme), a theme id or `custom` (only once one is saved); `bg` an owned id; `name` ≤ 16 chars or empty for the buddy's own. Default `{"buddy":"auto","bg":"none","name":""}` |
+| `look` | 1 | TEXT JSON | `{buddy, bg, frame, name}`: `buddy` is `auto` (follows the profile's theme), a theme id or `custom` (only once one is saved); `bg` and `frame` `none` or an owned shop item (`frame` from Stage 2); `name` ≤ 16 chars or empty for the buddy's own. Default `{"buddy":"auto","bg":"none","name":""}`; a missing `frame` reads as `none` |
 | `xp_bonus` | 1 | INTEGER ≥ 0 | Default 0; admin-granted XP for testing, added to derived XP |
 | `custom` | 2 | TEXT JSON, NULL | The custom buddy: `{palette: [hex] 1–16, rows: [string] n of n chars, n 4–24}`, each char a palette index `0`–`f` or `.` for empty; at most 1 KB. Never the uploaded file |
 | `cards_in_feed` | 3 | INTEGER 0/1 | Default 0; adds daily "Flashcards: N due" events to the calendar feed |
@@ -69,7 +69,7 @@ Two new route groups (three with the Stage 8 connector) plus additions to rows, 
 | 1 | `PUT /api/buddy/settings` | `{enabled: bool, tz: string, cardsInFeed?: bool}` (`cardsInFeed` from Stage 3) | Buddy state; the first `enabled: true` sets `since`, each one sets `on_at` and `reconciled_at`; a bad `tz` keeps the stored one |
 | 1 | `GET /api/buddy?day=YYYY-MM-DD` | — | `{enabled, xp, tier, next: {tier, xp}, health, mood, streak, coins, look, tiers: [{id, minXp, reward, reached, claimed}], recent: [{source, amount, at}] ×10, due}` |
 | 1 | `POST /api/buddy/claim` | `{tier}` | Buddy state; claiming twice pays once |
-| 1 | `PUT /api/buddy/look` | `{buddy?, bg?, name?}` | Buddy state; `custom` needs a saved custom buddy, `bg` must be owned (`not_owned`) |
+| 1 | `PUT /api/buddy/look` | `{buddy?, bg?, frame?, name?}` | Buddy state; `custom` needs a saved custom buddy, `bg` and `frame` must be owned (`not_owned`) |
 | 1 | `POST /api/admin/buddy/grant` | `{userId, coins?: 1–5000, xp?: 0–10000}` | Admin only; writes `admin:<at>` coins and/or sets `buddy_settings.xp_bonus`; logged in `admin_log` |
 | 2 | `GET /api/buddy/shop` | — | `{coins, items: [{sku, kind, level, max, cost, effect}]}` |
 | 2 | `PUT /api/buddy/custom` | `{palette, rows}` (made in the browser, §9) | Buddy state; checked against the `buddy_settings.custom` rules, else 400 `invalid` |

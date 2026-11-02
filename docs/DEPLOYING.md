@@ -240,6 +240,7 @@ runs once per database.
 | `0008_push_device_session.sql` | The session a push device subscribed under (`push_subscriptions.sid`) |
 | `0009_room_chat.sql` | Room chat between the people in a room (`room_messages`) |
 | `0010_buddy.sql` | Study Buddy: the Gameplay switch and the coin ledger (`buddy_settings`, `buddy_ledger`); `admin_log` is rebuilt so it can record `grant` |
+| `0011_buddy_shop.sql` | Study Buddy shop and custom buddy: what each person has bought (`buddy_owned`) and their custom buddy's pixels (`buddy_settings.custom`) |
 
 The files that used to follow it (`0002_spaces.sql` to `0009_friend_cancel.sql`) were
 folded into `0001_schema.sql` for the move of `rounds-v7` into `rounds-v8` (see
@@ -259,7 +260,7 @@ the feed, open to everyone) adds no migration either.
 
 To change the database:
 
-1. Add a new file with the next number, `0011_something.sql`. Never edit a file that
+1. Add a new file with the next number, `0012_something.sql`. Never edit a file that
    has already run.
 2. Apply it locally with `npm run db:local`, then test.
 3. Push it with the code that needs it. The Deploy workflow applies it to live and runs
