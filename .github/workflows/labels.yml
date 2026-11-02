@@ -1,0 +1,38 @@
+name: Labels
+# Keeps the repository's labels in step with .github/labels.json: creates missing ones,
+# fixes colours and descriptions, and renames a label listed under "from" (so issues keep
+# it). Labels not in the file are left alone; nothing is deleted.
+on:
+  push:
+    paths: ['.github/labels.json', '.github/workflows/labels.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+  issues: write
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/github-script@v8
+        with:
+          script: |
+            const wanted = JSON.parse(require('fs').readFileSync('.github/labels.json', 'utf8'));
+            const { owner, repo } = context.repo;
+            const existing = await github.paginate(github.rest.issues.listLabelsForRepo, { owner, repo, per_page: 100 });
+            const byName = new Map(existing.map((l) => [l.name.toLowerCase(), l]));
+            for (const l of wanted) {
+              const want = { color: l.color.replace('#', '').toLowerCase(), description: l.description || '' };
+              const have = byName.get(l.name.toLowerCase());
+              const old = have ? null : (l.from || []).map((n) => byName.get(n.toLowerCase())).find(Boolean);
+              const current = have || old;
+              if (!current) {
+                await github.rest.issues.createLabel({ owner, repo, name: l.name, ...want });
+                core.info(`created  ${l.name}`);
+              } else if (current.name !== l.name || current.color.toLowerCase() !== want.color || (current.description || '') !== want.description) {
+                await github.rest.issues.updateLabel({ owner, repo, name: current.name, new_name: l.name, ...want });
+                core.info(current.name === l.name ? `updated  ${l.name}` : `renamed  ${current.name} → ${l.name}`);
+              } else {
+                core.info(`ok       ${l.name}`);
+              }
+            }
