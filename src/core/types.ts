@@ -256,6 +256,8 @@ export interface BuddyState {
   look: BuddyLook; tz: string; tiers: BuddyTierRow[]; recent: { source: string; amount: number; at: number }[]; due: number;
   /** the saved custom buddy, if any; the backgrounds and frames you own */
   custom: CustomBuddy | null; owned: string[];
+  /** "Review cards in my calendar" (Stage 3) */
+  cardsInFeed?: boolean;
 }
 /** GET /api/buddy/shop: each item with your level and the next level's cost (null at the top). */
 export interface ShopItem { sku: string; kind: 'upgrade' | 'bg' | 'frame'; name: string; effect: string; level: number; max: number; cost: number | null }

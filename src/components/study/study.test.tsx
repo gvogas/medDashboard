@@ -95,12 +95,12 @@ const tab = (name: string) => screen.getByRole("tab", { name })
 const tabs = () => within(screen.getByRole("tablist", { name: "Study" })).getAllByRole("tab")
 
 describe("the Study page", () => {
-    it("shows the tiles, then five tabs with Timer open: the Ready card and Your flow", async () => {
+    it("shows the tiles, then six tabs with Timer open: the Ready card and Your flow", async () => {
         await show()
         for (const name of ["Streak", "Today", "This term"]) expect(tile(name)).toBeTruthy()
-        expect(tabs().map((t) => t.textContent)).toEqual(["Timer", "History", "Achievements", "Leaderboard", "Friends"])
-        expect(tabs().map((t) => t.getAttribute("aria-selected"))).toEqual(["true", "false", "false", "false", "false"])
-        expect(tabs().map((t) => t.tabIndex)).toEqual([0, -1, -1, -1, -1])
+        expect(tabs().map((t) => t.textContent)).toEqual(["Timer", "Cards", "History", "Achievements", "Leaderboard", "Friends"])
+        expect(tabs().map((t) => t.getAttribute("aria-selected"))).toEqual(["true", "false", "false", "false", "false", "false"])
+        expect(tabs().map((t) => t.tabIndex)).toEqual([0, -1, -1, -1, -1, -1])
         const panel = screen.getByRole("tabpanel", { name: "Timer" })
         expect(tab("Timer").getAttribute("aria-controls")).toBe(panel.id)
         expect(panel.tabIndex).toBe(0)
@@ -170,8 +170,8 @@ describe("the Study page", () => {
         await show()
         act(() => tab("Timer").focus())
         fireEvent.keyDown(tab("Timer"), { key: "ArrowRight" })
-        expect(document.activeElement).toBe(tab("History"))
-        expect(fake.ui.studyTab).toBe("history")
+        expect(document.activeElement).toBe(tab("Cards"))
+        expect(fake.ui.studyTab).toBe("cards")
         fireEvent.keyDown(document.activeElement!, { key: "End" })
         await act(async () => {})
         expect(document.activeElement).toBe(tab("Friends"))

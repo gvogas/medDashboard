@@ -85,6 +85,8 @@ async function change(call: () => Promise<BuddyAnswer>): Promise<string> {
 
 /** Turn gameplay on or off. Returns an error message, or "" when it went through. */
 export const setGameplay = (enabled: boolean) => change(() => api.buddy.settings(enabled, browserZone()))
+/** "Review cards in my calendar": daily "Flashcards: N due" events in the calendar feed. */
+export const setCardsInFeed = (on: boolean) => change(() => api.buddy.settings(true, browserZone(), on))
 /** Claim a reached rank's coins. */
 export const claimTier = (tier: string) => change(() => api.buddy.claim(tier))
 /** Pick a buddy: 'auto' (your theme), a theme's, or 'custom'. */

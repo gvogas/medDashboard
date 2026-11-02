@@ -277,7 +277,7 @@ export async function reconcile(db, userId, now = Date.now()) {
     xp, tier: tier.id, next: next ? { tier: next.id, xp: next.minXp } : null,
     health, mood: moodOf(health), streak,
     coins: rows.reduce((sum, r) => sum + r.amount, 0),
-    look: parseLook(s.look), tz,
+    look: parseLook(s.look), tz, cardsInFeed: s.cards_in_feed === 1,
     custom: parseCustom(s.custom),
     owned: owned.filter((o) => COSMETICS.some((c) => c.sku === o.sku)).map((o) => o.sku).sort(),
     tiers: TIERS.map((t) => ({ id: t.id, minXp: t.minXp, reward: t.reward, reached: xp >= t.minXp, claimed: claimed.has(t.id) })),
@@ -294,6 +294,8 @@ export async function saveSettings(db, userId, body, now = Date.now()) {
   if (typeof body.enabled !== 'boolean') throw new HttpError(400, { error: 'invalid', field: 'enabled' });
   const tz = body.tz === undefined ? null : validTz(body.tz);
   const on = body.enabled ? 1 : 0;
+  if (body.cardsInFeed !== undefined && typeof body.cardsInFeed !== 'boolean') throw new HttpError(400, { error: 'invalid', field: 'cardsInFeed' });
+  const feed = body.cardsInFeed === undefined ? null : body.cardsInFeed ? 1 : 0;
   await db.prepare(`INSERT INTO buddy_settings (user_id, enabled, since, on_at, reconciled_at, tz)
       VALUES (?1, ?2, CASE WHEN ?2 = 1 THEN ?3 END, CASE WHEN ?2 = 1 THEN ?3 END, ?3, COALESCE(?4, 'UTC'))
       ON CONFLICT (user_id) DO UPDATE SET
@@ -302,6 +304,7 @@ export async function saveSettings(db, userId, body, now = Date.now()) {
         reconciled_at = CASE WHEN ?2 = 1 AND buddy_settings.enabled = 0 THEN ?3 ELSE buddy_settings.reconciled_at END,
         enabled = ?2,
         tz = COALESCE(?4, buddy_settings.tz)`).bind(userId, on, now, tz).run();
+  if (feed !== null) await db.prepare('UPDATE buddy_settings SET cards_in_feed = ? WHERE user_id = ?').bind(feed, userId).run();
   return buddyState(db, userId, now);
 }
 

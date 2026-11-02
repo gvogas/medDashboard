@@ -44,10 +44,10 @@ Migration `0010` also rebuilds `admin_log` so its `action` CHECK allows `grant`.
 | --- | --- | --- | --- | --- |
 | `buddy_ledger` | 1 | `(user_id, source)` unique | `amount` INTEGER (±, ≠ 0), `kind` ('earn','spend'), `source` TEXT ≤ 64 (see §4), `at` INTEGER | No; read through `/api/buddy` |
 | `buddy_owned` | 2 | `(user_id, sku)` | `level` INTEGER ≥ 1 (upgrades) or 1 (cosmetics), `at` | No |
-| `decks` | 3 | `(scope, id)` | `author_id`, `course_id`, `title` ≤ 80, `revision`, timestamps, `deleted_at` | Yes, kind `decks`, in the deck's scope feed |
+| `decks` | 3 | `(scope, id)` | `author_id`, `course_id` or `class_id` (labels), `title` ≤ 80, `revision`, timestamps, `deleted_at` | Yes, kind `decks`, in the deck's scope feed |
 | `cards` | 3 | `(scope, id)` | `deck_id`, `author_id`, `front` ≤ 500, `back` ≤ 1,000, `source` ('hand','ai','paste','connector'), `revision`, timestamps | Yes, kind `cards`, in the deck's scope feed |
 | `card_state` | 3 | `(user_id, id)`, id = the card id (random 24-char ids, unique across scopes) | `due` TEXT day, `interval` INTEGER days, `ease` REAL 1.3–3.0, `reps`, `lapses`, `revision`, timestamps | Yes, kind `card_state`, user's `u:` feed only |
-| `card_reviews` | 3 | `(user_id, id)` | `card_ref` (the card id), `day` TEXT, `grade` ('again','good','easy'), `at` | Yes, kind `card_reviews`, `u:` feed; append-only |
+| `card_reviews` | 3 | `(user_id, id)` | `card_ref` (the card id), `deck_ref`, `day` TEXT, `grade` ('again','good','easy'), `at` | Yes, kind `card_reviews`, `u:` feed; append-only |
 | `quizzes` | 5 | `(scope, id)` | `author_id`, `deck_id` NULL, `course_id`, `item_id` NULL (the exam it prepares for), `questions` JSON ≤ 20 `[{q, choices[4], answer 0–3, topic}]`, `source`, timestamps | Yes, kind `quizzes`, scope feed |
 | `quiz_attempts` | 5 | `(user_id, id)` | `quiz_ref`, `answers` JSON, `score`, `weak_topics` JSON, `at` | Yes, `u:` feed |
 | `study_docs` | 6 | `(scope, id)` | `author_id`, `course_id`, `kind` ('notes','plan','material'), `title` ≤ 120, `body` JSON ≤ 60 KB, `source`, timestamps | Yes, kind `study_docs`, scope feed |
@@ -76,7 +76,7 @@ Two new route groups (three with the Stage 8 connector) plus additions to rows, 
 | 2 | `DELETE /api/buddy/custom` | — | Buddy state; a look of `custom` goes back to `auto` |
 | 2 | `POST /api/buddy/buy` | `{sku, level}` (the level being bought, guards double taps) | `{coins, item}` |
 | 3 | `PUT`/`DELETE /api/(decks\|cards\|card_state\|card_reviews)/<id>` | A row, as the existing `ROW` routes take | The stored row; coins and heal follow on the next Buddy read (§4) |
-| 3 | `PUT`/`DELETE /api/spaces/<id>/(decks\|cards)/<id>` | A shared row, as the existing `SHARED_ROW` routes take | The stored row; permissions in §9 |
+| 7 | `PUT`/`DELETE /api/spaces/<id>/(decks\|cards)/<id>` | A shared row, as the existing `SHARED_ROW` routes take | The stored row; permissions in §9. Moved from Stage 3: nothing can put a deck in a class before sharing; Stage 3's tables and sync v4 already carry class decks |
 | 3 | `GET /api/sync?v=4` | — | As v3, plus the new kinds |
 | 4 | `GET /api/study-ai/status?day=` | — | `{providers: ['workers'], left, extraLeft, globalOpen}`; `providers` gains `'chatgpt'` only if step 2 ships (§7.2) |
 | 4 | `POST /api/study-ai/cards` | `{courseId, itemId?, sources: {items: bool, text?: string ≤ 60k chars, topic?: string ≤ 120}, count 1–30, level, provider?: 'workers'}` | `{cards: [{front, back}], provider, left}`; a preview, not saved |

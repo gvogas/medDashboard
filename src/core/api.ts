@@ -228,6 +228,7 @@ async function buddyOf(response: Promise<unknown>): Promise<BuddyAnswer> {
     && (b.next === null || (!!b.next && typeof b.next.tier === 'string' && count(b.next.xp)))
     && !!b.look && typeof b.look.buddy === 'string' && typeof b.look.bg === 'string' && typeof b.look.frame === 'string' && typeof b.look.name === 'string'
     && (b.custom === null || checkCustom(b.custom) !== null) && Array.isArray(b.owned) && b.owned.every((o: unknown) => typeof o === 'string')
+    && (b.cardsInFeed === undefined || typeof b.cardsInFeed === 'boolean')
     && Array.isArray(b.tiers) && b.tiers.length === 7 && b.tiers.every((t: any) => t && typeof t.id === 'string' && count(t.minXp) && count(t.reward) && typeof t.reached === 'boolean' && typeof t.claimed === 'boolean')
     && Array.isArray(b.recent) && b.recent.every((r: any) => r && typeof r.source === 'string' && Number.isSafeInteger(r.amount) && count(r.at));
   if (!ok) throw invalidResponse();
@@ -325,7 +326,7 @@ export const api = {
   /* the Study Buddy (worker/buddy.js); every answer is checked before it is shown */
   buddy: {
     get: () => buddyOf(request('GET', '/api/buddy')),
-    settings: (enabled: boolean, tz?: string) => buddyOf(request('PUT', '/api/buddy/settings', { enabled, tz })),
+    settings: (enabled: boolean, tz?: string, cardsInFeed?: boolean) => buddyOf(request('PUT', '/api/buddy/settings', { enabled, tz, ...(cardsInFeed !== undefined && { cardsInFeed }) })),
     claim: (tier: string) => buddyOf(request('POST', '/api/buddy/claim', { tier })),
     look: (look: Partial<BuddyLook>) => buddyOf(request('PUT', '/api/buddy/look', look)),
     grant: (userId: string, g: { coins?: number; xp?: number }) => empty(request('POST', '/api/admin/buddy/grant', { userId, ...g })),

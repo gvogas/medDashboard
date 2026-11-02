@@ -22,6 +22,7 @@ import { sameString, hex } from './auth.js';
 import { personal } from './db.js';
 import { normalizeSchool, classWeekday, courseTerm, dayInfo, weekdayOf } from '../src/core/school.ts';
 import { HOUR_MS, TZ, addDays } from './time.js';
+import { localNow } from './push.js';
 
 const FEED_LIMIT = 60;                     /* fetches an hour per link; calendars poll a few times a day */
 const LABELS = { exam: 'Exam', quiz: 'Quiz', assignment: 'Assignment', lab: 'Lab', tutoring: 'Tutorial', office: 'Office hours', task: 'Task', project: 'Project' };
@@ -91,10 +92,11 @@ export async function serveFeed(env, url, userId, token) {
 
   const tz = url.searchParams.get('tz');
   const rows = await readRows(env, userId, user.hidden_sources);
+  const flashcards = await flashcardDays(env.DB, userId, Date.now());
   const body = buildCalendar({
     ...rows, termStart: user.term_start, school: parseSchool(user.school_calendar),
     types: parseList(user.types), tz: tz && TZ.test(tz) && tz.length <= 64 ? tz : null, now: Date.now(),
-    alarms: parseObject(user.study_prefs).alarms !== false,
+    alarms: parseObject(user.study_prefs).alarms !== false, flashcards,
   });
   return new Response(body, {
     headers: {
@@ -129,6 +131,19 @@ export async function readRows(env, userId, hiddenSources) {
   ]);
   return feedRows({ courses: courses.results, items: items.results, classCourses: classCourses.results, classItems: classItems.results,
     projectItems: projectItems.results, me: userId, hidden: parseList(hiddenSources) });
+}
+
+/**
+ * With "Review cards in my calendar" on: for each of the next 7 days in your zone, how many cards
+ * fall due (today counts every card due by then), from card_state. Days with none are left out.
+ */
+export async function flashcardDays(db, userId, now) {
+  const s = await db.prepare('SELECT cards_in_feed, tz FROM buddy_settings WHERE user_id = ?').bind(userId).first();
+  if (!s?.cards_in_feed) return [];
+  const today = localNow(s.tz, now).day, last = addDays(today, 6);
+  const { results } = await db.prepare(`SELECT CASE WHEN due < ?2 THEN ?2 ELSE due END AS day, count(*) AS n FROM card_state
+      WHERE user_id = ?1 AND deleted_at IS NULL AND due <= ?3 GROUP BY 1 ORDER BY 1`).bind(userId, today, last).all();
+  return results.filter((r) => r.n > 0).map((r) => ({ day: r.day, n: r.n }));
 }
 
 function parseSchool(v) {
@@ -200,7 +215,7 @@ export function feedRows({ courses, items, classCourses = [], classItems = [], p
  * reminders: a day and an hour before a timed one, 09:00 the day before an all-day one.
  * Apple Calendar shows them; Google keeps its own for subscribed calendars.
  */
-export function buildCalendar({ courses, items, termStart = null, school = null, types = [], tz = null, now = Date.now(), alarms = false }) {
+export function buildCalendar({ courses, items, termStart = null, school = null, types = [], tz = null, now = Date.now(), alarms = false, flashcards = [] }) {
   const stamp = new Date(now).toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, '');
   const yesterday = addDays(new Date(now).toISOString().slice(0, 10), -1);
   const byId = new Map(courses.map((c) => [c.id, c]));
@@ -252,6 +267,11 @@ export function buildCalendar({ courses, items, termStart = null, school = null,
       if (m.room) lines.push('LOCATION:' + text(m.room));
       lines.push('DESCRIPTION:' + text(c.name), 'END:VEVENT');
     }
+  }
+  /* "Review cards in my calendar" (Study Buddy, Stage 3): worded apart from the lecture review tasks, "Review 1/4 …" */
+  for (const { day, n } of flashcards) {
+    lines.push('BEGIN:VEVENT', 'UID:cards-' + day + '@rounds', 'DTSTAMP:' + stamp, ...when(day, '', ''),
+      'SUMMARY:' + text('Flashcards: ' + n + ' due'), 'CATEGORIES:Flashcards', 'TRANSP:TRANSPARENT', 'END:VEVENT');
   }
   lines.push('END:VCALENDAR');
   return lines.map(fold).join('\r\n') + '\r\n';
