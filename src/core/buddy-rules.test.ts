@@ -1,0 +1,30 @@
+import { describe, expect, it } from 'vitest';
+import { TIERS, tierOf, nextTier, moodOf, FINISHED, isReview } from './buddy-rules.ts';
+import { reviewId } from './reviews.ts';
+
+describe('buddy rules', () => {
+  it('has seven tiers in rising order, Legend at 4,000 XP', () => {
+    expect(TIERS.map((t) => t.id)).toEqual(['egg', 'hatchling', 'r3', 'r4', 'r5', 'r6', 'legend']);
+    expect(TIERS.every((t, i) => i === 0 || t.minXp > TIERS[i - 1].minXp)).toBe(true);
+    expect(TIERS.at(-1)).toMatchObject({ minXp: 4000, reward: 800 });
+  });
+  it('picks the highest tier reached and the next one', () => {
+    expect(tierOf(0).id).toBe('egg');
+    expect(tierOf(119).id).toBe('egg');
+    expect(tierOf(120).id).toBe('hatchling');
+    expect(nextTier(120)).toMatchObject({ id: 'r3', minXp: 300 });
+    expect(nextTier(9999)).toBeNull();
+  });
+  it('maps health to a mood', () => {
+    expect([100, 70, 69, 40, 39, 15, 14, 0].map(moodOf)).toEqual(['happy', 'happy', 'tired', 'tired', 'sick', 'sick', 'hurt', 'hurt']);
+  });
+  it('counts done, submitted and graded as finished', () => {
+    expect(FINISHED).toEqual(['done', 'submitted', 'graded']);
+  });
+  it('knows a lecture review task by its id and title, as reviews.ts makes them', () => {
+    const id = reviewId('pharm', 'm1', '2026-09-14', 1);
+    expect(isReview(id, 'Review 1/4 · PHARM Lecture Mon 14 Sep')).toBe(true);
+    expect(isReview(id, 'My own task')).toBe(false);
+    expect(isReview('t1', 'Review 1/4 · PHARM Lecture Mon 14 Sep')).toBe(false);
+  });
+});
