@@ -188,7 +188,8 @@ function Review({ group, list }: { group: string | null; list: CardGroup[] }) {
     const keys = (e: KeyboardEvent) => {
         if (e.key === " " || e.key === "Enter") { e.preventDefault(); setFlipped(true); return }
         const g = GRADES.find(([, , k]) => k === e.key)
-        if (g && flipped) { e.preventDefault(); void answer(g[0]) }
+        /* 1, 2 and 3 are the review's while it has focus, flipped or not: before the answer shows they do nothing, never switch pages */
+        if (g) { e.preventDefault(); if (flipped) void answer(g[0]) }
     }
     const done = () => showCards({ mode: "home" })
     if (!card) return (
