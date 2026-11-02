@@ -31,7 +31,7 @@ describe('buddy rules', () => {
   it('prices upgrade levels as base + step × level, and opens only the ones whose stage has shipped', () => {
     const focus = UPGRADES.find((u) => u.sku === 'focus')!;
     expect([1, 2, 5].map((n) => upgradeCost(focus, n))).toEqual([75, 110, 215]);
-    expect(UPGRADES.filter((u) => u.open).map((u) => u.sku)).toEqual(['focus', 'finisher']);
+    expect(UPGRADES.filter((u) => u.open).map((u) => u.sku)).toEqual(['focus', 'finisher', 'foundry']);
     expect(new Set([...UPGRADES, ...COSMETICS].map((x) => x.sku)).size).toBe(UPGRADES.length + COSMETICS.length);
     expect(COSMETICS.every((c) => c.cost >= 30 && c.cost <= 300 && c.sku.startsWith(c.kind + '-'))).toBe(true);
   });

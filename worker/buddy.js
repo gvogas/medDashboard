@@ -6,7 +6,7 @@
 
 import {
   BIG_FINISH_COINS, BIG_TYPES, COSMETICS, DAY_MINUTES, FINISH_COINS, FINISH_XP, FINISHED, FINISHER_COINS, FOCUS_RATE, GRADE_BONUS,
-  HEALTH, HEALTH_DAYS, LOG_WINDOW_MS, LOOK_BUDDIES, MINUTES_PER_COIN, NAME_MAX, PERSONAL_FINISH_LIMIT, REVIEW_FINISH_LIMIT, REVIEW_ID,
+  CARD_COIN_CAP, HEALTH, HEALTH_DAYS, LOG_WINDOW_MS, REVIEWS_PER_COIN, STREAK_REVIEWS, LOOK_BUDDIES, MINUTES_PER_COIN, NAME_MAX, PERSONAL_FINISH_LIMIT, REVIEW_FINISH_LIMIT, REVIEW_ID,
   STREAK_COINS, STREAK_MAX, STREAK_MINUTES, TIERS, UPGRADES, checkCustom, isReview, moodOf, nextTier, tierOf, upgradeCost,
 } from '../src/core/buddy-rules.ts';
 import { json, readJson, HttpError } from './http.js';
@@ -117,15 +117,25 @@ export function healthOf({ window, minutesByDay, events }) {
 }
 
 /**
- * The streak from `fromDay` to `today`: a day with STREAK_MINUTES or more extends it and pays
+ * Coins for card reviews: per day, one per REVIEWS_PER_COIN reviews, at most CARD_COIN_CAP plus
+ * one per Card Foundry level (`foundryOf(day)`, the level when that day was first paid).
+ */
+export function cardAwards(reviewsByDay, foundryOf = () => 0) {
+  return Object.entries(reviewsByDay)
+    .map(([day, n]) => ({ source: 'cards:' + day, amount: Math.min(CARD_COIN_CAP + foundryOf(day), Math.floor(n / REVIEWS_PER_COIN)), day }))
+    .filter((a) => a.amount > 0);
+}
+
+/**
+ * The streak from `fromDay` to `today`: a day with STREAK_MINUTES or more (or STREAK_REVIEWS card reviews) extends it and pays
  * min(STREAK_MAX, STREAK_COINS × length); a past day under it resets the run. Today counts once
  * it qualifies and, while it doesn't yet, leaves the run standing. Returns {awards, streak}.
  */
-export function streakAwards(minutesByDay, fromDay, today) {
+export function streakAwards(minutesByDay, fromDay, today, reviewsByDay = {}) {
   const awards = [];
   let run = 0;
   for (let day = fromDay; day <= today; day = addDays(day, 1)) {
-    if ((minutesByDay[day] || 0) >= STREAK_MINUTES) {
+    if ((minutesByDay[day] || 0) >= STREAK_MINUTES || (reviewsByDay[day] || 0) >= STREAK_REVIEWS) {
       run++;
       awards.push({ source: 'streak:' + day, amount: Math.min(STREAK_MAX, STREAK_COINS * run), day });
     } else if (day !== today) {
@@ -170,6 +180,9 @@ function reads(db, userId, s, from, to) {
         JOIN items AS i ON i.scope = 'c:' || m.space_id AND i.id = m.item_id AND i.deleted_at IS NULL
         WHERE m.user_id = ? AND m.deleted_at IS NULL AND m.grade >= ? AND m.updated_at >= ?`).bind(userId, GRADE_BONUS[0].min, s.on_at),
     db.prepare('SELECT sku, level FROM buddy_owned WHERE user_id = ?').bind(userId),
+    /* card reviews since gameplay began, and how many cards are due today */
+    db.prepare('SELECT card_ref, day, at FROM card_reviews WHERE user_id = ? AND deleted_at IS NULL AND at >= ?').bind(userId, s.since),
+    db.prepare('SELECT count(*) AS n FROM card_state WHERE user_id = ? AND deleted_at IS NULL AND due <= ?').bind(userId, to),
   ]);
 }
 
@@ -192,7 +205,7 @@ export async function reconcile(db, userId, now = Date.now()) {
   if (!s || !s.enabled) return null;
   const tz = s.tz, today = dayOf(now, tz);
   const startDay = dayOf(Math.max(s.since, now - (HEALTH_DAYS - 1) * DAY_MS), tz);
-  const [sessions, personal, marks, ledger, ownHealth, classHealth, grades, owned] = (await reads(db, userId, s, startDay, today)).map((r) => r.results);
+  const [sessions, personal, marks, ledger, ownHealth, classHealth, grades, owned, reviews, dueRows] = (await reads(db, userId, s, startDay, today)).map((r) => r.results);
   const paid = new Map(ledger.map((l) => [l.source, l]));
 
   /* sessions: XP counts every timed minute since `since`; coins only from when gameplay was last turned on */
@@ -223,15 +236,24 @@ export async function reconcile(db, userId, now = Date.now()) {
   const minutesByDay = {};
   for (const c of counted) minutesByDay[c.day] = (minutesByDay[c.day] || 0) + c.counted;
   const onDay = dayOf(s.on_at, tz);
-  const { awards: streakAll, streak } = streakAwards(minutesByDay, dayOf(s.since, tz), today);
+  /* card reviews: coins per day (only those made while gameplay was on), the streak, and +2 health per card a day */
+  const reviewsByDay = {}, paidReviews = {}, cardsByDay = {};
+  for (const r of reviews) {
+    reviewsByDay[r.day] = (reviewsByDay[r.day] || 0) + 1;
+    if (r.at >= s.on_at) paidReviews[r.day] = (paidReviews[r.day] || 0) + 1;
+    (cardsByDay[r.day] ||= new Set()).add(r.card_ref);
+  }
+  const foundryOf = (day) => levelAt(ledger, 'foundry', paid.get('cards:' + day)?.at ?? now);
+  const cardPay = cardAwards(paidReviews, foundryOf).filter((a) => !paid.has(a.source) || paid.get(a.source).amount < a.amount);
+  const { awards: streakAll, streak } = streakAwards(minutesByDay, dayOf(s.since, tz), today, reviewsByDay);
   const streakPay = streakAll.filter((a) => a.day >= onDay && !paid.has(a.source));
 
-  const pay = [...sessionPay, ...finishPay, ...gradePay, ...streakPay];
+  const pay = [...sessionPay, ...finishPay, ...gradePay, ...cardPay, ...streakPay];
   if (pay.length) {
     await db.batch([
       db.prepare(`INSERT INTO buddy_ledger (user_id, source, kind, amount, day, at)
           SELECT ?1, json_extract(value, '$.source'), 'earn', json_extract(value, '$.amount'), json_extract(value, '$.day'), ?2 FROM json_each(?3) WHERE true
-          ON CONFLICT (user_id, source) DO UPDATE SET amount = max(buddy_ledger.amount, excluded.amount) WHERE buddy_ledger.source GLOB 'session:*'`)
+          ON CONFLICT (user_id, source) DO UPDATE SET amount = max(buddy_ledger.amount, excluded.amount) WHERE buddy_ledger.source GLOB 'session:*' OR buddy_ledger.source GLOB 'cards:*'`)
         .bind(userId, now, JSON.stringify(pay)),
       db.prepare('UPDATE buddy_settings SET reconciled_at = ? WHERE user_id = ?').bind(now, userId),
     ]);
@@ -246,7 +268,8 @@ export async function reconcile(db, userId, now = Date.now()) {
   const xp = xpOf({ counted, finishes, bonus: s.xp_bonus });
   const window = [];
   for (let d = startDay; d <= today; d = addDays(d, 1)) window.push(d);
-  const health = healthOf({ window, minutesByDay, events: healthEvents([...ownHealth, ...classHealth], today) });
+  const cardHeal = Object.entries(cardsByDay).map(([day, set]) => ({ day, change: HEALTH.perCard * set.size }));
+  const health = healthOf({ window, minutesByDay, events: [...healthEvents([...ownHealth, ...classHealth], today), ...cardHeal] });
   const claimed = new Set(rows.filter((r) => r.source.startsWith('claim:')).map((r) => r.source.slice(6)));
   const tier = tierOf(xp), next = nextTier(xp);
   return {
@@ -259,7 +282,7 @@ export async function reconcile(db, userId, now = Date.now()) {
     owned: owned.filter((o) => COSMETICS.some((c) => c.sku === o.sku)).map((o) => o.sku).sort(),
     tiers: TIERS.map((t) => ({ id: t.id, minXp: t.minXp, reward: t.reward, reached: xp >= t.minXp, claimed: claimed.has(t.id) })),
     recent: rows.filter((r) => r.amount !== 0).slice(0, 10).map((r) => ({ source: r.source, amount: r.amount, at: r.at })),
-    due: 0,
+    due: dueRows[0]?.n ?? 0,
   };
 }
 
