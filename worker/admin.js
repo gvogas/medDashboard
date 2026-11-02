@@ -16,6 +16,8 @@ import { readMaintenance, validateMaintenance } from './maintenance.js';
 import { deleteAccountStmts } from './leaving.js';
 import { DAY_MS } from './time.js';
 import { MESSAGE_MAX } from '../src/core/shared.ts';
+import { GRANT_MAX } from '../src/core/buddy-rules.ts';
+import { dayOf } from './buddy.js';
 
 /* The newest file in migrations/; a test keeps it in step. */
 export const LATEST_MIGRATION = '0010_buddy.sql';
@@ -222,6 +224,32 @@ export const adminRoutes = [
     const { meta } = await env.DB.prepare('DELETE FROM login_throttle WHERE username = ?').bind(key).run();
     if (!meta.changes) throw new HttpError(404, { error: 'not_found' });
     await audit(env.DB, admin, 'unlock', key.split('#')[0], key.includes('#') ? 'one browser' : '').run();
+    return done();
+  }],
+
+  /* Study Buddy, for testing: coins as a ledger row, and/or XP added to what the rules work out. */
+  ['POST', /^\/api\/admin\/buddy\/grant$/, async ({ request, env }) => {
+    const admin = await requireAdmin(request, env);
+    const body = await readJson(request);
+    const whole = (v, min, max, field) => {
+      if (v === undefined) return null;
+      if (!Number.isInteger(v) || v < min || v > max) throw new HttpError(400, { error: 'invalid', field });
+      return v;
+    };
+    const coins = whole(body.coins, 1, GRANT_MAX.coins, 'coins');
+    const xp = whole(body.xp, 0, GRANT_MAX.xp, 'xp');
+    if (coins === null && xp === null) throw new HttpError(400, { error: 'invalid', field: 'coins' });
+    const user = await target(env.DB, typeof body.userId === 'string' ? body.userId : '');
+    const now = Date.now();
+    const tz = (await env.DB.prepare('SELECT tz FROM buddy_settings WHERE user_id = ?').bind(user.id).first())?.tz || 'UTC';
+    const detail = [coins !== null && `coins ${coins}`, xp !== null && `xp ${xp}`].filter(Boolean).join(', ');
+    await env.DB.batch([
+      env.DB.prepare('INSERT INTO buddy_settings (user_id) VALUES (?) ON CONFLICT (user_id) DO NOTHING').bind(user.id),
+      ...(xp !== null ? [env.DB.prepare('UPDATE buddy_settings SET xp_bonus = ? WHERE user_id = ?').bind(xp, user.id)] : []),
+      ...(coins !== null ? [env.DB.prepare("INSERT INTO buddy_ledger (user_id, source, kind, amount, day, at) VALUES (?, ?, 'earn', ?, ?, ?)")
+        .bind(user.id, `admin:${now}:${crypto.randomUUID().slice(0, 8)}`, coins, dayOf(now, tz), now)] : []),
+      audit(env.DB, admin, 'grant', user.username, detail, now),
+    ]);
     return done();
   }],
 
