@@ -1,22 +1,25 @@
 # Study Garden — Spec
 
-2026-10-14 · George · Companion design: [2026-10-14-study-garden-design.md](2026-10-14-study-garden-design.md)
+2026-10-14 · George · Revised 2026-11-02 (OpenRouter removed; Use your own AI, Sign in with ChatGPT, connector; checked against main at `3aaeaae`) · Companion design: [2026-10-14-study-garden-design.md](2026-10-14-study-garden-design.md)
 
 ## 1. Scope and conventions
 
-This spec defines what to build for Study Garden in seven stages. The why, the economy reasoning and the alternatives are in the design doc.
+This spec defines what to build for Study Garden in eight stages (the eighth optional). The why, the economy reasoning and the alternatives are in the design doc.
 
 - **Numbers** live in one file per side: `worker/garden-rules.js` (authoritative) and `src/core/garden-rules.ts` (display only, checked against the same table in tests). Changing a value changes one place.
 - **Ids and times** follow the tracker: text ids ≤ 24 chars, times in ms since epoch, days as the viewer's local `YYYY-MM-DD` sent by the browser and checked by the Worker (±1 day, like the leaderboard's week start).
 - **Personal rows** follow `marks`: `user_id` + text `id`, `revision`, `deleted_at` tombstones, changes written to the user's `u:` feed.
 - **Errors** follow `worker/http.js`: `HttpError(status, {error, ...})`; new codes are listed under API.
 - **Gameplay off** means the Garden API answers `{enabled: false}` and nothing is awarded. XP, coins and health count only activity after `users.garden_since`, set the first time gameplay is turned on (no back-pay). Coins are written only while gameplay is on. XP and health are worked out from all activity since `garden_since`, so turning gameplay off and on again never shrinks the plant.
-- **Names in the app:** the tab is "Garden" and the Settings toggle is "Gameplay"; study tools keep plain names (Cards, Quiz, Notes & plan). "Study Garden" is only the project name.
-- **Out of scope:** showing anyone's plant or coins to others, web research, key paste for other providers, a plant that dies.
+- **Names in the app:** the tab is "Garden" and the Settings toggle is "Gameplay"; study tools keep plain names (Cards, Quiz, Notes & plan). "Study Garden" is only the project name. The two ways to generate are "Generate here" (Workers AI) and "Use your own AI" (copy and paste).
+- **Shared AI code:** prompts and answer rules live in `src/core/study-prompts.ts` and `src/core/study-answers.ts`, imported by the browser and by `worker/study-ai.js` (as the Worker imports `src/core/grades.ts`), so a pasted answer and a model answer meet the same limits.
+- **Maintenance:** `garden` and `studyai` are added to `FEATURES` and the route map in `worker/maintenance.js`, and to `src/core/maintenance.ts`.
+- **Migrations:** each one bumps `LATEST_MIGRATION` (`worker/admin.js`, `scripts/lib/move-db.js`) and adds its row to the list in `docs/DEPLOYING.md`.
+- **Out of scope:** showing anyone's plant or coins to others, web research, API key paste for any provider, OpenRouter, a plant that dies.
 
 ## 2. Data model
 
-Six migrations (`0006`–`0011`, one per stage 1–6) add five user columns and eleven tables. Study content (decks, cards, quizzes, docs) carries a `scope` like `items` does: `u:<user>` when personal, `c:<space>` when shared with a class. Each person's review progress is always personal, so one shared deck serves the whole class.
+Seven migrations (`0010`–`0016`: Stages 1–3, 5–8; Stage 4 has none) add five user columns, nine tables, a rebuilt `activity` table and, with the optional connector, three OAuth tables. `0001`–`0009` are already taken. Study content (decks, cards, quizzes, docs) carries a `scope` like `items` does: `u:<user>` when personal, `c:<space>` when shared with a class. Each person's review progress is always personal, so one shared deck serves the whole class.
 
 **`users` columns**
 
@@ -26,7 +29,7 @@ Six migrations (`0006`–`0011`, one per stage 1–6) add five user columns and 
 | `garden_since` | 1 | INTEGER ms, NULL | Set once, the first time `gameplay` becomes 1 |
 | `garden_look` | 1 | TEXT JSON | `{skin, bg}`, each an owned id; default `{"skin":"bad","bg":"none"}` |
 | `garden_xp_bonus` | 1 | INTEGER ≥ 0 | Default 0; admin-granted XP for testing, added to derived XP |
-| `cards_in_feed` | 3 | INTEGER 0/1 | Default 0; adds daily "Review N cards" events to the calendar feed |
+| `cards_in_feed` | 3 | INTEGER 0/1 | Default 0; adds daily "Flashcards: N due" events to the calendar feed |
 
 **Tables**
 
@@ -35,22 +38,24 @@ Six migrations (`0006`–`0011`, one per stage 1–6) add five user columns and 
 | `garden_ledger` | 1 | `(user_id, source)` unique | `amount` INTEGER (±, ≠ 0), `kind` ('earn','spend'), `source` TEXT ≤ 64 (see §4), `at` INTEGER | No; read through `/api/garden` |
 | `garden_owned` | 2 | `(user_id, sku)` | `level` INTEGER ≥ 1 (upgrades) or 1 (cosmetics), `at` | No |
 | `decks` | 3 | `(scope, id)` | `author_id`, `course_id`, `title` ≤ 80, `revision`, timestamps, `deleted_at` | Yes, kind `decks`, in the deck's scope feed |
-| `cards` | 3 | `(scope, id)` | `deck_id`, `author_id`, `front` ≤ 500, `back` ≤ 1,000, `source` ('hand','ai'), `revision`, timestamps | Yes, kind `cards`, in the deck's scope feed |
+| `cards` | 3 | `(scope, id)` | `deck_id`, `author_id`, `front` ≤ 500, `back` ≤ 1,000, `source` ('hand','ai','paste','connector'), `revision`, timestamps | Yes, kind `cards`, in the deck's scope feed |
 | `card_state` | 3 | `(user_id, id)`, id = the card id (random 24-char ids, unique across scopes) | `due` TEXT day, `interval` INTEGER days, `ease` REAL 1.3–3.0, `reps`, `lapses`, `revision`, timestamps | Yes, kind `card_state`, user's `u:` feed only |
 | `card_reviews` | 3 | `(user_id, id)` | `card_ref` (the card id), `day` TEXT, `grade` ('again','good','easy'), `at` | Yes, kind `card_reviews`, `u:` feed; append-only |
-| `ai_keys` | 4 | `user_id` | `provider` ('openrouter'), `cipher` TEXT (keyring format of `spotify_tokens`), `label`, `model` (the picked model id), `created_at` | No; never leaves the Worker |
-| `ai_oauth_states` | 4 | `state` | `user_id`, `verifier_cipher`, `expires_at` (10 min) | No |
-| `quizzes` | 5 | `(scope, id)` | `author_id`, `deck_id` NULL, `course_id`, `item_id` NULL (the exam it prepares for), `questions` JSON ≤ 20 `[{q, choices[4], answer 0–3, topic}]`, timestamps | Yes, kind `quizzes`, scope feed |
+| `quizzes` | 5 | `(scope, id)` | `author_id`, `deck_id` NULL, `course_id`, `item_id` NULL (the exam it prepares for), `questions` JSON ≤ 20 `[{q, choices[4], answer 0–3, topic}]`, `source`, timestamps | Yes, kind `quizzes`, scope feed |
 | `quiz_attempts` | 5 | `(user_id, id)` | `quiz_ref`, `answers` JSON, `score`, `weak_topics` JSON, `at` | Yes, `u:` feed |
-| `study_docs` | 6 | `(scope, id)` | `author_id`, `course_id`, `kind` ('notes','plan','material'), `title` ≤ 120, `body` JSON ≤ 60 KB, timestamps | Yes, kind `study_docs`, scope feed |
+| `study_docs` | 6 | `(scope, id)` | `author_id`, `course_id`, `kind` ('notes','plan','material'), `title` ≤ 120, `body` JSON ≤ 60 KB, `source`, timestamps | Yes, kind `study_docs`, scope feed |
+| `activity` (rebuilt) | 7 | as today | The `verb` CHECK list gains `material.shared`; rows copied across in the migration | As today |
+| `mcp_clients` | 8 | `client_id` | `name` ≤ 80, `redirect_uris` JSON ≤ 5, `created_at` (dynamic client registration) | No |
+| `mcp_codes` | 8 | `code_hash` | `client_id`, `user_id`, `challenge` (S256), `redirect_uri`, `expires_at` (10 min) | No |
+| `mcp_tokens` | 8 | `token_hash` | `client_id`, `user_id`, `kind` ('access','refresh'), `expires_at` (1 h / 30 days), `revoked_at` | No; only hashes are stored |
 
-A study plan is always `u:` (it is built from one person's weak topics). `material` is plain text a member pastes or uploads (extracted in the browser), stored as text, never as the file.
+A study plan is always `u:` (it is built from one person's weak topics). `material` is plain text a member pastes or uploads (extracted in the browser), stored as text, never as the file. Every study row records how it was made in `source`: `'hand'`, `'ai'` (Workers AI), `'paste'` or `'connector'`; cards, quizzes and docs all carry it.
 
-**Feed.** Today's client rejects a whole v3 sync page if any change has a kind it does not know (`src/core/api.ts:186`). So new kinds are served only on a new `GET /api/sync?v=4`; `v=3` keeps filtering to its seven kinds, as `v=2` does to its five (spec §16). The Worker change ships before the client that asks for v4. Shared rows ride the class's `c:` feed, so the existing member guard decides who pulls them. Account deletion (`worker/accounts.js`) deletes every new table's rows.
+**Feed.** The client rejects a whole v3 sync page if any change has a kind it does not know, or a `c:` change that is not `courses` or `items` (`src/core/api.ts:187`). The Worker's `syncPageV3` (`worker/db.js:635`) filters no kinds today, so Stage 3 first gives `v=3` an explicit filter to its seven kinds, then serves the new kinds only on `GET /api/sync?v=4`, whose client accepts shared `decks`, `cards`, `quizzes` and `study_docs`. `v=2` keeps its five kinds (`db.js:318`) for any old tab, though its client was removed on 10/27. The Worker change ships before the client that asks for v4. Shared rows ride the class's `c:` feed, so the existing member guard decides who pulls them. Account deletion (`worker/accounts.js`, one statement list) deletes every new table's rows.
 
 ## 3. API
 
-Three new route groups plus additions to rows, sync and spaces. Every Garden route checks the `garden` switch; every study-AI route checks `studyai`; sharing also checks `classes`.
+Two new route groups (three with the Stage 8 connector) plus additions to rows, sync and spaces. Every Garden route checks the `garden` switch; every study-AI and connector route checks `studyai`; sharing also checks `classes`. Use your own AI adds no route: the browser builds the prompt and checks the answer, and saving uses the row routes.
 
 | Stage | Method + path | Body | Answer |
 | --- | --- | --- | --- |
@@ -64,13 +69,8 @@ Three new route groups plus additions to rows, sync and spaces. Every Garden rou
 | 3 | `PUT`/`DELETE /api/(decks\|cards\|card_state\|card_reviews)/<id>` | A row, as the existing `ROW` routes take | The stored row; coins and heal written in the same D1 batch |
 | 3 | `PUT`/`DELETE /api/spaces/<id>/(decks\|cards)/<id>` | A shared row, as the existing `SHARED_ROW` routes take | The stored row; permissions in §9 |
 | 3 | `GET /api/sync?v=4` | — | As v3, plus the new kinds |
-| 4 | `GET /api/study-ai/status?day=` | — | `{provider: 'workers'\|'openrouter', model, left, extraLeft, globalOpen}` |
-| 4 | `POST /api/study-ai/cards` | `{courseId, itemId?, sources: {items: bool, text?: string ≤ 60k chars, topic?: string ≤ 120}, count 1–30, level}` | `{cards: [{front, back}], provider, left}`; a preview, not saved |
-| 4 | `POST /api/openrouter/connect` | — | `{url}` to openrouter.ai/auth |
-| 4 | `GET /api/openrouter/callback?code&state` | — | 302 to `/settings?ai=connected` or `?ai=failed` |
-| 4 | `GET /api/openrouter/models` | — | `{models: [{id, name, free}], current, credit}` from `OPENROUTER_MODELS` plus the key's credit |
-| 4 | `PUT /api/openrouter/model` | `{model}` | One of the list, or any `vendor/model` id when the key has credit |
-| 4 | `DELETE /api/openrouter` | — | 204; deletes the key |
+| 4 | `GET /api/study-ai/status?day=` | — | `{providers: ['workers'], left, extraLeft, globalOpen}`; `providers` gains `'chatgpt'` only if step 2 ships (§7.2) |
+| 4 | `POST /api/study-ai/cards` | `{courseId, itemId?, sources: {items: bool, text?: string ≤ 60k chars, topic?: string ≤ 120}, count 1–30, level, provider?: 'workers'}` | `{cards: [{front, back}], provider, left}`; a preview, not saved |
 | 4 | `GET /api/admin/study-ai` | — | Admin only: `{today: {neurons, ceiling, generations, byProvider}, last14: [...], caps}` |
 | 4 | `PUT /api/admin/study-ai/caps` | `{perUser 0–20, extraMax 0–5, ceiling 0–9000}` | Admin only; stored in `app_meta` `studyai_caps` |
 | 5 | `POST /api/study-ai/quiz` | `{courseId, itemId?, deckId?, sources, count 1–20, level}` | `{questions: [...]}`; a preview |
@@ -78,6 +78,12 @@ Three new route groups plus additions to rows, sync and spaces. Every Garden rou
 | 6 | `POST /api/study-ai/notes` | `{courseId, sources}` | `{title, summary, concepts[], sections[]}` |
 | 6 | `POST /api/study-ai/plan` | `{courseId, startDay, endDay?}` (default: the class's next exam date, at most 30 days out) | `{days: [{day, tasks: [{text, minutes, priority}]}], endDay, examId}`; weights the last attempt's weak topics |
 | 7 | `POST /api/spaces/<id>/share` | `{kind: 'deck'\|'quiz'\|'doc', id}` | The new `c:` row; a copy of the personal one |
+| 8 | `GET /.well-known/oauth-protected-resource`, `GET /.well-known/oauth-authorization-server` | — | Metadata for the connector (§7.3) |
+| 8 | `POST /oauth/register` | `{client_name, redirect_uris}` | `{client_id}`; dynamic client registration |
+| 8 | `GET /oauth/authorize` | `client_id, redirect_uri, code_challenge, state` | Signed-in consent page; 302 back with `code` |
+| 8 | `POST /oauth/token` | `authorization_code` + `code_verifier`, or `refresh_token` | `{access_token, refresh_token, expires_in}` |
+| 8 | `POST /mcp` | MCP (streamable HTTP), `Authorization: Bearer` | The tools in §7.3 |
+| 8 | `GET`/`DELETE /api/connectors` | — | The user's connected chats, and disconnect (revokes their tokens) |
 
 **New error codes**
 
@@ -89,10 +95,10 @@ Three new route groups plus additions to rows, sync and spaces. Every Garden rou
 | `tier_not_reached` | 409 | Claim above current XP |
 | `study_ai_cap` | 429 | The user's daily uses are spent; `{retryAfter, extra: bool}` |
 | `study_ai_busy` | 429 | The global Workers AI ceiling for study is reached today |
-| `openrouter_limit` | 429 | OpenRouter answered 429 (free model 50/day) |
-| `openrouter_credit` | 409 | OpenRouter answered 402 or 403 |
-| `openrouter_auth` | 409 | The stored key was revoked (401); the key is deleted and the user asked to reconnect |
 | `material_too_large` | 413 | Text over 60k chars or a doc over 60 KB |
+| `invalid_token` | 401 | Connector call with a missing, expired or revoked token (with `WWW-Authenticate` naming the resource metadata) |
+
+`study_ai_cap` and `study_ai_busy` answers also carry `paste: true`, so the browser offers Use your own AI right away. A pasted answer that yields nothing is a message in the Generate sheet, not an HTTP error.
 
 ## 4. Earning rules
 
@@ -170,25 +176,15 @@ A card with no `card_state` row is new: ease 2.5, reps 0, interval 0.
 - **Due count** on Study and on each class = cards with `due ≤ today`, plus new cards up to the daily 20.
 - Two devices reviewing the same card offline: the later `updated_at` wins `card_state`; both `card_reviews` rows stay (they are append-only and keyed by their own id).
 - Editing a card's text keeps its schedule. Deleting a card deletes its `card_state`.
-- **Reminders.** Week view shows "N cards due" on today. The header badge's plant droops while cards are due and none were reviewed today (look only; health is unchanged). With `cards_in_feed` on, the calendar feed (`worker/calendar.js`) adds an all-day "Review N cards" event for each of the next 7 days, N from `card_state.due`.
+- **Reminders.** Week view shows "N cards due" on today. The header badge's plant droops while cards are due and none were reviewed today (look only; health is unchanged). With `cards_in_feed` on, the calendar feed (`worker/calendar.js`) adds an all-day "Flashcards: N due" event for each of the next 7 days, N from `card_state.due` (worded apart from the lecture review tasks, "Review 1/4 …", from `src/core/reviews.ts`).
 
 ## 6. AI gateway
 
-One module, `worker/study-ai.js`, serves all four generate routes: it picks the provider, enforces caps, builds the prompt, calls the model, and validates the answer. Calls reuse `runModel`, `modelJson` and `TIMEOUT_MS` from `worker/ai.js`.
+One module, `worker/study-ai.js`, serves all four Workers AI routes: it picks the provider, enforces caps, builds the prompt from `src/core/study-prompts.ts`, calls the model with `askJson` from `worker/ai.js` (which asks, cleans and retries once), and checks the answer with `src/core/study-answers.ts`. A failed call gives the use back, as `giveBackOutline` (`worker/limits.js`) does for outline reads.
 
-**Provider choice**
+**Provider slot**
 
-1. The user has an `ai_keys` row → OpenRouter, with the model they picked: one of `OPENROUTER_MODELS` or, when the key has credit, any `vendor/model` id. No app daily cap; 20 calls per hour per user to protect the Worker.
-2. Otherwise → Workers AI, `gpt-oss-120b` to start (the model outline reads already use), under both caps below.
-
-`OPENROUTER_MODELS` (a `wrangler.jsonc` var; listed 10/14, re-tested at Stage 4 and dropped if gone):
-
-| Model id | Note |
-| --- | --- |
-| `google/gemma-4-31b-it:free` | Default |
-| `nvidia/nemotron-3-super-120b-a12b:free` | Larger; likely better quizzes |
-| `thinkingmachines/inkling:free` | 1M context; long uploads |
-| `nvidia/nemotron-3-ultra-550b-a55b:free` | Largest; slowest |
+A provider is `{id, available(env, userId), run(route, prompt, schema) → {answer, usage}}`. Stage 4 registers one, `workers` (`@cf/openai/gpt-oss-120b`, the model outline reads use). A `chatgpt` provider (§7.2) registers only if OpenAI accepts the app; nothing else in the gateway changes. Use your own AI is not a provider: it never reaches the Worker.
 
 **Caps (Workers AI only)**
 
@@ -198,13 +194,13 @@ One module, `worker/study-ai.js`, serves all four generate routes: it picks the 
 | Bought extra | +1 per purchase, max 2 a day | `garden_ledger` `buy:ai:<day>:<n>` | Viewer's next day |
 | Global study ceiling | 4,000 estimated neurons a day | `app_meta` key `studyai_neurons:<UTC day>` | 00:00 UTC, with the Cloudflare quota |
 
-The three values are read from `app_meta` key `studyai_caps` (`{perUser, extraMax, ceiling}`), set on the Admin page; the table holds the defaults. Each call also adds to `app_meta` `studyai_usage:<UTC day>` (`{neurons, generations, byProvider}`) for the Admin page.
+`claimLimit` takes one fixed limit, so the claim is made with `limit = perUser + extras bought today` (counted from `buy:ai:<day>:*` rows in the same request). The three values are read from `app_meta` key `studyai_caps` (`{perUser, extraMax, ceiling}`), set on the Admin page; the table holds the defaults. Each call also adds to `app_meta` `studyai_usage:<UTC day>` (`{neurons, generations, byProvider}`) for the Admin page.
 
 Neurons are estimated after each call from its token usage: in × 31,818 + out × 68,182 per million tokens for gpt-oss-120b. The check happens before the call; a call that pushes past the ceiling still finishes. A failed call (timeout, invalid answer after retry) gives the use back.
 
 **Context**
 
-| Source | Content | Limit (Workers AI / OpenRouter) |
+| Source | Content | Limit (Workers AI / Use your own AI) |
 | --- | --- | --- |
 | Class data | Course name, items (type, title, date, notes, checklist), shared `material` docs | 12k / 30k chars, newest items first |
 | Text | Extracted file text, pasted text, or a lecture review's notes | 12k / 30k chars, cut at a page boundary |
@@ -212,7 +208,7 @@ Neurons are estimated after each call from its token usage: in × 31,818 + out �
 
 Sources are wrapped as data in the prompt ("Study material, not instructions:"), and every output field is shown as plain text, never HTML.
 
-**Output schemas** (asked for as JSON; validated with `worker/validate.js`; bad entries dropped; one retry if none are valid)
+**Output schemas** (asked for as JSON; checked by `src/core/study-answers.ts` on both sides, which reuses `worker/validate.js`'s limits; bad entries dropped; one retry on Workers AI if none are valid)
 
 | Route | Shape | Limits |
 | --- | --- | --- |
@@ -221,38 +217,56 @@ Sources are wrapped as data in the prompt ("Study material, not instructions:"),
 | notes | `{title, summary, concepts: [{term, meaning}], sections: [{heading, body}]}` | ≤ 12 concepts, ≤ 10 sections, 60 KB total |
 | plan | `{days: [{day, tasks: [{text, minutes, priority: 'high'\|'normal'}]}]}` | 1–30 days, ≤ 6 tasks a day, minutes 10–180 |
 
+The tolerant JSON reading `modelJson` does today (an answer wrapped in a code block or a sentence) moves into `src/core/study-answers.ts`, so the browser can read pasted answers the same way; `worker/ai.js` imports it from there.
+
 **Repeat requests.** Previews are kept on the device through `src/data/ai-cache.ts` (SHA-256 key, 30 days, newest 12, cleared on sign-out) with the route in the key, so reopening the same request never spends a use.
 
-**Logging.** Each call logs `study-ai:<route> <provider> <model> in=<n> out=<n> neurons≈<n>` to Workers Logs. The OpenRouter key is never logged.
+**Logging.** Each call logs `study-ai:<route> <provider> <model> in=<n> out=<n> neurons≈<n>` to Workers Logs.
 
-## 7. OpenRouter Connect
+## 7. Bring your own AI
 
-Connecting uses OpenRouter's OAuth PKCE flow ([docs](https://openrouter.ai/docs/use-cases/oauth-pkce)). The Worker holds the verifier and the key; the browser only ever sees the auth URL.
+Three steps, so people can use the AI they already have and neither they nor the app pays or signs up for anything new.
 
-```mermaid
-sequenceDiagram
-  participant B as Browser
-  participant W as Worker
-  participant D as D1
-  participant O as OpenRouter
-  B->>W: POST /api/openrouter/connect
-  W->>D: save state + encrypted verifier (10 min)
-  W-->>B: {url}, S256 challenge, state
-  B->>O: user logs in, approves
-  O->>W: redirect /callback?code&state
-  W->>D: check and delete state
-  W->>O: POST /api/v1/auth/keys + verifier
-  O-->>W: {key} (code valid 10 min)
-  W->>D: save key, AES-GCM
-  W-->>B: 302 /settings?ai=connected
-```
+### 7.1 Use your own AI (copy and paste) — Stage 4
 
-- **Connect:** the Worker makes a 64-byte verifier and a random `state`, stores the state with the verifier encrypted (10 min expiry), and answers `https://openrouter.ai/auth?callback_url=<origin>/api/openrouter/callback&code_challenge=<S256>&code_challenge_method=S256&state=<state>&key_label=Rounds`.
-- **Callback:** must be signed in as the same user who started; unknown or expired state → `?ai=failed`. The code is swapped at `POST https://openrouter.ai/api/v1/auth/keys` with `code`, `code_verifier` and `code_challenge_method`; codes expire after 10 minutes.
-- **Storage:** one `ai_keys` row per user, encrypted with the versioned AES-GCM keyring from `worker/spotify/tokens.js` with salt `rounds` and its own HKDF info (`openrouter-key`). Replacing a key overwrites the row.
-- **Status:** `GET /api/v1/key` with the user's key gives `free_model_daily_requests` and credit left; Settings shows it, read at most once per minute.
-- **Disconnect:** deletes the row. The key stays valid at OpenRouter until the user deletes it there; Settings links to `openrouter.ai/settings/keys`.
-- **Limits to expect:** free models allow 20 requests a minute and 50 a day per account (1,000 a day after $10 of credit) ([limits](https://openrouter.ai/docs/api-reference/limits)). A 429 shows "Your OpenRouter free limit is used up today" and offers the Workers AI quota if any is left.
+Everything runs in the browser, from its local copy of the class; nothing new on the Worker.
+
+1. **Prompt.** `buildPrompt(route, sources, options)` from `src/core/study-prompts.ts`, the same function the Worker uses, with the 30k-char context limit. The prompt ends with the exact JSON shape asked for and "Answer with only this JSON." It never includes anyone else's data: class data is what the user can already see.
+2. **Copy.** A **Copy prompt** button (`navigator.clipboard.writeText`; on failure, the prompt is shown selected in a read-only box), and links that open `chatgpt.com`, `claude.ai` and `gemini.google.com` in a new tab. The app remembers the last one picked (per device).
+3. **Paste.** A box for the answer, up to 200k chars. `readAnswer(route, text)` finds the JSON (bare, in a code block, or with text around it), checks it against the schema in §6, drops bad entries, and reports "18 of 20 cards could be read". Nothing readable: "That answer had no cards in it. Copy the prompt again and ask for only the JSON."
+4. **Preview and save.** The same preview as Generate here. Saved rows carry `source: 'paste'` and are written through the normal row routes, which validate them again.
+
+Use your own AI works while `studyai` is in maintenance and when the free quota is spent; it never counts toward either cap and writes nothing to the usage log. Plan generation (§3, Stage 6) works the same way: the prompt includes the last attempt's weak topics and the class's next exam date from the local store.
+
+### 7.2 Sign in with ChatGPT — if accepted
+
+OpenAI announced Sign in with ChatGPT at DevDay 2026: an OAuth sign-in that can let an app spend the user's ChatGPT plan allowance, with a per-app weekly cap the user sets. It is a limited preview; hosted apps must request access.
+
+- **Now:** apply from the OpenAI developer dashboard. Nothing is built except the provider slot in §6.
+- **If accepted:** write a short addendum to this spec from OpenAI's published terms (endpoints, scopes, token lifetime, what the app may show). Expected shape: a `chatgpt` provider; its tokens stored encrypted with the AES-GCM keyring in `worker/spotify/tokens.js` (own HKDF info, `chatgpt-token`), never sent to the browser or logged; Settings › AI for study gets Connect / Disconnect; Generate here uses ChatGPT when connected, with no app cap but 20 calls an hour per user to protect the Worker; a spent weekly cap falls back to Workers AI, then to Use your own AI.
+- **If not accepted:** nothing to undo.
+
+### 7.3 Connector (MCP) — Stage 8, optional
+
+A Model Context Protocol server on the Worker, so a user can add Rounds as a connector in ChatGPT (Apps SDK, private testing first) or Claude (custom connector) and say "make 20 cards for my Pharm exam". Their chat does the AI work on their plan.
+
+**Sign-in.** OAuth 2.1 with PKCE (S256 only), as the MCP authorization spec asks: protected-resource and authorization-server metadata, dynamic client registration, a consent page that requires the normal session cookie ("Allow ChatGPT to read your classes and save study material?"), codes for 10 minutes, access tokens for 1 hour, refresh tokens for 30 days, all stored as SHA-256 hashes (§2). Redirect URIs must be `https`. Disconnect in Settings revokes every token for that client. Evaluate `@cloudflare/workers-oauth-provider` at the start of Stage 8; it needs a KV binding, so D1 tables as in §2 are the default.
+
+**Tools**
+
+| Tool | Input | Output | Notes |
+| --- | --- | --- | --- |
+| `list_classes` | — | `[{courseId, name, nextExam?: {itemId, title, date}, due}]` | The user's personal and shared classes |
+| `get_class_material` | `{courseId, itemId?, maxChars ≤ 30000}` | Text: items, notes, checklists, shared `material` docs, newest first | Wrapped as data, as in §6 |
+| `save_deck` | `{courseId, title, cards: [{front, back}] ≤ 30}` | `{deckId, saved, dropped}` | Checked by `study-answers.ts`; `source: 'connector'` |
+| `save_quiz` | `{courseId, itemId?, questions ≤ 20}` | `{quizId, saved, dropped}` | Stage 5 rules |
+| `save_notes` | `{courseId, title, summary, concepts, sections}` | `{docId}` | Stage 6 rules |
+
+- All tools are personal (`u:`); sharing to a class stays in the app.
+- `studyai` maintenance stops `/mcp`; `classes` maintenance hides shared classes from `list_classes`.
+- 60 tool calls an hour per user (`claimLimit`, key `mcp:<user>`); saves count as row writes for the API limit.
+- Saved rows reach the user's devices through the normal `u:` feed. Saving earns nothing; reviewing the cards earns as usual.
+- Logs record the tool name and sizes, never the material or the token.
 
 ## 8. File ingestion
 
@@ -264,7 +278,7 @@ Files are read in the browser and only their text goes to the Worker. No new lib
 | PPTX | Starts with `PK\x03\x04` and holds `ppt/presentation.xml` | New `src/core/pptxtext.ts`: reads the zip directory, inflates `ppt/slides/slideN.xml` and notes with `DecompressionStream('deflate-raw')`, keeps `<a:t>` text | `### Slide N` blocks, speaker notes after each |
 | TXT, MD | Extension + valid UTF-8 | `File.text()` | As is |
 
-- **Limits:** 20 MB per file, 5 files per generate, then text cut to the provider's limit (12k or 30k chars) at a page or slide boundary.
+- **Limits:** 20 MB per file, 5 files per generate, then text cut to the limit (12k chars for Generate here, 30k for Use your own AI) at a page or slide boundary.
 - **No text layer** (a scanned PDF): "This PDF has no text to read." No OCR, which would spend neurons.
 - **Rejected:** `.ppt`, `.doc`, `.docx`, images. The drop zone names what it accepts.
 - **Sharing a file with a class** saves its extracted text as a `material` doc (≤ 60 KB), never the file itself. There is no file storage on the free tier.
@@ -276,20 +290,20 @@ Each surface follows the tracker's Term components and theme tokens. The plant s
 | Surface | States | Notes |
 | --- | --- | --- |
 | Settings › Gameplay | Off (default); On; "Review cards in my calendar" | Turning on shows a one-time card explaining earning; turning off hides Garden and badge, keeps data |
-| Settings › AI for study | Free quota ("2 of 3 left today"); Connected ("OpenRouter · <model>", model picker); Reconnect needed; Off for maintenance | Connect opens OpenRouter in the same tab; returns with a toast |
+| Settings › AI for study | Free quota ("2 of 3 left today"); Off for maintenance; a line that Use your own AI works with any chat, always | Gains Connect ChatGPT only if §7.2 ships, and Connected chats (Disconnect) with Stage 8 |
 | Header badge | Plant thumbnail + coins; pulses once on a new tier to claim; droops while cards are due | Hidden when gameplay is off or `garden` is in maintenance |
 | Garden › Plant | Sprite by equipped skin and health band; XP bar; health bar; streak; "+N XP" since last visit | Wilt never blocks anything |
 | Garden › Tiers | Locked / Reached (Claim) / Claimed (Equip) / Equipped | Seven rows with hacks' descriptions |
 | Garden › Shop | Upgrades (level, next cost, effect); Backgrounds and frames; Extra AI use | Buy disabled with the reason when coins are short or max level |
 | Study › Cards | Class list with due counts; deck list (Mine, Shared with class); review screen; editor | Review: front, tap to flip, Again / Good / Easy, progress "12 of 30"; keyboard 1/2/3 and space |
-| Generate sheet | Sources → options → generating → preview → saved | Preview lets the user delete or edit items; Save into a new or existing deck |
+| Generate sheet | Sources → options → Generate here or Use your own AI → (generating \| copy prompt → paste answer) → preview → saved | Generate here shows uses left; when spent or in maintenance it is disabled with the reason and Use your own AI is offered. Paste states: empty, reading, "18 of 20 could be read", nothing readable. Preview lets the user delete or edit items; Save into a new or existing deck |
 | Study › Quiz | Setup (optional exam link), question (one at a time), result with weak topics, history | Result offers "Make cards for weak topics" and, when linked to an exam, "Add N weak topics to exam prep" (that exam's checklist, max 50 entries, no duplicates) |
 | Study › Notes & plan | Notes reader (summary, concepts, sections); plan as a day list with tick boxes | The plan ends at the class's next exam by default (at most 30 days; the date can be changed); its tasks can be sent to the week |
 | Class sheet › Materials | Shared decks, quizzes, notes and materials with author and date; Add material; Share from mine; Generate | Materials shown only for shared classes when `classes` is not in maintenance; Generate on every class |
 | Exam item card | Make cards / Make quiz for this exam; linked quizzes with best score | Opens the Generate sheet with the class and exam filled in |
 | Lecture review done | Toast: "Make cards from today's notes" | Only when the review task has notes; uses those notes as the text source |
 | Week view | "N cards due" chip on today | Tap opens the review screen |
-| Admin › Study Garden | Neurons today vs ceiling, generations, provider split, 14-day chart; caps form; grant coins/XP to a user | Admins only; replaces hacks' hidden demo unlock |
+| Admin › Study Garden | Neurons today vs ceiling, generations (Workers AI; connector tool calls from Stage 8), 14-day chart; caps form; grant coins/XP to a user | Admins only; replaces hacks' hidden demo unlock |
 
 **Who can change shared materials**
 
@@ -304,9 +318,9 @@ Sharing makes a copy in the class; later edits to the personal original do not c
 
 ## 10. Stages and acceptance criteria
 
-Seven stages, each on its own `garden-N-<name>` branch, starting only after Collab Stage 10 is on main. A stage is done when its boxes are ticked, `npm test` passes, its migration is applied with `db:remote`, and it has been tried on the live site.
+Eight stages, each on its own `garden-N-<name>` branch; Stage 8 is optional. Collab Stage 10 is on main. A stage is done when its boxes are ticked, `npm test` passes, its migration (if any) is applied with `db:remote` and `LATEST_MIGRATION` bumped, and it has been tried on the live site.
 
-**1 · Game core** (`0006`)
+**1 · Game core** (`0010`)
 
 - [ ] Gameplay toggle in Settings; `garden_since` set once
 - [ ] `garden` maintenance switch hides Garden, badge and earning for non-admins
@@ -317,45 +331,47 @@ Seven stages, each on its own `garden-N-<name>` branch, starting only after Coll
 - [ ] Streak: 15 timed minutes or 10 reviews makes a day count; bonus 2 × length, max 20; a day that doesn't count resets it with no health change
 - [ ] Admin grant writes coins or XP plus an `admin_log` row; non-admins get 403
 
-**2 · Shop** (`0007`)
+**2 · Shop** (`0011`)
 
 - [ ] Buying with too few coins fails with no ledger row; two quick taps buy one level
 - [ ] Upgrade effects change the next award amounts
 - [ ] A grade of 92 pays 25 once; editing it to 85 and back pays nothing more
 - [ ] Backgrounds and frames equip and show behind the plant (the sprites have their pot drawn in, so there are no separate pots)
 
-**3 · Decks and spaced repetition** (`0008`)
+**3 · Decks and spaced repetition** (`0012`)
 
 - [ ] Make, edit, delete decks and cards by hand, offline included
 - [ ] Scheduling matches the table in `srs.test.ts`; due counts correct across midnight
-- [ ] A tab on today's build (sync v3) never receives the new kinds and keeps syncing; only v4 does
+- [ ] `v=3` filters to its seven kinds (new in this stage, test first); a tab on today's build never receives the new kinds and keeps syncing; only v4 does, including shared `c:` decks and cards
 - [ ] Card reviews pay `cards:<day>` coins and heal the plant when gameplay is on
-- [ ] Week view chip, plant droop and the calendar's "Review N cards" events (with `cards_in_feed` on) show the right counts
+- [ ] Week view chip, plant droop and the calendar's "Flashcards: N due" events (with `cards_in_feed` on) show the right counts
 
-**4 · AI gateway and AI cards** (`0009`)
+**4 · AI gateway and Use your own AI** (no migration)
 
 - [ ] Per-user cap (3/day), bought extras (max 2) and the 4,000-neuron global ceiling enforced; failed calls give the use back
-- [ ] OpenRouter Connect works end to end; state expires after 10 min; the key is never in a response or a log
-- [ ] A revoked key is deleted and Settings asks to reconnect
-- [ ] Cards from class data, PDF, PPTX, TXT, MD and a topic; preview then save
-- [ ] `studyai` switch stops generation; hand-made cards still work
+- [ ] The gateway runs through the provider slot with one provider, `workers`; adding a fake second provider in a test needs no other change
+- [ ] Prompts and answer rules come from `src/core/study-prompts.ts` and `study-answers.ts`, used by both browser and Worker (one test table for both)
+- [ ] Cards from class data, PDF, PPTX, TXT, MD and a topic, both ways; preview then save
+- [ ] Use your own AI: Copy prompt works (and falls back to a selectable box); a pasted answer in a code block, with text around it, or bare is read; bad entries dropped with "N of M"; saved cards have `source: 'paste'`
+- [ ] Use your own AI works with the quota spent and with `studyai` in maintenance, and spends no use
+- [ ] `studyai` switch stops Generate here; hand-made cards still work
 - [ ] One measured 20-card Workers AI run recorded in the neuron log
-- [ ] Model picker lists `OPENROUTER_MODELS`; any other model id is accepted only when the key has credit
 - [ ] Admin page shows today's usage and 14 days; changed caps apply to the next call
 - [ ] Generate from the exam item card, the class sheet and the lecture-review toast opens with class, exam and notes filled in
+- [ ] Applied for Sign in with ChatGPT (§7.2); outcome noted in the design doc
 
-**5 · Quizzes** (`0010`)
+**5 · Quizzes** (`0013`)
 
-- [ ] Generate, take, score; weak topics stored per attempt
+- [ ] Generate (here or with your own AI), take, score; weak topics stored per attempt
 - [ ] Wrong and correct answers change health; `quiz:<day>` coins capped
 - [ ] A quiz linked to an exam adds its weak topics to that exam's prep checklist when asked (no duplicates, max 50)
 
-**6 · Notes and study plan** (`0011`)
+**6 · Notes and study plan** (`0014`)
 
-- [ ] Notes from class data, files or topic, saved as a `study_docs` row
+- [ ] Notes from class data, files or topic, both ways, saved as a `study_docs` row
 - [ ] Plan runs to the class's next exam by default (max 30 days, date changeable) and weights the last attempt's weak topics; tasks can be sent to the week
 
-**7 · Shared class materials** (no migration; uses `scope` from 3–6)
+**7 · Shared class materials** (`0015`: rebuilds `activity` with the `material.shared` verb; content uses `scope` from 3–6)
 
 - [ ] Share a deck, quiz or notes to a class as a copy; add pasted or uploaded material
 - [ ] Permissions match the table in §9; non-members never pull `c:` rows
@@ -364,3 +380,11 @@ Seven stages, each on its own `garden-N-<name>` branch, starting only after Coll
 - [ ] Class data in AI prompts includes the class's shared material
 - [ ] Hidden while `classes` is in maintenance
 - [ ] Sharing writes an `activity` row, so classmates see it in their inbox; removing it removes the entry
+
+**8 · Connector, optional** (`0016`)
+
+- [ ] Metadata, dynamic registration, authorize (consent needs the session cookie) and token endpoints pass an MCP client's sign-in; PKCE S256 only; codes expire after 10 min; tokens are stored only as hashes
+- [ ] `list_classes`, `get_class_material`, `save_deck`, `save_quiz`, `save_notes` work from ChatGPT (private app) and Claude (custom connector); saved rows sync to the user's devices with `source: 'connector'`
+- [ ] Another user's classes are never listed or read; an expired or revoked token gets 401 `invalid_token`
+- [ ] Disconnect in Settings revokes the client's tokens; `studyai` maintenance stops `/mcp`; 60 calls an hour per user
+- [ ] No material or token in Workers Logs
