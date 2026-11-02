@@ -1,0 +1,42 @@
+name: Issue triage
+# When an issue is opened from a form (.github/ISSUE_TEMPLATE), turn its Area, Priority and
+# Flags answers into labels. The form's own labels (its type) are applied by GitHub. Only adds
+# labels, and only when an issue is opened, so a label removed later is never put back.
+on:
+  issues:
+    types: [opened]
+permissions:
+  issues: write
+jobs:
+  label:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/github-script@v8
+        with:
+          script: |
+            const body = context.payload.issue.body || '';
+            /* a form renders each question as "### <label>" followed by the answer */
+            const section = (title) => {
+              const at = body.indexOf('### ' + title);
+              if (at < 0) return '';
+              const rest = body.slice(at + title.length + 4);
+              const next = rest.indexOf('\n### ');
+              return next < 0 ? rest : rest.slice(0, next);
+            };
+            const ticked = (text) => [...text.matchAll(/^- \[[xX]\] (.+)$/gm)].map((m) => m[1].trim());
+            const AREAS = {
+              'Study Buddy': 'area: buddy', 'Flashcards': 'area: flashcards', 'AI study tools': 'area: study-ai',
+              'Shared classes and projects': 'area: classes', 'Sync and offline': 'area: sync', 'Worker and API': 'area: worker',
+              'Screens and components': 'area: ui', 'Admin page': 'area: admin',
+            };
+            const FLAGS = { 'Adds a D1 migration': 'migration', 'Optional': 'optional', 'Needs action outside the code': 'external' };
+            const PRIORITY = { High: 'priority: high', Medium: 'priority: medium', Low: 'priority: low' };
+            const pick = (map, answers) => answers.flatMap((a) => Object.entries(map).filter(([k]) => a.startsWith(k)).map(([, v]) => v));
+            const labels = [
+              ...pick(AREAS, ticked(section('Area'))),
+              ...pick(FLAGS, ticked(section('Flags'))),
+              ...pick(PRIORITY, [section('Priority').trim()]),
+            ];
+            if (!labels.length) return core.info('No form answers to label.');
+            await github.rest.issues.addLabels({ ...context.repo, issue_number: context.issue.number, labels: [...new Set(labels)] });
+            core.info('Added: ' + labels.join(', '));

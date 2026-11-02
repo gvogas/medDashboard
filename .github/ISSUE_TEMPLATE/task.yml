@@ -1,0 +1,56 @@
+name: Task or chore
+description: Upkeep that people won't see directly, such as dependencies, tests, CI, refactors or accounts.
+labels: ["type: chore"]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What needs doing
+    validations:
+      required: true
+  - type: textarea
+    id: why
+    attributes:
+      label: Why
+    validations:
+      required: false
+  - type: textarea
+    id: done
+    attributes:
+      label: Done when
+      value: |
+        - [ ] 
+    validations:
+      required: true
+  - type: checkboxes
+    id: area
+    attributes:
+      label: Area
+      description: Tick every part this touches. Each one adds its `area:` label when the issue is opened.
+      options:
+        - label: "Study Buddy: Gameplay, coins, ranks, health, buddy art"
+        - label: "Flashcards: decks, cards, spaced repetition"
+        - label: "AI study tools: Workers AI, Use your own AI, the connector"
+        - label: "Shared classes and projects: members, the inbox"
+        - label: "Sync and offline: the change feed, sync versions"
+        - label: "Worker and API: routes, D1 queries, limits"
+        - label: "Screens and components: React views and sheets"
+        - label: "Admin page: accounts, maintenance switches"
+  - type: dropdown
+    id: priority
+    attributes:
+      label: Priority
+      description: Adds a `priority:` label.
+      options:
+        - High (do next)
+        - Medium (do in order)
+        - Low (when there is time)
+    validations:
+      required: false
+  - type: checkboxes
+    id: flags
+    attributes:
+      label: Flags
+      options:
+        - label: Adds a D1 migration (run npm run db:remote before merging)
+        - label: Needs action outside the code (an account, an application, a setting)

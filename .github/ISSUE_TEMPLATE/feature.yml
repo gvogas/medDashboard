@@ -1,0 +1,64 @@
+name: Feature request
+description: A new thing Rounds should do, or a change to how something works.
+labels: ["type: feature"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: The problem
+      description: What is hard or missing today, and who runs into it?
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: What it should do
+      description: Describe the change from the user's side. Sketches and links are welcome.
+    validations:
+      required: true
+  - type: textarea
+    id: done
+    attributes:
+      label: Done when
+      description: A short checklist that says the feature is finished.
+      value: |
+        - [ ] 
+    validations:
+      required: false
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Other ways considered
+  - type: checkboxes
+    id: area
+    attributes:
+      label: Area
+      description: Tick every part this touches. Each one adds its `area:` label when the issue is opened.
+      options:
+        - label: "Study Buddy: Gameplay, coins, ranks, health, buddy art"
+        - label: "Flashcards: decks, cards, spaced repetition"
+        - label: "AI study tools: Workers AI, Use your own AI, the connector"
+        - label: "Shared classes and projects: members, the inbox"
+        - label: "Sync and offline: the change feed, sync versions"
+        - label: "Worker and API: routes, D1 queries, limits"
+        - label: "Screens and components: React views and sheets"
+        - label: "Admin page: accounts, maintenance switches"
+  - type: dropdown
+    id: priority
+    attributes:
+      label: Priority
+      description: Adds a `priority:` label.
+      options:
+        - High (do next)
+        - Medium (do in order)
+        - Low (when there is time)
+    validations:
+      required: false
+  - type: checkboxes
+    id: flags
+    attributes:
+      label: Flags
+      options:
+        - label: Adds a D1 migration (run npm run db:remote before merging)
+        - label: Optional (nice to have; can be skipped)
+        - label: Needs action outside the code (an account, an application, a setting)

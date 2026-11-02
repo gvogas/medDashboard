@@ -1,0 +1,46 @@
+[
+  { "name": "type: epic", "color": "3E4B9E", "description": "Tracks a feature made of several issues" },
+  { "name": "type: feature", "color": "1D76DB", "description": "New behaviour people can see", "from": ["enhancement"] },
+  { "name": "type: bug", "color": "D73A4A", "description": "Something isn't working", "from": ["bug"] },
+  { "name": "type: docs", "color": "0075CA", "description": "Specs, plans and docs/", "from": ["documentation"] },
+  { "name": "type: chore", "color": "C5DEF5", "description": "Upkeep: dependencies, tests, CI, refactors, accounts" },
+  { "name": "type: decision", "color": "5319E7", "description": "A choice to make before work can start" },
+  { "name": "type: question", "color": "D876E3", "description": "Needs an answer, not a change", "from": ["question"] },
+
+  { "name": "area: buddy", "color": "0E8A16", "description": "Study Buddy: Gameplay, coins, ranks, health, buddy art" },
+  { "name": "area: flashcards", "color": "2EA44F", "description": "Decks, cards and spaced repetition" },
+  { "name": "area: study-ai", "color": "0F5F58", "description": "AI study tools: Workers AI, Use your own AI, the connector" },
+  { "name": "area: classes", "color": "006B75", "description": "Shared classes and projects, members, the inbox" },
+  { "name": "area: sync", "color": "5FA8A0", "description": "The change feed, sync versions, offline and local-first" },
+  { "name": "area: worker", "color": "3F4E5E", "description": "The Cloudflare Worker: routes, D1 queries, limits" },
+  { "name": "area: ui", "color": "BFDADC", "description": "React screens, sheets and components" },
+  { "name": "area: admin", "color": "8A6D3B", "description": "The Admin page and maintenance switches" },
+
+  { "name": "buddy stage 1", "color": "E4DAF5", "description": "Study Buddy Stage 1: Game core" },
+  { "name": "buddy stage 2", "color": "E4DAF5", "description": "Study Buddy Stage 2: Shop and custom buddy" },
+  { "name": "buddy stage 3", "color": "E4DAF5", "description": "Study Buddy Stage 3: Decks and spaced repetition" },
+  { "name": "buddy stage 4", "color": "E4DAF5", "description": "Study Buddy Stage 4: AI gateway and Use your own AI" },
+  { "name": "buddy stage 5", "color": "E4DAF5", "description": "Study Buddy Stage 5: Quizzes" },
+  { "name": "buddy stage 6", "color": "E4DAF5", "description": "Study Buddy Stage 6: Notes and study plan" },
+  { "name": "buddy stage 7", "color": "E4DAF5", "description": "Study Buddy Stage 7: Shared class materials" },
+  { "name": "buddy stage 8", "color": "E4DAF5", "description": "Study Buddy Stage 8: Connector for ChatGPT and Claude" },
+
+  { "name": "status: needs decision", "color": "FBCA04", "description": "Waiting on George's answer" },
+  { "name": "status: blocked", "color": "B60205", "description": "Waiting on another issue" },
+  { "name": "status: ready", "color": "C2E0C6", "description": "Unblocked; can start" },
+  { "name": "status: in progress", "color": "FEF2C0", "description": "Someone is working on it" },
+
+  { "name": "priority: high", "color": "E99695", "description": "Do next" },
+  { "name": "priority: medium", "color": "F9D0C4", "description": "Do in order" },
+  { "name": "priority: low", "color": "FDF0EC", "description": "When there's time" },
+
+  { "name": "migration", "color": "D93F0B", "description": "Adds a D1 migration: run npm run db:remote before merging" },
+  { "name": "optional", "color": "D4D4D4", "description": "Nice to have; can be skipped" },
+  { "name": "external", "color": "F9A03F", "description": "Needs action outside the code: an account, an application, a setting" },
+  { "name": "good first issue", "color": "7057FF", "description": "Small and well defined" },
+  { "name": "help wanted", "color": "008672", "description": "Extra attention is needed" },
+
+  { "name": "resolution: duplicate", "color": "CFD3D7", "description": "Already tracked in another issue", "from": ["duplicate"] },
+  { "name": "resolution: invalid", "color": "E4E4E4", "description": "Not an issue", "from": ["invalid"] },
+  { "name": "resolution: won't do", "color": "FFFFFF", "description": "Decided against", "from": ["wontfix"] }
+]

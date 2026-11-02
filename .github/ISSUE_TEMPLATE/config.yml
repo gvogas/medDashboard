@@ -1,0 +1,5 @@
+blank_issues_enabled: true
+contact_links:
+  - name: How Rounds is built
+    url: https://github.com/gvogas/medDashboard/blob/main/docs/PROJECT-OVERVIEW.md
+    about: The project overview, for context before opening an issue.
