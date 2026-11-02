@@ -1,0 +1,84 @@
+name: Bug report
+description: Something in Rounds isn't working as it should.
+title: "Bug: "
+labels: ["type: bug"]
+body:
+  - type: markdown
+    attributes:
+      value: Thanks for writing this up. The more exact the steps, the faster it gets fixed.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you saw, and any message shown on screen.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Open Study › Timer
+        2. Start a 25-minute run and stop it after 2 minutes
+        3. …
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected
+    validations:
+      required: true
+  - type: dropdown
+    id: where
+    attributes:
+      label: Where in the app
+      options:
+        - Week
+        - Month
+        - All items
+        - Study
+        - Music
+        - Buddy
+        - Settings
+        - Admin
+        - Sign-in
+        - Calendar feed
+        - Somewhere else
+    validations:
+      required: true
+  - type: input
+    id: device
+    attributes:
+      label: Device and browser
+      placeholder: "iPhone 15, Safari 19 · Windows 11, Chrome 141"
+  - type: textarea
+    id: extra
+    attributes:
+      label: Screenshots or console errors
+      description: Paste or drag screenshots in. For errors, open the browser console and copy any red lines.
+  - type: checkboxes
+    id: area
+    attributes:
+      label: Area
+      description: Tick every part this touches. Each one adds its `area:` label when the issue is opened.
+      options:
+        - label: "Study Buddy: Gameplay, coins, ranks, health, buddy art"
+        - label: "Flashcards: decks, cards, spaced repetition"
+        - label: "AI study tools: Workers AI, Use your own AI, the connector"
+        - label: "Shared classes and projects: members, the inbox"
+        - label: "Sync and offline: the change feed, sync versions"
+        - label: "Worker and API: routes, D1 queries, limits"
+        - label: "Screens and components: React views and sheets"
+        - label: "Admin page: accounts, maintenance switches"
+  - type: dropdown
+    id: priority
+    attributes:
+      label: Priority
+      description: Adds a `priority:` label.
+      options:
+        - High (do next)
+        - Medium (do in order)
+        - Low (when there is time)
+    validations:
+      required: false

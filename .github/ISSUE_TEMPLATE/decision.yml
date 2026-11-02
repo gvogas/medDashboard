@@ -1,0 +1,56 @@
+name: Decision
+description: A choice that has to be made before work can start.
+labels: ["type: decision", "status: needs decision"]
+body:
+  - type: textarea
+    id: question
+    attributes:
+      label: The question
+      description: One sentence that can be answered.
+    validations:
+      required: true
+  - type: textarea
+    id: options
+    attributes:
+      label: Options
+      description: Each option with what it means for people using the app, and what it costs.
+      value: |
+        1. **…**: 
+        2. **…**: 
+    validations:
+      required: true
+  - type: textarea
+    id: recommendation
+    attributes:
+      label: Recommendation
+  - type: input
+    id: blocks
+    attributes:
+      label: Blocks
+      description: Issues waiting on this answer.
+      placeholder: "#36, #37"
+  - type: checkboxes
+    id: area
+    attributes:
+      label: Area
+      description: Tick every part this touches. Each one adds its `area:` label when the issue is opened.
+      options:
+        - label: "Study Buddy: Gameplay, coins, ranks, health, buddy art"
+        - label: "Flashcards: decks, cards, spaced repetition"
+        - label: "AI study tools: Workers AI, Use your own AI, the connector"
+        - label: "Shared classes and projects: members, the inbox"
+        - label: "Sync and offline: the change feed, sync versions"
+        - label: "Worker and API: routes, D1 queries, limits"
+        - label: "Screens and components: React views and sheets"
+        - label: "Admin page: accounts, maintenance switches"
+  - type: dropdown
+    id: priority
+    attributes:
+      label: Priority
+      description: Adds a `priority:` label.
+      options:
+        - High (do next)
+        - Medium (do in order)
+        - Low (when there is time)
+    validations:
+      required: false
