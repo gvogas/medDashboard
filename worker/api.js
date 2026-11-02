@@ -8,8 +8,8 @@ import { readOutline, cleanCode, MAX_BYTES } from './outline.js';
 import { readSchool } from './school.js';
 import { readSchedule } from './schedule.js';
 import { listParam, cleanTerm, TIMEOUT_MS } from './ai.js';
-import { validateProfile, validateCourse, validateItem, validateQuote, validateStudySession, validateAchievement, validateId, validateSharedCourse, validateSharedItem, validateChanged, DATE } from './validate.js';
-import { getUserForLogin, getProfile, updateProfile, getRow, upsertRow, deleteRow, syncPage, syncPageV3, parseCursor, bumpPasswordGen, saveSpotifyTokens, deleteSpotifyTokens, getShared, upsertShared, deleteShared, memberTaskWrite } from './db.js';
+import { validateProfile, validateCourse, validateItem, validateQuote, validateStudySession, validateAchievement, validateDeck, validateCard, validateCardState, validateCardReview, validateId, validateSharedCourse, validateSharedItem, validateChanged, DATE } from './validate.js';
+import { getUserForLogin, getProfile, updateProfile, getRow, upsertRow, deleteRow, syncPage, syncPageV3, V3_KINDS, V4_KINDS, parseCursor, bumpPasswordGen, saveSpotifyTokens, deleteSpotifyTokens, getShared, upsertShared, deleteShared, memberTaskWrite } from './db.js';
 import { parseScope, roleOf, scopeOf } from './access.js';
 import * as spotify from './spotify.js';
 import { feedState, renewFeed, stopFeed, serveFeed } from './calendar.js';
@@ -50,12 +50,18 @@ function svParam(raw) {
   return Number(raw);
 }
 
-const VALIDATORS = { courses: validateCourse, items: validateItem, quotes: validateQuote, study_sessions: validateStudySession, achievements: validateAchievement };
+const VALIDATORS = {
+  courses: validateCourse, items: validateItem, quotes: validateQuote, study_sessions: validateStudySession, achievements: validateAchievement,
+  decks: validateDeck, cards: validateCard, card_state: validateCardState, card_reviews: validateCardReview,
+};
+/* a deck or card names whoever wrote it, so a copy shared with a class later keeps its author (Stage 7) */
+const AUTHORED = new Set(['decks', 'cards']);
 
 async function putRow({ request, env, params: [table, id] }) {
   const userId = await requireUser(request, env);
   validateId(id);
   const fields = VALIDATORS[table](await readJson(request));
+  if (AUTHORED.has(table)) fields.authorId = userId;
   // An item's course is checked inside the upsert; see upsertRow.
   return json(await upsertRow(env.DB, table, userId, id, fields, Date.now(), revisionOf(request)));
 }
@@ -75,7 +81,7 @@ async function removeRow({ request, env, params: [table, id] }) {
   return new Response(null, { status: 204 });
 }
 
-const ROW = /^\/api\/(courses|items|quotes|study_sessions|achievements)\/([^/]+)$/;
+const ROW = /^\/api\/(courses|items|quotes|study_sessions|achievements|decks|cards|card_state|card_reviews)\/([^/]+)$/;
 
 // ── a space's shared rows ───────────────────────────────────────────────────
 // Someone outside the space gets 404 for everything here (spec §5); the guard inside each
@@ -315,8 +321,10 @@ const routes = [
   ['GET', /^\/api\/sync$/, async ({ request, env, url }) => {
     const userId = await requireUser(request, env);
     const q = url.searchParams;
-    if (q.get('v') === '3') {
-      return json(await syncPageV3(env.DB, userId, cursorsParam(q.get('cursors')), svParam(q.get('sv')), undefined, { unread: unreadStmt(env.DB, userId) }));
+    /* v4 adds the flashcard kinds; v3 never carries them, so a tab from before Stage 3 keeps syncing */
+    if (q.get('v') === '3' || q.get('v') === '4') {
+      const kinds = q.get('v') === '4' ? V4_KINDS : V3_KINDS;
+      return json(await syncPageV3(env.DB, userId, cursorsParam(q.get('cursors')), svParam(q.get('sv')), undefined, { unread: unreadStmt(env.DB, userId), kinds }));
     }
     // v=2, for tabs still on the old client: the person's own scope, one cursor (spec §16).
     const cursor = url.searchParams.get('cursor') || '0';
