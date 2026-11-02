@@ -12,6 +12,8 @@ import { refOf } from "./refs"
 import type { Flow, StepKind } from "./types"
 import { MINUTE_MS } from "@/lib/time"
 import { toast, TOAST_LONG_MS } from "./toast"
+import * as sync from "@/core/sync"
+import { activeBuddy, gainSince } from "./buddy"
 
 /** A run's place in a room: the room, when you first joined (on this device's clock), the room's
     study time when you last joined, and what earlier stints in it came to. */
@@ -139,6 +141,14 @@ export async function skip() {
 /** Stop & log: save the study time done so far. */
 export const stop = () => finish()
 
+/* With gameplay on: once the session has uploaded and the Buddy answered, "+N XP". Offline, or
+   with nothing new, it says nothing. The XP is read now, before the upload can change it. */
+function xpToast() {
+    const before = activeBuddy()?.xp
+    if (before === undefined) return
+    sync.syncNow().then(() => gainSince(before)).then((n) => { if (n > 0) toast(`+${n} XP`) }).catch(() => {})
+}
+
 /* the clock's own fields of a run */
 const pick = (r: timer.Run): timer.Run => ({ flow: r.flow, startedAt: r.startedAt, pausedAt: r.pausedAt, pausedMs: r.pausedMs, skippedMs: r.skippedMs, skippedStudyMs: r.skippedStudyMs })
 
@@ -170,6 +180,7 @@ async function finish() {
                     startedAt: ended.room ? ended.room.joinedAt : ended.startedAt, studyMinutes: minutes, roundsDone: ended.room ? roundsIn(ended.flow, roomStudyMs(ended)) : s.roundsDone,
                     ...(ended.room ? { roomId: ended.room.id } : {}),
                 })
+                xpToast()
             } else {
                 /* under a minute: nothing to log, and this says so rather than vanishing */
                 toast("Under a minute, so nothing was logged.")

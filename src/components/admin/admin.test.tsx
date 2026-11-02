@@ -155,7 +155,7 @@ describe("the Admin page", () => {
         await waitFor(() => expect((screen.getByRole("switch", { name: "Week" }) as HTMLInputElement).checked).toBe(true))
         expect((screen.getByRole("switch", { name: "Month" }) as HTMLInputElement).checked).toBe(false)
         const labels = screen.getAllByRole("switch").map((s) => s.getAttribute("aria-label") || (s as HTMLInputElement).labels?.[0]?.textContent)
-        expect(labels).toEqual(["Whole app", "Week", "Month", "All items", "Study", "Music", "Import with AI", "Shared classes & projects", "Friends & study together"])
+        expect(labels).toEqual(["Whole app", "Week", "Month", "All items", "Study", "Music", "Import with AI", "Shared classes & projects", "Friends & study together", "Study Buddy"])
         fireEvent.click(screen.getByRole("switch", { name: "Music" }))
         fireEvent.click(screen.getByRole("switch", { name: "Week" }))
         fireEvent.change(screen.getByLabelText("Message"), { target: { value: "Back by 9 pm." } })

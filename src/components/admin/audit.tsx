@@ -17,6 +17,7 @@ const SAYS: Record<string, (e: Entry) => string> = {
     unlock: (e) => "unlocked " + e.target + (e.detail ? " (" + e.detail + ")" : ""),
     announce: (e) => "announced “" + e.detail + "”",
     unannounce: () => "took the announcement down",
+    grant: (e) => "granted " + e.target + " Study Buddy " + e.detail,
 }
 
 export function AuditLog() {

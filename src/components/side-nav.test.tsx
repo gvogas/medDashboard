@@ -10,6 +10,12 @@ vi.mock("@/data/ui", async () => (await import("@/data/fake-ui")).fakeUi(ui))
 vi.mock("@/data/study-controller", () => ({ setView }))
 const side = vi.hoisted(() => ({ open: false, setSide: vi.fn() }))
 vi.mock("@/data/sidebar", () => ({ sideOpen: () => side.open, setSide: side.setSide }))
+const buddyGet = vi.hoisted(() => vi.fn())
+vi.mock("@/core/api", async (original) => {
+    const real = await original<typeof import("@/core/api")>()
+    return { ...real, api: { ...real.api, buddy: { ...real.api.buddy, get: buddyGet } } }
+})
+import { loadBuddy, resetBuddy } from "@/data/buddy"
 
 const current = () => screen.getAllByRole("button").filter((b) => b.getAttribute("aria-current") === "page").map((b) => b.textContent)
 
@@ -20,6 +26,7 @@ afterEach(() => {
     side.open = false
     setStudyBadge(null)
     ui.view = "week"
+    resetBuddy()
 })
 
 describe("the pages in the sidebar", () => {
@@ -61,5 +68,14 @@ describe("the pages in the sidebar", () => {
         setStudyBadge("24:13")
         render(<SideNav />)
         expect(screen.getByRole("button", { name: /Study/ }).textContent).toBe("Study24:13")
+    })
+
+    it("adds Buddy, key 6, once gameplay turns out to be on, without upsetting the hooks", async () => {
+        render(<SideNav />)
+        expect(screen.queryByRole("button", { name: "Buddy" })).toBeNull()
+        buddyGet.mockResolvedValue({ enabled: true, xp: 0, tier: "egg", next: null, health: 100, mood: "happy", streak: 0, coins: 0,
+            look: { buddy: "auto", bg: "none", name: "" }, tz: "UTC", tiers: [], recent: [], due: 0 })
+        await act(async () => { await loadBuddy() })
+        expect(screen.getByRole("button", { name: "Buddy" }).getAttribute("aria-keyshortcuts")).toBe("6")
     })
 })

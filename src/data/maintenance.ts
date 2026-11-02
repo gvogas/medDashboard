@@ -26,7 +26,7 @@ export function maintenanceState(feature: Feature | null): MaintenanceState {
 
 /** A page's switch: every page has one but Admin. */
 export const pageFeature = (view: string | null): Feature | null =>
-    view && ["week", "month", "table", "study", "spotify"].includes(view) ? view as Feature : null
+    view && ["week", "month", "table", "study", "spotify", "buddy"].includes(view) ? view as Feature : null
 
 /** The admins' message, or the default. */
 export const maintenanceMessage = (): string => data.profile?.maintenance?.message || DEFAULT_MESSAGE

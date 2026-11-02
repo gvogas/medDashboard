@@ -37,6 +37,8 @@ export function viewHeading(ui: Pick<Ui, "view" | "anchor">): Heading {
             return { title: MON[a.getMonth()] + " " + a.getFullYear(), sub: "" }
         case "study":
             return { title: "Study", sub: "" }
+        case "buddy":
+            return { title: "Buddy", sub: "" }
         case "admin":
             return { title: "Admin", sub: "" }
         case "spotify":

@@ -11,6 +11,7 @@ import { useProfile } from "@/data/store"
 import { toast } from "@/data/toast"
 import { Panel, HeadNote, Empty } from "@/components/views/bits"
 import { Button, Checkbox, Label, Note, TextInput } from "@/components/sheet/fields"
+import { GRANT_MAX } from "@/core/buddy-rules"
 import { problem, useLoad, when } from "./use-admin"
 import type { AdminAccount as Account, AdminAccounts as List, AdminLock as Lock } from "@/core/types"
 
@@ -97,7 +98,7 @@ function seen(day: string | null) {
     return days === 1 ? "yesterday" : days + " days ago"
 }
 
-type Action = { id: string; kind: "password" | "delete" | "admin" | "revoke" } | null
+type Action = { id: string; kind: "password" | "delete" | "admin" | "revoke" | "grant" } | null
 
 function AccountTable({ accounts, me, onChanged }: { accounts: Account[]; me: string | undefined; onChanged: () => Promise<void> }) {
     const [open, setOpen] = useState<Action>(null)
@@ -155,6 +156,7 @@ function AccountTable({ accounts, me, onChanged }: { accounts: Account[]; me: st
                                         {!self && <Small onClick={() => setOpen(open?.id === a.id && open.kind === "password" ? null : { id: a.id, kind: "password" })} aria-expanded={open?.id === a.id && open.kind === "password"} aria-label={"New password " + a.username}>New password</Small>}
                                         {!self && <Small onClick={() => setOpen(open?.id === a.id && open.kind === "revoke" ? null : { id: a.id, kind: "revoke" })} aria-expanded={open?.id === a.id && open.kind === "revoke"} aria-label={"Sign out " + a.username}>Sign out</Small>}
                                         {!self && <Small onClick={() => setOpen(open?.id === a.id && open.kind === "admin" ? null : { id: a.id, kind: "admin" })} aria-expanded={open?.id === a.id && open.kind === "admin"}>{a.admin ? "Remove admin" : "Make admin"}</Small>}
+                                        <Small onClick={() => setOpen(open?.id === a.id && open.kind === "grant" ? null : { id: a.id, kind: "grant" })} aria-expanded={open?.id === a.id && open.kind === "grant"} aria-label={"Grant coins or XP to " + a.username}>Grant</Small>
                                         {!self && <Small danger onClick={() => setOpen(open?.id === a.id && open.kind === "delete" ? null : { id: a.id, kind: "delete" })} aria-expanded={open?.id === a.id && open.kind === "delete"} aria-label={"Delete " + a.username}>Delete</Small>}
                                     </div>
                                 </td>
@@ -168,6 +170,9 @@ function AccountTable({ accounts, me, onChanged }: { accounts: Account[]; me: st
                                             : open.kind === "delete"
                                             ? <ConfirmDelete account={a} busy={busy === a.id + "d"} onCancel={() => setOpen(null)}
                                                 onDelete={(typed) => run(a.id + "d", () => api.admin.remove(a.id, typed), a.username + " and their data were deleted.")} />
+                                            : open.kind === "grant"
+                                            ? <Grant account={a} busy={busy === a.id + "g"} onCancel={() => setOpen(null)}
+                                                onGrant={(g) => run(a.id + "g", () => api.buddy.grant(a.id, g), "Granted to " + a.username + ".")} />
                                             : open.kind === "admin"
                                             ? <Confirm busy={busy === a.id + "a"} onCancel={() => setOpen(null)} label={a.admin ? "Remove admin" : "Make admin"}
                                                 text={a.admin ? a.username + " loses access to this Admin page and to changing accounts." : a.username + " can open this Admin page and change accounts."}
@@ -205,6 +210,30 @@ function NewPassword({ account, busy, onSave, onCancel }: { account: Account; bu
             <Button type="submit" className="h-8 px-3 text-[12.5px]" disabled={busy || pw.length < 8}>Set password</Button>
             <Button variant="ghost" className="h-8 px-3 text-[12.5px]" onClick={onCancel}>Cancel</Button>
             <Note>This signs them out on every device.</Note>
+        </form>
+    )
+}
+
+/* Study Buddy, for testing: coins (1–5,000) and/or XP (0–10,000, replacing the last XP grant). */
+function Grant({ account, busy, onGrant, onCancel }: { account: Account; busy: boolean; onGrant: (g: { coins?: number; xp?: number }) => Promise<void>; onCancel: () => void }) {
+    const id = useId()
+    const [coins, setCoins] = useState(""), [xp, setXp] = useState("")
+    const whole = (v: string, min: number, max: number) => v === "" ? undefined : Number.isInteger(+v) && +v >= min && +v <= max ? +v : NaN
+    const c = whole(coins, 1, GRANT_MAX.coins), x = whole(xp, 0, GRANT_MAX.xp)
+    const ok = !Number.isNaN(c) && !Number.isNaN(x) && (c !== undefined || x !== undefined)
+    return (
+        <form className="flex flex-wrap items-end gap-2" onSubmit={(e) => { e.preventDefault(); if (ok) void onGrant({ ...(c !== undefined ? { coins: c } : {}), ...(x !== undefined ? { xp: x } : {}) }) }}>
+            <div className="grid w-32 gap-1">
+                <Label htmlFor={id + "c"}>Coins</Label>
+                <TextInput id={id + "c"} type="number" inputMode="numeric" min={1} max={GRANT_MAX.coins} value={coins} onChange={(e) => setCoins(e.target.value)} autoFocus />
+            </div>
+            <div className="grid w-32 gap-1">
+                <Label htmlFor={id + "x"}>XP</Label>
+                <TextInput id={id + "x"} type="number" inputMode="numeric" min={0} max={GRANT_MAX.xp} value={xp} onChange={(e) => setXp(e.target.value)} />
+            </div>
+            <Button type="submit" className="h-8 px-3 text-[12.5px]" disabled={busy || !ok}>Grant</Button>
+            <Button variant="ghost" className="h-8 px-3 text-[12.5px]" onClick={onCancel}>Cancel</Button>
+            <Note>For testing {account.username}'s Study Buddy: coins 1 to {GRANT_MAX.coins.toLocaleString()}; XP 0 to {GRANT_MAX.xp.toLocaleString()} replaces the last XP grant. Recorded in the audit log.</Note>
         </form>
     )
 }

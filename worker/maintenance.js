@@ -10,7 +10,7 @@ import { requireUser } from './auth.js';
 import { MESSAGE_MAX } from '../src/core/shared.ts';
 
 /* In the Admin page's order; 'app' is the whole app. */
-export const FEATURES = ['app', 'week', 'month', 'table', 'study', 'spotify', 'import', 'classes', 'friends'];
+export const FEATURES = ['app', 'week', 'month', 'table', 'study', 'spotify', 'import', 'classes', 'friends', 'buddy'];
 
 /** The stored switches, {features, message, updatedAt}; nothing on when absent or unreadable. */
 export async function readMaintenance(db) {
@@ -57,6 +57,7 @@ const GUARDED = [
   [/^\/api\/ai\//, 'import'],
   [/^\/api\/(spaces|invites|join|inbox)(\/|$)/, 'classes'],
   [/^\/api\/(friends|rooms|presence)(\/|$)/, 'friends'],
+  [/^\/api\/buddy(\/|$)/, 'buddy'],
 ];
 
 /**

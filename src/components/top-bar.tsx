@@ -14,6 +14,7 @@ import { useSide } from "@/data/sidebar"
 import { useSyncStatus } from "@/data/sync"
 import { DOT, syncTrouble } from "@/components/sync-status"
 import { InboxBell } from "@/components/inbox-bell"
+import { BuddyBadge } from "@/components/buddy/buddy-badge"
 import { goToday, newItem, openAiImport, setSearch, showSidebar, step } from "@/data/actions"
 
 const icon = (children: ReactNode, box = "0 0 16 16") => (
@@ -66,6 +67,7 @@ export function TopBar() {
             )}
 
             <Search />
+            <BuddyBadge />
             <InboxBell />
             {/* Import with AI (spec §10): the spark and the words; the spark alone under 1280px, where the words would squeeze the title */}
             <TextureButton variant="minimal" size="sm" aria-label="Import with AI" title="Import with AI" onClick={openAiImport}>

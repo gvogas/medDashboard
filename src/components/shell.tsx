@@ -10,13 +10,13 @@ import { useUi } from "@/data/ui"
 import { pageFeature, useMaintenance } from "@/data/maintenance"
 import type { Ui } from "@/data/types"
 
-const PAGES = ["week", "month", "table", "study", "spotify", "admin"]
+const PAGES = ["week", "month", "table", "study", "spotify", "buddy", "admin"]
 
 /** The page shown, or null on the focus screen. #views is hidden without one. */
 export const shownView = (u: Ui) => (u.focus ? null : PAGES.includes(u.view) ? u.view : null)
 
 /** The tiles show above the week, month and table, off the focus screen. */
-export const statsShown = (u: Ui) => !u.focus && u.view !== "spotify" && u.view !== "study" && u.view !== "admin"
+export const statsShown = (u: Ui) => !u.focus && u.view !== "spotify" && u.view !== "study" && u.view !== "buddy" && u.view !== "admin"
 
 /** Shown until boot has opened an account, and after a session ends. */
 export function SignInScreen({ children }: { children?: ReactNode }) {

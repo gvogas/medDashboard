@@ -69,7 +69,7 @@ export const ui: Ui = {
 
 try {
     const saved = JSON.parse(localStorage.getItem(KEY) || "{}") as { view?: string; schedule?: string; monthDeadlines?: boolean; studyTab?: string }
-    if (["week", "month", "table", "spotify", "study", "admin"].includes(saved.view!)) ui.view = saved.view as Ui["view"]
+    if (["week", "month", "table", "spotify", "study", "buddy", "admin"].includes(saved.view!)) ui.view = saved.view as Ui["view"]
     if (["all", "deadlines", "classes"].includes(saved.schedule!)) ui.schedule = saved.schedule as Ui["schedule"]
     else if (saved.monthDeadlines === false) ui.schedule = "classes"   /* the month's old Deadlines toggle */
     if (["timer", "history", "achievements", "leaderboard", "friends"].includes(saved.studyTab!)) ui.studyTab = saved.studyTab as Ui["studyTab"]

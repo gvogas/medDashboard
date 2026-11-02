@@ -12,10 +12,14 @@ import { escapeFocus } from "./study-timer"
 import { newItem, goToday, step } from "./actions"
 import { ui } from "./ui"
 import type { View } from "./types"
+import { activeBuddy } from "./buddy"
+import { maintenanceState } from "./maintenance"
 
 /* Single keys, when nothing is being typed and no drawer or the focus screen is up:
    the list is components/overlays.tsx. Each does what its top-bar button does; a number shows a view. */
-const VIEW_KEYS: Record<string, View> = { 1: "week", 2: "month", 3: "table", 4: "study", 5: "spotify" }
+const VIEW_KEYS: Record<string, View> = { 1: "week", 2: "month", 3: "table", 4: "study", 5: "spotify", 6: "buddy" }
+/* 6 opens the Buddy page only while gameplay is on (and the buddy is not switched off) */
+const viewKey = (k: string): View | null => (k === "6" && !(activeBuddy() && maintenanceState("buddy") !== "blocked") ? null : VIEW_KEYS[k] ?? null)
 function shortcut(e: KeyboardEvent): boolean {
     const target = e.target as HTMLElement | null
     if (e.ctrlKey || e.metaKey || e.altKey || e.repeat || isTyping(target) || target?.isContentEditable) return false
@@ -26,7 +30,7 @@ function shortcut(e: KeyboardEvent): boolean {
     if (e.key === "n") return run(newItem)
     if (e.key === "t") return run(goToday)
     if ((e.key === "[" || e.key === "]") && (ui.view === "week" || ui.view === "month")) return run(() => step(e.key === "[" ? -1 : 1))
-    if (VIEW_KEYS[e.key]) return run(() => setView(VIEW_KEYS[e.key]))
+    { const v = viewKey(e.key); if (v) return run(() => setView(v)) }
     return false
 }
 

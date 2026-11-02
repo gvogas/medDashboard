@@ -11,7 +11,7 @@ const fake = vi.hoisted(() => ({
   pending: 0,
 }))
 vi.mock("@/core/store", () => ({ data: {}, subscribe: vi.fn(), pendingCount: () => fake.pending }))
-vi.mock("@/core/sync", () => ({ setOnPulled: vi.fn(), onUnauthenticated: (fn: () => void) => { fake.sync.signedOut = fn } }))
+vi.mock("@/core/sync", () => ({ setOnPulled: vi.fn(), setOnEarned: vi.fn(), onUnauthenticated: (fn: () => void) => { fake.sync.signedOut = fn } }))
 vi.mock("@/core/model", () => ({ useTypePrefs: vi.fn() }))
 vi.mock("@/bridge", () => ({ notify: vi.fn() }))
 vi.mock("@/data/sidebar", () => ({ setSide: vi.fn(), sideOpen: () => false, watchSidebar: vi.fn() }))

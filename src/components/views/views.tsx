@@ -1,4 +1,4 @@
-// The week, month, table, Study, Music or Admin page, in <App>'s #views. On the focus
+// The week, month, table, Study, Music, Buddy or Admin page, in <App>'s #views. On the focus
 // screen (components/focus/, in #focus) nothing shows here. Each page loads on first
 // use (lib/lazy.ts): the saved one at once, the others when the browser is idle.
 // A page the admins have switched off shows the maintenance page instead, however it was
@@ -17,10 +17,11 @@ const MonthView = lazyNamed(() => import("./month"), "MonthView")
 const TableView = lazyNamed(() => import("./table"), "TableView")
 const StudyView = lazyNamed(() => import("@/components/study/study-view"), "StudyView")
 const SpotifyPage = lazyNamed(() => import("@/components/spotify/spotify-page"), "SpotifyPage")
+const BuddyPage = lazyNamed(() => import("@/components/buddy/buddy-page"), "BuddyPage")
 /* admins only, so not fetched for everyone when the browser is idle */
 const AdminPage = lazyNamed(() => import("@/components/admin/admin-page"), "AdminPage", { idle: false })
 
-const PAGES = { week: WeekView, month: MonthView, table: TableView, study: StudyView, spotify: SpotifyPage, admin: AdminPage }
+const PAGES = { week: WeekView, month: MonthView, table: TableView, study: StudyView, spotify: SpotifyPage, buddy: BuddyPage, admin: AdminPage }
 PAGES[ui.view]?.preload().catch(() => {})
 
 export function Views() {
