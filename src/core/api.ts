@@ -167,8 +167,9 @@ async function empty(response: Promise<unknown>): Promise<null> {
 /** A v3 page (spec §6): changes across your own scope and your spaces', a cursor per scope. */
 export interface PageV3 extends Page { cursors: Record<string, Cursor>; scopes: Space[]; more: boolean; reset: string[]; revoked: string[]; unread?: number }
 const SCOPE = /^(u:[^,]+|[cp]:[a-z0-9]{12})$/;
-/* a v3 page's kinds; marks and space prefs only ever in your own scope (checked below) */
-const KINDS = ['courses', 'items', 'quotes', 'study_sessions', 'achievements', 'marks', 'space_prefs'];
+/* a v4 page's kinds (v3's seven and the flashcards, Study Buddy Stage 3); only courses, items, decks and cards in a space's scope (checked below) */
+const KINDS = ['courses', 'items', 'quotes', 'study_sessions', 'achievements', 'marks', 'space_prefs', 'decks', 'cards', 'card_state', 'card_reviews'];
+const SPACE_KINDS = ['courses', 'items', 'decks', 'cards'];
 const scopeList = (v: unknown): v is string[] => Array.isArray(v) && v.every((s) => typeof s === 'string' && SCOPE.test(s));
 /* A cursor's sequence: a plain one, or a resync's `r<seq>.<floor>`; NaN when malformed. */
 const RESYNC = /^r(\d{1,16})\.\d{1,16}$/;
@@ -179,14 +180,14 @@ function cursorSeq(c: unknown): number {
 async function changesV3(cursors: Record<string, Cursor>, sv: number): Promise<PageV3> {
   const list = Object.entries(cursors).map(([scope, seq]) => `${scope}:${seq}`).join(',');
   /* `any`: every field is checked below before the page is trusted */
-  const page = await request<any>('GET', `/api/sync?v=3&cursors=${encodeURIComponent(list)}&sv=${sv}`);
+  const page = await request<any>('GET', `/api/sync?v=4&cursors=${encodeURIComponent(list)}&sv=${sv}`);
   const valid = !!page && typeof page.more === 'boolean' && scopeList(page.reset) && scopeList(page.revoked)
     && !!page.cursors && typeof page.cursors === 'object'
     && Object.entries(page.cursors).every(([s, n]) => SCOPE.test(s) && !Number.isNaN(cursorSeq(n)))
     && Array.isArray(page.scopes) && page.scopes.every((s: Space | null) => !!s && typeof s.id === 'string' && SCOPE.test(s.scope) && Number.isSafeInteger(s.revision))
     && Array.isArray(page.changes) && page.changes.every((c: { scope?: unknown; kind?: unknown; row?: Row } | null) =>
       !!c && typeof c.scope === 'string' && SCOPE.test(c.scope) && KINDS.includes(c.kind as string)
-      && (c.scope.startsWith('u:') || c.kind === 'courses' || c.kind === 'items') && validRecord(c.row));
+      && (c.scope.startsWith('u:') || SPACE_KINDS.includes(c.kind as string)) && validRecord(c.row));
   if (!valid) throw invalidResponse();
   /* the inbox's count (spec §12): one unreadable value must not fail a whole sync page */
   if (!(Number.isSafeInteger(page.unread) && page.unread >= 0 && page.unread <= UNREAD_CAP)) delete page.unread;

@@ -114,6 +114,12 @@ describe('browser API response contracts', () => {
     /* your marks and prefs come only in your own scope */
     respond({ ...next, changes: [{ scope: web.scope, kind: 'marks', row: saved }] });
     await expect(client.api.syncV3({}, 0)).rejects.toMatchObject({ status: 502 });
+    /* flashcards (v4): a class's decks and cards come in its scope; your schedule and reviews only in yours */
+    respond({ ...next, changes: [{ scope: web.scope, kind: 'decks', row: { ...saved, title: 'Deck' } }, { scope: web.scope, kind: 'cards', row: saved }] });
+    expect((await client.api.syncV3({}, 0)).changes.map((c) => c.kind)).toEqual(['decks', 'cards']);
+    expect(new URL(fetch.mock.calls.at(-1)[0], BASE).searchParams.get('v')).toBe('4');
+    respond({ ...next, changes: [{ scope: web.scope, kind: 'card_state', row: saved }] });
+    await expect(client.api.syncV3({}, 0)).rejects.toMatchObject({ status: 502 });
     /* the last page's unread count (spec §12): a whole number up to 99; anything else is dropped, the page still syncs */
     expect(next.unread).toBe(0);
     respond({ ...next, unread: 100 });

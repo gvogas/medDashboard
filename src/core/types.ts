@@ -108,6 +108,18 @@ export interface ItemType {
 
 export interface Quote extends Synced { id: string; text: string; source: string }
 
+/* ── flashcards (Study Buddy, Stage 3; worker 0012_decks.sql) ── */
+export type CardSource = 'hand' | 'ai' | 'paste' | 'connector'
+/** A deck: a titled set of cards for one of your courses, filed under a class, or neither. */
+export interface Deck extends Synced { id: string; authorId: string; courseId: string | null; classId: string | null; title: string }
+export interface Card extends Synced { id: string; deckId: string; authorId: string; front: string; back: string; source: CardSource }
+/** Your schedule for one card (core/srs.ts), its id the card's. */
+export interface CardState extends Synced { id: string; due: string; interval: number; ease: number; reps: number; lapses: number }
+/** One review, kept as it was. */
+export interface CardReview extends Synced { id: string; cardRef: string; deckRef: string; day: string; grade: 'again' | 'good' | 'easy'; at: number }
+export type SharedDeck = Deck & { scope: string }
+export type SharedCard = Card & { scope: string }
+
 export interface StudySession extends Synced {
     id: string
     courseId: string | null

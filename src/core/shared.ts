@@ -48,11 +48,15 @@ export const TOMBSTONE_TTL_MS = 30 * 24 * 60 * 60 * 1000
 export const meaningfulMark = (m: Record<string, unknown>): boolean =>
   ['status', 'grade', 'weight', 'notes', 'checklist', 'completedAt'].some((f) => stable(m[f] ?? MARK_DEFAULTS[f]) !== stable(MARK_DEFAULTS[f]))
 
+/** The shared stores you write (a class's or project's course and items). */
 export type SharedStore = 'shared_courses' | 'shared_items'
-export const SHARED_STORES: SharedStore[] = ['shared_courses', 'shared_items']
+/** A class's flashcards (Study Buddy, Stage 3): read here; sharing writes them from Stage 7. */
+export type SharedCardStore = 'shared_decks' | 'shared_cards'
+/** Every shared store: wiped and revoked together. */
+export const SHARED_STORES: (SharedStore | SharedCardStore)[] = ['shared_courses', 'shared_items', 'shared_decks', 'shared_cards']
 
 /** The pending key of a shared row: its store, then its scope, then its id. */
-export const sharedKey = (store: SharedStore, scope: string, id: string): string => `${store}:${scope}:${id}`
+export const sharedKey = (store: SharedStore | SharedCardStore, scope: string, id: string): string => `${store}:${scope}:${id}`
 
 /**
  * What a pending key names. 'profile'; a personal '<kind>:<id>'; a shared
@@ -62,7 +66,7 @@ export const sharedKey = (store: SharedStore, scope: string, id: string): string
 export function parseKey(key: string): { store: string; scope: string | null; id: string } {
   if (key === 'profile') return { store: 'meta', scope: null, id: 'profile' }
   const at = key.indexOf(':'), store = key.slice(0, at), rest = key.slice(at + 1)
-  if (store === 'shared_courses' || store === 'shared_items') {
+  if (store.startsWith('shared_')) {
     const end = rest.indexOf(':', 2)
     return { store, scope: rest.slice(0, end), id: rest.slice(end + 1) }
   }

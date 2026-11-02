@@ -536,3 +536,51 @@ test('a mark upload refused as not found waits for the pull: carried onto your c
   sync.stop(); Object.assign(api, saved); await local.close();
  }
 });
+
+test('version 7 upgrade adds the flashcard stores and forgets the cursors, so the next sync reads every scope from 0', async () => {
+ const user = p(), name = `rounds:${user.id}`;
+ await new Promise((resolve, reject) => {
+  const request = indexedDB.open(name, 6);
+  request.onupgradeneeded = () => {
+   for (const s of ['courses', 'items', 'quotes', 'study_sessions', 'achievements', 'shared_courses', 'shared_items', 'spaces', 'marks', 'space_prefs', 'meta', 'pending', 'conflicts']) {
+    request.result.createObjectStore(s, { keyPath: ['meta', 'pending'].includes(s) ? 'key' : s.startsWith('shared_') ? ['scope', 'id'] : 'id' });
+   }
+  };
+  request.onerror = () => reject(request.error);
+  request.onsuccess = () => {
+   const db = request.result, tx = db.transaction(['meta'], 'readwrite');
+   tx.objectStore('meta').put({ key: 'cursors', value: { [`u:${user.id}`]: 812 } });
+   tx.oncomplete = () => { db.close(); resolve(); };
+  };
+ });
+ await first.open(user);
+ assert.equal(await first.meta.get('cursors'), undefined);
+ assert.deepEqual([first.data.decks, first.data.cards, first.data.card_state, first.data.card_reviews, first.data.shared_decks], [[], [], [], [], []]);
+});
+
+test('decks and cards save offline; deleting a deck takes its cards and your schedule for them, and queues one delete', async () => {
+ const user = p(); await first.open(user);
+ await first.saveDeck({ id: 'd1', title: 'Pharm' });
+ await first.saveCard({ id: 'k1', deckId: 'd1', front: 'Q1', back: 'A1' });
+ await first.saveCard({ id: 'k2', deckId: 'd1', front: 'Q2', back: 'A2' });
+ await first.saveReview({ id: 'k1', due: '2026-11-03', interval: 1, ease: 2.5, reps: 1, lapses: 0 }, { id: 'r1', cardRef: 'k1', deckRef: 'd1', day: '2026-11-02', grade: 'good', at: 1 });
+ assert.deepEqual(first.data.cards.map((c) => c.id).sort(), ['k1', 'k2']);
+ assert.equal(first.data.card_reviews.length, 1);
+ await first.deleteDeck('d1');
+ assert.deepEqual([first.data.decks, first.data.cards, first.data.card_state], [[], [], []]);
+ const keys = (await first.pending()).map((op) => op.key).sort();
+ assert.deepEqual(keys, ['card_reviews:r1', 'decks:d1']);
+});
+
+test("a class's decks and cards arrive from a page and go when the class is revoked", async () => {
+ const user = p(); await first.open(user);
+ const scope = 'c:abcdefghij12';
+ await first.applyPage({ cursors: { [scope]: 3 }, changes: [
+  { scope, kind: 'decks', row: { id: 'sd1', title: 'Shared', authorId: 'u-x', revision: 2 } },
+  { scope, kind: 'cards', row: { id: 'sk1', deckId: 'sd1', front: 'Q', back: 'A', authorId: 'u-x', revision: 2 } },
+ ] });
+ assert.deepEqual(first.data.shared_decks.map((d) => [d.scope, d.id, d.title]), [[scope, 'sd1', 'Shared']]);
+ assert.equal(first.data.shared_cards.length, 1);
+ await first.applyRevoked([scope]);
+ assert.deepEqual([first.data.shared_decks, first.data.shared_cards], [[], []]);
+});

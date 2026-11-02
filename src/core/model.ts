@@ -5,7 +5,7 @@
 import { diffDays, today, parse, addDays, iso } from './dates.ts';
 import { MAX_CATEGORIES, MAX_DROP } from './grades.ts';
 import type { GradeCategory } from './grades.ts';
-import type { Achievement, ChecklistEntry, Course, Flow, Item, ItemType, Mark, Meeting, Quote, SpacePref, StepKind, StudyPrefs, StudySession, TypePref } from './types.ts';
+import type { Achievement, Card, CardReview, CardState, ChecklistEntry, Course, Deck, Flow, Item, ItemType, Mark, Meeting, Quote, SpacePref, StepKind, StudyPrefs, StudySession, TypePref } from './types.ts';
 import { CHECKLIST_MAX, MEETINGS_MAX } from './shared.ts';
 
 /** How a type looks: its name, its plural and its colour. */
@@ -336,6 +336,27 @@ export function normalizeCategories(raw: unknown): GradeCategory[] {
 
 export function normalizeQuote(raw: Raw<Quote>): Quote {
   return { id: raw.id || uid(), text: raw.text || '', source: raw.source || '', createdAt: raw.createdAt ?? null, revision: raw.revision ?? 0, updatedAt: raw.updatedAt ?? null };
+}
+
+/* ── flashcards (Study Buddy, Stage 3) ── */
+const str = (v: unknown, fallback = ''): string => (typeof v === 'string' ? v : fallback);
+const intIn = (v: unknown, lo: number, hi: number, fallback: number): number => (Number.isInteger(v) && (v as number) >= lo && (v as number) <= hi ? v as number : fallback);
+const DAY_RE = /^\d{4}-\d{2}-\d{2}$/;
+const synced = (raw: { createdAt?: number | null; revision?: number | null; updatedAt?: number | null }) => ({ createdAt: raw.createdAt ?? null, revision: raw.revision ?? 0, updatedAt: raw.updatedAt ?? null });
+export function normalizeDeck(raw: Raw<Deck>): Deck {
+  return { id: raw.id || uid(), authorId: str(raw.authorId), courseId: typeof raw.courseId === 'string' ? raw.courseId : null, classId: typeof raw.classId === 'string' ? raw.classId : null, title: str(raw.title).slice(0, 80) || 'Untitled deck', ...synced(raw) };
+}
+export function normalizeCard(raw: Raw<Card>): Card {
+  const source = (['hand', 'ai', 'paste', 'connector'] as const).find((s) => s === raw.source) ?? 'hand';
+  return { id: raw.id || uid(), deckId: str(raw.deckId), authorId: str(raw.authorId), front: str(raw.front).slice(0, 500), back: str(raw.back).slice(0, 1000), source, ...synced(raw) };
+}
+export function normalizeCardState(raw: Raw<CardState>): CardState {
+  const ease = typeof raw.ease === 'number' && raw.ease >= 1.3 && raw.ease <= 3 ? raw.ease : 2.5;
+  return { id: raw.id || uid(), due: DAY_RE.test(str(raw.due)) ? raw.due! : today(), interval: intIn(raw.interval, 0, 180, 0), ease, reps: intIn(raw.reps, 0, 1e5, 0), lapses: intIn(raw.lapses, 0, 1e5, 0), ...synced(raw) };
+}
+export function normalizeCardReview(raw: Raw<CardReview>): CardReview {
+  const grade = (['again', 'good', 'easy'] as const).find((g) => g === raw.grade) ?? 'good';
+  return { id: raw.id || uid(), cardRef: str(raw.cardRef), deckRef: str(raw.deckRef), day: DAY_RE.test(str(raw.day)) ? raw.day! : today(), grade, at: typeof raw.at === 'number' ? raw.at : Date.now(), ...synced(raw) };
 }
 
 /* ── the study timer ── */

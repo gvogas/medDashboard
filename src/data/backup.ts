@@ -4,6 +4,7 @@
 
 import { statusLabel, tmeta } from "@/core/model"
 import type { Achievement, Course, Item, Mark, Profile, Quote, SharedCourse, SharedItem, Space, SpacePref, StudySession } from "./types"
+import type { Card, CardReview, CardState, Deck } from "@/core/types"
 import type { EffectiveCourse, EffectiveItem } from "./effective"
 
 /** What a backup reads of the store. */
@@ -20,6 +21,11 @@ export interface BackupSource {
     shared_items: SharedItem[]
     removed_items: SharedItem[]
     spaces: Space[]
+    /* flashcards (Study Buddy, Stage 3) */
+    decks?: Deck[]
+    cards?: Card[]
+    card_state?: CardState[]
+    card_reviews?: CardReview[]
 }
 
 /** A class or a project as the backup holds it: the space, its rows, and your layer on it. */
@@ -59,7 +65,10 @@ export function backupFile(d: BackupSource, pending: unknown[], conflicts: unkno
         exportedAt: exportedAt.toISOString(),
         account: d.profile ? { id: d.profile.id, username: d.profile.username, displayName: d.profile.displayName } : null,
         settings: d.profile,
-        personal: { courses: d.courses, items: d.items, quotes: d.quotes, studySessions: d.study_sessions, achievements: d.achievements },
+        personal: {
+            courses: d.courses, items: d.items, quotes: d.quotes, studySessions: d.study_sessions, achievements: d.achievements,
+            decks: d.decks ?? [], cards: d.cards ?? [], cardState: d.card_state ?? [], cardReviews: d.card_reviews ?? [],
+        },
         classes: d.spaces.filter((s) => s.kind === "class").map(space),
         projects: d.spaces.filter((s) => s.kind === "project").map(space),
         pending,

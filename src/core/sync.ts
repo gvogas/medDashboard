@@ -25,9 +25,9 @@ let unreadFn: (n: number) => void = () => {};
 export const setOnUnread = (fn: (n: number) => void): void => { unreadFn = fn; };
 export const onUnauthenticated = (fn: () => void): void => { signedOut = fn; };
 let earnedFn: () => unknown = () => {};
-/** The one listener for an upload that carried a study session, an item or a mark: what the Study Buddy pays for. */
+/** The one listener for an upload that carried a study session, an item, a mark or a card review: what the Study Buddy pays for. */
 export const setOnEarned = (fn: () => unknown): void => { earnedFn = fn; };
-const EARNS = /^(study_sessions|items|marks):/;
+const EARNS = /^(study_sessions|items|marks|card_reviews):/;
 function publish() { for (const fn of listeners) fn(status); }
 function state(value: SyncState, message = '') {
   Object.assign(status, { state: value, message, pending: store.pendingCount(), conflicts: store.conflicts.length });
@@ -140,8 +140,8 @@ async function pushAll(cycle: Cycle): Promise<boolean> {
         if (!cycle.refused) { cycle.refused = true; status.refusal = { reason }; publish(); }
       } else if (e instanceof ApiError && !STOPS.includes(e.status)) {
         cycle.failed.push(op);
-        // Items after a new course may belong to it: they wait for it.
-        if (/^(shared_)?courses:/.test(op.key) && op.op === 'put') break;
+        // Items after a new course may belong to it, cards after a new deck: they wait for it.
+        if (/^((shared_)?courses|decks):/.test(op.key) && op.op === 'put') break;
       } else throw e;
     }
   }
@@ -174,11 +174,12 @@ async function settleDeferred(cycle: Cycle): Promise<boolean> {
   }
   return active(cycle);
 }
-/* Upload order (spec §6): course puts, then items, then your marks and prefs (a mark on an item
-   made offline needs the item first), then course deletes. */
+/* Upload order (spec §6): course and deck puts, then items and cards, then your marks, prefs and
+   card schedules and reviews (a mark on an item made offline needs the item first), then course
+   and deck deletes. */
 function rank(op: PendingOp): number {
-  if (/^(shared_)?courses:/.test(op.key)) return op.op === 'put' ? 0 : 3;
-  return /^(marks|space_prefs):/.test(op.key) ? 2 : 1;
+  if (/^((shared_)?courses|decks):/.test(op.key)) return op.op === 'put' ? 0 : 3;
+  return /^(marks|space_prefs|card_state|card_reviews):/.test(op.key) ? 2 : 1;
 }
 /* The account whose member lists this tab holds: until its first complete pull after the
    app opens, `sv` is 0, so every list comes again (a renamed member shows on next open). */
