@@ -18,6 +18,8 @@ import { toggleClassTask } from "./marks"
 import { openKeys } from "./keys"
 import { api } from "@/core/api"
 import { toast, TOAST_LONG_MS } from "./toast"
+import { isReview } from "@/core/buddy-rules"
+import { openGenerate } from "./cards"
 import { backupFile, fileName, itemsCsv } from "./backup"
 import { applyCoat, TAB_OF, type SettingsTab } from "./settings"
 import { rememberUi } from "@/data/ui"
@@ -388,6 +390,13 @@ export async function toggleTask(key: string, from?: Element) {
     await touch(it)
     await chainReview(it)
     notify()
+    /* a lecture review with notes, finished: offer to turn the notes into flashcards (spec §9) */
+    if (finishing && isReview(it.id, it.title) && it.notes?.trim()) {
+        toast("Review done.", {
+            label: "Make cards from today's notes",
+            undo: () => openGenerate({ group: it.courseId ? "course:" + it.courseId : it.classId ? "class:" + it.classId : null, text: it.notes, title: it.title.replace(/^Review \d\/\d · /, "") }),
+        })
+    }
 }
 
 /** A task for today, in the course being shown. */

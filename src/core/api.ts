@@ -6,7 +6,7 @@ import { UNREAD_CAP } from './shared.ts';
 import { checkCustom, type CustomBuddy } from './buddy-rules.ts';
 import type { Cursor, Page, ServerProfile } from './store.ts';
 import type { Album, Device, Page as SpotifyPage, PlayerState, Playlist, SearchResults, Track } from './spotify-types.ts';
-import type { ActivityRow, AdminAccounts, BuddyAnswer, BuddyLook, Shop, ShopItem, AdminHealth, AdminTraffic, Announcement, AuditEntry, CalendarFeed, ErrorGroup, ErrorRow, MaintenanceState, Flow, FriendMatch, FriendSettings, Friends, GroupRecord, Inbox, JoinCode, ParentRef, RoomMessage, RoomView, Space, SpaceDetails, SpaceInvite, SpaceSummary } from './types.ts';
+import type { ActivityRow, AdminAccounts, BuddyAnswer, BuddyLook, Shop, ShopItem, StudyAiAdmin, StudyAiStatus, AdminHealth, AdminTraffic, Announcement, AuditEntry, CalendarFeed, ErrorGroup, ErrorRow, MaintenanceState, Flow, FriendMatch, FriendSettings, Friends, GroupRecord, Inbox, JoinCode, ParentRef, RoomMessage, RoomView, Space, SpaceDetails, SpaceInvite, SpaceSummary } from './types.ts';
 
 /** An error's body as the Worker sends it: its code, and for some the server's copy or a wait. */
 export interface ErrorBody { error?: string; retryAfter?: unknown; current?: Row | null; [field: string]: unknown }
@@ -334,6 +334,14 @@ export const api = {
     buy: (sku: string, level: number) => boughtOf(request('POST', '/api/buddy/buy', { sku, level })),
     saveCustom: (custom: CustomBuddy) => buddyOf(request('PUT', '/api/buddy/custom', custom)),
     deleteCustom: () => buddyOf(request('DELETE', '/api/buddy/custom')),
+  },
+  /* AI study material, Generate here (worker/study-ai.js); Use your own AI never calls the Worker */
+  studyAi: {
+    status: (): Promise<StudyAiStatus> => request('GET', '/api/study-ai/status'),
+    cards: (body: { sources: { classData?: string; text?: string; topic?: string }; count: number; level: string }): Promise<{ cards: { front: string; back: string }[]; provider: string; left: number }> =>
+      request('POST', '/api/study-ai/cards', body),
+    admin: (): Promise<StudyAiAdmin> => request('GET', '/api/admin/study-ai'),
+    setCaps: (caps: StudyAiAdmin['caps']): Promise<StudyAiAdmin> => request('PUT', '/api/admin/study-ai/caps', caps),
   },
   /* a solo run, so friends see you studying (worker/rooms.js setPresence) */
   presence: {

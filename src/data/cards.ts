@@ -122,10 +122,23 @@ export const removeCard = (id: string) => deleteCard(id)
 
 /* ── which Cards screen is open: the list, a deck's editor, or a review ── */
 export type CardsScreen = { mode: "home" } | { mode: "deck"; id: string } | { mode: "review"; group: string | null }
+    | { mode: "generate"; group: string | null; topic?: string; text?: string; title?: string }
 const screenStore = createStore<{ screen: CardsScreen }>({ screen: { mode: "home" } })
 export const useCardsScreen = () => screenStore.use().screen
 export const showCards = (screen: CardsScreen) => screenStore.set({ screen })
 /** Open Study › Cards on a review: one group's cards, or every group's (null). The Week chip uses it. */
+/** What Make cards from an exam starts with: its class, its title as the topic, its notes and prep topics as text. */
+export function prepStart(it: { title: string; notes?: string; checklist?: { text: string }[] }, group: string | null) {
+    const topics = (it.checklist || []).map((c) => c.text.trim()).filter(Boolean)
+    const text = [it.notes?.trim() || "", topics.length ? "Topics to know: " + topics.join("; ") : ""].filter(Boolean).join("\n\n")
+    return { group, topic: it.title.slice(0, 120), text, title: it.title }
+}
+/** Open Study › Cards on Make cards with AI, filled in: the class, and an exam's title or a lecture's notes. */
+export function openGenerate(start: { group: string | null; topic?: string; text?: string; title?: string }) {
+    showCards({ mode: "generate", ...start })
+    setView("study")
+    setStudyTab("cards")
+}
 export function openReview(group: string | null = null) {
     showCards({ mode: "review", group })
     setView("study")

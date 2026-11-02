@@ -259,6 +259,11 @@ export interface BuddyState {
   /** "Review cards in my calendar" (Stage 3) */
   cardsInFeed?: boolean;
 }
+/** GET /api/study-ai/status: who can generate, and how many uses are left today. */
+export interface StudyAiStatus { providers: string[]; left: number; perUser: number; extraLeft: number; globalOpen: boolean }
+export interface StudyAiDay { day: string; neurons: number; generations: number; byProvider: Record<string, number> }
+/** GET /api/admin/study-ai */
+export interface StudyAiAdmin { today: StudyAiDay & { ceiling: number }; last14: StudyAiDay[]; caps: { perUser: number; extraMax: number; ceiling: number } }
 /** GET /api/buddy/shop: each item with your level and the next level's cost (null at the top). */
 export interface ShopItem { sku: string; kind: 'upgrade' | 'bg' | 'frame' | 'ai'; name: string; effect: string; level: number; max: number; cost: number | null }
 export interface Shop { coins: number; items: ShopItem[] }

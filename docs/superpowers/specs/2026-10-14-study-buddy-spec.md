@@ -79,7 +79,7 @@ Two new route groups (three with the Stage 8 connector) plus additions to rows, 
 | 7 | `PUT`/`DELETE /api/spaces/<id>/(decks\|cards)/<id>` | A shared row, as the existing `SHARED_ROW` routes take | The stored row; permissions in §9. Moved from Stage 3: nothing can put a deck in a class before sharing; Stage 3's tables and sync v4 already carry class decks |
 | 3 | `GET /api/sync?v=4` | — | As v3, plus the new kinds |
 | 4 | `GET /api/study-ai/status?day=` | — | `{providers: ['workers'], left, extraLeft, globalOpen}`; `providers` gains `'chatgpt'` only if step 2 ships (§7.2) |
-| 4 | `POST /api/study-ai/cards` | `{courseId, itemId?, sources: {items: bool, text?: string ≤ 60k chars, topic?: string ≤ 120}, count 1–30, level, provider?: 'workers'}` | `{cards: [{front, back}], provider, left}`; a preview, not saved |
+| 4 | `POST /api/study-ai/cards` | `{sources: {classData?: string, text?: string, each ≤ 60k chars, topic?: string ≤ 120}, count 1–30, level ('basic','exam','deep'), provider?: 'workers'}` | `{cards: [{front, back}], provider, left}`; a preview, not saved. As built, the browser writes the class as text (`classContext`, the same it uses for Use your own AI), since it holds the class's rows and the Worker would read the same ones |
 | 4 | `GET /api/admin/study-ai` | — | Admin only: `{today: {neurons, ceiling, generations, byProvider}, last14: [...], caps}` |
 | 4 | `PUT /api/admin/study-ai/caps` | `{perUser 0–20, extraMax 0–5, ceiling 0–9000}` | Admin only; stored in `app_meta` `studyai_caps` |
 | 5 | `POST /api/study-ai/quiz` | `{courseId, itemId?, deckId?, sources, count 1–20, level}` | `{questions: [...]}`; a preview |

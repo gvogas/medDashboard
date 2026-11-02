@@ -12,6 +12,7 @@ import { today as todayIso } from "@/core/dates"
 import type { Grade } from "@/core/srs"
 import type { Card } from "@/core/types"
 import { useCourses, useProfile } from "@/data/store"
+import { GenerateCards } from "./generate"
 import {
     BACK_MAX, DECK_TITLE_MAX, FRONT_MAX, gradeCard, groups, newDeck, openReview, putCard, removeCard, removeDeck, renameDeck,
     reviewQueue, scheduleMap, showCards, startedToday, useCardsScreen, useFlashcards, type AnyCard, type CardGroup,
@@ -28,6 +29,7 @@ export function CardsCard() {
     const list = useMemo(() => groups(f, courses), [f, courses])
     if (screen.mode === "deck") return <DeckEditor id={screen.id} />
     if (screen.mode === "review") return <Review group={screen.group} list={list} />
+    if (screen.mode === "generate") return <GenerateCards start={screen} />
     return <CardsHome list={list} />
 }
 
@@ -48,12 +50,16 @@ function CardsHome({ list }: { list: CardGroup[] }) {
             <Panel title="Flashcards" label="Flashcards" head={<HeadNote>{total ? `${plural(total, "card")} due today` : "Nothing due today"}</HeadNote>}>
                 <div className="flex flex-wrap items-center gap-3 p-4">
                     <p className={cn(SMALL, "m-0 flex-1 basis-[260px]")}>Make a deck for a class, add cards, and review what's due each day. Cards you know come back less often; ones you miss come back tomorrow.</p>
+                    <Button variant="ghost" onClick={() => showCards({ mode: "generate", group: null })}>Make cards with AI</Button>
                     <Button variant="study" disabled={!total} onClick={() => openReview(null)}>{total ? `Review all ${total}` : "All caught up"}</Button>
                 </div>
             </Panel>
             {list.map((g) => (
                 <Panel key={g.key} label={g.name} title={<span className="flex items-center gap-2">{g.color && <span aria-hidden="true" className="size-2.5 rounded-full" style={{ background: g.color }} />}{g.name}</span>}
-                    head={<Button variant="ghost" disabled={!g.due} onClick={() => openReview(g.key)}>{g.due ? `Review ${g.due}` : "Nothing due"}</Button>}>
+                    head={<span className="flex gap-2">
+                        {g.key !== "none" && <Button variant="ghost" onClick={() => showCards({ mode: "generate", group: g.key })} aria-label={`Make cards with AI for ${g.name}`}>Make cards</Button>}
+                        <Button variant="ghost" disabled={!g.due} onClick={() => openReview(g.key)}>{g.due ? `Review ${g.due}` : "Nothing due"}</Button>
+                    </span>}>
                     <div className="px-4 py-1.5">
                         {g.decks.map((d) => {
                             const n = g.cards.filter((c) => c.deckId === d.id && (c.scope ?? null) === (d.scope ?? null)).length

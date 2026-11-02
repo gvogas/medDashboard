@@ -18,6 +18,7 @@ import { duration } from "@/lib/time"
 import { useItems, useMarks, useProfile, useRemovedItems, useSharedCourses, useSharedItems, useSpaces, useStudySessions } from "@/data/store"
 import { useUi } from "@/data/ui"
 import { closeSheet } from "@/data/overlay"
+import { openGenerate, prepStart } from "@/data/cards"
 import { busyDays, countdown, deriveEdit, REPEAT_CHOICES, REPEATS, untilLabel, type ItemField } from "@/data/item-edit"
 import { courseByKey } from "@/data/effective"
 import { keyedItems, keyedSessions, splitKey } from "@/data/refs"
@@ -196,6 +197,7 @@ function ClassItemCard({ itemKey, bar }: { itemKey: string; bar: boolean }) {
             ) : (
                 <SheetFoot hint="Edits save as you type">
                     {editor && <Button variant="ghost" onClick={() => setAsking("delete")}>Delete for everyone</Button>}
+                    {test && <Button variant="ghost" onClick={() => { closeSheet(); openGenerate(prepStart(view, "class:" + space.id)) }}>Make cards</Button>}
                     <Button onClick={closeSheet}>Done</Button>
                 </SheetFoot>
             )}

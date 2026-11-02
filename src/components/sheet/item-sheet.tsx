@@ -18,6 +18,7 @@ import { useCourses, useItems, useStudySessions } from "@/data/store"
 import { studiedFor } from "@/data/study"
 import { useUi } from "@/data/ui"
 import { closeSheet, onRequestClose, requestCloseSheet, updateDraft } from "@/data/overlay"
+import { openGenerate, prepStart } from "@/data/cards"
 import { busyDays, celebrate, chainReview, countdown, deriveEdit, editNow, flush, REPEAT_CHOICES, REPEATS, typeInto, untilLabel, useItemView, type ItemField } from "@/data/item-edit"
 import { deleteItem, openCourse } from "@/data/actions"
 import { courseByKey, keyOf } from "@/data/effective"
@@ -313,6 +314,7 @@ export function ItemSheet({ id, draft }: { id?: string; draft?: Item }) {
             ) : (
                 <SheetFoot hint="Edits save as you type">
                     <Button variant="ghost" onClick={() => void deleteItem(it.id)}>Delete</Button>
+                    {test && <Button variant="ghost" onClick={() => { closeSheet(); openGenerate(prepStart(it, it.courseId ? "course:" + it.courseId : it.classId ? "class:" + it.classId : null)) }}>Make cards</Button>}
                     <Button onClick={closeSheet}>Done</Button>
                 </SheetFoot>
             )}
