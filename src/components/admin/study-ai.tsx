@@ -11,6 +11,7 @@ import { Panel, Empty, HeadNote } from "@/components/views/bits"
 import { Button, Note, NumberInput } from "@/components/sheet/fields"
 import { problem, useLoad } from "./use-admin"
 
+const gens = (n: number) => `${n} generation${n === 1 ? "" : "s"}`
 const ROW = "flex flex-wrap items-center gap-3 border-b border-line-2 py-2 last:border-b-0 text-[12.5px]"
 const CAPS: [keyof StudyAiAdmin["caps"], string, string, number, number][] = [
     ["perUser", "Free generations a day", "per person", 0, 20],
@@ -35,7 +36,7 @@ export function StudyAiTab() {
     }
     return (
         <div className="grid gap-4">
-            <Panel title="Today" head={<HeadNote>{today.generations} generations</HeadNote>}>
+            <Panel title="Today" head={<HeadNote>{gens(today.generations)}</HeadNote>}>
                 <div className="grid gap-2 px-5 py-4">
                     <span className="text-[13px] text-ink-2"><b className="font-mono text-foreground">{today.neurons.toLocaleString()}</b> of {today.ceiling.toLocaleString()} neurons (estimated, Workers AI's free 10,000 a day is shared with Import with AI)</span>
                     <div role="meter" aria-label="Neurons used today" aria-valuemin={0} aria-valuemax={today.ceiling} aria-valuenow={today.neurons} className="h-2 overflow-hidden rounded-full bg-muted">
@@ -49,7 +50,7 @@ export function StudyAiTab() {
                     {last14.map((d) => (
                         <div key={d.day} className={ROW}>
                             <span className="w-24 font-mono text-ink-2">{d.day}</span>
-                            <span className="flex-1">{d.generations} generations</span>
+                            <span className="flex-1">{gens(d.generations)}</span>
                             <span className="font-mono text-foreground">{d.neurons.toLocaleString()} neurons</span>
                         </div>
                     ))}
