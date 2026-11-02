@@ -49,7 +49,7 @@ database (the older ones were deleted after each move was confirmed). The later 
 change triggers in their last form. The chain `rounds-v7` was built from
 (`0001_schema.sql` to `0009_friend_cancel.sql`) is kept as a test fixture in
 `test/fixtures/legacy-migrations/`, for the move's test. Later changes are new numbered
-files. The next one is `0010`, after `0009_room_chat.sql`.
+files. The next one is `0011`, after `0010_buddy.sql`.
 
 ## Structure at a glance
 
@@ -61,6 +61,7 @@ files. The next one is `0010`, after `0009_room_chat.sql`.
 | Activity and the inbox | `activity`, `inbox_seen` | What members did in each space (90 days), and how far each person has read |
 | Friends | `friendships`, `friend_settings` | Friend requests and friendships; whether you show in search |
 | Study rooms | `rooms`, `room_members`, `presence`, `room_messages` | Shared timers and who is in them (`0002_rooms.sql`); a solo run friends can see (`0003_presence.sql`); chat between the people in a room (`0009_room_chat.sql`) |
+| Study Buddy | `buddy_settings`, `buddy_ledger` | The Gameplay switch, look and time zone; one row per coin award or spend (`0010_buddy.sql`) |
 | Synchronization | `changes`, `sync_state` | Latest record changes, ordered cursors per scope, and the retention floor |
 | Authentication and request control | `login_throttle`, `request_limits` | Temporary attempt counts and cooldowns |
 | Spotify connection | `spotify_tokens`, `spotify_oauth_states`, `spotify_refresh_locks` | Credentials, one-use consent attempts, and refresh leases |
