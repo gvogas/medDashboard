@@ -22,6 +22,8 @@ const VIEW_KEYS: Record<string, View> = { 1: "week", 2: "month", 3: "table", 4: 
 const viewKey = (k: string): View | null => (k === "6" && !(activeBuddy() && maintenanceState("buddy") !== "blocked") ? null : VIEW_KEYS[k] ?? null)
 function shortcut(e: KeyboardEvent): boolean {
     const target = e.target as HTMLElement | null
+    /* a part of the page that used the key keeps it: the flashcard review's 1, 2 and 3 grade a card, they don't switch pages */
+    if (e.defaultPrevented) return false
     if (e.ctrlKey || e.metaKey || e.altKey || e.repeat || isTyping(target) || target?.isContentEditable) return false
     if (getBusy()) return false
     if (e.key === "?") { if (keysOpen()) closeKeys(); else openKeys(); e.preventDefault(); return true }

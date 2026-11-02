@@ -17,7 +17,7 @@ import { GOAL_MAX, GOALS, hm, REST_DAYS, toggleRest } from "@/data/settings"
 import { openSchool, removeSchool } from "@/data/school-edit"
 import { openAiImport } from "@/data/actions"
 import type { Profile } from "@/data/types"
-import { activeBuddy, loadBuddy, setGameplay, useBuddy } from "@/data/buddy"
+import { activeBuddy, loadBuddy, setCardsInFeed, setGameplay, useBuddy } from "@/data/buddy"
 import { maintenanceState } from "@/data/maintenance"
 import { GradingGroup } from "./grading-settings"
 import { Button, CONTROL } from "./fields"
@@ -121,8 +121,15 @@ export function Gameplay({ profile }: { profile: Profile }) {
                     <div className="mt-2"><Button variant="ghost" onClick={() => setIntro(false)}>Got it</Button></div>
                 </div>
             )}
+            {on && (
+                <label className="flex items-center gap-2 text-[12.5px] text-ink-2">
+                    <input type="checkbox" checked={!!activeBuddy(state)?.cardsInFeed} disabled={busy} className="accent-[var(--accent)]"
+                        onChange={async (e) => { setBusy(true); setError(await setCardsInFeed(e.target.checked)); setBusy(false) }} />
+                    <span>Review cards in my calendar</span>
+                </label>
+            )}
             {error && <Hint error>{error}</Hint>}
-            <Hint>{on ? "Turning it off hides your buddy and keeps everything it has earned." : "A pixel buddy for your theme that hatches and evolves as you study. Off by default."}</Hint>
+            <Hint>{on ? "Turning it off hides your buddy and keeps everything it has earned. Cards in your calendar adds a daily \u201cFlashcards: N due\u201d to the calendar feed." : "A pixel buddy for your theme that hatches and evolves as you study. Off by default."}</Hint>
         </Group>
     )
 }

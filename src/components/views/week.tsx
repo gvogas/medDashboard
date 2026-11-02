@@ -19,6 +19,7 @@ import { useWeekLayout } from "@/data/agenda"
 import { AgendaView, LayoutTabs } from "./agenda"
 import { useNeedsSetup } from "@/data/setup"
 import { Setup } from "./setup"
+import { dueToday, openReview, useFlashcards } from "@/data/cards"
 
 export function WeekView() {
     const { week, officeHours, tasks, empty, filtered, schedule } = useWeek()
@@ -66,6 +67,20 @@ export function WeekView() {
     )
 }
 
+/* "N cards due" on today (spec §5 Reminders): a tap opens the review */
+export function CardsChip() {
+    const due = dueToday(useFlashcards())
+    if (!due) return null
+    return (
+        <span className="px-2.5 pt-1">
+            <button type="button" onClick={() => openReview(null)}
+                className="hit inline-flex cursor-pointer items-center gap-1.5 rounded-full border border-[color-mix(in_srgb,var(--study)_45%,var(--line))] bg-[var(--study-soft)] px-2.5 py-0.5 font-[inherit] text-[12px] font-semibold text-[var(--study-ink)] hover:border-[var(--study)]">
+                {due} {due === 1 ? "card" : "cards"} due
+            </button>
+        </span>
+    )
+}
+
 function DayRow({ day, crunch }: { day: Day; crunch: Crunch[] }) {
     const tint = tintOf(day.info)
     return (
@@ -92,6 +107,7 @@ function DayRow({ day, crunch }: { day: Day; crunch: Crunch[] }) {
             <div className="flex min-w-0 flex-col gap-0.5">
                 {/* the school day's tags, in the wide column: the date column cuts long ones */}
                 {hasSchoolTags(day.info) && <span className="flex flex-wrap gap-1 px-2.5 pt-1.5 pb-0.5"><SchoolTags info={day.info} /></span>}
+                {day.isToday && <CardsChip />}
                 {day.entries.length
                     ? day.entries.map((e) => <EntryRow key={e.key} entry={e} />)
                     : <span className="px-2.5 py-1.5 text-[13px] text-muted-foreground">{tint === "off" || tint === "break" ? "" : "Nothing scheduled"}</span>}

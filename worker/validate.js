@@ -365,6 +365,52 @@ export function validateStudySession(body) {
   };
 }
 
+/* ── flashcards (Study Buddy, Stage 3): the author is whoever writes, set by the route ── */
+const CARD_SOURCES = ['hand', 'ai', 'paste', 'connector'];
+const GRADES = ['again', 'good', 'easy'];
+const refId = (v, field) => { str(v, field, 24, 1); return v; };
+export function validateDeck(body) {
+  obj(body, 'body');
+  const out = {
+    courseId: optStr(body.courseId, 'courseId', 40) || null,
+    classId: spaceLabel(body.classId ?? null, 'classId') ?? null,
+    title: str(typeof body.title === 'string' ? body.title.trim() : body.title, 'title', 80, 1),
+  };
+  if (out.classId && out.courseId) fail('classId');
+  return out;
+}
+export function validateCard(body) {
+  obj(body, 'body');
+  return {
+    deckId: refId(body.deckId, 'deckId'),
+    front: str(body.front, 'front', 500, 1),
+    back: str(body.back, 'back', 1000, 1),
+    source: oneOf(body.source ?? 'hand', 'source', CARD_SOURCES),
+  };
+}
+export function validateCardState(body) {
+  obj(body, 'body');
+  const ease = body.ease;
+  if (typeof ease !== 'number' || !Number.isFinite(ease) || ease < 1.3 || ease > 3.0) fail('ease');
+  return {
+    due: date(body.due, 'due'),
+    interval: int(body.interval, 'interval', 0, 180),
+    ease,
+    reps: int(body.reps, 'reps', 0, 100000),
+    lapses: int(body.lapses, 'lapses', 0, 100000),
+  };
+}
+export function validateCardReview(body) {
+  obj(body, 'body');
+  return {
+    cardRef: refId(body.cardRef, 'cardRef'),
+    deckRef: refId(body.deckRef, 'deckRef'),
+    day: date(body.day, 'day'),
+    grade: oneOf(body.grade, 'grade', GRADES),
+    at: int(body.at, 'at', 1, Number.MAX_SAFE_INTEGER),
+  };
+}
+
 /* The study room a session was studied in (worker/rooms.js): left out, the stored one stays. */
 function roomLabel(v) {
   if (v === undefined) return undefined;

@@ -30,7 +30,7 @@ describe('GET /api/buddy/shop and POST /api/buddy/buy', () => {
     const shop = await (await api('/api/buddy/shop')).json();
     expect(shop.coins).toBe(0);
     expect(shop.items.find((i) => i.sku === 'focus')).toEqual({ sku: 'focus', kind: 'upgrade', name: 'Focus Engine', effect: '+20% study coins', level: 0, max: 5, cost: 75 });
-    expect(shop.items.map((i) => i.sku)).not.toContain('foundry');           /* cards come in Stage 3 */
+    expect(shop.items.map((i) => i.sku)).not.toContain('magnet');            /* quizzes come in Stage 5 */
     expect(shop.items.find((i) => i.sku === 'bg-meadow')).toMatchObject({ kind: 'bg', level: 0, max: 1, cost: 30 });
   });
 
@@ -55,7 +55,7 @@ describe('GET /api/buddy/shop and POST /api/buddy/buy', () => {
     expect(await spends(api)).toEqual([{ source: 'buy:finisher:1', amount: -115 }]);
     expect((await buddy(api)).coins).toBe(1000 - 115);
     expect((await buy(api, 'finisher', 6)).status).toBe(400);
-    expect((await buy(api, 'foundry', 1)).status).toBe(400);
+    expect((await buy(api, 'magnet', 1)).status).toBe(400);
     expect((await buy(api, 'bg-meadow', 2)).status).toBe(400);
   });
 

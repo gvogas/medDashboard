@@ -1,16 +1,19 @@
 // The database is authoritative; memory is a render cache, never the shared queue.
 import { openDb, deleteDb, STORES as stores } from './db.ts';
-import { normalizeItem, normalizeCourse, normalizeQuote, normalizeStudySession, normalizeAchievement, normalizeMark, normalizeSpacePref, normalizeFlow, normalizePrefs, DEFAULT_COAT } from './model.ts';
-import { parseKey, sharedKey, stable, meaningfulMark, MARK_DEFAULTS, SHARED_STORES, TOMBSTONE_TTL_MS, type SharedStore } from './shared.ts';
+import { normalizeItem, normalizeCourse, normalizeQuote, normalizeStudySession, normalizeAchievement, normalizeMark, normalizeSpacePref, normalizeFlow, normalizePrefs, normalizeDeck, normalizeCard, normalizeCardState, normalizeCardReview, DEFAULT_COAT } from './model.ts';
+import { parseKey, sharedKey, stable, meaningfulMark, MARK_DEFAULTS, SHARED_STORES, TOMBSTONE_TTL_MS, type SharedCardStore, type SharedStore } from './shared.ts';
 import { parseMaintenance } from './maintenance.ts';
 import type { Access, Accessor, Conflict, Db, PendingOp, Row, Rows } from './db.ts';
 import type { Raw, RawCourse, RawItem } from './model.ts';
-import type { Achievement, Coat, Course, Item, Mark, Profile, Quote, SharedCourse, SharedItem, Space, SpacePref, StudySession } from './types.ts';
+import type { Achievement, Card, CardReview, CardState, Coat, Course, Deck, Item, Mark, Profile, Quote, SharedCard, SharedCourse, SharedDeck, SharedItem, Space, SpacePref, StudySession } from './types.ts';
 
 /** The kinds of row the store keeps, each in its own object store. */
-export type Kind = 'items' | 'courses' | 'quotes' | 'study_sessions' | 'achievements' | 'marks' | 'space_prefs';
+export type Kind = 'items' | 'courses' | 'quotes' | 'study_sessions' | 'achievements' | 'marks' | 'space_prefs' | 'decks' | 'cards' | 'card_state' | 'card_reviews';
 /** What each kind's normalizer takes. */
-interface RawOf { items: RawItem; courses: RawCourse; quotes: Raw<Quote>; study_sessions: Raw<StudySession>; achievements: Raw<Achievement>; marks: Raw<Mark>; space_prefs: Raw<SpacePref> }
+interface RawOf {
+  items: RawItem; courses: RawCourse; quotes: Raw<Quote>; study_sessions: Raw<StudySession>; achievements: Raw<Achievement>; marks: Raw<Mark>; space_prefs: Raw<SpacePref>
+  decks: Raw<Deck>; cards: Raw<Card>; card_state: Raw<CardState>; card_reviews: Raw<CardReview>
+}
 /** A row to save, with its kind. */
 export type SaveRow = { [K in Kind]: { kind: K; row: RawOf[K] } }[Kind];
 /** What the store says happened: a change here, in another tab, from a sync, and so on. */
@@ -43,11 +46,24 @@ export const data: {
   /* class items an editor deleted, kept as tombstones until you choose (spec §13 Keep as mine / Dismiss) */
   removed_items: SharedItem[];
   spaces: Space[];
-} = { profile: null, courses: [], items: [], quotes: [], study_sessions: [], achievements: [], marks: [], space_prefs: [], shared_courses: [], shared_items: [], removed_items: [], spaces: [] };
+  /* flashcards (Study Buddy, Stage 3): yours, your schedule and reviews, and your classes' */
+  decks: Deck[];
+  cards: Card[];
+  card_state: CardState[];
+  card_reviews: CardReview[];
+  shared_decks: SharedDeck[];
+  shared_cards: SharedCard[];
+} = {
+  profile: null, courses: [], items: [], quotes: [], study_sessions: [], achievements: [], marks: [], space_prefs: [], shared_courses: [], shared_items: [], removed_items: [], spaces: [],
+  decks: [], cards: [], card_state: [], card_reviews: [], shared_decks: [], shared_cards: [],
+};
 const dirty: Record<string, string> = {};
 export const conflicts: Conflict[] = [];
 const listeners = new Set<(evt: StoreEvent) => void>();
-const normal: { [K in Kind]: (raw: RawOf[K]) => Rows[K] } = { items: normalizeItem, courses: normalizeCourse, quotes: normalizeQuote, study_sessions: normalizeStudySession, achievements: normalizeAchievement, marks: normalizeMark, space_prefs: normalizeSpacePref };
+const normal: { [K in Kind]: (raw: RawOf[K]) => Rows[K] } = {
+  items: normalizeItem, courses: normalizeCourse, quotes: normalizeQuote, study_sessions: normalizeStudySession, achievements: normalizeAchievement, marks: normalizeMark, space_prefs: normalizeSpacePref,
+  decks: normalizeDeck, cards: normalizeCard, card_state: normalizeCardState, card_reviews: normalizeCardReview,
+};
 const kinds = Object.keys(normal) as Kind[];
 /* A stored or downloaded row may hold anything; each normalizer takes whatever it is given. */
 const normalizer = (kind: Kind) => normal[kind] as (raw: unknown, index?: number) => Rows[Kind];
@@ -60,6 +76,10 @@ const normalShared = {
     deletedAt: typeof r.deletedAt === 'number' ? r.deletedAt : null,
   }),
 };
+const normalSharedCards = {
+  shared_decks: (r: Row): SharedDeck => ({ ...normalizeDeck(r as unknown as Raw<Deck>), scope: r.scope as string }),
+  shared_cards: (r: Row): SharedCard => ({ ...normalizeCard(r as unknown as Raw<Card>), scope: r.scope as string }),
+};
 /* The shared store a change of `kind` goes to: only courses and items are shared. */
 /* A removed class item past the server's tombstone time: the purge has taken it, unless your mark
    holds something (then it waits for you, and the purge keeps it as yours: spec §13). */
@@ -67,6 +87,7 @@ const expired = (r: { scope: string; id: string; deletedAt?: unknown }, marks: M
   typeof r.deletedAt === 'number' && r.deletedAt < Date.now() - TOMBSTONE_TTL_MS
   && !marks.some((m) => m.spaceId === r.scope.slice(2) && m.itemId === r.id && meaningfulMark(m as unknown as Record<string, unknown>));
 const sharedStoreOf = (kind: Kind): SharedStore | null => (kind === 'courses' ? 'shared_courses' : kind === 'items' ? 'shared_items' : null);
+const sharedCardStoreOf = (kind: Kind): SharedCardStore | null => (kind === 'decks' ? 'shared_decks' : kind === 'cards' ? 'shared_cards' : null);
 /* Which tab queued an edit. It lasts as long as the tab, reloads included: a new id on
    every load made an unsynced edit look like another tab's once the page reloaded. */
 const owner = (() => {
@@ -112,14 +133,17 @@ export async function reload(): Promise<void> {
   if (!handle) return;
   /* one transaction, every read issued at once rather than each waiting for the last */
   const snapshot = await handle.transaction(stores, 'readonly', async (a) => {
-    const [courses, items, quotes, study_sessions, achievements, marks, space_prefs, shared_courses, shared_items, spaces, meta, pending, conflicts] = await Promise.all([
+    const [courses, items, quotes, study_sessions, achievements, marks, space_prefs, shared_courses, shared_items, spaces, meta, pending, conflicts,
+      decks, cards, card_state, card_reviews, shared_decks, shared_cards] = await Promise.all([
       a('courses').all(), a('items').all(), a('quotes').all(), a('study_sessions').all(), a('achievements').all(),
       a('marks').all(), a('space_prefs').all(),
       a('shared_courses').all(), a('shared_items').all(), a('spaces').all(),
       a('meta').get('profile'),
       a('pending').all(), a('conflicts').all(),
+      a('decks').all(), a('cards').all(), a('card_state').all(), a('card_reviews').all(), a('shared_decks').all(), a('shared_cards').all(),
     ]);
-    return { courses, items, quotes, study_sessions, achievements, marks, space_prefs, shared_courses, shared_items, spaces, profile: meta?.value as Profile | undefined, pending, conflicts };
+    return { courses, items, quotes, study_sessions, achievements, marks, space_prefs, shared_courses, shared_items, spaces, profile: meta?.value as Profile | undefined, pending, conflicts,
+      decks, cards, card_state, card_reviews, shared_decks, shared_cards };
   });
   if (db !== handle) return;
   for (const kind of kinds) (data as Record<Kind, Rows[Kind][]>)[kind] = snapshot[kind].filter((r) => !hidden.has(kind + ':' + r.id)).map(normalizer(kind));
@@ -128,6 +152,8 @@ export async function reload(): Promise<void> {
   data.shared_items = sharedItems.filter((r) => !r.deletedAt);
   data.removed_items = sharedItems.filter((r) => !!r.deletedAt && !expired(r, data.marks));
   data.spaces = snapshot.spaces;
+  data.shared_decks = snapshot.shared_decks.map((r) => normalSharedCards.shared_decks(r as unknown as Row));
+  data.shared_cards = snapshot.shared_cards.map((r) => normalSharedCards.shared_cards(r as unknown as Row));
   index();
   data.profile = snapshot.profile || null;
   for (const key of Object.keys(dirty)) delete dirty[key];
@@ -298,6 +324,25 @@ async function unlinkSessions(a: Accessor, field: 'itemId' | 'courseId', id: str
   }
 }
 export const deleteQuote = (id: string) => deleteRow('quotes', id);
+/* ── flashcards (Study Buddy, Stage 3) ── */
+export const saveDeck = (row: Raw<Deck>) => saveRow('decks', row);
+export const saveCard = (row: Raw<Card>) => saveRow('cards', row);
+/** A review: your new schedule for the card and the review itself, as one change. */
+export const saveReview = (state: Raw<CardState>, review: Raw<CardReview>) =>
+  saveRows([{ kind: 'card_state', row: state }, { kind: 'card_reviews', row: review }]);
+/* The Worker deletes a card's schedule with it, and a deck's cards with the deck, in the same
+   change; this does the same here. Their own pending edits go too: the delete covers them. */
+async function dropLocal(a: Accessor, kind: 'cards' | 'card_state', ids: string[]) {
+  for (const id of ids) { await a(kind).del(id); await a('pending').del(`${kind}:${id}`); }
+}
+export const deleteCard = (id: string) => deleteRow('cards', id, (a) => dropLocal(a, 'card_state', [id]));
+export function deleteDeck(id: string): Promise<void> {
+  return deleteRow('decks', id, async (a) => {
+    const ids = (await a('cards').all()).filter((c) => c.deckId === id).map((c) => c.id);
+    await dropLocal(a, 'card_state', ids);
+    await dropLocal(a, 'cards', ids);
+  });
+}
 export function deleteCourse(id: string): Promise<void> {
   return deleteRow('courses', id, async (a) => {
     for (const it of await a('items').all()) if (it.courseId === id) {
@@ -404,6 +449,16 @@ export function applyPage(page: Page, reset: boolean | string[] = false): Promis
         if (local && local.revision! > row.revision!) continue;
         if (row.deletedAt) await a(kind).del(row.id);
         else await a(kind).put(normalizer(kind)(row));
+        continue;
+      }
+      /* a class's decks and cards: read only until sharing (Stage 7), so nothing of yours is pending on them */
+      const cs = sharedCardStoreOf(kind);
+      if (cs) {
+        const store = a(cs) as unknown as Access<'shared_cards'>;
+        const local = await store.get([scope, row.id]);
+        if (local && local.revision! > row.revision!) continue;
+        if (row.deletedAt) await store.del([scope, row.id]);
+        else await store.put(normalSharedCards[cs]({ ...row, scope }) as SharedCard);
         continue;
       }
       const s = sharedStoreOf(kind);

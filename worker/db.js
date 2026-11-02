@@ -134,6 +134,27 @@ const TABLES = {
     toRow: (p) => ({ ...p, archived: p.archived ? 1 : 0 }),
     fromRow: (r) => ({ archived: r.archived === 1, target: r.target ?? null }),
   },
+  /* Study Buddy, Stage 3: flashcards (0012_decks.sql) */
+  decks: {
+    cols: { authorId: 'author_id', courseId: 'course_id', classId: 'class_id', title: 'title' },
+    toRow: (d) => d,
+    fromRow: (r) => ({ courseId: r.course_id ?? null, classId: r.class_id ?? null }),
+  },
+  cards: {
+    cols: { deckId: 'deck_id', authorId: 'author_id', front: 'front', back: 'back', source: 'source' },
+    toRow: (c) => c,
+    fromRow: () => ({}),
+  },
+  card_state: {
+    cols: { due: 'due', interval: 'interval', ease: 'ease', reps: 'reps', lapses: 'lapses' },
+    toRow: (c) => c,
+    fromRow: () => ({}),
+  },
+  card_reviews: {
+    cols: { cardRef: 'card_ref', deckRef: 'deck_ref', day: 'day', grade: 'grade', at: 'at' },
+    toRow: (r) => r,
+    fromRow: () => ({}),
+  },
 };
 
 /* Live achievements an account may hold; each carries its sticker picture. */
@@ -148,7 +169,7 @@ const unsent = (fields) => ([field]) => !(GRADE_FIELDS.has(field) && fields[fiel
 /** The scope of a person's own courses and items. */
 export const personal = (userId) => 'u:' + userId;
 /* The column that names a row's owner, and its value for this person. */
-const SCOPED = new Set(['courses', 'items']);
+const SCOPED = new Set(['courses', 'items', 'decks', 'cards']);
 const ownerCol = (table) => (SCOPED.has(table) ? 'scope' : 'user_id');
 const ownerOf = (table, userId) => (SCOPED.has(table) ? personal(userId) : userId);
 
@@ -192,8 +213,10 @@ function upsertStmt(db, table, userId, id, fields, now, revision, guard = null) 
       : field === 'roomId' && absent('roomId') ? `${col} = ${table}.${col}`
       : `${col} = excluded.${col}`;
   const updates = [...cols.map(setCol), 'updated_at = excluded.updated_at', 'deleted_at = NULL', 'revision = revision + 1'];
-  const courseGuard = table === 'items' ? ' AND (? IS NULL OR EXISTS (SELECT 1 FROM courses WHERE scope = ? AND id = ? AND deleted_at IS NULL))' : '';
-  const courseBindings = table === 'items' ? [fields.courseId ?? null, who, fields.courseId ?? null] : [];
+  const courseGuard = table === 'items' ? ' AND (? IS NULL OR EXISTS (SELECT 1 FROM courses WHERE scope = ? AND id = ? AND deleted_at IS NULL))'
+    /* a card goes only in a live deck of its own scope */
+    : table === 'cards' ? ' AND EXISTS (SELECT 1 FROM decks WHERE scope = ? AND id = ? AND deleted_at IS NULL)' : '';
+  const courseBindings = table === 'items' ? [fields.courseId ?? null, who, fields.courseId ?? null] : table === 'cards' ? [who, fields.deckId] : [];
   /* a new or revived achievement must fit under the limit; an edit to a live one always does */
   const capGuard = table === 'achievements' ? ' AND (SELECT count(*) FROM achievements WHERE user_id = ? AND id != ? AND deleted_at IS NULL) < ?' : '';
   const capBindings = table === 'achievements' ? [userId, id, ACHIEVEMENT_LIMIT] : [];
@@ -219,10 +242,12 @@ export async function upsertRow(db, table, userId, id, fields, now = Date.now(),
   if (guard && !(await passes(db, guard))) throw new HttpError(404, { error: 'not_found' });
   const [current, course, live] = await db.batch([
     db.prepare(`SELECT ${selectCols(table)} FROM ${table} WHERE ${ownerCol(table)} = ? AND id = ?`).bind(ownerOf(table, userId), id),
-    table === 'items' && fields.courseId ? courseStmt(db, userId, fields.courseId) : db.prepare('SELECT 1 AS x'),
+    table === 'items' && fields.courseId ? courseStmt(db, userId, fields.courseId)
+      : table === 'cards' ? db.prepare('SELECT 1 AS x FROM decks WHERE scope = ? AND id = ? AND deleted_at IS NULL').bind(personal(userId), fields.deckId)
+      : db.prepare('SELECT 1 AS x'),
     table === 'achievements' ? db.prepare('SELECT count(*) AS n FROM achievements WHERE user_id = ? AND deleted_at IS NULL').bind(userId) : db.prepare('SELECT 0 AS n'),
   ]);
-  if (!course.results.length) throw new HttpError(400, { error: 'invalid', field: 'courseId' });
+  if (!course.results.length) throw new HttpError(400, { error: 'invalid', field: table === 'cards' ? 'deckId' : 'courseId' });
   /* A new or revived achievement at a matching revision missed only because of the limit. */
   const row = current.results[0];
   if (table === 'achievements' && (row ? row.deleted_at !== null && row.revision === revision : revision === 0) && live.results[0].n >= ACHIEVEMENT_LIMIT) {
@@ -254,7 +279,7 @@ export async function purgeTombstones(db, before, now = Date.now()) {
       WHERE i.id = marks.item_id AND i.deleted_at IS NOT NULL AND i.deleted_at < ?
         AND (i.scope = 'p:' || marks.space_id OR (i.scope = 'c:' || marks.space_id AND NOT ${MEANINGFUL('marks')})))`).bind(now, now, before),
     /* a gone space's rows go whatever marks they hold: every way a space is deleted (deleteClass, deleteProject, account deletion) leaves no meaningful live mark in it */
-    ...['items', 'courses', 'changes'].map((t) =>
+    ...['items', 'courses', 'cards', 'decks', 'changes'].map((t) =>
       db.prepare(`DELETE FROM ${t} WHERE scope IN (SELECT 'c:' || id FROM ${GONE} UNION ALL SELECT 'p:' || id FROM ${GONE})`).bind(before, before)),
     ...['members', 'invites', 'marks', 'space_prefs'].map((t) => db.prepare(`DELETE FROM ${t} WHERE space_id IN ${GONE}`).bind(before)),
     /* rows about a person stay with them (their inbox), ageing out like the rest */
@@ -262,7 +287,7 @@ export async function purgeTombstones(db, before, now = Date.now()) {
     tombstones('spaces'),
     db.prepare('UPDATE sync_state SET floor = MAX(floor, COALESCE((SELECT MAX(seq) FROM changes WHERE deleted_at < ?), 0)) WHERE id = 1').bind(before),
     db.prepare('DELETE FROM changes WHERE deleted_at < ?').bind(before),
-    ...['marks', 'space_prefs', 'members', 'achievements', 'study_sessions'].map(tombstones),
+    ...['marks', 'space_prefs', 'members', 'achievements', 'study_sessions', 'card_state', 'card_reviews', 'cards', 'decks'].map(tombstones),
     db.prepare(`DELETE FROM items WHERE deleted_at IS NOT NULL AND deleted_at < ? AND (scope NOT GLOB 'c:*' OR NOT EXISTS (SELECT 1 FROM marks AS m
       WHERE m.space_id = substr(items.scope, 3) AND m.item_id = items.id AND m.deleted_at IS NULL AND ${MEANINGFUL('m')}))`).bind(before),
     tombstones('quotes'),
@@ -282,6 +307,22 @@ export async function deleteRow(db, table, userId, id, now = Date.now(), revisio
   if (table === 'courses') {
     stmts.push(
       db.prepare('UPDATE items SET course_id = NULL, updated_at = ?, revision = revision + 1 WHERE scope = ? AND course_id = ? AND changes() > 0').bind(now, who, id),
+    );
+  }
+  /* a deck takes its cards with it, and a card (or a deck's cards) your schedule for it; the guard is the delete above having happened now */
+  if (table === 'decks') {
+    stmts.push(
+      db.prepare(`UPDATE card_state SET deleted_at = ?, updated_at = ?, revision = revision + 1 WHERE user_id = ? AND deleted_at IS NULL
+        AND id IN (SELECT id FROM cards WHERE scope = ? AND deck_id = ? AND deleted_at IS NULL)
+        AND EXISTS (SELECT 1 FROM decks WHERE scope = ? AND id = ? AND deleted_at = ?)`).bind(now, now, userId, who, id, who, id, now),
+      db.prepare(`UPDATE cards SET deleted_at = ?, updated_at = ?, revision = revision + 1 WHERE scope = ? AND deck_id = ? AND deleted_at IS NULL
+        AND EXISTS (SELECT 1 FROM decks WHERE scope = ? AND id = ? AND deleted_at = ?)`).bind(now, now, who, id, who, id, now),
+    );
+  }
+  if (table === 'cards') {
+    stmts.push(
+      db.prepare(`UPDATE card_state SET deleted_at = ?, updated_at = ?, revision = revision + 1 WHERE user_id = ? AND id = ? AND deleted_at IS NULL
+        AND EXISTS (SELECT 1 FROM cards WHERE scope = ? AND id = ? AND deleted_at = ?)`).bind(now, now, userId, id, who, id, now),
     );
   }
   // Study sessions outlive their course and item; only the link goes. The guard is the
@@ -588,7 +629,13 @@ export async function readMemberships(db, userId, sv) {
  * scopes the guard refused, checked in the same batch. `also`, a statement to run in the same
  * batch, answers in `extra` (its first row).
  */
-export async function readPage(db, userId, wanted, limit = 100, also = null) {
+/** The kinds sync v3 sends: a v3 client rejects a whole page holding any other (src/core/api.ts). */
+export const V3_KINDS = ['courses', 'items', 'quotes', 'study_sessions', 'achievements', 'marks', 'space_prefs'];
+/** Sync v4 adds the flashcard kinds (Study Buddy, Stage 3): decks and cards ride their scope's feed, the rest yours. */
+export const V4_KINDS = [...V3_KINDS, 'decks', 'cards', 'card_state', 'card_reviews'];
+
+export async function readPage(db, userId, wanted, limit = 100, also = null, kinds = V3_KINDS) {
+  const only = `kind IN (${kinds.map((k) => `'${k}'`).join(', ')})`;
   const guards = wanted.map(([scope]) => {
     const p = parseScope(scope);
     return p.kind === 'user' ? { sql: p.userId === userId ? '1' : '0', binds: [] } : memberGuard(p.spaceId, userId);
@@ -597,7 +644,7 @@ export async function readPage(db, userId, wanted, limit = 100, also = null) {
     db.prepare("SELECT floor, COALESCE((SELECT seq FROM sqlite_sequence WHERE name = 'changes'), 0) AS head FROM sync_state WHERE id = 1"),
     db.prepare(`SELECT ${guards.map((g, i) => `(${g.sql}) AS a${i}`).join(', ') || '1 AS none'}`).bind(...guards.flatMap((g) => g.binds)),
     ...wanted.map(([scope, cursor], i) =>
-      db.prepare(`SELECT seq, scope, kind, payload FROM changes WHERE scope = ? AND seq > ? AND ${guards[i].sql} ORDER BY seq LIMIT ?`)
+      db.prepare(`SELECT seq, scope, kind, payload FROM changes WHERE scope = ? AND seq > ? AND ${only} AND ${guards[i].sql} ORDER BY seq LIMIT ?`)
         .bind(scope, cursor, ...guards[i].binds, limit + 1)),
     ...(also ? [also] : []),
   ]);
@@ -632,11 +679,11 @@ export function parseCursor(token) {
  * below the floor after a resync from 0 comes back tagged. With `unread` (activity.js
  * unreadStmt), the last page carries the inbox's count, read in the page's own batch.
  */
-export async function syncPageV3(db, userId, cursors, sv, limit = 100, { unread = null } = {}) {
+export async function syncPageV3(db, userId, cursors, sv, limit = 100, { unread = null, kinds = V3_KINDS } = {}) {
   const held = await readMemberships(db, userId, sv);
   const sent = new Map(cursors.map(([s, c]) => [s, parseCursor(c) || { seq: 0, base: null }]));
   const from = (s) => sent.get(s) || { seq: 0, base: null };
-  const { floor, head, lost, rows: all, extra } = await readPage(db, userId, [personal(userId), ...held.map((s) => s.scope)].map((s) => [s, from(s).seq]), limit, unread);
+  const { floor, head, lost, rows: all, extra } = await readPage(db, userId, [personal(userId), ...held.map((s) => s.scope)].map((s) => [s, from(s).seq]), limit, unread, kinds);
   /* a space left since readMemberships pages nothing and keeps no cursor: gone, as if never read */
   const spaces = held.filter((s) => !lost.includes(s.scope));
   const scopes = [personal(userId), ...spaces.map((s) => s.scope)];

@@ -68,6 +68,13 @@ describe("single-key shortcuts", () => {
         press("/")
         expect(document.activeElement?.id).toBe("search")
     })
+    it("leaves a key a part of the page already used, like the flashcard review's 1, 2 and 3", () => {
+        const e = new KeyboardEvent("keydown", { key: "2", cancelable: true })
+        Object.defineProperty(e, "target", { value: document.body })
+        e.preventDefault()
+        act(() => { onKeydown(e) })
+        expect(setView).not.toHaveBeenCalled()
+    })
 })
 
 describe("the shortcuts panel", () => {

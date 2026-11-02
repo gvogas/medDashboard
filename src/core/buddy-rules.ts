@@ -27,7 +27,10 @@ export const STREAK_MINUTES = 15;
 export const STREAK_COINS = 2;               /* per streak day */
 export const STREAK_MAX = 20;
 export const HEALTH_DAYS = 14;
-export const HEALTH = { missed: -10, idle: -5, idleFrom: 4, perTenMinutes: 1 } as const;
+export const HEALTH = { missed: -10, idle: -5, idleFrom: 4, perTenMinutes: 1, perCard: 2 } as const;
+export const REVIEWS_PER_COIN = 10;          /* card reviews a day per coin */
+export const CARD_COIN_CAP = 10;             /* card coins a day, +1 per Card Foundry level */
+export const STREAK_REVIEWS = 10;            /* or this many card reviews make a streak day */
 export const FINISHED: readonly string[] = ['done', 'submitted', 'graded'];
 export const GRANT_MAX = { coins: 5000, xp: 10000 } as const;
 export const NAME_MAX = 16;
@@ -53,7 +56,7 @@ export interface Upgrade { sku: string; name: string; effect: string; base: numb
 export const UPGRADES: readonly Upgrade[] = [
   { sku: 'focus', name: 'Focus Engine', effect: '+20% study coins', base: 40, step: 35, max: 5, open: true },
   { sku: 'finisher', name: 'Finisher', effect: '+2 coins per finished item', base: 65, step: 50, max: 5, open: true },
-  { sku: 'foundry', name: 'Card Foundry', effect: '+1 coin cap on cards', base: 55, step: 45, max: 5, open: false },   /* Stage 3: cards */
+  { sku: 'foundry', name: 'Card Foundry', effect: '+1 coin cap on cards', base: 55, step: 45, max: 5, open: true },
   { sku: 'magnet', name: 'Quiz Magnet', effect: '+5 quiz coin cap', base: 70, step: 55, max: 5, open: false },       /* Stage 5: quizzes */
 ];
 export const FOCUS_RATE = 0.2;               /* per Focus Engine level, on session coins */

@@ -179,6 +179,19 @@ describe("the header badge", () => {
         expect(render(<BuddyBadge />).container.textContent).toBe("")
     })
 
+    it("looks tired while cards are due and none were reviewed today, and says so", async () => {
+        const { data } = await import("@/core/store")
+        const { notify } = await import("@/bridge")
+        data.decks = [{ id: "d1", title: "D", courseId: null, classId: null, authorId: "u" }]
+        data.cards = [{ id: "k1", deckId: "d1", front: "Q", back: "A", source: "hand", authorId: "u" }]
+        try {
+            notify()
+            await withBuddy(state({ tiers: state().tiers.map((t) => ({ ...t, claimed: t.reached })) }))
+            render(<BuddyBadge />)
+            expect(screen.getByRole("button", { name: "Brief: 30 coins, cards due" })).toBeTruthy()
+        } finally { data.decks = []; data.cards = []; notify() }
+    })
+
     it("shows the coins, says a rank is waiting, and opens the Buddy page", async () => {
         await withBuddy(state({ tiers: state().tiers.map((t) => (t.id === "hatchling" ? { ...t, claimed: false } : t)) }))
         render(<BuddyBadge />)

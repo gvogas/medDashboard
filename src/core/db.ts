@@ -1,5 +1,5 @@
 // Atomic IndexedDB transactions shared by every tab of this account.
-import type { Achievement, Course, Item, Mark, Quote, SharedCourse, SharedItem, Space, SpacePref, StudySession } from './types.ts';
+import type { Achievement, Card, CardReview, CardState, Course, Deck, Item, Mark, Quote, SharedCard, SharedCourse, SharedDeck, SharedItem, Space, SpacePref, StudySession } from './types.ts';
 
 /** A row as the server and the queue know it: an id and whatever fields its kind has. */
 export interface Row { id: string; revision?: number; updatedAt?: number | null; deletedAt?: number | null; [field: string]: unknown }
@@ -32,6 +32,12 @@ export interface Rows {
   spaces: Space;
   marks: Mark;
   space_prefs: SpacePref;
+  decks: Deck;
+  cards: Card;
+  card_state: CardState;
+  card_reviews: CardReview;
+  shared_decks: SharedDeck;
+  shared_cards: SharedCard;
   meta: { key: string; value: unknown };
   pending: PendingOp;
   conflicts: Conflict;
@@ -56,25 +62,29 @@ export interface Db {
   close(): void;
 }
 
-export const STORES: StoreName[] = ['courses', 'items', 'quotes', 'study_sessions', 'achievements', 'shared_courses', 'shared_items', 'spaces', 'marks', 'space_prefs', 'meta', 'pending', 'conflicts'];
+export const STORES: StoreName[] = ['courses', 'items', 'quotes', 'study_sessions', 'achievements', 'shared_courses', 'shared_items', 'spaces', 'marks', 'space_prefs',
+  'decks', 'cards', 'card_state', 'card_reviews', 'shared_decks', 'shared_cards', 'meta', 'pending', 'conflicts'];
 /* Shared rows are keyed [scope, id], so a class's id can never shadow a personal row (spec §7). */
 const keyPathOf = (s: StoreName): string | string[] =>
-  s === 'meta' || s === 'pending' ? 'key' : s === 'shared_courses' || s === 'shared_items' ? ['scope', 'id'] : 'id';
+  s === 'meta' || s === 'pending' ? 'key' : s.startsWith('shared_') ? ['scope', 'id'] : 'id';
 const result = <T>(request: IDBRequest<T>) => new Promise<T>((resolve, reject) => {
   request.onsuccess = () => resolve(request.result);
   request.onerror = () => reject(request.error);
 });
 
-/** Version 6: version 5's shared rows, spaces and cursor per scope (spec §7), and your marks
-    and space prefs (Stage 4). Roll-forward only: a version 5 client cannot open it.
-    `account` names whose cursor version 4 kept. */
+/** Version 7: version 6 (version 5's shared rows, spaces and cursor per scope, spec §7; your
+    marks and space prefs, Stage 4) and the flashcard stores (Study Buddy, Stage 3). Roll-forward
+    only: an older client cannot open it. `account` names whose cursor version 4 kept. Opening
+    from version 5 or 6 forgets the cursors, so the first sync reads every scope again from 0: a
+    tab on sync v3 moved them past any decks another device had made, which v4 now needs. */
 export function openDb(name: string, onVersionChange: () => void = () => {}, account: string | null = null): Promise<Db> {
   return new Promise((resolve, reject) => {
-    const req = indexedDB.open(name, 6);
+    const req = indexedDB.open(name, 7);
     let blocked = false;
     req.onupgradeneeded = (event) => {
       const db = req.result, tx = req.transaction!;
       for (const s of STORES) if (!db.objectStoreNames.contains(s)) db.createObjectStore(s, { keyPath: keyPathOf(s) });
+      if (event.oldVersion >= 5 && event.oldVersion < 7) tx.objectStore('meta').delete('cursors');
       // Version 4 kept one cursor, for the person's own rows: it becomes theirs in the map.
       if (event.oldVersion >= 1 && event.oldVersion < 5 && account) {
         const meta = tx.objectStore('meta'), old: IDBRequest<{ value?: number } | undefined> = meta.get('syncCursor');

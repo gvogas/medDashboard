@@ -20,7 +20,7 @@ import { GRANT_MAX } from '../src/core/buddy-rules.ts';
 import { dayOf } from './buddy.js';
 
 /* The newest file in migrations/; a test keeps it in step. */
-export const LATEST_MIGRATION = '0011_buddy_shop.sql';
+export const LATEST_MIGRATION = '0012_decks.sql';
 const AUDIT_KEEP_MS = 90 * DAY_MS;
 export const MIN_PASSWORD = 8;
 const MAX_PASSWORD = 200;

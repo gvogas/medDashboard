@@ -223,3 +223,29 @@ describe('the feed endpoints', () => {
     expect(ics).not.toContain('X-INJECT');
   });
 });
+
+describe('flashcards in the feed (Study Buddy, Stage 3)', () => {
+  it('adds an all-day "Flashcards: N due" for each day cards fall due, worded apart from lecture reviews', () => {
+    const ics = buildCalendar({ courses: [], items: [], flashcards: [{ day: '2026-11-02', n: 12 }, { day: '2026-11-04', n: 3 }] });
+    const ev = events(ics);
+    expect(ev).toHaveLength(2);
+    expect(ev[0]).toContain('DTSTART;VALUE=DATE:20261102');
+    expect(ev[0]).toContain('SUMMARY:Flashcards: 12 due');
+    expect(ev[1]).toContain('SUMMARY:Flashcards: 3 due');
+    expect(ics).not.toContain('Review 1/4');
+  });
+
+  it('counts the next 7 days from card_state, only with "Review cards in my calendar" on', async () => {
+    const { flashcardDays } = await import('../worker/calendar.js');
+    const api = await signIn('cal-cards');
+    const put = (id, due) => api(`/api/card_state/${id}`, { method: 'PUT', body: { due, interval: 1, ease: 2.5, reps: 1, lapses: 0 } });
+    const now = Date.UTC(2026, 10, 2, 12), d = (n) => new Date(now + n * 86_400_000).toISOString().slice(0, 10);
+    await put('k1', '2026-10-01'); await put('k2', d(0)); await put('k3', d(2)); await put('k4', d(2)); await put('k5', d(9));
+    expect(await flashcardDays(env.DB, 'u-cal-cards', now)).toEqual([]);
+    await api('/api/buddy/settings', { method: 'PUT', body: { enabled: true, tz: 'UTC', cardsInFeed: true } });
+    expect(await flashcardDays(env.DB, 'u-cal-cards', now)).toEqual([{ day: d(0), n: 2 }, { day: d(2), n: 2 }]);
+    const b = await (await api('/api/buddy')).json();
+    expect(b.cardsInFeed).toBe(true);
+    expect((await api('/api/buddy/settings', { method: 'PUT', body: { enabled: true, cardsInFeed: 'yes' } })).status).toBe(400);
+  });
+});

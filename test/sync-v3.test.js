@@ -167,6 +167,21 @@ describe('sync v3', () => {
     }
   });
 
+  it('sends v3 only its seven kinds, and moves its cursor past a kind it does not know', async () => {
+    const ana = await createUser('v3-kinds');
+    await upsertRow(env.DB, 'quotes', ana, 'q1', { text: 'Go', source: '' });
+    /* a kind from a later stage (decks, cards…): a tab on today's client rejects the whole page if it gets one */
+    await env.DB.prepare("INSERT INTO changes (scope, kind, row_id, payload) VALUES (?, 'decks', 'd1', '{}')").bind(personal(ana)).run();
+    await upsertRow(env.DB, 'quotes', ana, 'q2', { text: 'On', source: '' });
+    await env.DB.prepare("INSERT INTO changes (scope, kind, row_id, payload) VALUES (?, 'cards', 'k1', '{}')").bind(personal(ana)).run();
+    const pages = await pageAll(ana, {}, 0, 1);
+    expect(pages.flatMap((p) => p.changes.map((c) => `${c.kind}:${c.row.id}`))).toEqual(['quotes:q1', 'quotes:q2']);
+    const head = (await env.DB.prepare("SELECT seq FROM sqlite_sequence WHERE name = 'changes'").first()).seq;
+    expect(pages.at(-1).cursors[personal(ana)]).toBe(head);
+    const again = await syncPageV3(env.DB, ana, Object.entries(pages.at(-1).cursors), 0);
+    expect(again.changes).toEqual([]);
+  });
+
   it('answers GET /api/sync?v=3, refuses malformed cursors, and keeps v2 as it was', async () => {
     const api = await signIn('v3-route');
     const ok = await (await api('/api/sync?v=3&cursors=' + encodeURIComponent('u:u-v3-route:0,c:abcdefghij12:4') + '&sv=0')).json();
