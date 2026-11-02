@@ -66,7 +66,7 @@ files. The next one is `0011`, after `0010_buddy.sql`.
 | Authentication and request control | `login_throttle`, `request_limits` | Temporary attempt counts and cooldowns |
 | Spotify connection | `spotify_tokens`, `spotify_oauth_states`, `spotify_refresh_locks` | Credentials, one-use consent attempts, and refresh leases |
 | Push reminders | `push_subscriptions` | The devices that get the morning digest |
-| Admin page | `error_log`, `admin_log`, `app_meta` | Caught failures (30 days), what admins did (90 days), app-wide values (announcement, maintenance, last cron run) |
+| Admin page | `error_log`, `admin_log`, `app_meta` | Caught failures (30 days), what admins did (90 days, including Study Buddy grants), app-wide values (announcement, maintenance, last cron run) |
 | Read-only inspection | `active_items`, `account_summary` | Views over existing records, with no duplicate stored data |
 
 ```mermaid
@@ -492,6 +492,14 @@ Chat between the people in a room (`0009_room_chat.sql`): `id`, `room_id` and `u
 `user_id` (primary key, `ON DELETE CASCADE`), `course_label`, `started_at`, `ends_at`. Written by `PUT /api/presence` when a solo run starts or resumes (`ends_at` = when it would end, plus 10 minutes), deleted by `DELETE /api/presence` when it stops, and only while `friend_settings.show_studying` is on (turning it off deletes the row). A row past `ends_at` reads as nobody studying; the nightly cron deletes it.
 
 The nightly cron also ends rooms nobody has polled for 30 minutes (the people in them taken out at their last sign of life, minutes kept) and deletes rooms 90 days after they ended, unless a session still names them. `GET /api/rooms/:id/record` sums each member's own `study_sessions` with that `room_id`, for people who were in the room only.
+
+## `buddy_settings`
+
+The Study Buddy's switch, one row per person who has ever turned gameplay on (`0010_buddy.sql`; `ON DELETE CASCADE`). Not on `users`, so it stays out of the profile's revision. `enabled` 0/1; `since` the first time it was turned on (nothing before it counts, and it never changes); `on_at` the latest time it was turned on from off (events before it never pay coins); `reconciled_at` the last time the Worker looked for new awards (a finish is dated no earlier than this, so `completed_at` from the browser cannot backdate one); `tz` the browser's IANA zone, checked with `validTz`, that days are counted in; `look` JSON `{buddy, bg, name}` (`buddy` is `auto`, following the profile's theme, or a theme's id); `xp_bonus` admin-granted XP for testing. Not synced: read and written through `/api/buddy`.
+
+## `buddy_ledger`
+
+One row per coin award or spend (`0010_buddy.sql`; `ON DELETE CASCADE`), keyed `(user_id, source)` so nothing pays twice: `session:<id>`, `item:u:<id>`, `item:c:<space>:<id>`, `streak:<day>`, `claim:<tier>`, `admin:<at>:<random>`. `kind` `earn` (amount ≥ 0; 0 records a finish over the day's limit, so it never pays later) or `spend` (amount < 0); `day` the local day it counts on; `at` when it was written. The balance is the sum. `GET /api/buddy` writes what is unpaid in one statement (`ON CONFLICT DO NOTHING`, except a `session:` row, which can only grow), then reads the state; XP, tier, health and streak are worked out from synced rows on each read and never stored. Not synced.
 
 ## Indexes
 

@@ -36,7 +36,10 @@ export function SideNav() {
     /* a friend studying now, as the last friends list said */
     const friendLive = !!useFriends().list?.friends.some((f) => f.live)
     const admin = !!useProfile()?.isAdmin
-    const buddyOn = !!activeBuddy(useBuddy()) && useMaintenance("buddy") !== "blocked"
+    /* both hooks every render: a short-circuit here would change the hook order once the buddy loads */
+    const buddy = activeBuddy(useBuddy())
+    const buddyBlocked = useMaintenance("buddy") === "blocked"
+    const buddyOn = !!buddy && !buddyBlocked
     return (
         <nav aria-label="Pages" className="flex flex-col gap-0.5">
             {[...PAGES, ...(buddyOn ? [BUDDY] : []), ...(admin ? [ADMIN] : [])].map((p) => {

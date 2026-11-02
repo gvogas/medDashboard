@@ -53,7 +53,8 @@ export function BuddyPage() {
     useEffect(() => {
         if (screen !== "app") return
         const reload = () => { if (!document.hidden && buddyStale()) void loadBuddy() }
-        reload()
+        /* opening the page always asks: coins may have come from another device or an admin */
+        void loadBuddy()
         const timer = setInterval(reload, STALE_MS / 2)
         document.addEventListener("visibilitychange", reload)
         return () => { clearInterval(timer); document.removeEventListener("visibilitychange", reload) }
