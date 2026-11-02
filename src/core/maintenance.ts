@@ -3,9 +3,9 @@
 
 import { MESSAGE_MAX } from "./shared.ts"
 
-/** A page (as in side-nav.tsx's PAGES), Import with AI, shared classes & projects, friends, or the whole app. */
-export type Feature = "app" | "week" | "month" | "table" | "study" | "spotify" | "import" | "classes" | "friends"
-export const FEATURES: readonly Feature[] = ["app", "week", "month", "table", "study", "spotify", "import", "classes", "friends"]
+/** A page (as in side-nav.tsx's PAGES), Import with AI, shared classes & projects, friends, the Study Buddy, or the whole app. */
+export type Feature = "app" | "week" | "month" | "table" | "study" | "spotify" | "import" | "classes" | "friends" | "buddy"
+export const FEATURES: readonly Feature[] = ["app", "week", "month", "table", "study", "spotify", "import", "classes", "friends", "buddy"]
 
 export interface Maintenance { features: Feature[]; message: string; updatedAt: number | null }
 

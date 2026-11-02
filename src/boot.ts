@@ -19,6 +19,7 @@ import { commitUndo, finishDelete } from "@/data/study-controller"
 import { onKeydown } from "@/data/keyboard"
 import { forgetReads } from "@/data/ai-cache"
 import { followToday } from "@/data/ui"
+import { activeBuddy, loadBuddy } from "@/data/buddy"
 // Listen to the store and sync from the start, before any component mounts.
 import "@/data/store"
 import "@/data/sync"
@@ -60,6 +61,8 @@ export function boot() {
     document.addEventListener("pointerdown", pointerPressed, true)
     for (const type of ["pointerup", "pointercancel"]) document.addEventListener(type, pointerReleased, true)
     sync.onUnauthenticated(sessionEnded)
+    /* the Study Buddy pays for uploaded sessions, items and marks: show the new coins */
+    sync.setOnEarned(() => { if (activeBuddy()) void loadBuddy() })
 
     /* ═════════ Spotify ═════════ */
     /* The sidebar player, the Music page and the focus screen's music

@@ -5,7 +5,7 @@ import type { Outline, Schedule } from './importers/plan.ts';
 import { UNREAD_CAP } from './shared.ts';
 import type { Cursor, Page, ServerProfile } from './store.ts';
 import type { Album, Device, Page as SpotifyPage, PlayerState, Playlist, SearchResults, Track } from './spotify-types.ts';
-import type { ActivityRow, AdminAccounts, AdminHealth, AdminTraffic, Announcement, AuditEntry, CalendarFeed, ErrorGroup, ErrorRow, MaintenanceState, Flow, FriendMatch, FriendSettings, Friends, GroupRecord, Inbox, JoinCode, ParentRef, RoomMessage, RoomView, Space, SpaceDetails, SpaceInvite, SpaceSummary } from './types.ts';
+import type { ActivityRow, AdminAccounts, BuddyAnswer, BuddyLook, AdminHealth, AdminTraffic, Announcement, AuditEntry, CalendarFeed, ErrorGroup, ErrorRow, MaintenanceState, Flow, FriendMatch, FriendSettings, Friends, GroupRecord, Inbox, JoinCode, ParentRef, RoomMessage, RoomView, Space, SpaceDetails, SpaceInvite, SpaceSummary } from './types.ts';
 
 /** An error's body as the Worker sends it: its code, and for some the server's copy or a wait. */
 export interface ErrorBody { error?: string; retryAfter?: unknown; current?: Row | null; [field: string]: unknown }
@@ -215,6 +215,22 @@ async function spaceOf(response: Promise<unknown>): Promise<SpaceSummary> {
 const query = (o: Record<string, string | undefined>) => new URLSearchParams(Object.entries(o).filter((e): e is [string, string] => !!e[1])).toString()
 type ReadQuery = { name: string; today: string; termStart?: string; terms?: string; codes?: string; grid?: string }
 
+const MOOD_NAMES = ['happy', 'tired', 'sick', 'hurt'];
+const count = (v: unknown, max = Number.MAX_SAFE_INTEGER) => Number.isSafeInteger(v) && (v as number) >= 0 && (v as number) <= max;
+/** The Buddy as the Worker answers it, or invalidResponse(): a broken answer never reaches the page. */
+async function buddyOf(response: Promise<unknown>): Promise<BuddyAnswer> {
+  const b = await response as any; /* `any`: every field is checked below */
+  if (b && b.enabled === false) return { enabled: false };
+  const ok = !!b && b.enabled === true && count(b.xp) && typeof b.tier === 'string' && count(b.health, 100) && MOOD_NAMES.includes(b.mood)
+    && count(b.streak) && Number.isSafeInteger(b.coins) && count(b.due)
+    && (b.next === null || (!!b.next && typeof b.next.tier === 'string' && count(b.next.xp)))
+    && !!b.look && typeof b.look.buddy === 'string' && typeof b.look.bg === 'string' && typeof b.look.name === 'string'
+    && Array.isArray(b.tiers) && b.tiers.length === 7 && b.tiers.every((t: any) => t && typeof t.id === 'string' && count(t.minXp) && count(t.reward) && typeof t.reached === 'boolean' && typeof t.claimed === 'boolean')
+    && Array.isArray(b.recent) && b.recent.every((r: any) => r && typeof r.source === 'string' && Number.isSafeInteger(r.amount) && count(r.at));
+  if (!ok) throw invalidResponse();
+  return b as BuddyAnswer;
+}
+
 export const api = {
   me: () => record<ServerProfile & Row>(request('GET', '/api/me'), accountId),
   saveMe: (profile: Record<string, unknown> & { id?: string; revision?: number }) => record<ServerProfile & Row>(request('PUT', '/api/me', profile, match(profile.revision)), accountId || profile.id, profile.revision),
@@ -289,6 +305,14 @@ export const api = {
     record: (id: string): Promise<GroupRecord> => request('GET', `/api/rooms/${id}/record`),
     messages: (id: string, after = 0): Promise<{ messages: RoomMessage[] }> => request('GET', `/api/rooms/${id}/messages${after ? `?after=${after}` : ''}`),
     say: (id: string, body: string): Promise<RoomMessage> => request('POST', `/api/rooms/${id}/messages`, { body }),
+  },
+  /* the Study Buddy (worker/buddy.js); every answer is checked before it is shown */
+  buddy: {
+    get: () => buddyOf(request('GET', '/api/buddy')),
+    settings: (enabled: boolean, tz?: string) => buddyOf(request('PUT', '/api/buddy/settings', { enabled, tz })),
+    claim: (tier: string) => buddyOf(request('POST', '/api/buddy/claim', { tier })),
+    look: (look: Partial<BuddyLook>) => buddyOf(request('PUT', '/api/buddy/look', look)),
+    grant: (userId: string, g: { coins?: number; xp?: number }) => empty(request('POST', '/api/admin/buddy/grant', { userId, ...g })),
   },
   /* a solo run, so friends see you studying (worker/rooms.js setPresence) */
   presence: {

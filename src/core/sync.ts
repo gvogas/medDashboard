@@ -24,6 +24,10 @@ let unreadFn: (n: number) => void = () => {};
     each sign-in sets it again, replacing the last. */
 export const setOnUnread = (fn: (n: number) => void): void => { unreadFn = fn; };
 export const onUnauthenticated = (fn: () => void): void => { signedOut = fn; };
+let earnedFn: () => unknown = () => {};
+/** The one listener for an upload that carried a study session, an item or a mark: what the Study Buddy pays for. */
+export const setOnEarned = (fn: () => unknown): void => { earnedFn = fn; };
+const EARNS = /^(study_sessions|items|marks):/;
 function publish() { for (const fn of listeners) fn(status); }
 function state(value: SyncState, message = '') {
   Object.assign(status, { state: value, message, pending: store.pendingCount(), conflicts: store.conflicts.length });
@@ -90,6 +94,7 @@ async function serverCopy(op: PendingOp, e?: { body?: ApiError['body'] }): Promi
 }
 async function pushAll(cycle: Cycle): Promise<boolean> {
   const operations = await store.pending();
+  let earned = false;
   // New courses before items; course deletion after pending item writes.
   operations.sort((a, b) => rank(a) - rank(b));
   for (const op of operations) {
@@ -116,6 +121,7 @@ async function pushAll(cycle: Cycle): Promise<boolean> {
       if (!active(cycle)) return false;
       await store.settleOperation(op, saved);
       tries.delete(op.token);   /* it got through after all */
+      if (EARNS.test(op.key)) earned = true;
     } catch (e) {
       if (!active(cycle)) return false;
       /* a feature the admins are working on (shared classes): the edit stays pending as it
@@ -139,6 +145,7 @@ async function pushAll(cycle: Cycle): Promise<boolean> {
       } else throw e;
     }
   }
+  if (earned) { try { earnedFn(); } catch { /* the Buddy's refresh never fails a sync */ } }
   return active(cycle);
 }
 /** Count a failed cycle against each held-back edit; set aside those out of tries. */

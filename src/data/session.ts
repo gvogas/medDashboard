@@ -11,6 +11,7 @@ import * as web from "./spotify/web-player"
 import { closeSheet } from "./overlay"
 import { forgetReads, keepReadsFor } from "./ai-cache"
 import { resetFriends } from "./friends"
+import { loadBuddy, resetBuddy } from "./buddy"
 import { resetRoom } from "./room"
 import { resetRecords } from "./record"
 import { toast, TOAST_LONG_MS } from "./toast"
@@ -57,6 +58,7 @@ async function start(profile: ServerProfile) {
     sync.init()
     sync.syncNow()
     spotify.start()
+    void loadBuddy()                             /* the header badge, while gameplay is on */
     preloadIdle()                                /* the other pages and the sheets */
     const back = spotifyReturn()
     if (back) { ui.spotifyNote = back; openSettings("spotifyGrp") }
@@ -86,7 +88,7 @@ function joinReturn(): string | null {
 export function onStoreEvent(evt: StoreEvent) {
     if (evt.type === "change" && data.profile) { celebrateStudy(); celebrateAchievements() }
     if (evt.type === "save-error") toast("The change could not be saved on this device. " + evt.message, { error: true, ms: 10000 })
-    if (evt.type === "signed-out") { sync.stop(); spotify.stop(); web.stop(); resetRequests(); forgetReads(); resetFriends(); resetRoom(); resetRecords(); location.reload() }
+    if (evt.type === "signed-out") { sync.stop(); spotify.stop(); web.stop(); resetRequests(); forgetReads(); resetFriends(); resetBuddy(); resetRoom(); resetRecords(); location.reload() }
     if (evt.type === "remote" && data.profile) refreshAfterSync()
     if ((evt.type === "synced" || evt.type === "remote") && data.profile) celebrateAchievements({ quiet: true })
 }
@@ -97,7 +99,7 @@ export function onStorage(event: StorageEvent) {
     let id: string | undefined
     try { id = JSON.parse(event.newValue || "null")?.id } catch {}
     if (id !== data.profile.id) {
-        sync.stop(); spotify.stop(); web.stop(); resetRequests(); forgetReads(); resetFriends(); resetRoom(); resetRecords()
+        sync.stop(); spotify.stop(); web.stop(); resetRequests(); forgetReads(); resetFriends(); resetBuddy(); resetRoom(); resetRecords()
         store.close().finally(() => location.reload())
     }
 }
@@ -137,7 +139,7 @@ export async function signOut({ everywhere = false, force = false }: { everywher
     spotify.stop()
     web.stop()
     closeSheet()
-    forgetReads(); resetFriends(); resetRoom(); resetRecords()
+    forgetReads(); resetFriends(); resetBuddy(); resetRoom(); resetRecords()
     if (id) {
         try { await store.wipe(id) }
         catch {

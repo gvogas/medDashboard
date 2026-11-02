@@ -234,6 +234,15 @@ export type FriendState = 'none' | 'friends' | 'requested' | 'asked';
 export interface FriendMatch extends FriendPerson { state: FriendState }
 export interface FriendSettings { findable: boolean; showStudying: boolean }
 export interface Friends { friends: Friend[]; incoming: FriendRequest[]; sent: FriendRequest[]; settings: FriendSettings }
+/** Study Buddy (worker/buddy.js): which buddy, and the Buddy as GET /api/buddy answers while gameplay is on. */
+export interface BuddyLook { buddy: string; bg: string; name: string }
+export interface BuddyTierRow { id: string; minXp: number; reward: number; reached: boolean; claimed: boolean }
+export interface BuddyState {
+  enabled: true; xp: number; tier: string; next: { tier: string; xp: number } | null;
+  health: number; mood: 'happy' | 'tired' | 'sick' | 'hurt'; streak: number; coins: number;
+  look: BuddyLook; tz: string; tiers: BuddyTierRow[]; recent: { source: string; amount: number; at: number }[]; due: number;
+}
+export type BuddyAnswer = BuddyState | { enabled: false };
 /** GET /api/inbox: your pending invites, the newest rows, and where you have read up to. */
 export interface Inbox { invites: Invite[]; friendRequests?: FriendRequest[]; roomInvites?: RoomInvite[]; items: ActivityRow[]; seen: number }
 
