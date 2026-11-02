@@ -101,7 +101,14 @@ function CardForm({ card, onSave, onCancel }: { card?: Card; onSave: (front: str
     const ok = front.trim() && back.trim()
     const id = card?.id ?? "new"
     return (
-        <form className="grid gap-2 py-2.5" onSubmit={async (e) => { e.preventDefault(); if (!ok) return; await onSave(front, back); if (!card) { setFront(""); setBack("") } }}>
+        <form className="grid gap-2 py-2.5" onSubmit={async (e) => {
+            e.preventDefault()
+            if (!ok) return
+            /* a new card's fields clear at once, not when the save ends: the next card may already be being typed */
+            const [f, b] = [front, back]
+            if (!card) { setFront(""); setBack("") }
+            await onSave(f, b)
+        }}>
             <label htmlFor={`front-${id}`} className="text-[12.5px] text-ink-2">Front</label>
             <TextArea id={`front-${id}`} rows={2} value={front} maxLength={FRONT_MAX} onChange={(e) => setFront(e.target.value)} />
             <label htmlFor={`back-${id}`} className="text-[12.5px] text-ink-2">Back</label>
@@ -188,7 +195,8 @@ function Review({ group, list }: { group: string | null; list: CardGroup[] }) {
     const keys = (e: KeyboardEvent) => {
         if (e.key === " " || e.key === "Enter") { e.preventDefault(); setFlipped(true); return }
         const g = GRADES.find(([, , k]) => k === e.key)
-        if (g && flipped) { e.preventDefault(); void answer(g[0]) }
+        /* 1, 2 and 3 are the review's while it has focus, flipped or not: before the answer shows they do nothing, never switch pages */
+        if (g) { e.preventDefault(); if (flipped) void answer(g[0]) }
     }
     const done = () => showCards({ mode: "home" })
     if (!card) return (

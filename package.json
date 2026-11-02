@@ -7,6 +7,7 @@
     "dev": "vite",
     "dev:built": "npm run build && vite preview",
     "dev:fake-ai": "vite --mode fake-ai",
+    "e2e": "node e2e/run.mjs",
     "deploy": "npm run check && node scripts/check-secrets.mjs && wrangler d1 migrations apply DB --config wrangler.jsonc --remote && node scripts/check-db.mjs --remote && wrangler deploy",
     "deploy:staging": "node scripts/deploy-staging.mjs",
     "test": "vitest run && npm run test:local",

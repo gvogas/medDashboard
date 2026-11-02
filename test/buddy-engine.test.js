@@ -113,3 +113,23 @@ describe('Stage 2 rules', () => {
     expect(out.map((a) => a.amount)).toEqual([9, 9, 9, 9, 9, 0]);
   });
 });
+
+describe('days in the person’s own zone (Pacific/Auckland, UTC+13 in November)', () => {
+  const NZ = 'Pacific/Auckland';
+  const at = (iso) => Date.parse(iso);
+  const sess = (id, startIso, minutes) => ({ id, started_at: at(startIso), created_at: at(startIso) + 60_000 * minutes, study_minutes: minutes, manual: 0, deleted_at: null });
+
+  it('splits the 240-minute day at local midnight, not UTC midnight', () => {
+    /* 22:00 and 00:30 New Zealand time: 09:00 and 11:30 UTC on the same UTC day */
+    const out = countSessions([sess('late', '2026-11-02T09:00:00Z', 200), sess('early', '2026-11-02T11:30:00Z', 200)], NZ, 0);
+    expect(out).toEqual([{ id: 'late', day: '2026-11-02', counted: 200 }, { id: 'early', day: '2026-11-03', counted: 200 }]);
+    /* in UTC both fall on one day, and the second is cut to 40 */
+    expect(countSessions([sess('late', '2026-11-02T09:00:00Z', 200), sess('early', '2026-11-02T11:30:00Z', 200)], 'UTC', 0).map((c) => c.counted)).toEqual([200, 40]);
+  });
+
+  it('counts the streak by local days, so a session after local midnight starts a new day', () => {
+    const minutes = {};
+    for (const c of countSessions([sess('a', '2026-11-02T09:00:00Z', 20), sess('b', '2026-11-02T11:30:00Z', 20)], NZ, 0)) minutes[c.day] = (minutes[c.day] || 0) + c.counted;
+    expect(streakAwards(minutes, '2026-11-02', '2026-11-03')).toMatchObject({ streak: 2 });
+  });
+});
