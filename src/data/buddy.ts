@@ -4,7 +4,8 @@
 // session, an item or a mark, so new coins show within a sync.
 
 import { api, ApiError } from "@/core/api"
-import type { BuddyAnswer, BuddyLook, BuddyState } from "@/core/types"
+import type { BuddyAnswer, BuddyLook, BuddyState, Shop } from "@/core/types"
+import type { CustomBuddy } from "@/core/buddy-rules"
 import { maintenanceState } from "./maintenance"
 import { MINUTE_MS } from "@/lib/time"
 import { createStore } from "@/lib/store"
@@ -65,6 +66,10 @@ export function buddyMessage(e: unknown): string {
     if (code === "gameplay_off") return "Turn on Gameplay in Settings first."
     if (code === "tier_not_reached") return "Your buddy hasn't reached that rank yet."
     if (code === "not_owned") return "That isn't yours yet."
+    if (code === "not_enough_coins") return "Not enough coins for that yet."
+    if (code === "stale_level") return "That was already bought. The shop is up to date now."
+    if (code === "invalid" && e.body?.field === "name") return "A name can be up to 16 letters."
+    if (code === "invalid" && e.body?.field === "custom") return "That picture couldn't be saved. Try another one."
     if (e.status === 503) return "The buddy is switched off for a moment. Try again soon."
     return "That did not go through. Try again."
 }
@@ -82,5 +87,29 @@ async function change(call: () => Promise<BuddyAnswer>): Promise<string> {
 export const setGameplay = (enabled: boolean) => change(() => api.buddy.settings(enabled, browserZone()))
 /** Claim a reached rank's coins. */
 export const claimTier = (tier: string) => change(() => api.buddy.claim(tier))
-/** Pick a buddy: 'auto' (your theme) or a theme's. */
+/** Pick a buddy: 'auto' (your theme), a theme's, or 'custom'. */
 export const pickBuddy = (buddy: BuddyLook["buddy"]) => change(() => api.buddy.look({ buddy }))
+/** Equip a background or frame you own ('none' to take it off), or rename the buddy ('' for its own name). */
+export const setLook = (look: Partial<Omit<BuddyLook, "buddy">>) => change(() => api.buddy.look(look))
+/** Save a custom buddy made from a picture (only its grid and palette), and show it. */
+export const saveCustom = (custom: CustomBuddy) => change(async () => { await api.buddy.saveCustom(custom); return api.buddy.look({ buddy: "custom" }) })
+/** Delete the custom buddy; a custom look goes back to your theme's buddy. */
+export const removeCustom = () => change(() => api.buddy.deleteCustom())
+
+/** The shop as the Worker has it, or an error message. */
+export async function loadShop(): Promise<Shop | string> {
+    try { return await api.buddy.shop() } catch (e) { return buddyMessage(e) }
+}
+/** Buy the next level of `sku`; the Buddy is read again so coins show at once. Returns an error message, or "". */
+export async function buy(sku: string, level: number): Promise<string> {
+    try {
+        const { coins } = await api.buddy.buy(sku, level)
+        const b = buddyNow().buddy
+        if (b?.enabled) set({ buddy: { ...b, coins } })
+        void loadBuddy()
+        return ""
+    } catch (e) {
+        if (e instanceof ApiError && e.body?.error === "stale_level") void loadBuddy()
+        return buddyMessage(e)
+    }
+}

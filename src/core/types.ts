@@ -4,6 +4,7 @@
 
 import type { Feature, Maintenance } from "./maintenance"
 import type { GradeCategory } from "./grades"
+import type { CustomBuddy } from "./buddy-rules"
 
 export type ItemStatus = "todo" | "submitted" | "graded" | "done" | "missed" | (string & {})
 
@@ -235,13 +236,18 @@ export interface FriendMatch extends FriendPerson { state: FriendState }
 export interface FriendSettings { findable: boolean; showStudying: boolean }
 export interface Friends { friends: Friend[]; incoming: FriendRequest[]; sent: FriendRequest[]; settings: FriendSettings }
 /** Study Buddy (worker/buddy.js): which buddy, and the Buddy as GET /api/buddy answers while gameplay is on. */
-export interface BuddyLook { buddy: string; bg: string; name: string }
+export interface BuddyLook { buddy: string; bg: string; frame: string; name: string }
 export interface BuddyTierRow { id: string; minXp: number; reward: number; reached: boolean; claimed: boolean }
 export interface BuddyState {
   enabled: true; xp: number; tier: string; next: { tier: string; xp: number } | null;
   health: number; mood: 'happy' | 'tired' | 'sick' | 'hurt'; streak: number; coins: number;
   look: BuddyLook; tz: string; tiers: BuddyTierRow[]; recent: { source: string; amount: number; at: number }[]; due: number;
+  /** the saved custom buddy, if any; the backgrounds and frames you own */
+  custom: CustomBuddy | null; owned: string[];
 }
+/** GET /api/buddy/shop: each item with your level and the next level's cost (null at the top). */
+export interface ShopItem { sku: string; kind: 'upgrade' | 'bg' | 'frame'; name: string; effect: string; level: number; max: number; cost: number | null }
+export interface Shop { coins: number; items: ShopItem[] }
 export type BuddyAnswer = BuddyState | { enabled: false };
 /** GET /api/inbox: your pending invites, the newest rows, and where you have read up to. */
 export interface Inbox { invites: Invite[]; friendRequests?: FriendRequest[]; roomInvites?: RoomInvite[]; items: ActivityRow[]; seen: number }

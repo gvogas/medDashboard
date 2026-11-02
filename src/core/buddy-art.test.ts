@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { BUDDIES, BUDDY_ORDER, N, buddyFor, rankName, sprite, type Grid } from './buddy-art.ts';
-import { MOODS, TIERS } from './buddy-rules.ts';
+import { BUDDIES, BUDDY_ORDER, FRAME_W, N, backdrop, buddyFor, customGrid, framed, rankName, shownFor, sprite, type Grid } from './buddy-art.ts';
+import { COSMETICS, MOODS, TIERS } from './buddy-rules.ts';
 
 const INK = '#1E1B24', GOLD_OUT = '#7A4A00';
 const fnv = (s: string) => { let h = 0x811c9dc5; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 0x01000193) >>> 0; } return h.toString(36); };
@@ -49,5 +49,32 @@ describe('buddy art', () => {
     expect(buddyFor(null, 'cs')).toBe('cs');
     expect(buddyFor({ buddy: 'pilot' }, 'law')).toBe('pilot');
     expect(buddyFor({ buddy: 'dragon' }, 'nope')).toBe('med');
+  });
+});
+
+describe('the custom buddy, backgrounds and frames', () => {
+  const PIC = { palette: ['#e8913f', '#2e4a2a'], rows: ['.00.', '0110', '0000', '.00.'] };
+  it('draws a saved picture at every tier and mood inside 32 × 32, growing with the rank', () => {
+    const size = (g: Grid) => count(g, (c) => c === '#e8913f' || c === '#2e4a2a');
+    for (let t = 0; t < 7; t++) for (const m of MOODS) for (const f of [0, 1] as const) {
+      const g = sprite('custom', t, m, f, PIC);
+      expect(g).toHaveLength(N);
+      expect(g.every((row) => row.length === N)).toBe(true);
+      expect(count(g, (c) => c === INK || c === GOLD_OUT)).toBeGreaterThan(10);
+    }
+    expect(size(sprite('custom', 0, 'happy', 0, PIC))).toBe(0);                 /* still an egg */
+    expect(size(sprite('custom', 5, 'happy', 0, PIC))).toBeGreaterThan(size(sprite('custom', 2, 'happy', 0, PIC)));
+    expect(customGrid(PIC)[1]).toEqual(['#e8913f', '#2e4a2a', '#2e4a2a', '#e8913f']);
+    expect(shownFor({ buddy: 'custom' }, 'law', PIC)).toBe('custom');
+    expect(shownFor({ buddy: 'custom' }, 'law', null)).toBe('law');
+    expect(rankName('custom', 4)).toBe('Scholar');
+  });
+  it('has a full background for every background in the shop, and a frame for every frame', () => {
+    for (const c of COSMETICS) {
+      if (c.kind === 'bg') { const g = backdrop(c.sku)!; expect(g).toHaveLength(N); expect(g.flat().every(Boolean)).toBe(true); }
+      else { const g = framed(sprite('med', 3, 'happy'), c.sku); expect(g).toHaveLength(N + 2 * FRAME_W); expect(g[0].every(Boolean)).toBe(true); }
+    }
+    expect(backdrop('none')).toBeNull();
+    expect(framed(sprite('med', 3, 'happy'), 'none')).toHaveLength(N);
   });
 });

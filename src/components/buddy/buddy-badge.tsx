@@ -3,7 +3,7 @@
 
 import { cn } from "@/lib/utils"
 import { TextureButton } from "@/components/ui/texture-button"
-import { BUDDIES, buddyFor } from "@/core/buddy-art"
+import { buddyName, shownFor } from "@/core/buddy-art"
 import { TIERS } from "@/core/buddy-rules"
 import { activeBuddy, useBuddy } from "@/data/buddy"
 import { useMaintenance } from "@/data/maintenance"
@@ -16,8 +16,8 @@ export function BuddyBadge() {
     const bg = useProfile()?.bg ?? "med"
     const blocked = useMaintenance("buddy") === "blocked"
     if (!b || blocked) return null
-    const who = buddyFor(b.look, bg)
-    const name = b.look.name || BUDDIES[who].name
+    const who = shownFor(b.look, bg, b.custom)
+    const name = b.look.name || buddyName(who)
     const tier = Math.max(0, TIERS.findIndex((t) => t.id === b.tier))
     const toClaim = b.tiers.some((t) => t.reached && !t.claimed)
     return (
@@ -25,7 +25,7 @@ export function BuddyBadge() {
             aria-label={`${name}: ${b.coins.toLocaleString()} coins${toClaim ? ", a rank to claim" : ""}`}
             title={toClaim ? "A rank to claim" : name}
             className={cn("gap-1.5 pl-1", toClaim && "motion-safe:animate-pulse")}>
-            <BuddySprite buddy={who} tier={tier} mood={b.mood} scale={1} label="" />
+            <BuddySprite buddy={who} tier={tier} mood={b.mood} scale={1} label="" custom={b.custom} />
             <span className="font-mono text-[12px] tabular-nums">{b.coins.toLocaleString()}</span>
         </TextureButton>
     )
