@@ -1,16 +1,16 @@
 # Study Buddy — Spec
 
-2026-10-14 · George · Revised 2026-11-02 (OpenRouter removed; Use your own AI, Sign in with ChatGPT, connector; checked against main at `3aaeaae`; the plant became a study buddy) · Companion design: [2026-10-14-study-buddy-design.md](2026-10-14-study-buddy-design.md)
+2026-10-14 · George · Revised 2026-11-02 (OpenRouter removed; Use your own AI, Sign in with ChatGPT, connector; checked against main at `3aaeaae`; the plant became a study buddy; the seven decisions in #35 written in) · Companion design: [2026-10-14-study-buddy-design.md](2026-10-14-study-buddy-design.md)
 
 ## 1. Scope and conventions
 
 This spec defines what to build for Study Buddy in eight stages (the eighth optional). The why, the economy reasoning and the alternatives are in the design doc.
 
-- **Numbers** live in one file per side: `worker/buddy-rules.js` (authoritative) and `src/core/buddy-rules.ts` (display only, checked against the same table in tests). Changing a value changes one place.
+- **Numbers** live in one file, `src/core/buddy-rules.ts`, imported by the Worker (as `worker/db.js` imports `src/core/shared.ts`) and by the app. Changing a value changes one place.
 - **Ids and times** follow the tracker: text ids ≤ 24 chars, times in ms since epoch, days as the viewer's local `YYYY-MM-DD` sent by the browser and checked by the Worker (±1 day, like the leaderboard's week start).
 - **Personal rows** follow `marks`: `user_id` + text `id`, `revision`, `deleted_at` tombstones, changes written to the user's `u:` feed.
 - **Errors** follow `worker/http.js`: `HttpError(status, {error, ...})`; new codes are listed under API.
-- **Gameplay off** means the Buddy API answers `{enabled: false}` and nothing is awarded. XP, coins and health count only activity after `users.buddy_since`, set the first time gameplay is turned on (no back-pay). Coins are written only while gameplay is on. XP and health are worked out from all activity since `buddy_since`, so turning gameplay off and on again never shrinks the plant.
+- **Gameplay off** means the Buddy API answers `{enabled: false}` and nothing is awarded. XP, coins and health count only activity after `buddy_settings.since`, set the first time gameplay is turned on (no back-pay). Coins are written only while gameplay is on, and nothing finished while it was off pays later. XP from timed study and health are worked out from all activity since `since`, so turning gameplay off and on again never takes XP away.
 - **Names in the app:** the tab is "Buddy" and the Settings toggle is "Gameplay"; study tools keep plain names (Cards, Quiz, Notes & plan). "Study Buddy" is only the project name. The two ways to generate are "Generate here" (Workers AI) and "Use your own AI" (copy and paste).
 - **Shared AI code:** prompts and answer rules live in `src/core/study-prompts.ts` and `src/core/study-answers.ts`, imported by the browser and by `worker/study-ai.js` (as the Worker imports `src/core/grades.ts`), so a pasted answer and a model answer meet the same limits.
 - **Maintenance:** `buddy` and `studyai` are added to `FEATURES` and the route map in `worker/maintenance.js`, and to `src/core/maintenance.ts`.
@@ -20,18 +20,23 @@ This spec defines what to build for Study Buddy in eight stages (the eighth opti
 
 ## 2. Data model
 
-Seven migrations (`0010`–`0016`: Stages 1–3, 5–8; Stage 4 has none) add six user columns, nine tables, a rebuilt `activity` table and, with the optional connector, three OAuth tables. `0001`–`0009` are already taken. Study content (decks, cards, quizzes, docs) carries a `scope` like `items` does: `u:<user>` when personal, `c:<space>` when shared with a class. Each person's review progress is always personal, so one shared deck serves the whole class.
+Seven migrations (`0010`–`0016`: Stages 1–3, 5–8; Stage 4 has none) add a `buddy_settings` table, nine more tables, a rebuilt `activity` table and, with the optional connector, three OAuth tables. `0001`–`0009` are already taken. Study content (decks, cards, quizzes, docs) carries a `scope` like `items` does: `u:<user>` when personal, `c:<space>` when shared with a class. Each person's review progress is always personal, so one shared deck serves the whole class.
 
-**`users` columns**
+**`buddy_settings`** (one row per person who has turned gameplay on; not on `users`, so the toggle stays out of the profile's revision and out of `scripts/lib/move-db.js`'s users list)
 
 | Column | Stage | Type | Rule |
 | --- | --- | --- | --- |
-| `gameplay` | 1 | INTEGER 0/1 | Default 0 |
-| `buddy_since` | 1 | INTEGER ms, NULL | Set once, the first time `gameplay` becomes 1 |
-| `buddy_look` | 1 | TEXT JSON | `{buddy, bg, name}`: `buddy` is `auto` (follows the profile's theme), a theme id or `custom` (only once one is saved); `bg` an owned id; `name` ≤ 16 chars or empty for the buddy's own. Default `{"buddy":"auto","bg":"none","name":""}` |
-| `buddy_custom` | 2 | TEXT JSON, NULL | The custom buddy: `{palette: [hex] 1–16, rows: [string] n of n chars, n 4–24}`, each char a palette index `0`–`f` or `.` for empty; at most 1 KB. Never the uploaded file |
-| `buddy_xp_bonus` | 1 | INTEGER ≥ 0 | Default 0; admin-granted XP for testing, added to derived XP |
+| `enabled` | 1 | INTEGER 0/1 | Default 0 |
+| `since` | 1 | INTEGER ms, NULL | Set once, the first time `enabled` becomes 1 |
+| `on_at` | 1 | INTEGER ms, NULL | The latest time it became 1; events before it never pay |
+| `reconciled_at` | 1 | INTEGER ms | The last time the Worker looked for new awards; a finish is dated no earlier than this |
+| `tz` | 1 | TEXT | The browser's IANA zone, checked with `validTz` (`worker/push.js`); days are counted in it. Default `UTC` |
+| `look` | 1 | TEXT JSON | `{buddy, bg, name}`: `buddy` is `auto` (follows the profile's theme), a theme id or `custom` (only once one is saved); `bg` an owned id; `name` ≤ 16 chars or empty for the buddy's own. Default `{"buddy":"auto","bg":"none","name":""}` |
+| `xp_bonus` | 1 | INTEGER ≥ 0 | Default 0; admin-granted XP for testing, added to derived XP |
+| `custom` | 2 | TEXT JSON, NULL | The custom buddy: `{palette: [hex] 1–16, rows: [string] n of n chars, n 4–24}`, each char a palette index `0`–`f` or `.` for empty; at most 1 KB. Never the uploaded file |
 | `cards_in_feed` | 3 | INTEGER 0/1 | Default 0; adds daily "Flashcards: N due" events to the calendar feed |
+
+Migration `0010` also rebuilds `admin_log` so its `action` CHECK allows `grant`.
 
 **Tables**
 
@@ -61,16 +66,16 @@ Two new route groups (three with the Stage 8 connector) plus additions to rows, 
 
 | Stage | Method + path | Body | Answer |
 | --- | --- | --- | --- |
-| 1 | `PUT /api/me` (existing) | `{gameplay: true\|false, cardsInFeed?: bool}` | Profile; sets `buddy_since` on first true |
+| 1 | `PUT /api/buddy/settings` | `{enabled: bool, tz: string, cardsInFeed?: bool}` (`cardsInFeed` from Stage 3) | Buddy state; the first `enabled: true` sets `since`, each one sets `on_at` and `reconciled_at`; a bad `tz` keeps the stored one |
 | 1 | `GET /api/buddy?day=YYYY-MM-DD` | — | `{enabled, xp, tier, next: {tier, xp}, health, mood, streak, coins, look, tiers: [{id, minXp, reward, reached, claimed}], recent: [{source, amount, at}] ×10, due}` |
 | 1 | `POST /api/buddy/claim` | `{tier}` | Buddy state; claiming twice pays once |
 | 1 | `PUT /api/buddy/look` | `{buddy?, bg?, name?}` | Buddy state; `custom` needs a saved custom buddy, `bg` must be owned (`not_owned`) |
-| 1 | `POST /api/admin/buddy/grant` | `{userId, coins?: 1–5000, xp?: 0–10000}` | Admin only; writes `admin:<at>` coins and/or sets `buddy_xp_bonus`; logged in `admin_log` |
+| 1 | `POST /api/admin/buddy/grant` | `{userId, coins?: 1–5000, xp?: 0–10000}` | Admin only; writes `admin:<at>` coins and/or sets `buddy_settings.xp_bonus`; logged in `admin_log` |
 | 2 | `GET /api/buddy/shop` | — | `{coins, items: [{sku, kind, level, max, cost, effect}]}` |
-| 2 | `PUT /api/buddy/custom` | `{palette, rows}` (made in the browser, §9) | Buddy state; checked against the `buddy_custom` rules, else 400 `invalid` |
+| 2 | `PUT /api/buddy/custom` | `{palette, rows}` (made in the browser, §9) | Buddy state; checked against the `buddy_settings.custom` rules, else 400 `invalid` |
 | 2 | `DELETE /api/buddy/custom` | — | Buddy state; a look of `custom` goes back to `auto` |
 | 2 | `POST /api/buddy/buy` | `{sku, level}` (the level being bought, guards double taps) | `{coins, item}` |
-| 3 | `PUT`/`DELETE /api/(decks\|cards\|card_state\|card_reviews)/<id>` | A row, as the existing `ROW` routes take | The stored row; coins and heal written in the same D1 batch |
+| 3 | `PUT`/`DELETE /api/(decks\|cards\|card_state\|card_reviews)/<id>` | A row, as the existing `ROW` routes take | The stored row; coins and heal follow on the next Buddy read (§4) |
 | 3 | `PUT`/`DELETE /api/spaces/<id>/(decks\|cards)/<id>` | A shared row, as the existing `SHARED_ROW` routes take | The stored row; permissions in §9 |
 | 3 | `GET /api/sync?v=4` | — | As v3, plus the new kinds |
 | 4 | `GET /api/study-ai/status?day=` | — | `{providers: ['workers'], left, extraLeft, globalOpen}`; `providers` gains `'chatgpt'` only if step 2 ships (§7.2) |
@@ -107,45 +112,46 @@ Two new route groups (three with the Stage 8 connector) plus additions to rows, 
 
 ## 4. Earning rules
 
-XP and health are worked out on every `GET /api/buddy` from synced rows. Coins are ledger rows written in the same D1 batch as the row write that carries the event (`putRow`, `putShared`, the marks status write). Values are the starting set from the design doc.
+XP and health are worked out on every `GET /api/buddy` from synced rows. Coins are ledger rows, and the same read writes them: `reconcile()` finds the events that have no ledger row yet and inserts them (`ON CONFLICT DO NOTHING`, keyed by source), so it is safe to run twice at once. No row-write route changes; sessions, items and marks reach D1 through `putRow`, `upsertMark`, `memberTaskWrite`, the importers and sync, and all of them are covered. The app reads the Buddy after each sync that carried a session, item or mark while gameplay is on. Values are the starting set from the design doc.
 
 **XP**
 
 ```
-XP = Σ over days ≥ buddy_since of min(240, timed minutes that day)
-   + 10 × first finishes
-   + buddy_xp_bonus
+XP = Σ over days ≥ since of min(240, timed minutes that day)
+   + 10 × paid first finishes still finished
+   + xp_bonus
 ```
 
-- Timed minutes: `study_sessions` with `manual = 0`, not deleted, `started_at ≥ buddy_since`, grouped by the viewer's local day.
-- First finish: an `items` row in the user's scope, or a `marks` row, in a finished status for its type with `completed_at ≥ buddy_since`. Finished = `done` or `graded` (exam, quiz), `submitted` or `graded` (assignment), `done` (lab, tutoring, office, task, project, custom types). Turning it back to `todo` removes the 10 XP until it is finished again.
-- Task, office, tutoring and custom-type finishes count at most 5 a day; exams, quizzes, assignments, labs and projects have no daily limit.
+- Timed minutes: `study_sessions` with `manual = 0`, not deleted, `started_at ≥ since`, and saved within 48 hours of starting (`created_at − started_at ≤ 48 h`; the Worker sets `created_at`), grouped by local day in `tz`. `manual` is set by the browser, so the 240-minute day is the real limit.
+- First finish: a personal `items` row (`u:` scope, not recurring), or a `marks` row on a class (`c:`) item, in a finished status: `done`, `submitted` or `graded`. It counts once it has a paid `item:` ledger row; turning it back to `todo` removes the 10 XP until it is finished again. Project (`p:`) tasks earn nothing for now.
+- A finish is dated by the Worker: its `completed_at`, clamped between `reconciled_at` and now, so it can't be backdated past the Worker's last look. A row whose `completed_at` is before `on_at` (finished while gameplay was off) never pays.
+- **Daily limits:** personal finishes of every type, exams included, share a limit of 5 a day. Lecture review tasks (`reviewId` ids `rv…` titled "Review n/4 · …", `src/core/reviews.ts`) have their own limit of 4 a day. Class finishes have no limit. A finish over a limit writes a 0-coin row, so it never pays later.
 - Tier = the highest tier with `minXp ≤ XP`. Claiming pays its reward once (`claim:<tier>`).
 
 **Coins (ledger)**
 
 | Event | Ledger source | Amount | Written when |
 | --- | --- | --- | --- |
-| Timed session lands | `session:<id>` | floor(counted minutes / 5) × (1 + 0.2 × Focus Engine level); counted = minutes left under the 240/day cap | First write of that session id; later edits do not change it |
-| Item finished | `item:<scope>:<id>` | 5 (15 for `exam`, `project`) + 2 × Finisher level | First move to a finished status; never again for that item; inside the 5-a-day limit for tasks, office, tutoring and custom types |
+| Timed session lands | `session:<id>` | floor(counted minutes / 5) × (1 + 0.2 × Focus Engine level); counted = minutes left under the 240/day cap | First read after the session lands; a room session written again with a larger total raises the amount, nothing lowers it |
+| Item finished | `item:<scope>:<id>` | 5 + 2 × Finisher level; a class `exam` or `project` pays 15 + 2 × Finisher level | First read after it is finished; never again for that item; 0 over the daily limit |
 | Cards reviewed | `cards:<day>` | min(10 + Card Foundry, floor(reviews that day / 10)) | Upserted on each review write |
 | Correct quiz answers | `quiz:<day>` | min(20 + 5 × Quiz Magnet, correct that day) | Upserted on each attempt write |
-| Grade ≥ 80 | `grade80:<scope>:<id>` | +10 | First grade save at 80+ |
-| Grade ≥ 90 | `grade90:<scope>:<id>` | +15 (25 in all with the 80 bonus) | First grade save at 90+ |
-| Streak day | `streak:<day>` | min(20, 2 × streak length) | The first write that makes the day count |
+| Grade ≥ 80 (class items) | `grade80:c:<space>:<id>` | +10 | First read after the mark's grade reaches 80 |
+| Grade ≥ 90 (class items) | `grade90:c:<space>:<id>` | +15 (25 in all with the 80 bonus) | First read after it reaches 90 |
+| Streak day | `streak:<day>` | min(20, 2 × streak length) | The first read after the day counts |
 | Classmate uses a shared deck or quiz | `use:<shared id>:<classmate id>` (on the author's ledger) | +1, at most 20 a day | Classmate's first card review in that deck, or first attempt on that quiz |
 | Tier claimed | `claim:<tier>` | Tier reward | Claim call |
 | Purchase | `buy:<sku>:<level>` (`buy:ai:<day>:<n>` for extra AI uses) | −cost | Buy call, only if balance ≥ cost in the same statement |
 | Admin grant | `admin:<at>` | 1–5000 | Admin call |
 
-- **Grade bonus:** an item's grade (or a mark's grade) pays once per threshold; lowering a grade takes nothing back. Written in the same batch as the grade write.
-- **Streak:** a day counts when it has 15+ timed minutes or 10+ card reviews. A day that does not count resets the streak to 0; it never touches health. `GET /api/buddy` returns `streak`.
+- **Grade bonus:** only a class item's grade (a mark's grade) pays, once per threshold; a personal item's grade pays nothing, since anyone can make those. Lowering a grade takes nothing back.
+- **Streak:** the Buddy's own rule, apart from the study streak (whose daily minimum each person sets): a day counts when it has 15+ timed minutes, or from Stage 3 10+ card reviews. A day that does not count resets the streak to 0; it never touches health. `GET /api/buddy` returns `streak`.
 - **Author reward:** nothing for the author's own use, for shared notes (opening them writes nothing), or while the author's gameplay is off.
 - **Balance** = sum of `amount`. Deleting a session does not take its coins back; this keeps the balance from going negative after a purchase.
 
 **Health**
 
-Start at 100 on the first day of the window (the later of `buddy_since` and 14 days ago), apply each day's events in time order, and clamp to 0–100 after each one.
+Start at 100 on the first day of the window (the later of `since` and 14 days ago), apply each day's events in time order, and clamp to 0–100 after each one.
 
 | Event (from rows) | Change |
 | --- | --- |
@@ -329,10 +335,10 @@ Eight stages, each on its own `buddy-N-<name>` branch; Stage 8 is optional. Coll
 
 **1 · Game core** (`0010`)
 
-- [ ] Gameplay toggle in Settings; `buddy_since` set once
+- [ ] Gameplay toggle in Settings; `buddy_settings.since` set once
 - [ ] `buddy` maintenance switch hides the Buddy page, badge and earning for non-admins
 - [ ] Timed session writes pay `session:<id>` coins; manual logs pay none; the 240 min/day cap holds across several sessions
-- [ ] Finishing an item pays once even after todo → done → todo → done; the sixth task finished in a day pays nothing; a cancelled tutoring session does not hurt the buddy's health
+- [ ] Finishing an item pays once even after todo → done → todo → done; the sixth personal finish in a day (exams included) pays nothing, lecture reviews pay up to 4 apart from that, class finishes have no limit; a session saved over 48 h after it began pays nothing; a cancelled tutoring session does not hurt the buddy's health
 - [ ] XP, tier and health match the formulas in worker tests (fixtures for missed items and idle days)
 - [ ] Buddy tab shows the buddy for the person's theme (or the one picked), XP bar, ranks; claim pays once
 - [ ] `buddy-art.ts`: every theme × tier × mood fits 32 × 32 with an outline, and matches its snapshot; the animation stops under reduced motion
@@ -343,10 +349,10 @@ Eight stages, each on its own `buddy-N-<name>` branch; Stage 8 is optional. Coll
 
 - [ ] Buying with too few coins fails with no ledger row; two quick taps buy one level
 - [ ] Upgrade effects change the next award amounts
-- [ ] A grade of 92 pays 25 once; editing it to 85 and back pays nothing more
+- [ ] A grade of 92 on a class item pays 25 once (a personal item's grade pays nothing); editing it to 85 and back pays nothing more
 - [ ] Backgrounds and frames equip and show behind the buddy
 - [ ] A custom buddy made from a PNG, a JPG and a photo with a plain background saves as a grid of at most 24 × 24 and shows at every rank and mood; the uploaded file is never sent
-- [ ] A bad `buddy_custom` (wrong size, unknown palette index, over 1 KB) gets 400; deleting it puts a `custom` look back to `auto`
+- [ ] A bad custom buddy (wrong size, unknown palette index, over 1 KB) gets 400; deleting it puts a `custom` look back to `auto`
 - [ ] A name up to 16 characters shows on the Buddy page and the badge's label
 
 **3 · Decks and spaced repetition** (`0012`)

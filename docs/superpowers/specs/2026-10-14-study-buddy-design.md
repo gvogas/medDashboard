@@ -59,7 +59,7 @@ The decisions from the 10/14 Q&A hold up, but the plan needed eight changes. The
 | 14 | Lecture reviews (`src/core/reviews.ts`) make "Review 1/4 …" tasks | They don't use up the 5-a-day task limit, since the app makes them; card reminders in the calendar say "Flashcards: N due" so the two never look alike |
 | 15 | OpenRouter Connect cost the app nothing, but made every user sign up with a third party, and took a third of Stage 4 | Removed. Bring your own AI is copy and paste now; Sign in with ChatGPT and a connector later (see below) |
 
-**Open from the 11/02 review** (decide before Stage 1): self-made exams and projects pay with no daily limit; `manual` and `completedAt` are set by the browser; project (`p:`) items are not covered; study-room sessions could be checked against the room's server clock. Listed under Rollout.
+**Decided 11/02 (#35):** the seven changes listed under Rollout › Settled 11/02. Still open for later: checking study-room sessions against the room's server clock.
 
 **Stage order.** Game core (toggle, ledger, Buddy page) comes first because it touches no AI. Decks and spaced repetition come before the AI gateway, so AI generation drops into a working deck. Quizzes need the gateway; notes and plans come next; shared class materials after that. The connector is last and optional.
 
@@ -185,9 +185,9 @@ Legend takes about 65 hours of timed study, roughly one busy semester. hacks rea
 
 Ranks 3 to 7 are named per theme (see The buddies).
 
-**Coins earned.** 1 coin per 5 timed minutes, 5 per finished item (15 for an exam or project; tasks and other self-made items at most 5 a day), 1 per 10 cards reviewed (max 10 a day), 1 per correct quiz answer (max 20 a day). Upgrades raise each rate. Cards and quizzes earn the same however they were made (by hand, Workers AI, pasted, or the connector).
+**Coins earned.** 1 coin per 5 timed minutes, 5 per finished item (personal items of every type at most 5 a day; lecture reviews up to 4 more; class items have no limit, and a class exam or project pays 15), 1 per 10 cards reviewed (max 10 a day), 1 per correct quiz answer (max 20 a day). Upgrades raise each rate. Cards and quizzes earn the same however they were made (by hand, Workers AI, pasted, or the connector).
 
-**Grade bonus.** A grade of 80% or more pays 10 coins, 90% or more pays 25, once per item. Lowering the grade later takes nothing back.
+**Grade bonus.** On a class item, a grade of 80% or more pays 10 coins, 90% or more pays 25, once per item; a personal item's grade pays nothing. Lowering the grade later takes nothing back.
 
 **Streak.** A day with 15+ timed minutes or 10+ card reviews extends the streak and pays 2 coins per streak day, at most 20. Missing a day resets it and never hurts the buddy.
 
@@ -260,13 +260,17 @@ Eight stages, each its own branch (`buddy-N-<name>`), merged and released before
 
 - The plant is replaced by a study buddy: one per theme with rank names and gear, plus a custom buddy from an uploaded picture. The feature is called Buddy in the app.
 - OpenRouter Connect removed. Bring your own AI is copy and paste (Stage 4), then Sign in with ChatGPT if accepted, then the optional connector (Stage 8).
+- The seven changes from the spec, all accepted (#35):
+  1. Settings live in a `buddy_settings` table, not `users` columns; the toggle is `PUT /api/buddy/settings`.
+  2. Coins are worked out when the Buddy is read (`reconcile()`), not in each row write.
+  3. One rules file, `src/core/buddy-rules.ts`, for the Worker and the app.
+  4. Limits: 5 paying personal finishes a day, exams included (5 coins each); class items unlimited, class exams 15; lecture reviews 4 a day apart from that; a finish can't be dated before the Worker's last look; a session counts only if saved within 48 h of starting; room sessions written again can raise their coins, never lower them. Grade bonuses pay on class items only.
+  5. Project (`p:`) tasks earn nothing for now.
+  6. The Buddy keeps its own streak rule (15 timed minutes; card reviews from Stage 3), apart from the study streak.
+  7. `admin_log` is rebuilt in `0010` to allow `grant`.
 
 **Open**
 
 - [ ] Neurons per generation: measure a 20-card run on Workers AI before fixing the per-user cap (planned: 3 a day).
 - [ ] Apply for Sign in with ChatGPT; design the `chatgpt` provider only after acceptance.
-- [ ] Self-made exams and projects pay 15 coins and grade bonuses with no daily limit. Cap all `u:` items instead, and pay grade bonuses only on class items?
-- [ ] `manual` and `completedAt` are set by the browser. Accept that the 240 min/day cap is the real guard, and use the ledger row's server time (not `completed_at`) for the `buddy_since` check?
-- [ ] Project (`p:`) items: does finishing a project task pay, and to whom (the assignee)?
-- [ ] Study-room sessions: check them against the room's server clock (`worker/rooms.js` `studyAt`), and is there a small group-study bonus?
-- [ ] Two streaks: reuse the existing study streak rule (`studyPrefs`: goal, rest days) plus card reviews, instead of a separate Buddy rule?
+- [ ] Later: check study-room sessions against the room's server clock (`worker/rooms.js` `studyAt`), and is there a small group-study bonus?

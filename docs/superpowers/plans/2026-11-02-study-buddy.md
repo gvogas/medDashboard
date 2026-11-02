@@ -39,9 +39,9 @@
 
 Each stage brings its own migration, so later tables are designed against the code the earlier stages leave, as Study together did.
 
-## Changes from the spec (made here; Stage 1's docs task writes them into the spec)
+## Changes from the spec (all accepted in #35, 2026-11-02, and written into the spec and design doc)
 
-The spec was written against the 10/14 code. Reading today's write paths changed seven things. George: confirm or overrule each one before Task 1.
+The spec was written against the 10/14 code. Reading today's write paths changed seven things. George accepted all seven, so Task 1 can start.
 
 1. **Settings live in a `buddy_settings` table, not on `users`.** This follows `friend_settings`. It keeps the toggle out of the profile's `revision`, so turning gameplay on can't conflict with a Settings edit on another device, and it leaves `scripts/lib/move-db.js`'s `users` column list alone. The toggle is `PUT /api/buddy/settings`, not `PUT /api/me`. the `users.buddy_*` columns and `PUT /api/me {gameplay}` are dropped from spec §2/§3. (`cards_in_feed` moves here too in Stage 3.)
 2. **The Worker works out awards when the Buddy page is read, not in each row write's batch.** Spec §4 says coins are written "in the same D1 batch as the row write". But a session, an item or a mark reaches D1 through `putRow`, `upsertMark`, `memberTaskWrite`, the importers and every sync push. Hooking all of them puts game code on the hot path for everyone, including people with gameplay off. Instead, `reconcile()` runs inside `GET /api/buddy`. It reads the live rows and inserts the missing ledger rows (`INSERT … ON CONFLICT DO NOTHING`, keyed by source), so it is idempotent and safe to run concurrently. The client reads the Buddy page after each push of a session, item or mark while gameplay is on, so awards arrive within a sync.
@@ -62,7 +62,7 @@ Smaller points: health skips recurring items (`recur IS NOT NULL`: one status, m
 - `POST /api/buddy/buy {sku, level}`: one statement inserts `buy:<sku>:<level>` only `WHERE` the balance ≥ cost and the level is the next one (`not_enough_coins`, `stale_level`). Focus Engine scales `session:` amounts in `reconcile()`; Finisher scales `item:`.
 - Grade bonus: `grade80:` and `grade90:` rows in `reconcile()` for **class** items only (change 4); a personal grade earns nothing.
 - Backgrounds and frames: `look.bg` must be an owned sku, drawn behind the buddy by `buddy-sprite.tsx`.
-- Custom buddy: `buddy_settings.custom` (TEXT JSON, NULL) in `0011`, with the spec §2 `buddy_custom` rules checked in `worker/buddy.js` (palette 1–16 hex colours, `n` rows of `n` chars, `n` 4–24, each char `0`–`f` or `.`, at most 1 KB). `PUT`/`DELETE /api/buddy/custom`; a `custom` look needs a saved one.
+- Custom buddy: `buddy_settings.custom` (TEXT JSON, NULL) in `0011`, with the spec §2 `buddy_settings.custom` rules checked in `worker/buddy.js` (palette 1–16 hex colours, `n` rows of `n` chars, `n` 4–24, each char `0`–`f` or `.`, at most 1 KB). `PUT`/`DELETE /api/buddy/custom`; a `custom` look needs a saved one.
 - `src/core/pixelate.ts` (ported from `downscale` and `pixelate` in `design/study-buddies-prototype.html`): halving downscale, background flood from the commonest edge colour, k-means to 3–16 colours, crop to the shape on the bottom row. Tests on small fixture images: a red square on white loses the white; a transparent PNG keeps its alpha; 3 colours give at most 3 palette entries; a blank picture returns null.
 - Buddy page › Custom: upload, drop or paste; picture and pixel version side by side; Detail, Colours, Remove the background; the three error messages from spec §9; Save sends only the grid. `look.name` (≤ 16) for any buddy.
 
@@ -561,12 +561,7 @@ Fill in the four sketched tests in the same style before Step 3. Each one is an 
 
 ### Task 12: Docs, checks, ship
 
-- [ ] **Spec and design:** write in the changes above.
-  - Spec §2: `buddy_settings` replaces the four `users` columns, and the ledger CHECK allows 0.
-  - Spec §3: `PUT /api/buddy/settings` replaces `PUT /api/me {gameplay}`.
-  - Spec §4: reconcile on read; the finish limits, the finish day and the 48 h rule.
-  - Spec §1: one rules file.
-  - Design doc Open list: tick the defaults George confirmed.
+- [ ] **Spec and design:** the seven changes are already written in (#35). Update them only if building Stage 1 changes a detail.
 - [ ] **`docs/DATA-MODEL.md`:** the two tables and the `admin_log` change. **`docs/PROJECT-OVERVIEW.md`:** one line on the Buddy page.
 - [ ] `npm run check` passes.
 - [ ] By hand on `npm run dev`:
