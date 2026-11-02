@@ -260,7 +260,7 @@ export interface BuddyState {
   cardsInFeed?: boolean;
 }
 /** GET /api/buddy/shop: each item with your level and the next level's cost (null at the top). */
-export interface ShopItem { sku: string; kind: 'upgrade' | 'bg' | 'frame'; name: string; effect: string; level: number; max: number; cost: number | null }
+export interface ShopItem { sku: string; kind: 'upgrade' | 'bg' | 'frame' | 'ai'; name: string; effect: string; level: number; max: number; cost: number | null }
 export interface Shop { coins: number; items: ShopItem[] }
 export type BuddyAnswer = BuddyState | { enabled: false };
 /** GET /api/inbox: your pending invites, the newest rows, and where you have read up to. */

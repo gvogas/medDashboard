@@ -99,6 +99,12 @@ export function fakeAi(mode = 'ok') {
           blocks: blocks.map((_, i) => ({ n: i + 1, code: 'TST ' + (100 + i), name: 'Block ' + (i + 1), room: 'Classroom R-' + (i + 1), kind: '' })) }, usage };
       }
       if (/llama-4-scout/.test(model)) return { response: schedule(''), usage, tool_calls: [] };
+      /* flashcards (Study Buddy, Generate here): as many as asked, about the topic or the first words of the material */
+      if (/flashcards/i.test(system)) {
+        const n = Number((system.match(/exactly (\d+) flashcards/) || [])[1]) || 10;
+        const about = ((text.match(/Topic: (.+)/) || [])[1] || 'the material').trim();
+        return chat({ cards: Array.from({ length: n }, (_, i) => ({ front: `${about}: question ${i + 1}?`, back: `Answer ${i + 1} about ${about}, from the fake AI.` })) });
+      }
       if (/academic calendar/i.test(system)) return chat(calendar(today));
       if (/class schedule/i.test(system)) return chat(schedule(text));
       return chat(outline(text, today));

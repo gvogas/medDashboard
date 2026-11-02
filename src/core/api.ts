@@ -234,7 +234,7 @@ async function buddyOf(response: Promise<unknown>): Promise<BuddyAnswer> {
   if (!ok) throw invalidResponse();
   return b as BuddyAnswer;
 }
-const SHOP_KINDS = ['upgrade', 'bg', 'frame'];
+const SHOP_KINDS = ['upgrade', 'bg', 'frame', 'ai'];
 const shopItemOk = (i: any) => !!i && typeof i.sku === 'string' && SHOP_KINDS.includes(i.kind) && typeof i.name === 'string' && typeof i.effect === 'string'
   && count(i.level) && count(i.max) && i.level <= i.max && (i.cost === null || count(i.cost));
 async function shopOf(response: Promise<unknown>): Promise<Shop> {

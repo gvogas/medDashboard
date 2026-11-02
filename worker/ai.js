@@ -184,23 +184,26 @@ function cutOff(out, input) {
  * retry is part of the same read (no second claim) and of its one deadline, `timeoutMs`
  * (the browser gives up at 120 s). No retry when less than `minRetryMs` is left, or when the
  * answer was cut off at max_tokens (the retry would be too). JSON that `clean` finds empty is
- * not retried: the same document would give the same answer at the same cost.
+ * not retried: the same document would give the same answer at the same cost. `onUsage` hears
+ * each call's token usage.
  */
-export async function askJson(ai, model, input, clean, what = 'ai', { timeoutMs = TIMEOUT_MS, minRetryMs = MIN_RETRY_MS } = {}) {
+export async function askJson(ai, model, input, clean, what = 'ai', { timeoutMs = TIMEOUT_MS, minRetryMs = MIN_RETRY_MS, onUsage = null } = {}) {
   const start = Date.now();
-  const out = await runModel(ai, model, input, what, timeoutMs);
+  /* each call's tokens, for a caller that counts them (study-ai.js's neuron estimate) */
+  const counted = (o) => { if (onUsage && o?.usage) onUsage(o.usage); return o; };
+  const out = counted(await runModel(ai, model, input, what, timeoutMs));
   const answer = reply(out);
   if (modelJson(answer)) return cleaned(clean, answer, model);
   const left = timeoutMs - (Date.now() - start);
   if (left < minRetryMs || cutOff(out, input)) return cleaned(clean, answer, model);
   const text = modelAnswer(answer);
   const said = typeof text === 'string' ? text : JSON.stringify(text ?? null);
-  const again = reply(await runModel(ai, model, {
+  const again = reply(counted(await runModel(ai, model, {
     ...input,
     messages: [...input.messages,
       { role: 'assistant', content: said.slice(0, 2000) },
       { role: 'user', content: 'That was not one valid JSON object. Answer again with only the JSON object, nothing else.' }],
-  }, what + ' retry', left));
+  }, what + ' retry', left)));
   return cleaned(clean, again, model);
 }
 
