@@ -1,0 +1,690 @@
+<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<!-- Study Buddies prototype (2026-11-02): the reference for src/core/buddy-art.ts and src/core/pixelate.ts. Open in a browser; published at https://claude.ai/artifact/47NgghHfTzh7rrXCG8QXME -->
+<title>Study Buddies</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&family=Pixelify+Sans:wght@500;600&display=swap">
+<style>
+/* Layout: a creature roster. Controls on top, one band per theme with its seven ranks in a row,
+   and a detail card for the picked buddy. The app's own neutrals (Ward Board palette) and fonts;
+   a pixel face for headings only, to match the sprites. */
+:root{
+  --bg:#F6F5F1; --panel:#FFFFFF; --ink:#1C1C1A; --ink-2:#55534E; --ink-3:#6E6B64; --line:#E6E3DC;
+  --focus:#0F5F58; --gold:#9A6A00;
+  --med-soft:#EEF5F3; --med-acc:#0F5F58;
+  --cs-soft:#EFF2FA; --cs-acc:#2B4FA8;
+  --law-soft:#F7F0EF; --law-acc:#7A2E2E;
+  --pilot-soft:#F0F3F7; --pilot-acc:#1F3A5F;
+  --sports-soft:#EEF5EF; --sports-acc:#2F6B3A;
+  --eng-soft:#F0F2F4; --eng-acc:#3F4E5E;
+  --custom-soft:#F3F0F8; --custom-acc:#6A4FA8;
+  --f-display:"Pixelify Sans", "IBM Plex Mono", ui-monospace, monospace;
+  --f-body:"IBM Plex Sans", system-ui, sans-serif;
+  --f-mono:"IBM Plex Mono", ui-monospace, monospace;
+}
+@media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){
+  --bg:#121312; --panel:#1B1C1A; --ink:#ECEAE4; --ink-2:#B9B6AE; --ink-3:#9A978F; --line:#2E2F2B; --focus:#5CC2B6; --gold:#E2B33C;
+  --med-soft:#16302D; --med-acc:#5CC2B6; --cs-soft:#1B2340; --cs-acc:#8EA2F0; --law-soft:#341919; --law-acc:#D98C8C;
+  --pilot-soft:#1A212B; --pilot-acc:#8CADD9; --sports-soft:#19341E; --sports-acc:#8CD99A; --eng-soft:#192634; --eng-acc:#8CB1D9; --custom-soft:#241E31; --custom-acc:#B9A3E8;
+  color-scheme:dark;
+}}
+:root[data-theme="dark"]{
+  --bg:#121312; --panel:#1B1C1A; --ink:#ECEAE4; --ink-2:#B9B6AE; --ink-3:#9A978F; --line:#2E2F2B; --focus:#5CC2B6; --gold:#E2B33C;
+  --med-soft:#16302D; --med-acc:#5CC2B6; --cs-soft:#1B2340; --cs-acc:#8EA2F0; --law-soft:#341919; --law-acc:#D98C8C;
+  --pilot-soft:#1A212B; --pilot-acc:#8CADD9; --sports-soft:#19341E; --sports-acc:#8CD99A; --eng-soft:#192634; --eng-acc:#8CB1D9; --custom-soft:#241E31; --custom-acc:#B9A3E8;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:15px;line-height:1.5;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:28px 56px}
+.wrap{max-width:1180px;margin:0 auto;display:flex;flex-direction:column;gap:28px}
+header{display:flex;flex-direction:column;gap:8px}
+h1{font-family:var(--f-display);font-weight:600;font-size:36px;line-height:1.1;margin:0;letter-spacing:.01em;text-wrap:balance}
+.lede{margin:0;color:var(--ink-2);max-width:70ch}
+.controls{display:flex;flex-wrap:wrap;gap:16px 28px;align-items:flex-end}
+.group{display:flex;flex-direction:column;gap:6px}
+.label{font-family:var(--f-mono);font-size:11.5px;text-transform:uppercase;letter-spacing:.08em;color:var(--ink-3)}
+.seg{display:flex;flex-wrap:wrap;gap:4px;background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:3px}
+.seg button{font:500 13.5px/1 var(--f-body);color:var(--ink-2);background:transparent;border:0;border-radius:6px;padding:8px 11px;cursor:pointer;display:flex;gap:6px;align-items:baseline}
+.seg button small{font-family:var(--f-mono);font-size:11px;color:var(--ink-3)}
+.seg button[aria-pressed="true"]{background:var(--ink);color:var(--bg)}
+.seg button[aria-pressed="true"] small{color:var(--bg);opacity:.75}
+button:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
+.layout{display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:28px;align-items:start}
+@media (max-width:980px){.layout{grid-template-columns:minmax(0,1fr)}}
+.themes{display:flex;flex-direction:column;gap:22px;min-width:0}
+.theme{display:flex;flex-direction:column;gap:10px}
+.theme-head{display:flex;flex-wrap:wrap;gap:4px 12px;align-items:baseline}
+.theme-head h2{margin:0;font-size:17px;font-weight:600}
+.theme-head p{margin:0;color:var(--ink-3);font-size:13.5px}
+.row{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:8px}
+@media (max-width:640px){.row{grid-template-columns:repeat(4,minmax(0,1fr))}}
+.tile{background:var(--t-soft);border:1px solid transparent;border-radius:10px;padding:8px 6px 7px;display:flex;flex-direction:column;align-items:center;gap:3px;cursor:pointer;color:var(--ink);font:inherit;min-width:0;text-align:center}
+.tile[aria-pressed="true"]{border-color:var(--t-acc);box-shadow:inset 0 0 0 1px var(--t-acc)}
+.tile canvas{width:100%;max-width:96px;height:auto;aspect-ratio:1;image-rendering:pixelated}
+.tile .t{font-size:12px;font-weight:600;line-height:1.2}
+.tile .x{font-family:var(--f-mono);font-size:11px;color:var(--ink-3);font-variant-numeric:tabular-nums}
+.tile.legend .t{color:var(--gold)}
+.t-med{--t-soft:var(--med-soft);--t-acc:var(--med-acc)} .t-cs{--t-soft:var(--cs-soft);--t-acc:var(--cs-acc)}
+.t-law{--t-soft:var(--law-soft);--t-acc:var(--law-acc)} .t-pilot{--t-soft:var(--pilot-soft);--t-acc:var(--pilot-acc)}
+.t-sports{--t-soft:var(--sports-soft);--t-acc:var(--sports-acc)} .t-eng{--t-soft:var(--eng-soft);--t-acc:var(--eng-acc)}
+.t-custom{--t-soft:var(--custom-soft);--t-acc:var(--custom-acc)}
+aside{position:sticky;top:calc(env(safe-area-inset-top,0px) + 16px);background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px;display:flex;flex-direction:column;gap:14px;min-width:0}
+@media (max-width:980px){aside{position:static}}
+aside h3{margin:0;font-family:var(--f-display);font-weight:600;font-size:22px;line-height:1.15}
+aside .sub{margin:2px 0 0;color:var(--ink-3);font-size:13px}
+.stage{background:var(--t-soft);border-radius:10px;display:flex;justify-content:center;padding:10px}
+.stage canvas{width:100%;max-width:256px;height:auto;aspect-ratio:1;image-rendering:pixelated}
+.moods{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px}
+.moods figure{margin:0;background:var(--t-soft);border-radius:8px;padding:6px 4px;display:flex;flex-direction:column;align-items:center;gap:2px}
+.moods canvas{width:100%;max-width:64px;height:auto;aspect-ratio:1;image-rendering:pixelated}
+.moods figcaption{font-size:11.5px;color:var(--ink-2)}
+.block{display:flex;flex-direction:column;gap:8px}
+.badge{align-self:flex-start;display:flex;align-items:center;gap:8px;border:1px solid var(--line);border-radius:999px;padding:3px 12px 3px 4px;background:var(--bg)}
+.badge canvas{width:32px;height:32px;image-rendering:pixelated}
+.badge span{font-family:var(--f-mono);font-size:13px;font-variant-numeric:tabular-nums}
+.gear{margin:0;display:grid;grid-template-columns:auto minmax(0,1fr);gap:4px 12px;font-size:13.5px}
+.gear dt{font-family:var(--f-mono);font-size:11.5px;color:var(--ink-3);text-transform:uppercase;letter-spacing:.06em;padding-top:2px}
+.gear dd{margin:0;color:var(--ink-2)}
+.motion{display:flex;align-items:center;gap:8px;font-size:13.5px;color:var(--ink-2)}
+.motion input{accent-color:var(--focus);width:16px;height:16px}
+@media (prefers-reduced-motion:no-preference){.tile{transition:transform .12s ease}.tile:hover{transform:translateY(-2px)}}
+.col{display:flex;flex-direction:column;gap:22px;min-width:0}
+.cust{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,1fr);gap:12px;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px}
+@media (max-width:640px){.cust{grid-template-columns:minmax(0,1fr)}}
+.drop{display:flex;gap:12px;align-items:center;border:1.5px dashed var(--t-acc);border-radius:10px;padding:10px;cursor:pointer;background:var(--t-soft);min-width:0}
+.drop.over{border-style:solid;box-shadow:inset 0 0 0 2px var(--t-acc)}
+.drop:focus-within{outline:2px solid var(--focus);outline-offset:2px}
+.pics{display:flex;gap:6px;flex:none}
+.pics figure{margin:0;display:flex;flex-direction:column;align-items:center;gap:2px}
+.pics canvas{width:72px;height:72px;border-radius:6px;background:var(--panel);image-rendering:pixelated}
+.pics figcaption{font-size:11px;color:var(--ink-3)}
+.drop .msg{font-size:13.5px;color:var(--ink-2);min-width:0}
+.drop .msg strong{color:var(--t-acc);font-weight:600}
+.sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+.opts{display:grid;grid-template-columns:auto minmax(0,1fr);gap:8px 12px;align-items:center;font-size:13.5px;min-width:0}
+.opts label{color:var(--ink-2)}
+.opts output{font-family:var(--f-mono);font-size:11.5px;color:var(--ink-3);margin-left:4px}
+.opts input[type=text]{font:inherit;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:5px 8px;min-width:0;width:100%}
+.opts input[type=range]{accent-color:var(--t-acc);width:100%;min-width:0}
+.opts .check{grid-column:1 / -1;display:flex;gap:8px;align-items:center}
+.opts .check input{accent-color:var(--t-acc);width:16px;height:16px}
+.note{grid-column:1 / -1;margin:0;font-size:12.5px;color:var(--ink-3)}
+.note.err{color:#B3362B}
+</style>
+
+<div class="wrap">
+  <header>
+    <h1>Study Buddies</h1>
+    <p class="lede">A pixel creature for each Rounds theme. It hatches from an egg and evolves through seven ranks as you study, picking up its theme's gear as it grows. Its mood shows your health: happy when you keep up, tired, then sick, then bandaged when things slip. It never dies, and XP and coins are never lost. Or make your own: upload any picture and it becomes a custom buddy.</p>
+  </header>
+
+  <div class="controls">
+    <div class="group">
+      <span class="label" id="mood-label">Mood (health)</span>
+      <div class="seg" role="group" aria-labelledby="mood-label" id="moods"></div>
+    </div>
+    <div class="group">
+      <span class="label" id="theme-label">Theme</span>
+      <div class="seg" role="group" aria-labelledby="theme-label" id="filter"></div>
+    </div>
+    <label class="motion" for="anim"><input type="checkbox" id="anim" checked> Idle animation</label>
+  </div>
+
+  <div class="layout">
+    <div class="col">
+      <div class="themes" id="themes"></div>
+      <section class="theme t-custom" id="custom" aria-labelledby="h-custom">
+        <div class="theme-head"><h2 id="h-custom">Custom · <span id="cname-label">Mochi</span></h2><p>your own picture, turned into pixel art</p></div>
+        <div class="cust">
+          <label class="drop" id="drop" for="file">
+            <span class="pics">
+              <figure><canvas id="src-pic" width="72" height="72" role="img" aria-label="The picture"></canvas><figcaption>Picture</figcaption></figure>
+              <figure><canvas id="px-pic" width="72" height="72" role="img" aria-label="Its pixel version"></canvas><figcaption>Pixels</figcaption></figure>
+            </span>
+            <span class="msg"><strong>Upload a picture</strong>, drop one here, or paste one. PNG, JPG, GIF or WebP, up to 10&nbsp;MB. A pet, a doodle or a mascot with a clear shape works best.</span>
+            <input type="file" id="file" class="sr-only" accept="image/png,image/jpeg,image/gif,image/webp">
+          </label>
+          <div class="opts">
+            <label for="cname">Name</label><input type="text" id="cname" maxlength="16" value="Mochi" autocomplete="off">
+            <label for="csize">Detail<output id="csize-out" for="csize">24 px</output></label><input type="range" id="csize" min="12" max="24" step="2" value="24">
+            <label for="ccolors">Colours<output id="ccolors-out" for="ccolors">10</output></label><input type="range" id="ccolors" min="3" max="16" value="10">
+            <label class="check" for="cbg"><input type="checkbox" id="cbg" checked> Remove the background</label>
+            <p class="note" id="cnote">Showing an example picture. Upload your own to replace it; it never leaves this page.</p>
+          </div>
+        </div>
+        <div class="row" id="custom-row"></div>
+      </section>
+    </div>
+    <aside id="detail" aria-live="polite"></aside>
+  </div>
+</div>
+
+<script>
+(() => {
+const N = 32, INK = '#1E1B24', GOLD_OUT = '#7A4A00';
+const XP = [0, 120, 300, 700, 1400, 2500, 4000];
+const MOODS = [
+  { id: 'happy', label: 'Happy', range: '70–100' }, { id: 'tired', label: 'Tired', range: '40–69' },
+  { id: 'sick', label: 'Sick', range: '15–39' }, { id: 'hurt', label: 'Bandaged', range: '0–14' },
+];
+
+/* ── colour helpers ─────────────────────────────────────────── */
+const hex = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16));
+const toHex = (c) => '#' + c.map((v) => Math.max(0, Math.min(255, Math.round(v))).toString(16).padStart(2, '0')).join('');
+const mix = (a, b, t) => toHex(hex(a).map((v, i) => v + (hex(b)[i] - v) * t));
+const grey = (a) => { const [r, g, b] = hex(a); const l = 0.3 * r + 0.59 * g + 0.11 * b; return toHex([l, l, l]); };
+const moodTint = (c, mood) => mood === 'sick' ? mix(c, '#9EC46A', 0.38) : mood === 'hurt' ? mix(c, grey(c), 0.4) : mood === 'tired' ? mix(c, grey(c), 0.15) : c;
+
+/* ── the six buddies ─────────────────────────────────────────── */
+const THEMES = {
+  med: {
+    label: 'Medicine', name: 'Pip', kind: 'a mint blob in scrubs',
+    ranks: ['Egg', 'Hatchling', 'Pre-med', 'Med student', 'Intern', 'Resident', 'Chief of medicine'],
+    body: { l: '#C4F2E4', m: '#86DCC6', d: '#4FAE99' }, cape: '#0F5F58',
+    gear: { hat: 'Teal surgical cap, then a head mirror', item: 'Clipboard with a red cross', outfit: 'White coat and stethoscope' },
+    egg: (put, cx, cy) => { [[0, -1], [-1, 0], [0, 0], [1, 0], [0, 1]].forEach(([x, y]) => put(cx + x, cy + y, '#D2443A')); },
+  },
+  cs: {
+    label: 'Computer Science', name: 'Byte', kind: 'a periwinkle blob in a hoodie',
+    ranks: ['Egg', 'Hatchling', 'Script kiddie', 'Junior dev', 'Developer', 'Senior dev', '10x engineer'],
+    body: { l: '#CDD8FB', m: '#95ACF2', d: '#5F78C8' }, cape: '#2B4FA8',
+    gear: { hat: 'Over-ear headphones', item: 'Laptop, screen glowing', outfit: 'Navy hoodie with drawstrings' },
+    egg: (put, cx, cy) => { [-3, -1, 1, 3].forEach((x, i) => { put(cx + x, cy - 1, i % 2 ? '#3A63C9' : '#7BE0B0'); put(cx + x + (i % 2 ? -1 : 1), cy + 1, i % 2 ? '#7BE0B0' : '#3A63C9'); }); },
+  },
+  law: {
+    label: 'Law', name: 'Brief', kind: 'a rose blob in a barrister’s wig',
+    ranks: ['Egg', 'Hatchling', 'Pre-law', '1L', 'Associate', 'Partner', 'Supreme justice'],
+    body: { l: '#F7D2D2', m: '#E9A6A6', d: '#C27474' }, cape: '#7A2E2E',
+    gear: { hat: 'Curly white barrister’s wig', item: 'Gavel', outfit: 'Charcoal suit, white shirt, red tie' },
+    egg: (put, cx, cy) => { for (let x = -5; x <= 5; x++) { put(cx + x, cy, '#7A2E2E'); put(cx + x, cy + 1, '#C99A3A'); } },
+  },
+  pilot: {
+    label: 'Aviation', name: 'Jet', kind: 'a sky-blue blob in a flight cap',
+    ranks: ['Egg', 'Hatchling', 'Cadet', 'Student pilot', 'First officer', 'Captain', 'Ace'],
+    body: { l: '#CBE8FB', m: '#8FCBF1', d: '#5C9CC8' }, cape: '#1F3A5F',
+    gear: { hat: 'Leather flight cap with goggles', item: 'Paper plane', outfit: 'Leather flight jacket with a fur collar' },
+    egg: (put, cx, cy) => { for (let x = -4; x <= 4; x++) put(cx + x, cy, Math.abs(x) <= 1 ? '#E2B33C' : '#26476F'); [-3, -2, 2, 3].forEach((x) => put(cx + x, cy + 1, '#26476F')); },
+  },
+  sports: {
+    label: 'Sports', name: 'Rookie', kind: 'an orange blob in a jersey',
+    ranks: ['Egg', 'Hatchling', 'Benchwarmer', 'Rookie', 'Starter', 'All-star', 'MVP'],
+    body: { l: '#FCD0A4', m: '#F6A55E', d: '#D27A30' }, cape: '#2F6B3A',
+    gear: { hat: 'Red and white sweatband', item: 'Basketball', outfit: 'Green jersey, number 7' },
+    egg: (put, cx, cy) => { for (let y = -5; y <= 5; y++) put(cx, cy + y, '#B5651D'); for (let x = -4; x <= 4; x++) put(cx + x, cy, '#B5651D'); },
+  },
+  eng: {
+    label: 'Engineering', name: 'Bolt', kind: 'a yellow blob in a hard hat',
+    ranks: ['Egg', 'Hatchling', 'Apprentice', 'Technician', 'Engineer', 'Lead engineer', 'Chief engineer'],
+    body: { l: '#FBEBA8', m: '#F3D35A', d: '#C9A21C' }, cape: '#3F4E5E',
+    gear: { hat: 'Yellow hard hat', item: 'Wrench', outfit: 'Orange hi-vis vest with reflective stripes' },
+    egg: (put, cx, cy) => { for (let y = 0; y <= 2; y++) for (let x = -5; x <= 5; x++) put(cx + x, cy + y, (((x + y + 20) >> 1) % 2) ? '#2A2F35' : '#F2C21B'); },
+  },
+};
+const ORDER = ['med', 'cs', 'law', 'pilot', 'sports', 'eng'];
+const FILTERS = [...ORDER, 'custom'];
+const esc = (v) => String(v).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+
+/* ── the custom buddy: someone's own picture as pixel art ──────── */
+THEMES.custom = {
+  label: 'Custom', name: 'Mochi', kind: 'your own picture, turned into pixel art',
+  ranks: ['Egg', 'Hatchling', 'Newbie', 'Learner', 'Scholar', 'Expert', 'Legend'], cape: '#6A4FA8', body: { l: '#E4DAF5', m: '#C7B4EC', d: '#9A83C9' },
+  egg: (put, cx, cy) => { [[-1, -3], [0, -3], [1, -3], [2, -2], [1, -1], [0, 0], [0, 2]].forEach(([x, y]) => put(cx + x, cy + y, '#6A4FA8')); },
+};
+const CUSTOM = { source: null, master: null, size: 24, colors: 10, removeBg: true, sample: true };
+const CSIZE = [0, 10, 13, 16, 19, 22, 22];   /* the picture's size in pixels at each rank */
+
+/* halve until close, then one last smooth step: a cleaner small picture than one big jump */
+function downscale(img, size) {
+  let cur = img, cw = img.naturalWidth || img.width, ch = img.naturalHeight || img.height;
+  const step = (w, h) => { const c = document.createElement('canvas'); c.width = w; c.height = h; const x = c.getContext('2d'); x.imageSmoothingEnabled = true; x.imageSmoothingQuality = 'high'; x.drawImage(cur, 0, 0, w, h); cur = c; cw = w; ch = h; return x; };
+  while (Math.max(cw, ch) > size * 2) step(Math.max(1, Math.round(cw / 2)), Math.max(1, Math.round(ch / 2)));
+  const k = size / Math.max(cw, ch);
+  const x = step(Math.max(1, Math.round(cw * k)), Math.max(1, Math.round(ch * k)));
+  return x.getImageData(0, 0, cw, ch);
+}
+const d2 = (a, b) => (a[0] - b[0]) ** 2 + (a[1] - b[1]) ** 2 + (a[2] - b[2]) ** 2;
+function pixelate(img, { size, colors, removeBg }) {
+  const { width: w, height: h, data } = downscale(img, size);
+  const px = [];
+  for (let i = 0; i < w * h; i++) px.push(data[i * 4 + 3] >= 128 ? [data[i * 4], data[i * 4 + 1], data[i * 4 + 2]] : null);
+  /* the background: the commonest edge colour, flooded in from the edges */
+  if (removeBg) {
+    const border = [];
+    for (let x = 0; x < w; x++) border.push(x, (h - 1) * w + x);
+    for (let y = 1; y < h - 1; y++) border.push(y * w, y * w + w - 1);
+    const counts = new Map();
+    border.forEach((i) => { if (px[i]) { const k = px[i].map((v) => v >> 5).join(); counts.set(k, (counts.get(k) || []).concat([px[i]])); } });
+    const top = [...counts.values()].sort((a, b) => b.length - a.length)[0];
+    if (top && top.length >= border.length * 0.25) {
+      const bg = [0, 1, 2].map((j) => top.reduce((s, c) => s + c[j], 0) / top.length);
+      const near = (i) => px[i] && d2(px[i], bg) < 62 ** 2;
+      const queue = border.filter(near), seen = new Set(queue);
+      while (queue.length) {
+        const i = queue.pop(); px[i] = null;
+        const x = i % w, y = (i / w) | 0;
+        [[1, 0], [-1, 0], [0, 1], [0, -1]].forEach(([dx, dy]) => {
+          const nx = x + dx, ny = y + dy, j = ny * w + nx;
+          if (nx >= 0 && ny >= 0 && nx < w && ny < h && !seen.has(j) && near(j)) { seen.add(j); queue.push(j); }
+        });
+      }
+    }
+  }
+  /* a few colours: k-means, seeded across the brightness range */
+  const opaque = px.filter(Boolean);
+  if (!opaque.length) return null;
+  const lum = (c) => 0.3 * c[0] + 0.59 * c[1] + 0.11 * c[2];
+  const sorted = opaque.slice().sort((a, b) => lum(a) - lum(b));
+  const k = Math.min(colors, opaque.length);
+  let cents = Array.from({ length: k }, (_, i) => sorted[Math.floor(((i + 0.5) / k) * sorted.length)].slice());
+  for (let it = 0; it < 8; it++) {
+    const sums = cents.map(() => [0, 0, 0, 0]);
+    opaque.forEach((c) => { let b = 0; cents.forEach((m, j) => { if (d2(c, m) < d2(c, cents[b])) b = j; }); sums[b][0] += c[0]; sums[b][1] += c[1]; sums[b][2] += c[2]; sums[b][3]++; });
+    cents = cents.map((m, j) => (sums[j][3] ? [sums[j][0] / sums[j][3], sums[j][1] / sums[j][3], sums[j][2] / sums[j][3]] : m));
+  }
+  const near = (c) => { let b = 0; cents.forEach((m, j) => { if (d2(c, m) < d2(c, cents[b])) b = j; }); return toHex(cents[b]); };
+  /* crop to the shape and stand it on the bottom row, centred */
+  let x0 = w, x1 = -1, y0 = h, y1 = -1;
+  px.forEach((c, i) => { if (!c) return; const x = i % w, y = (i / w) | 0; x0 = Math.min(x0, x); x1 = Math.max(x1, x); y0 = Math.min(y0, y); y1 = Math.max(y1, y); });
+  const bw = x1 - x0 + 1, bh = y1 - y0 + 1, n = Math.max(bw, bh);
+  const grid = Array.from({ length: n }, () => Array(n).fill(null));
+  const ox = Math.floor((n - bw) / 2), oy = n - bh;
+  for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) { const c = px[y * w + x]; if (c) grid[oy + y - y0][ox + x - x0] = near(c); }
+  return grid;
+}
+
+function customSprite(tier, mood, frame) {
+  const grid = Array.from({ length: N }, () => Array(N).fill(null));
+  const put = (x, y, c) => { if (x >= 0 && x < N && y >= 0 && y < N && c) grid[y][x] = c; };
+  const has = (x, y) => !!grid[y]?.[x];
+  const extras = [], M = CUSTOM.master;
+  if (!M) return finish(grid, extras, { legend: false, mood, frame });
+  const n = M.length, S = CSIZE[tier], left = 16 - Math.floor(S / 2), top = 30 - S;
+  for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) {
+    const c = M[Math.floor((y * n) / S)][Math.floor((x * n) / S)];
+    if (c) put(left + x, top + y, moodTint(c, mood));
+  }
+  if (tier === 1) {
+    const shell = { m: moodTint('#F2E7CF', mood), d: moodTint('#D6C6A3', mood) };
+    ellipse(16, 25, 5, 5, (x, y, dx, dy) => { if (y < 24 || (y === 24 && (x % 2))) return; put(x, y, dy > 2 ? shell.d : shell.m); });
+    THEMES.custom.egg((x, y, c) => { if (y >= 26 && has(x, y)) put(x, y, moodTint(c, mood)); }, 16, 27);
+  }
+  /* mood, drawn around the picture since its face could be anywhere */
+  if (mood === 'tired') { extras.push(...zz(left + S, top - 3 + (frame ? -1 : 0))); extras.push([left - 2, top + 2, '#8FD3F5'], [left - 2, top + 3, '#5BB6E8']); }
+  if (mood === 'sick') { const y = top + Math.floor(S / 2); [[0, -4], [0, -3], [0, -2], [0, -1]].forEach(([dx, dy]) => put(left + S + 1 + dx, y + dy, '#FFFFFF')); put(left + S + 1, y, '#D2443A'); }
+  if (mood === 'hurt') [[1, 1], [2, 2], [3, 3], [3, 1], [1, 3]].forEach(([dx, dy]) => { if (has(left + dx, top + dy)) put(left + dx, top + dy, '#F1D6B0'); });
+  if (tier === 6) {
+    const y0 = top - 6 + (frame ? -1 : 0), cx = 16;
+    [[-2, 0], [0, -1], [2, 0], [-2, 1], [-1, 1], [0, 1], [1, 1], [2, 1], [-2, 2], [-1, 2], [0, 2], [1, 2], [2, 2]].forEach(([x, y]) => put(cx + x, y0 + y + 1, '#F5C542'));
+    put(cx, y0 + 2, '#D2443A');
+  }
+  return finish(grid, extras, { legend: tier === 6, mood, frame });
+}
+
+/* an example "upload" so the custom row opens filled in: a tabby cat on a white background */
+function samplePicture() {
+  const c = document.createElement('canvas'); c.width = c.height = 240;
+  const g = c.getContext('2d');
+  g.fillStyle = '#FFFFFF'; g.fillRect(0, 0, 240, 240);
+  const tri = (pts, fill) => { g.beginPath(); g.moveTo(...pts[0]); pts.slice(1).forEach((p) => g.lineTo(...p)); g.closePath(); g.fillStyle = fill; g.fill(); };
+  tri([[52, 110], [62, 22], [118, 78]], '#E8913F'); tri([[188, 110], [178, 22], [122, 78]], '#E8913F');
+  tri([[66, 92], [70, 44], [104, 78]], '#F6B8C4'); tri([[174, 92], [170, 44], [136, 78]], '#F6B8C4');
+  g.fillStyle = '#F0A04B'; g.beginPath(); g.ellipse(120, 140, 92, 82, 0, 0, Math.PI * 2); g.fill();
+  g.fillStyle = '#C9772E'; [[104, 62, 8, 30], [120, 58, 8, 34], [136, 62, 8, 30]].forEach(([x, y, w, h]) => { g.beginPath(); g.ellipse(x, y + h / 2, w / 2, h / 2, 0, 0, Math.PI * 2); g.fill(); });
+  g.fillStyle = '#FFF4E6'; g.beginPath(); g.ellipse(120, 176, 50, 36, 0, 0, Math.PI * 2); g.fill();
+  g.fillStyle = '#2E4A2A'; [[86, 132], [154, 132]].forEach(([x, y]) => { g.beginPath(); g.ellipse(x, y, 13, 17, 0, 0, Math.PI * 2); g.fill(); });
+  g.fillStyle = '#FFFFFF'; [[82, 126], [150, 126]].forEach(([x, y]) => { g.beginPath(); g.arc(x, y, 5, 0, Math.PI * 2); g.fill(); });
+  tri([[110, 160], [130, 160], [120, 172]], '#E06A86');
+  g.strokeStyle = '#7A3E1A'; g.lineWidth = 4; g.beginPath(); g.moveTo(120, 172); g.lineTo(120, 182); g.moveTo(120, 182); g.quadraticCurveTo(108, 192, 100, 184); g.moveTo(120, 182); g.quadraticCurveTo(132, 192, 140, 184); g.stroke();
+  g.fillStyle = '#F59AB0'; [[70, 166], [170, 166]].forEach(([x, y]) => { g.beginPath(); g.ellipse(x, y, 14, 8, 0, 0, Math.PI * 2); g.fill(); });
+  return c;
+}
+
+/* ── drawing ──────────────────────────────────────────────────── */
+function ellipse(cx, cy, rx, ry, f) {
+  for (let y = Math.floor(cy - ry - 1); y <= cy + ry + 1; y++) for (let x = Math.floor(cx - rx - 1); x <= cx + rx + 1; x++) {
+    const dx = x - cx, dy = y - cy;
+    if ((dx * dx) / ((rx + 0.5) ** 2) + (dy * dy) / ((ry + 0.5) ** 2) <= 1) f(x, y, dx, dy);
+  }
+}
+/* body shapes by rank: radius x, radius y, centre y (feet rest on row 29) */
+const SHAPE = [null, { rx: 4, ry: 3, cy: 22 }, { rx: 5, ry: 4, cy: 25 }, { rx: 6, ry: 5, cy: 24 }, { rx: 6, ry: 6, cy: 23 }, { rx: 7, ry: 7, cy: 22 }, { rx: 7, ry: 7, cy: 22 }];
+
+function sprite(theme, tier, mood, frame) {
+  const T = THEMES[theme];
+  const grid = Array.from({ length: N }, () => Array(N).fill(null));
+  const put = (x, y, c) => { if (x >= 0 && x < N && y >= 0 && y < N && c) grid[y][x] = c; };
+  const has = (x, y) => !!grid[y]?.[x];
+  const B = { l: moodTint(T.body.l, mood), m: moodTint(T.body.m, mood), d: moodTint(T.body.d, mood) };
+  const legend = tier === 6;
+  const extras = [];      /* after the outline: sparkles, zZ, sweat, the crown's glint */
+
+  /* ── rank 0: the egg ── */
+  if (tier === 0) {
+    const cx = 16, cy = 23, rx = 5, ry = 6;
+    const shell = { l: moodTint('#FFF8EA', mood), m: moodTint('#F2E7CF', mood), d: moodTint('#D6C6A3', mood) };
+    ellipse(cx, cy, rx, ry, (x, y, dx, dy) => put(x, y, dy > ry * 0.45 ? shell.d : (dx < -1 && dy < -2) ? shell.l : shell.m));
+    T.egg((x, y, c) => { if (has(x, y)) put(x, y, moodTint(c, mood)); }, cx, cy);
+    if (mood === 'sick' || mood === 'hurt') [[18, 18], [17, 19], [18, 20], [19, 21]].forEach(([x, y]) => put(x, y, INK));
+    if (mood === 'hurt') [[12, 21], [13, 22], [14, 23], [14, 21], [12, 23]].forEach(([x, y]) => put(x, y, '#F1D6B0'));
+    /* happy eggs wobble */
+    const tilt = mood === 'happy' && frame ? 1 : 0;
+    if (tilt) { const g2 = grid.map((r) => r.slice()); for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) grid[y][x] = y < cy ? (g2[y][x - 1] ?? null) : g2[y][x]; }
+    return finish(grid, extras, { legend: false, mood, frame, head: { x: cx, y: cy - ry } });
+  }
+  if (theme === 'custom') return customSprite(tier, mood, frame);
+
+  const { rx, ry, cy } = SHAPE[tier];
+  const cx = 16, yt = cy - ry, bob = 0;
+
+  /* legendary cape, behind everything */
+  if (legend) {
+    for (let y = cy - 3; y <= cy + ry + 1; y++) {
+      const w = rx + 1 + Math.floor((y - (cy - 3)) / 3);
+      for (let x = cx - w; x <= cx + w; x++) put(x, y, y === cy + ry + 1 ? '#E2B33C' : (x - cx + y) % 5 === 0 ? mix(T.cape, '#000000', 0.25) : T.cape);
+    }
+  }
+
+  /* the body */
+  ellipse(cx, cy, rx, ry, (x, y, dx, dy) => {
+    let c = B.m;
+    if (dy > ry * 0.45) c = B.d;
+    else if (dx < -rx * 0.2 && dy < -ry * 0.2) c = B.l;
+    put(x, y, c);
+  });
+  /* feet and, from rank 3, arms */
+  [[-3, 1], [-2, 1], [2, 1], [3, 1]].forEach(([x]) => put(cx + x, cy + ry + 1, B.d));
+  if (tier >= 3) { put(cx - rx - 1, cy + 1, B.m); put(cx - rx - 1, cy + 2, B.d); put(cx + rx + 1, cy + 1, B.m); put(cx + rx + 1, cy + 2, B.d); }
+
+  /* the outfit, from rank 5: the lower body */
+  const top5 = cy + Math.round(ry * 0.25);
+  if (tier >= 5) outfit(theme, { put, has, cx, cy, rx, ry, top: top5 });
+
+  /* the face */
+  const gap = rx >= 6 ? 3 : 2;
+  const ey = cy - Math.max(1, Math.round(ry * 0.3));
+  const eyes = [cx - gap - 1, cx + gap];          /* each eye is 2 wide from here */
+  const m = ey + 3;
+  if (mood === 'happy') {
+    eyes.forEach((x) => { put(x, ey, '#FFFFFF'); put(x + 1, ey, INK); put(x, ey + 1, INK); put(x + 1, ey + 1, INK); });
+    [cx - 1, cx + 1].forEach((x) => put(x, m, INK)); put(cx, m + 1, INK);
+    if (rx >= 5) [[eyes[0] - 1, ey + 2], [eyes[0], ey + 2], [eyes[1] + 1, ey + 2], [eyes[1] + 2, ey + 2]].forEach(([x, y]) => { if (has(x, y)) put(x, y, '#F59AB0'); });
+  } else if (mood === 'tired') {
+    eyes.forEach((x) => { put(x, ey + 1, INK); put(x + 1, ey + 1, INK); put(x, ey + 2, mix(B.d, '#6A5A8A', 0.4)); put(x + 1, ey + 2, mix(B.d, '#6A5A8A', 0.4)); });
+    put(cx, m + 1, INK); put(cx + 1, m + 1, INK);
+    extras.push(...zz(cx + rx + 1, yt - 3 + (frame ? -1 : 0)));
+    extras.push([cx - rx - 1, yt + 2, '#8FD3F5'], [cx - rx - 1, yt + 3, '#5BB6E8']);
+  } else if (mood === 'sick') {
+    eyes.forEach((x) => { put(x, ey + 1, INK); put(x + 1, ey, INK); });
+    put(cx - 1, m, INK); put(cx, m, INK);
+    /* a thermometer */
+    [[cx + 1, m], [cx + 2, m], [cx + 3, m - 1]].forEach(([x, y]) => put(x, y, '#FFFFFF')); put(cx + 4, m - 1, '#D2443A');
+  } else {
+    put(eyes[0], ey, INK); put(eyes[0] + 1, ey, INK); put(eyes[0], ey + 1, INK); put(eyes[0] + 1, ey + 1, INK);
+    put(eyes[0], ey + 2 + (frame ? 1 : 0), '#5BB6E8');                                      /* a tear */
+    for (let y = ey - 1; y <= ey + 1; y++) for (let x = eyes[1] - 1; x <= eyes[1] + 2; x++) put(x, y, (x + y) % 2 ? '#FFFFFF' : '#E6E0D4');   /* an eye patch of gauze */
+    put(cx - 1, m + 1, INK); put(cx, m, INK); put(cx + 1, m + 1, INK);
+    /* a plaster on the head */
+    [[cx - 3, yt + 1], [cx - 2, yt + 2], [cx - 1, yt + 3], [cx - 1, yt + 1], [cx - 3, yt + 3]].forEach(([x, y]) => put(x, y, '#F1D6B0'));
+  }
+
+  /* hat from rank 3, held item from rank 4 */
+  if (tier >= 3) hat(theme, tier, { put, has, cx, yt, rx, ey, cy, mood });
+  if (tier >= 4) item(theme, { put, ax: cx + rx + 2, ay: cy - 1 });
+
+  /* rank 1: an eggshell around the hatchling's lower half */
+  if (tier === 1) {
+    const shell = { m: moodTint('#F2E7CF', mood), d: moodTint('#D6C6A3', mood) };
+    ellipse(16, 25, 5, 5, (x, y, dx, dy) => {
+      if (y < 24 || (y === 24 && (x % 2))) return;
+      put(x, y, dy > 2 ? shell.d : shell.m);
+    });
+    T.egg((x, y, c) => { if (y >= 26 && has(x, y)) put(x, y, moodTint(c, mood)); }, 16, 27);
+  }
+
+  /* legendary: a floating crown */
+  if (legend) {
+    const y0 = yt - 6 + (frame ? -1 : 0);
+    [[-2, 0], [0, -1], [2, 0], [-2, 1], [-1, 1], [0, 1], [1, 1], [2, 1], [-2, 2], [-1, 2], [0, 2], [1, 2], [2, 2]].forEach(([x, y]) => put(cx + x, y0 + y + 1, '#F5C542'));
+    put(cx, y0 + 2, '#D2443A');
+  }
+  return finish(grid, extras, { legend, mood, frame, head: { x: cx, y: yt } });
+}
+
+function zz(x, y) {
+  const cells = [];
+  const z = (ox, oy, s) => { for (let i = 0; i < s; i++) { cells.push([ox + i, oy, '#9A97C9'], [ox + i, oy + s - 1, '#9A97C9'], [ox + s - 1 - i, oy + i, '#9A97C9']); } };
+  z(x, y, 3); z(x + 3, y - 4, 2);
+  return cells;
+}
+
+function outfit(theme, { put, has, cx, cy, rx, ry, top }) {
+  const paint = (f) => { for (let y = top; y <= cy + ry; y++) for (let x = cx - rx; x <= cx + rx; x++) if (has(x, y)) { const c = f(x - cx, y - top); if (c) put(x, y, c); } };
+  const low = (dy) => dy > (cy + ry - top) * 0.55;
+  if (theme === 'med') {
+    paint((dx, dy) => (dx === 0 ? null : low(dy) || Math.abs(dx) >= rx - 1 ? '#C9D8D8' : '#F6FAFA'));
+    [[-2, 0], [-2, 1], [-2, 2], [-1, 3], [0, 3], [1, 2]].forEach(([x, y]) => put(cx + x, top + y, '#4A545E'));
+    put(cx + 1, top + 3, '#C9CED6'); put(cx + 2, top + 3, '#9AA6B2');
+  } else if (theme === 'cs') {
+    paint((dx, dy) => (low(dy) ? '#262F47' : '#34405E'));
+    [[-1, 0], [-1, 1], [-1, 2], [1, 0], [1, 1], [1, 2]].forEach(([x, y]) => put(cx + x, top + y, '#F2F4FA'));
+    for (let x = -2; x <= 2; x++) put(cx + x, top + 4, '#1D2438');
+  } else if (theme === 'law') {
+    paint((dx, dy) => (Math.abs(dx) <= 2 - dy && dy <= 2 ? '#FFFFFF' : low(dy) ? '#1E2027' : '#2E3039'));
+    [0, 1, 2, 3, 4].forEach((y) => put(cx, top + y, y === 0 ? '#8E2A2A' : '#B23A3A'));
+  } else if (theme === 'pilot') {
+    paint((dx, dy) => (dy === 0 ? '#EDE1C8' : dx === 0 ? '#C9CED6' : low(dy) ? '#6A4325' : '#8A5A34'));
+    put(cx - 2, top + 1, '#FFFFFF'); put(cx - 3, top + 2, '#FFFFFF');
+  } else if (theme === 'sports') {
+    paint((dx, dy) => (dy === 0 && Math.abs(dx) <= 1 ? '#FFFFFF' : low(dy) ? '#226A38' : '#2F8A4A'));
+    [[-1, 1], [0, 1], [1, 1], [1, 2], [0, 3], [0, 4]].forEach(([x, y]) => put(cx + x, top + y, '#FFFFFF'));
+  } else if (theme === 'eng') {
+    paint((dx, dy) => (dy === 2 || dy === 4 ? '#E3E8EE' : dx === 0 ? null : low(dy) ? '#C85E10' : '#F07A1F'));
+  }
+}
+
+function hat(theme, tier, { put, has, cx, yt, rx, ey, cy }) {
+  if (theme === 'med') {
+    for (let y = yt - 2; y <= yt + 1; y++) { const w = y === yt - 2 ? rx - 3 : rx - 1; for (let x = cx - w; x <= cx + w; x++) put(x, y, y === yt + 1 ? '#1C7A71' : (x + y) % 4 === 0 ? '#5CC2B6' : '#2FA59A'); }
+    if (tier >= 5) { put(cx - 1, yt + 2, '#DDE3E8'); put(cx, yt + 2, '#9AA6B2'); put(cx + 1, yt + 2, '#DDE3E8'); put(cx, yt + 3, '#DDE3E8'); }
+  } else if (theme === 'cs') {
+    for (let x = cx - rx + 1; x <= cx + rx - 1; x++) put(x, yt - 1, '#2A2F45');
+    put(cx - rx, yt, '#2A2F45'); put(cx + rx, yt, '#2A2F45');
+    for (let y = ey - 1; y <= ey + 2; y++) { put(cx - rx - 1, y, '#3A63C9'); put(cx - rx, y, '#5C82E0'); put(cx + rx, y, '#5C82E0'); put(cx + rx + 1, y, '#3A63C9'); }
+  } else if (theme === 'law') {
+    for (let y = yt - 2; y <= yt + 1; y++) { const w = y === yt - 2 ? rx - 2 : rx; for (let x = cx - w; x <= cx + w; x++) put(x, y, (x + y) % 2 ? '#FFFFFF' : '#D9D3C7'); }
+    for (let y = yt + 2; y <= ey + 3; y++) { put(cx - rx - 1, y, (y % 2) ? '#FFFFFF' : '#D9D3C7'); put(cx - rx, y, (y % 2) ? '#D9D3C7' : '#FFFFFF'); put(cx + rx, y, (y % 2) ? '#D9D3C7' : '#FFFFFF'); put(cx + rx + 1, y, (y % 2) ? '#FFFFFF' : '#D9D3C7'); }
+  } else if (theme === 'pilot') {
+    for (let y = yt - 1; y <= yt + 1; y++) { const w = y === yt - 1 ? rx - 2 : rx; for (let x = cx - w; x <= cx + w; x++) put(x, y, y === yt - 1 ? '#A8744A' : '#8A5A34'); }
+    for (let y = yt + 2; y <= ey + 1; y++) { put(cx - rx, y, '#8A5A34'); put(cx + rx, y, '#8A5A34'); }
+    [[-3, 0], [-2, 0], [2, 0], [3, 0]].forEach(([x]) => { put(cx + x, yt, '#8FD3F5'); });
+    [-4, -1, 1, 4].forEach((x) => put(cx + x, yt, '#C9CED6')); put(cx, yt, '#6A4325');
+  } else if (theme === 'sports') {
+    for (let x = cx - rx; x <= cx + rx; x++) { if (has(x, ey - 2)) put(x, ey - 2, '#FFFFFF'); if (has(x, ey - 3)) put(x, ey - 3, '#D84A3A'); }
+    put(cx + rx + 1, ey - 2, '#D84A3A'); put(cx + rx + 2, ey - 1, '#D84A3A');
+  } else if (theme === 'eng') {
+    ellipse(cx, yt + 1, rx - 1, 3, (x, y) => { if (y <= yt + 1) put(x, y, x < cx - 1 && y < yt ? '#FFE58A' : '#F2C21B'); });
+    for (let x = cx - rx - 1; x <= cx + rx + 1; x++) put(x, yt + 2, '#C99A0A');
+    put(cx, yt - 2, '#C99A0A'); put(cx, yt - 1, '#C99A0A');
+  }
+}
+
+function item(theme, { put, ax, ay }) {
+  const P = (cells, c) => cells.forEach(([x, y]) => put(ax + x, ay + y, c));
+  if (theme === 'med') {
+    for (let y = 0; y <= 5; y++) for (let x = 0; x <= 3; x++) put(ax + x, ay + y, '#A87A4A');
+    for (let y = 1; y <= 4; y++) for (let x = 1; x <= 2; x++) put(ax + x, ay + y, '#FFFFFF');
+    P([[1, -1], [2, -1]], '#9AA6B2'); P([[1, 2], [2, 2]], '#D2443A'); put(ax + 2, ay + 1, '#D2443A');
+  } else if (theme === 'cs') {
+    for (let y = 0; y <= 3; y++) for (let x = 0; x <= 4; x++) put(ax + x, ay + y, (x === 0 || x === 4 || y === 0 || y === 3) ? '#9AA6B2' : '#7FB8FF');
+    P([[1, 1], [3, 2]], '#E9F8FF');
+    for (let x = -1; x <= 4; x++) put(ax + x, ay + 4, '#6E7884');
+  } else if (theme === 'law') {
+    for (let y = 0; y <= 1; y++) for (let x = 0; x <= 4; x++) put(ax + x, ay + y, x === 0 || x === 4 ? '#C99A3A' : '#7A4E2A');
+    P([[2, 2], [2, 3], [2, 4], [2, 5]], '#A8744A');
+  } else if (theme === 'pilot') {
+    P([[0, 1], [1, 1], [2, 1], [3, 1], [4, 1], [1, 0], [2, 0]], '#FFFFFF');
+    P([[2, 2], [3, 2], [1, 2]], '#C9D6E6');
+  } else if (theme === 'sports') {
+    for (let y = 0; y <= 4; y++) for (let x = 0; x <= 4; x++) { const d = (x - 2) ** 2 + (y - 2) ** 2; if (d <= 5) put(ax + x, ay + y, x === 2 || y === 2 ? '#7A3A10' : '#E8742A'); }
+  } else if (theme === 'eng') {
+    P([[0, 5], [1, 4], [2, 3], [3, 2]], '#9AA6B2');
+    P([[3, 0], [4, 1], [5, 1], [3, 1], [5, 0], [4, 2]], '#C9CED6'); put(ax + 4, ay, null);
+  }
+}
+
+/* the outline, then whatever floats outside it */
+function finish(grid, extras, { legend, mood, frame }) {
+  const out = grid.map((r) => r.slice());
+  const line = legend ? GOLD_OUT : INK;
+  for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
+    if (grid[y][x]) continue;
+    if ([[1, 0], [-1, 0], [0, 1], [0, -1]].some(([dx, dy]) => grid[y + dy]?.[x + dx])) out[y][x] = line;
+  }
+  if (legend) {
+    /* a soft gold aura on the beat, and sparkles that trade places */
+    if (!frame && mood !== 'hurt') for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
+      if (out[y][x]) continue;
+      if ([[1, 0], [-1, 0], [0, 1], [0, -1]].some(([dx, dy]) => out[y + dy]?.[x + dx] === line)) out[y][x] = 'rgba(245,197,66,0.38)';
+    }
+    const star = (x, y, big) => (big
+      ? [[0, 0, '#FFFFFF'], [1, 0, '#F5C542'], [-1, 0, '#F5C542'], [0, 1, '#F5C542'], [0, -1, '#F5C542'], [2, 0, '#E0A82A'], [-2, 0, '#E0A82A'], [0, 2, '#E0A82A'], [0, -2, '#E0A82A']]
+      : [[0, 0, '#FFF6D6'], [1, 0, '#F5C542'], [-1, 0, '#F5C542'], [0, 1, '#F5C542'], [0, -1, '#F5C542']]).map(([dx, dy, c]) => [x + dx, y + dy, c]);
+    if (mood !== 'hurt') extras.push(...star(4, 8, !frame), ...star(27, 5, !!frame), ...star(28, 19, !frame), ...star(3, 22, !!frame));
+  }
+  extras.forEach(([x, y, c]) => { if (x >= 0 && x < N && y >= 0 && y < N && (!out[y][x] || String(out[y][x]).startsWith('rgba'))) out[y][x] = c; });
+  return out;
+}
+
+function paint(canvas, theme, tier, mood, scale, frame = 0) {
+  if (canvas.width !== N * scale) { canvas.width = N * scale; canvas.height = N * scale; }
+  const ctx = canvas.getContext('2d');
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  const g = sprite(theme, tier, mood, frame);
+  const lift = frame && mood === 'happy' && tier > 0 ? -1 : 0;   /* a happy hop */
+  for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) if (g[y][x]) { ctx.fillStyle = g[y][x]; ctx.fillRect(x * scale, (y + lift) * scale, scale, scale); }
+}
+
+/* ── page state and rendering ─────────────────────────────────── */
+const read = (k, d) => { try { return localStorage.getItem(k) ?? d; } catch { return d; } };
+const save = (k, v) => { try { localStorage.setItem(k, v); } catch {} };
+const reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+const state = { mood: read('sb-mood', 'happy'), only: read('sb-only', 'all'), pick: { theme: 'med', tier: 5 }, anim: read('sb-anim', reduce ? '0' : '1') === '1', frame: 0 };
+if (!MOODS.some((b) => b.id === state.mood)) state.mood = 'happy';
+if (state.only !== 'all' && !FILTERS.includes(state.only)) state.only = 'all';
+
+const $ = (id) => document.getElementById(id);
+function segs() {
+  $('moods').innerHTML = MOODS.map((b) => `<button type="button" id="mood-${b.id}" data-mood="${b.id}" aria-pressed="${b.id === state.mood}">${b.label} <small>${b.range}</small></button>`).join('');
+  $('filter').innerHTML = ['all', ...FILTERS].map((t) => `<button type="button" id="only-${t}" data-only="${t}" aria-pressed="${t === state.only}">${t === 'all' ? 'All' : THEMES[t].label}</button>`).join('');
+  $('anim').checked = state.anim;
+}
+function grid() {
+  const list = state.only === 'all' ? ORDER : state.only === 'custom' ? [] : [state.only];
+  $('custom').hidden = !(state.only === 'all' || state.only === 'custom');
+  customRow();
+  $('themes').innerHTML = list.map((t) => `
+    <section class="theme t-${t}" aria-labelledby="h-${t}">
+      <div class="theme-head"><h2 id="h-${t}">${THEMES[t].label} · ${THEMES[t].name}</h2><p>${THEMES[t].kind}</p></div>
+      <div class="row">${THEMES[t].ranks.map((r, i) => `
+        <button type="button" class="tile${i === 6 ? ' legend' : ''}" id="tile-${t}-${i}" data-theme="${t}" data-tier="${i}" aria-pressed="${state.pick.theme === t && state.pick.tier === i}" aria-label="${THEMES[t].name}, ${r}, ${state.mood}">
+          <canvas data-c="${t}-${i}"></canvas><span class="t">${r}</span><span class="x">${XP[i].toLocaleString('en-US')} XP</span>
+        </button>`).join('')}
+      </div>
+    </section>`).join('');
+  draw();
+}
+function detail() {
+  const { theme, tier } = state.pick, T = THEMES[theme];
+  const box = $('detail');
+  box.className = 't-' + theme;
+  const shown = (min) => (tier >= min ? '' : ` <span class="label">from ${T.ranks[min]}</span>`);
+  box.innerHTML = `
+    <div><h3>${esc(T.name)} · ${T.ranks[tier]}</h3><p class="sub">${T.label} · rank ${tier + 1} of 7 · ${XP[tier].toLocaleString('en-US')} XP</p></div>
+    <div class="stage"><canvas id="big" role="img" aria-label="${esc(T.name)}, ${T.ranks[tier]}, ${state.mood}"></canvas></div>
+    <div class="block"><span class="label">Every mood</span>
+      <div class="moods">${MOODS.map((b) => `<figure><canvas data-m="${b.id}" role="img" aria-label="${b.label}"></canvas><figcaption>${b.label}</figcaption></figure>`).join('')}</div>
+    </div>
+    <div class="block"><span class="label">Header badge, actual size</span>
+      <div class="badge"><canvas id="mini" role="img" aria-label="Buddy badge"></canvas><span>48 coins</span></div>
+    </div>
+    ${theme === 'custom' ? `<dl class="gear">
+      <dt>Gear</dt><dd>None, so the picture stays as drawn. Mood shows around it.</dd>
+      <dt>Legend</dt><dd>Gold aura, crown and sparkles${shown(6)}</dd>
+      <dt>Kept</dt><dd>In the app, as a ${CUSTOM.size} × ${CUSTOM.size} pixel grid on your account, never the file. Only you see it.</dd>
+    </dl>` : `<dl class="gear">
+      <dt>Hat</dt><dd>${T.gear.hat}${shown(3)}</dd>
+      <dt>Item</dt><dd>${T.gear.item}${shown(4)}</dd>
+      <dt>Outfit</dt><dd>${T.gear.outfit}${shown(5)}</dd>
+      <dt>Legend</dt><dd>Gold aura, crown, cape and sparkles${shown(6)}</dd>
+    </dl>`}`;
+  draw();
+}
+function draw() {
+  const f = state.anim ? state.frame : 0;
+  document.querySelectorAll('canvas[data-c]').forEach((c) => { const [t, i] = c.dataset.c.split('-'); paint(c, t, +i, state.mood, 4, f); });
+  const { theme, tier } = state.pick;
+  if ($('big')) paint($('big'), theme, tier, state.mood, 8, f);
+  if ($('mini')) paint($('mini'), theme, tier, state.mood, 1, f);
+  document.querySelectorAll('canvas[data-m]').forEach((c) => paint(c, theme, tier, c.dataset.m, 2, f));
+}
+function render() { segs(); grid(); detail(); }
+
+document.addEventListener('click', (e) => {
+  const b = e.target.closest('button'); if (!b) return;
+  if (b.dataset.mood) { state.mood = b.dataset.mood; save('sb-mood', state.mood); render(); $('mood-' + state.mood).focus(); }
+  else if (b.dataset.only) { state.only = b.dataset.only; save('sb-only', state.only); if (state.only !== 'all') state.pick.theme = state.only; render(); $('only-' + state.only).focus(); }
+  else if (b.dataset.tier !== undefined) { state.pick = { theme: b.dataset.theme, tier: +b.dataset.tier }; grid(); detail(); $(`tile-${state.pick.theme}-${state.pick.tier}`).focus(); }
+});
+$('anim').addEventListener('change', (e) => { state.anim = e.target.checked; save('sb-anim', state.anim ? '1' : '0'); state.frame = 0; draw(); });
+setInterval(() => { if (!state.anim || document.hidden) return; state.frame = state.frame ? 0 : 1; draw(); }, 550);
+function customRow() {
+  const T = THEMES.custom;
+  $('custom-row').innerHTML = T.ranks.map((rk, i) => `
+    <button type="button" class="tile${i === 6 ? ' legend' : ''}" id="tile-custom-${i}" data-theme="custom" data-tier="${i}" aria-pressed="${state.pick.theme === 'custom' && state.pick.tier === i}" aria-label="${esc(T.name)}, ${rk}, ${state.mood}">
+      <canvas data-c="custom-${i}"></canvas><span class="t">${rk}</span><span class="x">${XP[i].toLocaleString('en-US')} XP</span>
+    </button>`).join('');
+}
+function previews() {
+  const src = $('src-pic').getContext('2d'), s = CUSTOM.source;
+  src.clearRect(0, 0, 72, 72);
+  if (s) { const w = s.naturalWidth || s.width, h = s.naturalHeight || s.height, k = 72 / Math.max(w, h); src.imageSmoothingQuality = 'high'; src.drawImage(s, (72 - w * k) / 2, (72 - h * k) / 2, w * k, h * k); }
+  const px = $('px-pic').getContext('2d'), M = CUSTOM.master;
+  px.clearRect(0, 0, 72, 72);
+  if (M) { const n = M.length, k = Math.floor(72 / n), o = (72 - k * n) / 2; M.forEach((row, y) => row.forEach((c, x) => { if (c) { px.fillStyle = c; px.fillRect(o + x * k, o + y * k, k, k); } })); }
+}
+function rebuild() {
+  CUSTOM.master = CUSTOM.source ? pixelate(CUSTOM.source, CUSTOM) : null;
+  const note = $('cnote');
+  note.classList.toggle('err', !CUSTOM.master);
+  note.textContent = !CUSTOM.master ? 'Nothing was left once the background was removed. Turn off "Remove the background", or try a picture with more contrast.'
+    : CUSTOM.sample ? 'Showing an example picture. Upload your own to replace it; it never leaves this page.' : 'Your picture, as pixel art. It stays on this page.';
+  previews(); customRow(); if (state.pick.theme === 'custom') detail(); else draw();
+}
+function load(file) {
+  const note = $('cnote');
+  if (!file || !/^image\/(png|jpeg|gif|webp)$/.test(file.type)) { note.classList.add('err'); note.textContent = 'That isn’t a picture this can read. Use a PNG, JPG, GIF or WebP.'; return; }
+  if (file.size > 10 * 1024 * 1024) { note.classList.add('err'); note.textContent = 'That picture is over 10 MB. Pick a smaller one.'; return; }
+  const url = URL.createObjectURL(file), img = new Image();
+  img.onload = () => { CUSTOM.source = img; CUSTOM.sample = false; state.pick = { theme: 'custom', tier: 5 }; rebuild(); };
+  img.onerror = () => { URL.revokeObjectURL(url); note.classList.add('err'); note.textContent = 'That file couldn’t be opened as a picture. Try saving it as PNG or JPG.'; };
+  img.src = url;
+}
+$('file').addEventListener('change', (e) => { load(e.target.files[0]); e.target.value = ''; });
+const drop = $('drop');
+['dragenter', 'dragover'].forEach((t) => drop.addEventListener(t, (e) => { e.preventDefault(); drop.classList.add('over'); }));
+['dragleave', 'drop'].forEach((t) => drop.addEventListener(t, (e) => { e.preventDefault(); drop.classList.remove('over'); }));
+drop.addEventListener('drop', (e) => load(e.dataTransfer.files[0]));
+document.addEventListener('paste', (e) => { const f = [...(e.clipboardData?.files || [])].find((x) => x.type.startsWith('image/')); if (f) load(f); });
+$('cname').addEventListener('input', (e) => { THEMES.custom.name = e.target.value.trim() || 'Mochi'; $('cname-label').textContent = THEMES.custom.name; customRow(); if (state.pick.theme === 'custom') detail(); else draw(); });
+$('csize').addEventListener('input', (e) => { CUSTOM.size = +e.target.value; $('csize-out').textContent = CUSTOM.size + ' px'; rebuild(); });
+$('ccolors').addEventListener('input', (e) => { CUSTOM.colors = +e.target.value; $('ccolors-out').textContent = CUSTOM.colors; rebuild(); });
+$('cbg').addEventListener('change', (e) => { CUSTOM.removeBg = e.target.checked; rebuild(); });
+
+CUSTOM.source = samplePicture();
+CUSTOM.master = pixelate(CUSTOM.source, CUSTOM);
+render();
+previews();
+})();
+</script>

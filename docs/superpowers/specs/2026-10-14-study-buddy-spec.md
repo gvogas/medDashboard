@@ -1,42 +1,44 @@
-# Study Garden — Spec
+# Study Buddy — Spec
 
-2026-10-14 · George · Revised 2026-11-02 (OpenRouter removed; Use your own AI, Sign in with ChatGPT, connector; checked against main at `3aaeaae`) · Companion design: [2026-10-14-study-garden-design.md](2026-10-14-study-garden-design.md)
+2026-10-14 · George · Revised 2026-11-02 (OpenRouter removed; Use your own AI, Sign in with ChatGPT, connector; checked against main at `3aaeaae`; the plant became a study buddy) · Companion design: [2026-10-14-study-buddy-design.md](2026-10-14-study-buddy-design.md)
 
 ## 1. Scope and conventions
 
-This spec defines what to build for Study Garden in eight stages (the eighth optional). The why, the economy reasoning and the alternatives are in the design doc.
+This spec defines what to build for Study Buddy in eight stages (the eighth optional). The why, the economy reasoning and the alternatives are in the design doc.
 
-- **Numbers** live in one file per side: `worker/garden-rules.js` (authoritative) and `src/core/garden-rules.ts` (display only, checked against the same table in tests). Changing a value changes one place.
+- **Numbers** live in one file per side: `worker/buddy-rules.js` (authoritative) and `src/core/buddy-rules.ts` (display only, checked against the same table in tests). Changing a value changes one place.
 - **Ids and times** follow the tracker: text ids ≤ 24 chars, times in ms since epoch, days as the viewer's local `YYYY-MM-DD` sent by the browser and checked by the Worker (±1 day, like the leaderboard's week start).
 - **Personal rows** follow `marks`: `user_id` + text `id`, `revision`, `deleted_at` tombstones, changes written to the user's `u:` feed.
 - **Errors** follow `worker/http.js`: `HttpError(status, {error, ...})`; new codes are listed under API.
-- **Gameplay off** means the Garden API answers `{enabled: false}` and nothing is awarded. XP, coins and health count only activity after `users.garden_since`, set the first time gameplay is turned on (no back-pay). Coins are written only while gameplay is on. XP and health are worked out from all activity since `garden_since`, so turning gameplay off and on again never shrinks the plant.
-- **Names in the app:** the tab is "Garden" and the Settings toggle is "Gameplay"; study tools keep plain names (Cards, Quiz, Notes & plan). "Study Garden" is only the project name. The two ways to generate are "Generate here" (Workers AI) and "Use your own AI" (copy and paste).
+- **Gameplay off** means the Buddy API answers `{enabled: false}` and nothing is awarded. XP, coins and health count only activity after `users.buddy_since`, set the first time gameplay is turned on (no back-pay). Coins are written only while gameplay is on. XP and health are worked out from all activity since `buddy_since`, so turning gameplay off and on again never shrinks the plant.
+- **Names in the app:** the tab is "Buddy" and the Settings toggle is "Gameplay"; study tools keep plain names (Cards, Quiz, Notes & plan). "Study Buddy" is only the project name. The two ways to generate are "Generate here" (Workers AI) and "Use your own AI" (copy and paste).
 - **Shared AI code:** prompts and answer rules live in `src/core/study-prompts.ts` and `src/core/study-answers.ts`, imported by the browser and by `worker/study-ai.js` (as the Worker imports `src/core/grades.ts`), so a pasted answer and a model answer meet the same limits.
-- **Maintenance:** `garden` and `studyai` are added to `FEATURES` and the route map in `worker/maintenance.js`, and to `src/core/maintenance.ts`.
+- **Maintenance:** `buddy` and `studyai` are added to `FEATURES` and the route map in `worker/maintenance.js`, and to `src/core/maintenance.ts`.
 - **Migrations:** each one bumps `LATEST_MIGRATION` (`worker/admin.js`, `scripts/lib/move-db.js`) and adds its row to the list in `docs/DEPLOYING.md`.
-- **Out of scope:** showing anyone's plant or coins to others, web research, API key paste for any provider, OpenRouter, a plant that dies.
+- **Tiers and ranks:** the code and the API say *tier* (ids `egg`, `hatchling`, `r3`, `r4`, `r5`, `r6`, `legend`); the app says *rank* and shows each buddy's own rank names (design doc, The buddies).
+- **Out of scope:** showing anyone's buddy or coins to others, web research, API key paste for any provider, OpenRouter, a buddy that dies, storing uploaded pictures.
 
 ## 2. Data model
 
-Seven migrations (`0010`–`0016`: Stages 1–3, 5–8; Stage 4 has none) add five user columns, nine tables, a rebuilt `activity` table and, with the optional connector, three OAuth tables. `0001`–`0009` are already taken. Study content (decks, cards, quizzes, docs) carries a `scope` like `items` does: `u:<user>` when personal, `c:<space>` when shared with a class. Each person's review progress is always personal, so one shared deck serves the whole class.
+Seven migrations (`0010`–`0016`: Stages 1–3, 5–8; Stage 4 has none) add six user columns, nine tables, a rebuilt `activity` table and, with the optional connector, three OAuth tables. `0001`–`0009` are already taken. Study content (decks, cards, quizzes, docs) carries a `scope` like `items` does: `u:<user>` when personal, `c:<space>` when shared with a class. Each person's review progress is always personal, so one shared deck serves the whole class.
 
 **`users` columns**
 
 | Column | Stage | Type | Rule |
 | --- | --- | --- | --- |
 | `gameplay` | 1 | INTEGER 0/1 | Default 0 |
-| `garden_since` | 1 | INTEGER ms, NULL | Set once, the first time `gameplay` becomes 1 |
-| `garden_look` | 1 | TEXT JSON | `{skin, bg}`, each an owned id; default `{"skin":"bad","bg":"none"}` |
-| `garden_xp_bonus` | 1 | INTEGER ≥ 0 | Default 0; admin-granted XP for testing, added to derived XP |
+| `buddy_since` | 1 | INTEGER ms, NULL | Set once, the first time `gameplay` becomes 1 |
+| `buddy_look` | 1 | TEXT JSON | `{buddy, bg, name}`: `buddy` is `auto` (follows the profile's theme), a theme id or `custom` (only once one is saved); `bg` an owned id; `name` ≤ 16 chars or empty for the buddy's own. Default `{"buddy":"auto","bg":"none","name":""}` |
+| `buddy_custom` | 2 | TEXT JSON, NULL | The custom buddy: `{palette: [hex] 1–16, rows: [string] n of n chars, n 4–24}`, each char a palette index `0`–`f` or `.` for empty; at most 1 KB. Never the uploaded file |
+| `buddy_xp_bonus` | 1 | INTEGER ≥ 0 | Default 0; admin-granted XP for testing, added to derived XP |
 | `cards_in_feed` | 3 | INTEGER 0/1 | Default 0; adds daily "Flashcards: N due" events to the calendar feed |
 
 **Tables**
 
 | Table | Stage | Key | Columns | Synced |
 | --- | --- | --- | --- | --- |
-| `garden_ledger` | 1 | `(user_id, source)` unique | `amount` INTEGER (±, ≠ 0), `kind` ('earn','spend'), `source` TEXT ≤ 64 (see §4), `at` INTEGER | No; read through `/api/garden` |
-| `garden_owned` | 2 | `(user_id, sku)` | `level` INTEGER ≥ 1 (upgrades) or 1 (cosmetics), `at` | No |
+| `buddy_ledger` | 1 | `(user_id, source)` unique | `amount` INTEGER (±, ≠ 0), `kind` ('earn','spend'), `source` TEXT ≤ 64 (see §4), `at` INTEGER | No; read through `/api/buddy` |
+| `buddy_owned` | 2 | `(user_id, sku)` | `level` INTEGER ≥ 1 (upgrades) or 1 (cosmetics), `at` | No |
 | `decks` | 3 | `(scope, id)` | `author_id`, `course_id`, `title` ≤ 80, `revision`, timestamps, `deleted_at` | Yes, kind `decks`, in the deck's scope feed |
 | `cards` | 3 | `(scope, id)` | `deck_id`, `author_id`, `front` ≤ 500, `back` ≤ 1,000, `source` ('hand','ai','paste','connector'), `revision`, timestamps | Yes, kind `cards`, in the deck's scope feed |
 | `card_state` | 3 | `(user_id, id)`, id = the card id (random 24-char ids, unique across scopes) | `due` TEXT day, `interval` INTEGER days, `ease` REAL 1.3–3.0, `reps`, `lapses`, `revision`, timestamps | Yes, kind `card_state`, user's `u:` feed only |
@@ -55,17 +57,19 @@ A study plan is always `u:` (it is built from one person's weak topics). `materi
 
 ## 3. API
 
-Two new route groups (three with the Stage 8 connector) plus additions to rows, sync and spaces. Every Garden route checks the `garden` switch; every study-AI and connector route checks `studyai`; sharing also checks `classes`. Use your own AI adds no route: the browser builds the prompt and checks the answer, and saving uses the row routes.
+Two new route groups (three with the Stage 8 connector) plus additions to rows, sync and spaces. Every Buddy route checks the `buddy` switch; every study-AI and connector route checks `studyai`; sharing also checks `classes`. Use your own AI adds no route: the browser builds the prompt and checks the answer, and saving uses the row routes.
 
 | Stage | Method + path | Body | Answer |
 | --- | --- | --- | --- |
-| 1 | `PUT /api/me` (existing) | `{gameplay: true\|false, cardsInFeed?: bool}` | Profile; sets `garden_since` on first true |
-| 1 | `GET /api/garden?day=YYYY-MM-DD` | — | `{enabled, xp, tier, next: {tier, xp}, health, band, streak, coins, look, tiers: [{id, minXp, reward, reached, claimed}], recent: [{source, amount, at}] ×10, due}` |
-| 1 | `POST /api/garden/claim` | `{tier}` | Garden state; claiming twice pays once |
-| 1 | `PUT /api/garden/look` | `{skin?, bg?}` | Garden state; each must be owned |
-| 1 | `POST /api/admin/garden/grant` | `{userId, coins?: 1–5000, xp?: 0–10000}` | Admin only; writes `admin:<at>` coins and/or sets `garden_xp_bonus`; logged in `admin_log` |
-| 2 | `GET /api/garden/shop` | — | `{coins, items: [{sku, kind, level, max, cost, effect}]}` |
-| 2 | `POST /api/garden/buy` | `{sku, level}` (the level being bought, guards double taps) | `{coins, item}` |
+| 1 | `PUT /api/me` (existing) | `{gameplay: true\|false, cardsInFeed?: bool}` | Profile; sets `buddy_since` on first true |
+| 1 | `GET /api/buddy?day=YYYY-MM-DD` | — | `{enabled, xp, tier, next: {tier, xp}, health, mood, streak, coins, look, tiers: [{id, minXp, reward, reached, claimed}], recent: [{source, amount, at}] ×10, due}` |
+| 1 | `POST /api/buddy/claim` | `{tier}` | Buddy state; claiming twice pays once |
+| 1 | `PUT /api/buddy/look` | `{buddy?, bg?, name?}` | Buddy state; `custom` needs a saved custom buddy, `bg` must be owned (`not_owned`) |
+| 1 | `POST /api/admin/buddy/grant` | `{userId, coins?: 1–5000, xp?: 0–10000}` | Admin only; writes `admin:<at>` coins and/or sets `buddy_xp_bonus`; logged in `admin_log` |
+| 2 | `GET /api/buddy/shop` | — | `{coins, items: [{sku, kind, level, max, cost, effect}]}` |
+| 2 | `PUT /api/buddy/custom` | `{palette, rows}` (made in the browser, §9) | Buddy state; checked against the `buddy_custom` rules, else 400 `invalid` |
+| 2 | `DELETE /api/buddy/custom` | — | Buddy state; a look of `custom` goes back to `auto` |
+| 2 | `POST /api/buddy/buy` | `{sku, level}` (the level being bought, guards double taps) | `{coins, item}` |
 | 3 | `PUT`/`DELETE /api/(decks\|cards\|card_state\|card_reviews)/<id>` | A row, as the existing `ROW` routes take | The stored row; coins and heal written in the same D1 batch |
 | 3 | `PUT`/`DELETE /api/spaces/<id>/(decks\|cards)/<id>` | A shared row, as the existing `SHARED_ROW` routes take | The stored row; permissions in §9 |
 | 3 | `GET /api/sync?v=4` | — | As v3, plus the new kinds |
@@ -89,10 +93,11 @@ Two new route groups (three with the Stage 8 connector) plus additions to rows, 
 
 | Code | Status | When |
 | --- | --- | --- |
-| `gameplay_off` | 409 | A Garden write while gameplay is off |
+| `gameplay_off` | 409 | A Buddy write while gameplay is off |
 | `not_enough_coins` | 409 | Buy with too few coins (checked in the same statement as the spend) |
 | `stale_level` | 409 | `level` in a buy is not the next one |
 | `tier_not_reached` | 409 | Claim above current XP |
+| `not_owned` | 409 | A look that names a background not bought, or `custom` with none saved |
 | `study_ai_cap` | 429 | The user's daily uses are spent; `{retryAfter, extra: bool}` |
 | `study_ai_busy` | 429 | The global Workers AI ceiling for study is reached today |
 | `material_too_large` | 413 | Text over 60k chars or a doc over 60 KB |
@@ -102,18 +107,18 @@ Two new route groups (three with the Stage 8 connector) plus additions to rows, 
 
 ## 4. Earning rules
 
-XP and health are worked out on every `GET /api/garden` from synced rows. Coins are ledger rows written in the same D1 batch as the row write that carries the event (`putRow`, `putShared`, the marks status write). Values are the starting set from the design doc.
+XP and health are worked out on every `GET /api/buddy` from synced rows. Coins are ledger rows written in the same D1 batch as the row write that carries the event (`putRow`, `putShared`, the marks status write). Values are the starting set from the design doc.
 
 **XP**
 
 ```
-XP = Σ over days ≥ garden_since of min(240, timed minutes that day)
+XP = Σ over days ≥ buddy_since of min(240, timed minutes that day)
    + 10 × first finishes
-   + garden_xp_bonus
+   + buddy_xp_bonus
 ```
 
-- Timed minutes: `study_sessions` with `manual = 0`, not deleted, `started_at ≥ garden_since`, grouped by the viewer's local day.
-- First finish: an `items` row in the user's scope, or a `marks` row, in a finished status for its type with `completed_at ≥ garden_since`. Finished = `done` or `graded` (exam, quiz), `submitted` or `graded` (assignment), `done` (lab, tutoring, office, task, project, custom types). Turning it back to `todo` removes the 10 XP until it is finished again.
+- Timed minutes: `study_sessions` with `manual = 0`, not deleted, `started_at ≥ buddy_since`, grouped by the viewer's local day.
+- First finish: an `items` row in the user's scope, or a `marks` row, in a finished status for its type with `completed_at ≥ buddy_since`. Finished = `done` or `graded` (exam, quiz), `submitted` or `graded` (assignment), `done` (lab, tutoring, office, task, project, custom types). Turning it back to `todo` removes the 10 XP until it is finished again.
 - Task, office, tutoring and custom-type finishes count at most 5 a day; exams, quizzes, assignments, labs and projects have no daily limit.
 - Tier = the highest tier with `minXp ≤ XP`. Claiming pays its reward once (`claim:<tier>`).
 
@@ -134,13 +139,13 @@ XP = Σ over days ≥ garden_since of min(240, timed minutes that day)
 | Admin grant | `admin:<at>` | 1–5000 | Admin call |
 
 - **Grade bonus:** an item's grade (or a mark's grade) pays once per threshold; lowering a grade takes nothing back. Written in the same batch as the grade write.
-- **Streak:** a day counts when it has 15+ timed minutes or 10+ card reviews. A day that does not count resets the streak to 0; it never touches health. `GET /api/garden` returns `streak`.
+- **Streak:** a day counts when it has 15+ timed minutes or 10+ card reviews. A day that does not count resets the streak to 0; it never touches health. `GET /api/buddy` returns `streak`.
 - **Author reward:** nothing for the author's own use, for shared notes (opening them writes nothing), or while the author's gameplay is off.
 - **Balance** = sum of `amount`. Deleting a session does not take its coins back; this keeps the balance from going negative after a purchase.
 
 **Health**
 
-Start at 100 on the first day of the window (the later of `garden_since` and 14 days ago), apply each day's events in time order, and clamp to 0–100 after each one.
+Start at 100 on the first day of the window (the later of `buddy_since` and 14 days ago), apply each day's events in time order, and clamp to 0–100 after each one.
 
 | Event (from rows) | Change |
 | --- | --- |
@@ -154,7 +159,7 @@ Start at 100 on the first day of the window (the later of `garden_since` and 14 
 
 Not counted: tutoring `missed` (it means Cancelled) and project `missed` (Dropped). Exams and quizzes have no missed status.
 
-Look bands: 70–100 `healthy` (the tier's sprite), 40–69 `drooping` (the same sprite, tilted and desaturated with CSS), 15–39 `cracked` (`Cracked2.png`), 0–14 `broken` (`Cracked1.png`). `Broken.png` (a shattered pot) is not used, since the plant never dies.
+Moods: 70–100 `happy`, 40–69 `tired`, 15–39 `sick`, 0–14 `hurt` (shown as Bandaged). The mood only changes the buddy's face and extras (design doc, The buddies); nothing dies.
 
 Shared decks and quizzes earn and heal the same as personal ones; the person reviewing gets the reward (the author gets only the author reward).
 
@@ -176,7 +181,7 @@ A card with no `card_state` row is new: ease 2.5, reps 0, interval 0.
 - **Due count** on Study and on each class = cards with `due ≤ today`, plus new cards up to the daily 20.
 - Two devices reviewing the same card offline: the later `updated_at` wins `card_state`; both `card_reviews` rows stay (they are append-only and keyed by their own id).
 - Editing a card's text keeps its schedule. Deleting a card deletes its `card_state`.
-- **Reminders.** Week view shows "N cards due" on today. The header badge's plant droops while cards are due and none were reviewed today (look only; health is unchanged). With `cards_in_feed` on, the calendar feed (`worker/calendar.js`) adds an all-day "Flashcards: N due" event for each of the next 7 days, N from `card_state.due` (worded apart from the lecture review tasks, "Review 1/4 …", from `src/core/reviews.ts`).
+- **Reminders.** Week view shows "N cards due" on today. The header badge's buddy shows its tired face while cards are due and none were reviewed today (look only; health is unchanged). With `cards_in_feed` on, the calendar feed (`worker/calendar.js`) adds an all-day "Flashcards: N due" event for each of the next 7 days, N from `card_state.due` (worded apart from the lecture review tasks, "Review 1/4 …", from `src/core/reviews.ts`).
 
 ## 6. AI gateway
 
@@ -191,7 +196,7 @@ A provider is `{id, available(env, userId), run(route, prompt, schema) → {answ
 | Cap | Default | Stored | Resets |
 | --- | --- | --- | --- |
 | Per user | 3 generations a day | `request_limits`, key `studyai:<user>`, 24 h window via `claimLimit` | 24 h after the first use |
-| Bought extra | +1 per purchase, max 2 a day | `garden_ledger` `buy:ai:<day>:<n>` | Viewer's next day |
+| Bought extra | +1 per purchase, max 2 a day | `buddy_ledger` `buy:ai:<day>:<n>` | Viewer's next day |
 | Global study ceiling | 4,000 estimated neurons a day | `app_meta` key `studyai_neurons:<UTC day>` | 00:00 UTC, with the Cloudflare quota |
 
 `claimLimit` takes one fixed limit, so the claim is made with `limit = perUser + extras bought today` (counted from `buy:ai:<day>:*` rows in the same request). The three values are read from `app_meta` key `studyai_caps` (`{perUser, extraMax, ceiling}`), set on the Admin page; the table holds the defaults. Each call also adds to `app_meta` `studyai_usage:<UTC day>` (`{neurons, generations, byProvider}`) for the Admin page.
@@ -285,16 +290,18 @@ Files are read in the browser and only their text goes to the Worker. No new lib
 
 ## 9. UI
 
-Each surface follows the tracker's Term components and theme tokens. The plant sprites are hacks' pixel-art PNGs, copied to `public/garden/` and drawn at 4× with `image-rendering: pixelated`. Tiers use hacks' mapping: Bad `MainFlower1`, Average `MainFlower2`, Good `MainFlower3`, Excellent `MainFlower4`, Amazing `Sunflower`, Phenomenal `WhiteFlower`, Legendary `CactiBro`.
+Each surface follows the tracker's Term components and theme tokens. The buddies are drawn in code by `src/core/buddy-art.ts`: `sprite(buddy, tier, mood, frame, custom?)` returns a 32 × 32 grid of colours, and `src/components/buddy/buddy-sprite.tsx` paints it on a canvas at a whole-number scale. The idle animation swaps two frames every 550 ms, and stops under `prefers-reduced-motion` and in hidden tabs. The prototype, `design/study-buddies-prototype.html`, is the reference for every theme, rank and mood.
 
 | Surface | States | Notes |
 | --- | --- | --- |
-| Settings › Gameplay | Off (default); On; "Review cards in my calendar" | Turning on shows a one-time card explaining earning; turning off hides Garden and badge, keeps data |
+| Settings › Gameplay | Off (default); On; "Review cards in my calendar" | Turning on shows a one-time card explaining earning; turning off hides the Buddy page and badge, keeps data |
 | Settings › AI for study | Free quota ("2 of 3 left today"); Off for maintenance; a line that Use your own AI works with any chat, always | Gains Connect ChatGPT only if §7.2 ships, and Connected chats (Disconnect) with Stage 8 |
-| Header badge | Plant thumbnail + coins; pulses once on a new tier to claim; droops while cards are due | Hidden when gameplay is off or `garden` is in maintenance |
-| Garden › Plant | Sprite by equipped skin and health band; XP bar; health bar; streak; "+N XP" since last visit | Wilt never blocks anything |
-| Garden › Tiers | Locked / Reached (Claim) / Claimed (Equip) / Equipped | Seven rows with hacks' descriptions |
-| Garden › Shop | Upgrades (level, next cost, effect); Backgrounds and frames; Extra AI use | Buy disabled with the reason when coins are short or max level |
+| Header badge | Buddy at 32 px + coins; pulses once on a new rank to claim; tired face while cards are due | Hidden when gameplay is off or `buddy` is in maintenance |
+| Buddy › The buddy | The chosen buddy at its rank and mood; its name and rank title; XP bar; health bar; streak; "+N XP" since last visit | Mood never blocks anything |
+| Buddy › Ranks | Locked / Reached (Claim) / Claimed | Seven rows with the buddy's rank names and what each adds (hat, item, outfit, legend) |
+| Buddy › Pick a buddy | Auto (your theme); the six theme buddies; Custom; rename | Stage 1 has the six and Auto; Custom and naming come in Stage 2 |
+| Buddy › Custom buddy (Stage 2) | Empty (upload, drop or paste); picture and pixel version side by side; Detail 12–24 px, Colours 3–16, Remove the background; errors (not a picture, over 10 MB, nothing left after removing the background) | Made in the browser by `src/core/pixelate.ts`: shrink in halving steps, flood the commonest edge colour away, k-means to the chosen colours, crop and stand on the bottom row. Saving sends only the grid and palette |
+| Buddy › Shop | Upgrades (level, next cost, effect); Backgrounds and frames; Extra AI use | Buy disabled with the reason when coins are short or max level |
 | Study › Cards | Class list with due counts; deck list (Mine, Shared with class); review screen; editor | Review: front, tap to flip, Again / Good / Easy, progress "12 of 30"; keyboard 1/2/3 and space |
 | Generate sheet | Sources → options → Generate here or Use your own AI → (generating \| copy prompt → paste answer) → preview → saved | Generate here shows uses left; when spent or in maintenance it is disabled with the reason and Use your own AI is offered. Paste states: empty, reading, "18 of 20 could be read", nothing readable. Preview lets the user delete or edit items; Save into a new or existing deck |
 | Study › Quiz | Setup (optional exam link), question (one at a time), result with weak topics, history | Result offers "Make cards for weak topics" and, when linked to an exam, "Add N weak topics to exam prep" (that exam's checklist, max 50 entries, no duplicates) |
@@ -303,7 +310,7 @@ Each surface follows the tracker's Term components and theme tokens. The plant s
 | Exam item card | Make cards / Make quiz for this exam; linked quizzes with best score | Opens the Generate sheet with the class and exam filled in |
 | Lecture review done | Toast: "Make cards from today's notes" | Only when the review task has notes; uses those notes as the text source |
 | Week view | "N cards due" chip on today | Tap opens the review screen |
-| Admin › Study Garden | Neurons today vs ceiling, generations (Workers AI; connector tool calls from Stage 8), 14-day chart; caps form; grant coins/XP to a user | Admins only; replaces hacks' hidden demo unlock |
+| Admin › Study Buddy | Neurons today vs ceiling, generations (Workers AI; connector tool calls from Stage 8), 14-day chart; caps form; grant coins/XP to a user | Admins only; replaces hacks' hidden demo unlock |
 
 **Who can change shared materials**
 
@@ -318,33 +325,37 @@ Sharing makes a copy in the class; later edits to the personal original do not c
 
 ## 10. Stages and acceptance criteria
 
-Eight stages, each on its own `garden-N-<name>` branch; Stage 8 is optional. Collab Stage 10 is on main. A stage is done when its boxes are ticked, `npm test` passes, its migration (if any) is applied with `db:remote` and `LATEST_MIGRATION` bumped, and it has been tried on the live site.
+Eight stages, each on its own `buddy-N-<name>` branch; Stage 8 is optional. Collab Stage 10 is on main. A stage is done when its boxes are ticked, `npm test` passes, its migration (if any) is applied with `db:remote` and `LATEST_MIGRATION` bumped, and it has been tried on the live site.
 
 **1 · Game core** (`0010`)
 
-- [ ] Gameplay toggle in Settings; `garden_since` set once
-- [ ] `garden` maintenance switch hides Garden, badge and earning for non-admins
+- [ ] Gameplay toggle in Settings; `buddy_since` set once
+- [ ] `buddy` maintenance switch hides the Buddy page, badge and earning for non-admins
 - [ ] Timed session writes pay `session:<id>` coins; manual logs pay none; the 240 min/day cap holds across several sessions
-- [ ] Finishing an item pays once even after todo → done → todo → done; the sixth task finished in a day pays nothing; a cancelled tutoring session does not wilt the plant
+- [ ] Finishing an item pays once even after todo → done → todo → done; the sixth task finished in a day pays nothing; a cancelled tutoring session does not hurt the buddy's health
 - [ ] XP, tier and health match the formulas in worker tests (fixtures for missed items and idle days)
-- [ ] Garden tab shows plant, XP bar, tiers; claim pays once
+- [ ] Buddy tab shows the buddy for the person's theme (or the one picked), XP bar, ranks; claim pays once
+- [ ] `buddy-art.ts`: every theme × tier × mood fits 32 × 32 with an outline, and matches its snapshot; the animation stops under reduced motion
 - [ ] Streak: 15 timed minutes or 10 reviews makes a day count; bonus 2 × length, max 20; a day that doesn't count resets it with no health change
 - [ ] Admin grant writes coins or XP plus an `admin_log` row; non-admins get 403
 
-**2 · Shop** (`0011`)
+**2 · Shop and custom buddy** (`0011`)
 
 - [ ] Buying with too few coins fails with no ledger row; two quick taps buy one level
 - [ ] Upgrade effects change the next award amounts
 - [ ] A grade of 92 pays 25 once; editing it to 85 and back pays nothing more
-- [ ] Backgrounds and frames equip and show behind the plant (the sprites have their pot drawn in, so there are no separate pots)
+- [ ] Backgrounds and frames equip and show behind the buddy
+- [ ] A custom buddy made from a PNG, a JPG and a photo with a plain background saves as a grid of at most 24 × 24 and shows at every rank and mood; the uploaded file is never sent
+- [ ] A bad `buddy_custom` (wrong size, unknown palette index, over 1 KB) gets 400; deleting it puts a `custom` look back to `auto`
+- [ ] A name up to 16 characters shows on the Buddy page and the badge's label
 
 **3 · Decks and spaced repetition** (`0012`)
 
 - [ ] Make, edit, delete decks and cards by hand, offline included
 - [ ] Scheduling matches the table in `srs.test.ts`; due counts correct across midnight
 - [ ] `v=3` filters to its seven kinds (new in this stage, test first); a tab on today's build never receives the new kinds and keeps syncing; only v4 does, including shared `c:` decks and cards
-- [ ] Card reviews pay `cards:<day>` coins and heal the plant when gameplay is on
-- [ ] Week view chip, plant droop and the calendar's "Flashcards: N due" events (with `cards_in_feed` on) show the right counts
+- [ ] Card reviews pay `cards:<day>` coins and heal the buddy when gameplay is on
+- [ ] Week view chip, the badge's tired face and the calendar's "Flashcards: N due" events (with `cards_in_feed` on) show the right counts
 
 **4 · AI gateway and Use your own AI** (no migration)
 
