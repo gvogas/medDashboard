@@ -196,7 +196,7 @@ function Review({ group, list }: { group: string | null; list: CardGroup[] }) {
     )
     return (
         <Panel title={name} label="Review" head={<><HeadNote>{at + 1} of {order.length}</HeadNote><Button variant="ghost" onClick={done}>Stop</Button></>}>
-            <div ref={box} tabIndex={0} onKeyDown={keys} aria-label="Card, press Space to flip, then 1, 2 or 3"
+            <div ref={box} role="group" tabIndex={0} onKeyDown={keys} aria-label="Card, press Space to flip, then 1, 2 or 3"
                 className="grid gap-4 p-5 outline-none focus-visible:shadow-[inset_0_0_0_2px_var(--accent)]">
                 <button type="button" onClick={() => setFlipped(true)} aria-label={flipped ? undefined : "Show the answer"}
                     className="flex min-h-[180px] w-full cursor-pointer flex-col items-center justify-center gap-3 rounded-xl border border-border bg-muted p-6 text-center font-[inherit]">
