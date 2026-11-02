@@ -50,9 +50,8 @@ export function loadBuddy(): Promise<void> {
     return inFlight
 }
 
-/** XP gained since the last answer, once the next one arrives; 0 when nothing new, offline, or gameplay off. */
-export async function buddyGain(): Promise<number> {
-    const before = activeBuddy()?.xp
+/** XP gained over `before` (read before the change), once the next answer arrives; 0 when nothing new, offline, or gameplay off. */
+export async function gainSince(before: number | undefined): Promise<number> {
     if (before === undefined) return 0
     await loadBuddy()
     const after = activeBuddy()?.xp

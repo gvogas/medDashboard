@@ -1,4 +1,4 @@
-// The pages, in the sidebar: Week, Month, All items, Study, Music, and Admin for admins. The view is the UI
+// The pages, in the sidebar: Week, Month, All items, Study, Music, Buddy while gameplay is on, and Admin for admins. The view is the UI
 // state's (ui.view); this reads it through the bridge and changes it with setView, the
 // same call the 1–5 keys make. It replaces the dock that sat in the top bar. On a narrow
 // screen, where the sidebar slides over the page, picking a page closes it.
@@ -12,6 +12,8 @@ import { useFriends } from "@/data/friends"
 import { setSide, sideOpen } from "@/data/sidebar"
 import { useProfile } from "@/data/store"
 import type { View } from "@/data/types"
+import { activeBuddy, useBuddy } from "@/data/buddy"
+import { useMaintenance } from "@/data/maintenance"
 
 export const PAGES: { id: View; label: string; shortcut: string }[] = [
     { id: "week", label: "Week", shortcut: "1" },
@@ -21,6 +23,8 @@ export const PAGES: { id: View; label: string; shortcut: string }[] = [
     { id: "spotify", label: "Music", shortcut: "5" },
 ]
 
+/* Only while gameplay is on (Settings › Study › Gameplay). */
+const BUDDY = { id: "buddy" as View, label: "Buddy", shortcut: "6" }
 /* Only for admins, and without a number key. */
 const ADMIN = { id: "admin" as View, label: "Admin", shortcut: "" }
 
@@ -32,9 +36,10 @@ export function SideNav() {
     /* a friend studying now, as the last friends list said */
     const friendLive = !!useFriends().list?.friends.some((f) => f.live)
     const admin = !!useProfile()?.isAdmin
+    const buddyOn = !!activeBuddy(useBuddy()) && useMaintenance("buddy") !== "blocked"
     return (
         <nav aria-label="Pages" className="flex flex-col gap-0.5">
-            {(admin ? [...PAGES, ADMIN] : PAGES).map((p) => {
+            {[...PAGES, ...(buddyOn ? [BUDDY] : []), ...(admin ? [ADMIN] : [])].map((p) => {
                 const on = p.id === view
                 return (
                     <button

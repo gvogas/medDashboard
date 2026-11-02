@@ -17,6 +17,8 @@ import { GOAL_MAX, GOALS, hm, REST_DAYS, toggleRest } from "@/data/settings"
 import { openSchool, removeSchool } from "@/data/school-edit"
 import { openAiImport } from "@/data/actions"
 import type { Profile } from "@/data/types"
+import { activeBuddy, loadBuddy, setGameplay, useBuddy } from "@/data/buddy"
+import { maintenanceState } from "@/data/maintenance"
 import { GradingGroup } from "./grading-settings"
 import { Button, CONTROL } from "./fields"
 import { Group, Hint, Row, Chip } from "./settings-parts"
@@ -28,6 +30,7 @@ export function StudyTab({ profile }: { profile: Profile }) {
         <>
             <Goal profile={profile} />
             <Streak profile={profile} />
+            <Gameplay profile={profile} />
             <Reviews profile={profile} />
             <School />
             <GradingGroup profile={profile} />
@@ -80,6 +83,46 @@ function Streak({ profile }: { profile: Profile }) {
                 <input type="checkbox" checked={p.celebrate} className="accent-[var(--accent)]" onChange={(e) => void savePrefs({ celebrate: e.target.checked })} />
                 <span>Fireworks at the daily goal and at 7, 30, 100 and 365 days</span>
             </label>
+        </Group>
+    )
+}
+
+/* The one-time card that explains earning, shown the first time gameplay is turned on in this browser. */
+const SEEN_KEY = (id: string) => "rounds:buddy-intro:" + id
+const seenIntro = (id: string) => { try { return localStorage.getItem(SEEN_KEY(id)) === "1" } catch { return true } }
+const markIntro = (id: string) => { try { localStorage.setItem(SEEN_KEY(id), "1") } catch { /* private window: shown again next time */ } }
+
+export function Gameplay({ profile }: { profile: Profile }) {
+    const state = useBuddy()
+    const on = !!activeBuddy(state)
+    const [busy, setBusy] = useState(false)
+    const [error, setError] = useState("")
+    const [intro, setIntro] = useState(false)
+    useEffect(() => { if (!state.buddy && !state.loading) void loadBuddy() }, [state.buddy, state.loading])
+    if (maintenanceState("buddy") === "blocked") return null
+    const toggle = async (next: boolean) => {
+        setBusy(true); setError("")
+        const message = await setGameplay(next)
+        setBusy(false)
+        if (message) { setError(message); return }
+        if (next && !seenIntro(profile.id)) { markIntro(profile.id); setIntro(true) }
+        if (!next) setIntro(false)
+    }
+    return (
+        <Group title="Gameplay" state={on ? "on" : "off"} id="gameplayGrp">
+            <label className="flex items-center gap-2 text-[12.5px] text-ink-2">
+                <input type="checkbox" checked={on} disabled={busy || (state.loading && !state.buddy)} className="accent-[var(--accent)]"
+                    onChange={(e) => void toggle(e.target.checked)} />
+                <span>Raise a study buddy</span>
+            </label>
+            {intro && (
+                <div role="status" className="rounded-lg border border-border bg-muted px-3 py-2.5 text-[12.5px] text-ink-2">
+                    <b className="text-foreground">Your buddy has hatched.</b> It grows with timed study and finished items, and earns coins you can claim as it ranks up. Typed-in study doesn’t count. Your buddy and coins are only ever shown to you.
+                    <div className="mt-2"><Button variant="ghost" onClick={() => setIntro(false)}>Got it</Button></div>
+                </div>
+            )}
+            {error && <Hint error>{error}</Hint>}
+            <Hint>{on ? "Turning it off hides your buddy and keeps everything it has earned." : "A pixel buddy for your theme that hatches and evolves as you study. Off by default."}</Hint>
         </Group>
     )
 }
