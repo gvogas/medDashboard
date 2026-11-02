@@ -579,3 +579,70 @@ Fill in the four sketched tests in the same style before Step 3. Each one is an 
   - grant 100 coins to it.
 - [ ] With George's yes: push the branch, open the PR, then before the merge `npm run db:remote` (it lists `0010_buddy.sql`; answer Y) and `npm run db:check -- --remote`.
 - [ ] After the merge, try it on the live site; tick spec §10 Stage 1.
+
+---
+
+# Stage 3: Decks and spaced repetition
+
+**Branch:** `buddy-3-cards` from `main` after Stage 2 merged. **Migration:** `0012_decks.sql`. **Issue:** #38.
+
+**Scope call.** Spec §3 lists `PUT`/`DELETE /api/spaces/<id>/(decks|cards)/<id>` in Stage 3, but nothing in Stage 3 can put a deck in a class: sharing is Stage 7 (`POST /api/spaces/<id>/share`). So Stage 3 makes the tables scoped (`scope` like `items`), and sync v4 and the client accept class decks and cards (tested with rows written straight to D1); the class write routes and their §9 permissions ship with sharing in Stage 7.
+
+### Task 1: v3 only sends its seven kinds (done first, `ae3473e`)
+- `readPage` takes a kind list (`V3_KINDS` by default) in its SQL, so v3 cursors move past later kinds. Test in `test/sync-v3.test.js`.
+
+### Task 2: Migration and Worker rows
+- `0012_decks.sql`:
+  - `decks (scope, id)`: `author_id`, `course_id`, `title` ≤ 80, `position`, timestamps, `revision`, `deleted_at`.
+  - `cards (scope, id)`: `deck_id`, `author_id`, `front` ≤ 500, `back` ≤ 1,000, `source` ('hand','ai','paste','connector'), `position`, timestamps, `revision`, `deleted_at`.
+  - `card_state (user_id, id)`: `due` day, `interval` 0–180, `ease` 1.3–3.0, `reps`, `lapses`, timestamps, `revision`, `deleted_at`.
+  - `card_reviews (user_id, id)`: `card_ref`, `deck_ref`, `day`, `grade` ('again','good','easy'), `at`, timestamps, `revision`, `deleted_at`.
+  - Each table gets insert and update triggers into `changes` (decks and cards in their own scope, like items; card_state and card_reviews in `u:`), and a partial `deleted_at` index.
+  - `buddy_settings.cards_in_feed`.
+- `worker/db.js`:
+  - `TABLES` entries; `SCOPED` gains decks and cards.
+  - A card needs a live deck in its scope, the way an item needs its course.
+  - Deleting a deck deletes its cards; deleting a card deletes your `card_state`.
+  - Tombstone purge, gone-space delete.
+- `worker/validate.js` validators; `ROW` route regex; `test/helpers.js` route list.
+- Account deletion (`worker/accounts.js`): decks and cards in `u:`. move-db `TABLES`/`ORDER_BY`, `database-health.js`, `LATEST_MIGRATION`, DEPLOYING, DATA-MODEL.
+- `syncPageV3(…, kinds)`: `GET /api/sync?v=4` serves `V4_KINDS` (v3's plus the four).
+- **Tests:** schema, routes, validation, deck→card guard and cascades, v3 never carries them while v4 does (personal and class), purge, account deletion.
+
+### Task 3: SRS core
+- `src/core/srs.ts`: `grade(state, g, today)`, `isDue`, `queue(cards, states, today, newToday)` and `dueCount`, exactly per spec §5.
+- `srs.test.ts` holds the table.
+
+### Task 4: Client store and sync v4
+- **`api.ts`:** `KINDS` + the four; shared kinds decks and cards; `v=4`.
+- **First v4 sync reads every scope from 0 once:** the cursors are stored under a new key. A v3 tab open at the same time may have moved the old cursors past deck rows.
+- **`db.ts`:** v7 stores (`decks`, `cards`, `card_state`, `card_reviews`, `shared_decks`, `shared_cards`).
+- **`shared.ts`, `store.ts`, `sync.ts`:**
+  - push order: decks before cards;
+  - `EARNS` gains `card_reviews`;
+  - normalizers in `model.ts`;
+  - `backup.ts`;
+  - the local-store fake in `test/local-store.node.mjs`.
+- **Tests:** api page check, store apply and push order, offline save.
+
+### Task 5: Rewards
+- `reconcile()`:
+  - `cards:<day>` = min(10 + Card Foundry level, floor(reviews that day / 10)), upserted as the day grows (it only ever grows).
+  - +2 health per card per day.
+  - A day with 10+ reviews counts for the streak.
+- Card Foundry opens in the shop.
+- The answer's `due` = cards due today (the badge's tired face uses it).
+- **Tests:** in `test/buddy-cards.test.js`.
+
+### Task 6: Cards UI
+- Study › **Cards** tab:
+  - classes with due counts;
+  - each class's decks;
+  - deck editor (title, cards: front and back; add, edit, delete);
+  - review screen (front, tap or Space to flip, Again / Good / Easy, keys 1/2/3, "12 of 30", Again requeues once).
+- **Week view:** "N cards due" chip on today, which opens the review screen.
+- **Badge:** tired face while cards are due and none were reviewed today (look only).
+- **Settings › Gameplay:** "Review cards in my calendar" (`cards_in_feed`); `worker/calendar.js` adds "Flashcards: N due" all-day events for the next 7 days.
+- **Tests:** component tests for the editor, review keys and chip; a calendar feed test.
+
+### Task 7: Docs, `npm run check`, try it in the dev app, PR.
