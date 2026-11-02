@@ -23,7 +23,8 @@ export const TABLES = {
   friendships: ['user_lo', 'user_hi', 'requested_by', 'status', 'created_at', 'accepted_at', 'declined_at', 'cancelled_at'],
   friend_settings: ['user_id', 'findable', 'show_studying'],
   /* Study Buddy: the Gameplay switch and the wallet, so a move keeps everyone's coins. */
-  buddy_settings: ['user_id', 'enabled', 'since', 'on_at', 'reconciled_at', 'tz', 'look', 'xp_bonus'],
+  buddy_settings: ['user_id', 'enabled', 'since', 'on_at', 'reconciled_at', 'tz', 'look', 'xp_bonus', 'custom'],
+  buddy_owned: ['user_id', 'sku', 'level', 'at'],
   buddy_ledger: ['user_id', 'source', 'kind', 'amount', 'day', 'at'],
   rooms: ['id', 'host_id', 'flow', 'started_at', 'paused_at', 'paused_ms', 'skipped_ms', 'skipped_study_ms', 'ended_at', 'feed', 'version', 'created_at'],
   presence: ['user_id', 'course_label', 'started_at', 'ends_at'],
@@ -41,7 +42,7 @@ export const TABLES = {
   sessions: ['sid', 'user_id', 'gen', 'expires_at'],
 };
 
-const ORDER_BY = { users: 'id', spaces: 'id', members: 'space_id, user_id', invites: 'space_id, user_id', courses: 'scope, id', items: 'scope, id', activity: 'seq', inbox_seen: 'user_id', friendships: 'user_lo, user_hi', friend_settings: 'user_id', buddy_settings: 'user_id', buddy_ledger: 'user_id, source', rooms: 'id', room_members: 'room_id, user_id', room_messages: 'id', presence: 'user_id', push_subscriptions: 'endpoint', changes: 'seq', spotify_tokens: 'user_id', admin_log: 'id', revoked_sessions: 'sid', sessions: 'sid' };
+const ORDER_BY = { users: 'id', spaces: 'id', members: 'space_id, user_id', invites: 'space_id, user_id', courses: 'scope, id', items: 'scope, id', activity: 'seq', inbox_seen: 'user_id', friendships: 'user_lo, user_hi', friend_settings: 'user_id', buddy_settings: 'user_id', buddy_ledger: 'user_id, source', buddy_owned: 'user_id, sku', rooms: 'id', room_members: 'room_id, user_id', room_messages: 'id', presence: 'user_id', push_subscriptions: 'endpoint', changes: 'seq', spotify_tokens: 'user_id', admin_log: 'id', revoked_sessions: 'sid', sessions: 'sid' };
 /* Written by triggers as the rows above go in, then replaced by the source's own. */
 const REBUILT = ['activity', 'changes'];
 

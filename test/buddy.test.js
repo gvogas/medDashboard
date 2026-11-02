@@ -134,7 +134,7 @@ describe('GET /api/buddy', () => {
   it("picks any theme's buddy; custom needs a saved one", async () => {
     const api = await player('bd-look');
     const look = (body) => api('/api/buddy/look', { method: 'PUT', body });
-    expect((await (await look({ buddy: 'law' })).json()).look).toEqual({ buddy: 'law', bg: 'none', name: '' });
+    expect((await (await look({ buddy: 'law' })).json()).look).toEqual({ buddy: 'law', bg: 'none', frame: 'none', name: '' });
     expect(await (await look({ buddy: 'custom' })).json()).toMatchObject({ error: 'not_owned' });
     expect((await look({ buddy: 'dragon' })).status).toBe(400);
   });
