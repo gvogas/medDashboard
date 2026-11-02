@@ -584,3 +584,45 @@ test("a class's decks and cards arrive from a page and go when the class is revo
  await first.applyRevoked([scope]);
  assert.deepEqual([first.data.shared_decks, first.data.shared_cards], [[], []]);
 });
+
+/* An old tab (version 6) holding the database open while a new one opens version 7 */
+async function oldTab(name, { closes }) {
+ const db = await new Promise((resolve, reject) => {
+  const request = indexedDB.open(name, 6);
+  request.onupgradeneeded = () => {
+   for (const s of ['courses', 'items', 'quotes', 'study_sessions', 'achievements', 'shared_courses', 'shared_items', 'spaces', 'marks', 'space_prefs', 'meta', 'pending', 'conflicts']) {
+    request.result.createObjectStore(s, { keyPath: ['meta', 'pending'].includes(s) ? 'key' : s.startsWith('shared_') ? ['scope', 'id'] : 'id' });
+   }
+  };
+  request.onerror = () => reject(request.error);
+  request.onsuccess = () => resolve(request.result);
+ });
+ const told = { versionchange: false };
+ db.onversionchange = () => { told.versionchange = true; if (closes) db.close(); };
+ return { db, told };
+}
+
+test('two tabs: an old tab that closes when told lets the new one upgrade to version 7', async () => {
+ const user = p(), name = `rounds:${user.id}`;
+ const old = await oldTab(name, { closes: true });
+ await first.open(user);
+ assert.equal(old.told.versionchange, true);
+ await first.saveDeck({ id: 'd1', title: 'After the upgrade' });
+ assert.deepEqual(first.data.decks.map((d) => d.title), ['After the upgrade']);
+});
+
+test('two tabs: an old tab that keeps the database open blocks the upgrade with a message, and nothing is lost', async () => {
+ const user = p(), name = `rounds:${user.id}`;
+ const old = await oldTab(name, { closes: false });
+ await new Promise((resolve, reject) => {
+  const tx = old.db.transaction(['items', 'pending'], 'readwrite');
+  tx.objectStore('items').put({ id: 'a', title: 'Typed in the old tab', revision: 2 });
+  tx.objectStore('pending').put({ key: 'items:a', op: 'put', body: { id: 'a', title: 'Typed in the old tab', revision: 2 }, revision: 2, reviewRequired: false, token: 't', owner: 'old-tab' });
+  tx.oncomplete = resolve; tx.onerror = () => reject(tx.error);
+ });
+ await assert.rejects(openDb(name), /Close older Term tabs/);
+ old.db.close();
+ await first.open(user);
+ assert.deepEqual((await first.pending()).map((op) => op.key), ['items:a']);
+ assert.deepEqual(first.data.items.map((i) => i.title), ['Typed in the old tab']);
+});

@@ -248,4 +248,16 @@ describe('flashcards in the feed (Study Buddy, Stage 3)', () => {
     expect(b.cardsInFeed).toBe(true);
     expect((await api('/api/buddy/settings', { method: 'PUT', body: { enabled: true, cardsInFeed: 'yes' } })).status).toBe(400);
   });
+
+  it("counts the feed's days in the person's zone: ahead of UTC, tomorrow's cards are today's", async () => {
+    const { flashcardDays } = await import('../worker/calendar.js');
+    const api = await signIn('cal-nz');
+    await api('/api/buddy/settings', { method: 'PUT', body: { enabled: true, tz: 'Pacific/Auckland', cardsInFeed: true } });
+    await api('/api/card_state/k1', { method: 'PUT', body: { due: '2026-11-03', interval: 1, ease: 2.5, reps: 1, lapses: 0 } });
+    /* 12:00 UTC on 2 November is 01:00 on 3 November in Auckland */
+    expect(await flashcardDays(env.DB, 'u-cal-nz', Date.UTC(2026, 10, 2, 12))).toEqual([{ day: '2026-11-03', n: 1 }]);
+    /* and at 10:00 UTC (23:00 on the 2nd there) it is still tomorrow's */
+    expect(await flashcardDays(env.DB, 'u-cal-nz', Date.UTC(2026, 10, 2, 10))).toEqual([{ day: '2026-11-03', n: 1 }]);
+  });
 });
+
