@@ -101,7 +101,14 @@ function CardForm({ card, onSave, onCancel }: { card?: Card; onSave: (front: str
     const ok = front.trim() && back.trim()
     const id = card?.id ?? "new"
     return (
-        <form className="grid gap-2 py-2.5" onSubmit={async (e) => { e.preventDefault(); if (!ok) return; await onSave(front, back); if (!card) { setFront(""); setBack("") } }}>
+        <form className="grid gap-2 py-2.5" onSubmit={async (e) => {
+            e.preventDefault()
+            if (!ok) return
+            /* a new card's fields clear at once, not when the save ends: the next card may already be being typed */
+            const [f, b] = [front, back]
+            if (!card) { setFront(""); setBack("") }
+            await onSave(f, b)
+        }}>
             <label htmlFor={`front-${id}`} className="text-[12.5px] text-ink-2">Front</label>
             <TextArea id={`front-${id}`} rows={2} value={front} maxLength={FRONT_MAX} onChange={(e) => setFront(e.target.value)} />
             <label htmlFor={`back-${id}`} className="text-[12.5px] text-ink-2">Back</label>

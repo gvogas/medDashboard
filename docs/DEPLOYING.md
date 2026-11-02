@@ -530,6 +530,7 @@ Run every command in PowerShell from the project folder.
 | `npm run dev:built` | Builds, then runs the site the deploy uploads | Local |
 | `npm test` | Runs all tests | Local |
 | `npm run check` | Type check, all tests and the release build | Local |
+| `npm run e2e` | The browser suite: the whole app in Chromium against the local Worker and the fake AI (`e2e/run.mjs`) | Local |
 | `npm run csp:update` | Rewrites the inline script's hash in `public/_headers` | Local |
 | `npm run db:local` | Applies new migrations to the local database | Local |
 | `npm run push:key` | Makes a local VAPID key pair for push reminders in `.dev.vars` | Local |

@@ -34,3 +34,4 @@ dist/
 *CLAUDE*
 *Claude*
 .mcp.json
+e2e/out/

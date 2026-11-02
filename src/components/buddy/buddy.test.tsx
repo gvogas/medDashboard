@@ -30,8 +30,8 @@ const state = (over = {}) => ({
     recent: [{ source: "session:s1", amount: 5, at: 1 }], due: 0, ...over,
 })
 
-const item = (sku: string, kind: "upgrade" | "bg" | "frame", name: string, level: number, max: number, cost: number | null) => ({ sku, kind, name, effect: kind === "upgrade" ? "+20% study coins" : "Cosmetic", level, max, cost })
-const SHOP = { coins: 30, items: [item("focus", "upgrade", "Focus Engine", 0, 5, 75), item("bg-meadow", "bg", "Meadow", 0, 1, 25), item("bg-night", "bg", "Starry night", 1, 1, null)] }
+const item = (sku: string, kind: "upgrade" | "bg" | "frame" | "ai", name: string, level: number, max: number, cost: number | null) => ({ sku, kind, name, effect: kind === "upgrade" ? "+20% study coins" : "Cosmetic", level, max, cost })
+const SHOP = { coins: 30, items: [item("focus", "upgrade", "Focus Engine", 0, 5, 75), item("bg-meadow", "bg", "Meadow", 0, 1, 25), item("bg-night", "bg", "Starry night", 1, 1, null), { ...item("ai", "ai", "Extra AI use", 1, 2, 60), effect: "+1 Generate here today" }] }
 
 beforeEach(() => {
     resetBuddy()
@@ -120,6 +120,16 @@ describe("the shop", () => {
         render(<BuddyPage />); await act(async () => {})
         await act(async () => { fireEvent.click(screen.getByRole("button", { name: "Buy Focus Engine level 1 for 75 coins" })) })
         expect(screen.getByText("Not enough coins for that yet.")).toBeTruthy()
+    })
+
+    it("sells an extra AI use in its own row, never as something to wear", async () => {
+        await withBuddy(state({ coins: 100, owned: ["bg-night"] }))
+        render(<BuddyPage />); await act(async () => {})
+        expect(screen.getByText("· 1 of 2 today")).toBeTruthy()
+        expect(screen.getAllByRole("button", { name: "Use" })).toHaveLength(1)           /* only the background you own */
+        fake.api.buddy.buy.mockResolvedValue({ coins: 40, item: { ...SHOP.items[3], level: 2, cost: null } })
+        await act(async () => { fireEvent.click(screen.getByRole("button", { name: "Buy an extra AI use for 60 coins" })) })
+        expect(fake.api.buddy.buy).toHaveBeenCalledWith("ai", 2)
     })
 
     it("words why a buy is off", () => {

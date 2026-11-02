@@ -54,6 +54,25 @@ describe("flashcards on the real store, with the page's shortcuts on", () => {
         expect(await kinds()).toEqual(["cards", "cards", "decks"])
     })
 
+    it("clears the new-card form at once, so typing the next card while the last one saves loses nothing", async () => {
+        showCards({ mode: "home" })
+        render(<CardsCard />)
+        fireEvent.click(await screen.findByRole("button", { name: "Edit" }))
+        const front = () => screen.getByLabelText("Front", { selector: "#front-new" }) as HTMLTextAreaElement
+        const back = () => screen.getByLabelText("Back", { selector: "#back-new" }) as HTMLTextAreaElement
+        const n = store.data.cards.length
+        fireEvent.change(front(), { target: { value: "Fast one?" } }); fireEvent.change(back(), { target: { value: "Yes" } })
+        fireEvent.click(screen.getByRole("button", { name: "Add card" }))
+        /* before the save has finished, the next card is typed */
+        fireEvent.change(front(), { target: { value: "Fast two?" } }); fireEvent.change(back(), { target: { value: "Also" } })
+        await waitFor(() => expect(store.data.cards.length).toBe(n + 1))
+        await act(async () => {})
+        expect([front().value, back().value]).toEqual(["Fast two?", "Also"])
+        fireEvent.click(screen.getByRole("button", { name: "Add card" }))
+        await waitFor(() => expect(store.data.cards.length).toBe(n + 2))
+        for (const f of ["Fast one?", "Fast two?"]) await act(async () => { await store.deleteCard(store.data.cards.find((c) => c.front === f)!.id) })
+    })
+
     it("grades with 1/2/3 without switching pages, and saves exactly one schedule and one review per grade", async () => {
         showCards({ mode: "home" })
         render(<CardsCard />)

@@ -44,7 +44,9 @@ export function BuddyShop({ b, who, tier, custom }: { b: BuddyState; who: Shown;
 
     const coins = b.coins
     const upgrades = shop.items.filter((i) => i.kind === "upgrade")
-    const looks = shop.items.filter((i) => i.kind !== "upgrade")
+    const looks = shop.items.filter((i) => i.kind === "bg" || i.kind === "frame")
+    /* an extra Generate here use (Stage 4): bought again each day, never worn */
+    const ai = shop.items.find((i) => i.kind === "ai")
     const worn = (i: ShopItem) => (i.kind === "bg" ? b.look.bg : b.look.frame) === i.sku
     return (
         <Panel title="Shop" label="Shop">
@@ -70,6 +72,24 @@ export function BuddyShop({ b, who, tier, custom }: { b: BuddyState; who: Shown;
                         </div>
                     )
                 })}
+                {ai && (() => {
+                    const why = ai.cost === null ? "" : cannotBuy(ai, coins)
+                    return (
+                        <div className={ROW}>
+                            <span className="flex min-w-[150px] flex-1 flex-col">
+                                <b className="text-[13.5px] text-foreground">{ai.name} <span className="font-normal text-muted-foreground">· {ai.level} of {ai.max} today</span></b>
+                                <span className={SMALL}>{ai.effect}. Use your own AI is always free.</span>
+                            </span>
+                            {ai.cost === null ? <span className={SMALL}>All bought today</span> : (
+                                <Button variant="study" disabled={!!busy || !!why} title={why || undefined}
+                                    aria-label={`Buy an extra AI use for ${ai.cost} coins`}
+                                    onClick={() => void act("ai", () => buy("ai", ai.level + 1))}>
+                                    {busy === "ai" ? "Buying…" : `${ai.cost} coins`}
+                                </Button>
+                            )}
+                        </div>
+                    )
+                })()}
                 <h3 className="m-0 pt-3 text-[12px] font-semibold uppercase tracking-wide text-muted-foreground">Backgrounds and frames</h3>
                 <div className="grid grid-cols-2 gap-2 py-2 min-[420px]:grid-cols-4 min-[900px]:grid-cols-2">
                     {looks.map((i) => {
