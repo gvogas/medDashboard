@@ -9,9 +9,13 @@ name: Deploy
 #   CLOUDFLARE_ACCOUNT_ID  the account id (also in wrangler.jsonc as CF_ACCOUNT_ID)
 # Cloudflare's own Git build must be turned off, or it deploys the code before the
 # migrations are applied (docs/DEPLOYING.md, "Deploying").
+# Paused 2026-11-02 to save Actions minutes: runs only when started by hand (Actions › Run workflow).
+# To turn it back on, put back the triggers it had:
+# on:
+#     push:
+#       branches: [main]
+#     workflow_dispatch:
 on:
-  push:
-    branches: [main]
   workflow_dispatch:
 permissions:
   contents: read

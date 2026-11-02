@@ -2,9 +2,13 @@ name: Issue triage
 # When an issue is opened from a form (.github/ISSUE_TEMPLATE), turn its Area, Priority and
 # Flags answers into labels. The form's own labels (its type) are applied by GitHub. Only adds
 # labels, and only when an issue is opened, so a label removed later is never put back.
+# Paused 2026-11-02 to save Actions minutes: runs only when started by hand (Actions › Run workflow).
+# To turn it back on, put back the triggers it had:
+# on:
+#     issues:
+#       types: [opened]
 on:
-  issues:
-    types: [opened]
+  workflow_dispatch:
 permissions:
   issues: write
 jobs:

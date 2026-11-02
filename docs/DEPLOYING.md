@@ -86,8 +86,15 @@ One catch: if you edit the small inline script inside `index.html`, run
 
 ## Deploying
 
-GitHub Actions deploys the site (`.github/workflows/deploy.yml`). Every push to `main`
-runs, in order, and stops at the first step that fails:
+> **Paused since 2026-11-02.** Every workflow now runs only when started by hand, to save
+> Actions minutes: nothing deploys on a push to `main`, and no checks run on branches or pull
+> requests. To deploy after a merge, open Actions › Deploy › Run workflow on `main` (once
+> Actions can start jobs again), or run `npm run deploy` from your computer, which does the
+> check, the secrets check, the migrations, the database check and the deploy. Each workflow file
+> keeps its old triggers in a comment, to put back when the pause ends.
+
+GitHub Actions deploys the site (`.github/workflows/deploy.yml`). Each run (on a push to
+`main`, while not paused) goes, in order, and stops at the first step that fails:
 
 1. `npm run check`: types, all tests and the release build
 2. the Worker secrets are set (`scripts/check-secrets.mjs`)

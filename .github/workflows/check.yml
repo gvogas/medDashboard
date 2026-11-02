@@ -1,10 +1,14 @@
 name: Check
 # Every branch and pull request. Pushes to main run the same checks inside deploy.yml,
 # so they are left out here.
+# Paused 2026-11-02 to save Actions minutes: runs only when started by hand (Actions › Run workflow).
+# To turn it back on, put back the triggers it had:
+# on:
+#     push:
+#       branches-ignore: [main]
+#     pull_request:
 on:
-  push:
-    branches-ignore: [main]
-  pull_request:
+  workflow_dispatch:
 permissions:
   contents: read
 jobs:

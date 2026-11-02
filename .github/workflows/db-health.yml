@@ -2,9 +2,13 @@ name: Database health
 # Nightly, read-only: the live database has every migration in main, and its integrity
 # checks pass (`npm run db:check -- --remote`). A failed run emails the repository owner.
 # Nothing here changes a record. Uses the same two repository secrets as deploy.yml.
+# Paused 2026-11-02 to save Actions minutes: runs only when started by hand (Actions › Run workflow).
+# To turn it back on, put back the triggers it had:
+# on:
+#     schedule:
+#       - cron: '30 4 * * *'
+#     workflow_dispatch:
 on:
-  schedule:
-    - cron: '30 4 * * *'
   workflow_dispatch:
 permissions:
   contents: read
