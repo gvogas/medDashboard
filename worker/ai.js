@@ -6,6 +6,7 @@
 //   Llama 4 Scout 24,545 in, 77,273 out          (developers.cloudflare.com/workers-ai/platform/pricing)
 
 import { HttpError } from './http.js';
+import { parseLoose } from '../src/core/study-answers.ts';
 
 /* Longer than any read seen so far (30 s), shorter than the browser's 120 s. A read's deadline:
    it starts with the request (api.js), so the file's conversion, the model and its retry
@@ -67,19 +68,6 @@ export function modelAnswer(raw) {
   return Array.isArray(o) && o.length && o.every((p) => p && typeof p === 'object' && typeof p.text === 'string') ? o.map(partText).join('') : o;
 }
 const partText = (p) => (typeof p === 'string' ? p : typeof p?.text === 'string' ? p.text : '');
-
-/* the first {...} or [...] that parses, after any code fence: models wrap JSON in prose or ```json */
-function parseLoose(text) {
-  const s = text.replace(/```(?:json)?/gi, '');
-  /* whichever opens first: a list of objects is a list, not its first object */
-  const pairs = [['{', '}'], ['[', ']']].sort((a, b) => (s.indexOf(a[0]) + 1 || Infinity) - (s.indexOf(b[0]) + 1 || Infinity));
-  for (const [open, close] of pairs) {
-    const from = s.indexOf(open), to = s.lastIndexOf(close);
-    if (from < 0 || to <= from) continue;
-    try { return JSON.parse(s.slice(from, to + 1)); } catch { /* the next shape */ }
-  }
-  return null;
-}
 
 /**
  * The model's answer as an object, or null: gpt-oss answers in JSON text, sometimes wrapped;
