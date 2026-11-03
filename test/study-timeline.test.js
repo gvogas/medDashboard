@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { studyTimeline } from '../src/core/study-timeline.ts';
 
 const t = (text, done = false) => ({ id: text, text, done });
-const exam = (id, title, date, checklist, extra = {}) => ({ id, type: 'exam', title, date, status: 'open', checklist, ...extra });
+const exam = (id, title, date, checklist, extra = {}) => ({ id, key: id, type: 'exam', title, date, status: 'open', checklist, ...extra });
 
 describe('studyTimeline', () => {
   it('merges every open exam\'s plan into one date-ordered list', () => {
