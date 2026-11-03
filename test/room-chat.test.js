@@ -62,6 +62,19 @@ describe('room chat', () => {
     expect(messages.at(-1).body).toBe('m51');
   });
 
+  it('deletes the older rows when a new message is sent, so the room keeps 50', async () => {
+    const { host, roomId } = await pairInRoom('cht-prune');
+    for (let i = 0; i < 52; i++) {
+      await env.DB.prepare('INSERT INTO room_messages (room_id, user_id, body, created_at) VALUES (?, ?, ?, ?)').bind(roomId, host.id, 'm' + i, i).run();
+    }
+    expect((await say(host, roomId, 'latest')).status).toBe(201);
+    const { n } = await env.DB.prepare('SELECT count(*) AS n FROM room_messages WHERE room_id = ?').bind(roomId).first();
+    expect(n).toBe(50);
+    const { messages } = await (await host(`/api/rooms/${roomId}/messages`)).json();
+    expect(messages.at(-1).body).toBe('latest');
+    expect(messages[0].body).toBe('m3');
+  });
+
   it('refuses people who are not in the room now, and past members', async () => {
     const { host, pal, roomId } = await pairInRoom('cht-who');
     const stranger = await person('cht-who-s');

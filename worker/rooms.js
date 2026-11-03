@@ -524,6 +524,8 @@ export async function sendMessage(db, me, roomId, body, now = Date.now()) {
   if (wait) throw rateLimited(wait, 'chat_limit');
   const row = await db.prepare('INSERT INTO room_messages (room_id, user_id, body, created_at) VALUES (?, ?, ?, ?) RETURNING id, created_at')
     .bind(roomId, me, text, now).first();
+  await db.prepare('DELETE FROM room_messages WHERE room_id = ? AND id <= (SELECT id FROM room_messages WHERE room_id = ? ORDER BY id DESC LIMIT 1 OFFSET ?)')
+    .bind(roomId, roomId, CHAT_KEEP).run();
   await touch(db, room, m, now);
   return { id: row.id, userId: me, name: m.name, body: text, at: row.created_at };
 }
