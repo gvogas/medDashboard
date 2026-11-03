@@ -179,21 +179,21 @@ function ClassItemCard({ itemKey, bar }: { itemKey: string; bar: boolean }) {
                     <Checklist item={view} fill={test && lectures ? fill : null} fillNote={fillNote} onLeave={() => void flushTyping()}
                         onChange={(list, typing) => { if (typing) typeMark(itemKey, { checklist: list }); else void editMark(itemKey, { checklist: list }) }} />
 
-                {plan && plan.days.length > 0 && (
-                    <Section title="Study plan" note={plan.days.length + " day" + (plan.days.length === 1 ? "" : "s") + " to go"}>
-                        <ol className="flex flex-col gap-1 text-[13px]">
-                            {plan.days.map((d) => (
-                                <li key={d.date} className="flex gap-2">
-                                    <span className="w-24 flex-none text-ink-2">{shortDate(d.date)}</span>
-                                    <span>{d.topics.join("; ")}</span>
-                                </li>
-                            ))}
-                        </ol>
-                    </Section>
-                )}
-                {plan && plan.noStudyDays && (
-                    <p className="text-[13px] text-ink-2">No study day is left before this exam. The open topics need today.</p>
-                )}
+                    {plan && plan.days.length > 0 && (
+                        <Section title="Study plan" note={plan.days.length + " day" + (plan.days.length === 1 ? "" : "s") + " to go"}>
+                            <ol className="flex flex-col gap-1 text-[13px]">
+                                {plan.days.map((d) => (
+                                    <li key={d.date} className="flex gap-2">
+                                        <span className="w-24 flex-none text-ink-2">{shortDate(d.date)}</span>
+                                        <span>{d.topics.join("; ")}</span>
+                                    </li>
+                                ))}
+                            </ol>
+                        </Section>
+                    )}
+                    {plan && plan.noStudyDays && (
+                        <p className="text-[13px] text-ink-2">No study day is left before this exam. The open topics need today.</p>
+                    )}
                     <TextArea aria-label="My notes" value={view.notes} maxLength={5000} placeholder="Only you see these."
                         onChange={(e) => typeMark(itemKey, { notes: e.target.value })} onBlur={() => void flushTyping()} />
                     {asking === "hide" ? (
