@@ -66,7 +66,9 @@ scenario('signs in', async (p) => {
   await p.fill('#loginUser', USER); await p.fill('#loginPass', PASSWORD);
   await p.click('button:has-text("Sign in")');
   await p.getByRole('button', { name: 'Study', exact: true }).first().waitFor({ timeout: 20_000 });
+  /* the setup appears after the first full sync, so wait for it a little rather than check once */
   const skip = p.getByRole('button', { name: 'Skip setup' });
+  await skip.first().waitFor({ timeout: 10_000 }).catch(() => {});
   if (await skip.count()) await skip.first().click();
 });
 
