@@ -113,7 +113,7 @@ function InviteMore({ inside }: { inside: string[] }) {
     )
 }
 
-/** The room's chat: the people in it talk to each other. In the panel, under the controls on a phone, and in the music sheet on a phone while music is open. */
+/** The room's chat: the people in it talk to each other. In the panel, under the controls on a phone, and in the music sheet while music is open (the panel gives way to the sheet then). */
 export function RoomChat() {
     const state = useRoom()
     const me = data.profile?.id ?? ""

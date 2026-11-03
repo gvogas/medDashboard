@@ -16,7 +16,7 @@ export interface MusicPanelProps {
     /** ✕: close the panel. */
     onClose: () => void
     className?: string
-    /** Shown under the header (the room chat, on a phone with music open). */
+    /** Shown under the header (the room chat, while music is open in a room). */
     top?: ReactNode
 }
 
