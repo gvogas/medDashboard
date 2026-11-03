@@ -73,11 +73,11 @@ describe("flashcards on the real store, with the page's shortcuts on", () => {
         for (const f of ["Fast one?", "Fast two?"]) await act(async () => { await store.deleteCard(store.data.cards.find((c) => c.front === f)!.id) })
     })
 
-    it("grades with 1/2/3 without switching pages, and saves exactly one schedule and one review per grade", async () => {
+    it("grades with 1 (wrong) and 2 (right) without switching pages, and saves exactly one schedule and one review per grade", async () => {
         showCards({ mode: "home" })
         render(<CardsCard />)
         fireEvent.click(await screen.findByRole("button", { name: "Review all 2" }))
-        const box = screen.getByRole("group", { name: "Card, press Space to flip, then 1, 2 or 3" })
+        const box = screen.getByRole("group", { name: "Flashcard. Press Space to flip, then 2 if you were right or 1 if you were wrong" })
         const before = { reviews: store.data.card_reviews.length, states: store.data.card_state.length }
         await act(async () => { fireEvent.keyDown(box, { key: "2" }) })          /* not flipped: no grade, and no page change */
         expect(store.data.card_reviews.length).toBe(before.reviews)
@@ -87,13 +87,13 @@ describe("flashcards on the real store, with the page's shortcuts on", () => {
             fireEvent.keyDown(box, { key })
             await waitFor(() => expect(store.data.card_reviews.length).toBe(before.reviews + n))
         }
-        await grade("1", 1)                                                      /* Again: the card goes to the back */
-        await grade("3", 2)
+        await grade("1", 1)                                                      /* wrong: the card goes to the back */
+        await grade("2", 2)                                                      /* right */
         await grade("2", 3)
         expect(await screen.findByText("All done for today")).toBeTruthy()
-        expect(views.calls).toEqual(["study"])                                   /* Review all opened Study; 1, 2 and 3 never reached the page's shortcuts */
+        expect(views.calls).toEqual(["study"])                                   /* Review all opened Study; 1 and 2 never reached the page's shortcuts */
         expect(ui.view).toBe("study")
-        expect(store.data.card_reviews.map((r) => r.grade).sort()).toEqual(["again", "easy", "good"])
+        expect(store.data.card_reviews.map((r) => r.grade).sort()).toEqual(["again", "good", "good"])
         expect(store.data.card_state.length).toBe(2)
         expect((await kinds()).filter((k) => k.startsWith("card_"))).toEqual(["card_reviews", "card_reviews", "card_reviews", "card_state", "card_state"])
     })

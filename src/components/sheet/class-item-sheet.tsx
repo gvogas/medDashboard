@@ -7,10 +7,11 @@
 
 import { useEffect, useId, useState } from "react"
 import { cn } from "@/lib/utils"
-import { baseOf, httpUrl, isOpen, isTest, statusesFor, tmeta, typeList } from "@/core/model"
+import { baseOf, httpUrl, isOpen, isTest, normalizePrefs, statusesFor, tmeta, typeList } from "@/core/model"
 import { shortDate, today, DOW } from "@/core/dates"
 import { GRADABLE, shareOf } from "@/core/grades"
 import { fillTopics, prepLabel, prepPace } from "@/core/prep"
+import { studyPlan } from "@/core/study-plan"
 import { repeatEnds } from "@/core/school"
 import * as store from "@/core/store"
 import { schoolCal, termStart } from "@/data/query"
@@ -68,6 +69,7 @@ function ClassItemCard({ itemKey, bar }: { itemKey: string; bar: boolean }) {
 
     /* closing, or switching to another item, saves what is being typed */
     useFlushOnClose(() => { void flushTyping() })
+    const profile = useProfile()
     /* deleted for good, or the class gone from this device, while open; a removed item keeps its card */
     useEffect(() => { if ((!row && !gone) || !space) closeSheet() }, [row, gone, space])
 
@@ -90,6 +92,7 @@ function ClassItemCard({ itemKey, bar }: { itemKey: string; bar: boolean }) {
     const test = isTest(it.type)
     const lectures = !!course && (course.meetings || []).some((x) => x.kind === "Lecture")
     const prep = test && isOpen(view) ? prepPace(view, today()) : null
+    const plan = test && isOpen(view) ? studyPlan(view, today(), normalizePrefs(profile?.studyPrefs).rest) : null
     const studied = studiedFor(keyedSessions(sessions), itemKey)
     const by = editedBy(row, space, me)
 
@@ -175,6 +178,22 @@ function ClassItemCard({ itemKey, bar }: { itemKey: string; bar: boolean }) {
                     )}
                     <Checklist item={view} fill={test && lectures ? fill : null} fillNote={fillNote} onLeave={() => void flushTyping()}
                         onChange={(list, typing) => { if (typing) typeMark(itemKey, { checklist: list }); else void editMark(itemKey, { checklist: list }) }} />
+
+                {plan && plan.days.length > 0 && (
+                    <Section title="Study plan" note={plan.days.length + " day" + (plan.days.length === 1 ? "" : "s") + " to go"}>
+                        <ol className="flex flex-col gap-1 text-[13px]">
+                            {plan.days.map((d) => (
+                                <li key={d.date} className="flex gap-2">
+                                    <span className="w-24 flex-none text-ink-2">{shortDate(d.date)}</span>
+                                    <span>{d.topics.join("; ")}</span>
+                                </li>
+                            ))}
+                        </ol>
+                    </Section>
+                )}
+                {plan && plan.noStudyDays && (
+                    <p className="text-[13px] text-ink-2">No study day is left before this exam. The open topics need today.</p>
+                )}
                     <TextArea aria-label="My notes" value={view.notes} maxLength={5000} placeholder="Only you see these."
                         onChange={(e) => typeMark(itemKey, { notes: e.target.value })} onBlur={() => void flushTyping()} />
                     {asking === "hide" ? (

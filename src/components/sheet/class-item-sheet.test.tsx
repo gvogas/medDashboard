@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react"
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react"
 
 // The class item card with the store, the overlay and the toast as fakes; the effective
 // lists, the marks rules and the item rules are the real ones.
@@ -73,6 +73,18 @@ describe("a class item, for a member", () => {
         fireEvent.click(screen.getByRole("button", { name: "Hide it" }))
         await waitFor(() => expect(fake.store.saveMark).toHaveBeenCalledWith(expect.objectContaining({ hidden: true })))
         expect(fake.overlay.closeSheet).toHaveBeenCalled()
+    })
+
+    it("shows a study plan for an upcoming exam: open topics only, spread over the days before it", () => {
+        fake.data.shared_items = [{ ...row(), type: "exam", date: "2099-03-10" }]
+        fake.data.marks = [{ ...graded, status: "todo", grade: null, weight: 20, checklist: [
+            { id: "c1", text: "Chapter 3", done: false }, { id: "c2", text: "Chapter 4", done: true }, { id: "c3", text: "Chapter 5", done: false },
+        ] }]
+        render(<ClassItemSheet itemKey={KEY} />)
+        const plan = screen.getByRole("heading", { name: /^Study plan/ }).closest("section") as HTMLElement
+        expect(within(plan).getByText("Chapter 3")).toBeTruthy()
+        expect(within(plan).getByText("Chapter 5")).toBeTruthy()
+        expect(within(plan).queryByText(/Chapter 4/)).toBeNull()
     })
 })
 

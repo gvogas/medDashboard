@@ -6,7 +6,7 @@
 
 import { useEffect, useId, useRef, useState } from "react"
 import { cn } from "@/lib/utils"
-import { baseOf, heldOn, isComplete, isOpen, isTest, normalizeItem, statusesFor, tmeta, typeList } from "@/core/model"
+import { baseOf, heldOn, isComplete, isOpen, isTest, normalizeItem, normalizePrefs, statusesFor, tmeta, typeList } from "@/core/model"
 import { shortDate, today, DOW } from "@/core/dates"
 import * as store from "@/core/store"
 import { repeatEnds } from "@/core/school"
@@ -14,7 +14,7 @@ import { GRADABLE } from "@/core/grades"
 import { fillTopics, prepLabel, prepPace } from "@/core/prep"
 import { schoolCal, termStart } from "@/data/query"
 import { duration } from "@/lib/time"
-import { useCourses, useItems, useStudySessions } from "@/data/store"
+import { useCourses, useItems, useProfile, useStudySessions } from "@/data/store"
 import { studiedFor } from "@/data/study"
 import { useUi } from "@/data/ui"
 import { closeSheet, onRequestClose, requestCloseSheet, updateDraft } from "@/data/overlay"
@@ -40,6 +40,7 @@ import { Checklist, Links } from "./item-parts"
 import { ShareItem } from "./share-item"
 import { WeightProp } from "./grade-setup"
 import { CHECKLIST_MAX } from "@/core/shared"
+import { studyPlan } from "@/core/study-plan"
 
 /** Fields saved once typing pauses; the rest save at once. */
 const TYPED: ItemField[] = ["title", "notes", "where", "dept", "checklist"]
@@ -85,6 +86,7 @@ export function ItemSheet({ id, draft }: { id?: string; draft?: Item }) {
     }, [typedSomething, asking])
     /* asked, the keyboard goes to Keep editing */
     useEffect(() => { if (asking) keep.current?.focus() }, [asking])
+    const profile = useProfile()
     if (!it) return null
 
     const m = tmeta(it.type)
@@ -121,6 +123,7 @@ export function ItemSheet({ id, draft }: { id?: string; draft?: Item }) {
     const types = typeList(bg, items).filter((t: { id: string; hidden: boolean }) => t.id === it.type || !t.hidden)
     const statuses = statusesFor(it.type) as [string, string][]
     const prep = !isNew && isTest(it.type) && isOpen(it) ? prepPace(it, today()) : null
+    const plan = !isNew && isTest(it.type) && isOpen(it) ? studyPlan(it, today(), normalizePrefs(profile?.studyPrefs).rest) : null
     const lectures = !!c && (c.meetings || []).some((x) => x.kind === "Lecture")
     const studied = isNew ? 0 : studiedFor(sessions, it.id)
     const next = c ? [...(c.meetings || [])].filter((x) => heldOn(x, today())).sort((a, b) => (a.weekday + 6) % 7 - (b.weekday + 6) % 7)[0] ?? null : null
@@ -279,6 +282,22 @@ export function ItemSheet({ id, draft }: { id?: string; draft?: Item }) {
                         } : null}
                         fillNote={fillNote}
                     />
+                )}
+
+                {plan && plan.days.length > 0 && (
+                    <Section title="Study plan" note={plan.days.length + " day" + (plan.days.length === 1 ? "" : "s") + " to go"}>
+                        <ol className="flex flex-col gap-1 text-[13px]">
+                            {plan.days.map((d) => (
+                                <li key={d.date} className="flex gap-2">
+                                    <span className="w-24 flex-none text-ink-2">{shortDate(d.date)}</span>
+                                    <span>{d.topics.join("; ")}</span>
+                                </li>
+                            ))}
+                        </ol>
+                    </Section>
+                )}
+                {plan && plan.noStudyDays && (
+                    <p className="text-[13px] text-ink-2">No study day is left before this exam. The open topics need today.</p>
                 )}
 
                 {show.notes && (

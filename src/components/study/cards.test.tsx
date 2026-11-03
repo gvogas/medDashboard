@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react"
 
 // Study › Cards (Study Buddy, Stage 3): groups with what's due, a deck's editor, the review
-// screen (flip with Space, grade with 1/2/3, Again comes back once), the Week chip and the
+// screen (flip with Space, check = right, X = wrong, a wrong card comes back once), the Week chip and the
 // badge's tired face. The store is a fake: each save replaces its array and notifies.
 const fake = vi.hoisted(() => ({
     data: { decks: [] as any[], cards: [] as any[], card_state: [] as any[], card_reviews: [] as any[], shared_decks: [] as any[], shared_cards: [] as any[] },
@@ -71,12 +71,12 @@ describe("Study › Cards", () => {
         expect(fake.data.cards.map((c) => c.id)).not.toContain("k1")
     })
 
-    it("reviews with the keyboard: Space flips, 1/2/3 grade; Again comes back once at the end", async () => {
+    it("reviews with the keyboard: Space flips, 2 = right, 1 = wrong; a wrong card comes back once, and the tally counts", async () => {
         fake.data.decks = [deck("d1")]
         fake.data.cards = [card("k1"), card("k2")]
         render(<CardsCard />)
         fireEvent.click(screen.getByRole("button", { name: "Review all 2" }))
-        const box = screen.getByLabelText("Card, press Space to flip, then 1, 2 or 3")
+        const box = screen.getByLabelText("Flashcard. Press Space to flip, then 2 if you were right or 1 if you were wrong")
         expect(screen.getByText("1 of 2")).toBeTruthy()
         expect(screen.queryByText("Back k1")).toBeNull()
         fireEvent.keyDown(box, { key: "1" })                                  /* not flipped yet: nothing */
@@ -87,16 +87,35 @@ describe("Study › Cards", () => {
         expect(fake.data.card_state.find((s) => s.id === "k1")).toMatchObject({ interval: 1, lapses: 1, due: "2026-11-03" })
         expect(screen.getByText("2 of 3")).toBeTruthy()                       /* k1 went to the back */
         fireEvent.keyDown(box, { key: " " })
-        await act(async () => { fireEvent.keyDown(box, { key: "3" }) })     /* Easy on k2 */
-        expect(fake.data.card_state.find((s) => s.id === "k2")).toMatchObject({ interval: 4, reps: 1 })
+        await act(async () => { fireEvent.keyDown(box, { key: "2" }) })     /* Right on k2 */
+        expect(fake.data.card_state.find((s) => s.id === "k2")).toMatchObject({ interval: 1, reps: 1 })
         expect(screen.getByText("Front k1")).toBeTruthy()
         fireEvent.keyDown(box, { key: " " })
         await act(async () => { fireEvent.keyDown(box, { key: "1" }) })     /* Again a second time: not requeued */
         expect(screen.getByText("All done for today")).toBeTruthy()
         expect(fake.data.card_reviews.map((r) => [r.cardRef, r.grade, r.day, r.deckRef])).toEqual([
-            ["k1", "again", "2026-11-02", "d1"], ["k2", "easy", "2026-11-02", "d1"], ["k1", "again", "2026-11-02", "d1"],
+            ["k1", "again", "2026-11-02", "d1"], ["k2", "good", "2026-11-02", "d1"], ["k1", "again", "2026-11-02", "d1"],
         ])
+        expect(screen.getByText("1 right")).toBeTruthy()
+        expect(screen.getByText("2 wrong")).toBeTruthy()
     })
+
+    it("answers with the buttons: click to flip, Space on a focused Right stays the button's own, and the tally counts", async () => {
+        fake.data.decks = [deck("d1")]
+        fake.data.cards = [card("k1"), card("k2")]
+        render(<CardsCard />)
+        fireEvent.click(screen.getByRole("button", { name: "Review all 2" }))
+        fireEvent.click(screen.getByRole("button", { name: "Show the answer" }))
+        expect(screen.getByText("Back k1")).toBeTruthy()
+        /* a focused answer button keeps its own Space/Enter, so its click can answer the card */
+        expect(fireEvent.keyDown(screen.getByRole("button", { name: /Right/ }), { key: " " })).toBe(true)
+        await act(async () => { fireEvent.click(screen.getByRole("button", { name: /Right/ })) })
+        expect(fake.data.card_reviews.map((r) => r.grade)).toEqual(["good"])
+        fireEvent.click(screen.getByRole("button", { name: "Show the answer" }))
+        await act(async () => { fireEvent.click(screen.getByRole("button", { name: /Wrong/ })) })
+        expect(screen.getByText("1 right")).toBeTruthy()
+        expect(screen.getByText("1 wrong")).toBeTruthy()
+     })
 
     it("a class's shared deck shows, reviews, and has no Edit", () => {
         fake.data.shared_decks = [{ ...deck("sd1", { courseId: null }), scope: "c:abcdefghij12" }]

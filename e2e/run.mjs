@@ -146,15 +146,20 @@ scenario('makes a deck and cards, shows them due on the Week view', async (p) =>
   await p.getByRole('button', { name: 'Done' }).click();
   await p.getByRole('button', { name: 'Week', exact: true }).first().click();
   await p.getByRole('button', { name: '3 cards due' }).click();       /* the chip opens the review */
-  await p.getByRole('group', { name: 'Card, press Space to flip, then 1, 2 or 3' }).waitFor();
+  await p.getByRole('group', { name: 'Flashcard. Press Space to flip, then 2 if you were right or 1 if you were wrong' }).waitFor();
 });
 
-scenario('reviews by keyboard: 1/2/3 never switch pages, Again comes back once', async (p) => {
-  const box = p.getByRole('group', { name: 'Card, press Space to flip, then 1, 2 or 3' });
+scenario('reviews by keyboard: 1 and 2 never switch pages, a wrong card comes back once', async (p) => {
+  const box = p.getByRole('group', { name: 'Flashcard. Press Space to flip, then 2 if you were right or 1 if you were wrong' });
   await box.press('2');                                                   /* before the answer: nothing, and still on Study */
   expect(await box.count() === 1, 'the review left the page on 2');
-  const grades = ['1', '2', '3', '2'];                                   /* Again first: 3 cards + 1 again */
-  for (const g of grades) { await box.press(' '); await box.press(g); await p.waitForTimeout(150); }
+  const grades = ['1', '2', '2', '2'];                                   /* 1 = wrong: that card comes back once; then 3 right */
+  for (const [i, g] of grades.entries()) {
+    if (i === 0) { await p.waitForTimeout(900); await p.screenshot({ path: out + 'review-front.png' }); }
+    await box.press(' ');
+    if (i === 0) { await p.waitForTimeout(900); await p.screenshot({ path: out + 'review-back.png' }); }
+    await box.press(g); await p.waitForTimeout(150);
+  }
   await p.getByText('All done for today').waitFor();
   await p.waitForTimeout(3500);                                           /* the sync after the reviews */
   const reviews = await p.evaluate(async () => (await (await fetch('/api/sync?v=4&cursors=')).json()).changes.filter((c) => c.kind === 'card_reviews').length);

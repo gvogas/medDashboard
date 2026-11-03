@@ -1,6 +1,6 @@
 // Study › Cards (spec §9): your decks and your classes' decks grouped by class, each group with
 // what is due today and Review; a deck's editor (title, then its cards, front and back); and the
-// review screen: the front, Space or a tap to flip, then Again / Good / Easy (keys 1, 2, 3). A card
+// screen: the front, Space or a tap to flip, then a check (right) or an X (wrong), keys 2 and 1. A card
 // graded Again comes back once at the end of today's queue. Everything is saved on this device
 // first and syncs (data/cards.ts), so it all works offline.
 
@@ -168,7 +168,37 @@ function DeckEditor({ id }: { id: string }) {
     )
 }
 
-const GRADES: [Grade, string, string][] = [["again", "Again", "1"], ["good", "Good", "2"], ["easy", "Easy", "3"]]
+/* The two answers. The X is "again" (the card comes back once today); the check is "good". */
+const ANSWERS: { grade: Grade; label: string; key: string }[] = [
+    { grade: "again", label: "Wrong", key: "1" },
+    { grade: "good", label: "Right", key: "2" },
+]
+
+type Tally = { right: number; wrong: number }
+
+/* The face turns in each time it changes, unless the device asks for less motion. */
+function useTurn(deps: unknown[]) {
+    const ref = useRef<HTMLDivElement>(null)
+    useEffect(() => {
+        const el = ref.current
+        if (!el || !el.animate || window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches) return
+        el.animate([{ transform: "perspective(900px) rotateY(88deg)", opacity: 0.4 }, { transform: "perspective(900px) rotateY(0deg)", opacity: 1 }],
+            { duration: 340, easing: "ease-out" })
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, deps)
+    return ref
+}
+
+function Score({ tally }: { tally: Tally }) {
+    return (
+        <span className="flex items-center gap-3 text-[13px] font-semibold tabular-nums">
+            <span style={{ color: "var(--good)" }}>{tally.right} right</span>
+            <span style={{ color: "var(--crit)" }}>{tally.wrong} wrong</span>
+        </span>
+    )
+}
+
+const ICON_PATH = { right: "M5 12.5l4.5 4.5L19 7.5", wrong: "M6.5 6.5l11 11M17.5 6.5l-11 11" }
 
 function Review({ group, list }: { group: string | null; list: CardGroup[] }) {
     const f = useFlashcards()
@@ -181,7 +211,9 @@ function Review({ group, list }: { group: string | null; list: CardGroup[] }) {
     const [at, setAt] = useState(0)
     const [flipped, setFlipped] = useState(false)
     const [again, setAgain] = useState<Set<string>>(new Set())
+    const [tally, setTally] = useState<Tally>({ right: 0, wrong: 0 })
     const box = useRef<HTMLDivElement>(null)
+    const face = useTurn([at, flipped])
     useEffect(() => { box.current?.focus() }, [at])
     const card = order[at]
     const name = group ? list.find((g) => g.key === group)?.name ?? "Cards" : "All classes"
@@ -189,14 +221,17 @@ function Review({ group, list }: { group: string | null; list: CardGroup[] }) {
         if (!card || !flipped) return
         await gradeCard(card, g, f.states, today)
         if (g === "again" && !again.has(card.id)) { setOrder((o) => [...o, card]); setAgain((s) => new Set(s).add(card.id)) }
+        setTally((t) => (g === "good" ? { ...t, right: t.right + 1 } : { ...t, wrong: t.wrong + 1 }))
         setFlipped(false)
         setAt((n) => n + 1)
     }
     const keys = (e: KeyboardEvent) => {
+        /* a focused Wrong/Right button keeps its own Space/Enter (its click answers the card) */
+        if ((e.key === " " || e.key === "Enter") && (e.target as HTMLElement).hasAttribute("aria-keyshortcuts")) return
         if (e.key === " " || e.key === "Enter") { e.preventDefault(); setFlipped(true); return }
-        const g = GRADES.find(([, , k]) => k === e.key)
-        /* 1, 2 and 3 are the review's while it has focus, flipped or not: before the answer shows they do nothing, never switch pages */
-        if (g) { e.preventDefault(); if (flipped) void answer(g[0]) }
+        const a = ANSWERS.find((x) => x.key === e.key)
+        /* 1 and 2 do nothing until the answer shows, and never switch pages */
+        if (a) { e.preventDefault(); if (flipped) void answer(a.grade) }
     }
     const done = () => showCards({ mode: "home" })
     if (!card) return (
@@ -204,27 +239,49 @@ function Review({ group, list }: { group: string | null; list: CardGroup[] }) {
             <div className="flex flex-col items-center gap-3 p-8 text-center">
                 <b className="text-[16px] text-foreground">{order.length ? "All done for today" : "Nothing due right now"}</b>
                 <p className={cn(SMALL, "m-0")}>{order.length ? `You reviewed ${plural(order.length, "card")}. They'll come back when they're due.` : "Add cards to a deck, or come back tomorrow."}</p>
+                {order.length > 0 && <Score tally={tally} />}
                 <Button variant="study" onClick={done}>Back to decks</Button>
             </div>
         </Panel>
     )
     return (
-        <Panel title={name} label="Review" head={<><HeadNote>{at + 1} of {order.length}</HeadNote><Button variant="ghost" onClick={done}>Stop</Button></>}>
-            <div ref={box} role="group" tabIndex={0} onKeyDown={keys} aria-label="Card, press Space to flip, then 1, 2 or 3"
-                className="grid gap-4 p-5 outline-none focus-visible:shadow-[inset_0_0_0_2px_var(--accent)]">
-                <button type="button" onClick={() => setFlipped(true)} aria-label={flipped ? undefined : "Show the answer"}
-                    className="flex min-h-[180px] w-full cursor-pointer flex-col items-center justify-center gap-3 rounded-xl border border-border bg-muted p-6 text-center font-[inherit]">
-                    <span className="text-[18px] font-semibold whitespace-pre-wrap text-foreground">{card.front}</span>
-                    {flipped
-                        ? <span className="border-t border-line-2 pt-3 text-[15px] whitespace-pre-wrap text-ink-2">{card.back}</span>
-                        : <span className={SMALL}>Tap or press Space to show the answer</span>}
-                </button>
-                <div className="flex flex-wrap justify-center gap-2" role="group" aria-label="How well did you know it?">
-                    {GRADES.map(([g, label, key]) => (
-                        <Button key={g} variant={g === "good" ? "study" : "ghost"} disabled={!flipped} onClick={() => void answer(g)} aria-keyshortcuts={key}>
-                            {label} <span className="ml-1 font-mono text-[11px] opacity-70">{key}</span>
-                        </Button>
-                    ))}
+        <Panel title={name} label="Review" head={<><HeadNote>{at + 1} of {order.length}</HeadNote><Score tally={tally} /><Button variant="ghost" onClick={done}>Stop</Button></>}>
+            <div ref={box} role="group" tabIndex={0} onKeyDown={keys} aria-label="Flashcard. Press Space to flip, then 2 if you were right or 1 if you were wrong"
+                className="grid gap-5 p-5 outline-none focus-visible:shadow-[inset_0_0_0_2px_var(--accent)]">
+                <div className="mx-auto w-full max-w-[520px]" style={{ perspective: "900px" }}>
+                    <button type="button" onClick={() => { if (!flipped) setFlipped(true) }} aria-label={flipped ? undefined : "Show the answer"}
+                        className="block w-full cursor-pointer rounded-2xl border border-border bg-muted p-0 text-left font-[inherit] shadow-[0_14px_34px_-18px_rgba(0,0,0,0.5)] transition-transform hover:-translate-y-0.5 focus-visible:outline-none">
+                        <div ref={face} className="flex min-h-[260px] flex-col gap-4 p-7">
+                            <span className="flex items-center justify-between text-[11px] font-semibold tracking-[0.12em] text-muted-foreground uppercase">
+                                <span>{flipped ? "Answer" : "Question"}</span>
+                                <span>{name}</span>
+                            </span>
+                            {flipped ? (
+                                <>
+                                    <span className="text-center text-[14px] whitespace-pre-wrap text-ink-2">{card.front}</span>
+                                    <span className="my-auto block border-t border-line-2 pt-4 text-center text-[20px] leading-snug font-semibold whitespace-pre-wrap text-foreground">{card.back}</span>
+                                </>
+                            ) : (
+                                <span className="my-auto block text-center text-[20px] leading-snug font-semibold whitespace-pre-wrap text-foreground">{card.front}</span>
+                            )}
+                            <span className="text-center text-[12.5px] text-muted-foreground">{flipped ? "" : "Tap or press Space to show the answer"}</span>
+                        </div>
+                    </button>
+                </div>
+                <div className="flex flex-wrap items-center justify-center gap-5" role="group" aria-label="Did you know it?">
+                    {ANSWERS.map(({ grade, label, key }) => {
+                        const right = grade === "good"
+                        return (
+                            <button key={grade} type="button" disabled={!flipped} onClick={() => void answer(grade)} aria-keyshortcuts={key}
+                                style={{ color: right ? "var(--good)" : "var(--crit)", borderColor: "currentColor" }}
+                                className="flex min-w-[112px] flex-col items-center gap-1 rounded-xl border-2 bg-transparent px-5 py-3 font-semibold transition hover:bg-muted disabled:opacity-35">
+                                <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                                    <path d={right ? ICON_PATH.right : ICON_PATH.wrong} />
+                                </svg>
+                                <span className="text-[13px]">{label} <span className="font-mono text-[11px] opacity-70">{key}</span></span>
+                            </button>
+                        )
+                    })}
                 </div>
             </div>
         </Panel>
