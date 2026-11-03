@@ -29,6 +29,8 @@ import { FlipClock } from "./flip-clock"
 import { PhaseLabel, PlayIcon, RoundStrip } from "./timer-bits"
 import { TodayCard } from "./today-card"
 import { MINUTE_MS } from "@/lib/time"
+import { TimelineCard } from "./timeline"
+
 
 
 export function TimerCards() {
@@ -40,6 +42,7 @@ export function TimerCards() {
                 <TogetherCard />
                 <FlowCard flow={flow} />
                 <TodayCard />
+                <TimelineCard />
             </div>
         </div>
     )
