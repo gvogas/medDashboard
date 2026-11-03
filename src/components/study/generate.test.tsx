@@ -107,6 +107,14 @@ describe("Generate here", () => {
         await act(async () => { fireEvent.click(screen.getByRole("button", { name: "Generate" })) })
         expect(await screen.findByText(/Use your own AI has no limit/)).toBeTruthy()
     })
+
+    it("says a slow generation took too long, not that there is no connection", async () => {
+        fake.cards.mockRejectedValue(new DOMException("The request timed out. Try again.", "TimeoutError"))
+        await show({ group: null, topic: "Antibiotics", title: "Antibiotics" })
+        await act(async () => { fireEvent.click(screen.getByRole("button", { name: "Generate" })) })
+        expect(await screen.findByText(/took too long/)).toBeTruthy()
+        expect(screen.queryByText(/needs a connection/)).toBeNull()
+    })
 })
 
 describe("files", () => {

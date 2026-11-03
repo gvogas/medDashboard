@@ -33,6 +33,7 @@ export const CARD_COIN_CAP = 10;             /* card coins a day, +1 per Card Fo
 export const STREAK_REVIEWS = 10;            /* or this many card reviews make a streak day */
 export const FINISHED: readonly string[] = ['done', 'submitted', 'graded'];
 export const GRANT_MAX = { coins: 5000, xp: 10000 } as const;
+export const XP_BONUS_MAX = 100000;          /* the most admin-granted XP a person holds: the xp_bonus CHECK in migration 0010 */
 export const NAME_MAX = 16;
 
 /* A lecture review task (src/core/reviews.ts): its id and its title, both made by the app. */

@@ -200,4 +200,19 @@ describe('POST /api/admin/buddy/grant', () => {
     expect((await grant(admin, { userId: 'u-nobody', coins: 5 })).status).toBe(404);
     expect((await grant(api, { userId: api.id, coins: 5 })).status).toBe(403);
   });
+
+  it('adds XP to the bonus when asked, and replaces it otherwise', async () => {
+    const admin = await signInAdmin('bd-adder');
+    const api = await player('bd-added');
+    const grant = (who, body) => who('/api/admin/buddy/grant', { method: 'POST', body });
+    await grant(admin, { userId: api.id, xp: 500 });
+    await grant(admin, { userId: api.id, xp: 300, xpMode: 'add' });
+    expect(await buddy(api)).toMatchObject({ xp: 800 });
+    await grant(admin, { userId: api.id, xp: 100 });
+    expect(await buddy(api)).toMatchObject({ xp: 100 });
+    expect((await grant(admin, { userId: api.id, xp: 5, xpMode: 'bogus' })).status).toBe(400);
+    // Eleven 10,000 adds would be 110,000; the clamp must hold it at the migration's 100,000 limit, not fail the write.
+    for (let i = 0; i < 11; i++) expect((await grant(admin, { userId: api.id, xp: 10000, xpMode: 'add' })).status).toBe(204);
+    expect(await buddy(api)).toMatchObject({ xp: 100000 });
+  });
 });

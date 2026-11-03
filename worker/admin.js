@@ -16,7 +16,7 @@ import { readMaintenance, validateMaintenance } from './maintenance.js';
 import { deleteAccountStmts } from './leaving.js';
 import { DAY_MS } from './time.js';
 import { MESSAGE_MAX } from '../src/core/shared.ts';
-import { GRANT_MAX } from '../src/core/buddy-rules.ts';
+import { GRANT_MAX, XP_BONUS_MAX } from '../src/core/buddy-rules.ts';
 import { dayOf } from './buddy.js';
 
 /* The newest file in migrations/; a test keeps it in step. */
@@ -239,13 +239,17 @@ export const adminRoutes = [
     const coins = whole(body.coins, 1, GRANT_MAX.coins, 'coins');
     const xp = whole(body.xp, 0, GRANT_MAX.xp, 'xp');
     if (coins === null && xp === null) throw new HttpError(400, { error: 'invalid', field: 'coins' });
+    const add = body.xpMode === 'add';
+    if (body.xpMode !== undefined && body.xpMode !== 'set' && !add) throw new HttpError(400, { error: 'invalid', field: 'xpMode' });
     const user = await target(env.DB, typeof body.userId === 'string' ? body.userId : '');
     const now = Date.now();
     const tz = (await env.DB.prepare('SELECT tz FROM buddy_settings WHERE user_id = ?').bind(user.id).first())?.tz || 'UTC';
-    const detail = [coins !== null && `coins ${coins}`, xp !== null && `xp ${xp}`].filter(Boolean).join(', ');
+    const detail = [coins !== null && `coins ${coins}`, xp !== null && (add ? `xp +${xp}` : `xp ${xp}`)].filter(Boolean).join(', ');
     await env.DB.batch([
       env.DB.prepare('INSERT INTO buddy_settings (user_id) VALUES (?) ON CONFLICT (user_id) DO NOTHING').bind(user.id),
-      ...(xp !== null ? [env.DB.prepare('UPDATE buddy_settings SET xp_bonus = ? WHERE user_id = ?').bind(xp, user.id)] : []),
+      ...(xp !== null ? [add
+        ? env.DB.prepare('UPDATE buddy_settings SET xp_bonus = MIN(?, xp_bonus + ?) WHERE user_id = ?').bind(XP_BONUS_MAX, xp, user.id)
+        : env.DB.prepare('UPDATE buddy_settings SET xp_bonus = ? WHERE user_id = ?').bind(xp, user.id)] : []),
       ...(coins !== null ? [env.DB.prepare("INSERT INTO buddy_ledger (user_id, source, kind, amount, day, at) VALUES (?, ?, 'earn', ?, ?, ?)")
         .bind(user.id, `admin:${now}:${crypto.randomUUID().slice(0, 8)}`, coins, dayOf(now, tz), now)] : []),
       audit(env.DB, admin, 'grant', user.username, detail, now),

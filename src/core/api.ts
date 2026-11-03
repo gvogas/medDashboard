@@ -93,10 +93,10 @@ function spotifyRequest(method: string, path: string, body?: unknown) {
 }
 
 /** Resolves to JSON (or null for 204). Invalid replies never acknowledge a write. */
-export function request<T = unknown>(method: string, path: string, body?: unknown, headers?: Record<string, string>, signal?: AbortSignal): Promise<T> {
+export function request<T = unknown>(method: string, path: string, body?: unknown, headers?: Record<string, string>, signal?: AbortSignal, timeoutMs?: number): Promise<T> {
   /* Account operations and the local connection check remain available during an API cooldown. */
   if (path.startsWith('/api/spotify/') && !['/api/spotify/token', '/api/spotify/status'].includes(path)) return spotifyRequest(method, path, body);
-  return send(method, path, body, headers, signal);
+  return send(method, path, body, headers, signal, timeoutMs);
 }
 /** What the Worker's /api/spotify/player and /status say: a part of the player's state. */
 type SpotifyAnswer = Partial<Omit<PlayerState, 'stale' | 'error' | 'loaded'>>;
@@ -104,7 +104,7 @@ type Queue = { current: Track | null; queue: Track[] };
 
 /* The answer is JSON as the Worker sends it (`any`, as Response.json() is); request<T>() gives
    it the type each api method promises, and the record and sync answers are checked here. */
-async function send(method: string, path: string, body?: unknown, extraHeaders: Record<string, string> = {}, outer?: AbortSignal) {
+async function send(method: string, path: string, body?: unknown, extraHeaders: Record<string, string> = {}, outer?: AbortSignal, timeoutMs?: number) {
   const session = sessionRequests.signal;
   const controller = new AbortController();
   const { signal } = controller;
@@ -115,7 +115,7 @@ async function send(method: string, path: string, body?: unknown, extraHeaders: 
   outer?.addEventListener('abort', stop, { once: true });
   /* A file (a course outline) goes as it is, and reading it with AI can take a while. */
   const file = typeof Blob !== 'undefined' && body instanceof Blob;
-  const timer = setTimeout(() => controller.abort(new DOMException('The request timed out. Try again.', 'TimeoutError')), file ? 120_000 : 30_000);
+  const timer = setTimeout(() => controller.abort(new DOMException('The request timed out. Try again.', 'TimeoutError')), timeoutMs ?? (file ? 120_000 : 30_000));
   try {
     session.throwIfAborted();
     outer?.throwIfAborted();
@@ -329,7 +329,7 @@ export const api = {
     settings: (enabled: boolean, tz?: string, cardsInFeed?: boolean) => buddyOf(request('PUT', '/api/buddy/settings', { enabled, tz, ...(cardsInFeed !== undefined && { cardsInFeed }) })),
     claim: (tier: string) => buddyOf(request('POST', '/api/buddy/claim', { tier })),
     look: (look: Partial<BuddyLook>) => buddyOf(request('PUT', '/api/buddy/look', look)),
-    grant: (userId: string, g: { coins?: number; xp?: number }) => empty(request('POST', '/api/admin/buddy/grant', { userId, ...g })),
+    grant: (userId: string, g: { coins?: number; xp?: number; xpMode?: 'set' | 'add' }) => empty(request('POST', '/api/admin/buddy/grant', { userId, ...g })),
     shop: () => shopOf(request('GET', '/api/buddy/shop')),
     buy: (sku: string, level: number) => boughtOf(request('POST', '/api/buddy/buy', { sku, level })),
     saveCustom: (custom: CustomBuddy) => buddyOf(request('PUT', '/api/buddy/custom', custom)),
@@ -339,7 +339,7 @@ export const api = {
   studyAi: {
     status: (): Promise<StudyAiStatus> => request('GET', '/api/study-ai/status'),
     cards: (body: { sources: { classData?: string; text?: string; topic?: string }; count: number; level: string }): Promise<{ cards: { front: string; back: string }[]; provider: string; left: number }> =>
-      request('POST', '/api/study-ai/cards', body),
+      request('POST', '/api/study-ai/cards', body, undefined, undefined, 120_000),
     admin: (): Promise<StudyAiAdmin> => request('GET', '/api/admin/study-ai'),
     setCaps: (caps: StudyAiAdmin['caps']): Promise<StudyAiAdmin> => request('PUT', '/api/admin/study-ai/caps', caps),
   },

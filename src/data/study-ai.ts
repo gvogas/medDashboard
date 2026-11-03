@@ -77,7 +77,12 @@ export async function loadStudyAiStatus(): Promise<void> {
 
 /** What a refused Generate here says; every refusal offers Use your own AI. */
 export function generateMessage(e: unknown): string {
-    if (!(e instanceof ApiError)) return "That needs a connection. Use your own AI works offline too: copy the prompt instead."
+    if (e instanceof DOMException && e.name === "TimeoutError") return "Generate here took too long. Try again, or use your own AI."
+    if (!(e instanceof ApiError)) {
+        /* A failed request (fetch rejects with a TypeError) or an offline device is a connection problem; anything else is not. */
+        if (e instanceof TypeError || (typeof navigator !== "undefined" && navigator.onLine === false)) return "That needs a connection. Use your own AI works offline too: copy the prompt instead."
+        return "Generate here didn't work this time. Try again, or use your own AI."
+    }
     const code = e.body?.error
     if (code === "study_ai_cap") return "You've used today's free generations. Use your own AI has no limit."
     if (code === "study_ai_busy") return "Generate here is busy for today. Use your own AI still works."
@@ -102,6 +107,7 @@ export async function generateHere(r: CardRequest): Promise<{ cards: CardDraft[]
         return { cards: out.cards, cached: false }
     } catch (e) {
         void loadStudyAiStatus()
+        if (!(e instanceof ApiError)) console.error("Generate here failed:", e)
         return { error: generateMessage(e) }
     }
 }

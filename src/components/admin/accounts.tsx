@@ -214,15 +214,15 @@ function NewPassword({ account, busy, onSave, onCancel }: { account: Account; bu
     )
 }
 
-/* Study Buddy, for testing: coins (1–5,000) and/or XP (0–10,000, replacing the last XP grant). */
-function Grant({ account, busy, onGrant, onCancel }: { account: Account; busy: boolean; onGrant: (g: { coins?: number; xp?: number }) => Promise<void>; onCancel: () => void }) {
+/* Study Buddy, for testing: coins (1–5,000) and/or XP (0–10,000). XP replaces the last XP grant unless "Add XP" is ticked. */
+function Grant({ account, busy, onGrant, onCancel }: { account: Account; busy: boolean; onGrant: (g: { coins?: number; xp?: number; xpMode?: "set" | "add" }) => Promise<void>; onCancel: () => void }) {
     const id = useId()
-    const [coins, setCoins] = useState(""), [xp, setXp] = useState("")
+    const [coins, setCoins] = useState(""), [xp, setXp] = useState(""), [add, setAdd] = useState(false)
     const whole = (v: string, min: number, max: number) => v === "" ? undefined : Number.isInteger(+v) && +v >= min && +v <= max ? +v : NaN
     const c = whole(coins, 1, GRANT_MAX.coins), x = whole(xp, 0, GRANT_MAX.xp)
     const ok = !Number.isNaN(c) && !Number.isNaN(x) && (c !== undefined || x !== undefined)
     return (
-        <form className="flex flex-wrap items-end gap-2" onSubmit={(e) => { e.preventDefault(); if (ok) void onGrant({ ...(c !== undefined ? { coins: c } : {}), ...(x !== undefined ? { xp: x } : {}) }) }}>
+        <form className="flex flex-wrap items-end gap-2" onSubmit={(e) => { e.preventDefault(); if (ok) void onGrant({ ...(c !== undefined ? { coins: c } : {}), ...(x !== undefined ? { xp: x, xpMode: add ? "add" : "set" } : {}) }) }}>
             <div className="grid w-32 gap-1">
                 <Label htmlFor={id + "c"}>Coins</Label>
                 <TextInput id={id + "c"} type="number" inputMode="numeric" min={1} max={GRANT_MAX.coins} value={coins} onChange={(e) => setCoins(e.target.value)} autoFocus />
@@ -231,9 +231,11 @@ function Grant({ account, busy, onGrant, onCancel }: { account: Account; busy: b
                 <Label htmlFor={id + "x"}>XP</Label>
                 <TextInput id={id + "x"} type="number" inputMode="numeric" min={0} max={GRANT_MAX.xp} value={xp} onChange={(e) => setXp(e.target.value)} />
             </div>
+            <Button type="button" variant="ghost" className="h-8 px-3 text-[12.5px]" onClick={() => { setCoins(String(GRANT_MAX.coins)); setXp(String(GRANT_MAX.xp)) }}>Max</Button>
+            <Checkbox id={id + "m"} checked={add} onChange={setAdd}>Add XP</Checkbox>
             <Button type="submit" className="h-8 px-3 text-[12.5px]" disabled={busy || !ok}>Grant</Button>
             <Button variant="ghost" className="h-8 px-3 text-[12.5px]" onClick={onCancel}>Cancel</Button>
-            <Note>For testing {account.username}'s Study Buddy: coins 1 to {GRANT_MAX.coins.toLocaleString()}; XP 0 to {GRANT_MAX.xp.toLocaleString()} replaces the last XP grant. Recorded in the audit log.</Note>
+            <Note>For testing {account.username}'s Study Buddy: coins 1 to {GRANT_MAX.coins.toLocaleString()}; XP 0 to {GRANT_MAX.xp.toLocaleString()}. XP replaces the last XP grant unless "Add XP" is ticked. Recorded in the audit log.</Note>
         </form>
     )
 }
