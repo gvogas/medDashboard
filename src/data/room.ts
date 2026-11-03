@@ -9,6 +9,7 @@
 
 import { api, ApiError } from "@/core/api"
 import { data } from "@/core/store"
+import { CHAT_MESSAGE_MAX } from "@/core/shared"
 import * as run from "./run"
 import { toast } from "./toast"
 import { openRecord } from "./record"
@@ -159,7 +160,7 @@ export async function sendChat(text: string): Promise<string> {
 /** What a failed chat send says: the chat's own limits first, then the room's. */
 function chatMessage(e: unknown): string {
     if (e instanceof ApiError && e.body?.error === "chat_limit") return "You're sending messages fast. Wait a moment."
-    if (e instanceof ApiError && e.status === 400) return "Messages can be up to 500 characters."
+    if (e instanceof ApiError && e.status === 400 && e.body?.field === "body") return `Messages can be up to ${CHAT_MESSAGE_MAX} characters.`
     return roomMessage(e)
 }
 

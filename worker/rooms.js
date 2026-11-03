@@ -13,6 +13,7 @@ import { studyFlow } from './validate.js';
 import { logError, messageOf } from './errors.js';
 import * as timer from '../src/core/timer.ts';
 import { MINUTE_MS, DAY_MS } from './time.js';
+import { CHAT_MESSAGE_MAX } from '../src/core/shared.ts';
 import { DISPLAY_NAME, pairOf } from './accounts.js';
 
 export const ROOM_SIZE = 8;
@@ -477,7 +478,6 @@ export async function groupRecord(db, me, roomId) {
 /* ── room chat ── */
 
 export const CHAT_KEEP = 50;
-export const MESSAGE_MAX = 500;
 /** Messages one person may send a minute: well above talk, well below a flood. */
 export const CHAT_PER_MINUTE = 30;
 
@@ -511,7 +511,7 @@ export async function listMessages(db, me, roomId, after = null) {
     already taken you out for being away (settled as a poll would). */
 export async function sendMessage(db, me, roomId, body, now = Date.now()) {
   const text = typeof body?.body === 'string' ? body.body.replace(/[\x00-\x08\x0b-\x1f\x7f]/g, '').trim() : '';
-  if (!text || text.length > MESSAGE_MAX) throw new HttpError(400, { error: 'invalid', field: 'body' });
+  if (!text || text.length > CHAT_MESSAGE_MAX) throw new HttpError(400, { error: 'invalid', field: 'body' });
   const first = await load(db, roomId);
   if (!first) throw notFound();
   if (!first.members.some((m) => m.userId === me && m.state === 'in')) throw notFound();

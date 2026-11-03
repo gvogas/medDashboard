@@ -31,6 +31,8 @@ export const MARK_DEFAULTS: Record<string, unknown> = { status: 'todo', grade: n
 export const STICKER_MAX = 90_000
 /** Characters in an announcement or a maintenance message. */
 export const MESSAGE_MAX = 280
+/** Characters in one room chat message. */
+export const CHAT_MESSAGE_MAX = 500
 /** Tasks in one project. */
 export const TASK_LIMIT = 200
 /** Steps in an item's checklist. */

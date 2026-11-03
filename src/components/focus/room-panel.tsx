@@ -7,6 +7,7 @@ import { useEffect, useRef, useState, type FormEvent } from "react"
 import { cn } from "@/lib/utils"
 import { duration, MINUTE_MS } from "@/lib/time"
 import { data } from "@/core/store"
+import { CHAT_MESSAGE_MAX } from "@/core/shared"
 import { useFriends } from "@/data/friends"
 import { inviteMore, isHost, localClock, memberMinutes, sendChat, useRoom } from "@/data/room"
 import type { Run } from "@/data/study-timer"
@@ -144,7 +145,7 @@ export function RoomChat() {
                 ))}
             </ol>
             <form onSubmit={send} className="flex gap-2">
-                <input aria-label="Message the room" value={draft} maxLength={500} onChange={(e) => setDraft(e.target.value)} placeholder="Say something"
+                <input aria-label="Message the room" value={draft} maxLength={CHAT_MESSAGE_MAX} onChange={(e) => setDraft(e.target.value)} placeholder="Say something"
                     className="min-w-0 flex-1 rounded-full border border-white/10 bg-white/5 px-3 py-1.5 font-[inherit] text-[13px] text-[var(--fx-ink)]" />
                 <button type="submit" disabled={busy || !draft.trim()}
                     className="cursor-pointer rounded-full border border-white/10 bg-white/5 px-3 py-1.5 font-[inherit] text-[12.5px] font-semibold text-[var(--fx-ink-2)] hover:text-[var(--fx-ink)] disabled:opacity-50">Send</button>
