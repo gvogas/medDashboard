@@ -84,6 +84,7 @@ export function generateMessage(e: unknown): string {
         return "Generate here didn't work this time. Try again, or use your own AI."
     }
     const code = e.body?.error
+    if (code === "ai_timeout") return "Generate here took too long, so this use is given back. Try again, or use your own AI."
     if (code === "study_ai_cap") return "You've used today's free generations. Use your own AI has no limit."
     if (code === "study_ai_busy") return "Generate here is busy for today. Use your own AI still works."
     if (code === "maintenance") return "Generate here is switched off for a moment. Use your own AI still works."

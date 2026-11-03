@@ -108,6 +108,14 @@ describe("Generate here", () => {
         expect(await screen.findByText(/Use your own AI has no limit/)).toBeTruthy()
     })
 
+    it("says the server's model timeout took too long, and that the use came back", async () => {
+        fake.cards.mockRejectedValue(new ApiError(504, { error: "ai_timeout" }))
+        await show({ group: null, topic: "Antibiotics", title: "Antibiotics" })
+        await act(async () => { fireEvent.click(screen.getByRole("button", { name: "Generate" })) })
+        expect(await screen.findByText(/took too long, so this use is given back/)).toBeTruthy()
+        expect(screen.queryByText(/needs a connection/)).toBeNull()
+    })
+
     it("says a slow generation took too long, not that there is no connection", async () => {
         fake.cards.mockRejectedValue(new DOMException("The request timed out. Try again.", "TimeoutError"))
         await show({ group: null, topic: "Antibiotics", title: "Antibiotics" })
