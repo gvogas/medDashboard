@@ -79,7 +79,8 @@ describe('Generate here', () => {
     for (const bad of [body({ count: 0 }), body({ count: 31 }), body({ level: 'expert' }), body({ sources: {} }), body({ sources: { topic: 'x'.repeat(121) } })]) {
       await expect(generateCards(e, id, bad)).rejects.toMatchObject({ status: expect.any(Number) });
     }
-    await expect(generateCards(e, id, body({ sources: { text: 'x'.repeat(60_001) } }))).rejects.toMatchObject({ status: 413 });
+    const long = await generateCards({ DB: env.DB, AI: ai() }, await user(), body({ sources: { text: 'Page 1\n' + 'x'.repeat(70_000) } }));
+    expect(long.cards).toHaveLength(2);
   });
 });
 

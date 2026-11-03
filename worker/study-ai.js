@@ -11,7 +11,7 @@ import { requireAdmin } from './admin.js';
 import { claimLimit } from './limits.js';
 import { askJson, modelAnswer } from './ai.js';
 import { DAY_MS } from './time.js';
-import { cardsPrompt, HERE_LIMIT, LEVELS, TOPIC_MAX } from '../src/core/study-prompts.ts';
+import { cardsPrompt, cutText, HERE_LIMIT, LEVELS, TOPIC_MAX } from '../src/core/study-prompts.ts';
 import { checkCards, CARDS_MAX, parseLoose } from '../src/core/study-answers.ts';
 import { dayOf } from './buddy.js';
 
@@ -103,13 +103,16 @@ export async function studyAiStatus(env, userId, now = Date.now()) {
 function cardRequest(body) {
   if (!body || typeof body !== 'object') throw new HttpError(400, { error: 'invalid', field: 'body' });
   const src = body.sources && typeof body.sources === 'object' ? body.sources : {};
-  const text = (v, field, max) => {
+  const text = (v, field, max, cut = false) => {
     if (v === undefined || v === null || v === '') return '';
     if (typeof v !== 'string') throw new HttpError(400, { error: 'invalid', field });
-    if (v.length > max) throw new HttpError(413, { error: 'material_too_large' });
+    if (v.length > max) {
+      if (cut) return cutText(v, max); /* a long PDF: cut at a page or line break; the model sees HERE_LIMIT of it anyway */
+      throw new HttpError(413, { error: 'material_too_large' });
+    }
     return v;
   };
-  const sources = { classData: text(src.classData, 'classData', 60_000), text: text(src.text, 'text', 60_000), topic: text(src.topic, 'topic', TOPIC_MAX) };
+  const sources = { classData: text(src.classData, 'classData', 60_000, true), text: text(src.text, 'text', 60_000, true), topic: text(src.topic, 'topic', TOPIC_MAX) };
   if (!sources.classData.trim() && !sources.text.trim() && !sources.topic.trim()) throw new HttpError(400, { error: 'invalid', field: 'sources' });
   const count = body.count;
   if (!Number.isInteger(count) || count < 1 || count > CARDS_MAX) throw new HttpError(400, { error: 'invalid', field: 'count' });

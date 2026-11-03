@@ -8,7 +8,7 @@ import { useEffect, useMemo, useState } from "react"
 import { cn } from "@/lib/utils"
 import { Panel, HeadNote } from "@/components/views/bits"
 import { Button, Checkbox, Note, Select, TextArea, TextInput } from "@/components/sheet/fields"
-import { LEVELS, type Level } from "@/core/study-prompts"
+import { LEVELS, cutText, type Level } from "@/core/study-prompts"
 import { PASTE_MAX, type CardDraft } from "@/core/study-answers"
 import { useMaintenance } from "@/data/maintenance"
 import { useCourses, useItems, useProfile } from "@/data/store"
@@ -20,6 +20,20 @@ import {
 
 const SMALL = "text-[12.5px] text-muted-foreground"
 const LEVEL_NAME: Record<Level, string> = { basic: "Basics", exam: "Exam prep", deep: "Deeper" }
+
+/* What the wait shows, so a click on Generate is never silent: the count, the seconds, and a note if it runs long. */
+function GenerateProgress({ secs, count }: { secs: number; count: number }) {
+    return (
+        <div className="grid gap-1.5">
+            <span aria-hidden="true" className="text-[12.5px] text-foreground">Making {count} cards from your material · {secs} s</span>
+            <span className="sr-only" role="status">Making {count} cards from your material</span>
+            <span aria-hidden="true" className="block h-1 overflow-hidden rounded-sm bg-line-2">
+                <span className="block h-1 w-1/3 animate-pulse bg-primary" />
+            </span>
+            <span className={SMALL} role="status">{secs >= 30 ? "Still working. This is taking longer than usual." : "Usually under half a minute."}</span>
+        </div>
+    )
+}
 
 export interface GenerateStart { group: string | null; topic?: string; text?: string; title?: string }
 
@@ -48,6 +62,15 @@ export function GenerateCards({ start }: { start: GenerateStart }) {
     const [drafts, setDrafts] = useState<CardDraft[] | null>(null)
     const [source, setSource] = useState<"ai" | "paste">("ai")
     const [note, setNote] = useState("")
+    const [secs, setSecs] = useState(0)
+    /* count the seconds while cards are made, so the wait visibly goes on */
+    useEffect(() => {
+        if (!busy) return
+        const t0 = Date.now()
+        setSecs(0)
+        const id = setInterval(() => setSecs(Math.floor((Date.now() - t0) / 1000)), 1000)
+        return () => clearInterval(id)
+    }, [busy])
 
     /* the class as the prompt reads it: its own items, newest first */
     const classData = useMemo(() => {
@@ -56,7 +79,7 @@ export function GenerateCards({ start }: { start: GenerateStart }) {
         const name = course.code ? `${course.code} · ${course.name}` : course.name
         return classContext(name, mine.map((it) => ({ type: it.type, title: it.title, date: it.date, notes: it.notes, checklist: it.checklist })), 60_000)
     }, [useClass, course, items])
-    const req: CardRequest = { classData, text: [...files.map((x) => x.text), pasted].filter((t) => t.trim()).join("\n\n"), topic, count, level }
+    const req: CardRequest = { classData, text: cutText([...files.map((x) => x.text), pasted].filter((t) => t.trim()).join("\n\n"), 60_000), topic, count, level }
     const ready = hasMaterial(req)
 
     const addFiles = async (list: FileList | null) => {
@@ -133,6 +156,7 @@ export function GenerateCards({ start }: { start: GenerateStart }) {
                         </p>
                         {error && <Note tone="bad">{error}</Note>}
                         <span><Button variant="study" disabled={!ready || busy || !here || !status?.left || !status.globalOpen} onClick={() => void generate()}>{busy ? "Making cards…" : "Generate"}</Button></span>
+                        {busy && <GenerateProgress secs={secs} count={count} />}
                         {!ready && <span className={SMALL}>Pick a class, add a file, paste notes, or type a topic.</span>}
                     </div>
                 ) : (
