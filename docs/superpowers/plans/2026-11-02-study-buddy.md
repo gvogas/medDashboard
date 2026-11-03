@@ -19,7 +19,7 @@
 3. **Line endings:** keep every file LF.
 4. **Non-ASCII** (·, —, …): write it with Edit/Write, never through a shell; run `npm run build` after (Vite refuses Latin-1 bytes the tests miss).
 5. **Deploying:** the Cloudflare Git build does **not** apply remote D1 migrations. A stage with a migration needs `npm run db:remote` and `npm run db:check -- --remote` before its merge to `main`.
-6. **Commits:** end each message with `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`. Commit only on the stage branch; never push, merge to `main` or touch remote D1 without George's yes.
+6. **Commits:** do not add `Co-Authored-By` or other trailers to commit messages. Commit only on the stage branch; never push, merge to `main` or touch remote D1 without George's yes.
 7. **Sub-agent worktrees** may start from `main`: create the stage branch yourself and point agents at it.
 
 ---
@@ -32,7 +32,7 @@
 | 2 | Shop and custom buddy: upgrades, backgrounds and frames, grade bonus, a buddy from your own picture, naming | `buddy-2-shop` | `0011_buddy_shop.sql` | from "What Stage 2 must cover" |
 | 3 | Decks and spaced repetition, sync v4 | `buddy-3-cards` | `0012_decks.sql` | from "What Stage 3 must cover" |
 | 4 | AI gateway, Generate here (Workers AI), Use your own AI (copy and paste) | `buddy-4-ai` | none | written after Stage 3 ships |
-| 5 | Quizzes | `buddy-5-quiz` | `0013_quizzes.sql` | later |
+| 5 | Practice (AI practice questions) | `buddy-5-practice` | `0013_practice_attempts.sql` | later; see `docs/superpowers/plans/2026-11-03-ai-practice.md` |
 | 6 | Notes and study plan | `buddy-6-notes` | `0014_study_docs.sql` | later |
 | 7 | Shared class materials | `buddy-7-share` | `0015_activity_share.sql` | later |
 | 8 | Connector (MCP), optional | `buddy-8-connector` | `0016_mcp_oauth.sql` | later |
