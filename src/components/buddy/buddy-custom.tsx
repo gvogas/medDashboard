@@ -56,10 +56,16 @@ export function BuddyCustom({ saved, onDone }: { saved: CustomBuddy | null; onDo
     const load = (file: File | undefined | null) => {
         if (!file || !PICTURE_TYPES.test(file.type)) { setError(PICTURE_ERRORS.type); return }
         if (file.size > MAX_PICTURE_BYTES) { setError(PICTURE_ERRORS.size); return }
-        const url = URL.createObjectURL(file), img = new Image()
-        img.onload = () => { URL.revokeObjectURL(url); setError(""); setPic(img) }
-        img.onerror = () => { URL.revokeObjectURL(url); setError(PICTURE_ERRORS.open) }
-        img.src = url
+        /* a data: URL, not a blob: one: the CSP's img-src allows data: and not blob: */
+        const reader = new FileReader()
+        reader.onload = () => {
+            const img = new Image()
+            img.onload = () => { setError(""); setPic(img) }
+            img.onerror = () => setError(PICTURE_ERRORS.open)
+            img.src = String(reader.result)
+        }
+        reader.onerror = () => setError(PICTURE_ERRORS.open)
+        reader.readAsDataURL(file)
     }
     /* a picture pasted anywhere on the page while this is open */
     useEffect(() => {
