@@ -127,7 +127,8 @@ describe("the session sheet", () => {
         fireEvent.change(screen.getByLabelText("How long"), { target: { value: "65" } })
         fireEvent.change(screen.getByLabelText("What you covered"), { target: { value: "  Anki, 120 cards " } })
         await act(async () => { fireEvent.click(button("Save")) })
-        expect(store.saveStudySession).toHaveBeenCalledWith({ ...s, spaceId: null, studyMinutes: 65, note: "Anki, 120 cards" })
+        /* onto the stored session go only the fields changed (the store fills spaceId when it normalizes the row) */
+        expect(store.saveStudySession).toHaveBeenCalledWith({ ...s, studyMinutes: 65, note: "Anki, 120 cards" })
         expect(getSheet()).toBeNull()
     })
 

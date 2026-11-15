@@ -3,7 +3,7 @@
 import type { Row } from './db.ts';
 import type { Outline, Schedule } from './importers/plan.ts';
 import { UNREAD_CAP } from './shared.ts';
-import { checkCustom, type CustomBuddy } from './buddy-rules.ts';
+import { checkCustom, MOODS, type CustomBuddy } from './buddy-rules.ts';
 import type { Cursor, Page, ServerProfile } from './store.ts';
 import type { Album, Device, Page as SpotifyPage, PlayerState, Playlist, SearchResults, Track } from './spotify-types.ts';
 import type { ActivityRow, AdminAccounts, BuddyAnswer, BuddyLook, Shop, ShopItem, StudyAiAdmin, StudyAiStatus, AdminHealth, AdminTraffic, Announcement, AuditEntry, CalendarFeed, ErrorGroup, ErrorRow, MaintenanceState, Flow, FriendMatch, FriendSettings, Friends, GroupRecord, Inbox, JoinCode, ParentRef, RoomMessage, RoomView, Space, SpaceDetails, SpaceInvite, SpaceSummary } from './types.ts';
@@ -217,13 +217,12 @@ async function spaceOf(response: Promise<unknown>): Promise<SpaceSummary> {
 const query = (o: Record<string, string | undefined>) => new URLSearchParams(Object.entries(o).filter((e): e is [string, string] => !!e[1])).toString()
 type ReadQuery = { name: string; today: string; termStart?: string; terms?: string; codes?: string; grid?: string }
 
-const MOOD_NAMES = ['happy', 'tired', 'sick', 'hurt'];
 const count = (v: unknown, max = Number.MAX_SAFE_INTEGER) => Number.isSafeInteger(v) && (v as number) >= 0 && (v as number) <= max;
 /** The Buddy as the Worker answers it, or invalidResponse(): a broken answer never reaches the page. */
 async function buddyOf(response: Promise<unknown>): Promise<BuddyAnswer> {
   const b = await response as any; /* `any`: every field is checked below */
   if (b && b.enabled === false) return { enabled: false };
-  const ok = !!b && b.enabled === true && count(b.xp) && typeof b.tier === 'string' && count(b.health, 100) && MOOD_NAMES.includes(b.mood)
+  const ok = !!b && b.enabled === true && count(b.xp) && typeof b.tier === 'string' && count(b.health, 100) && (MOODS as readonly string[]).includes(b.mood)
     && count(b.streak) && Number.isSafeInteger(b.coins) && count(b.due)
     && (b.next === null || (!!b.next && typeof b.next.tier === 'string' && count(b.next.xp)))
     && !!b.look && typeof b.look.buddy === 'string' && typeof b.look.bg === 'string' && typeof b.look.frame === 'string' && typeof b.look.name === 'string'

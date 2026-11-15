@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest"
-import { fitSize, shrinkImage, MAX_EDGE } from "./image"
+import { fitSize, shrinkTimetable, MAX_EDGE } from "./image"
 
 afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals() })
 
@@ -22,7 +22,7 @@ describe("a screenshot made smaller", () => {
             canvas = this
             cb(new Blob(["j"], { type: type as string }))
         })
-        const out = await shrinkImage(new File(["png"], "t.png", { type: "image/png" }))
+        const { blob: out } = await shrinkTimetable(new File(["png"], "t.png", { type: "image/png" }))
         expect(out.type).toBe("image/jpeg")
         expect(toBlob.mock.calls[0][1]).toBe("image/jpeg")
         expect(ctx.fillRect).toHaveBeenCalledWith(0, 0, 1600, 1000)
@@ -37,7 +37,7 @@ describe("a screenshot made smaller", () => {
 
     it("says so when the browser cannot open it", async () => {
         vi.stubGlobal("createImageBitmap", vi.fn(async () => { throw new DOMException("bad", "InvalidStateError") }))
-        await expect(shrinkImage(new File(["x"], "t.heic", { type: "image/heic" })))
+        await expect(shrinkTimetable(new File(["x"], "t.heic", { type: "image/heic" })))
             .rejects.toMatchObject({ name: "FileError", message: "That picture could not be opened. Use a PNG or JPG screenshot." })
     })
 })

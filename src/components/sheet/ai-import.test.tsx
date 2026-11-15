@@ -23,7 +23,7 @@ vi.mock("@/data/query", () => ({ schoolCal: () => fake.cal, termStart: () => nul
 vi.mock("@/core/api", () => ({ api: { readSchedule: vi.fn(), readOutline: vi.fn(), readSchool: vi.fn() } }))
 vi.mock("@/data/ai-read", () => ai)
 vi.mock("@/data/toast", () => ({ TOAST_MS: 6000, TOAST_LONG_MS: 8000, toast: legacy.toast }))
-vi.mock("@/core/image", () => ({ shrinkImage: legacy.shrink, shrinkTimetable: async (f: Blob) => ({ blob: await legacy.shrink(f), grid: "" }) }))
+vi.mock("@/core/image", () => ({ shrinkTimetable: async (f: Blob) => ({ blob: await legacy.shrink(f), grid: "" }) }))
 vi.mock("@/core/pdftext", () => ({ pdfTimetable }))
 vi.mock("@/data/actions", () => ({ openSettings: vi.fn() }))
 

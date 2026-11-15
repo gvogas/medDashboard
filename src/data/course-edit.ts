@@ -1,6 +1,5 @@
 // Editing a course. Unlike an item, a course is a draft until Save: its classes are
-// entered together, and a half-edited timetable should not reach the board. From legacy
-// views/drawer-course.js.
+// entered together, and a half-edited timetable should not reach the board.
 
 import { HEXES, normalizeCourse, uid } from "@/core/model"
 import { courseTerm, type SchoolCalendar } from "@/core/school"

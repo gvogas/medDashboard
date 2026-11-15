@@ -203,9 +203,8 @@ export function repeatEnds(cal: SchoolCalendar | null, date: string): { end: str
 }
 
 /** The term start the app goes by: the school calendar's current semester, else the one set. */
-export function termStartFor(profile: { schoolCalendar?: unknown; termStart?: string | null } | null | undefined, today: string): string | null {
-  const cal = normalizeSchool(profile?.schoolCalendar);
-  return cal ? currentTerm(cal, today)!.start : profile?.termStart || null;
+export function termStartFor(cal: SchoolCalendar | null, termStart: string | null | undefined, today: string): string | null {
+  return cal ? currentTerm(cal, today)!.start : termStart || null;
 }
 
 /** One line about where `today` is in the school year, for Settings. */

@@ -1,6 +1,6 @@
 // What the Settings sheet says and where it goes: the sync line, the theme's line, which
 // tab a deep link opens, the calendar feed's link, a saved copy's values, and the coat
-// colour. From legacy views/drawer-settings.js.
+// colour.
 
 import { DEFAULT_COAT } from "@/core/model"
 import { CHECK_TEXT, HOLD_TEXT, changesWaiting } from "@/core/sync-text"

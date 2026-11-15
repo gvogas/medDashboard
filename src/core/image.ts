@@ -14,16 +14,12 @@ export function fitSize(w: number, h: number, max = MAX_EDGE): { w: number; h: n
 
 const fileError = () => Object.assign(new Error("That picture could not be opened. Use a PNG or JPG screenshot."), { name: "FileError" })
 
-/** The picture as a JPEG of at most MAX_EDGE px. A FileError when the browser cannot open it (HEIC, a damaged file). */
-export async function shrinkImage(file: Blob): Promise<Blob> {
-    return withCanvas(file, (canvas) => jpeg(canvas))
-}
-
 /**
  * A timetable screenshot made smaller, with its grid read from the pixels (image-grid.ts): when
  * a grid is found, each class's block gets a red number in its corner, and `grid` says where
  * each numbered block is for the Worker (worker/schedule.js parseGrid): "5.20|0:1-3,0:4-7".
- * No grid: the picture as shrinkImage makes it, and `grid` is "".
+ * No grid: the picture as a JPEG of at most MAX_EDGE px, and `grid` is "". A FileError when the
+ * browser cannot open it (HEIC, a damaged file).
  */
 export async function shrinkTimetable(file: Blob): Promise<{ blob: Blob; grid: string }> {
     return withCanvas(file, async (canvas, ctx) => {

@@ -87,8 +87,8 @@ describe('a school calendar', () => {
   it('follows the semester for the term start, then the one set', () => {
     expect(currentTerm(cal, '2026-06-01').name).toBe('Autumn 2026');
     expect(currentTerm(cal, '2027-02-01').name).toBe('Winter 2027');
-    expect(termStartFor({ schoolCalendar: VANIER, termStart: '2026-01-01' }, '2027-02-01')).toBe('2027-01-19');
-    expect(termStartFor({ schoolCalendar: {}, termStart: '2026-01-01' }, '2027-02-01')).toBe('2026-01-01');
+    expect(termStartFor(normalizeSchool(VANIER), '2026-01-01', '2027-02-01')).toBe('2027-01-19');
+    expect(termStartFor(normalizeSchool({}), '2026-01-01', '2027-02-01')).toBe('2026-01-01');
     expect(schoolStatus(cal, '2026-09-26')).toBe('Autumn 2026 · week 5 of 16');
     expect(schoolStatus(cal, '2027-01-05', (d) => d)).toBe('Winter 2027 starts 2027-01-19');
   });

@@ -5,7 +5,7 @@
 // non-admins 503 {error: 'maintenance', feature}. Personal data and sync are never stopped,
 // so nobody loses an edit; the pages (week, month, …) are only the app's to hide.
 
-import { HttpError } from './http.js';
+import { HttpError, oneLine } from './http.js';
 import { requireUser } from './auth.js';
 import { MESSAGE_MAX } from '../src/core/shared.ts';
 
@@ -45,7 +45,7 @@ export function validateMaintenance(body, by, now = Date.now()) {
     throw new HttpError(400, { error: 'invalid', field: 'features' });
   }
   if (typeof message !== 'string') throw new HttpError(400, { error: 'invalid', field: 'message' });
-  const text = message.replace(/[\x00-\x1f\x7f]/g, ' ').trim();
+  const text = oneLine(message);
   if (text.length > MESSAGE_MAX) throw new HttpError(400, { error: 'invalid', field: 'message' });
   return { features: FEATURES.filter((f) => features.includes(f)), message: text, updatedAt: now, updatedBy: by };
 }

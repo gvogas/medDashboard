@@ -2,7 +2,7 @@
 // worked out in views.ts, from the store and the UI state passed in.
 
 import { data } from "@/core/store"
-import { normalizeSchool, currentTerm, type SchoolCalendar } from "@/core/school"
+import { normalizeSchool, termStartFor, type SchoolCalendar } from "@/core/school"
 import { today } from "@/core/dates"
 import { ui } from "./ui"
 
@@ -16,10 +16,7 @@ export function schoolCal(): SchoolCalendar | null {
 }
 
 /** The term start the app goes by: the school calendar's semester, else the one set. */
-export const termStart = (): string | null => {
-    const cal = schoolCal()
-    return cal ? currentTerm(cal, today())!.start : data.profile?.termStart || null
-}
+export const termStart = (): string | null => termStartFor(schoolCal(), data.profile?.termStart, today())
 
 /** A type chip on All items is on unless it was switched off; new types start on. */
 export const typeOn = (t: string) => ui.types[t] !== false

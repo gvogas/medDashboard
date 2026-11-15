@@ -1,6 +1,6 @@
 // Editing an item: what an edit to one field changes besides it, saving as you type, and
-// the small shows when something is finished. From legacy views/drawer-item.js; the item
-// sheet (components/sheet/item-sheet.tsx) is the only form now.
+// the small shows when something is finished. The item sheet (components/sheet/item-sheet.tsx)
+// is the only form.
 
 import { useSyncExternalStore } from "react"
 import * as store from "@/core/store"

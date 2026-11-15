@@ -1,6 +1,6 @@
 // The school calendar: read from a PDF with AI, checked and fixed in the school sheet
 // (semesters and special days), saved on the profile. core/school.ts says what each
-// day is. From legacy views/drawer-school.js.
+// day is.
 
 import * as store from "@/core/store"
 import { today } from "@/core/dates"

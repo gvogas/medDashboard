@@ -8,7 +8,7 @@
 // the rest only reach Workers Logs. A flood of 4xx cannot crowd out the 500s, and refused
 // requests from no account (anyone on the internet) have a smaller cap inside their kind's, so
 // they cannot crowd out those from people signed in. Browser reports need a signed-in session.
-import { readJson, HttpError } from './http.js';
+import { readJson, HttpError, oneLine } from './http.js';
 import { claimLimit, rateLimited } from './limits.js';
 import { requireUser } from './auth.js';
 import { HOUR_MS, DAY_MS } from './time.js';
@@ -131,7 +131,7 @@ export async function purgeErrors(db, now = Date.now()) {
 
 /* ── browser reports ── */
 
-const text = (v, max) => (typeof v === 'string' ? v.replace(/[\x00-\x1f\x7f]/g, ' ').trim().slice(0, max) : '');
+const text = (v, max) => (typeof v === 'string' ? oneLine(v).slice(0, max) : '');
 
 /** The kinds the crash reporter sends (src/core/report.ts). Any other kind is refused, so a kind cannot pose as a label. */
 const BROWSER_KINDS = ['error', 'rejection', 'react'];

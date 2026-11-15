@@ -5,7 +5,7 @@
 // Each change reads the room and its members, works out the new state in plain JS (settle, and
 // the action), and writes it back in one batch guarded by rooms.version, which the write bumps.
 // Two changes at once: the second finds the version moved and starts again from a fresh read.
-import { json, readJson, HttpError } from './http.js';
+import { json, readJson, HttpError, oneLine } from './http.js';
 import { requireUser } from './auth.js';
 import { claimLimit, rateLimited } from './limits.js';
 import { randomId } from './spaces.js';
@@ -202,7 +202,7 @@ export function view(room, members, now) {
 function label(v) {
   if (v === undefined) return '';
   if (typeof v !== 'string') throw new HttpError(400, { error: 'invalid', field: 'courseLabel' });
-  const text = v.replace(/[\x00-\x1f\x7f]/g, ' ').trim();
+  const text = oneLine(v);
   if (text.length > LABEL_MAX) throw new HttpError(400, { error: 'invalid', field: 'courseLabel' });
   return text;
 }

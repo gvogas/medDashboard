@@ -50,6 +50,9 @@ export async function readJson(request) {
 }
 
 /** A write's `If-Match: "<revision>"`: 428 without one (a client from before revisions), 400 when malformed. */
+/** Text kept to one line: control characters become spaces, then the ends are trimmed. */
+export const oneLine = (s) => s.replace(/[\x00-\x1f\x7f]/g, ' ').trim();
+
 export function revisionOf(request) {
   const raw = request.headers.get('if-match');
   if (raw === null) throw new HttpError(428, { error: 'reload_required' });

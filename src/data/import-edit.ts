@@ -1,7 +1,6 @@
 // Importing: a calendar, CSV or course outline read into a plan, shown in the import sheet
 // with a tick per row, and written only on Import. The parsing and planning stay in
-// core/importers/; this is what the sheet does with a plan. From legacy
-// views/drawer-import.js.
+// core/importers/; this is what the sheet does with a plan.
 
 import * as store from "@/core/store"
 import { data } from "@/core/store"
