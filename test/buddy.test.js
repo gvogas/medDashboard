@@ -119,6 +119,29 @@ describe('GET /api/buddy', () => {
     expect((await buddy(api)).xp).toBe(30);
   });
 
+  it('a settings save from another zone does not pay the same streak day again (audit L11)', async () => {
+    const api = await player('bd-tz');
+    const base = dayBase();
+    await backdate(api, base - MIN);
+    await session(api, 'z1', base + 2 * 60 * MIN, 60);               /* 02:00 UTC: the evening before in Los Angeles */
+    expect((await buddy(api)).streak).toBe(1);
+    await api('/api/buddy/settings', { method: 'PUT', body: { enabled: true, tz: 'America/Los_Angeles' } });
+    await buddy(api);
+    expect((await env.DB.prepare("SELECT count(*) AS n FROM buddy_ledger WHERE user_id = 'u-bd-tz' AND source GLOB 'streak:*'").first()).n).toBe(1);
+  });
+
+  it('an assignment left open costs health for the whole 14-day window (audit L12)', async () => {
+    const health = async (name, back) => {
+      const api = await player(name);
+      await backdate(api, Date.now() - 30 * DAY);
+      if (back !== null) await task(api, 'a', 'todo', { type: 'assignment', date: isoDay(Date.now() - back * DAY) });
+      return (await buddy(api)).health;
+    };
+    const none = await health('bd-h0', null);
+    expect(await health('bd-h13', 13)).toBe(none - 10);
+    expect(await health('bd-h14', 14)).toBe(none - 10);
+  });
+
   it('claims a reached tier once; a tier above the XP is tier_not_reached', async () => {
     const api = await player('bd-claim');
     const claim = (tier) => api('/api/buddy/claim', { method: 'POST', body: { tier } });

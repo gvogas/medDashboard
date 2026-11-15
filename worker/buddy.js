@@ -7,7 +7,7 @@
 import {
   BIG_FINISH_COINS, BIG_TYPES, COSMETICS, DAY_MINUTES, FINISH_COINS, FINISH_XP, FINISHED, FINISHER_COINS, FOCUS_RATE, GRADE_BONUS,
   CARD_COIN_CAP, HEALTH, HEALTH_DAYS, LOG_WINDOW_MS, REVIEWS_PER_COIN, STREAK_REVIEWS, LOOK_BUDDIES, MINUTES_PER_COIN, NAME_MAX, PERSONAL_FINISH_LIMIT, REVIEW_FINISH_LIMIT, REVIEW_ID,
-  STREAK_COINS, STREAK_MAX, STREAK_MINUTES, TIERS, UPGRADES, checkCustom, isReview, moodOf, nextTier, tierOf, upgradeCost,
+  STREAK_COINS, STREAK_MAX, STREAK_MINUTES, TIERS, UPGRADES, checkCustom, moodOf, nextTier, tierOf, upgradeCost,
 } from '../src/core/buddy-rules.ts';
 import { json, readJson, HttpError } from './http.js';
 import { requireUser } from './auth.js';
@@ -89,7 +89,8 @@ export function finishAwards(rows, { tz, from, now, used = {}, finisher = 0 }) {
     const c = (count[day] ||= { personal: 0, review: 0 });
     let amount = (r.scope === 'c' && BIG_TYPES.includes(r.type) ? BIG_FINISH_COINS : FINISH_COINS) + FINISHER_COINS * finisher;
     if (r.scope === 'u') {
-      const kind = isReview(r.id, r.title || '') ? 'review' : 'personal';
+      /* by the id alone, as the tally of earlier reads does: a review's title can be edited (audit L13) */
+      const kind = REVIEW_ID.test(r.id) ? 'review' : 'personal';
       const limit = kind === 'review' ? REVIEW_FINISH_LIMIT : PERSONAL_FINISH_LIMIT;
       if (c[kind] >= limit) amount = 0;
       else c[kind]++;
@@ -172,14 +173,15 @@ function reads(db, userId, s, from, to) {
         JOIN items AS i ON i.scope = 'c:' || m.space_id AND i.id = m.item_id AND i.deleted_at IS NULL
         WHERE m.user_id = ? AND m.deleted_at IS NULL AND m.hidden = 0 AND m.status IN ${DONE_SQL}`).bind(userId),
     db.prepare('SELECT source, amount, day, at FROM buddy_ledger WHERE user_id = ?').bind(userId),
-    /* health: labs and office hours missed, assignments left open, in the window */
+    /* health: labs and office hours missed, assignments left open, in the window; from the day before it, since an
+       assignment due then costs on the window's first day (audit L12) */
     db.prepare(`SELECT type, status, date FROM items WHERE scope = 'u:' || ? AND deleted_at IS NULL AND recur IS NULL
-        AND type IN ('lab', 'office', 'assignment') AND date BETWEEN ? AND ?`).bind(userId, from, to),
+        AND type IN ('lab', 'office', 'assignment') AND date BETWEEN ? AND ?`).bind(userId, addDays(from, -1), to),
     db.prepare(`SELECT i.type, COALESCE(m.status, 'todo') AS status, i.date FROM members AS mb
         JOIN items AS i ON i.scope = 'c:' || mb.space_id AND i.deleted_at IS NULL AND i.recur IS NULL
           AND i.type IN ('lab', 'office', 'assignment') AND i.date BETWEEN ?2 AND ?3
         LEFT JOIN marks AS m ON m.user_id = ?1 AND m.space_id = mb.space_id AND m.item_id = i.id AND m.deleted_at IS NULL
-        WHERE mb.user_id = ?1 AND mb.deleted_at IS NULL AND COALESCE(m.hidden, 0) = 0`).bind(userId, from, to),
+        WHERE mb.user_id = ?1 AND mb.deleted_at IS NULL AND COALESCE(m.hidden, 0) = 0`).bind(userId, addDays(from, -1), to),
     /* grade bonus: your grades on a class's items, set or changed while gameplay was on */
     db.prepare(`SELECT m.space_id, m.item_id AS id, m.grade FROM marks AS m
         JOIN items AS i ON i.scope = 'c:' || m.space_id AND i.id = m.item_id AND i.deleted_at IS NULL
@@ -252,7 +254,9 @@ export async function reconcile(db, userId, now = Date.now()) {
   const foundryOf = (day) => levelAt(ledger, 'foundry', paid.get('cards:' + day)?.at ?? now);
   const cardPay = cardAwards(paidReviews, foundryOf).filter((a) => !paid.has(a.source) || paid.get(a.source).amount < a.amount);
   const { awards: streakAll, streak } = streakAwards(minutesByDay, dayOf(s.since, tz), today, reviewsByDay);
-  const streakPay = streakAll.filter((a) => a.day >= onDay && !paid.has(a.source));
+  /* only days after the newest one paid: a save from another zone re-dates the same study, and would pay it again (audit L11) */
+  const lastStreak = ledger.reduce((d, l) => (l.source.startsWith('streak:') && l.source.slice(7) > d ? l.source.slice(7) : d), '');
+  const streakPay = streakAll.filter((a) => a.day >= onDay && a.day > lastStreak && !paid.has(a.source));
 
   const pay = [...sessionPay, ...finishPay, ...gradePay, ...cardPay, ...streakPay];
   /* one round trip: the payment (if any), the mark, and the ledger as it then stands, in order in one transaction */

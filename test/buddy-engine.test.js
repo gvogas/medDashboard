@@ -48,6 +48,11 @@ describe('finishes', () => {
     const out = finishAwards([1, 2, 3, 4, 5].map(rv), opts({ used: { '2026-11-02': { personal: 5, review: 0 } } }));
     expect(out.map((a) => a.amount)).toEqual([5, 5, 5, 5, 0]);
   });
+  it('knows a lecture review by its id alone, as the later tally does, so an edited title cannot double the day (audit L13)', () => {
+    const rv = (n) => item('rvabc' + n, 'task', { title: 'My own words ' + n, completed_at: T - (9 - n) * MIN });
+    const out = finishAwards([1, 2, 3, 4, 5].map(rv), opts({ used: { '2026-11-02': { personal: 5, review: 0 } } }));
+    expect(out.map((a) => a.amount)).toEqual([5, 5, 5, 5, 0]);
+  });
   it('counts on from what earlier reads already paid that day', () => {
     const out = finishAwards([item('t7', 'task')], opts({ used: { '2026-11-02': { personal: 5, review: 0 } } }));
     expect(out[0].amount).toBe(0);
