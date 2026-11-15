@@ -36,7 +36,7 @@
 @media (prefers-reduced-motion:reduce){.scrim,.side{transition:none}}
 
 @media (max-width:900px){
-  .side{position:fixed;top:0;bottom:0;left:0;width:260px;z-index:45;transform:translateX(-102%);transition:transform .18s ease;box-shadow:var(--shadow-2)}
+  .side{position:fixed;top:0;bottom:0;left:0;width:260px;z-index:45;transform:translateX(-102%);transition:transform .28s cubic-bezier(.2,.8,.2,1);box-shadow:var(--shadow-2)}
   .side.on{transform:none}
 }
 
@@ -48,9 +48,14 @@
 /* The whole page scrolls instead of one short box under the header and stats; the
    header scrolls away (New item floats: top-bar.tsx, so the bar stacks above the page
    or the page would cover it). Spotify keeps its own columns. */
+/* --phone-nav: the height of the bottom bar (components/phone-nav.tsx), 0 where there is
+   none. What floats at the foot of a phone screen (New item, the study dock, a toast)
+   adds it to its own offset, and the page leaves room for it. */
+:root{--phone-nav:0px}
 @media (max-width:700px){
+  :root{--phone-nav:56px}
   .content{overflow-y:auto;overflow-x:hidden;overscroll-behavior-y:contain}
   .bar{z-index:2;backdrop-filter:none;gap:8px;padding:10px 16px}
-  .scroll{flex:none;overflow:visible;padding:16px 16px 84px}
+  .scroll{flex:none;overflow:visible;padding:16px 16px calc(84px + var(--phone-nav) + env(safe-area-inset-bottom,0px))}
   #views,#views.own-scroll{flex:none;overflow:visible;display:block;padding-right:0}
 }

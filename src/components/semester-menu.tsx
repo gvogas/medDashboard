@@ -56,7 +56,7 @@ export function SemesterMenu({ names, value, onPick }: { names: string[]; value:
                     role="listbox"
                     aria-label="Semester"
                     onKeyDown={keys}
-                    className="absolute top-full right-0 z-50 mt-1 min-w-[148px] rounded-[10px] border border-border bg-card p-1 shadow-[var(--shadow-2)]"
+                    className="pop-in [--pop-origin:top_right] absolute top-full right-0 z-50 mt-1 min-w-[148px] rounded-[10px] border border-border bg-card p-1 shadow-[var(--shadow-2)]"
                 >
                     {names.map((name) => (
                         <button

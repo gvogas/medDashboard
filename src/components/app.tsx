@@ -9,6 +9,7 @@ import { focusAfterSide, useSide } from "@/data/sidebar"
 import { Page, Scrim, SheetHost, SignInScreen, StatsHost, ViewsHost } from "./shell"
 import { TopBar } from "@/components/top-bar"
 import { Sidebar } from "@/components/sidebar"
+import { PhoneNav } from "@/components/phone-nav"
 import { SignIn } from "@/components/sign-in"
 import { Toaster } from "@/components/toaster"
 import { SyncAnnouncer } from "@/components/sync-status"
@@ -63,6 +64,8 @@ function Content() {
                 <StatsHost><Stats /></StatsHost>
                 <ViewsHost><Views /></ViewsHost>
             </div>
+            {/* a phone's bottom bar: the main pages one tap away (nothing above 700px) */}
+            <PhoneNav />
         </div>
     )
 }

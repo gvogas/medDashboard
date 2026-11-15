@@ -22,7 +22,7 @@ export function WeekPane({ w, goal, onDelete }: { w: WeekHist; goal: number; onD
                                     "box-border flex h-full flex-col-reverse gap-0.5 rounded-md",
                                     d.future ? "border-[1.5px] border-dashed border-border" : "bg-[repeating-linear-gradient(to_top,var(--line-2)_0_1px,transparent_1px_25%)]",
                                 )}>
-                                    {d.bars.map((b) => <i key={b.courseId} style={{ ...courseColour(b.courseId || null), height: b.height + "%" }} className="block min-h-0.5 rounded bg-[var(--c)]" />)}
+                                    {d.bars.map((b) => <i key={b.courseId} style={{ ...courseColour(b.courseId || null), height: b.height + "%" }} className="grow-y block min-h-0.5 rounded bg-[var(--c)]" />)}
                                 </span>
                             ))}
                         </div>
@@ -67,7 +67,7 @@ export function CourseBars({ list }: { list: [string, number][] }) {
                         <i aria-hidden="true" className="size-2 rounded-full bg-[var(--c)]" />{courseCode(id || null)}
                     </span>
                     <span aria-hidden="true" className="h-[7px] overflow-hidden rounded-full bg-line-2">
-                        <i style={{ width: Math.round((minutes / top) * 1000) / 10 + "%" }} className="block h-full rounded-full bg-[var(--c)]" />
+                        <i style={{ width: Math.round((minutes / top) * 1000) / 10 + "%" }} className="grow-x block h-full rounded-full bg-[var(--c)]" />
                     </span>
                     <span className="text-right font-mono text-foreground">{duration(minutes)}</span>
                 </li>

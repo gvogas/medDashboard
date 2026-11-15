@@ -29,10 +29,10 @@ function ToastCard({ rows }: { rows: Toast[] }) {
     return (
         <div
             className={cn(
-                "toast-in fixed bottom-[calc(18px+env(safe-area-inset-bottom,0px))] left-[18px] z-[70] max-w-[min(440px,calc(100vw-36px))]",
+                "toast-in fixed bottom-[calc(18px+var(--phone-nav,0px)+env(safe-area-inset-bottom,0px))] left-[18px] z-[70] max-w-[min(440px,calc(100vw-36px))]",
                 /* beside the sidebar on wide screens, not over the coat or badge */
                 "min-[901px]:left-[240px]",
-                "max-[640px]:right-3 max-[640px]:left-3 max-[640px]:bottom-[calc(84px+env(safe-area-inset-bottom,0px))] max-[640px]:max-w-none"
+                "max-[640px]:right-3 max-[640px]:left-3 max-[640px]:bottom-[calc(84px+var(--phone-nav,0px)+env(safe-area-inset-bottom,0px))] max-[640px]:max-w-none"
             )}
             onPointerEnter={() => holdToasts("pointer", true)}
             onPointerLeave={() => holdToasts("pointer", false)}

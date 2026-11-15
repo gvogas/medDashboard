@@ -1,7 +1,8 @@
 // The pages, in the sidebar: Week, Month, All items, Study, Music, Buddy while gameplay is on, and Admin for admins. The view is the UI
 // state's (ui.view); this reads it through the bridge and changes it with setView, the
 // same call the 1–5 keys make. It replaces the dock that sat in the top bar. On a narrow
-// screen, where the sidebar slides over the page, picking a page closes it.
+// screen, where the sidebar slides over the page, picking a page closes it. Each page has a
+// small picture (nav-icons.tsx), and the card behind the current one slides to it.
 
 import { useSyncExternalStore } from "react"
 import { cn } from "@/lib/utils"
@@ -14,6 +15,7 @@ import { useProfile } from "@/data/store"
 import type { View } from "@/data/types"
 import { activeBuddy, useBuddy } from "@/data/buddy"
 import { useMaintenance } from "@/data/maintenance"
+import { NAV_ICON } from "@/components/nav-icons"
 
 export const PAGES: { id: View; label: string; shortcut: string }[] = [
     { id: "week", label: "Week", shortcut: "1" },
@@ -29,6 +31,8 @@ const BUDDY = { id: "buddy" as View, label: "Buddy", shortcut: "6" }
 const ADMIN = { id: "admin" as View, label: "Admin", shortcut: "" }
 
 const currentView = () => ui.view as View
+/* a row's height and the gap under it: how far the current page's card slides per row */
+const ROW = 34
 
 export function SideNav() {
     const view = useSyncExternalStore(subscribe, currentView)
@@ -40,9 +44,22 @@ export function SideNav() {
     const buddy = activeBuddy(useBuddy())
     const buddyBlocked = useMaintenance("buddy") === "blocked"
     const buddyOn = !!buddy && !buddyBlocked
+    const pages = [...PAGES, ...(buddyOn ? [BUDDY] : []), ...(admin ? [ADMIN] : [])]
+    const at = pages.findIndex((p) => p.id === view)
     return (
-        <nav aria-label="Pages" className="flex flex-col gap-0.5">
-            {[...PAGES, ...(buddyOn ? [BUDDY] : []), ...(admin ? [ADMIN] : [])].map((p) => {
+        <nav aria-label="Pages" className="relative flex flex-col gap-0.5">
+            {/* the card behind the current page: one element that slides to it (each row is 32px and 2px apart) */}
+            <span
+                aria-hidden="true"
+                data-nav-pill=""
+                style={{ transform: "translateY(" + Math.max(0, at) * ROW + "px)" }}
+                className={cn(
+                    "pointer-events-none absolute inset-x-0 top-0 h-8 rounded-[6px] bg-card shadow-[0_0_0_1px_var(--line)]",
+                    "transition-[transform,opacity] duration-[260ms] ease-[cubic-bezier(.2,.8,.2,1)] motion-reduce:transition-none",
+                    at < 0 && "opacity-0",
+                )}
+            />
+            {pages.map((p) => {
                 const on = p.id === view
                 return (
                     <button
@@ -53,11 +70,12 @@ export function SideNav() {
                         aria-keyshortcuts={p.shortcut || undefined}
                         onClick={() => { setView(p.id); if (sideOpen()) setSide(false) }}
                         className={cn(
-                            "flex h-8 cursor-pointer items-center justify-between rounded-[6px] border-0 px-2.5 text-left text-[14px]",
-                            on ? "bg-card font-medium text-foreground shadow-[0_0_0_1px_var(--line)]" : "bg-transparent text-ink-2 hover:bg-[color-mix(in_srgb,var(--ink)_6%,transparent)] hover:text-foreground",
+                            "relative flex h-8 cursor-pointer items-center gap-2.5 rounded-[6px] border-0 bg-transparent px-2.5 text-left text-[14px]",
+                            on ? "font-medium text-foreground [&>svg]:text-primary" : "text-ink-2 hover:bg-[color-mix(in_srgb,var(--ink)_6%,transparent)] hover:text-foreground [&>svg]:text-muted-foreground hover:[&>svg]:text-ink-2",
                         )}
                     >
-                        {p.label}
+                        {NAV_ICON[p.id]}
+                        <span className="flex-1">{p.label}</span>
                         {p.id === "study" && badge && <span className="font-mono text-[11.5px] text-accent-foreground">{badge}</span>}
                         {p.id === "study" && !badge && friendLive && <span title="A friend is studying now" className="size-[7px] rounded-full bg-[var(--study)]"><span className="sr-only">, a friend is studying now</span></span>}
                     </button>

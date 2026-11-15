@@ -1,0 +1,73 @@
+/* Term — motion. One place for how things move: the easings and durations, the state
+   changes every control eases through, and the entrances (a page, a Study tab, the stat
+   tiles, a popover, a bar that fills). All of it is CSS, so Framer Motion stays out of
+   the first load, and all of it sits behind prefers-reduced-motion: with less motion
+   asked for, nothing here runs and every state changes at once. In the `components`
+   layer, so a utility on an element still wins. */
+
+:root {
+  --ease-out: cubic-bezier(.2, .8, .2, 1);
+  --ease-pop: cubic-bezier(.3, 1.35, .6, 1);
+  --t-fast: .15s;
+  --t-med: .26s;
+  --t-slow: .5s;
+}
+
+/* An entrance fades up a few pixels; the page and tab versions come down from above
+   instead (view-in), so a page that just fits its box never grows a scrollbar for the
+   length of the animation. */
+@keyframes rise-in { from { opacity: 0; transform: translateY(6px); } }
+@keyframes view-in { from { opacity: 0; transform: translateY(-4px); } }
+@keyframes fade-in { from { opacity: 0; } }
+@keyframes pop-in { from { opacity: 0; transform: scale(.96); } }
+@keyframes grow-x { from { transform: scaleX(0); } }
+@keyframes grow-y { from { transform: scaleY(0); } }
+@keyframes slide-up { from { transform: translateY(100%); } }
+
+@media (prefers-reduced-motion: no-preference) {
+  /* Every control eases between its states (hover, pressed, chosen, disabled) rather than
+     snapping. A utility such as transition-transform replaces this where one is set. */
+  button, a, input, select, textarea, summary, label, [role="tab"] {
+    transition: background-color var(--t-fast) ease, border-color var(--t-fast) ease, color var(--t-fast) ease,
+      box-shadow var(--t-fast) ease, opacity var(--t-fast) ease, filter var(--t-fast) ease, scale var(--t-fast) var(--ease-out);
+  }
+
+  /* A page replaces another, and a Study tab its neighbour: the new one fades in. The
+     animation belongs to the element, so it plays once, when that element is drawn. */
+  #views > *, #study-panel > * { animation: view-in var(--t-med) var(--ease-out); }
+
+  /* The stat tiles arrive one after another when the app first shows. */
+  #stats > * { animation: rise-in .36s var(--ease-out) backwards; }
+  #stats > :nth-child(2) { animation-delay: 40ms; }
+  #stats > :nth-child(3) { animation-delay: 80ms; }
+  #stats > :nth-child(4) { animation-delay: 120ms; }
+
+  /* .press: a button gives a little under the finger. `scale` is its own property, so it
+     never fights a translate that places the button. */
+  .press:active:not(:disabled) { scale: .97; }
+
+  /* .stagger: a list's rows arrive in turn, the first eight a step apart. */
+  .stagger > * { animation: rise-in .3s var(--ease-out) backwards; }
+  .stagger > :nth-child(2) { animation-delay: 30ms; }
+  .stagger > :nth-child(3) { animation-delay: 60ms; }
+  .stagger > :nth-child(4) { animation-delay: 90ms; }
+  .stagger > :nth-child(5) { animation-delay: 120ms; }
+  .stagger > :nth-child(6) { animation-delay: 150ms; }
+  .stagger > :nth-child(7) { animation-delay: 180ms; }
+  .stagger > :nth-child(n + 8) { animation-delay: 210ms; }
+
+  .rise-in { animation: rise-in .3s var(--ease-out) backwards; }
+  .fade-in { animation: fade-in var(--t-med) ease backwards; }
+  /* a menu or a popover opens from where it hangs */
+  .pop-in { animation: pop-in .16s var(--ease-out); transform-origin: var(--pop-origin, top); }
+  /* a bar fills from its start: across (grow-x) or up from the baseline (grow-y) */
+  .grow-x { transform-origin: left center; animation: grow-x .6s var(--ease-out) backwards; }
+  .grow-y { transform-origin: center bottom; animation: grow-y .6s var(--ease-out) backwards; }
+  .slide-up { animation: slide-up var(--t-med) var(--ease-out); }
+
+  /* A card you can open lifts a little under the pointer. */
+  @media (hover: hover) {
+    .lift { transition: translate var(--t-fast) var(--ease-out), box-shadow var(--t-fast) ease, border-color var(--t-fast) ease; }
+    .lift:hover { translate: 0 -1px; box-shadow: 0 8px 18px -10px rgba(0, 0, 0, .28); }
+  }
+}

@@ -113,7 +113,7 @@ function FocusScreen({ run }: { run: Run }) {
             aria-label="Focus"
             data-phase={run.kind}
             className={cn(
-                "study-fx fixed inset-0 z-20 flex overflow-hidden bg-[var(--fx-bg)] text-[var(--fx-ink)] outline-none",
+                "study-fx fade-in fixed inset-0 z-20 flex overflow-hidden bg-[var(--fx-bg)] text-[var(--fx-ink)] outline-none",
                 "transition-colors duration-700 motion-reduce:transition-none",
             )}
         >

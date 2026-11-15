@@ -31,7 +31,7 @@ export const TextureButton = React.forwardRef<HTMLButtonElement, TextureButtonPr
     ({ className, variant = "primary", size = "default", children, ...props }, ref) => (
         <button
             ref={ref}
-            className={cn("inline-flex cursor-pointer items-center justify-center gap-2 rounded-[6px] font-medium whitespace-nowrap disabled:cursor-not-allowed disabled:opacity-50", VARIANT[variant], SIZE[size], className)}
+            className={cn("press inline-flex cursor-pointer items-center justify-center gap-2 rounded-[6px] font-medium whitespace-nowrap disabled:cursor-not-allowed disabled:opacity-50", VARIANT[variant], SIZE[size], className)}
             {...props}
         >
             {children}

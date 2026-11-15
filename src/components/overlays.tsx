@@ -20,7 +20,7 @@ export const SHORTCUTS: [string[], string][] = [
 ]
 
 const BACKDROP = "fixed inset-0 grid place-items-center bg-[var(--scrim)] p-4 backdrop-blur-[3px] animate-[overlay-in_.18s_ease] motion-reduce:animate-none"
-const CARD = "w-full rounded-[18px] border border-border bg-[linear-gradient(var(--panel),color-mix(in_srgb,var(--panel-2)_60%,var(--panel)))] shadow-[var(--lift),0_0_0_1px_var(--rim-hi),inset_0_1px_0_var(--rim-hi)] outline-none"
+const CARD = "pop-in [--pop-origin:center] w-full rounded-[18px] border border-border bg-[linear-gradient(var(--panel),color-mix(in_srgb,var(--panel-2)_60%,var(--panel)))] shadow-[var(--lift),0_0_0_1px_var(--rim-hi),inset_0_1px_0_var(--rim-hi)] outline-none"
 
 export function Overlays() {
     const keys = useKeys()

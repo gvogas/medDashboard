@@ -30,6 +30,7 @@
 @import "./styles/tokens.css" layer(base);
 @import "./styles/base.css" layer(base);
 @import "./styles/shell.css" layer(shell);
+@import "./styles/motion.css" layer(components);
 
 /* Source Serif 4: only the latin and latin-ext files, normal and italic. */
 @font-face {

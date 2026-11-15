@@ -82,7 +82,7 @@ export function TopBar() {
                 onClick={newItem}
                 className={cn(
                     "font-semibold",
-                    "max-[700px]:fixed max-[700px]:right-4 max-[700px]:bottom-[calc(16px+env(safe-area-inset-bottom))] max-[700px]:z-30",
+                    "press max-[700px]:fixed max-[700px]:right-4 max-[700px]:bottom-[calc(16px+var(--phone-nav,0px)+env(safe-area-inset-bottom,0px))] max-[700px]:z-30",
                     "max-[700px]:rounded-full max-[700px]:shadow-[var(--shadow-2)] max-[700px]:h-auto max-[700px]:px-5 max-[700px]:py-3",
                     setup && "max-[700px]:hidden",
                 )}

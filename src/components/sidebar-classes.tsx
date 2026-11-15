@@ -50,7 +50,7 @@ export function NewMenu() {
             </button>
             {open && (
                 <div ref={menu} role="menu" aria-label="New" onKeyDown={keys}
-                    className="absolute bottom-full left-0 z-50 mb-1 w-[230px] rounded-[10px] border border-border bg-card p-1 shadow-[var(--shadow-2)]">
+                    className="pop-in [--pop-origin:bottom_left] absolute bottom-full left-0 z-50 mb-1 w-[230px] rounded-[10px] border border-border bg-card p-1 shadow-[var(--shadow-2)]">
                     {ITEMS.map(([label, sub, act]) => (
                         <button
                             key={label}

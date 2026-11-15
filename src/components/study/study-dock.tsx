@@ -25,11 +25,11 @@ export function StudyDock() {
             aria-label="Study timer"
             data-phase={run.kind}
             className={cn(
-                "study-fx fixed right-[18px] bottom-[calc(18px+env(safe-area-inset-bottom,0px))] z-30 flex items-center gap-3 rounded-full py-2 pr-2 pl-3.5 text-[var(--fx-ink)]",
+                "study-fx rise-in fixed right-[18px] bottom-[calc(18px+env(safe-area-inset-bottom,0px))] z-30 flex items-center gap-3 rounded-full py-2 pr-2 pl-3.5 text-[var(--fx-ink)]",
                 "border border-white/10 bg-[color-mix(in_srgb,var(--fx-bg)_84%,transparent)] shadow-[0_12px_30px_-8px_rgba(0,0,0,.5)] backdrop-blur-md",
                 "transition-colors duration-500 motion-reduce:transition-none",
                 /* a phone: the width of the screen, above the floating New item button */
-                "max-[700px]:right-3 max-[700px]:left-3 max-[700px]:bottom-[calc(76px+env(safe-area-inset-bottom,0px))] max-[700px]:justify-between",
+                "max-[700px]:right-3 max-[700px]:left-3 max-[700px]:bottom-[calc(76px+var(--phone-nav,0px)+env(safe-area-inset-bottom,0px))] max-[700px]:justify-between",
             )}
         >
             <FlipClock ms={run.leftMs} running={!run.paused} size="mini" />

@@ -86,6 +86,6 @@ function Box({ label, value, foot, tone, onClick, title, children, art }: {
     )
     const box = "flex h-[132px] w-full min-w-0 flex-col gap-1 rounded-[var(--radius)] border border-border bg-card px-[18px] pt-4 pb-3.5 text-left font-[inherit] max-[700px]:flex-[0_0_170px] max-[700px]:snap-start"
     return onClick
-        ? <button type="button" onClick={onClick} title={title} className={cn(box, "cursor-pointer")}>{body}</button>
+        ? <button type="button" onClick={onClick} title={title} className={cn(box, "lift cursor-pointer")}>{body}</button>
         : <div className={box}>{body}</div>
 }

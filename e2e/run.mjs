@@ -4,8 +4,9 @@
 // It applies the local migrations, makes a throwaway admin account (e2e-<time>), starts the dev
 // server on its own port (or uses E2E_URL when one is already running), and runs each scenario in
 // order on one page: Study Buddy (gameplay, a timed session, ranks, the shop, a custom buddy,
-// naming), flashcards (a deck, cards, the Week chip, review by keyboard) and AI cards (Generate
-// here and Use your own AI). Any page error fails the run. Screenshots go to e2e/out/.
+// naming), flashcards (a deck, cards, the Week chip, review by keyboard), AI cards (Generate
+// here and Use your own AI) and the phone layout (no sideways scroll, the bottom bar). Any page
+// error fails the run. Screenshots go to e2e/out/.
 //
 // Needs Playwright with Chromium: `npm i -D playwright && npx playwright install chromium` on a
 // machine without them (the cloud sessions have both).
@@ -193,6 +194,23 @@ scenario('fits a phone: no sideways scroll on Buddy and Cards', async (p) => {
     const wide = await p.evaluate(() => document.documentElement.scrollWidth);
     expect(wide <= 390, 'scroll width ' + wide);
   }
+});
+
+scenario('on a phone the bottom bar changes page in one tap, and More opens the sidebar', async (p) => {
+  const bar = p.getByRole('navigation', { name: 'Pages, quick' });
+  await bar.getByRole('button', { name: 'Month' }).click();
+  expect(await bar.getByRole('button', { name: 'Month' }).getAttribute('aria-current') === 'page', 'Month is not current');
+  await p.getByRole('region', { name: 'Month', exact: true }).waitFor();
+  await bar.getByRole('button', { name: 'Study' }).click();
+  await p.getByRole('tablist', { name: 'Study' }).waitFor();
+  /* the round New item button sits above the bar, never under it */
+  const [fab, nav] = await Promise.all([p.getByRole('button', { name: 'New item' }).boundingBox(), bar.boundingBox()]);
+  expect(fab && nav && fab.y + fab.height <= nav.y, 'New item overlaps the bottom bar');
+  await bar.getByRole('button', { name: 'More' }).click();
+  await p.getByRole('navigation', { name: 'Pages', exact: true }).getByRole('button', { name: 'Music' }).click();
+  await p.screenshot({ path: out + 'phone.png' });
+  await p.setViewportSize({ width: 1280, height: 900 });
+  expect(await bar.count() === 0, 'the bottom bar shows on a wide screen');
 });
 
 async function main() {

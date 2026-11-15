@@ -45,7 +45,7 @@ export const Section = ({ title, note, children }: { title: ReactNode; note?: Re
 
 /* ── buttons ── */
 
-const BUTTON = "hit inline-flex cursor-pointer items-center justify-center gap-1.5 rounded-[10px] border px-3.5 py-[7px] font-[inherit] text-[12.5px] leading-tight transition-[filter,color,border-color] disabled:cursor-default"
+const BUTTON = "hit press inline-flex cursor-pointer items-center justify-center gap-1.5 rounded-[10px] border px-3.5 py-[7px] font-[inherit] text-[12.5px] leading-tight transition-[filter,color,border-color,scale,box-shadow] disabled:cursor-default"
 
 /** The sheet's buttons: the accent gradient, the study colour, the quiet ghost, or the crit colour. */
 export function Button({ variant = "primary", className, ...props }: ComponentProps<"button"> & { variant?: "primary" | "study" | "ghost" | "danger" }) {
