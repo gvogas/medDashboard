@@ -136,3 +136,18 @@ describe('join codes', () => {
     expect((await join(late2, code)).status).toBe(404);
   });
 });
+
+describe('removing a member clears the join code (decision Q6a, audit S8)', () => {
+  it('someone removed cannot rejoin with the code they used, in a class or a project', async () => {
+    for (const kind of ['class', 'project']) {
+      const boss = await signInAdmin('jc-rm-owner-' + kind);
+      const guest = await signInAdmin('jc-rm-guest-' + kind);
+      const space = await makeSpace({ kind, members: { [boss.id]: 'owner' } });
+      const { code } = await (await makeCode(boss, space)).json();
+      expect((await join(guest, code)).status).toBeLessThan(300);
+      expect((await boss(`/api/spaces/${space.id}/members/${guest.id}`, { method: 'DELETE' })).status).toBe(204);
+      expect((await join(guest, code)).status).toBe(404);
+      expect((await env.DB.prepare('SELECT code_hash FROM spaces WHERE id = ?').bind(space.id).first()).code_hash).toBeNull();
+    }
+  });
+});

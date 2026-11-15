@@ -197,7 +197,12 @@ export async function removeMember(db, userId, spaceId, targetId, now = Date.now
     ? await leaveProject(db, targetId, spaceId, userId, now)
     : await detach(db, targetId, spaceId, { keepCopy: true, who: REMOVING, actor: userId, now,
       after: [noteStmt(db, { spaceId, actorId: userId, verb: 'member.removed', subjectUser: targetId, now, when: ENDED, binds: [targetId] })] });
-  if (ended) return;
+  if (ended) {
+    /* the code they joined with goes too, or they could rejoin at once; the owner makes a new one (audit S8) */
+    await db.prepare(`UPDATE spaces SET code_hash = NULL, code_expires = NULL, code_uses_left = NULL, updated_at = ?, revision = ${NEXT_SPACE_REVISION}
+      WHERE id = ? AND code_hash IS NOT NULL`).bind(now, spaceId).run();
+    return;
+  }
   const them = await roleOf(db, targetId, spaceId);
   throw them ? new HttpError(403, { error: 'forbidden' }) : new HttpError(404, { error: 'not_found' });
 }

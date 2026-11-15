@@ -189,7 +189,7 @@ function MemberList({ spaceId, members, owner, me, kind, reload }: { spaceId: st
             </ul>
             {removing && (
                 <div className="flex flex-wrap items-center gap-2">
-                    <Note>Remove {removing.name}? {kind === "project" ? "They lose access. Their tasks become unassigned; nothing is copied." : "They keep a copy of the class as their own course."}</Note>
+                    <Note>Remove {removing.name}? {kind === "project" ? "They lose access. Their tasks become unassigned; nothing is copied." : "They keep a copy of the class as their own course."} The join code stops working too; make a new one to invite others.</Note>
                     <Button variant="ghost" onClick={() => setRemoving(null)}>Cancel</Button>
                     <Button variant="danger" disabled={busy} onClick={() => void remove(removing)}>Remove {removing.name} from the {kind}</Button>
                 </div>
