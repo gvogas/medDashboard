@@ -1,7 +1,7 @@
 import { env } from 'cloudflare:test';
 import { describe, expect, it } from 'vitest';
 import { createUser } from './helpers.js';
-import { upsertRow, deleteRow, getRow, syncPage, personal } from '../worker/db.js';
+import { upsertRow, deleteRow, getRow, syncPageV3, personal } from '../worker/db.js';
 import { normalizeItem } from '../src/core/model.ts';
 
 /* A raw row, so these tests see the schema's own rules and not the Worker's. */
@@ -96,7 +96,7 @@ describe('the Worker reads and writes a person\'s own scope', () => {
     const i = await upsertRow(env.DB, 'items', id, 'mid', normalizeItem({ id: 'mid', title: 'Midterm', type: 'exam', courseId: 'bio' }));
     expect(await env.DB.prepare('SELECT scope FROM items WHERE id = ? AND scope = ?').bind('mid', 'u:' + id).first()).toEqual({ scope: 'u:' + id });
     expect((await getRow(env.DB, 'items', id, 'mid')).courseId).toBe('bio');
-    const page = await syncPage(env.DB, id, 0);
+    const page = await syncPageV3(env.DB, id, [], 0);
     expect(page.changes.map((ch) => `${ch.kind}:${ch.row.id}`)).toEqual(['courses:bio', 'items:mid']);
     await deleteRow(env.DB, 'courses', id, 'bio', Date.now(), c.revision);
     expect((await getRow(env.DB, 'items', id, 'mid')).courseId).toBeNull();
@@ -108,6 +108,6 @@ describe('the Worker reads and writes a person\'s own scope', () => {
     await env.DB.prepare("INSERT INTO courses (scope, id, code, name, color, created_at, updated_at) VALUES ('c:' || ?, 'cc', 'SH', 'Shared', '#17B3AE', 1, 1)").bind(id).run();
     await env.DB.prepare("INSERT INTO items (scope, id, type, title, course_id, date, status, created_at, updated_at) VALUES ('c:' || ?, 'x', 'exam', 'Shared', 'cc', '2026-10-01', 'todo', 1, 1)").bind(id).run();
     expect(await getRow(env.DB, 'items', id, 'x')).toBeNull();
-    expect((await syncPage(env.DB, id, 0)).changes).toEqual([]);
+    expect((await syncPageV3(env.DB, id, [], 0)).changes).toEqual([]);
   });
 });

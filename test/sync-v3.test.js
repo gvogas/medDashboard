@@ -182,7 +182,7 @@ describe('sync v3', () => {
     expect(again.changes).toEqual([]);
   });
 
-  it('answers GET /api/sync?v=3, refuses malformed cursors, and keeps v2 as it was', async () => {
+  it('answers GET /api/sync?v=3, refuses malformed cursors, and tells a v2 tab to reload', async () => {
     const api = await signIn('v3-route');
     const ok = await (await api('/api/sync?v=3&cursors=' + encodeURIComponent('u:u-v3-route:0,c:abcdefghij12:4') + '&sv=0')).json();
     expect(ok).toMatchObject({ scopes: [], more: false, reset: [], revoked: ['c:abcdefghij12'] });
@@ -193,6 +193,8 @@ describe('sync v3', () => {
       expect((await api('/api/sync?v=3&cursors=' + encodeURIComponent(bad))).status).toBe(400);
     }
     expect((await api('/api/sync?v=3&sv=x')).status).toBe(400);
-    expect(await (await api('/api/sync?v=2&cursor=0')).json()).toMatchObject({ reset: false, more: false, changes: [] });
+    const v2 = await api('/api/sync?v=2&cursor=0');
+    expect(v2.status).toBe(428);
+    expect(await v2.json()).toEqual({ error: 'reload_required' });
   });
 });

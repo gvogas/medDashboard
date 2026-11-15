@@ -46,11 +46,12 @@ describe('revision and sequence protocol', () => {
  it('requests reconciliation after deletion history expires', async () => {
   const api=await signIn();
   await api('/api/quotes/a',{method:'PUT',body:quote('old')});
-  const first=await (await api('/api/sync?v=2&cursor=0')).json();
+  const own='u:'+(await (await api('/api/me')).json()).id;
+  const first=await (await api('/api/sync?v=4')).json();
   await api('/api/quotes/a',{method:'DELETE'});
   await purgeTombstones(env.DB,Date.now()+1000);
-  expect((await (await api(`/api/sync?v=2&cursor=${first.cursor}`)).json()).reset).toBe(true);
-  expect((await (await api('/api/sync?v=2&cursor=0')).json()).changes).toEqual([]);
+  expect((await (await api(`/api/sync?v=4&cursors=${encodeURIComponent(own+':'+first.cursors[own])}`)).json()).reset).toEqual([own]);
+  expect((await (await api('/api/sync?v=4')).json()).changes).toEqual([]);
  });
  it('paginates the change feed and isolates accounts', async () => {
   const api=await signIn(); const other=await signIn();
@@ -58,12 +59,13 @@ describe('revision and sequence protocol', () => {
   const now=Date.now();
   await env.DB.batch(Array.from({length:105},(_,i)=>env.DB.prepare('INSERT INTO quotes(user_id,id,text,source,created_at,updated_at) VALUES(?,?,?,?,?,?)').bind(me.id,'q'+i,'Quote '+i,'',now,now)));
   await other('/api/quotes/private',{method:'PUT',body:quote('private')});
-  const page=await (await api('/api/sync?v=2&cursor=0')).json();
+  const own='u:'+me.id;
+  const page=await (await api('/api/sync?v=4')).json();
   expect(page.changes).toHaveLength(100); expect(page.more).toBe(true);
   // A record updated between pages moves ahead of the cursor and remains visible.
   await api('/api/quotes/q0');
   await api('/api/quotes/q0',{method:'PUT',body:quote('updated')});
-  const next=await (await api(`/api/sync?v=2&cursor=${page.cursor}`)).json();
+  const next=await (await api(`/api/sync?v=4&cursors=${encodeURIComponent(own+':'+page.cursors[own])}`)).json();
   expect(next.changes).toHaveLength(6); expect(next.more).toBe(false);
   expect(next.changes.some(c=>c.row.text==='private')).toBe(false);
   expect(next.changes.at(-1).row.text).toBe('updated');

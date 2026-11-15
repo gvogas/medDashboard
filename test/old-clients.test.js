@@ -9,17 +9,14 @@ const PNG = 'data:image/png;base64,iVBORw0KGgo=';
 const profile = { coat: { name: '', role: '', color: '#E4749B' }, theme: 'dark', termStart: null, displayName: '' };
 
 describe('a client from before Stage 4', () => {
-  it('pages only the five kinds it knows on v2, and still reaches the head', async () => {
+  it('is told to reload on sync v2, which is retired, and never pages it (decision Q11a, audit L8)', async () => {
     const api = await signIn('old-v2');
     expect((await api('/api/items/q1', { method: 'PUT', body: item() })).status).toBe(200);
-    await env.DB.batch([
-      env.DB.prepare("INSERT INTO marks (user_id, id, space_id, item_id, created_at, updated_at) VALUES ('u-old-v2', ?, ?, 'x', 1, 1)").bind(SID + ':x', SID),
-      env.DB.prepare("INSERT INTO space_prefs (user_id, id, space_id, color, created_at, updated_at) VALUES ('u-old-v2', ?, ?, '#17B3AE', 1, 1)").bind(SID, SID),
-    ]);
-    const page = await (await api('/api/sync?v=2&cursor=0')).json();
-    expect(page.changes.map((c) => c.kind)).toEqual(['items']);
-    const { head } = await env.DB.prepare("SELECT seq AS head FROM sqlite_sequence WHERE name = 'changes'").first();
-    expect(page.cursor).toBe(head);
+    for (const q of ['v=2&cursor=0', 'cursor=0', '']) {
+      const res = await api('/api/sync' + (q ? '?' + q : ''));
+      expect(res.status).toBe(428);
+      expect(await res.json()).toEqual({ error: 'reload_required' });
+    }
   });
 
   it("keeps an item's class label when the body leaves it out; the new client sets and clears it", async () => {

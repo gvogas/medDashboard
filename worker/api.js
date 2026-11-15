@@ -9,7 +9,7 @@ import { readSchool } from './school.js';
 import { readSchedule } from './schedule.js';
 import { listParam, cleanTerm, TIMEOUT_MS } from './ai.js';
 import { validateProfile, validateCourse, validateItem, validateQuote, validateStudySession, validateAchievement, validateDeck, validateCard, validateCardState, validateCardReview, validateId, validateSharedCourse, validateSharedItem, validateChanged, DATE } from './validate.js';
-import { getUserForLogin, getProfile, updateProfile, getRow, upsertRow, deleteRow, syncPage, syncPageV3, V3_KINDS, V4_KINDS, parseCursor, bumpPasswordGen, saveSpotifyTokens, deleteSpotifyTokens, getShared, upsertShared, deleteShared, memberTaskWrite } from './db.js';
+import { getUserForLogin, getProfile, updateProfile, getRow, upsertRow, deleteRow, syncPageV3, V3_KINDS, V4_KINDS, parseCursor, bumpPasswordGen, saveSpotifyTokens, deleteSpotifyTokens, getShared, upsertShared, deleteShared, memberTaskWrite } from './db.js';
 import { parseScope, roleOf, scopeOf } from './access.js';
 import * as spotify from './spotify.js';
 import { feedState, renewFeed, stopFeed, serveFeed } from './calendar.js';
@@ -330,10 +330,8 @@ const routes = [
       const kinds = q.get('v') === '4' ? V4_KINDS : V3_KINDS;
       return json(await syncPageV3(env.DB, userId, cursorsParam(q.get('cursors')), svParam(q.get('sv')), undefined, { unread: unreadStmt(env.DB, userId), kinds }));
     }
-    // v=2, for tabs still on the old client: the person's own scope, one cursor (spec §16).
-    const cursor = url.searchParams.get('cursor') || '0';
-    if (!/^\d{1,16}$/.test(cursor) || !Number.isSafeInteger(Number(cursor))) throw new HttpError(400, { error: 'invalid', field: 'cursor' });
-    return json(await syncPage(env.DB, userId, Number(cursor)));
+    /* v2 is retired (audit L8): a tab still on that client is told to reload, which it understands (it keeps its queued edits) */
+    throw new HttpError(428, { error: 'reload_required' });
   }],
 
   // The calendar feed: its state and link for the app, and the .ics a calendar fetches.

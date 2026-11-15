@@ -145,7 +145,7 @@ describe('the guards', () => {
     const put = await person('/api/courses/c1', { method: 'PUT', body: { code: 'BIO1', name: 'Biology', color: '#17B3AE' } });
     expect(put.status).toBe(200);
     expect((await person('/api/sync?v=3')).status).toBe(200);
-    expect((await person('/api/sync?v=2&cursor=0')).status).toBe(200);
+    expect((await person('/api/sync?v=4')).status).toBe(200);
     expect((await person('/api/me')).status).toBe(200);
     expect((await person('/api/calendar')).status).toBe(200);
   });

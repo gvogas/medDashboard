@@ -1,7 +1,7 @@
 import { env } from 'cloudflare:test';
 import { describe, expect, it } from 'vitest';
 import { validateCourse, validateItem } from '../worker/validate.js';
-import { upsertRow, syncPage } from '../worker/db.js';
+import { upsertRow, syncPageV3 } from '../worker/db.js';
 import { courseGrade, targetsFor, ungraded } from '../src/core/grades.ts';
 import { isTest, normalizeCourse, statusesFor } from '../src/core/model.ts';
 import { guessType } from '../src/core/importers/plan.ts';
@@ -21,7 +21,7 @@ describe('quizzes', () => {
     const id = await createUser('quiz-db');
     const saved = await upsertRow(env.DB, 'items', id, 'q', { ...validateItem({ type: 'quiz', title: 'Quiz 1', date: '2026-10-01', status: 'todo' }) });
     expect(saved.type).toBe('quiz');
-    const page = await syncPage(env.DB, id, 0);
+    const page = await syncPageV3(env.DB, id, [], 0);
     expect(page.changes.find((c) => c.kind === 'items').row.type).toBe('quiz');
   });
 
@@ -63,7 +63,7 @@ describe('a course\'s grade target', () => {
     expect((await res.json()).target).toBe(80);
     res = await api('/api/courses/bio', { method: 'PUT', body: { ...course, target: null } });
     expect((await res.json()).target).toBeNull();
-    const page = await (await api('/api/sync?v=2&cursor=0')).json();
+    const page = await (await api('/api/sync?v=4')).json();
     expect(page.changes.find((c) => c.kind === 'courses').row.target).toBeNull();
   });
 

@@ -1,6 +1,6 @@
 import { applyD1Migrations, env } from 'cloudflare:test';
 import { expect, it } from 'vitest';
-import { upsertRow, syncPage } from '../worker/db.js';
+import { upsertRow, syncPageV3 } from '../worker/db.js';
 import { normalizeCourse } from '../src/core/model.ts';
 import { readQueries, copyStatements, COLUMNS_QUERY, uncopied, differences } from '../scripts/lib/move-db.js';
 
@@ -105,12 +105,12 @@ it('copies a rounds-v7 database into today\'s schema, row for row, with the chan
   expect(await to.prepare('PRAGMA foreign_key_check').all()).toMatchObject({ results: [] });
 
   /* devices sync on from the same cursor: ben's feed in the copy holds his rows */
-  const page = await syncPage(to, 'ben', 0, 50);
+  const page = await syncPageV3(to, 'ben', [], 0, 50);
   expect(page.changes.map((c) => `${c.kind}:${c.row.id}`).sort())
     .toEqual(['achievements:a1', 'courses:bio', 'courses:extra', 'items:mid', 'items:q', 'quotes:k', 'study_sessions:s1']);
   expect(page.changes.find((c) => c.row.id === 'extra').row.name).toBe('Extra 2');
   expect(page.changes.find((c) => c.kind === 'items' && c.row.id === 'mid').row).toMatchObject({ grade: 87.5, weight: 20, courseId: 'bio' });
-  expect(page.cursor).toBe(source.state.head);
+  expect(page.more).toBe(false);
   /* the next write numbers on from the old head, in the person's own scope */
   const next = await upsertRow(to, 'courses', 'ana', 'n', normalizeCourse({ id: 'n', code: 'N', name: 'New', color: '#7D8A99' }), 300);
   expect(next.revision).toBe(source.state.head + 1);

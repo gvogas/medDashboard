@@ -63,9 +63,9 @@ describe('endpoint contract', () => {
   it('rejects unsafe sync cursors without reaching D1 with Infinity', async () => {
     const api = await signIn();
     for (const cursor of ['9'.repeat(400), '9007199254740992', '-1', '1.5']) {
-      const res = await api('/api/sync?v=2&cursor=' + cursor);
+      const res = await api('/api/sync?v=4&cursors=u:me:' + cursor);
       expect(res.status).toBe(400);
-      expect(await res.json()).toEqual({ error: 'invalid', field: 'cursor' });
+      expect(await res.json()).toEqual({ error: 'invalid', field: 'cursors' });
     }
   });
 

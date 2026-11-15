@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { minutesByDay, streak, week, month, heatRange, level, dayOf } from '../src/core/history.ts';
 import { normalizePrefs, normalizeStudySession } from '../src/core/model.ts';
 import { studyPrefs, validateStudySession } from '../worker/validate.js';
-import { upsertRow, syncPage } from '../worker/db.js';
+import { upsertRow, syncPageV3 } from '../worker/db.js';
 import { createUser, signIn } from './helpers.js';
 
 /* A session at a local day and hour, so the tests hold in any time zone. */
@@ -167,7 +167,7 @@ describe('a session typed in by hand', () => {
     const id = await createUser('hand-log');
     const saved = await upsertRow(env.DB, 'study_sessions', id, 's1', validateStudySession({ startedAt: 1000, studyMinutes: 45, note: 'Library', manual: true }));
     expect(saved).toMatchObject({ note: 'Library', manual: true, studyMinutes: 45 });
-    const page = await syncPage(env.DB, id, 0);
+    const page = await syncPageV3(env.DB, id, [], 0);
     expect(page.changes.find((c) => c.kind === 'study_sessions').row).toMatchObject({ note: 'Library', manual: true });
     await expect(env.DB.prepare('UPDATE study_sessions SET manual = 2 WHERE user_id = ?').bind(id).run()).rejects.toThrow(/CHECK constraint failed/);
   });

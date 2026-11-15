@@ -353,28 +353,6 @@ const courseStmt = (db, userId, id) =>
 /* Whether a guard holds now: a write it refused was refused for access, not a revision. */
 const passes = async (db, guard) => (await db.prepare(`SELECT ${guard.sql} AS ok`).bind(...guard.binds).first()).ok === 1;
 
-/** A bounded page, ordered by commit sequence rather than wall-clock timestamps.
- * The metadata and page share a D1 batch transaction, including during pruning.
- * cursor=0 starts reconciliation; an expired cursor requires the same reset.
- */
-export async function syncPage(db, userId, cursor, limit = 100) {
-  const [state, page] = await db.batch([
-    db.prepare("SELECT floor, COALESCE((SELECT seq FROM sqlite_sequence WHERE name = 'changes'), 0) AS head FROM sync_state WHERE id = 1"),
-    /* only the kinds a client from before Stage 4 knows (spec §16): marks and prefs never reach it */
-    db.prepare(`SELECT seq, kind, payload FROM changes WHERE scope = ? AND seq > ? AND kind IN ('courses', 'items', 'quotes', 'study_sessions', 'achievements')
-      ORDER BY seq LIMIT ?`).bind(personal(userId), cursor, limit + 1),
-  ]);
-  const { floor, head } = state.results[0];
-  if (cursor && (cursor < floor || cursor > head)) return { reset: true, cursor: 0, changes: [], more: false };
-  const rows = page.results.slice(0, limit);
-  return {
-    reset: false,
-    cursor: page.results.length > limit ? rows.at(-1).seq : head,
-    more: page.results.length > limit,
-    changes: rows.map((r) => ({ kind: r.kind, row: rowToApi(r.kind, JSON.parse(r.payload)) })),
-  };
-}
-
 // ── shared rows: a class's or a project's courses and items ─────────────────
 // The scope comes from the route ('c:' or 'p:' and a space id); every statement carries a
 // guard from access.js. A write at the row's revision replaces the row, as a personal one

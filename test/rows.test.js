@@ -187,9 +187,9 @@ describe('sync', () => {
     await alice('/api/quotes/q1', { method: 'PUT', body: quote() });
     await bob('/api/items/i2', { method: 'PUT', body: item({ title: 'Bob only' }) });
 
-    const res = await alice('/api/sync?v=2&cursor=0');
+    const res = await alice('/api/sync?v=4');
     expect(res.status).toBe(200);
-    expect((await res.json()).reset).toBe(false);
+    expect((await res.json()).reset).toEqual([]);
     const sync = await feed(alice);
     expect(sync.courses.map((c) => c.id)).toEqual(['cvs']);
     expect(sync.items.map((i) => i.id)).toEqual(['i1']);
@@ -215,7 +215,7 @@ describe('sync', () => {
 
   it('rejects a non-numeric cursor', async () => {
     const api = await signIn();
-    expect((await api('/api/sync?v=2&cursor=yesterday')).status).toBe(400);
+    expect((await api('/api/sync?v=4&cursors=u:me:yesterday')).status).toBe(400);
   });
 });
 
@@ -227,7 +227,7 @@ describe('stored JSON', () => {
     await env.DB.prepare(`INSERT INTO changes (scope, kind, row_id, payload, deleted_at) VALUES ('u:' || ?1, 'courses', 'bad', json_object(
       'scope', 'u:' || ?1, 'id', 'bad', 'code', 'BAD', 'name', 'Bad', 'color', '#E4749B', 'instructor', '', 'term', '', 'archived', 0,
       'meetings', '[{"id":', 'created_at', 1, 'updated_at', 1, 'deleted_at', NULL, 'revision', 1), NULL)`).bind('u-corrupt-json').run();
-    const res = await api('/api/sync?v=2&cursor=0');
+    const res = await api('/api/sync?v=4');
     expect(res.status).toBe(200);
     const { changes } = await res.json();
     expect(changes.find((c) => c.row.id === 'bad').row.meetings).toEqual([]);

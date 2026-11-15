@@ -53,13 +53,15 @@ export async function signIn(username = `user${++n}`) {
   return call;
 }
 
-/** The change feed after `cursor`, as the latest row of each kind; deleted rows carry deletedAt. */
-export async function feed(api, cursor = 0) {
+/** Your own rows in the change feed after `cursor` (the cursors a feed returned; '' from the start), as the latest row of
+    each kind; deleted rows carry deletedAt. Read on sync v4, every scope's cursor carried page to page. */
+export async function feed(api, cursor = '') {
   const out = { courses: [], items: [], quotes: [], study_sessions: [], achievements: [] };
   for (let more = true; more;) {
-    const page = await (await api(`/api/sync?v=2&cursor=${cursor}`)).json();
-    for (const { kind, row } of page.changes) out[kind] = [...out[kind].filter((r) => r.id !== row.id), row];
-    ({ cursor, more } = page);
+    const page = await (await api(`/api/sync?v=4&cursors=${encodeURIComponent(cursor)}`)).json();
+    for (const { scope, kind, row } of page.changes) if (scope.startsWith('u:') && out[kind]) out[kind] = [...out[kind].filter((r) => r.id !== row.id), row];
+    cursor = Object.entries(page.cursors).map(([s, c]) => `${s}:${c}`).join(',');
+    more = page.more;
   }
   return { ...out, cursor };
 }
