@@ -5,7 +5,7 @@
 // Guards: an admin cannot delete, demote, sign out or reset the password of their own
 // account, and the last admin cannot be removed. Each change is written to admin_log in the same batch.
 
-import { json, readJson, HttpError } from './http.js';
+import { json, readJson, HttpError, oneLine } from './http.js';
 import { requireUser } from './auth.js';
 import { hashPassword, normalizeUsername } from './password.js';
 import { errorGroups, recentErrors } from './errors.js';
@@ -20,7 +20,7 @@ import { GRANT_MAX, XP_BONUS_MAX } from '../src/core/buddy-rules.ts';
 import { dayOf } from './buddy.js';
 
 /* The newest file in migrations/; a test keeps it in step. */
-export const LATEST_MIGRATION = '0012_decks.sql';
+export const LATEST_MIGRATION = '0013_leaderboard_indexes.sql';
 const AUDIT_KEEP_MS = 90 * DAY_MS;
 export const MIN_PASSWORD = 8;
 const MAX_PASSWORD = 200;
@@ -287,7 +287,7 @@ export const adminRoutes = [
   ['PUT', /^\/api\/admin\/announcement$/, async ({ request, env }) => {
     const admin = await requireAdmin(request, env);
     const body = await readJson(request);
-    const text = typeof body.text === 'string' ? body.text.replace(/[\x00-\x1f\x7f]/g, ' ').trim() : '';
+    const text = typeof body.text === 'string' ? oneLine(body.text) : '';
     if (!text || text.length > MESSAGE_MAX) throw new HttpError(400, { error: 'invalid', field: 'text' });
     const now = Date.now();
     if (!Number.isSafeInteger(body.until) || body.until <= now || body.until > now + ANNOUNCE_MAX_MS) throw new HttpError(400, { error: 'invalid', field: 'until' });

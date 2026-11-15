@@ -275,9 +275,12 @@ export async function purgeTombstones(db, before, now = Date.now()) {
   await db.batch([
     /* soft, so the change feed carries the deletion; the tombstone goes with a later night's sweep. A project task's
        marks go whatever they hold (your note goes with it, spec §13); a class item's only when they hold nothing */
-    db.prepare(`UPDATE marks SET deleted_at = ?, updated_at = ?, revision = revision + 1 WHERE deleted_at IS NULL AND EXISTS (SELECT 1 FROM items AS i
+    db.prepare(`UPDATE marks SET deleted_at = ?, updated_at = ?, revision = revision + 1 WHERE deleted_at IS NULL
+      /* driven by the few items deleted long enough ago (items_deleted, then marks_space_item), not a scan of every live mark */
+      AND (space_id, item_id) IN (SELECT substr(scope, 3), id FROM items WHERE deleted_at IS NOT NULL AND deleted_at < ? AND scope NOT GLOB 'u:*')
+      AND EXISTS (SELECT 1 FROM items AS i
       WHERE i.id = marks.item_id AND i.deleted_at IS NOT NULL AND i.deleted_at < ?
-        AND (i.scope = 'p:' || marks.space_id OR (i.scope = 'c:' || marks.space_id AND NOT ${MEANINGFUL('marks')})))`).bind(now, now, before),
+        AND (i.scope = 'p:' || marks.space_id OR (i.scope = 'c:' || marks.space_id AND NOT ${MEANINGFUL('marks')})))`).bind(now, now, before, before),
     /* a gone space's rows go whatever marks they hold: every way a space is deleted (deleteClass, deleteProject, account deletion) leaves no meaningful live mark in it */
     ...['items', 'courses', 'cards', 'decks', 'changes'].map((t) =>
       db.prepare(`DELETE FROM ${t} WHERE scope IN (SELECT 'c:' || id FROM ${GONE} UNION ALL SELECT 'p:' || id FROM ${GONE})`).bind(before, before)),
@@ -285,8 +288,9 @@ export async function purgeTombstones(db, before, now = Date.now()) {
     /* rows about a person stay with them (their inbox), ageing out like the rest */
     db.prepare(`DELETE FROM activity WHERE subject_user = '' AND space_id IN ${GONE}`).bind(before),
     tombstones('spaces'),
-    db.prepare('UPDATE sync_state SET floor = MAX(floor, COALESCE((SELECT MAX(seq) FROM changes WHERE deleted_at < ?), 0)) WHERE id = 1').bind(before),
-    db.prepare('DELETE FROM changes WHERE deleted_at < ?').bind(before),
+    db.prepare('UPDATE sync_state SET floor = MAX(floor, COALESCE((SELECT MAX(seq) FROM changes WHERE deleted_at IS NOT NULL AND deleted_at < ?), 0)) WHERE id = 1').bind(before),
+    /* `IS NOT NULL` lets both use the partial index changes_deleted: without it they walk the whole change feed */
+    db.prepare('DELETE FROM changes WHERE deleted_at IS NOT NULL AND deleted_at < ?').bind(before),
     ...['marks', 'space_prefs', 'members', 'achievements', 'study_sessions', 'card_state', 'card_reviews', 'cards', 'decks'].map(tombstones),
     db.prepare(`DELETE FROM items WHERE deleted_at IS NOT NULL AND deleted_at < ? AND (scope NOT GLOB 'c:*' OR NOT EXISTS (SELECT 1 FROM marks AS m
       WHERE m.space_id = substr(items.scope, 3) AND m.item_id = items.id AND m.deleted_at IS NULL AND ${MEANINGFUL('m')}))`).bind(before),

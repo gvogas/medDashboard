@@ -255,20 +255,18 @@ export async function reconcile(db, userId, now = Date.now()) {
   const streakPay = streakAll.filter((a) => a.day >= onDay && !paid.has(a.source));
 
   const pay = [...sessionPay, ...finishPay, ...gradePay, ...cardPay, ...streakPay];
-  if (pay.length) {
-    await db.batch([
-      db.prepare(`INSERT INTO buddy_ledger (user_id, source, kind, amount, day, at)
+  /* one round trip: the payment (if any), the mark, and the ledger as it then stands, in order in one transaction */
+  const writes = await db.batch([
+    ...(pay.length ? [db.prepare(`INSERT INTO buddy_ledger (user_id, source, kind, amount, day, at)
           SELECT ?1, json_extract(value, '$.source'), 'earn', json_extract(value, '$.amount'), json_extract(value, '$.day'), ?2 FROM json_each(?3) WHERE true
           ON CONFLICT (user_id, source) DO UPDATE SET amount = max(buddy_ledger.amount, excluded.amount) WHERE buddy_ledger.source GLOB 'session:*' OR buddy_ledger.source GLOB 'cards:*'`)
-        .bind(userId, now, JSON.stringify(pay)),
-      db.prepare('UPDATE buddy_settings SET reconciled_at = ? WHERE user_id = ?').bind(now, userId),
-    ]);
-  } else {
-    await db.prepare('UPDATE buddy_settings SET reconciled_at = ? WHERE user_id = ?').bind(now, userId).run();
-  }
+      .bind(userId, now, JSON.stringify(pay))] : []),
+    db.prepare('UPDATE buddy_settings SET reconciled_at = ? WHERE user_id = ?').bind(now, userId),
+    db.prepare('SELECT source, amount, day, at FROM buddy_ledger WHERE user_id = ? ORDER BY at DESC, source').bind(userId),
+  ]);
 
   /* the state, from the ledger as it now stands */
-  const rows = (await db.prepare('SELECT source, amount, day, at FROM buddy_ledger WHERE user_id = ? ORDER BY at DESC, source').bind(userId).all()).results;
+  const rows = writes[writes.length - 1].results;
   const finishedKeys = new Set(finished.map((r) => 'item:' + r.key));
   const finishes = rows.filter((r) => r.source.startsWith('item:') && r.amount > 0 && finishedKeys.has(r.source)).length;
   const xp = xpOf({ counted, finishes, bonus: s.xp_bonus });

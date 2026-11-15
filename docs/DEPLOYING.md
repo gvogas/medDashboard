@@ -249,6 +249,7 @@ runs once per database.
 | `0010_buddy.sql` | Study Buddy: the Gameplay switch and the coin ledger (`buddy_settings`, `buddy_ledger`); `admin_log` is rebuilt so it can record `grant` |
 | `0011_buddy_shop.sql` | Study Buddy shop and custom buddy: what each person has bought (`buddy_owned`) and their custom buddy's pixels (`buddy_settings.custom`) |
 | `0012_decks.sql` | Flashcards: `decks`, `cards`, `card_state` (each person's schedule) and `card_reviews`, synced on `GET /api/sync?v=4`; `buddy_settings.cards_in_feed` |
+| `0013_leaderboard_indexes.sql` | Two indexes for the leaderboard's totals (`users_leaderboard`, `study_sessions_board`); no data changes |
 
 The files that used to follow it (`0002_spaces.sql` to `0009_friend_cancel.sql`) were
 folded into `0001_schema.sql` for the move of `rounds-v7` into `rounds-v8` (see

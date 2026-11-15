@@ -348,9 +348,10 @@ const AUTO_KEEP_GROUPS = 3;
  * goes the night after. A group that fails is logged and skipped, so it never blocks the others.
  */
 export async function autoKeep(db, before, now = Date.now()) {
-  const { results } = await db.prepare(`SELECT m.user_id, m.space_id, m.item_id FROM marks AS m
-      JOIN items AS i ON i.scope = 'c:' || m.space_id AND i.id = m.item_id
-    WHERE m.deleted_at IS NULL AND i.deleted_at IS NOT NULL AND i.deleted_at < ? AND ${MEANINGFUL('m')}
+  /* from the old class tombstones (items_deleted) to their marks (marks_space_item): never a scan of every live mark */
+  const { results } = await db.prepare(`SELECT m.user_id, m.space_id, m.item_id FROM items AS i
+      JOIN marks AS m ON m.space_id = substr(i.scope, 3) AND m.item_id = i.id
+    WHERE i.deleted_at IS NOT NULL AND i.deleted_at < ? AND substr(i.scope, 1, 2) = 'c:' AND m.deleted_at IS NULL AND ${MEANINGFUL('m')}
     ORDER BY m.user_id, m.space_id LIMIT 500`).bind(before).all();
   const groups = new Map();
   for (const r of results) {
