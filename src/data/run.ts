@@ -56,7 +56,7 @@ export async function load() {
     const kept = await store.meta.get(KEY) as StoredRun | null | undefined
     run = kept && typeof kept.id === "string" && timer.resumable(kept) ? kept : null
     if (!run) { if (kept) await store.meta.set(KEY, null); return }   /* a damaged run would stop sign-in */
-    if (timer.read(run).done) { await finish(); return }
+    if (timer.read(run).done) { await finish(true); return }
     lastStep = stepKey(run)
     tick()
     ensureTicking()
@@ -72,7 +72,7 @@ function ensureTicking() {
 function tick() {
     if (!run) return
     const s = timer.read(run)
-    if (s.done) { finish().catch(() => {}); return }
+    if (s.done) { finish(true).catch(() => {}); return }
     const key = s.round + ":" + s.index
     if (key !== lastStep) {
         lastStep = key
@@ -154,7 +154,33 @@ function xpToast() {
 /* the clock's own fields of a run */
 const pick = (r: timer.Run): timer.Run => ({ flow: r.flow, startedAt: r.startedAt, pausedAt: r.pausedAt, pausedMs: r.pausedMs, skippedMs: r.skippedMs, skippedStudyMs: r.skippedStudyMs })
 
-async function finish() {
+let checking = false
+/* A solo run whose clock here has run out: when another tab of this device kept it paused or skipped and its
+   clock as kept is not done, take that clock and carry on. Logging it now would log it early, and that tab
+   would then find nothing to log (audit T1). True when it carried on. */
+async function carriedOn(): Promise<boolean> {
+    if (!run || run.room || checking) return checking
+    checking = true
+    try {
+        const stored = await store.meta.get(KEY) as StoredRun | null | undefined
+        if (!run || stored?.id !== run.id) return false
+        const clock = { ...run, ...pick(stored) }
+        if (timer.read(clock).done) return false
+        run = clock
+        lastStep = stepKey(run)
+        if (run.pausedAt !== null) releaseScreen()
+        emit("tick")
+        return true
+    } catch {
+        return false
+    } finally {
+        checking = false
+    }
+}
+
+/** Log the run and clear it. `natural`: its clock ran out here (not Stop & log), so the clock another tab kept is checked first. */
+async function finish(natural = false) {
+    if (natural && await carriedOn()) return
     if (!run) return
     const ended = run
     run = null

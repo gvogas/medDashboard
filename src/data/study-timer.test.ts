@@ -559,14 +559,21 @@ describe("a run", () => {
         expect(getStudyBadge()).toBeNull()
     })
 
-    it("logs a run's minutes as kept when another tab of this device paused it", async () => {
+    it("takes the clock another tab of this device kept, and carries on, rather than logging the run early (decision Q4a, audit T1)", async () => {
         await begin({ steps: [["study", 5], ["break", 1]], rounds: 1 })
         await tickFor(2 * 60_000)
         /* the other tab pauses at 2 minutes and keeps the run; this one never hears of it */
         const kept = fake.meta.get("studyRun") as { pausedAt: number | null }
         fake.meta.set("studyRun", { ...kept, pausedAt: Date.now() })
+        /* this tab's clock says the run is over: it reads the kept one, which is not, and logs nothing */
         await jump(10 * 60_000)
-        expect(fake.sessions).toEqual([expect.objectContaining({ studyMinutes: 2 })])
+        expect(fake.sessions).toEqual([])
+        expect(focus.read()).toMatchObject({ paused: true, studyMs: 2 * 60_000 })
+        expect(fake.meta.get("studyRun")).toMatchObject({ pausedAt: expect.any(Number) })
+        /* resumed here, it runs on from 2 minutes and logs once, at its real end */
+        await act(() => focus.togglePause())
+        await tickFor(4 * 60_000)
+        expect(fake.sessions).toEqual([expect.objectContaining({ studyMinutes: 5 })])
     })
 
     it("ticks the badge without the store's change signal, so the views are not worked out again each second", async () => {
