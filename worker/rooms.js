@@ -548,6 +548,8 @@ export async function purgeRooms(db, now = Date.now()) {
   }
   await db.batch([
     db.prepare('DELETE FROM presence WHERE ends_at < ?').bind(now),
+    /* a room a session still names is kept, but its chat goes with every other room's, 90 days after it ended */
+    db.prepare('DELETE FROM room_messages WHERE room_id IN (SELECT id FROM rooms WHERE ended_at < ?)').bind(now - ROOM_KEEP_MS),
     db.prepare('DELETE FROM rooms WHERE ended_at < ? AND NOT EXISTS (SELECT 1 FROM study_sessions AS ss WHERE ss.room_id = rooms.id)').bind(now - ROOM_KEEP_MS),
   ]);
 }

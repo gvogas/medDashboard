@@ -21,7 +21,7 @@ import { claimLimit, rateLimited } from './limits.js';
 import { sameString, hex } from './auth.js';
 import { personal } from './db.js';
 import { normalizeSchool, classWeekday, courseTerm, dayInfo, weekdayOf } from '../src/core/school.ts';
-import { HOUR_MS, TZ, addDays } from './time.js';
+import { HOUR_MS, TZ, addDays, isDay } from './time.js';
 import { localNow } from './push.js';
 
 const FEED_LIMIT = 60;                     /* fetches an hour per link; calendars poll a few times a day */
@@ -134,6 +134,15 @@ export async function readRows(env, userId, hiddenSources) {
 }
 
 /**
+ * A schedule (a card_state row, the person bound as ?1) whose card is still there to review: one
+ * of your own, or one of a class you are in. A schedule can outlive its card: a first review that
+ * syncs after another device deleted the card is saved as a live row, and without this it was
+ * counted as due every day from then on. worker/buddy.js counts with it too.
+ */
+export const LIVE_CARD = `EXISTS (SELECT 1 FROM cards AS lc WHERE lc.id = card_state.id AND lc.deleted_at IS NULL
+      AND (lc.scope = 'u:' || ?1 OR lc.scope IN (SELECT 'c:' || mb.space_id FROM members AS mb WHERE mb.user_id = ?1 AND mb.deleted_at IS NULL)))`;
+
+/**
  * With "Review cards in my calendar" on: for each of the next 7 days in your zone, how many cards
  * fall due (today counts every card due by then), from card_state. Days with none are left out.
  */
@@ -142,7 +151,7 @@ export async function flashcardDays(db, userId, now) {
   if (!s?.cards_in_feed) return [];
   const today = localNow(s.tz, now).day, last = addDays(today, 6);
   const { results } = await db.prepare(`SELECT CASE WHEN due < ?2 THEN ?2 ELSE due END AS day, count(*) AS n FROM card_state
-      WHERE user_id = ?1 AND deleted_at IS NULL AND due <= ?3 GROUP BY 1 ORDER BY 1`).bind(userId, today, last).all();
+      WHERE user_id = ?1 AND deleted_at IS NULL AND due <= ?3 AND ${LIVE_CARD} GROUP BY 1 ORDER BY 1`).bind(userId, today, last).all();
   return results.filter((r) => r.n > 0).map((r) => ({ day: r.day, n: r.n }));
 }
 
@@ -228,6 +237,8 @@ export function buildCalendar({ courses, items, termStart = null, school = null,
   if (tz) lines.push('X-WR-TIMEZONE:' + tz);
 
   for (const it of items) {
+    /* a row whose date is not a real day (written before the routes all checked) is left out: one bad row must not fail the whole feed */
+    if (!isDay(it.date)) continue;
     const c = byId.get(it.course_id);
     const label = labelOf(it.type);
     const weekly = it.recur === 'weekly' && Number.isInteger(it.weekday);

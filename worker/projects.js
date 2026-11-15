@@ -6,7 +6,8 @@ import { HttpError } from './http.js';
 import { assertKeeper, assertOwner, keeperGuard, memberGuard, ownerGuard } from './access.js';
 import { MY_SPACES, NEXT_ROW_REVISION, NEXT_SPACE_REVISION, SPACE_LIMIT, joinPrefs, randomId, spaceSummary, touchSpace } from './spaces.js';
 import { BUCKET, NAME } from './accounts.js';
-import { DATE, SPACE_ID } from './validate.js';
+import { SPACE_ID } from './validate.js';
+import { isDay } from './time.js';
 import { SPACE_NAME, noteStmt, undoneStmt } from './activity.js';
 
 /** The most live tasks a project holds (spec §3 Limits). */
@@ -27,7 +28,8 @@ export function projectBody(body) {
   if (title.length < 1 || title.length > 140 || title.includes('\0')) throw bad('title');
   const parent = parentOf(body.parent);
   const date = body.date == null ? null : body.date;
-  if (date !== null && (typeof date !== 'string' || !DATE.test(date))) throw bad('date');
+  /* a day that exists, as the item route asks: the shape alone let 2026-13-45 in, and that row broke every member's calendar feed */
+  if (date !== null && !isDay(date)) throw bad('date');
   if (date === null && !parent) throw bad('date');
   return { title, date, parent };
 }

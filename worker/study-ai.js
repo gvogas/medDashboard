@@ -12,7 +12,7 @@ import { claimLimit } from './limits.js';
 import { askJson, modelAnswer } from './ai.js';
 import { DAY_MS } from './time.js';
 import { cardsPrompt, cutText, HERE_LIMIT, LEVELS, TOPIC_MAX } from '../src/core/study-prompts.ts';
-import { checkCards, CARDS_MAX, parseLoose } from '../src/core/study-answers.ts';
+import { checkCards, CARDS_MAX, parseAnswer } from '../src/core/study-answers.ts';
 import { dayOf } from './buddy.js';
 
 export const DEFAULT_CAPS = { perUser: 3, extraMax: 2, ceiling: 4000 };
@@ -30,8 +30,9 @@ const limitKey = (userId) => 'studyai:' + userId;
 export const workersProvider = {
   id: 'workers',
   available: (env) => !!env.AI,
-  async run(env, prompt, clean, what) {
-    const usage = { prompt_tokens: 0, completion_tokens: 0 };
+  /* `usage` is the caller's tally, filled as each model call reports its tokens: a run that ends in an
+     error (an answer with no cards, a timeout after a first call) has still cost what it counted */
+  async run(env, prompt, clean, what, usage = { prompt_tokens: 0, completion_tokens: 0 }) {
     const answer = await askJson(env.AI, MODEL, {
       messages: [{ role: 'system', content: prompt.system }, { role: 'user', content: prompt.user }],
       max_tokens: 6000,
@@ -64,20 +65,32 @@ async function usageOn(db, day) {
   const row = await db.prepare('SELECT value FROM app_meta WHERE key = ?').bind(usageKey(day)).first();
   try { const v = JSON.parse(row?.value || '{}'); return { neurons: v.neurons || 0, generations: v.generations || 0, byProvider: v.byProvider || {} }; } catch { return { neurons: 0, generations: 0, byProvider: {} }; }
 }
-/** Add one generation to the day's usage, in one statement (two at once both count). */
-const recordUsage = (db, day, provider, neurons, now) => db.prepare(`INSERT INTO app_meta (key, value, updated_at)
-    VALUES (?1, json_object('neurons', ?2, 'generations', 1, 'byProvider', json_object(?3, 1)), ?4)
+/** Add to the day's usage, in one statement (two at once both count): the neurons, and one generation
+    when `made` is 1. A run that failed after the model answered passes 0: its neurons still count
+    toward the day's ceiling, but it is not a generation. */
+const recordUsage = (db, day, provider, neurons, now, made = 1) => db.prepare(`INSERT INTO app_meta (key, value, updated_at)
+    VALUES (?1, json_object('neurons', ?2, 'generations', ?5, 'byProvider', json_object(?3, ?5)), ?4)
     ON CONFLICT (key) DO UPDATE SET updated_at = ?4, value = json_set(value,
       '$.neurons', COALESCE(json_extract(value, '$.neurons'), 0) + ?2,
-      '$.generations', COALESCE(json_extract(value, '$.generations'), 0) + 1,
-      '$.byProvider.' || ?3, COALESCE(json_extract(value, '$.byProvider.' || ?3), 0) + 1)`).bind(usageKey(day), neurons, provider, now).run();
+      '$.generations', COALESCE(json_extract(value, '$.generations'), 0) + ?5,
+      '$.byProvider.' || ?3, COALESCE(json_extract(value, '$.byProvider.' || ?3), 0) + ?5)`).bind(usageKey(day), neurons, provider, now, made).run();
 
-/** Extra uses bought today (`buy:ai:<day>:<n>` in the ledger), in the person's own day. */
+/**
+ * Extra uses bought (`buy:ai:<day>:<n>` in the ledger). `n` is today's, in the person's own day:
+ * what the shop still sells is by the day. `counted` is what adds to the limit now. The uses are
+ * counted in a 24-hour window from the first one, which runs past midnight, so while a window is
+ * live it is every extra bought since the window began or on the day it began (bought that morning,
+ * used that evening). Counted by today alone, yesterday's uses stayed in the window while the
+ * extras that paid for them dropped out at midnight, and one bought the next morning added nothing.
+ */
 async function extrasToday(db, userId, now) {
   const s = await db.prepare('SELECT tz FROM buddy_settings WHERE user_id = ?').bind(userId).first();
-  const day = dayOf(now, s?.tz || 'UTC');
-  const row = await db.prepare("SELECT count(*) AS n FROM buddy_ledger WHERE user_id = ? AND source GLOB ?").bind(userId, `buy:ai:${day}:*`).first();
-  return { day, n: row?.n ?? 0, gameplay: !!s };
+  const tz = s?.tz || 'UTC', day = dayOf(now, tz);
+  const live = await db.prepare('SELECT reset_at FROM request_limits WHERE key = ? AND reset_at > ?').bind(limitKey(userId), now).first();
+  const began = live ? live.reset_at - DAY_MS : null;
+  const row = await db.prepare(`SELECT COALESCE(SUM(day = ?2), 0) AS n, COALESCE(SUM(day = ?2 OR (?3 IS NOT NULL AND (at >= ?3 OR day = ?4))), 0) AS counted
+    FROM buddy_ledger WHERE user_id = ?1 AND source GLOB 'buy:ai:*'`).bind(userId, day, began, began === null ? null : dayOf(began, tz)).first();
+  return { day, n: row?.n ?? 0, counted: row?.counted ?? 0, gameplay: !!s };
 }
 
 /** The uses left in the person's 24-hour window, with what the extras add. */
@@ -91,7 +104,7 @@ async function usesLeft(db, userId, caps, extras, now) {
 export async function studyAiStatus(env, userId, now = Date.now()) {
   const caps = await readCaps(env.DB);
   const extras = await extrasToday(env.DB, userId, now);
-  const { left } = await usesLeft(env.DB, userId, caps, extras.n, now);
+  const { left } = await usesLeft(env.DB, userId, caps, extras.counted, now);
   const usage = await usageOn(env.DB, utcDay(now));
   return {
     providers: PROVIDERS.filter((p) => p.available(env)).map((p) => p.id),
@@ -140,31 +153,37 @@ export async function generateCards(env, userId, body, now = Date.now(), provide
   const day = utcDay(now);
   if ((await usageOn(env.DB, day)).neurons >= caps.ceiling) throw new HttpError(429, { error: 'study_ai_busy', paste: true });
   const extras = await extrasToday(env.DB, userId, now);
-  const wait = await claimLimit(env.DB, limitKey(userId), caps.perUser + extras.n, now, DAY_MS);
+  const wait = await claimLimit(env.DB, limitKey(userId), caps.perUser + extras.counted, now, DAY_MS);
   if (wait) throw new HttpError(429, { error: 'study_ai_cap', retryAfter: wait, extra: extras.gameplay && extras.n < caps.extraMax, paste: true });
   let result;
+  /* what the model calls of this run report, kept here so a run that fails is still counted */
+  const spent = { prompt_tokens: 0, completion_tokens: 0 };
   try {
     const prompt = cardsPrompt(req.sources, { count: req.count, level: req.level }, HERE_LIMIT);
     result = await provider.run(env, prompt, (answer) => {
       const read = checkCards(safeParse(answer), req.count);
       if (!read.items.length) throw new HttpError(502, { error: 'outline_unreadable' });
       return read;
-    }, 'study-ai:cards');
+    }, 'study-ai:cards', spent);
   } catch (e) {
     const code = e instanceof HttpError ? e.body?.error : 'outline_unavailable';
     if (GIVEN_BACK.has(code)) await giveBack(env.DB, userId, now).catch(() => {});
+    /* the person's use comes back, but the neurons were spent: they count toward the day's ceiling,
+       or answers with no usable cards could run the model without limit */
+    const lost = neuronsOf(spent);
+    if (lost > 0) await recordUsage(env.DB, day, provider.id, lost, now, 0).catch(() => {});
     throw e instanceof HttpError ? Object.assign(e, { body: { ...e.body, paste: true } }) : new HttpError(503, { error: 'outline_unavailable', paste: true });
   }
   const neurons = neuronsOf(result.usage);
   await recordUsage(env.DB, day, provider.id, neurons, now);
   console.log(`study-ai:cards ${provider.id} ${result.model} in=${result.usage.prompt_tokens} out=${result.usage.completion_tokens} neurons≈${neurons}`);
-  const { left } = await usesLeft(env.DB, userId, caps, extras.n, now);
+  const { left } = await usesLeft(env.DB, userId, caps, extras.counted, now);
   return { cards: result.answer.items, provider: provider.id, left };
 }
 /* askJson hands `clean` the model's reply: an object in JSON mode, else text; study-answers reads the text */
 function safeParse(answer) {
   const a = modelAnswer(answer);
-  return typeof a === 'string' ? parseLoose(a) : a;
+  return typeof a === 'string' ? parseAnswer(a) : a;
 }
 
 /** GET /api/admin/study-ai: today's usage against the ceiling, the last 14 days, and the caps. */

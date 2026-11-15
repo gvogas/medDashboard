@@ -53,6 +53,9 @@ describe('card rewards', () => {
 
   it('answers how many cards are due today', async () => {
     const api = await player('bc-due');
+    /* the cards themselves: a schedule counts only while its card is there */
+    await api('/api/decks/d1', { method: 'PUT', body: { title: 'Deck', courseId: null } });
+    for (const id of ['k1', 'k2', 'k3']) await api(`/api/cards/${id}`, { method: 'PUT', body: { deckId: 'd1', front: 'Q ' + id, back: 'A' } });
     for (const [id, due] of [['k1', '2020-01-01'], ['k2', isoDay(Date.now())], ['k3', '2999-01-01']]) {
       await api(`/api/card_state/${id}`, { method: 'PUT', body: { due, interval: 1, ease: 2.5, reps: 1, lapses: 0 } });
     }

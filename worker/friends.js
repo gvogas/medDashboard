@@ -149,12 +149,14 @@ const STATE = `CASE WHEN f.status = 'accepted' THEN 'friends'
 
 /** Up to 8 people matching `q` (2-40 characters) with where you stand with each. */
 export async function searchPeople(db, me, raw, now = Date.now()) {
-  const q = String(raw ?? '').trim().toLowerCase();
+  const typed = String(raw ?? '').trim(), q = typed.toLowerCase();
   if (q.length < 2 || q.length > 40) throw new HttpError(400, { error: 'invalid', field: 'q' });
   const wait = await claimLimit(db, `friend-search:${me}`, SEARCHES_PER_MINUTE, now);
   if (wait) throw rateLimited(wait);
-  /* LIKE ignores case for ASCII letters only; accented letters must match exactly */
-  const like = '%' + q.replace(/[\\%_]/g, (c) => '\\' + c) + '%';
+  /* LIKE ignores case for ASCII letters only; accented letters must match exactly. So the pattern is the text as
+     typed: lower-cased, "Émilie" became "émilie" and could never match the name it was copied from. Only the
+     exact-username comparison uses the lower-cased text (usernames are stored lower-case). */
+  const like = '%' + typed.replace(/[\\%_]/g, (c) => '\\' + c) + '%';
   const { results } = await db.prepare(`SELECT u.id, u.username, ${DISPLAY_NAME} AS name, ${STATE} AS state
     FROM users AS u
     LEFT JOIN friend_settings AS s ON s.user_id = u.id

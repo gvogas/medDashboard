@@ -52,6 +52,26 @@ describe('decks and cards', () => {
     expect(await live('card_state')).toEqual([]);
   });
 
+  it('does not count a schedule as due once its card is gone: a first review that syncs after another device deleted the card', async () => {
+    const { flashcardDays } = await import('../worker/calendar.js');
+    const api = await signIn('dk-orphan');
+    await api('/api/buddy/settings', { method: 'PUT', body: { enabled: true, tz: 'UTC', cardsInFeed: true } });
+    await deck(api, 'd1'); await card(api, 'k1', 'd1'); await card(api, 'k2', 'd1');
+    expect((await api('/api/cards/k1', { method: 'DELETE' })).status).toBe(204);            /* device B deletes k1 */
+    expect((await state(api, 'k1')).status).toBe(200);                                      /* device A uploads its schedule for it afterwards */
+    expect((await state(api, 'k2')).status).toBe(200);                                      /* and for a card that is still there */
+    const now = Date.UTC(2026, 10, 20, 12);
+    expect(await flashcardDays(env.DB, 'u-dk-orphan', now)).toEqual([{ day: '2026-11-20', n: 1 }]);   /* k2 alone */
+    expect((await (await api('/api/buddy')).json()).due).toBe(1);
+    /* a class's card counts for a member, and stops counting when they leave the class */
+    const cls = await makeSpace({ members: { 'u-dk-orphan': 'member' } });
+    await env.DB.prepare("INSERT INTO cards (scope, id, deck_id, author_id, front, back, created_at, updated_at) VALUES (?, 'k9', 'sd1', 'u-x', 'Q', 'A', 1, 1)").bind(cls.scope).run();
+    expect((await state(api, 'k9')).status).toBe(200);
+    expect(await flashcardDays(env.DB, 'u-dk-orphan', now)).toEqual([{ day: '2026-11-20', n: 2 }]);
+    await env.DB.prepare("UPDATE members SET deleted_at = 1 WHERE space_id = ? AND user_id = 'u-dk-orphan'").bind(cls.id).run();
+    expect(await flashcardDays(env.DB, 'u-dk-orphan', now)).toEqual([{ day: '2026-11-20', n: 1 }]);
+  });
+
   it('goes with the account', async () => {
     const api = await signIn('dk-gone');
     await deck(api, 'd1'); await card(api, 'k1', 'd1'); await state(api, 'k1'); await review(api, 'r1');

@@ -3,6 +3,7 @@
 // object containing only known fields, in API (camelCase) shape.
 
 import { HttpError } from './http.js';
+import { isDay } from './time.js';
 import { SCHOOL_KINDS, SCHOOL_LIMITS, validDate } from '../src/core/school.ts';
 import { CHECKLIST_MAX, MARK_DEFAULTS, MEETINGS_MAX, SHARED_FIELDS, STICKER_MAX, stable } from '../src/core/shared.ts';
 import { MAX_CATEGORIES, MAX_DROP, MAX_PASS, MAX_STEPS } from '../src/core/grades.ts';
@@ -66,10 +67,12 @@ function optInt(v, field) {
   return v;
 }
 
+/* The last millisecond a Date can hold. A timestamp past it is a safe integer but no date: the
+   Buddy page turns each session's start into a day, and one such row made every read of it a 500. */
+const MAX_TIME = 8_640_000_000_000_000;
+
 function date(v, field) {
-  if (typeof v !== 'string' || !DATE.test(v)) fail(field);
-  const parsed = new Date(`${v}T00:00:00.000Z`);
-  if (!Number.isFinite(parsed.getTime()) || parsed.toISOString().slice(0, 10) !== v) fail(field);
+  if (!isDay(v)) fail(field);
   return v;
 }
 
@@ -355,7 +358,7 @@ export function validateStudySession(body) {
   return {
     courseId: optStr(body.courseId, 'courseId', 40) || null,
     itemId: optStr(body.itemId, 'itemId', 24) || null,
-    startedAt: int(body.startedAt, 'startedAt', 1, Number.MAX_SAFE_INTEGER),
+    startedAt: int(body.startedAt, 'startedAt', 1, MAX_TIME),
     studyMinutes: int(body.studyMinutes, 'studyMinutes', 1, 1440),
     roundsDone: int(body.roundsDone ?? 0, 'roundsDone', 0, 12),
     note: str(body.note ?? '', 'note', 200),
@@ -407,7 +410,7 @@ export function validateCardReview(body) {
     deckRef: refId(body.deckRef, 'deckRef'),
     day: date(body.day, 'day'),
     grade: oneOf(body.grade, 'grade', GRADES),
-    at: int(body.at, 'at', 1, Number.MAX_SAFE_INTEGER),
+    at: int(body.at, 'at', 1, MAX_TIME),
   };
 }
 
@@ -485,8 +488,24 @@ export function validateSharedItem(body, kind, id) {
 export function validateChanged(body, set) {
   if (body.changed === undefined || body.changed === null) return undefined;
   const changed = obj(body.changed, 'changed');
-  for (const f of Object.keys(changed)) if (!SHARED_FIELDS[set].includes(f)) fail('changed');
+  for (const f of Object.keys(changed)) if (!SHARED_FIELDS[set].includes(f) || tooDeep(changed[f])) fail('changed');
   return changed;
+}
+
+/* The deepest any shared field goes is a list of small objects (a checklist, meetings, grade
+   categories with their steps). A `changed` value is compared with the stored one by a recursive
+   walk (shared.ts stable), so one nested thousands deep would overflow the stack: a 500 on demand. */
+const CHANGED_DEPTH = 6;
+/** Whether a value nests deeper than any shared field can. Walked with a list, never by recursion. */
+function tooDeep(value) {
+  let level = [value];
+  for (let depth = 0; level.length; depth++) {
+    if (depth > CHANGED_DEPTH) return true;
+    const next = [];
+    for (const v of level) if (v && typeof v === 'object') for (const k of Object.keys(v)) next.push(v[k]);
+    level = next;
+  }
+  return false;
 }
 
 /**

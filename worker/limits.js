@@ -17,14 +17,16 @@ export function rateLimited(seconds, error = 'rate_limited') {
 /**
  * An atomic fixed window; rejected requests cannot extend it or increment it. `guard`
  * is SQL that must hold for the hit to count at all, with its own bindings from ?5.
+ * A limit of 0 admits nothing: without that the first hit of each window got through,
+ * so a cap an admin set to 0 still gave everyone one a day.
  */
 function claimStmt(db, key, limit, now, windowMs, guard = 'true', ...guardArgs) {
   return db.prepare(`
-    INSERT INTO request_limits (key, hits, reset_at) SELECT ?1, 1, ?2 + ?3 WHERE ${guard}
+    INSERT INTO request_limits (key, hits, reset_at) SELECT ?1, 1, ?2 + ?3 WHERE (${guard}) AND ?4 > 0
     ON CONFLICT (key) DO UPDATE SET
       hits = CASE WHEN reset_at <= ?2 THEN 1 ELSE hits + 1 END,
       reset_at = CASE WHEN reset_at <= ?2 THEN ?2 + ?3 ELSE reset_at END
-    WHERE reset_at <= ?2 OR hits < ?4
+    WHERE (reset_at <= ?2 OR hits < ?4) AND ?4 > 0
     RETURNING reset_at
   `).bind(key, now, windowMs, limit, ...guardArgs);
 }

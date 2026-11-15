@@ -14,6 +14,7 @@ import { requireUser } from './auth.js';
 import { localNow, validTz } from './push.js';
 import { DAY_MS, addDays } from './time.js';
 import { readCaps } from './study-ai.js';
+import { LIVE_CARD } from './calendar.js';
 
 /** The local YYYY-MM-DD of a time in the zone `tz`. */
 export const dayOf = (ms, tz) => localNow(tz, ms).day;
@@ -183,7 +184,8 @@ function reads(db, userId, s, from, to) {
     db.prepare('SELECT sku, level FROM buddy_owned WHERE user_id = ?').bind(userId),
     /* card reviews since gameplay began, and how many cards are due today */
     db.prepare('SELECT card_ref, day, at FROM card_reviews WHERE user_id = ? AND deleted_at IS NULL AND at >= ?').bind(userId, s.since),
-    db.prepare('SELECT count(*) AS n FROM card_state WHERE user_id = ? AND deleted_at IS NULL AND due <= ?').bind(userId, to),
+    /* only schedules whose card is still there: one left behind by a deleted card is not something to review */
+    db.prepare(`SELECT count(*) AS n FROM card_state WHERE user_id = ?1 AND deleted_at IS NULL AND due <= ?2 AND ${LIVE_CARD}`).bind(userId, to),
   ]);
 }
 

@@ -240,6 +240,9 @@ describe('flashcards in the feed (Study Buddy, Stage 3)', () => {
     const api = await signIn('cal-cards');
     const put = (id, due) => api(`/api/card_state/${id}`, { method: 'PUT', body: { due, interval: 1, ease: 2.5, reps: 1, lapses: 0 } });
     const now = Date.UTC(2026, 10, 2, 12), d = (n) => new Date(now + n * 86_400_000).toISOString().slice(0, 10);
+    /* the cards themselves: a schedule counts only while its card is there */
+    await api('/api/decks/d1', { method: 'PUT', body: { title: 'Deck', courseId: null } });
+    for (const id of ['k1', 'k2', 'k3', 'k4', 'k5']) await api(`/api/cards/${id}`, { method: 'PUT', body: { deckId: 'd1', front: 'Q ' + id, back: 'A' } });
     await put('k1', '2026-10-01'); await put('k2', d(0)); await put('k3', d(2)); await put('k4', d(2)); await put('k5', d(9));
     expect(await flashcardDays(env.DB, 'u-cal-cards', now)).toEqual([]);
     await api('/api/buddy/settings', { method: 'PUT', body: { enabled: true, tz: 'UTC', cardsInFeed: true } });
@@ -253,6 +256,8 @@ describe('flashcards in the feed (Study Buddy, Stage 3)', () => {
     const { flashcardDays } = await import('../worker/calendar.js');
     const api = await signIn('cal-nz');
     await api('/api/buddy/settings', { method: 'PUT', body: { enabled: true, tz: 'Pacific/Auckland', cardsInFeed: true } });
+    await api('/api/decks/d1', { method: 'PUT', body: { title: 'Deck', courseId: null } });
+    await api('/api/cards/k1', { method: 'PUT', body: { deckId: 'd1', front: 'Q', back: 'A' } });
     await api('/api/card_state/k1', { method: 'PUT', body: { due: '2026-11-03', interval: 1, ease: 2.5, reps: 1, lapses: 0 } });
     /* 12:00 UTC on 2 November is 01:00 on 3 November in Auckland */
     expect(await flashcardDays(env.DB, 'u-cal-nz', Date.UTC(2026, 10, 2, 12))).toEqual([{ day: '2026-11-03', n: 1 }]);

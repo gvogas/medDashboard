@@ -71,22 +71,27 @@ export function sameString(a, b) {
 }
 
 // Trusted devices: a browser that has signed in as a name gets `rounds_device=nonce.sig`,
-// signed over the name. Sign-ins from it are throttled on their own, so failures from
-// anywhere else cannot lock its owner out (see worker/throttle.js).
+// signed over the name and the account's password generation (`pw_gen`). Sign-ins from it
+// are throttled on their own, so failures from anywhere else cannot lock its owner out (see
+// worker/throttle.js). The generation is in the signature so that a new password, or Sign
+// out everywhere, retires every device cookie made before it, as it does every session:
+// without it, whoever once knew the password kept a private five-guess allowance for each
+// cookie they had collected, and a way through a lock on the name.
 const DEVICE_COOKIE = 'rounds_device';
 const DEVICE_MS = 365 * DAY_MS;
+const deviceText = (username, gen, nonce) => `device:${username}:${gen}:${nonce}`;
 
-export async function deviceCookie(username, secret, url) {
+export async function deviceCookie(username, gen, secret, url) {
   const nonce = hex(crypto.getRandomValues(new Uint8Array(12)));
-  const sig = await signature(`device:${username}:${nonce}`, secret);
+  const sig = await signature(deviceText(username, gen, nonce), secret);
   return `${DEVICE_COOKIE}=${nonce}.${sig}; Path=/api/login; HttpOnly; SameSite=Strict; Max-Age=${DEVICE_MS / 1000}${secureFlag(url)}`;
 }
 
-/** The device's nonce when the request carries a valid device cookie for this name, else null. */
-export async function trustedDevice(request, username, secret) {
+/** The device's nonce when the request carries a valid device cookie for this name at this password generation, else null. */
+export async function trustedDevice(request, username, gen, secret) {
   const [nonce, sig] = (parseCookies(request.headers.get('cookie'))[DEVICE_COOKIE] || '').split('.');
   if (!/^[0-9a-f]{24}$/.test(nonce || '') || !sig) return null;
-  return sameString(await signature(`device:${username}:${nonce}`, secret), sig) ? nonce : null;
+  return sameString(await signature(deviceText(username, gen, nonce), secret), sig) ? nonce : null;
 }
 
 export function parseCookies(header) {

@@ -265,9 +265,11 @@ const routes = [
     const bad = (triesLeft) => new HttpError(401, { error: 'bad_login', ...(triesLeft <= WARN_LEFT && { triesLeft }) });
     const username = normalizeUsername(body.username);
     if (!username) throw bad();
+    // The account is read first: a device cookie is good only for the password it was made under.
+    const user = await getUserForLogin(env.DB, username);
     // Counted before the password is checked; see worker/throttle.js. A browser that has
     // signed in as this name before counts on its own, so strangers cannot lock it out.
-    const device = await trustedDevice(request, username, env.SESSION_SECRET);
+    const device = await trustedDevice(request, username, user ? user.pw_gen : 0, env.SESSION_SECRET);
     const throttleKey = device ? `${username}#${device}` : username;
     let { wait, left } = await claimAttempt(env.DB, throttleKey);
     if (wait) {
@@ -278,14 +280,13 @@ const routes = [
       }
       ({ wait, left } = await claimAttempt(env.DB, throttleKey, Date.now(), { pastLock: true }));
     }
-    const user = await getUserForLogin(env.DB, username);
     // Verify even when the user is unknown, so timing does not reveal which usernames exist.
     const ok = await verifyPassword(body.password, user ? user.password_hash : 'pbkdf2$100000$AAAAAAAAAAAAAAAAAAAAAA$AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA');
     if (!user || !ok) throw bad(left);
     await recordSuccess(env.DB, throttleKey);
     const token = await issueSession(env, user.profile.id, user.pw_gen);
     const res = json(user.profile, 200, { 'set-cookie': sessionCookie(token, url) });
-    if (!device) res.headers.append('set-cookie', await deviceCookie(username, env.SESSION_SECRET, url));
+    if (!device) res.headers.append('set-cookie', await deviceCookie(username, user.pw_gen, env.SESSION_SECRET, url));
     return res;
   }],
 

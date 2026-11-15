@@ -91,7 +91,7 @@ const itemCopy = (which, course, classId) => `INSERT INTO items (scope, id, type
     start = excluded.start, end = excluded.end, location = excluded.location, status = excluded.status, grade = excluded.grade,
     weight = excluded.weight, notes = excluded.notes, checklist = excluded.checklist, links = excluded.links, recur = excluded.recur,
     weekday = excluded.weekday, recur_until = excluded.recur_until, dept = excluded.dept, completed_at = excluded.completed_at,
-    class_id = excluded.class_id, updated_at = excluded.updated_at, deleted_at = NULL, revision = items.revision + 1
+    class_id = excluded.class_id, category = excluded.category, updated_at = excluded.updated_at, deleted_at = NULL, revision = items.revision + 1
     WHERE items.deleted_at IS NOT NULL`;
 
 /* What a copy takes (Decision 2): live items, except hidden ones holding nothing of yours that

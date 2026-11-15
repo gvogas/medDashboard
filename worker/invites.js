@@ -54,6 +54,7 @@ export async function invite(db, userId, spaceId, { username, role = null }, now
       ON CONFLICT (space_id, user_id) DO UPDATE SET invited_by = excluded.invited_by, role = excluded.role, status = 'pending',
         created_at = excluded.created_at, expires_at = excluded.expires_at
       WHERE invites.status != 'pending' OR invites.invited_by = excluded.invited_by
+        OR invites.expires_at <= excluded.created_at OR invites.invited_by IS NULL
         OR EXISTS (SELECT 1 FROM members WHERE space_id = ? AND user_id = ? AND role = 'owner' AND deleted_at IS NULL)
       RETURNING user_id`).bind(spaceId, who.id, userId, give, now, expires, ...g.binds, spaceId, who.id, spaceId, userId).first();
   if (!saved) {
@@ -65,13 +66,16 @@ export async function invite(db, userId, spaceId, { username, role = null }, now
   return { userId: who.id, username: who.username, name: who.name, role: give, status: 'pending', createdAt: now, expiresAt: expires, invitedBy: userId };
 }
 
-/** Withdraw an invite not yet accepted: whoever sent it, or the owner. 404 whether it is someone else's or there is none. */
-export async function revokeInvite(db, userId, spaceId, targetId) {
+/** Withdraw an invite not yet accepted: whoever sent it, or the owner; anyone who may invite, once it has expired or its
+    sender's account is gone (a dead invite is nobody's, and it would otherwise block a new one until the 90-day purge).
+    404 whether it is someone else's or there is none. */
+export async function revokeInvite(db, userId, spaceId, targetId, now = Date.now()) {
   await assertAllowed(db, userId, spaceId, 'editor');
   const g = editorGuard(spaceId, userId);
   const gone = await db.prepare(`DELETE FROM invites WHERE space_id = ? AND user_id = ? AND status != 'accepted' AND ${g.sql}
-      AND (invited_by = ? OR EXISTS (SELECT 1 FROM members WHERE space_id = ? AND user_id = ? AND role = 'owner' AND deleted_at IS NULL))
-    RETURNING user_id`).bind(spaceId, targetId, ...g.binds, userId, spaceId, userId).first();
+      AND (invited_by = ? OR invited_by IS NULL OR expires_at <= ?
+        OR EXISTS (SELECT 1 FROM members WHERE space_id = ? AND user_id = ? AND role = 'owner' AND deleted_at IS NULL))
+    RETURNING user_id`).bind(spaceId, targetId, ...g.binds, userId, now, spaceId, userId).first();
   if (gone) return;
   throw new HttpError(404, { error: 'not_found' });
 }

@@ -105,6 +105,31 @@ describe('the study-AI routes', () => {
     }
   });
 
+  it('an extra bought the morning after a late day of extras still adds a use: one purchase, one use', async () => {
+    await clearMeta();
+    const id = await user(), e = { DB: env.DB, AI: ai() };
+    /* what POST /api/buddy/buy {sku: 'ai'} writes (worker/buddy.js) */
+    const buyExtra = (day, level, at) => env.DB.prepare("INSERT INTO buddy_ledger (user_id, source, kind, amount, day, at) VALUES (?, ?, 'spend', -60, ?, ?)")
+      .bind(id, `buy:ai:${day}:${level}`, day, at).run();
+    const d1 = Date.UTC(2026, 10, 10, 22, 0);                                  /* day one, 22:00 UTC: two extras, all five uses */
+    await buyExtra('2026-11-10', 1, d1 - 60_000);
+    await buyExtra('2026-11-10', 2, d1 - 60_000);
+    for (let i = 0; i < 5; i++) await generateCards(e, id, body(), d1 + i * 60_000);
+    await expect(generateCards(e, id, body(), d1 + 6 * 60_000)).rejects.toMatchObject({ status: 429 });
+    /* day two, 08:00: the 24 hours since the first use are not over, so the five uses still count, and so must the extras that paid for two of them */
+    const d2 = Date.UTC(2026, 10, 11, 8, 0);
+    expect(await studyAiStatus(e, id, d2)).toMatchObject({ left: 0, extraLeft: 2 });
+    await buyExtra('2026-11-11', 1, d2);
+    expect(await studyAiStatus(e, id, d2)).toMatchObject({ left: 1, extraLeft: 1 });
+    expect((await generateCards(e, id, body(), d2 + 60_000)).left).toBe(0);
+    await expect(generateCards(e, id, body(), d2 + 120_000)).rejects.toMatchObject({ status: 429, body: { error: 'study_ai_cap', extra: false } });
+    await buyExtra('2026-11-11', 2, d2 + 180_000);
+    expect((await generateCards(e, id, body(), d2 + 240_000)).left).toBe(0);
+    /* once the 24 hours are over the count starts again: the free three and today's two extras */
+    const d3 = d1 + 24 * 3_600_000 + 60_000;
+    expect(await studyAiStatus(e, id, d3)).toMatchObject({ left: 5, extraLeft: 0 });
+  });
+
   it('sells an extra AI use for 60 coins, at most extraMax a day', async () => {
     await clearMeta();
     const api = await signIn('sa-buy');
