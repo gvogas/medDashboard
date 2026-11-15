@@ -94,6 +94,32 @@ describe('GET /api/buddy', () => {
     expect(await buddy(api)).toMatchObject({ coins: 25, xp: 40 });
   });
 
+  it('converting a course into a class pays nothing again, and its grade pays no class bonus (audit L1)', async () => {
+    const api = await player('bd-conv');
+    expect((await api('/api/courses/c1', { method: 'PUT', body: { code: 'BIO', name: 'Biology', color: '#17B3AE' } })).status).toBe(200);
+    for (const id of ['t1', 't2', 't3']) await task(api, id, 'done', { courseId: 'c1' });
+    await task(api, 'x1', 'graded', { type: 'exam', courseId: 'c1', grade: 95 });
+    const before = await buddy(api);
+    expect(before).toMatchObject({ coins: 20, xp: 40 });
+    const made = await api('/api/spaces', { method: 'POST', body: { kind: 'class', convertCourseId: 'c1', items: ['t1', 't2', 't3', 'x1'] } });
+    expect(made.status).toBe(201);
+    expect(await buddy(api)).toMatchObject({ coins: 20, xp: 40 });
+  });
+
+  it('leaving a class with a copy pays nothing again and keeps the XP (audit L2)', async () => {
+    const api = await player('bd-leave');
+    const owner = await createUser('bd-leave-owner');
+    const s = await makeSpace({ members: { [owner]: 'owner', [api.id]: 'member' } });
+    const ids = ['k1', 'k2', 'k3', 'k4', 'k5', 'k6', 'k7'];
+    for (const id of ids) {
+      await sharedItem(s.scope, id, { type: 'task', course_id: s.course });
+      await mark(api.id, s.id, id, { status: 'done', completed_at: Date.now() });
+    }
+    expect(await buddy(api)).toMatchObject({ coins: 35, xp: 70 });
+    expect((await api(`/api/spaces/${s.id}/leave`, { method: 'POST', body: {} })).status).toBe(204);
+    expect(await buddy(api)).toMatchObject({ coins: 35, xp: 70 });
+  });
+
   it('a personal exam shares the 5 and pays 5; a class exam has no limit and pays 15', async () => {
     const api = await player('bd-exam');
     const s = await makeSpace({ members: { [api.id]: 'member' } });

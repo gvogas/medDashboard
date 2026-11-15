@@ -180,6 +180,9 @@ const off = () => new HttpError(409, { error: 'gameplay_off' });
 const parseCustom = (v) => { try { return v ? checkCustom(JSON.parse(v)) : null; } catch { return null; } };
 const parseLook = (v) => { try { const l = JSON.parse(v); return l && typeof l === 'object' ? { ...DEFAULT_LOOK, ...l } : DEFAULT_LOOK; } catch { return DEFAULT_LOOK; } };
 
+/* the item id in a finish's ledger source: item:u:<id>, or item:c:<space>:<id> with a 12-character space id (an id may hold ':') */
+const itemIdOf = (source) => (source.startsWith('item:c:') ? source.slice(20) : source.slice(7));
+
 export const settingsStmt = (db, userId) => db.prepare('SELECT * FROM buddy_settings WHERE user_id = ?').bind(userId);
 
 /** Everything reconcile and the read need, in one batch: sessions, finishes, the ledger, health items. */
@@ -250,7 +253,15 @@ export async function reconcile(db, userId, now = Date.now()) {
     ...personal.map((r) => ({ ...r, scope: 'u', key: 'u:' + r.id })),
     ...marks.map((r) => ({ ...r, scope: 'c', key: `c:${r.space_id}:${r.id}` })),
   ];
-  const fresh = finished.filter((r) => !paid.has('item:' + r.key) && !(r.completed_at != null && r.completed_at < s.on_at));
+  /* a finish is paid once per item, whatever scope it is in now: converting a course, absorbing, sharing or leaving
+     with a copy moves an item to a new key, and must not pay it again (audit L1, L2) */
+  const paidIds = new Set(), personalIds = new Set();
+  for (const l of ledger) {
+    if (!l.source.startsWith('item:')) continue;
+    paidIds.add(itemIdOf(l.source));
+    if (l.source.startsWith('item:u:')) personalIds.add(itemIdOf(l.source));
+  }
+  const fresh = finished.filter((r) => !paidIds.has(r.id) && !(r.completed_at != null && r.completed_at < s.on_at));
   const used = {};
   for (const l of ledger) {
     if (!l.source.startsWith('item:u:') || l.amount <= 0) continue;
@@ -259,7 +270,8 @@ export async function reconcile(db, userId, now = Date.now()) {
   }
   const finisher = owned.find((o) => o.sku === 'finisher')?.level ?? 0;
   const finishPay = finishAwards(fresh, { tz, from: Math.max(s.reconciled_at, s.on_at), now, used, finisher });
-  const gradePay = gradeAwards(grades.map((g) => ({ key: `c:${g.space_id}:${g.id}`, grade: g.grade })), paid, today);
+  /* a grade an item brought with it from your own list pays no class bonus: a personal item's grade pays nothing */
+  const gradePay = gradeAwards(grades.filter((g) => !personalIds.has(g.id)).map((g) => ({ key: `c:${g.space_id}:${g.id}`, grade: g.grade })), paid, today);
 
   /* the streak runs from `since`; its coins only for days from when gameplay was last turned on */
   const minutesByDay = {};
@@ -292,8 +304,9 @@ export async function reconcile(db, userId, now = Date.now()) {
 
   /* the state, from the ledger as it now stands */
   const rows = writes[writes.length - 1].results;
-  const finishedKeys = new Set(finished.map((r) => 'item:' + r.key));
-  const finishes = rows.filter((r) => r.source.startsWith('item:') && r.amount > 0 && finishedKeys.has(r.source)).length;
+  /* XP: each item still finished whose finish paid, once, by its id */
+  const earned = new Set(rows.filter((r) => r.source.startsWith('item:') && r.amount > 0).map((r) => itemIdOf(r.source)));
+  const finishes = new Set(finished.map((r) => r.id).filter((id) => earned.has(id))).size;
   const xp = xpOf({ counted, finishes, bonus: s.xp_bonus });
   const window = [];
   for (let d = startDay; d <= today; d = addDays(d, 1)) window.push(d);
