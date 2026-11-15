@@ -127,13 +127,17 @@ const memberKey = (m) => JSON.stringify(MEMBER_FIELDS.filter((f) => f !== 'lastS
 async function save(db, before, room, members) {
   const was = new Map(before.members.map((m) => [m.userId, memberKey(m)]));
   const changed = members.filter((m) => was.get(m.userId) !== memberKey(m));
-  if (!changed.length && roomKey(before.room) === roomKey(room)) return true;
+  /* rows `act` took out of the list (a joiner replacing a row, joinRoom) */
+  const dropped = before.members.filter((b) => !members.some((m) => m.userId === b.userId));
+  if (!changed.length && !dropped.length && roomKey(before.room) === roomKey(room)) return true;
   const guard = '(SELECT version FROM rooms WHERE id = ?) = ?';
-  const stmts = changed.map((m) => db.prepare(`INSERT INTO room_members (room_id, user_id, ${MEMBER_COLS.join(', ')})
+  const stmts = dropped.map((m) => db.prepare(`DELETE FROM room_members WHERE room_id = ? AND user_id = ? AND ${guard}`)
+    .bind(room.id, m.userId, room.id, before.room.version));
+  stmts.push(...changed.map((m) => db.prepare(`INSERT INTO room_members (room_id, user_id, ${MEMBER_COLS.join(', ')})
     SELECT ?, ?, ${MEMBER_COLS.map(() => '?').join(', ')} WHERE ${guard}
     ON CONFLICT (room_id, user_id) DO UPDATE SET ${MEMBER_COLS.filter((c) => c !== 'last_seen').map((c) => `${c} = excluded.${c}`).join(', ')},
       last_seen = max(COALESCE(room_members.last_seen, 0), COALESCE(excluded.last_seen, 0))`)
-    .bind(room.id, m.userId, ...MEMBER_FIELDS.map((f) => m[f] ?? null), room.id, before.room.version));
+    .bind(room.id, m.userId, ...MEMBER_FIELDS.map((f) => m[f] ?? null), room.id, before.room.version)));
   const r = room.run;
   stmts.push(db.prepare(`UPDATE rooms SET host_id = ?, flow = ?, started_at = ?, paused_at = ?, paused_ms = ?, skipped_ms = ?, skipped_study_ms = ?,
     ended_at = ?, feed = ?, version = version + 1 WHERE id = ? AND version = ? RETURNING version`)
@@ -310,6 +314,13 @@ export async function joinRoom(db, me, roomId, body, now = Date.now()) {
     if (m?.state === 'in') { m.courseLabel = courseLabel; return; }
     if (members.filter((x) => x.state === 'in').length >= ROOM_SIZE) throw new HttpError(409, { error: 'full' });
     if (!m) {
+      /* at ROOM_ROWS a joiner takes the place of the oldest row that left without studying; with none, the room is full (audit L16) */
+      if (members.length >= ROOM_ROWS) {
+        const spare = members.filter((x) => x.state === 'left' && !(x.earlierMs > 0))
+          .sort((a, b) => (a.leftAt ?? a.invitedAt ?? 0) - (b.leftAt ?? b.invitedAt ?? 0))[0];
+        if (!spare) throw new HttpError(409, { error: 'full' });
+        members.splice(members.indexOf(spare), 1);
+      }
       m = { userId: me, invitedBy: null, invitedAt: null, joinedAt: null, earlierMs: 0, leftAt: null, lastSeen: null };
       members.push(m);
     }

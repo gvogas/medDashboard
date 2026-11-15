@@ -115,6 +115,39 @@ describe('a room', () => {
     await expect(joinRoom(env.DB, late, r.room.id, {}, T0 + 20)).rejects.toMatchObject({ status: 409, body: { error: 'full' } });
   });
 
+  it('holds 24 rows: a joiner replaces the oldest row that left without studying, never one that studied (decision Q10a, audit L16)', async () => {
+    const host = await createUser('ro-rows-h');
+    const r = await createRoom(env.DB, host, { flow: FLOW }, T0);
+    const rows = async () => (await env.DB.prepare('SELECT count(*) AS n FROM room_members WHERE room_id = ?').bind(r.room.id).first()).n;
+    /* the first friend studies five minutes before leaving: that row is kept */
+    const keeper = await createUser('ro-rows-keep');
+    await befriend(host, keeper);
+    await joinRoom(env.DB, keeper, r.room.id, {}, T0 + 1);
+    await leaveRoom(env.DB, keeper, r.room.id, T0 + 5 * MIN);
+    for (let i = 0; i < 30; i++) {
+      const u = await createUser('ro-rows-' + i), at = T0 + 6 * MIN + i * 10;
+      await befriend(host, u);
+      await joinRoom(env.DB, u, r.room.id, {}, at);
+      await leaveRoom(env.DB, u, r.room.id, at);
+    }
+    expect(await rows()).toBe(24);
+    expect(await env.DB.prepare('SELECT state FROM room_members WHERE room_id = ? AND user_id = ?').bind(r.room.id, keeper).first()).toEqual({ state: 'left' });
+  });
+
+  it('answers full when none of the 24 rows can be replaced', async () => {
+    const host = await createUser('ro-rows2-h');
+    const r = await createRoom(env.DB, host, { flow: FLOW }, T0);
+    for (let i = 0; i < 23; i++) {
+      const u = await createUser('ro-rows2-' + i);
+      await befriend(host, u);
+      await joinRoom(env.DB, u, r.room.id, {}, T0 + i);
+      await leaveRoom(env.DB, u, r.room.id, T0 + i + MIN);          /* each studied a minute */
+    }
+    const late = await createUser('ro-rows2-late');
+    await befriend(host, late);
+    await expect(joinRoom(env.DB, late, r.room.id, {}, T0 + 2 * MIN)).rejects.toMatchObject({ status: 409, body: { error: 'full' } });
+  });
+
   it('counts a joiner from when they joined, and keeps earlier stints when they come back', async () => {
     const [h, g] = await users('ro-m-h', 'ro-m-g');
     await befriend(h, g);
