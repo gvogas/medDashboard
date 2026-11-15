@@ -82,10 +82,11 @@ export function boot() {
     window.addEventListener("storage", onStorage)
 
     /* ═════════ events ═════════ */
-    /* A click outside the phone sidebar closes it. */
+    /* A click outside the phone sidebar closes it. The two buttons that open it are not "outside":
+       the menu button, and the bottom bar's More (its own click would shut what it had just opened). */
     document.addEventListener("click", (e) => {
         const target = e.target as Element
-        if (!target.closest("#side") && !target.closest("#menuBtn") && sideOpen()) setSide(false)
+        if (!target.closest("#side") && !target.closest("#menuBtn") && !target.closest("#phoneNav") && sideOpen()) setSide(false)
     })
 
     watchSidebar()
