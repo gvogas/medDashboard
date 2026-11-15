@@ -4,7 +4,7 @@
 confirmed 59 findings; 43 are fixed and merged. The 16 still open are here, with the
 decision each one needs and the work that follows once it is made.
 
-**Status:** nothing here is started. Part 1 is questions for George; no task in Part 2 that
+**Status:** Part 3's L6, stale-draft and read-guard items are done (`f7b7c91`); the rest is not started. Part 1 is questions for George; no task in Part 2 that
 depends on one starts before it is answered. Part 3 needs no decision.
 
 **Finding numbers** (S, F, T, L) are the audit's. Each finding there has the sequence that
@@ -249,7 +249,7 @@ live, `worker/leaving.js` (the copy); tests in `test/buddy.test.js`.
 
 ## Part 3: Follow-ups that need no decision
 
-- [ ] **L6. Give a use back to the window it was claimed in.** `worker/study-ai.js`
+- [x] **L6. Give a use back to the window it was claimed in.** `worker/study-ai.js`
       `giveBack` and `worker/limits.js` `giveBackOutline` decrement whatever window is
       open. Have the claim return its `reset_at` and add `AND reset_at = ?` to the
       give-back. Tests: the audit's two cases (a claim one second before the window ends,
@@ -257,13 +257,13 @@ live, `worker/leaving.js` (the copy); tests in `test/buddy.test.js`.
 - [ ] **L14. Room minutes for someone taken out for going quiet.** Store the room's study
       time with each `last_seen` write and credit from that, so a pause after they left
       does not cost them (15 minutes credited for 20 studied). `worker/rooms.js`.
-- [ ] **The stale-draft pattern elsewhere.** The course sheet's fix (F1) was to save only
+- [x] **The stale-draft pattern elsewhere.** The course sheet's fix (F1) was to save only
       what the draft changed onto the row as stored now. The audit read the same pattern,
       untested, in the inline task editor (`src/components/sheet/task-row.tsx`: `assignees`
       from when it opened) and in `src/data/achievement-edit.ts` and
       `src/data/session-edit.ts` (the old revision). Write the test for each first; fix the
       ones that fail.
-- [ ] **A read guard for bad dates.** New writes are refused (L4), but `countSessions` in
+- [x] **A read guard for bad dates.** New writes are refused (L4), but `countSessions` in
       `worker/buddy.js` should skip a stored row whose start cannot be a date, so one bad
       row cannot fail the Buddy page.
 - [ ] **Two queries on the live database**, read-only, with George's yes:
@@ -272,6 +272,33 @@ live, `worker/leaving.js` (the copy); tests in `test/buddy.test.js`.
       Any row found is fixed by hand.
 - [ ] **T24.** A step over 99 minutes shows `99:xx`. Deliberate and pinned by tests; if it
       should show hours, that is a design change to the flip clock, not a fix.
+
+## Efficiency pass, 15 November (done, and what was left)
+
+Done: the nightly purge and autoKeep run on indexes; the Buddy's reconcile makes one round trip
+fewer; `0013_leaderboard_indexes.sql`; the focus screen loads lazily (first-load JS 65 to 51 kB
+gzip); the cards-due count is memoized; sync retries back off with jitter; dead code and copies
+removed. Considered and left, each for a reason or a decision:
+
+- **The store reloads all 19 IndexedDB stores after every write** (`src/core/store.ts` `mutate`),
+  so every memo in the app recomputes on each save and each sync. The biggest front-end cost.
+  Fix: re-read only the stores a transaction wrote, keep the other arrays' identity, and skip
+  `applyPage`/`applyServerProfile` writes that change nothing. A store refactor: wants its own
+  stage and tests.
+- **Push uploads one edit per request** (`src/core/sync.ts` `pushAll`), with a full reload after
+  each. A backlog of 50 is 50 round trips. Fix: settle all results in one transaction, or a batch
+  endpoint.
+- **Hourly digests loop over every push subscriber** (`worker/push.js`), 3 to 4 D1 calls each,
+  capped by pushes sent, not by users read. On D1's free plan (50 queries an invocation) that
+  fails at about 15 subscribers in one zone. Fix: a `next_digest_at` column and index, and a cap
+  on users per run. Needs a migration.
+- **The maintenance check reads `app_meta` on every guarded request.** A short isolate cache
+  would save the read, but the Worker tests share the module and an admin's switch would lag.
+- **Every tab syncs after an edit in any tab.** Kept: it is what uploads a tab's queued edit when
+  that tab closes before syncing.
+- **Friend search** (`LIKE '%q%'`) scans every user; **purgeRooms** is up to 400 sequential calls
+  in the nightly invocation; **the purge** is one unchunked batch. Fine at today's size.
+- **Bundle:** `tailwind-merge` (27 kB) and the buddy art (15 kB) are still on the first load.
 
 ## Suggestions from the Study review (for the Study Buddy stages, not tasks here)
 
