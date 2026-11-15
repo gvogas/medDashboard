@@ -4,8 +4,12 @@
 confirmed 59 findings; 43 are fixed and merged. The 16 still open are here, with the
 decision each one needs and the work that follows once it is made.
 
-**Status:** Part 3's L6, stale-draft and read-guard items are done (`f7b7c91`); the rest is not started. Part 1 is questions for George; no task in Part 2 that
-depends on one starts before it is answered. Part 3 needs no decision.
+**Status:** George answered on 15 November: every question takes its recommended answer
+(Q1a, Q2a, Q3a, Q4a, Q5b, Q6a, Q7a, Q8a, Q9b, Q10a, Q11a). Tasks 1 to 11 are done on
+`claude/busy-cori-t91umd`, each with its test, and Part 3's L6, stale-draft and read-guard
+items too. Still open: L14 (room minutes after going quiet), the two live-database queries
+(they need George's yes), T24, and the efficiency pass's items below. Retiring sync v3 as well
+was asked and not answered.
 
 **Finding numbers** (S, F, T, L) are the audit's. Each finding there has the sequence that
 reproduces it, and the audit's test sources are in the session that ran it; the tests to
@@ -151,57 +155,57 @@ Each task: write the test, see it fail, make the change, run the file and its ne
 move items: `worker/classes.js` (convert), `worker/layer.js` or wherever absorb and share
 live, `worker/leaving.js` (the copy); tests in `test/buddy.test.js`.
 
-- [ ] Test: convert a course with three finished items and a graded exam; coins and XP are
+- [x] Test: convert a course with three finished items and a graded exam; coins and XP are
       unchanged after the convert (audit L1's sequence, 15 coins stays 15).
-- [ ] Test: leave a class with a copy after seven class finishes; coins stay 35, XP stays 70
+- [x] Test: leave a class with a copy after seven class finishes; coins stay 35, XP stays 70
       (audit L2).
-- [ ] Treat a finish as paid when any `item:*` ledger row ends in the same item id; count XP
+- [x] Treat a finish as paid when any `item:*` ledger row ends in the same item id; count XP
       finishes by item id.
-- [ ] The grade bonus: skip marks the convert, absorb and share batches created, or have
+- [x] The grade bonus: skip marks the convert, absorb and share batches created, or have
       those batches write 0-amount `grade80:` and `grade90:` rows.
 
 ### Task 2 (Q2a): the day's session coins hold to the cap
 
 **Files:** `worker/buddy.js`; `test/buddy.test.js`.
 
-- [ ] Test: a 240-minute session at 04:00, read, then one at 00:00 the same day, read:
+- [x] Test: a 240-minute session at 04:00, read, then one at 00:00 the same day, read:
       50 coins, not 98 (audit L3).
-- [ ] When paying, clamp each new or raised `session:` amount so the day's rows sum to at
+- [x] When paying, clamp each new or raised `session:` amount so the day's rows sum to at
       most the cap. A row still never shrinks.
 
 ### Task 3 (Q3): streak day, health window, review finishes
 
 **Files:** `worker/buddy.js`; `test/buddy.test.js`, `test/buddy-engine.test.js`.
 
-- [ ] L11: pay only streak days later than the newest paid `streak:` day. Test: a settings
+- [x] L11: pay only streak days later than the newest paid `streak:` day. Test: a settings
       save from another zone adds no second row.
-- [ ] L12: read assignments from `addDays(startDay, -1)`. Test: one dated 14 days back
+- [x] L12: read assignments from `addDays(startDay, -1)`. Test: one dated 14 days back
       costs the same 10 as one dated 13 back.
-- [ ] L13: classify a finish by its id alone in `finishAwards`. Test: five edited-title
+- [x] L13: classify a finish by its id alone in `finishAwards`. Test: five edited-title
       review tasks, a read, five ordinary tasks, a read: the personal limit holds.
 
 ### Task 4 (Q4a): the stale tab adopts the stored clock
 
 **Files:** `src/data/run.ts` (`finish`); `src/data/study-timer.test.ts`.
 
-- [ ] Rewrite the pinned test to expect one 60-minute session after a 20-minute pause in
+- [x] Rewrite the pinned test to expect one 60-minute session after a 20-minute pause in
       the other tab (audit T1).
-- [ ] In `finish()` on a natural end, when the stored solo clock is not done, take it and
+- [x] In `finish()` on a natural end, when the stored solo clock is not done, take it and
       keep ticking instead of logging and clearing.
 
 ### Task 5 (Q5b): say what "Logging to" does
 
 **Files:** `src/components/focus/` (the room's class picker); its test.
 
-- [ ] Reword the control and its hint so it says the whole session is logged to the class
+- [x] Reword the control and its hint so it says the whole session is logged to the class
       picked. Fix the "from here on" comment in `src/data/study-room.ts`.
 
 ### Task 6 (Q6a): removal clears the join code
 
 **Files:** `worker/leaving.js` (`removeMember`); `test/join-code.test.js`.
 
-- [ ] Test: join by code, be removed, join by the same code again: refused.
-- [ ] Clear `code_hash`, `code_expires` and `code_uses_left` in the removal batch, for
+- [x] Test: join by code, be removed, join by the same code again: refused.
+- [x] Clear `code_hash`, `code_expires` and `code_uses_left` in the removal batch, for
       classes and projects. Say so in the members tab where the owner removes someone.
 
 ### Task 7 (Q7a): no class title in a project's activity
@@ -209,41 +213,41 @@ live, `worker/leaving.js` (the copy); tests in `test/buddy.test.js`.
 **Files:** `worker/projects.js` (`linkProject`); the activity row's text in
 `src/data/inbox.ts`; `test/projects.test.js`.
 
-- [ ] Test: a project member outside the class reads no `detail.assignment`.
-- [ ] Store `detail: {}`; the browser names the assignment from the parent item when the
+- [x] Test: a project member outside the class reads no `detail.assignment`.
+- [x] Store `detail: {}`; the browser names the assignment from the parent item when the
       reader holds the class, else says "a class assignment".
-- [ ] Correct `docs/DATA-MODEL.md` to match.
+- [x] Correct `docs/DATA-MODEL.md` to match.
 
 ### Task 8 (Q8a): give-backs are limited
 
 **Files:** `worker/study-ai.js`, `worker/api.js` (the AI reads), `worker/limits.js`;
 `test/study-ai.test.js`, `test/ai.test.js`.
 
-- [ ] Test: four failed runs in a day; the fourth costs the use.
-- [ ] Count give-backs per person per day in `request_limits`; refuse past 3.
-- [ ] Start an AI read's deadline after `readBytes`.
+- [x] Test: four failed runs in a day; the fourth costs the use.
+- [x] Count give-backs per person per day in `request_limits`; refuse past 3.
+- [x] Start an AI read's deadline after `readBytes`.
 
 ### Task 9 (Q9b): label class notes
 
 **Files:** `src/components/sheet/item-sheet.tsx`; its test.
 
-- [ ] While "Add it to the class for everyone" is ticked, the Notes box is labelled as the
+- [x] While "Add it to the class for everyone" is ticked, the Notes box is labelled as the
       class's, read by everyone.
 
 ### Task 10 (Q10a): a room holds 24 rows
 
 **Files:** `worker/rooms.js` (`joinRoom`); `test/rooms.test.js`.
 
-- [ ] Test: 30 friends join and leave in turn: at most 24 rows.
-- [ ] With no row of your own and the room at `ROOM_ROWS`, replace the oldest row that has
+- [x] Test: 30 friends join and leave in turn: at most 24 rows.
+- [x] With no row of your own and the room at `ROOM_ROWS`, replace the oldest row that has
       left and never studied; with none to replace, `409 full`.
 
 ### Task 11 (Q11a): retire sync v2
 
 **Files:** `worker/api.js`, `worker/db.js` (`syncPage`); `test/old-clients.test.js`.
 
-- [ ] Test: a v2 pull answers the reload response and never loops.
-- [ ] Remove `syncPage` once nothing calls it.
+- [x] Test: a v2 pull answers the reload response and never loops.
+- [x] Remove `syncPage` once nothing calls it.
 
 ---
 
