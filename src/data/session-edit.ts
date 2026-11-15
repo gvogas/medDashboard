@@ -13,6 +13,7 @@ import { effectiveCourses } from "./effective"
 import { closeSheet } from "./overlay"
 import { courseRefKey, itemRefKey, keyedCourses, refOf } from "./refs"
 import { ui } from "./ui"
+import { rebased } from "./rebase"
 import type { StudyPrefs, StudySession } from "./types"
 import { MINUTE_MS } from "@/lib/time"
 
@@ -87,14 +88,18 @@ export function impact(d: SessionDraft, sessions: StudySession[], prefs: StudyPr
     return parts.join(" ")
 }
 
-/** Save it, keeping what the stored session had besides (rounds, the manual flag), and close the sheet. */
+/* the row a draft saves: what the session had besides (rounds, the manual flag) with the draft's fields on it */
+const rowOf = (d: SessionDraft): StudySession => ({
+    ...(d.base || { roundsDone: 0, manual: true }),
+    id: d.id, ...refOf(d.courseId, d.itemId), note: d.note.trim(),
+    startedAt: startedAtOf(d), studyMinutes: d.minutes,
+}) as StudySession
+
+/** Save it onto the session as stored now (only the fields this sheet changed), and close the sheet. */
 export async function saveSession(d: SessionDraft) {
     if (!validSession(d)) return
-    await store.saveStudySession({
-        ...(d.base || { roundsDone: 0, manual: true }),
-        id: d.id, ...refOf(d.courseId, d.itemId), note: d.note.trim(),
-        startedAt: startedAtOf(d), studyMinutes: d.minutes,
-    })
+    const stored = d.base && store.data.study_sessions.find((s) => s.id === d.id)
+    await store.saveStudySession(rebased(stored, d.base && rowOf(sessionDraft(d.base)), rowOf(d)))
     closeSheet()
     notify()
 }

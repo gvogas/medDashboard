@@ -8,7 +8,7 @@
 import { json, readJson, HttpError } from './http.js';
 import { requireUser } from './auth.js';
 import { requireAdmin } from './admin.js';
-import { claimLimit } from './limits.js';
+import { claimWindow, giveBackTo } from './limits.js';
 import { askJson, modelAnswer } from './ai.js';
 import { DAY_MS } from './time.js';
 import { cardsPrompt, cutText, HERE_LIMIT, LEVELS, TOPIC_MAX } from '../src/core/study-prompts.ts';
@@ -137,7 +137,7 @@ function cardRequest(body) {
 
 /* failures where the model never gave a usable answer: the use comes back */
 const GIVEN_BACK = new Set(['outline_quota', 'outline_unavailable', 'ai_timeout', 'outline_unreadable']);
-const giveBack = (db, userId, now) => db.prepare('UPDATE request_limits SET hits = hits - 1 WHERE key = ? AND hits > 0 AND reset_at > ?').bind(limitKey(userId), now).run();
+const giveBack = (db, userId, resetAt) => giveBackTo(db, limitKey(userId), resetAt);
 
 /**
  * POST /api/study-ai/cards: flashcards, a preview (nothing is saved). Claims a use, checks the
@@ -153,7 +153,7 @@ export async function generateCards(env, userId, body, now = Date.now(), provide
   const day = utcDay(now);
   if ((await usageOn(env.DB, day)).neurons >= caps.ceiling) throw new HttpError(429, { error: 'study_ai_busy', paste: true });
   const extras = await extrasToday(env.DB, userId, now);
-  const wait = await claimLimit(env.DB, limitKey(userId), caps.perUser + extras.counted, now, DAY_MS);
+  const { wait, resetAt } = await claimWindow(env.DB, limitKey(userId), caps.perUser + extras.counted, now, DAY_MS);
   if (wait) throw new HttpError(429, { error: 'study_ai_cap', retryAfter: wait, extra: extras.gameplay && extras.n < caps.extraMax, paste: true });
   let result;
   /* what the model calls of this run report, kept here so a run that fails is still counted */
@@ -167,7 +167,7 @@ export async function generateCards(env, userId, body, now = Date.now(), provide
     }, 'study-ai:cards', spent);
   } catch (e) {
     const code = e instanceof HttpError ? e.body?.error : 'outline_unavailable';
-    if (GIVEN_BACK.has(code)) await giveBack(env.DB, userId, now).catch(() => {});
+    if (GIVEN_BACK.has(code)) await giveBack(env.DB, userId, resetAt).catch(() => {});
     /* the person's use comes back, but the neurons were spent: they count toward the day's ceiling,
        or answers with no usable cards could run the model without limit */
     const lost = neuronsOf(spent);

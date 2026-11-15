@@ -16,7 +16,7 @@ import { once, spaceGone, uploadFirst } from "./leave"
 import { closeSheet, openSheet } from "./overlay"
 import { toast } from "./toast"
 import type { Course, Item, ParentRef, SharedItem, Space, SpacePref } from "./types"
-import { TASK_LIMIT } from "@/core/shared"
+import { stable, TASK_LIMIT } from "@/core/shared"
 
 /** The most live tasks a project holds (spec §3); the Worker refuses the 201st too. */
 
@@ -60,7 +60,16 @@ export async function addTask(spaceId: string, title: string, date: string): Pro
     return true
 }
 /** An editor's change to a task: title, date, times, notes, assignees. */
-export const saveTask = (t: SharedItem, patch: Partial<SharedItem>) => write({ ...t, ...patch })
+export const saveTask = (t: SharedItem, patch: Partial<SharedItem>) => write({ ...stored(t), ...patch })
+/** The inline editor's Save: onto the task as stored now go only the fields it changed from `opened`, so a
+ *  claim or rename someone made while it was open is not sent back undone. */
+export function editTask(opened: SharedItem, edit: Pick<SharedItem, "title" | "date" | "assignees">) {
+    const patch: Partial<SharedItem> = {}
+    if (edit.title !== opened.title) patch.title = edit.title
+    if (edit.date !== opened.date) patch.date = edit.date
+    if (stable(edit.assignees) !== stable(opened.assignees)) patch.assignees = edit.assignees
+    return saveTask(opened, patch)
+}
 /** Done or not done, for the whole team (spec §10); whoever completes it is named by the Worker,
  *  and here too until it syncs, so achievements count it at once. Done again keeps who finished it first. */
 export function setDone(row: SharedItem, done: boolean) {

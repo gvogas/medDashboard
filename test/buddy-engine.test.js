@@ -16,6 +16,10 @@ describe('counted minutes', () => {
     const rows = [s('old', T - H, 30), s('late', T, 30, { created_at: T + 49 * H })];
     expect(countSessions(rows, TZ, T)).toEqual([]);
   });
+  it('skips a stored row whose start cannot be a date, so one bad row cannot fail the page', () => {
+    const rows = [s('bad', 8.7e15, 30, { created_at: 8.7e15 }), s('nan', NaN, 30), s('ok', T, 30)];
+    expect(countSessions(rows, TZ, 0)).toEqual([{ id: 'ok', day: '2026-11-02', counted: 30 }]);
+  });
   it('splits days in the stored zone', () => {
     const late = Date.UTC(2026, 10, 3, 3);              /* 22:00 on 11-02 in Toronto */
     expect(countSessions([s('t', late, 30)], 'America/Toronto', 0)[0].day).toBe('2026-11-02');

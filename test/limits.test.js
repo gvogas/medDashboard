@@ -1,6 +1,6 @@
 import { env, SELF } from 'cloudflare:test';
 import { describe, expect, it } from 'vitest';
-import { API_LIMIT, SPOTIFY_LIMIT, OUTLINE_DAILY_LIMIT, claimLimit, cooldownRemaining, setCooldown, purgeLimits, readsLeft } from '../worker/limits.js';
+import { API_LIMIT, SPOTIFY_LIMIT, OUTLINE_DAILY_LIMIT, claimLimit, claimWindow, giveBackTo, cooldownRemaining, setCooldown, purgeLimits, readsLeft } from '../worker/limits.js';
 import { handleApi } from '../worker/api.js';
 import { BASE, signIn } from './helpers.js';
 
@@ -17,6 +17,19 @@ describe('shared request limits', () => {
     expect(await claimLimit(env.DB, 'test:burst', 5, now + 59999)).toBe(1);
     expect(await claimLimit(env.DB, 'test:burst', 5, now + 60000)).toBe(0);
     expect(await claimLimit(env.DB, 'test:other', 5, now)).toBe(0);
+  });
+
+  it('gives a use back only to the window it was claimed in (audit L6)', async () => {
+    const now = Date.now(), day = 86_400_000;
+    const first = await claimWindow(env.DB, 'test:gb', 3, now - day + 1000, day);   /* one second before the window ends */
+    expect(first).toEqual({ wait: 0, resetAt: now + 1000 });
+    const next = await claimWindow(env.DB, 'test:gb', 3, now + 2000, day);          /* the next window, claimed once */
+    expect(next.wait).toBe(0);
+    await giveBackTo(env.DB, 'test:gb', first.resetAt);
+    expect((await env.DB.prepare("SELECT hits FROM request_limits WHERE key = 'test:gb'").first()).hits).toBe(1);
+    await giveBackTo(env.DB, 'test:gb', next.resetAt);
+    expect((await env.DB.prepare("SELECT hits FROM request_limits WHERE key = 'test:gb'").first()).hits).toBe(0);
+    expect((await claimWindow(env.DB, 'test:gb', 0, now, day)).wait).toBeGreaterThan(0);
   });
 
   it('enforces the general API budget and isolates users', async () => {

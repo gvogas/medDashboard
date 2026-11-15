@@ -35,7 +35,7 @@ vi.mock("./refs", () => ({ splitKey: () => ({}) }))
 import { ApiError } from "@/core/api"
 
 import {
-    addTask, assigneeNames, assignmentOf, canClaim, canEdit, canFinish, claim, leaveProject, link, linkable, makeProject, progress, projectColour,
+    addTask, assigneeNames, editTask, assignmentOf, canClaim, canEdit, canFinish, claim, leaveProject, link, linkable, makeProject, progress, projectColour,
     removeProject, setDone, takeAssignmentDate, tasksOf, teamTaskTick, toggleTeamTask, withProjects, workload,
 } from "./projects"
 import type { SharedItem, Space } from "./types"
@@ -126,6 +126,15 @@ describe("writing tasks", () => {
         expect(fake.saveShared).toHaveBeenLastCalledWith("shared_items", expect.objectContaining({ title: "New title", notes: "Just typed", status: "done" }))
         await claim(stale, "u-me", true)
         expect(fake.saveShared).toHaveBeenLastCalledWith("shared_items", expect.objectContaining({ title: "New title", notes: "Just typed", assignees: ["u-me"] }))
+    })
+    it("saves an editor's change onto the stored row: a claim made while it was open is kept", async () => {
+        const opened = task({ title: "Draft", assignees: [] })
+        fake.data.shared_items = [{ ...opened, assignees: ["u-sam"], revision: 2 }]
+        await editTask(opened, { title: "Draft v2", date: opened.date, assignees: [] })
+        expect(fake.saveShared).toHaveBeenLastCalledWith("shared_items", expect.objectContaining({ title: "Draft v2", assignees: ["u-sam"], revision: 2 }))
+        /* assignees the editor did change still go */
+        await editTask(opened, { title: "Draft", date: opened.date, assignees: ["*"] })
+        expect(fake.saveShared).toHaveBeenLastCalledWith("shared_items", expect.objectContaining({ title: "Draft", assignees: ["*"] }))
     })
 })
 

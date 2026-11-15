@@ -31,10 +31,21 @@ function claimStmt(db, key, limit, now, windowMs, guard = 'true', ...guardArgs) 
   `).bind(key, now, windowMs, limit, ...guardArgs);
 }
 
-export async function claimLimit(db, key, limit, now = Date.now(), windowMs = WINDOW_MS) {
+/** A hit on `key`: {wait: 0, resetAt} with the end of the window it counted in, else {wait} in seconds. */
+export async function claimWindow(db, key, limit, now = Date.now(), windowMs = WINDOW_MS) {
   const row = await claimStmt(db, key, limit, now, windowMs).first();
-  if (row) return 0;
-  return Math.max(1, await cooldownRemaining(db, key, now));
+  if (row) return { wait: 0, resetAt: row.reset_at };
+  return { wait: Math.max(1, await cooldownRemaining(db, key, now)) };
+}
+
+/** Seconds to wait, 0 when the hit counted. */
+export async function claimLimit(db, key, limit, now = Date.now(), windowMs = WINDOW_MS) {
+  return (await claimWindow(db, key, limit, now, windowMs)).wait;
+}
+
+/** A hit handed back to the window `resetAt` it was claimed in: never to one that has started since. */
+export function giveBackTo(db, key, resetAt) {
+  return db.prepare('UPDATE request_limits SET hits = hits - 1 WHERE key = ? AND hits > 0 AND reset_at = ?').bind(key, resetAt).run();
 }
 
 export const cooldownStmt = (db, key) => db.prepare('SELECT reset_at FROM request_limits WHERE key = ?').bind(key);
@@ -122,15 +133,16 @@ function isLive(row, gen) {
   return row?.pw_gen === gen && !row.revoked;
 }
 
+/** Claims one of the day's AI reads; returns the window it counted in, for giveBackOutline. */
 export async function limitOutline(env, userId) {
-  const wait = await claimLimit(env.DB, `outline:${userId}`, OUTLINE_DAILY_LIMIT, Date.now(), DAY_MS);
+  const { wait, resetAt } = await claimWindow(env.DB, `outline:${userId}`, OUTLINE_DAILY_LIMIT, Date.now(), DAY_MS);
   if (wait) throw rateLimited(wait, 'outline_limit');
+  return resetAt;
 }
 
-/** A read claimed by limitOutline handed back: the model never answered. */
-export async function giveBackOutline(env, userId, now = Date.now()) {
-  await env.DB.prepare('UPDATE request_limits SET hits = hits - 1 WHERE key = ? AND hits > 0 AND reset_at > ?')
-    .bind(`outline:${userId}`, now).run();
+/** A read claimed by limitOutline handed back to its window: the model never answered. */
+export async function giveBackOutline(env, userId, resetAt) {
+  await giveBackTo(env.DB, `outline:${userId}`, resetAt);
 }
 
 /** The AI reads (outlines, calendars, timetables) left in the person's window: { left, limit }. */

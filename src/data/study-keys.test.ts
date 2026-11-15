@@ -4,6 +4,7 @@ const fake = vi.hoisted(() => ({
     data: {
         profile: { id: "u1", isAdmin: true }, spaces: [{ id: "abcdefghij12", scope: "c:abcdefghij12" }], shared_courses: [{ scope: "c:abcdefghij12", id: "web" }],
         courses: [] as unknown[], items: [] as unknown[], shared_items: [] as unknown[], marks: [] as unknown[], space_prefs: [] as unknown[],
+        study_sessions: [] as unknown[], achievements: [] as unknown[],
     },
     saveStudySession: vi.fn(async () => {}), saveAchievement: vi.fn(async () => {}),
 }))

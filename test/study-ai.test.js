@@ -55,6 +55,15 @@ describe('Generate here', () => {
     expect((await studyAiStatus({ DB: env.DB, AI: ai() }, id)).left).toBe(3);
   });
 
+  it('gives a use back to the window it was claimed in, not one that started since (audit L6)', async () => {
+    await clearMeta();
+    const id = await user(), key = 'studyai:' + id;
+    /* the model fails after the day's window has rolled over and the new one holds a claim */
+    const rolling = { async run() { await env.DB.prepare('UPDATE request_limits SET hits = 1, reset_at = reset_at + 86400000 WHERE key = ?').bind(key).run(); throw new Error('AiError: 3043'); } };
+    await expect(generateCards({ DB: env.DB, AI: rolling }, id, body())).rejects.toMatchObject({ status: 503 });
+    expect((await env.DB.prepare('SELECT hits FROM request_limits WHERE key = ?').bind(key).first()).hits).toBe(1);
+  });
+
   it('closes for everyone once the day passes the neuron ceiling', async () => {
     await clearMeta();
     await caps({ perUser: 3, extraMax: 2, ceiling: 100 });

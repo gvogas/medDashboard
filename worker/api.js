@@ -219,7 +219,7 @@ const aiRead = (read, what) => async ({ request, env, url }) => {
   const t0 = Date.now();
   const userId = await requireUser(request, env);
   const type = request.headers.get('content-type') || '';
-  let claimed = false, size = 0;
+  let claimed = null, size = 0;
   try {
     const bytes = await readBytes(request, MAX_BYTES);
     size = bytes.byteLength;
@@ -228,7 +228,7 @@ const aiRead = (read, what) => async ({ request, env, url }) => {
     return json(await read(env.AI, {
       bytes, type, name: (url.searchParams.get('name') || what).slice(0, 120),
       today: date('today') || new Date().toISOString().slice(0, 10), termStart: date('termStart'),
-      claim: async () => { await limitOutline(env, userId); claimed = true; },
+      claim: async () => { claimed = await limitOutline(env, userId); },
       deadline: t0 + TIMEOUT_MS,
       /* a screenshot's grid as the browser found it (schedule.js parseGrid); the other reads ignore it */
       grid: url.searchParams.get('grid') || '',
@@ -241,7 +241,7 @@ const aiRead = (read, what) => async ({ request, env, url }) => {
     const known = e instanceof HttpError;
     const code = known ? e.body?.error || 'error' : 'outline_unavailable';
     if (!known) console.error(what + ':', e?.message || e);
-    if (claimed && GIVEN_BACK.has(code)) await giveBackOutline(env, userId).catch(() => {});
+    if (claimed && GIVEN_BACK.has(code)) await giveBackOutline(env, userId, claimed).catch(() => {});
     const message = [code, what, (type.split(';')[0] || 'no type') + ' ' + size + ' bytes', (Date.now() - t0) + ' ms',
       claimed && GIVEN_BACK.has(code) ? 'read given back' : '', known ? e.detail : messageOf(e)].filter(Boolean).join(' · ');
     await logError(env.DB, { method: request.method, route: routeLabel(url.pathname, routes), status: known ? e.status : 503, message, userId });

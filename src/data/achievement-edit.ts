@@ -8,6 +8,7 @@ import { dayMonth } from "@/core/dates"
 import { ownAchievements } from "@/core/achievements"
 import { notify } from "@/bridge"
 import { closeSheet } from "./overlay"
+import { rebased } from "./rebase"
 import { courseRefKey, itemRefKey, refOf } from "./refs"
 import type { Achievement, Course, Item, StudySession } from "./types"
 
@@ -64,14 +65,20 @@ export function standing(d: AchievementDraft, sessions: StudySession[], items: I
 }
 
 /** Save it, keeping what the stored one had besides, and close the sheet. */
-export async function saveAchievementDraft(d: AchievementDraft) {
-    if (!validAchievement(d)) return
-    /* the draft holds keys; the row stores the ids and the space they are in */
+/* the row a draft saves; the draft holds keys, the row stores the ids and the space they are in */
+function rowOf(d: AchievementDraft): Achievement {
     const ref = refOf(d.rule === "hours" ? d.courseId : null, d.rule === "grade" ? d.itemId : null)
-    await store.saveAchievement({
+    return {
         ...(d.base || {}), id: d.id, name: d.name.trim(), sticker: d.sticker, rule: d.rule,
         courseId: ref.courseId, itemId: ref.itemId, spaceId: ref.spaceId, target: d.target,
-    })
+    } as Achievement
+}
+
+/** Save it onto the achievement as stored now (only the fields this sheet changed), and close the sheet. */
+export async function saveAchievementDraft(d: AchievementDraft) {
+    if (!validAchievement(d)) return
+    const stored = d.base && store.data.achievements.find((a) => a.id === d.id)
+    await store.saveAchievement(rebased(stored, d.base && rowOf(achievementDraft(d.base)), rowOf(d)))
     closeSheet()
     notify()
 }

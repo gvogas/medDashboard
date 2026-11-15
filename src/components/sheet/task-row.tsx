@@ -8,7 +8,7 @@
 import { useEffect, useId, useRef, useState } from "react"
 import { cn } from "@/lib/utils"
 import { dayMonth } from "@/core/dates"
-import { assigneeNames, canClaim, canEdit, canFinish, claim, deleteTask, saveTask, setDone } from "@/data/projects"
+import { assigneeNames, canClaim, canEdit, canFinish, claim, deleteTask, editTask, setDone } from "@/data/projects"
 import { openItem } from "@/data/actions"
 import type { SharedItem, Space } from "@/data/types"
 import { Button, DateInput, TextInput } from "./fields"
@@ -49,10 +49,12 @@ export function TaskRow({ task, space, me, load, gone }: { task: SharedItem; spa
 }
 
 function TaskEditor({ task, space, load, close, remove }: { task: SharedItem; space: Space; load: Map<string, number>; close: () => void; remove: () => void }) {
-    const [title, setTitle] = useState(task.title)
-    const [date, setDate] = useState(task.date)
+    /* the task as it was when the editor opened: Save sends only what changed from this */
+    const [opened] = useState(() => ({ ...task, assignees: task.assignees.filter((u) => u === "*" || space.members.some((m) => m.userId === u)) }))
+    const [title, setTitle] = useState(opened.title)
+    const [date, setDate] = useState(opened.date)
     /* everyone, or the people still in the project: someone who left is not offered again */
-    const [who, setWho] = useState<string[]>(() => task.assignees.filter((u) => u === "*" || space.members.some((m) => m.userId === u)))
+    const [who, setWho] = useState<string[]>(opened.assignees)
     /* Delete asks first; Keep it gives the keyboard back to Delete */
     const [asking, setAsking] = useState(false)
     const del = useRef<HTMLButtonElement>(null)
@@ -61,7 +63,7 @@ function TaskEditor({ task, space, load, close, remove }: { task: SharedItem; sp
     const f = useId()
     const everyone = who.includes("*")
     const toggle = (id: string) => setWho((w) => (w.includes(id) ? w.filter((x) => x !== id) : [...w.filter((x) => x !== "*"), id]))
-    const save = () => { void saveTask(task, { title: title.trim() || task.title, date: date || task.date, assignees: who }); close() }
+    const save = () => { void editTask(opened, { title: title.trim() || opened.title, date: date || opened.date, assignees: who }); close() }
     return (
         <div className="flex flex-col gap-2 border-t border-border pt-2">
             <TextInput aria-label="Task" value={title} maxLength={140} autoFocus onChange={(e) => setTitle(e.target.value)}

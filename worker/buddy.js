@@ -19,6 +19,9 @@ import { LIVE_CARD } from './calendar.js';
 /** The local YYYY-MM-DD of a time in the zone `tz`. */
 export const dayOf = (ms, tz) => localNow(tz, ms).day;
 
+/** Whether `ms` is a time a Date can hold: a bad stored row is skipped, not thrown on. */
+const validTime = (ms) => Number.isFinite(ms) && Math.abs(ms) <= 8.64e15;
+
 /**
  * Each timed session's minutes that count, filling every local day up to DAY_MINUTES in start
  * order: [{id, day, counted}]. Typed-in logs, deleted sessions, sessions from before `since`,
@@ -26,7 +29,7 @@ export const dayOf = (ms, tz) => localNow(tz, ms).day;
  */
 export function countSessions(rows, tz, since) {
   const live = rows
-    .filter((s) => !s.manual && !s.deleted_at && s.started_at >= since && s.created_at - s.started_at <= LOG_WINDOW_MS)
+    .filter((s) => !s.manual && !s.deleted_at && validTime(s.started_at) && s.started_at >= since && s.created_at - s.started_at <= LOG_WINDOW_MS)
     .sort((a, b) => a.started_at - b.started_at || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
   const used = new Map();
   const out = [];
