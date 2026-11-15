@@ -45,6 +45,7 @@ import { newSession } from "@/data/session-edit"
 import { flush, TYPING_MS } from "@/data/item-edit"
 import { runToastAction } from "@/data/toast"
 import { Sheet } from "./sheet"
+import { ItemSheet } from "./item-sheet"
 import { Page, Scrim, SheetHost } from "@/components/shell"
 import type { Item } from "@/data/types"
 import { showApp } from "@/data/signin"
@@ -131,6 +132,19 @@ describe("the sheet", () => {
 })
 
 describe("the item sheet", () => {
+    it("labels the notes as the class's while a new item goes to the class for everyone (decision Q9b, audit F5)", () => {
+        const data = fake.data as unknown as { spaces?: unknown[] }
+        data.spaces = [{ id: "web000000001", scope: "c:web000000001", kind: "class", role: "editor", archived: false, members: [] }]
+        try {
+            render(<ItemSheet draft={item({ id: "n1", title: "Lab 3", classId: "web000000001", notes: "Bring goggles" })} />)
+            expect(screen.getByLabelText("Class notes (everyone sees these)")).toBeTruthy()
+            fireEvent.click(screen.getByLabelText(/Add it to the class for everyone/))
+            expect(screen.getByLabelText("Notes")).toBeTruthy()
+        } finally {
+            delete data.spaces
+        }
+    })
+
     it("says in the foot what saving needs", () => {
         show()
         open({ kind: "new-item", draft: item({ id: "n2", title: "" }) })

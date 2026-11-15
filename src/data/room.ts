@@ -286,7 +286,7 @@ export async function inviteMore(userIds: string[]): Promise<string> {
     try { await api.rooms.invite(id, userIds); return "" } catch (e) { return roomMessage(e) }
 }
 
-/** Log to another class from here on; the room sees its label. */
+/** Log the whole session to another class (its minutes so far move too); the room sees its label. */
 export async function setRoomPick(courseId: string, itemId: string | null, courseLabel: string): Promise<void> {
     const id = roomId()
     if (!id) return

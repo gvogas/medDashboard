@@ -65,6 +65,7 @@ export function ItemSheet({ id, draft }: { id?: string; draft?: Item }) {
     /* a new item with a class picked goes into the class, for its owner or an editor, unless unticked */
     const [shareNew, setShareNew] = useState(true)
     const f = useId()
+    const classNotes = isNew && shareNew && !!it && canAddToClass(it)
     /* Checklist, Notes and Links start folded; one the item has opens by itself and stays
        open while the card is, even emptied. `focus` is the part a + just opened. */
     const [unfolded, setUnfolded] = useState(() => ({
@@ -301,8 +302,9 @@ export function ItemSheet({ id, draft }: { id?: string; draft?: Item }) {
                 )}
 
                 {show.notes && (
-                    <Section title="Notes">
-                        <TextArea aria-label="Notes" autoFocus={focus === "notes"} value={it.notes} maxLength={5000} placeholder="What to revise, what the lecturer said, page numbers."
+                    /* a new item going to the class for everyone takes its notes into the class's, which every member reads (decision Q9b) */
+                    <Section title={classNotes ? "Class notes (everyone sees these)" : "Notes"}>
+                        <TextArea aria-label={classNotes ? "Class notes (everyone sees these)" : "Notes"} autoFocus={focus === "notes"} value={it.notes} maxLength={5000} placeholder="What to revise, what the lecturer said, page numbers."
                             onChange={(e) => set("notes", e.target.value)} onBlur={() => void flush()} />
                     </Section>
                 )}

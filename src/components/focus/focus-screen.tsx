@@ -121,8 +121,10 @@ export function FocusScreen({ run }: { run: Run }) {
                         <BackIcon />Hide
                     </button>
                     {inRoom ? (
-                        <label className="inline-flex max-w-full min-w-0 items-center gap-2 text-[12.5px] text-[var(--fx-ink-2)]">
-                            Logging to
+                        /* one session per room: changing the class moves all of it, so the label says so (decision Q5b, audit T6) */
+                        <label title="The whole session is logged to the class you pick, including the time before you change it"
+                            className="inline-flex max-w-full min-w-0 items-center gap-2 text-[12.5px] text-[var(--fx-ink-2)]">
+                            Log this session to
                             <select value={run.courseId ?? ""} onChange={(e) => void pickRoomClass(e.target.value, null)}
                                 className="h-8 max-w-[220px] min-w-0 cursor-pointer rounded-full border border-white/10 bg-white/5 px-3 font-[inherit] text-[12.5px] text-[var(--fx-ink)] [&_option]:bg-card [&_option]:text-foreground">
                                 {courses.filter((c) => !c.archived || c.id === run.courseId).map((c) => <option key={c.id} value={c.id}>{c.code}{run.courseId === c.id && item ? " · " + item.title : ""}</option>)}

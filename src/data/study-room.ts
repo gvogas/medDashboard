@@ -47,7 +47,7 @@ export async function joinRoomRun(id: string, anyway = false): Promise<string> {
     return err
 }
 
-/** In a room: log to another class from here on. */
+/** In a room: log the whole session to another class (one session per room, so its minutes so far move too). */
 export function pickRoomClass(courseId: string, itemId: string | null): Promise<void> {
     ui.study.courseId = courseId
     ui.study.itemId = itemId
