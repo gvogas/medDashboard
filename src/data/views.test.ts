@@ -7,7 +7,7 @@ vi.mock("@/data/query", () => ({ schoolCal: () => null }))
 import { normalizeCourse, normalizeItem } from "@/core/model"
 import { normalizeSchool } from "@/core/school"
 import {
-    cellLabel, classes, instances, monthCells, officeHours, pickedSource, quoteAt, stats, tableRows, tableView, tasks, timetable, typeCounts, weekDays,
+    cellLabel, classes, instances, monthCells, nextOfficeHour, officeHours, pickedSource, quoteAt, stats, tableRows, tableView, tasks, timetable, typeCounts, weekDays,
     type Filters, type TableFilters, type ViewInput,
 } from "./views"
 import type { Course, Item, Schedule, StudySession } from "./types"
@@ -134,6 +134,33 @@ describe("the side panels", () => {
             item({ id: "mon", type: "office", recur: "weekly", weekday: 1, start: "12:00" }),
         ]
         expect(officeHours(oh, [], ALL).map((x) => x.id)).toEqual(["mon", "fri", "sun"])
+    })
+
+    /* a weekly slot runs from its date to its last day: outside that run its weekday is not a meeting */
+    describe("the next office hour", () => {
+        const office = (row: Partial<Item> & { id: string }) => item({ type: "office", start: "10:00", recur: "weekly", ...row })
+        const now = new Date(2026, 10, 14, 12)   /* Saturday 14 November 2026 */
+
+        it("is not a weekly slot whose run has ended", () => {
+            const ended = office({ id: "ended", date: "2026-01-12", weekday: 1, recurUntil: "2026-04-24" })
+            const live = office({ id: "live", date: "2026-09-08", weekday: 2, recurUntil: "2026-12-18" })
+            expect(nextOfficeHour([ended, live], now)).toBe("live")
+            expect(nextOfficeHour([ended], now)).toBeNull()
+        })
+
+        it("is not one that has not started while another meets sooner, and is it once nothing else does", () => {
+            const later = office({ id: "later", date: "2027-01-11", weekday: 1 })
+            const live = office({ id: "live", date: "2026-09-08", weekday: 2 })
+            expect(nextOfficeHour([later, live], now)).toBe("live")
+            /* alone, its first meeting is still the next one: Monday 11 January, not this coming Monday */
+            expect(nextOfficeHour([later], now)).toBe("later")
+        })
+
+        it("still takes the sooner of two running slots, and a slot's last day counts", () => {
+            const mon = office({ id: "mon", date: "2026-09-07", weekday: 1, recurUntil: "2026-11-16" })
+            const tue = office({ id: "tue", date: "2026-09-08", weekday: 2 })
+            expect(nextOfficeHour([tue, mon], now)).toBe("mon")
+        })
     })
 
     it("put open tasks first, by date, nine at most", () => {

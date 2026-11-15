@@ -84,4 +84,21 @@ describe("a new item with a class picked", () => {
             scope: WEB, id: "n1", courseId: "web", classId: null, status: "todo", grade: null, checklist: [], completedAt: null,
         }))
     })
+
+    /* the new-item card offers a status, a grade and a checklist: what is typed there is yours, so it goes into your mark, not into the void */
+    it("keeps the status, grade and steps typed in the card, in your mark on the new class item", async () => {
+        const steps = [{ id: "k1", text: "Outline", done: false }, { id: "k2", text: "Draft", done: true }]
+        await addToClass({ id: "n2", type: "assignment", title: "Essay", courseId: null, classId: SID, status: "submitted", grade: null, checklist: steps, completedAt: 7 } as Item)
+        expect(fake.store.saveShared).toHaveBeenCalledWith("shared_items", expect.objectContaining({ id: "n2", status: "todo", checklist: [], completedAt: null }))
+        expect(fake.store.saveMark).toHaveBeenCalledTimes(1)
+        expect(fake.store.saveMark).toHaveBeenCalledWith({ id: SID + ":n2", spaceId: SID, itemId: "n2", status: "submitted", completedAt: 7, checklist: steps })
+        /* the class's row is saved first: the mark names an item that is there */
+        expect(fake.store.saveShared.mock.invocationCallOrder[0]).toBeLessThan(fake.store.saveMark.mock.invocationCallOrder[0])
+    })
+
+    it("makes no mark when nothing of yours was set", async () => {
+        await addToClass({ id: "n3", type: "quiz", title: "Quiz 3", courseId: null, classId: SID, status: "todo", grade: null, checklist: [], completedAt: null } as unknown as Item)
+        expect(fake.store.saveShared).toHaveBeenCalledTimes(1)
+        expect(fake.store.saveMark).not.toHaveBeenCalled()
+    })
 })

@@ -17,10 +17,13 @@ import type { Course, Item, SharedCourse } from "./types"
 
 type Dated = Pick<Item, "id" | "type" | "title" | "date">
 
-/** A title as the pairing compares it: lower case, letters and digits. */
-export const normTitle = (t: string): string => t.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim()
+/** A title as the pairing compares it: lower case, letters and digits of any script (a–z alone
+    made every Greek or Cyrillic title the same empty string, and so a match for any other). */
+export const normTitle = (t: string): string => t.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim()
+/* two titles with nothing left to compare are not the same title */
+const sameTitle = (a: string, b: string) => { const n = normTitle(a); return n !== "" && n === normTitle(b) }
 const pairable = (it: Dated) => !it.type.startsWith("c-") && !(it.type === "task" && REVIEW_ID.test(it.id))
-const same = (a: Dated, b: Dated) => a.type === b.type && normTitle(a.title) === normTitle(b.title)
+const same = (a: Dated, b: Dated) => a.type === b.type && sameTitle(a.title, b.title)
 const far = (a: Dated, b: Dated) => Math.abs(diffDays(a.date, b.date))
 /* the one nearest by date; null when there is none, or two are as near (unsure) */
 function nearest<T extends Dated>(from: Dated, list: T[]): T | null {
@@ -55,7 +58,7 @@ export function matchFor(spaceId: string, courses: Course[] = data.courses, shar
     const code = (s: string) => s.toLowerCase().replace(/\s+/g, "")
     return courses.find((c) => c.id === cc.id)
         ?? (cc.code ? courses.find((c) => code(c.code) === code(cc.code)) : undefined)
-        ?? courses.find((c) => normTitle(c.name) === normTitle(cc.name))
+        ?? courses.find((c) => sameTitle(c.name, cc.name))
         ?? null
 }
 

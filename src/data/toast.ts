@@ -75,6 +75,9 @@ function take(t: Toast) {
     if (current?.id === t.id) current = null
     undos = undos.filter((x) => x.id !== t.id)
     if (!current && undos.length === 0) holds.clear()
+    /* a toast leaves by a press on one of its own buttons, which has the focus: the button goes with it and no blur
+       reaches the card, so the focus hold is let go here, or the toasts left would never run out (nor their deletes be made final) */
+    else if (holds.delete("focus") && holds.size === 0) for (const id of clocks.keys()) runClock(id)
     emit()
 }
 
@@ -100,6 +103,8 @@ export function toast(text: string, { undo = null, label = "Undo", badge = null,
 
 /** The notice on screen (one without an Undo), or null. */
 export const currentToast = (): Toast | null => current
+/** The toasts with an Undo on screen, oldest first. */
+export const undoToasts = (): Toast[] => undos
 
 /** Hide a toast: the one with this id; with none, the notice, else the newest Undo toast. Its onGone runs. */
 export function hideToast(id?: number) {

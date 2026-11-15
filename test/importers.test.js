@@ -99,6 +99,13 @@ describe('parseCsv', () => {
     expect(rows[1]).toMatchObject({ type: 'exam', title: 'Midterm "A"', weight: 30 });
   });
 
+  /* a semicolon file is how a spreadsheet with decimal commas exports: 12,5 was read as 12 */
+  it('reads a weight written with a decimal comma', () => {
+    const rows = parseCsv('type;course;title;date;weight\nexam;BIO;Midterm;14/09/2026;12,5\nquiz;BIO;Quiz 1;21/09/2026;7,5\nquiz;BIO;Quiz 2;28/09/2026;10%\n');
+    expect(rows.map((r) => r.weight)).toEqual([12.5, 7.5, 10]);
+    expect(parseCsv('title,date,weight\nEssay,2026-10-01,"12,5"\nLab,2026-10-02,20.5\n').map((r) => r.weight)).toEqual([12.5, 20.5]);
+  });
+
   it('fills missing columns and skips blank lines', () => {
     const rows = parseCsv('title,date\r\nRead chapter 3,2026-09-20\r\n\r\n');
     expect(rows).toEqual([{ type: '', course: '', title: 'Read chapter 3', date: '2026-09-20', start: '', end: '', room: '', weight: null }]);
@@ -120,6 +127,24 @@ describe('guessing', () => {
     expect(guessType('Essay due')).toBe('assignment');
     expect(guessType('Coffee with tutor')).toBe('task');
     expect(codeToken(' pharm101 Lecture')).toBe('PHARM101');
+  });
+
+  /* a–z alone gave these no code at all, and a weekly class with no code is skipped */
+  it('reads a course code written in any script', () => {
+    expect(codeToken('Ανατομία Διάλεξη')).toBe('ΑΝΑΤΟΜΊΑ');
+    expect(codeToken('Анатомия-2 лекция')).toBe('АНАТОМИЯ');
+    expect(codeToken('— no code here')).toBe('');
+  });
+
+  it('imports a weekly class whose name is not in Latin letters', () => {
+    const ics = [
+      'BEGIN:VCALENDAR', 'BEGIN:VEVENT', 'SUMMARY:Ανατομία Διάλεξη', 'DTSTART:20260914T090000', 'DTEND:20260914T100000',
+      'RRULE:FREQ=WEEKLY;BYDAY=MO', 'LOCATION:Αίθουσα 2', 'END:VEVENT', 'END:VCALENDAR',
+    ].join('\r\n');
+    const plan = planImport(parseIcs(ics), { courses: [], items: [] });
+    expect(plan.notes).toEqual([]);
+    expect(plan.courses).toHaveLength(1);
+    expect(plan.courses[0].meetings).toMatchObject([{ weekday: 1, start: '09:00', end: '10:00', room: 'Αίθουσα 2' }]);
   });
 });
 
@@ -233,6 +258,37 @@ describe('planOutline', () => {
     const plan = planOutline({ ...outline, code: '', classes: [], assessments: [] }, { courses: [], items: [] });
     expect(plan.courses[0]).toMatchObject({ code: 'PRIN', keep: true });
     expect(planSummary(plan)).toBe('1 new course · 0 classes · 0 items');
+  });
+
+  /* An outline with no code gets one made from its name. A made-up code says nothing about which course it is,
+     so it must never file the outline under a different course of yours that happens to have the same code. */
+  describe('an outline with no course code', () => {
+    const bare = (name) => ({ ...outline, code: '', name, classes: [{ kind: 'Lecture', weekday: 1, start: '09:00', end: '10:00', room: '' }],
+      assessments: [{ type: 'exam', title: 'Final', date: '2026-12-10', start: '', end: '', room: '', weight: 40 }], officeHours: [] });
+    const mine = (id, code, name) => ({ id, code, name, color: '#E4749B', meetings: [], term: '' });
+
+    it('is a new course with a code of its own when another course already has the made-up one', () => {
+      const second = planOutline(bare('Biology II'), { courses: [mine('c1', 'BIOL', 'Biology I')], items: [] });
+      expect(second.courses).toHaveLength(1);
+      expect(second.courses[0]).toMatchObject({ isNew: true, code: 'BIOL2', name: 'Biology II' });
+      expect(second.items[0].row.courseId).toBe(second.courses[0].id);
+      expect(second.items[0].row.courseId).not.toBe('c1');
+    });
+
+    it('the same for names with no Latin letters, which all make NEW', () => {
+      const first = planOutline(bare('Ανατομία'), { courses: [], items: [] });
+      expect(first.courses[0]).toMatchObject({ code: 'NEW', isNew: true });
+      const second = planOutline(bare('Φυσιολογία'), { courses: [mine('c1', 'NEW', 'Ανατομία')], items: [] });
+      expect(second.courses[0]).toMatchObject({ isNew: true, code: 'NEW2' });
+      expect(second.items[0].row.courseId).not.toBe('c1');
+    });
+
+    it('is the course of yours with the same name, whatever its code', () => {
+      const again = planOutline(bare('  biology  ii '), { courses: [mine('c1', 'BIOL', 'Biology I'), mine('c2', 'BIO2', 'Biology II')], items: [] });
+      expect(again.courses).toHaveLength(1);
+      expect(again.courses[0]).toMatchObject({ id: 'c2', isNew: false });
+      expect(again.items[0].row.courseId).toBe('c2');
+    });
   });
 
   it("marks the plan as an outline and keeps an existing course's semester", () => {

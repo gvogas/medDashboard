@@ -121,13 +121,19 @@ export function canAddToClass(row: { type: string; classId?: string | null }): b
     return !!space && space.kind === "class" && space.role !== "member" && !space.archived && !row.type.startsWith("c-")
 }
 
-/** A new item an owner or editor adds to a class (spec §20): the class's row under its one course, with nothing of yours on it. */
+/** A new item an owner or editor adds to a class (spec §20): the class's row under its one course, with nothing of yours on it.
+    What the card took that is yours (a status, a grade, checklist steps) goes into your mark on the new item, so it is not lost. */
 export async function addToClass(row: Item) {
     const scope = "c:" + row.classId, course = (data.shared_courses ?? []).find((c) => c.scope === scope)
     if (!course) { await store.saveItem(row); return }
     await store.saveShared("shared_items", {
         ...row, scope, courseId: course.id, classId: null, status: "todo", grade: null, checklist: [], completedAt: null,
     } as unknown as Row & { scope: string })
+    const mine: Partial<Mark> = {}
+    if (row.status && row.status !== "todo") { mine.status = row.status; mine.completedAt = row.completedAt ?? null }
+    if (row.grade != null) mine.grade = row.grade
+    if (row.checklist?.length) mine.checklist = row.checklist
+    if (Object.keys(mine).length) await store.saveMark({ id: row.classId + ":" + row.id, spaceId: row.classId!, itemId: row.id, ...mine })
 }
 
 /* ── who changed it ── */

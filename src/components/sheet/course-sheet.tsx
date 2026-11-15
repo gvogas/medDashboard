@@ -10,6 +10,7 @@ import { cn } from "@/lib/utils"
 import { colourName, KINDS, PALETTE } from "@/core/model"
 import { dur, DOW } from "@/core/dates"
 import * as store from "@/core/store"
+import { stable } from "@/core/shared"
 import { useCourses, useItems, useSharedCourses } from "@/data/store"
 import { courseKeyOf, type EffectiveCourse } from "@/data/effective"
 import { isSharedKey, splitKey } from "@/data/refs"
@@ -31,6 +32,14 @@ import { ShareCourse } from "./share-course"
 
 const WEEK = [1, 2, 3, 4, 5, 6, 0]
 
+/** The stored course with the draft's changes on it: each field whose saved form differs from what the sheet opened with. */
+function rebased(stored: Course, opened: Course, draft: Course): Course {
+    const was = forSaving(opened) as unknown as Record<string, unknown>, now = forSaving(draft) as unknown as Record<string, unknown>
+    const out = { ...stored } as unknown as Record<string, unknown>
+    for (const f of Object.keys(now)) if (stable(now[f]) !== stable(was[f])) out[f] = now[f]
+    return out as unknown as Course
+}
+
 export function CourseSheet({ id }: { id: string | null }) {
     const courses = useCourses() as EffectiveCourse[]
     const sharedRows = useSharedCourses()
@@ -41,15 +50,18 @@ export function CourseSheet({ id }: { id: string | null }) {
         ? sharedRows.find((c) => c.scope === shared.scope && c.id === shared.id) ?? null
         : id ? courses.find((c) => !c.source && c.id === id) ?? null : null
     const [draft, setDraft] = useState<Course>(() => (stored ? structuredClone(stored) : newCourse(courses.length)))
+    /* the course as it was when the sheet opened: what the person changed is the draft against this, not against
+       the stored course, which a sync may have moved on since (another editor's change, or this device's last upload settling) */
+    const [opened, setOpened] = useState<Course | null>(() => (stored ? structuredClone(stored) : null))
     /* a class's course that lands after the sheet opened: edit it, never a new one in its scope */
-    useEffect(() => { if (shared && stored && draft.id !== stored.id) setDraft(structuredClone(stored)) }, [shared, stored, draft.id])
+    useEffect(() => { if (shared && stored && draft.id !== stored.id) { setDraft(structuredClone(stored)); setOpened(structuredClone(stored)) } }, [shared, stored, draft.id])
     const [asking, setAsking] = useState(false)
     /* what-if scores: never saved, gone when the sheet closes */
     const [whatIf, setWhatIf] = useState<Record<string, number>>({})
     const f = useId()
     const keep = useRef<HTMLButtonElement>(null)
     const isNew = !stored
-    const changed = courseChanged(draft, stored)
+    const changed = courseChanged(draft, stored ? opened ?? stored : null)
     const cal = schoolCal()
 
     /* ✕, Escape and the scrim ask before throwing changes away; asked, they discard */
@@ -65,8 +77,14 @@ export function CourseSheet({ id }: { id: string | null }) {
     const editClass = (mid: string, change: Partial<Meeting>) => edit({ meetings: draft.meetings.map((m) => (m.id === mid ? changeClass(m, change) : m)) })
     const save = async () => {
         if (!draft.name.trim()) return
-        if (shared) await store.saveShared("shared_courses", { ...forSaving(draft), scope: shared.scope, target: null, archived: false } as unknown as Row & { scope: string })
-        else await store.saveCourse(forSaving(draft))
+        /* onto the course as it is stored now go only the fields this draft changed: saving the whole draft would
+           send another editor's newer value back as this person's change (and undo it for the class), and would
+           upload at the revision the sheet opened with, which the Worker refuses once a sync has moved it on */
+        const row = stored && opened ? rebased(stored, opened, draft) : forSaving(draft)
+        if (shared) await store.saveShared("shared_courses", { ...row, scope: shared.scope, target: null, archived: false } as unknown as Row & { scope: string })
+        else await store.saveCourse(row)
+        /* the sheet can stay drawn while it slides away and be opened again as it is: what it holds is now the saved course */
+        setDraft(structuredClone(row)); setOpened(structuredClone(row))
         closeSheet()
     }
 

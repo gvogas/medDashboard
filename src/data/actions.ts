@@ -290,8 +290,10 @@ export function setSettingsTab(tab: SettingsTab) {
 export async function addQuote(text: string, source: string) {
     const t = text.trim().replace(/^[“"']|[”"']$/g, "")
     if (!t) return false
-    await store.saveQuote({ id: uid(), text: t, source: source.trim() })
-    ui.quoteIx = data.quotes.length - 1
+    const id = uid()
+    await store.saveQuote({ id, text: t, source: source.trim() })
+    /* found by its id: the quotes come back in id order and ids are random, so the new one is not always the last */
+    ui.quoteIx = Math.max(0, data.quotes.findIndex((q) => q.id === id))
     notify()
     return true
 }

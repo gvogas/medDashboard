@@ -78,9 +78,10 @@ export function guessType(text: unknown): string {
   return 'task';
 }
 
-/** The course code a summary starts with: its first word, upper-cased, at most 8 characters. */
+/** The course code a summary starts with: its first word, upper-cased, at most 8 characters.
+    Letters and digits of any script: with a–z alone a class named in Greek or Cyrillic had no code and was skipped. */
 export function codeToken(summary: unknown): string {
-  const m = String(summary).trim().match(/^[A-Za-z0-9][A-Za-z0-9-]*/);
+  const m = String(summary).trim().match(/^[\p{L}\p{N}][\p{L}\p{N}-]*/u);
   return m ? m[0].toUpperCase().slice(0, 8) : '';
 }
 
@@ -184,6 +185,26 @@ function onOrAfter(from: string, weekday: number): string {
 }
 
 /**
+ * The code for an outline that gave none: the name's first four letters, or NEW. A made-up
+ * code says nothing about which course this is, and the plan files rows by code, so it must
+ * not land on a different course of yours that has the same one ("Biology I" and "Biology II"
+ * both make BIOL; every name with no Latin letters makes NEW). The course of yours with the
+ * same name keeps its code; otherwise a digit is added until no course has the code, as
+ * planSchedule's makeCode does.
+ */
+function madeCode(name: unknown, mine: NonNullable<PlanData['courses']>): string {
+  const norm = (s: unknown) => String(s || '').replace(/\s+/g, ' ').trim().toLowerCase();
+  const n = norm(name);
+  const sameName = n ? mine.find((c) => norm(c.name) === n) : undefined;
+  if (sameName?.code) return sameName.code.toUpperCase().slice(0, 8);
+  const base = (String(name || '').replace(/[^A-Za-z0-9]/g, '').slice(0, 4) || 'NEW').toUpperCase();
+  const taken = new Set(mine.map((c) => String(c.code || '').toUpperCase()));
+  let code = base;
+  for (let i = 2; taken.has(code); i++) code = base.slice(0, 8 - String(i).length) + i;
+  return code;
+}
+
+/**
  * A course outline read by the Worker (worker/outline.js) → the same plan.
  * Classes become meetings; office hours become weekly office-hours items; assessments
  * with a date become items. Assessments given only as "Week N" are dated from week 1
@@ -192,7 +213,7 @@ function onOrAfter(from: string, weekday: number): string {
  * Assessments with neither are listed in the notes.
  */
 export function planOutline(o: Outline, data: PlanData, termStart = ''): Plan {
-  const code = (o.code || String(o.name || '').replace(/[^A-Za-z0-9]/g, '').slice(0, 4) || 'NEW').toUpperCase().slice(0, 8);
+  const code = o.code ? o.code.toUpperCase().slice(0, 8) : madeCode(o.name, data.courses || []);
   const name = o.name || code;
   const rows: ImportRow[] = [
     ...o.classes.map((c) => ({ type: 'class', kind: c.kind, weekday: c.weekday, course: code, courseName: name, title: c.kind, date: '', start: c.start, end: c.end, room: c.room, weight: null })),

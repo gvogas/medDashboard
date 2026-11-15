@@ -99,7 +99,8 @@ export function courseGrade(items: Graded[], guesses: Guesses = {}, categories?:
     graded: r1(graded), total: r1(total), remaining: r1(remaining),
     needed(target) {
       if (r1(remaining) <= 0) return null;
-      return r1((target * 100 - points) / remaining);
+      /* against the same whole `remaining` is counted from: 100, or the weights' own total once they pass it */
+      return r1((target * Math.max(total, 100) - points) / remaining);
     },
     categories: out,
     dropped,

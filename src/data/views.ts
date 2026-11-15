@@ -203,9 +203,13 @@ export function nextOfficeHour(rows: Item[], now: Date): string | null {
 function nextMeeting(it: Item, now: Date): number | null {
     const [h, m] = (it.start || "00:00").split(":").map(Number)
     if (it.recur === "weekly") {
+        /* a weekly slot runs from its date to its last day: one not started yet first meets on or after its date,
+           and one that has ended does not meet again, whatever weekday comes next */
+        const from = it.date && parse(it.date) > now ? parse(it.date) : now
         for (let k = 0; k <= 7; k++) {
-            const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() + k, h, m)
-            if (d.getDay() === (it.weekday ?? 0) && d > now) return d.getTime()
+            const d = new Date(from.getFullYear(), from.getMonth(), from.getDate() + k, h, m)
+            if (d.getDay() !== (it.weekday ?? 0) || d <= now) continue
+            return it.recurUntil && iso(d) > it.recurUntil ? null : d.getTime()
         }
         return null
     }

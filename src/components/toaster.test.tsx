@@ -78,4 +78,49 @@ describe("the toaster", () => {
         act(() => { vi.advanceTimersByTime(200) })
         expect(screen.queryByText("Default")).toBeNull()
     })
+
+    /* A click focuses the button it lands on. Its toast then leaves the screen with the focus inside
+       it, and no blur ever reaches the card: the focus hold has to be let go with the toast, or the
+       other Undo toasts stand still for good and the deletes they stand for are never made final. */
+    it("lets the other Undo toasts run out after one's Undo is pressed with the focus on it", () => {
+        vi.useFakeTimers()
+        render(<Toaster />)
+        const undoA = vi.fn(), goneB = vi.fn()
+        act(() => { toast("A deleted", { undo: undoA }) })
+        act(() => { toast("B deleted", { undo: () => {}, onGone: goneB }) })
+        const undo = screen.getAllByRole("button", { name: "Undo" })
+        act(() => { undo[0].focus() })
+        act(() => { fireEvent.click(undo[0]) })
+        expect(undoA).toHaveBeenCalledOnce()
+        expect(screen.queryByText("A deleted")).toBeNull()
+        expect(screen.getByText("B deleted")).toBeTruthy()
+        act(() => { vi.advanceTimersByTime(7000) })
+        expect(screen.queryByText("B deleted")).toBeNull()
+        expect(goneB).toHaveBeenCalledOnce()
+    })
+
+    it("and after one is dismissed with ✕", () => {
+        vi.useFakeTimers()
+        render(<Toaster />)
+        const goneB = vi.fn()
+        act(() => { toast("A deleted", { undo: () => {} }) })
+        act(() => { toast("B deleted", { undo: () => {}, onGone: goneB }) })
+        const dismiss = screen.getAllByRole("button", { name: "Dismiss" })
+        act(() => { dismiss[0].focus() })
+        act(() => { fireEvent.click(dismiss[0]) })
+        act(() => { vi.advanceTimersByTime(7000) })
+        expect(goneB).toHaveBeenCalledOnce()
+    })
+
+    it("still holds the toasts while the focus stays on one that is not leaving", () => {
+        vi.useFakeTimers()
+        render(<Toaster />)
+        const goneA = vi.fn(), goneB = vi.fn()
+        act(() => { toast("A deleted", { undo: () => {}, onGone: goneA }) })
+        act(() => { toast("B deleted", { undo: () => {}, onGone: goneB }) })
+        act(() => { screen.getAllByRole("button", { name: "Undo" })[1].focus() })
+        act(() => { vi.advanceTimersByTime(60_000) })
+        expect(goneA).not.toHaveBeenCalled()
+        expect(goneB).not.toHaveBeenCalled()
+    })
 })

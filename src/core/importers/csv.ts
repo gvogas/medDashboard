@@ -60,7 +60,8 @@ export function parseCsv(text: string): CsvRow[] {
     out.date = normDate(out.date);
     out.start = out.start ? parseTime(out.start) || '' : '';
     out.end = out.end ? parseTime(out.end) || '' : '';
-    const w = parseFloat(out.weight as string);
+    /* a decimal comma (12,5) as a semicolon file from a European spreadsheet writes it: parseFloat alone stops at the comma */
+    const w = parseFloat((out.weight as string).replace(',', '.'));
     out.weight = Number.isFinite(w) && w > 0 && w <= 100 ? w : null;
     return out as CsvRow;
   });

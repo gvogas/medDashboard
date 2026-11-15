@@ -44,6 +44,20 @@ describe('courseGrade', () => {
     expect(g.needed(50)).toBe(40);
   });
 
+  /* remaining already takes the course as its real total when the weights pass 100; needed must use the
+     same total, or scoring exactly what the panel asks for falls short of the target */
+  it('asks for a score that reaches the target when the weights add to more than 100', () => {
+    const items = [{ id: 'a', status: 'graded', weight: 60, grade: 80 }, { id: 'b', status: 'todo', weight: 60, grade: null }];
+    const g = courseGrade(items);
+    expect(g.total).toBe(120);
+    expect(g.remaining).toBe(60);
+    // 70 overall of 120 needs (70 × 120 − 80 × 60) / 60 = 60
+    expect(g.needed(70)).toBe(60);
+    const after = courseGrade(items, { b: g.needed(70) });
+    expect(after.remaining).toBe(0);
+    expect(after.current).toBe(70);
+  });
+
   it('knows when nothing remains', () => {
     expect(courseGrade([item('graded', 100, 72)]).needed(50)).toBeNull();
   });
