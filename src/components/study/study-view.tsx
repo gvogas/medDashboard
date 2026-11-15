@@ -5,7 +5,7 @@
 // ui.studyTab, remembered on this browser; the arrow keys, Home and End move between tabs
 // (radio-keys.ts).
 
-import { useEffect } from "react"
+import { useEffect, useLayoutEffect, useRef, useState } from "react"
 import { cn } from "@/lib/utils"
 import { useUi } from "@/data/ui"
 import { setStudyTab } from "@/data/study"
@@ -34,6 +34,28 @@ export function StudyView() {
     const waiting = blocked ? 0 : list?.incoming.length ?? 0
     const fresh = !blocked && !!list && list.friends.length === 0 && list.incoming.length === 0
     const due = dueToday(useFlashcards())
+    /* the line under the open tab: where that tab is in the bar, measured again when the bar's
+       width or a tab's badge changes; on a phone the bar scrolls, and the open tab is kept in sight */
+    const bar = useRef<HTMLDivElement>(null)
+    const [line, setLine] = useState({ left: 0, width: 0 })
+    useLayoutEffect(() => {
+        const el = bar.current
+        if (!el) return
+        const measure = () => {
+            const tab = el.querySelector<HTMLElement>('[role="tab"][aria-selected="true"]')
+            if (!tab) return
+            setLine((l) => (l.left === tab.offsetLeft && l.width === tab.offsetWidth ? l : { left: tab.offsetLeft, width: tab.offsetWidth }))
+            /* only the bar moves, never the page: scrollIntoView would also scroll the page down to the bar */
+            const from = tab.offsetLeft - 16, to = tab.offsetLeft + tab.offsetWidth + 16 - el.clientWidth
+            if (el.scrollLeft > from) el.scrollLeft = Math.max(0, from)
+            else if (el.scrollLeft < to) el.scrollLeft = to
+        }
+        measure()
+        if (typeof ResizeObserver !== "function") return
+        const watch = new ResizeObserver(measure)
+        watch.observe(el)
+        return () => watch.disconnect()
+    }, [open, due, waiting, fresh])
     /* loaded when the page shows, so the tab's count is there before the tab opens */
     useEffect(() => {
         if (screen !== "app") return
@@ -48,8 +70,11 @@ export function StudyView() {
     return (
         <div className="grid gap-4 pb-1.5">
             <StudyTiles />
-            <div role="tablist" aria-label="Study" onKeyDown={tabKeys}
-                className="flex gap-1 overflow-x-auto border-b border-border [scrollbar-width:none]">
+            <div ref={bar} role="tablist" aria-label="Study" onKeyDown={tabKeys}
+                className="relative flex gap-1 overflow-x-auto border-b border-border [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                {/* the line under the open tab: one element that slides to it */}
+                <span aria-hidden="true" style={{ transform: `translateX(${line.left}px)`, width: line.width }}
+                    className="pointer-events-none absolute bottom-0 left-0 h-0.5 rounded-full bg-primary transition-[transform,width] duration-[260ms] ease-[cubic-bezier(.2,.8,.2,1)] motion-reduce:transition-none" />
                 {TABS.map(([id, label]) => (
                     <button
                         key={id}
@@ -62,7 +87,7 @@ export function StudyView() {
                         onClick={() => setStudyTab(id)}
                         className={cn(
                             "h-[42px] flex-none cursor-pointer border-0 bg-transparent px-3.5 font-[inherit] outline-none focus-visible:shadow-[inset_0_0_0_2px_var(--accent)] text-[13.5px] max-[520px]:px-2.5",
-                            open === id ? "font-semibold text-foreground shadow-[inset_0_-2px_0_var(--primary)] focus-visible:shadow-[inset_0_0_0_2px_var(--accent),inset_0_-2px_0_var(--primary)]" : "font-medium text-muted-foreground hover:text-foreground",
+                            open === id ? "font-semibold text-foreground" : "font-medium text-muted-foreground hover:text-foreground",
                         )}
                     >
                         {label}

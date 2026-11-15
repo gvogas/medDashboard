@@ -1,6 +1,7 @@
 // The Study page's three tiles: the streak, today against the daily goal, and the term
 // so far (the last 16 weeks with no term start), the numbers in serif. With no goal,
 // Today offers to set one. Once you have studied in a room, a fourth: With friends this week.
+// Under 520px they are one row to swipe along, the next tile showing at the edge.
 
 import type { ReactNode } from "react"
 import { cn } from "@/lib/utils"
@@ -13,7 +14,12 @@ export function StudyTiles() {
     const t = useStudyTiles()
     const goal = t.today.goal
     return (
-        <div className={cn("grid gap-[13px] max-[760px]:grid-cols-2 max-[520px]:grid-cols-1", t.together ? "grid-cols-4 max-[1100px]:grid-cols-2" : "grid-cols-3")}>
+        <div className={cn(
+            "stagger grid gap-[13px] max-[760px]:grid-cols-2",
+            /* a phone: one row you swipe along, as the Week's tiles are, so the tabs and the timer stay on the first screen */
+            "max-[520px]:-mx-4 max-[520px]:flex max-[520px]:snap-x max-[520px]:snap-mandatory max-[520px]:scroll-px-4 max-[520px]:gap-2.5 max-[520px]:overflow-x-auto max-[520px]:px-4 max-[520px]:pb-0.5 max-[520px]:[scrollbar-width:none] max-[520px]:[&::-webkit-scrollbar]:hidden",
+            t.together ? "grid-cols-4 max-[1100px]:grid-cols-2" : "grid-cols-3",
+        )}>
             <Tile
                 label="Streak"
                 icon={<Icon study><Flame /></Icon>}
@@ -38,7 +44,7 @@ export function StudyTiles() {
                 icon={<Icon><Calendar /></Icon>}
                 value={duration(t.term.minutes)}
                 sub={t.term.sub}
-                className={t.together ? undefined : "max-[760px]:col-span-2 max-[520px]:col-span-1"}
+                className={t.together ? undefined : "max-[760px]:col-span-2"}
             />
             {t.together && (
                 <Tile label="With friends this week" icon={<Icon><People /></Icon>} value={duration(t.together.minutes)} sub={t.together.sub} />
@@ -49,7 +55,7 @@ export function StudyTiles() {
 
 function Tile({ label, icon, value, sub, className }: { label: string; icon: ReactNode; value: ReactNode; sub: ReactNode; className?: string }) {
     return (
-        <Card className={cn("min-w-0", className)}>
+        <Card className={cn("min-w-0 max-[520px]:w-[68%] max-[520px]:flex-none max-[520px]:snap-start", className)}>
             <div role="group" aria-label={label} className="flex min-h-[84px] items-center gap-4 px-5 py-3 max-[520px]:min-h-0 max-[520px]:gap-3 max-[520px]:px-3.5 max-[520px]:py-2.5">
                 {icon}
                 <span className="flex min-w-0 flex-col gap-0.5">

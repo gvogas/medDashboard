@@ -1,12 +1,14 @@
 // The Study page's Timer tab: the Ready card large on the left, in the theme's dark colour
 // so starting feels like stepping into the focus screen (the phase in the theme's word,
 // the flip clock on the first step, the flow's name, the round strip, the course and item
-// picked, and Start); on the right Your flow (the steps, the rounds and the Quick start
-// presets; every change saves the flow to the profile, study-timer.ts) and Today
-// (today-card.tsx). Under 1000px, one column (the 314px Ready clock plus the card's
+// picked, and Start); on the right the Study plan (plan-card.tsx: today's topics, then the
+// days after), Your flow (the steps, the rounds and the Quick start presets; every change
+// saves the flow to the profile, study-timer.ts), Study together (start a room with friends,
+// or join a friend who is in one, data/room.ts) and Today (today-card.tsx). The Ready card
+// is as tall as what it holds and stays at the top while the right column scrolls, so Start
+// is always in sight. Under 1000px, one column (the 314px Ready clock plus the card's
 // padding does not fit beside the 260px sidebar and Your flow below about 996px; the card
-// trims its padding to 24px under 1100px). Above Your flow, Study together: start a room with
-// friends, or join a friend who is in one (data/room.ts).
+// trims its padding to 24px under 1100px).
 
 import { useEffect, useState, type KeyboardEvent, type ReactNode } from "react"
 import { cn } from "@/lib/utils"
@@ -29,20 +31,18 @@ import { FlipClock } from "./flip-clock"
 import { PhaseLabel, PlayIcon, RoundStrip } from "./timer-bits"
 import { TodayCard } from "./today-card"
 import { MINUTE_MS } from "@/lib/time"
-import { TimelineCard } from "./timeline"
-
-
+import { PlanCard } from "./plan-card"
 
 export function TimerCards() {
     const flow = useFlow()
     return (
-        <div className={cn("grid items-stretch gap-4 [grid-template-columns:minmax(0,1.4fr)_minmax(0,1fr)] max-[1000px]:[grid-template-columns:minmax(0,1fr)]")}>
+        <div className={cn("grid items-start gap-4 [grid-template-columns:minmax(0,1.4fr)_minmax(0,1fr)] max-[1000px]:[grid-template-columns:minmax(0,1fr)]")}>
             <ReadyCard flow={flow} />
-            <div className="flex min-w-0 flex-col gap-4">
-                <TogetherCard />
+            <div className="stagger flex min-w-0 flex-col gap-4">
+                <PlanCard />
                 <FlowCard flow={flow} />
+                <TogetherCard />
                 <TodayCard />
-                <TimelineCard />
             </div>
         </div>
     )
@@ -60,7 +60,7 @@ function ReadyCard({ flow }: { flow: Flow }) {
     return (
         <section
             aria-label="Ready"
-            className="study-fx flex min-w-0 flex-col justify-center gap-6 rounded-[10px] bg-[var(--fx-bg)] px-11 py-9 max-[1100px]:px-6 text-[var(--fx-ink)] shadow-[inset_0_0_0_1px_rgba(255,255,255,.06)] max-[520px]:gap-5 max-[520px]:px-5 max-[520px]:py-6"
+            className="study-fx flex min-w-0 flex-col justify-center gap-6 rounded-[10px] bg-[var(--fx-bg)] px-11 py-10 max-[1100px]:px-6 text-[var(--fx-ink)] shadow-[inset_0_0_0_1px_rgba(255,255,255,.06)] min-[1001px]:sticky min-[1001px]:top-0 max-[520px]:gap-5 max-[520px]:px-5 max-[520px]:py-6"
         >
             <PhaseLabel className="text-[12px] font-medium tracking-[.04em] normal-case">
                 {THEMES[bg].studyWord} · round 1 of {flow.rounds}
