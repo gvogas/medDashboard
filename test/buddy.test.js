@@ -70,6 +70,17 @@ describe('GET /api/buddy', () => {
     expect((await buddy(api)).coins).toBe(50);           /* a second read pays nothing more */
   });
 
+  it('holds the day to its 240 minutes of coins when an earlier session arrives after a later one was paid (audit L3)', async () => {
+    const api = await player('bd-order');
+    const base = dayBase();
+    await backdate(api, base - MIN);
+    await session(api, 'late', base + 210 * MIN, 100);
+    expect((await buddy(api)).coins).toBe(20 + 2);       /* 100 minutes → 20; a streak day → 2 */
+    await session(api, 'early', base, 200);               /* the second device's, from earlier that day */
+    expect((await buddy(api)).coins).toBe(48 + 2);       /* the day's 240 minutes are 48 coins, however they arrived */
+    expect((await buddy(api)).coins).toBe(50);
+  });
+
   it('pays a finish once even after todo → done → todo → done, and stops at 5 personal a day', async () => {
     const api = await player('bd-fin');
     await task(api, 't1', 'done'); await buddy(api);

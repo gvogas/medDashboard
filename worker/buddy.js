@@ -55,6 +55,27 @@ export function sessionAwards(counted, focusOf = () => 0) {
 }
 
 /**
+ * The session awards still to write (new, or raised), held so each day's `session:` rows sum to no
+ * more than the day's counted minutes are worth now (`all`). A paid row never shrinks, so without
+ * this a second device's earlier session arriving after a later one was paid would pay the day twice
+ * (audit L3). An award with no room left is not written.
+ */
+export function holdToDay(all, ledger, paid) {
+  const allowed = {}, used = {};
+  for (const a of all) allowed[a.day] = (allowed[a.day] || 0) + a.amount;
+  for (const l of ledger) if (l.source.startsWith('session:')) used[l.day] = (used[l.day] || 0) + l.amount;
+  const out = [];
+  for (const a of all) {
+    const was = paid.get(a.source)?.amount ?? 0;
+    const more = Math.min(a.amount - was, (allowed[a.day] || 0) - (used[a.day] || 0));
+    if (more <= 0) continue;
+    used[a.day] = (used[a.day] || 0) + more;
+    out.push({ ...a, amount: was + more });
+  }
+  return out;
+}
+
+/**
  * Grade bonuses not yet paid for class items: rows {key: 'c:<space>:<id>', grade}; each step of
  * GRADE_BONUS the grade has reached pays once (`grade80:<key>`, `grade90:<key>`).
  */
@@ -221,8 +242,8 @@ export async function reconcile(db, userId, now = Date.now()) {
   const startedOf = new Map(sessions.map((x) => [x.id, x.started_at]));
   /* Focus Engine at the level it had when each session was first paid, so buying it never re-pays old sessions */
   const focusOf = (id) => levelAt(ledger, 'focus', paid.get('session:' + id)?.at ?? now);
-  const sessionPay = sessionAwards(counted.filter((c) => startedOf.get(c.id) >= s.on_at), focusOf)
-    .filter((a) => !paid.has(a.source) || paid.get(a.source).amount < a.amount);
+  const sessionAll = sessionAwards(counted.filter((c) => startedOf.get(c.id) >= s.on_at), focusOf);
+  const sessionPay = holdToDay(sessionAll, ledger, paid);
 
   /* finishes not yet recorded; one finished while gameplay was off never pays */
   const finished = [
