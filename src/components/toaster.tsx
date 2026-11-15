@@ -6,7 +6,7 @@ import { hideToast, holdToasts, runToastAction, useToast, useUndoToasts, type To
 import { Card } from "@/components/ui/card"
 import { TextureButton } from "@/components/ui/texture-button"
 import { cn } from "@/lib/utils"
-import { TONE } from "@/components/study/achievements"
+import { TONE } from "@/components/study/achievement-tone"
 
 export function Toaster() {
     const notice = useToast()

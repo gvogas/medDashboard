@@ -33,6 +33,21 @@ function state(value: SyncState, message = '') {
   Object.assign(status, { state: value, message, pending: store.pendingCount(), conflicts: store.conflicts.length });
   publish();
 }
+/* failed cycles in a row; a cycle that finishes sets it back to 0 */
+let failures = 0;
+const BACKOFF_CAP_MS = 10 * 60_000;
+/** How long to wait after the `n`th failed cycle in a row: 30 s, doubling to 10 min, at least `floorMs` (what a
+    429 asked for), and up to 20% more at random so every device back after an outage does not retry at once. */
+export function backoffMs(n: number, floorMs = 30_000, rand = Math.random): number {
+  const base = Math.min(BACKOFF_CAP_MS, 30_000 * 2 ** Math.max(0, n - 1));
+  return Math.round(Math.max(floorMs, base * (1 + 0.2 * rand())));
+}
+/* after a failed cycle: back off, and while the browser knows it is offline wait for its `online` event instead */
+function retryLater(floorMs = 30_000) {
+  failures++;
+  if (typeof navigator !== 'undefined' && navigator.onLine === false) return;
+  schedule(backoffMs(failures, floorMs));
+}
 function schedule(ms = 600) {
   if (paused) return;
   clearTimeout(timer);
@@ -40,6 +55,7 @@ function schedule(ms = 600) {
 }
 export function init(): void {
   paused = false;
+  failures = 0;
   schedule(0);
   if (initialized) return;
   initialized = true;
@@ -240,9 +256,10 @@ export async function syncNow(): Promise<boolean> {
           await holdBack(cycle);
           if (!active(cycle)) return false;
           state('error', 'Some edits did not save yet. Trying again shortly.');
-          schedule(30000);
+          retryLater();
           return false;
         }
+        failures = 0;
         state(store.conflicts.length ? 'error' : store.pendingCount() || !complete ? 'pending' : 'idle',
           store.conflicts.length ? REVIEW_TEXT : !complete ? 'Downloading remaining changes.'
             : cycle.waiting ? HOLD_TEXT : '');
@@ -256,7 +273,7 @@ export async function syncNow(): Promise<boolean> {
       if (!active(cycle)) return false;
       if (e instanceof ApiError && e.status === 401) { stop(); state('signed-out'); signedOut(); }
       else if (e instanceof ApiError && e.status === 428) { state('error', 'Reload Term to finish the update. Your edits are saved.'); }
-      else { state(e instanceof ApiError ? 'error' : 'offline', plainError(e)); schedule(retryDelayMs(e)); }
+      else { state(e instanceof ApiError ? 'error' : 'offline', plainError(e)); retryLater(retryDelayMs(e)); }
       return false;
     }
   })();

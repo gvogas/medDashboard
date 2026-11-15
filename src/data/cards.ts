@@ -108,8 +108,10 @@ export function groups(f: Flashcards, courses: EffectiveCourse[] = effectiveCour
         g.decks.push(d)
     }
     for (const g of map.values()) {
-        const ids = new Set(g.decks.map((d) => d.id))
-        g.cards = cards.filter((c) => ids.has(c.deckId) && (c.scope ?? null) === (g.decks.find((d) => d.id === c.deckId)?.scope ?? null))
+        /* deck id to its scope: one lookup per card, not a search of the group's decks */
+        const scopes = new Map<string, string | null>()
+        for (const d of g.decks) if (!scopes.has(d.id)) scopes.set(d.id, d.scope ?? null)
+        g.cards = cards.filter((c) => scopes.has(c.deckId) && (c.scope ?? null) === scopes.get(c.deckId))
         /* due cards and new cards up to the day's 20 less those already started today (per group, spec §5) */
         g.queue = reviewQueue(g.cards, states, started, today)
         g.due = g.queue.length
@@ -124,7 +126,14 @@ export function reviewQueue(cards: AnyCard[], states: Map<string, Schedule>, sta
 }
 
 /** Every card due today across your groups: the Week chip and the badge's tired face. */
-export const dueToday = (f: Flashcards, today = todayIso()): number => groups(f, [], today).reduce((n, g) => n + g.due, 0)
+export function dueToday(f: Flashcards, today = todayIso()): number {
+    /* the badge and the Week ask on every render: the snapshot keeps its identity until a collection changes */
+    if (dueMemo?.f === f && dueMemo.today === today) return dueMemo.n
+    const n = groups(f, [], today).reduce((sum, g) => sum + g.due, 0)
+    dueMemo = { f, today, n }
+    return n
+}
+let dueMemo: { f: Flashcards; today: string; n: number } | null = null
 /** Whether you reviewed any card today. */
 export const reviewedToday = (f: Flashcards, today = todayIso()): boolean => f.reviews.some((r) => r.day === today)
 

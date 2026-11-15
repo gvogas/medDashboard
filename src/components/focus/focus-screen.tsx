@@ -1,4 +1,4 @@
-// The focus screen, in <App>'s #focus: while a run goes and ui.focus is on, the clock
+// The focus screen, drawn by focus.tsx in <App>'s #focus: while a run goes and ui.focus is on, the clock
 // takes the stage and everything else on the page is hidden (html.focusing). Dark in both
 // themes, the glow behind the clock, the break colours in a break. The top line: ← Leave,
 // the course chip, today against the goal. The stage: the phase and round, the big flip
@@ -10,7 +10,7 @@
 // host's (Pause and End for everyone) or a note naming the host, Stop & log becomes Leave,
 // and the people panel (room-panel.tsx) sits on the right.
 
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react"
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react"
 import { cn } from "@/lib/utils"
 import { duration } from "@/lib/time"
 import { isTyping } from "@/lib/dom"
@@ -35,26 +35,11 @@ import { MusicPill } from "./music-pill"
 import { MusicPanel } from "./music-panel"
 
 /** The focus screen while it is up, and the page's chrome hidden behind it. */
-export function Focus() {
-    const run = useRun()
-    const on = useUi((u) => u.focus)
-    const showing = on && run !== null
-
-    useLayoutEffect(() => {
-        document.documentElement.classList.toggle("focusing", showing)
-        return () => { document.documentElement.classList.remove("focusing") }
-    }, [showing])
-
-    /* The screen belongs to a run: one that ended unseen (another tab logged it) leaves it. */
-    useEffect(() => { if (on && run === null) leaveFocus() }, [on, run])
-
-    return showing ? <FocusScreen run={run} /> : null
-}
-
 /* Keys a focused control or box keeps: Space presses a button, a tab or a slider. */
 const OWN_SPACE = "button, a, input, select, textarea, summary, [role=button], [role=tab], [role=option], [role=slider], [role=switch], [role=checkbox], [contenteditable]"
 
-function FocusScreen({ run }: { run: Run }) {
+/** The screen itself, loaded on first use (focus.tsx). */
+export function FocusScreen({ run }: { run: Run }) {
     const music = useUi((u) => u.focusMusic)
     const bg = useUi((u) => u.bg)
     const today = useToday(run)

@@ -50,7 +50,7 @@ import { joinRoom, poll, resetRoom } from "@/data/room"
 import { fakeApi, resetEngine, track } from "@/components/spotify/test-spotify"
 import { TimerCards } from "@/components/study/timer-cards"
 import { StudyDock } from "@/components/study/study-dock"
-import { Focus } from "./focus-screen"
+import { Focus } from "./focus"
 import type { Flow } from "@/data/types"
 
 const MIN = 60_000

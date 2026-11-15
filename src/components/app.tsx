@@ -18,7 +18,7 @@ import { Views } from "@/components/views/views"
 import { Sheet } from "@/components/sheet/sheet"
 import { Overlays } from "@/components/overlays"
 import { StudyDock } from "@/components/study/study-dock"
-import { Focus } from "@/components/focus/focus-screen"
+import { Focus } from "@/components/focus/focus"
 import { AnnouncementBanner } from "@/components/admin/announcement-banner"
 
 export function App() {
