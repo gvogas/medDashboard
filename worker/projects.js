@@ -74,7 +74,7 @@ export async function linkProject(db, userId, spaceId, parent, now = Date.now())
   let assignment = null;
   if (parent) {
     const g = memberGuard(parent.space, userId);
-    assignment = await db.prepare(`SELECT title, date FROM items WHERE scope = ? AND id = ? AND deleted_at IS NULL AND ${g.sql}`)
+    assignment = await db.prepare(`SELECT date FROM items WHERE scope = ? AND id = ? AND deleted_at IS NULL AND ${g.sql}`)
       .bind('c:' + parent.space, parent.item, ...g.binds).first();
     if (!assignment) throw bad('parent');
   }
@@ -88,7 +88,7 @@ export async function linkProject(db, userId, spaceId, parent, now = Date.now())
       WHERE scope = ? AND id = 'project' AND date != ? AND EXISTS (SELECT 1 FROM spaces WHERE id = ? AND parent_item = ? AND updated_at = ?)`)
       .bind(assignment.date, userId, now, 'p:' + spaceId, assignment.date, spaceId, parent.item, now)] : []),
     /* old_value is never NULL, so the first "from" is kept and an undone link is found */
-    noteStmt(db, { spaceId, actorId: userId, verb: 'space.linked', oldValue: prior, newValue: parent?.item ?? null, detail: parent ? { assignment: assignment.title } : {}, now,
+    noteStmt(db, { spaceId, actorId: userId, verb: 'space.linked', oldValue: prior, newValue: parent?.item ?? null, detail: {}, now,
       when: 'EXISTS (SELECT 1 FROM spaces WHERE id = ?1 AND updated_at = ?8 AND parent_item IS ?6)' }),
     undoneStmt(db, { spaceId, actorId: userId, verb: 'space.linked', now }),
   ]);

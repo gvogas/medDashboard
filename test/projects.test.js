@@ -146,7 +146,8 @@ describe('linking a project to an assignment (spec §10)', () => {
     expect(await one("SELECT date FROM items WHERE scope = ? AND id = 'project'", space.scope)).toEqual({ date: '2026-11-02' });
     const notes = (await env.DB.prepare(`SELECT old_value, new_value, json_extract(detail, '$.assignment') AS a FROM activity
       WHERE space_id = ? AND verb = 'space.linked' ORDER BY seq`).bind(space.id).all()).results;
-    expect(notes).toEqual([{ old_value: '', new_value: 'a1', a: 'REST API Project' }, { old_value: 'a1', new_value: 'a2', a: 'GraphQL Project' },
+    /* no assignment title: a project member outside the class must not read it (decision Q7a, audit S7) */
+    expect(notes).toEqual([{ old_value: '', new_value: 'a1', a: null }, { old_value: 'a1', new_value: 'a2', a: null },
       { old_value: 'a2', new_value: null, a: null }]);
   });
 

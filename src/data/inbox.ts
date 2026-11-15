@@ -114,6 +114,19 @@ const when = (v: string | null) => {
 const pct = (v: string | null) => (v === null ? "none" : Number(v) + "%")
 const role = (r: string | null) => (r === "editor" ? "an editor" : r === "owner" ? "the owner" : "a member")
 
+/* A linked assignment's title, only from a class you hold: the row stores no title, since a project's members need
+   not be in the class (audit S7). The project's parent first, then any class of yours with that item. */
+function assignmentName(projectId: string, itemId: string): string {
+    const spaces = data.spaces ?? []
+    const parent = spaces.find((s) => s.id === projectId)?.parent
+    const scopes = [...(parent?.item === itemId ? ["c:" + parent.space] : []), ...spaces.filter((s) => s.kind === "class").map((s) => s.scope)]
+    for (const scope of scopes) {
+        const title = (itemByKey(scope + "/" + itemId) as { title?: string } | null)?.title
+        if (title) return title
+    }
+    return "a class assignment"
+}
+
 /** What a row says (spec §12), for the inbox and the Activity tabs. `me` is your user id. */
 export function describe(r: ActivityRow, me: string): string {
     const by = r.actor === me ? "You" : r.detail.by || "A former member"
@@ -141,7 +154,7 @@ export function describe(r: ActivityRow, me: string): string {
         case "member.removed": return r.about ? `${by} removed you from ${r.space}` : `${by} removed ${whom}`
         case "member.role": return `${by} made ${whom} ${role(r.new)}`
         case "space.archived": return `${by} ${r.new === "1" ? "archived" : "unarchived"} ${r.space}`
-        case "space.linked": return r.new === null ? `${by} unlinked ${r.space} from its assignment` : `${by} linked ${r.space} to ${r.detail.assignment || "an assignment"}`
+        case "space.linked": return r.new === null ? `${by} unlinked ${r.space} from its assignment` : `${by} linked ${r.space} to ${assignmentName(r.spaceId, r.new)}`
         case "space.transferred": return r.about ? `${by} made you the owner of ${r.space}` : `${by} handed ${r.space} to ${whom}`
         case "space.deleted": return `${by} deleted ${r.space}`
         default: return `${by} changed ${r.space}`

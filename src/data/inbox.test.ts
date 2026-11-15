@@ -201,9 +201,16 @@ describe("the inbox list", () => {
 })
 
 describe("a project's link", () => {
+    it("names the assignment only for a reader who holds its class (decision Q7a, audit S7)", () => {
+        const linked = row({ verb: "space.linked", kind: "project", spaceId: "fire00000001", new: "a1", old: "", space: "Fire", detail: { by: "Gabriel" } })
+        expect(say(linked, "u-me")).toBe("Gabriel linked Fire to a class assignment")
+        /* an old row that still carries the title tells nobody outside the class */
+        expect(say({ ...linked, detail: { by: "Gabriel", assignment: "REST API" } }, "u-me")).toBe("Gabriel linked Fire to a class assignment")
+        fake.data.spaces = [{ id: "fire00000001", parent: { space: "web000000001", item: "a1" } }, { id: "web000000001", kind: "class", scope: "c:web000000001" }] as never
+        fake.items.set("c:web000000001/a1", { title: "REST API" })
+        expect(say(linked, "u-me")).toBe("Gabriel linked Fire to REST API")
+    })
     it("reads a link and an unlink", () => {
-        expect(say(row({ verb: "space.linked", kind: "project", new: "a1", old: "", space: "Fire", detail: { by: "Gabriel", assignment: "REST API" } }), "u-me"))
-            .toBe("Gabriel linked Fire to REST API")
         expect(say(row({ verb: "space.linked", kind: "project", new: null, old: "a1", space: "Fire", detail: { by: "Gabriel" } }), "u-me"))
             .toBe("Gabriel unlinked Fire from its assignment")
     })

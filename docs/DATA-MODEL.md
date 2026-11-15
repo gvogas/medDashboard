@@ -797,8 +797,11 @@ past that is `409 limit`, checked inside the write; a live task is never refused
 **Linking** (`POST /api/spaces/:sid/link`): the owner of an unarchived project links it
 to a class item (the project's date becomes the item's, which also writes an `item.date`
 row) or unlinks it (the date stays). `space.linked` has `old_value` the item it was linked
-to (`''` for none) and `new_value` the new item, or NULL for an unlink;
-`detail.assignment` the item's title. A link undone within its ten minutes leaves no row
+to (`''` for none) and `new_value` the new item, or NULL for an unlink. It stores no title:
+a project's members need not be in the class, and class data shows only to people in it.
+The browser names the assignment from the class item when the reader holds the class, else
+says "a class assignment" (rows written before 15 November 2026 may still hold
+`detail.assignment`; the browser ignores it). A link undone within its ten minutes leaves no row
 (`undoneStmt` matches a `''` "from" to a NULL "to").
 
 **Leaving and removal** (`leaveProject`): one batch takes you off every live task's
