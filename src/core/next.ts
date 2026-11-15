@@ -75,7 +75,7 @@ export function reasonFor(it: Ranked, days: number, prep: Pace | null): string {
   const parts = [when];
   const w = weightOf(it);
   if (w) parts.push('worth ' + w + '%');
-  if (left > 0) parts.push(left + ' topic' + (left === 1 ? '' : 's') + ' left', '~' + Math.ceil(prep!.pace) + ' a day');
+  if (left > 0) parts.push(left + ' topic' + (left === 1 ? '' : 's') + ' left', '~' + Math.max(1, Math.ceil(prep!.pace)) + ' a day');   /* with a topic left it is never "~0 a day" */
   if (isReview(it)) parts.push('lecture review');
   return parts.join(' · ');
 }

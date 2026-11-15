@@ -74,6 +74,8 @@ describe('the reason line', () => {
     expect(reasonFor(item('assignment', '2026-10-12', { weight: 30 }), -2, null)).toBe('Overdue 2 days · worth 30%');
     expect(reasonFor(item('exam', '2026-10-18'), 4, { done: 4, total: 12, days: 4, pace: 2, hot: false })).toBe('Exam in 4 days · 8 topics left · ~2 a day');
     expect(reasonFor(item('exam', '2026-10-18'), 4, { done: 1, total: 2, days: 4, pace: 0.3, hot: false })).toBe('Exam in 4 days · 1 topic left · ~1 a day');
+    /* one topic three weeks out is a pace that rounds to 0: still about one a day, never "~0 a day" */
+    expect(reasonFor(item('exam', '2026-11-04'), 21, { done: 0, total: 1, days: 21, pace: 0, hot: false })).toBe('Exam in 21 days · 1 topic left · ~1 a day');
     expect(reasonFor(item('exam', '2026-10-12'), -2, null)).toBe('Overdue 2 days');
   });
 

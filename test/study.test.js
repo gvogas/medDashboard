@@ -157,6 +157,19 @@ describe('exam prep', () => {
     expect(prepLabel(prepPace(e, '2026-10-20'))).toBe('1/3 topics · 1/day');
   });
 
+  it('never says 0 a day while topics are left', () => {
+    const far = { ...exam, date: '2026-12-31', checklist: [{ text: 'A', done: false }, { text: 'B', done: false }] };
+    expect(prepPace(far, '2026-10-20').pace).toBe(0);                         /* two topics over ten weeks rounds to none a day */
+    expect(prepLabel(prepPace(far, '2026-10-20'))).toBe('0/2 topics · <1/day');
+    expect(prepLabel(prepPace({ ...far, checklist: [{ text: 'A', done: true }] }, '2026-10-20'))).toBe('1/1 topics · 0/day');
+  });
+
+  it('does not count a step left blank as a topic, as the plan does not', () => {
+    const e = { ...exam, checklist: [{ id: 'a', text: 'Renal', done: false }, { id: 'b', text: '', done: false }, { id: 'c', text: '  ', done: false }] };
+    expect(prepPace(e, '2026-10-20')).toMatchObject({ done: 0, total: 1 });
+    expect(prepPace({ ...exam, checklist: [{ id: 'b', text: ' ', done: false }] }, '2026-10-20')).toBeNull();
+  });
+
   it('formats short dates', () => {
     expect(shortDate('2026-09-21')).toBe('Mon 21 Sep');
   });

@@ -12,7 +12,7 @@ import { grade as regrade, queue as srsQueue, type Grade, type Schedule } from "
 import type { Card, CardReview, CardState, Deck, SharedCard, SharedDeck } from "@/core/types"
 import { effectiveCourses, type EffectiveCourse } from "./effective"
 import { createStore } from "@/lib/store"
-import { setView } from "./study-controller"
+import { showStudyPage } from "./study-controller"
 import { setStudyTab } from "./study"
 
 /** A deck as the Cards tab shows it: yours (scope null) or a class's. */
@@ -23,7 +23,42 @@ export type AnyCard = (Card & { scope?: undefined }) | SharedCard
 export const groupOf = (d: AnyDeck): string =>
     d.scope ? "class:" + d.scope.slice(2) : d.classId ? "class:" + d.classId : d.courseId ? "course:" + d.courseId : "none"
 
-export interface CardGroup { key: string; name: string; color: string | null; decks: AnyDeck[]; cards: AnyCard[]; due: number }
+/** `queue` is today's review for the group, in order; `due` is how many it holds. */
+export interface CardGroup { key: string; name: string; color: string | null; decks: AnyDeck[]; cards: AnyCard[]; due: number; queue: AnyCard[] }
+
+/** A deck within its group: yours and a class's can share an id, so the scope is part of it. */
+export const deckRef = (d: { id: string; scope?: string | null }): string => (d.scope ?? "") + "/" + d.id
+const cardDeckRef = (c: AnyCard): string => (c.scope ?? "") + "/" + c.deckId
+
+/** A card whose interval has reached this many days counts as known. */
+export const KNOWN_DAYS = 21
+export interface DeckStat { cards: number; due: number; fresh: number; learning: number; known: number }
+/** One deck's numbers: its cards, how many are in today's review, and how many are new, being learned and known. */
+export function deckStat(g: CardGroup, d: AnyDeck, states: Map<string, Schedule>): DeckStat {
+    const ref = deckRef(d)
+    const out: DeckStat = { cards: 0, due: g.queue.filter((c) => cardDeckRef(c) === ref).length, fresh: 0, learning: 0, known: 0 }
+    for (const c of g.cards) {
+        if (cardDeckRef(c) !== ref) continue
+        out.cards++
+        const s = states.get(c.id)
+        if (!s) out.fresh++
+        else if (s.interval >= KNOWN_DAYS) out.known++
+        else out.learning++
+    }
+    return out
+}
+
+/** Today's review: every group's queue, one group's, or one deck's within its group. */
+export function reviewCards(list: CardGroup[], group: string | null, deck?: string | null): AnyCard[] {
+    const cards = (group ? list.filter((g) => g.key === group) : list).flatMap((g) => g.queue)
+    return deck ? cards.filter((c) => cardDeckRef(c) === deck) : cards
+}
+
+/** When the soonest of these cards comes back after today, and how many do that day; null when none are scheduled. */
+export function nextDue(cards: AnyCard[], states: Map<string, Schedule>, today: string): { date: string; count: number } | null {
+    const later = cards.map((c) => states.get(c.id)?.due).filter((d): d is string => !!d && d > today).sort()
+    return later.length ? { date: later[0], count: later.filter((d) => d === later[0]).length } : null
+}
 
 /* Read with `??`: a test's fake store may hold none of these. */
 const NONE: never[] = []
@@ -66,7 +101,8 @@ export function groups(f: Flashcards, courses: EffectiveCourse[] = effectiveCour
         if (!g) {
             const course = key.startsWith("course:") ? courses.find((c) => !c.spaceId && c.id === key.slice(7))
                 : key.startsWith("class:") ? courses.find((c) => c.spaceId === key.slice(6)) : undefined
-            g = { key, name: courseName(course) ?? (key === "none" ? "No class" : "A class you left"), color: course?.color ?? null, decks: [], cards: [], due: 0 }
+            /* only a class can be left: a deck keeps the id of a course of your own after you delete the course, and then it has no class */
+            g = { key, name: courseName(course) ?? (key.startsWith("class:") ? "A class you left" : "No class"), color: course?.color ?? null, decks: [], cards: [], due: 0, queue: [] }
             map.set(key, g)
         }
         g.decks.push(d)
@@ -74,14 +110,11 @@ export function groups(f: Flashcards, courses: EffectiveCourse[] = effectiveCour
     for (const g of map.values()) {
         const ids = new Set(g.decks.map((d) => d.id))
         g.cards = cards.filter((c) => ids.has(c.deckId) && (c.scope ?? null) === (g.decks.find((d) => d.id === c.deckId)?.scope ?? null))
-        g.due = dueOf(g.cards, states, started, today)
+        /* due cards and new cards up to the day's 20 less those already started today (per group, spec §5) */
+        g.queue = reviewQueue(g.cards, states, started, today)
+        g.due = g.queue.length
     }
     return [...map.values()].sort((a, b) => b.due - a.due || a.name.localeCompare(b.name))
-}
-
-/* due cards and new cards up to the day's 20 less those already started today (per group, spec §5) */
-function dueOf(cards: AnyCard[], states: Map<string, Schedule>, started: Set<string>, today: string): number {
-    return reviewQueue(cards, states, started, today).length
 }
 
 /** Today's queue for some cards: due first (oldest first), then new ones in deck order. */
@@ -121,7 +154,7 @@ export function putCard(deckId: string, front: string, back: string, authorId: s
 export const removeCard = (id: string) => deleteCard(id)
 
 /* ── which Cards screen is open: the list, a deck's editor, or a review ── */
-export type CardsScreen = { mode: "home" } | { mode: "deck"; id: string } | { mode: "review"; group: string | null }
+export type CardsScreen = { mode: "home" } | { mode: "deck"; id: string } | { mode: "review"; group: string | null; deck?: string | null }
     | { mode: "generate"; group: string | null; topic?: string; text?: string; title?: string }
 const screenStore = createStore<{ screen: CardsScreen }>({ screen: { mode: "home" } })
 export const useCardsScreen = () => screenStore.use().screen
@@ -136,11 +169,11 @@ export function prepStart(it: { title: string; notes?: string; checklist?: { tex
 /** Open Study › Cards on Make cards with AI, filled in: the class, and an exam's title or a lecture's notes. */
 export function openGenerate(start: { group: string | null; topic?: string; text?: string; title?: string }) {
     showCards({ mode: "generate", ...start })
-    setView("study")
+    showStudyPage()
     setStudyTab("cards")
 }
-export function openReview(group: string | null = null) {
-    showCards({ mode: "review", group })
-    setView("study")
+export function openReview(group: string | null = null, deck: string | null = null) {
+    showCards({ mode: "review", group, deck })
+    showStudyPage()
     setStudyTab("cards")
 }

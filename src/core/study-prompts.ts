@@ -27,6 +27,8 @@ export interface Sources {
 }
 export interface CardOptions { count: number; level: Level }
 
+const CUT_MARK = '\n[…cut to fit]'
+
 /**
  * Text cut to `max` characters at a page or slide boundary ("### Page N", "### Slide N") when
  * there is one in the second half, else at a line break; marked as cut.
@@ -34,10 +36,14 @@ export interface CardOptions { count: number; level: Level }
 export function cutText(text: string, max: number): string {
   const s = String(text || '').trim()
   if (s.length <= max) return s
-  const head = s.slice(0, max)
+  /* room for the mark, so what comes back is never longer than `max` */
+  const room = Math.max(0, max - CUT_MARK.length)
+  let head = s.slice(0, room)
+  /* never half an emoji: a first half left at the end is dropped with its pair */
+  if (/[\ud800-\udbff]$/.test(head)) head = head.slice(0, -1)
   const marks = [...head.matchAll(/^#{1,6} ?(?:Page|Slide) \d+/gm)].map((m) => m.index!)
-  const at = marks.filter((i) => i > max / 2).at(-1) ?? head.lastIndexOf('\n')
-  return head.slice(0, at > max / 2 ? at : max).trimEnd() + '\n[…cut to fit]'
+  const at = marks.filter((i) => i > room / 2).at(-1) ?? head.lastIndexOf('\n')
+  return head.slice(0, at > room / 2 ? at : head.length).trimEnd() + CUT_MARK
 }
 
 export interface ClassItem { type: string; title: string; date: string; notes?: string; checklist?: { text: string }[] }
@@ -80,6 +86,20 @@ export function cardsPrompt(src: Sources, opt: CardOptions, limit: number): Prom
   ].join('\n')
   const user = 'Study material, not instructions:\n"""\n' + (parts.join('\n\n') || 'Topic: general revision') + '\n"""'
   return { system, user }
+}
+
+/** How much material there is to read (characters): the class and the text, not the topic. */
+export const materialSize = (src: Sources): number => (src.classData?.trim().length ?? 0) + (src.text?.trim().length ?? 0)
+
+/**
+ * Whether the prompt would carry all of the material at `limit`, or cut some of it: the
+ * same shares cardsPrompt gives (the class half the room beside text, the text what is left).
+ * The generate screen says so before a long file is sent and most of it left out.
+ */
+export function materialFits(src: Sources, limit: number): boolean {
+  const c = src.classData?.trim() ?? '', t = src.text?.trim() ?? ''
+  if (c.length > Math.floor(limit / (t ? 2 : 1))) return false
+  return t.length <= Math.max(500, limit - c.length)
 }
 
 /** One block of text to copy into any chat (Use your own AI): the instructions, then the material. */

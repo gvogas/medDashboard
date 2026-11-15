@@ -38,6 +38,21 @@ describe('PowerPoint text', () => {
     expect(isPptx(deck)).toBe(true)
     expect(await pptxText(new Blob([deck as BlobPart]))).toBe('### Slide 1\nAutonomic drugs\nWeek 3 & 4\n\n### Slide 2\nBeta blockers\nNotes: Ask about asthma\n\n### Slide 10\nSummary')
   })
+  it("puts notes on the slide they belong to and the slides in the deck's order, not by file number", async () => {
+    const rel = (id: string, kind: string, target: string) => `<Relationship Id="${id}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/${kind}" Target="${target}"/>`
+    /* PowerPoint numbers notes files as they are made: only the third slide has notes, in notesSlide1.xml; the deck shows slide2.xml first */
+    const deck = zip([
+      ['ppt/presentation.xml', '<p:presentation><p:sldIdLst><p:sldId id="257" r:id="rId3"/><p:sldId id="256" r:id="rId2"/><p:sldId id="258" r:id="rId4"/></p:sldIdLst></p:presentation>', false],
+      ['ppt/_rels/presentation.xml.rels', `<Relationships>${rel('rId1', 'slideMaster', 'slideMasters/slideMaster1.xml')}${rel('rId2', 'slide', 'slides/slide1.xml')}${rel('rId3', 'slide', 'slides/slide2.xml')}${rel('rId4', 'slide', 'slides/slide3.xml')}</Relationships>`, false],
+      ['ppt/slides/slide1.xml', slide(['Title']), false],
+      ['ppt/slides/slide2.xml', slide(['Agonists']), false],
+      ['ppt/slides/slide3.xml', slide(['Antagonists']), true],
+      ['ppt/slides/_rels/slide1.xml.rels', `<Relationships>${rel('rId1', 'slideLayout', '../slideLayouts/slideLayout1.xml')}</Relationships>`, false],
+      ['ppt/slides/_rels/slide3.xml.rels', `<Relationships>${rel('rId1', 'slideLayout', '../slideLayouts/slideLayout2.xml')}${rel('rId2', 'notesSlide', '../notesSlides/notesSlide1.xml')}</Relationships>`, true],
+      ['ppt/notesSlides/notesSlide1.xml', slide(['Propranolol is the classic example']), false],
+    ])
+    expect(await pptxText(new Blob([deck as BlobPart]))).toBe('### Slide 1\nAgonists\n\n### Slide 2\nTitle\n\n### Slide 3\nAntagonists\nNotes: Propranolol is the classic example')
+  })
   it('knows a pptx from another zip or a non-zip', () => {
     expect(isPptx(zip([['word/document.xml', '<w:document/>', false]]))).toBe(false)
     expect(isPptx(new TextEncoder().encode('%PDF-1.7'))).toBe(false)

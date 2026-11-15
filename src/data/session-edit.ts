@@ -61,14 +61,19 @@ export function startedAtOf(d: Pick<SessionDraft, "date" | "time">): number {
     return new Date(y, m - 1, day, h, min).getTime()
 }
 
-/** 1 to 720 whole minutes, a day up to today, and a start time. */
-export const validSession = (d: SessionDraft, now = today()) =>
-    Number.isInteger(d.minutes) && d.minutes >= 1 && d.minutes <= MAX_MINUTES
-    && /^\d{4}-\d{2}-\d{2}$/.test(d.date) && d.date <= now && !!parseTime(d.time)
+/* a day up to today, and on today a start no later than now: study still to come would count toward today's goal and streak at once */
+const started = (d: SessionDraft, now: string, nowMs: number) => /^\d{4}-\d{2}-\d{2}$/.test(d.date) && d.date <= now && !!parseTime(d.time) && startedAtOf(d) <= nowMs
+
+/** 1 to 720 whole minutes, a day up to today, and a start time that is not still to come. */
+export const validSession = (d: SessionDraft, now = today(), nowMs = Date.now()) =>
+    Number.isInteger(d.minutes) && d.minutes >= 1 && d.minutes <= MAX_MINUTES && started(d, now, nowMs)
 
 /** What saving would do to that day, the goal and the streak, in a line. */
-export function impact(d: SessionDraft, sessions: StudySession[], prefs: StudyPrefs, now = today()): string {
-    if (!validSession(d, now)) return d.date > now ? "Pick a day up to today." : "Enter a day, a start time and 1 to 720 minutes."
+export function impact(d: SessionDraft, sessions: StudySession[], prefs: StudyPrefs, now = today(), nowMs = Date.now()): string {
+    if (!validSession(d, now, nowMs)) {
+        if (d.date > now) return "Pick a day up to today."
+        return d.date === now && !!parseTime(d.time) && startedAtOf(d) > nowMs ? "Pick a start time up to now." : "Enter a day, a start time and 1 to 720 minutes."
+    }
     const before: Map<string, number> = minutesByDay(sessions.filter((s) => s.id !== d.id))
     const after = new Map(before)
     const day = (after.get(d.date) || 0) + d.minutes

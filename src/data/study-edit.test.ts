@@ -32,6 +32,15 @@ describe("a session logged by hand", () => {
         expect(validSession(draft({ time: "later" }), TODAY)).toBe(false)
     })
 
+    it("cannot start later today than now: study not done yet does not count toward today", () => {
+        const two = new Date(2026, 8, 23, 14, 0).getTime()                 /* 14:00 on TODAY */
+        expect(validSession(draft({ time: "23:00", minutes: 120 }), TODAY, two)).toBe(false)
+        expect(validSession(draft({ time: "14:00" }), TODAY, two)).toBe(true)
+        expect(validSession(draft({ time: "13:59" }), TODAY, two)).toBe(true)
+        expect(impact(draft({ time: "23:00" }), [], prefs, TODAY, two)).toBe("Pick a start time up to now.")
+        expect(impact(draft({ time: "13:00" }), [], prefs, TODAY, two)).toMatch(/^Today goes to 30m/)
+    })
+
     it("starts at the typed day and time", () => {
         expect(startedAtOf({ date: "2026-09-20", time: "14:05" })).toBe(new Date(2026, 8, 20, 14, 5).getTime())
         expect(startedAtOf({ date: "2026-09-20", time: "830" })).toBe(new Date(2026, 8, 20, 8, 30).getTime())

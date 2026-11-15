@@ -180,6 +180,19 @@ describe("today so far", () => {
         expect(todaySoFar([], runAt(CLASSIC, 0, { studyMs: 59_999 }), TODAY)).toBe(0)
     })
 
+    it("in a room counts only your own study: none of what the room did before you joined", () => {
+        /* the room began an hour before and has 60 minutes of study behind it; you join now */
+        const link = { id: "room00000001", joinedAt: new Date(2026, 8, 28, 14).getTime(), joinedStudyMs: 60 * MIN, earlierMs: 0 }
+        const room = (studyMs: number, over = {}) => runAt(CLASSIC, 0, { startedAt: new Date(2026, 8, 28, 13).getTime(), studyMs, room: { ...link, ...over } })
+        expect(todaySoFar(logged, room(60 * MIN), TODAY)).toBe(40)             /* just joined: nothing of yours yet */
+        expect(todaySoFar(logged, room(70 * MIN), TODAY)).toBe(50)             /* ten minutes in */
+        /* back in the room after leaving it: the stint already logged (15 minutes, the room's session) is counted once */
+        const first = { ...session(link.joinedAt, 15), id: "r-" + link.id }
+        expect(todaySoFar([...logged, first], room(70 * MIN, { earlierMs: 15 * MIN, joinedStudyMs: 65 * MIN }), TODAY)).toBe(40 + 15 + 5)
+        /* joined before midnight: it is logged on that day, as a run of your own is */
+        expect(todaySoFar(logged, room(70 * MIN, { joinedAt: new Date(2026, 8, 27, 23).getTime() }), TODAY)).toBe(40)
+    })
+
     it("counts a run begun before midnight toward that day, where it will be logged", () => {
         const late = runAt(CLASSIC, 0, { startedAt: new Date(2026, 8, 27, 23, 30).getTime(), studyMs: 45 * MIN })
         expect(todaySoFar(logged, late, TODAY)).toBe(40)
@@ -448,6 +461,22 @@ describe("a run", () => {
         expect(result.current).toBeNull()
         expect(fake.sessions).toEqual([expect.objectContaining({ studyMinutes: 3 })])
         expect(fake.meta.get("studyRun")).toBeNull()
+    })
+
+    it("ticks again when a run kept after a failed Stop & log is resumed, and ends by itself", async () => {
+        const { result } = renderHook(() => useRun())
+        await begin(CLASSIC)
+        await tickFor(3 * MIN)
+        fake.failSaves = true
+        try { await act(() => stopRun()) } finally { fake.failSaves = false }
+        expect(result.current).toMatchObject({ paused: true, studyMs: 3 * MIN })
+        await act(() => togglePause())                 /* Resume, not Stop & log again */
+        expect(result.current).toMatchObject({ paused: false })
+        await tickFor(10_000)
+        expect(result.current!.studyMs).toBe(3 * MIN + 10_000)     /* the clock moves on screen */
+        await tickFor(120 * MIN)                       /* the rest of the four rounds */
+        expect(result.current).toBeNull()
+        expect(fake.sessions).toEqual([expect.objectContaining({ studyMinutes: 100 })])
     })
 
     it("logs the whole minutes studied on Stop & log, and is none after", async () => {

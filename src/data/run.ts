@@ -127,6 +127,8 @@ export async function togglePause() {
     /* the timer copies the run with its changes, so the id and what it is logged against stay */
     run = (run.pausedAt === null ? timer.pause(run) : timer.resume(run)) as StoredRun
     if (run.pausedAt === null) holdScreen(); else releaseScreen()
+    /* a run kept after a failed Stop & log has no ticker (finish stopped it): resumed, it must tick again, or the clock stands still and the run never ends */
+    ensureTicking()
     await save()
     emit("tick")
 }

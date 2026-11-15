@@ -9,17 +9,24 @@ vi.mock("@/core/store", () => {
     return { data, deleteStudySession: vi.fn(async (id: string) => { data.study_sessions = data.study_sessions.filter((s) => s.id !== id) }), subscribe: () => () => {} }
 })
 vi.mock("@/data/ui", async () => (await import("@/data/fake-ui")).fakeUi(fake.ui))
-vi.mock("@/data/run", () => ({ active: () => false, onTick: vi.fn() }))
+const going = vi.hoisted(() => ({ run: false, fullscreen: vi.fn() }))
+vi.mock("@/data/run", () => ({ active: () => going.run, onTick: vi.fn(), fullscreen: going.fullscreen }))
 vi.mock("@/data/query", () => ({ termStart: () => null, schoolCal: () => null }))
 vi.mock("@/data/study-timer", () => ({ openFocus: vi.fn() }))
 vi.mock("@/lib/fireworks", () => ({ launch: vi.fn() }))
 
 import { data, deleteStudySession } from "@/core/store"
 import { shownSessions, undoSessionDelete } from "./study"
-import { deleteWithUndo, showAchievement } from "./study-controller"
+import { deleteWithUndo, setView, showAchievement, showStudyPage } from "./study-controller"
+import { openFocus } from "./study-timer"
+import { openGenerate, openReview } from "./cards"
 import { TOAST_MS } from "./toast"
 
 afterEach(() => {
+    going.run = false
+    going.fullscreen.mockClear()
+    vi.mocked(openFocus).mockClear()
+    Object.assign(fake.ui, { focus: false })
     vi.unstubAllGlobals()
     vi.useRealTimers()
     document.body.innerHTML = ""
@@ -27,6 +34,35 @@ afterEach(() => {
     fake.ui.hist.undo = null
     data.study_sessions = []
     vi.mocked(deleteStudySession).mockClear()
+})
+
+describe("the Study page while the timer runs", () => {
+    it("Study in the sidebar opens the focus screen, as before", () => {
+        going.run = true
+        setView("study")
+        expect(openFocus).toHaveBeenCalledOnce()
+        expect(fake.ui.view).toBe("week")
+    })
+
+    it("showStudyPage shows the page itself, off the focus screen and out of full screen", () => {
+        going.run = true
+        Object.assign(fake.ui, { view: "week", focus: true })
+        showStudyPage()
+        expect(fake.ui).toMatchObject({ view: "study", focus: false })
+        expect(going.fullscreen).toHaveBeenCalledWith(false)
+        expect(openFocus).not.toHaveBeenCalled()
+    })
+
+    it("a review and Make cards open Study, Cards with a run going: the cards show, the clock stays in the dock", () => {
+        going.run = true
+        openReview(null)                                   /* the Week's "N cards due" chip */
+        expect(fake.ui).toMatchObject({ view: "study", studyTab: "cards", focus: false })
+        expect(openFocus).not.toHaveBeenCalled()
+        Object.assign(fake.ui, { view: "week", studyTab: "timer" })
+        openGenerate({ group: null, topic: "Midterm" })    /* Make cards on an exam's card */
+        expect(fake.ui).toMatchObject({ view: "study", studyTab: "cards", focus: false })
+        expect(openFocus).not.toHaveBeenCalled()
+    })
 })
 
 describe("an achievement toast's See", () => {

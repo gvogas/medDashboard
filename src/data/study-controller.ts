@@ -20,10 +20,19 @@ import { keyedAchievements, keyedCourses, keyedItems, keyedSessions } from "./re
 import type { StudyPrefs, View } from "./types"
 import { pendingUndos, type PendingUndo } from "./study"
 
-/** Show a view: the side nav and the 1–5 keys. Study while a run is going opens its focus screen. */
+/** Show a view: the side nav and the 1–5 keys. Study while a run is going opens its focus screen;
+    what needs the Study page itself during a run (the flashcards) asks for it with showStudyPage. */
 export function setView(view: View) {
     if (view === "study" && run.active()) { openFocus(); return }
     ui.view = view; ui.listFrom = null; rememberUi(); notify()   /* a stat tile's list ends with the page */
+}
+
+/** Show the Study page itself, with a run going or not: a review or Make cards opens there while the
+    clock carries on in the dock. Going through setView, a run sent these to the focus screen, so the
+    cards could not be opened for as long as the timer ran. */
+export function showStudyPage() {
+    if (ui.focus) { ui.focus = false; run.fullscreen(false) }
+    ui.view = "study"; ui.listFrom = null; rememberUi(); notify()
 }
 
 /* ── the history: deletes that can be undone, the goal ── */

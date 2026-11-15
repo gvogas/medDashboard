@@ -8,6 +8,8 @@ const fake = vi.hoisted(() => ({
     status: { providers: ["workers"], left: 2, perUser: 3, extraLeft: 2, globalOpen: true } as any,
     cards: vi.fn(),
     saved: { decks: [] as any[], cards: [] as any[] },
+    saves: 0,             /* calls to the store's saveRows: one change each */
+    failSave: false,      /* the next saveRows throws, and like the real one (a transaction) keeps nothing */
     maintenance: null as null | "blocked",
 }))
 vi.mock("@/core/api", () => ({
@@ -17,6 +19,12 @@ vi.mock("@/core/api", () => ({
 vi.mock("@/core/store", () => ({
     data: { decks: [], cards: [], card_state: [], card_reviews: [], shared_decks: [], shared_cards: [] },
     saveDeck: async (r: any) => { fake.saved.decks.push(r) }, saveCard: async (r: any) => { fake.saved.cards.push(r) },
+    saveRows: async (rows: { kind: "decks" | "cards"; row: any }[]) => {
+        fake.saves++
+        if (fake.failSave) { fake.failSave = false; throw new Error("QuotaExceededError") }
+        for (const { kind, row } of rows) fake.saved[kind].push(row)
+        return rows.map((r) => r.row)
+    },
     saveReview: vi.fn(), deleteCard: vi.fn(), deleteDeck: vi.fn(),
 }))
 vi.mock("@/data/store", () => ({
@@ -26,15 +34,18 @@ vi.mock("@/data/store", () => ({
 }))
 vi.mock("@/data/maintenance", () => ({ useMaintenance: () => fake.maintenance, maintenanceState: () => fake.maintenance }))
 vi.mock("@/data/effective", () => ({ effectiveCourses: () => [] }))
-vi.mock("@/data/study-controller", () => ({ setView: vi.fn() }))
+vi.mock("@/data/study-controller", () => ({ setView: vi.fn(), showStudyPage: vi.fn() }))
 vi.mock("@/data/study", () => ({ setStudyTab: vi.fn() }))
 
 import { GenerateCards } from "./generate"
 import { ApiError } from "@/core/api"
-import { readStudyFile, FILE_ERRORS } from "@/data/study-ai"
+import { readPasted, readStudyFile, FILE_ERRORS } from "@/data/study-ai"
+import { hideToast, undoToasts } from "@/data/toast"
 
 beforeEach(() => {
+    for (const t of undoToasts()) hideToast(t.id)
     fake.saved = { decks: [], cards: [] }
+    fake.saves = 0; fake.failSave = false
     fake.maintenance = null
     fake.status = { providers: ["workers"], left: 2, perUser: 3, extraLeft: 2, globalOpen: true }
     try { localStorage.clear() } catch {}
@@ -64,6 +75,37 @@ describe("Use your own AI", () => {
         await act(async () => { fireEvent.click(screen.getByRole("button", { name: "Save 1 cards" })) })
         expect(fake.saved.decks).toEqual([expect.objectContaining({ title: "Midterm", courseId: "pharm", authorId: "u-me" })])
         expect(fake.saved.cards).toEqual([expect.objectContaining({ front: "A", back: "1", source: "paste", deckId: fake.saved.decks[0].id })])
+    })
+
+    it("keeps every good card of a pasted answer, more than the count asked for too, and counts only the unreadable ones as unread", async () => {
+        const cards = (n: number) => Array.from({ length: n }, (_, i) => ({ front: "Q" + i, back: "A" + i }))
+        await show()
+        fireEvent.change(screen.getByLabelText("Cards"), { target: { value: "10" } })
+        fireEvent.click(screen.getByRole("tab", { name: "Use your own AI" }))
+        fireEvent.change(screen.getByLabelText("The chat's answer"), { target: { value: JSON.stringify({ cards: cards(12) }) } })
+        fireEvent.click(screen.getByRole("button", { name: "Read the answer" }))
+        expect(screen.getByText("12 cards read.")).toBeTruthy()
+        expect(screen.getByRole("button", { name: "Save 12 cards" })).toBeTruthy()
+        /* the note's numbers, without the screen */
+        expect(readPasted(JSON.stringify({ cards: [...cards(3), { front: "", back: "x" }] }), 2)).toMatchObject({ note: "3 of 4 cards could be read." })
+        expect(readPasted(JSON.stringify({ cards: cards(35) }), 10).note).toBe("35 cards read; the first 30 are kept.")
+        expect(readPasted(JSON.stringify({ cards: cards(35) }), 10).cards).toHaveLength(30)
+    })
+
+    it("saves the deck and its cards as one change, so a save that fails and is tried again leaves one deck", async () => {
+        const cards = Array.from({ length: 4 }, (_, i) => ({ front: "Q" + i, back: "A" + i }))
+        await show()
+        fireEvent.click(screen.getByRole("tab", { name: "Use your own AI" }))
+        fireEvent.change(screen.getByLabelText("The chat's answer"), { target: { value: JSON.stringify({ cards }) } })
+        fireEvent.click(screen.getByRole("button", { name: "Read the answer" }))
+        fake.failSave = true
+        await act(async () => { fireEvent.click(screen.getByRole("button", { name: "Save 4 cards" })) })
+        expect(screen.getByText("Those cards couldn't be saved on this device.")).toBeTruthy()
+        expect(fake.saved).toEqual({ decks: [], cards: [] })               /* nothing half-saved */
+        await act(async () => { fireEvent.click(screen.getByRole("button", { name: "Save 4 cards" })) })
+        expect(fake.saves).toBe(2)                                         /* one store change per press */
+        expect(fake.saved.decks.map((d) => d.title)).toEqual(["Midterm"])
+        expect(fake.saved.cards.map((c) => [c.front, c.deckId])).toEqual(cards.map((c) => [c.front, fake.saved.decks[0].id]))
     })
 
     it("shows the prompt to select when copying is refused, and says when an answer had no cards", async () => {
@@ -99,6 +141,44 @@ describe("Generate here", () => {
         expect(fake.cards).toHaveBeenCalledWith(expect.objectContaining({ count: 15, level: "exam", sources: expect.objectContaining({ topic: "Midterm" }) }))
         await act(async () => { fireEvent.click(screen.getByRole("button", { name: "Save 1 cards" })) })
         expect(fake.saved.cards[0]).toMatchObject({ front: "Q1", source: "ai" })
+    })
+
+    it("with extras bought, says how many are left without measuring them against the free three", async () => {
+        fake.status = { providers: ["workers"], left: 5, perUser: 3, extraLeft: 0, globalOpen: true }
+        await show()
+        expect(screen.getByText("5 generations left today.")).toBeTruthy()
+        expect(screen.queryByText(/5 of 3/)).toBeNull()
+    })
+
+    it("asks for a whole number of cards, whatever is typed", async () => {
+        fake.cards.mockResolvedValue({ cards: [{ front: "Q1", back: "A1" }], provider: "workers", left: 1 })
+        await show()
+        fireEvent.change(screen.getByLabelText("Cards"), { target: { value: "7.5" } })
+        expect((screen.getByLabelText("Cards") as HTMLInputElement).value).toBe("7")
+        await act(async () => { fireEvent.click(screen.getByRole("button", { name: "Generate" })) })
+        await waitFor(() => expect(fake.cards).toHaveBeenCalledWith(expect.objectContaining({ count: 7 })))
+    })
+
+    it("says how much of long material each way reads, before anything is sent", async () => {
+        await show({ group: null, topic: "", title: "" })
+        expect(screen.queryByText(/characters of material/)).toBeNull()
+        fireEvent.change(screen.getByLabelText("Or paste notes"), { target: { value: "word ".repeat(1000) } })
+        expect(screen.getByText(/4,999 characters of material/)).toBeTruthy()
+        expect(screen.queryByText(/Generate here reads/)).toBeNull()                       /* it all fits */
+        fireEvent.change(screen.getByLabelText("Or paste notes"), { target: { value: "word ".repeat(3000) } })
+        expect(screen.getByText(/Generate here reads about the first 12,000/)).toBeTruthy()
+        expect(screen.getByText(/Use your own AI reads all of it/)).toBeTruthy()
+        fireEvent.change(screen.getByLabelText("Or paste notes"), { target: { value: "word ".repeat(7000) } })
+        expect(screen.getByText(/Use your own AI reads about the first 30,000/)).toBeTruthy()
+    })
+
+    it("after saving, offers to review the new cards", async () => {
+        fake.cards.mockResolvedValue({ cards: [{ front: "Q1", back: "A1" }], provider: "workers", left: 1 })
+        await show()
+        await act(async () => { fireEvent.click(screen.getByRole("button", { name: "Generate" })) })
+        await waitFor(() => expect(screen.getByRole("button", { name: "Save 1 cards" })).toBeTruthy())
+        await act(async () => { fireEvent.click(screen.getByRole("button", { name: "Save 1 cards" })) })
+        expect(undoToasts().map((t) => [t.text, t.label])).toEqual([["Saved 1 card to Midterm.", "Review now"]])
     })
 
     it("offers Use your own AI when the day's uses are spent", async () => {

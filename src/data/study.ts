@@ -84,7 +84,8 @@ export function studyTiles(sessions: StudySession[], prefs: StudyPrefs, termStar
     return {
         streak: {
             days: st.current,
-            sub: "Longest " + st.longest + " · a day counts from " + prefs.dayMin + " min" + (st.today || !st.current ? "" : " · study today to keep it"),
+            /* a rest day never breaks the streak, so on one there is nothing to keep */
+            sub: "Longest " + st.longest + " · a day counts from " + prefs.dayMin + " min" + (st.today || !st.current || (prefs.rest ?? []).includes(parse(today).getDay()) ? "" : " · study today to keep it"),
         },
         today: { minutes, goal: prefs.goal, sub: prefs.goal ? (left ? left + " min to your daily goal" : "Daily goal reached") : "" },
         term: {

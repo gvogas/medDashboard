@@ -8,18 +8,45 @@ import { useEffect, useMemo, useState } from "react"
 import { cn } from "@/lib/utils"
 import { Panel, HeadNote } from "@/components/views/bits"
 import { Button, Checkbox, Note, Select, TextArea, TextInput } from "@/components/sheet/fields"
-import { LEVELS, cutText, type Level } from "@/core/study-prompts"
+import { HERE_LIMIT, LEVELS, OWN_LIMIT, cutText, materialFits, materialSize, type Level } from "@/core/study-prompts"
 import { PASTE_MAX, type CardDraft } from "@/core/study-answers"
+import type { Deck } from "@/core/types"
 import { useMaintenance } from "@/data/maintenance"
 import { useCourses, useItems, useProfile } from "@/data/store"
-import { showCards, useFlashcards } from "@/data/cards"
+import { deckRef, groupOf, openReview, showCards, useFlashcards } from "@/data/cards"
+import { toast } from "@/data/toast"
 import {
     ACCEPT, CHATS, FILE_ERRORS, MAX_FILES, classContext, generateHere, hasMaterial, lastChat, loadStudyAiStatus, ownPrompt, pickChat,
     readPasted, readStudyFile, saveDrafts, useStudyAiStatus, type CardRequest,
 } from "@/data/study-ai"
 
 const SMALL = "text-[12.5px] text-muted-foreground"
+const HEAD = "m-0 flex items-center gap-2 text-[12px] font-semibold uppercase tracking-wide text-muted-foreground"
 const LEVEL_NAME: Record<Level, string> = { basic: "Basics", exam: "Exam prep", deep: "Deeper" }
+const chars = (n: number) => n.toLocaleString("en-US")
+
+/* A step of the form: its number in a small disc, then what it asks for. */
+const Step = ({ n, children }: { n: number; children: string }) => (
+    <h3 className={HEAD}>
+        <span aria-hidden="true" className="grid size-[18px] flex-none place-items-center rounded-full bg-[var(--study-soft)] text-[10.5px] font-bold text-[var(--study-ink)] tabular-nums">{n}</span>
+        {children}
+    </h3>
+)
+
+/* How much material there is, and what each way does with it. Generate here is sent far less
+   than a long file holds, so this says so before the file is cut and most of it left out. */
+function MaterialNote({ req }: { req: CardRequest }) {
+    const size = materialSize(req)
+    if (!size) return null
+    const here = materialFits(req, HERE_LIMIT), own = materialFits(req, OWN_LIMIT)
+    return (
+        <p role="status" className={cn(SMALL, "m-0", !here && "rounded-md bg-[var(--amber-bg)] px-2.5 py-1.5 text-[var(--amber-ink)]")}>
+            {chars(size)} characters of material.
+            {!here && own && ` Generate here reads about the first ${chars(HERE_LIMIT)} and leaves the rest out; Use your own AI reads all of it.`}
+            {!here && !own && ` Generate here reads about the first ${chars(HERE_LIMIT)} and Use your own AI reads about the first ${chars(OWN_LIMIT)}; the rest is left out. To cover it all, make cards a part at a time.`}
+        </p>
+    )
+}
 
 /* What the wait shows, so a click on Generate is never silent: the count, the seconds, and a note if it runs long. */
 function GenerateProgress({ secs, count }: { secs: number; count: number }) {
@@ -52,6 +79,8 @@ export function GenerateCards({ start }: { start: GenerateStart }) {
     const [useClass, setUseClass] = useState(!!course)
     const [files, setFiles] = useState<{ name: string; text: string }[]>([])
     const [fileError, setFileError] = useState("")
+    /* a file is being dragged over the Add files box */
+    const [over, setOver] = useState(false)
     const [pasted, setPasted] = useState(start.text ?? "")
     const [topic, setTopic] = useState(start.topic ?? "")
     const [count, setCount] = useState(15)
@@ -107,7 +136,7 @@ export function GenerateCards({ start }: { start: GenerateStart }) {
         <Panel title="Make cards with AI" label="Make cards with AI" head={<Button variant="ghost" onClick={() => showCards({ mode: "home" })}>Cancel</Button>}>
             <div className="grid gap-4 p-4">
                 <section className="grid gap-2">
-                    <h3 className="m-0 text-[12px] font-semibold uppercase tracking-wide text-muted-foreground">From</h3>
+                    <Step n={1}>What to study from</Step>
                     <label className="grid gap-1 text-[12.5px] text-ink-2">Class
                         <Select value={group} onChange={(e) => { setGroup(e.target.value); setUseClass(e.target.value !== "none") }}>
                             <option value="none">No class</option>
@@ -115,8 +144,15 @@ export function GenerateCards({ start }: { start: GenerateStart }) {
                         </Select>
                     </label>
                     {course && <Checkbox id="gen-class" checked={useClass} onChange={setUseClass}>Use this class's items and notes</Checkbox>}
-                    <label className="flex cursor-pointer flex-col gap-1 rounded-lg border border-dashed border-border bg-muted p-3 text-center text-[12.5px] text-ink-2" htmlFor="gen-files">
-                        <b className="text-foreground">Add files</b> PDF, PowerPoint (.pptx), TXT or MD, up to 20 MB each. Only their words are used.
+                    <label htmlFor="gen-files"
+                        onDragOver={(e) => { e.preventDefault(); setOver(true) }}
+                        onDragLeave={() => setOver(false)}
+                        onDrop={(e) => { e.preventDefault(); setOver(false); void addFiles(e.dataTransfer.files) }}
+                        className={cn(
+                            "flex cursor-pointer flex-col gap-1 rounded-lg border border-dashed p-3 text-center text-[12.5px] text-ink-2 hover:border-[var(--study)]",
+                            over ? "border-[var(--study)] bg-[var(--study-soft)]" : "border-border bg-muted",
+                        )}>
+                        <b className="text-foreground">{over ? "Drop to add" : "Add files, or drop them here"}</b> PDF, PowerPoint (.pptx), TXT or MD, up to 20 MB each. Only their words are used.
                         <input id="gen-files" type="file" multiple accept={ACCEPT} className="sr-only" onChange={(e) => { void addFiles(e.target.files); e.target.value = "" }} />
                     </label>
                     {files.map((x) => (
@@ -131,16 +167,19 @@ export function GenerateCards({ start }: { start: GenerateStart }) {
                     <label className="grid gap-1 text-[12.5px] text-ink-2">Topic
                         <TextInput value={topic} maxLength={120} onChange={(e) => setTopic(e.target.value)} placeholder="e.g. Beta blockers" />
                     </label>
+                    <MaterialNote req={req} />
                 </section>
-                <section className="flex flex-wrap gap-3">
+                <Step n={2}>How many, and how hard</Step>
+                <section className="-mt-2 flex flex-wrap gap-3">
                     <label className="grid gap-1 text-[12.5px] text-ink-2">Cards
-                        <TextInput type="number" min={1} max={30} value={count} onChange={(e) => setCount(Math.max(1, Math.min(30, Number(e.target.value) || 1)))} className="w-24" />
+                        <TextInput type="number" min={1} max={30} value={count} onChange={(e) => setCount(Math.max(1, Math.min(30, Math.floor(Number(e.target.value)) || 1)))} className="w-24" />
                     </label>
                     <label className="grid gap-1 text-[12.5px] text-ink-2">Level
                         <Select value={level} onChange={(e) => setLevel(e.target.value as Level)}>{LEVELS.map((l) => <option key={l} value={l}>{LEVEL_NAME[l]}</option>)}</Select>
                     </label>
                 </section>
-                <div role="tablist" aria-label="How" className="flex gap-1 border-b border-border">
+                <Step n={3}>Make them</Step>
+                <div role="tablist" aria-label="How" className="-mt-2 flex gap-1 border-b border-border">
                     {([["here", "Generate here"], ["own", "Use your own AI"]] as const).map(([id, label]) => (
                         <button key={id} type="button" role="tab" aria-selected={way === id} onClick={() => setWay(id)}
                             className={cn("h-9 cursor-pointer border-0 bg-transparent px-3 font-[inherit] text-[13px]", way === id ? "font-semibold text-foreground shadow-[inset_0_-2px_0_var(--primary)]" : "text-muted-foreground")}>{label}</button>
@@ -152,7 +191,8 @@ export function GenerateCards({ start }: { start: GenerateStart }) {
                             {off ? "Generate here is switched off for a moment. Use your own AI still works."
                                 : !status ? "Checking today's free generations…"
                                 : !status.globalOpen ? "Generate here is busy for today. Use your own AI still works."
-                                : `${status.left} of ${status.perUser} free generations left today.${status.extraLeft ? " More can be bought with coins in the Buddy shop." : ""}`}
+                                /* extras bought with coins raise what is left past the free ones: then "5 of 3 free" would be wrong twice */
+                                : `${status.left > status.perUser ? `${status.left} generations left today.` : `${status.left} of ${status.perUser} free generations left today.`}${status.extraLeft ? " More can be bought with coins in the Buddy shop." : ""}`}
                         </p>
                         {error && <Note tone="bad">{error}</Note>}
                         <span><Button variant="study" disabled={!ready || busy || !here || !status?.left || !status.globalOpen} onClick={() => void generate()}>{busy ? "Making cards…" : "Generate"}</Button></span>
@@ -207,7 +247,7 @@ function OwnAi({ req, ready, onCards }: { req: CardRequest; ready: boolean; onCa
 
 function Preview({ drafts, setDrafts, source, note, group, me, decks, title, onBack }: {
     drafts: CardDraft[]; setDrafts: (d: CardDraft[]) => void; source: "ai" | "paste"; note: string; group: string; me: string
-    decks: { id: string; title: string }[]; title: string; onBack: () => void
+    decks: Deck[]; title: string; onBack: () => void
 }) {
     const [into, setInto] = useState("new")
     const [name, setName] = useState(title)
@@ -218,8 +258,15 @@ function Preview({ drafts, setDrafts, source, note, group, me, decks, title, onB
     const save = async () => {
         setSaving(true)
         try {
-            await saveDrafts(ok, into === "new" ? { title: name, group } : { deckId: into }, me, source)
+            const deckId = await saveDrafts(ok, into === "new" ? { title: name, group } : { deckId: into }, me, source)
             showCards({ mode: "home" })
+            /* the cards are due today: offer the review of just that deck, one tap away */
+            const kept = decks.find((d) => d.id === into)
+            const title = kept?.title ?? (name.trim().slice(0, 80) || "Generated cards")
+            toast(`Saved ${ok.length} ${ok.length === 1 ? "card" : "cards"} to ${title}.`, {
+                label: "Review now",
+                undo: () => openReview(kept ? groupOf(kept) : group, deckRef({ id: deckId })),
+            })
         } catch { setError("Those cards couldn't be saved on this device."); setSaving(false) }
     }
     return (

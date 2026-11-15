@@ -10,7 +10,10 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-libra
 const views = vi.hoisted(() => ({ calls: [] as string[] }))
 const ui = vi.hoisted(() => ({ view: "study", focus: false, studyTab: "cards" }))
 vi.mock("@/data/ui", async () => (await import("@/data/fake-ui")).fakeUi(ui))
-vi.mock("@/data/study-controller", () => ({ setView: (v: string) => { views.calls.push(v); ui.view = v } }))
+vi.mock("@/data/study-controller", () => ({
+    setView: (v: string) => { views.calls.push(v); ui.view = v },
+    showStudyPage: () => { views.calls.push("study"); ui.view = "study" },   /* how a review opens Study (data/cards.ts) */
+}))
 vi.mock("@/data/study", () => ({ setStudyTab: vi.fn() }))
 vi.mock("@/data/actions", () => ({ newItem: vi.fn(), goToday: vi.fn(), step: vi.fn() }))
 vi.mock("@/data/study-timer", () => ({ escapeFocus: vi.fn() }))

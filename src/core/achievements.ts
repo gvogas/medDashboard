@@ -24,6 +24,8 @@ const GRADES: [number, string][] = [[80, 'Solid'], [90, 'Top marks'], [100, 'Per
 const MARATHON = 240;
 
 const r1 = (n: number) => Math.round(n * 10) / 10;
+/* Hours toward a goal not yet reached: rounding 57 minutes gave "1 / 1 h" and a full bar on a medal still locked, so short of the goal it reads at most a tenth under it. */
+const toward = (minutes: number, goalHours: number) => (minutes >= goalHours * 60 ? r1(minutes / 60) : Math.min(r1(minutes / 60), r1(goalHours - 0.1)));
 const plural = (n: number, one: string) => n + ' ' + one + (n === 1 ? '' : 's');
 
 /** The local day an item was finished: when it was marked, else last saved, else its date. */
@@ -60,8 +62,8 @@ export function achievements(sessions: Sessions, items: Done[], prefs: Pick<Stud
   const best = days.reduce((a, [, m]) => Math.max(a, m), 0);
   const out: Badge[] = [];
 
-  const hours = r1(totalMin / 60);
   for (const [h, name] of HOURS) {
+    const hours = toward(totalMin, h);
     out.push(badge('hours', h, h + 'h', name, 'Study ' + plural(h, 'hour') + ' in total', h, hours,
       crossedOn(days, h * 60), hours + ' / ' + h + ' h'));
   }
@@ -79,8 +81,8 @@ export function achievements(sessions: Sessions, items: Done[], prefs: Pick<Stud
   out.push(badge('days', 'goal', 'Goal', 'Goal met', 'Reach your daily goal', goal, goal ? best : 0,
     goal ? days.find(([, m]) => m >= goal)?.[0] : null,
     goal ? 'Best day ' + best + ' / ' + goal + ' min' : 'Set a daily goal'));
-  out.push(badge('days', 'marathon', '4h', 'Marathon day', 'Study 4 hours in one day', MARATHON / 60, r1(best / 60),
-    days.find(([, m]) => m >= MARATHON)?.[0], r1(best / 60) + ' / 4 h in one day'));
+  out.push(badge('days', 'marathon', '4h', 'Marathon day', 'Study 4 hours in one day', MARATHON / 60, toward(best, MARATHON / 60),
+    days.find(([, m]) => m >= MARATHON)?.[0], toward(best, MARATHON / 60) + ' / 4 h in one day'));
 
   const done = items.filter(isComplete).map((it) => ({ it, day: doneDay(it) }))
     .sort((a, b) => a.day.localeCompare(b.day));
@@ -132,7 +134,7 @@ export function ownAchievements(own: Achievement[], sessions: Sessions, items: D
     if (courses.length && !courses.some((c) => c.id === a.courseId)) return make(0, null, 'Course removed');
     const days = [...minutesByDay(sessions.filter((s) => s.courseId === a.courseId && s.studyMinutes > 0))]
       .sort((x, y) => x[0].localeCompare(y[0]));
-    const hours = r1(days.reduce((t, [, m]) => t + m, 0) / 60);
+    const hours = toward(days.reduce((t, [, m]) => t + m, 0), a.target);
     return make(hours, crossedOn(days, a.target * 60), hours + ' / ' + a.target + ' h');
   });
 }

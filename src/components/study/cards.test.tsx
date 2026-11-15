@@ -7,6 +7,7 @@ import { act, cleanup, fireEvent, render, screen } from "@testing-library/react"
 const fake = vi.hoisted(() => ({
     data: { decks: [] as any[], cards: [] as any[], card_state: [] as any[], card_reviews: [] as any[], shared_decks: [] as any[], shared_cards: [] as any[] },
     view: vi.fn(), tab: vi.fn(),
+    delay: 0,          /* how long a review's save takes, in ms: the real one is an IndexedDB write and a reload */
 }))
 vi.mock("@/core/store", async () => {
     const { notify } = await import("@/bridge")
@@ -19,14 +20,15 @@ vi.mock("@/core/store", async () => {
         data: fake.data,
         saveDeck: async (row: any) => { put("decks", row); notify() },
         saveCard: async (row: any) => { put("cards", row); notify() },
-        saveReview: async (state: any, review: any) => { put("card_state", state); put("card_reviews", review); notify() },
+        saveReview: async (state: any, review: any) => { if (fake.delay) await new Promise((r) => setTimeout(r, fake.delay)); put("card_state", state); put("card_reviews", review); notify() },
         deleteCard: async (id: string) => { del("cards", (r) => r.id === id); del("card_state", (r) => r.id === id); notify() },
         deleteDeck: async (id: string) => { const ids = fake.data.cards.filter((c) => c.deckId === id).map((c) => c.id); del("decks", (r) => r.id === id); del("cards", (r) => ids.includes(r.id)); notify() },
     }
 })
 vi.mock("@/data/store", () => ({ useCourses: () => [{ id: "pharm", code: "PHARM", name: "Pharmacology", color: "#4F74D9", archived: false }], useProfile: () => ({ id: "u-me" }) }))
 vi.mock("@/data/effective", () => ({ effectiveCourses: () => [] }))
-vi.mock("@/data/study-controller", () => ({ setView: fake.view }))
+/* showStudyPage is how a review opens Study (data/cards.ts): recorded with the views asked for */
+vi.mock("@/data/study-controller", () => ({ setView: fake.view, showStudyPage: () => fake.view("study") }))
 vi.mock("@/data/study", () => ({ setStudyTab: fake.tab }))
 vi.mock("@/core/dates", async (orig) => ({ ...(await orig<object>()), today: () => "2026-11-02" }))
 
@@ -39,6 +41,7 @@ const card = (id: string, deckId = "d1", over = {}) => ({ id, deckId, front: "Fr
 
 beforeEach(() => {
     for (const k of Object.keys(fake.data) as (keyof typeof fake.data)[]) fake.data[k] = []
+    fake.delay = 0
     showCards({ mode: "home" })
 })
 afterEach(() => { cleanup(); vi.clearAllMocks() })
@@ -116,6 +119,86 @@ describe("Study › Cards", () => {
         expect(screen.getByText("1 right")).toBeTruthy()
         expect(screen.getByText("1 wrong")).toBeTruthy()
      })
+
+    it("shows what is due in each deck, how well it is known, and reviews one deck on its own", async () => {
+        fake.data.decks = [deck("d1"), deck("d2", { title: "Antibiotics" })]
+        fake.data.cards = [card("k1"), card("k2"), card("k3", "d2"), card("k4", "d2")]
+        fake.data.card_state = [{ id: "k4", due: "2026-12-01", interval: 30, ease: 2.5, reps: 4, lapses: 0 }]   /* known, not due */
+        render(<CardsCard />)
+        expect(screen.getByText("2 due")).toBeTruthy()                         /* Beta blockers: both new */
+        expect(screen.getByRole("img", { name: "Antibiotics: 1 new, 0 learning, 1 known" })).toBeTruthy()
+        fireEvent.click(screen.getByRole("button", { name: "Review Antibiotics, 1 due" }))
+        expect(screen.getByText("1 of 1")).toBeTruthy()
+        expect(screen.getByText("Front k3")).toBeTruthy()
+        fireEvent.keyDown(screen.getByLabelText(/^Flashcard/), { key: " " })
+        await act(async () => { fireEvent.keyDown(screen.getByLabelText(/^Flashcard/), { key: "2" }) })
+        /* only that deck was reviewed, and the end says when cards come back */
+        expect(fake.data.card_reviews.map((r) => r.cardRef)).toEqual(["k3"])
+        expect(screen.getByText("All done for today")).toBeTruthy()
+        expect(screen.getByText("Next up: 1 card tomorrow.")).toBeTruthy()
+    })
+
+    it("a second press while the answer is still saving does nothing: one review, and the next card shows", async () => {
+        const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
+        fake.data.decks = [deck("d1")]
+        fake.data.cards = [card("k1"), card("k2"), card("k3")]
+        fake.delay = 40
+        render(<CardsCard />)
+        fireEvent.click(screen.getByRole("button", { name: "Review all 3" }))
+        const box = screen.getByLabelText(/^Flashcard/)
+        fireEvent.keyDown(box, { key: " " })
+        await act(async () => {
+            fireEvent.keyDown(box, { key: "2" })
+            await sleep(10)
+            fireEvent.keyDown(box, { key: "2" })                              /* while the 40 ms save is under way */
+            fireEvent.click(screen.getByRole("button", { name: /Right/ }))    /* and the button too */
+            await sleep(120)
+        })
+        expect(fake.data.card_reviews.map((r) => r.cardRef)).toEqual(["k1"])
+        expect(screen.getByText("2 of 3")).toBeTruthy()
+        expect(screen.getByText("Front k2")).toBeTruthy()
+        expect(screen.getByText("1 right")).toBeTruthy()
+        /* Wrong twice in the window: one review, and the card is queued once more, not twice */
+        fireEvent.keyDown(box, { key: " " })
+        await act(async () => { fireEvent.keyDown(box, { key: "1" }); await sleep(10); fireEvent.keyDown(box, { key: "1" }); await sleep(120) })
+        expect(fake.data.card_reviews.map((r) => [r.cardRef, r.grade])).toEqual([["k1", "good"], ["k2", "again"]])
+        expect(screen.getByText("3 of 4")).toBeTruthy()
+    })
+
+    it("counts each card once at the end, however often it came back", async () => {
+        fake.data.decks = [deck("d1")]
+        fake.data.cards = [card("k1")]
+        render(<CardsCard />)
+        fireEvent.click(screen.getByRole("button", { name: "Review all 1" }))
+        const box = screen.getByLabelText(/^Flashcard/)
+        fireEvent.keyDown(box, { key: " " })
+        await act(async () => { fireEvent.keyDown(box, { key: "1" }) })
+        fireEvent.keyDown(box, { key: " " })
+        await act(async () => { fireEvent.keyDown(box, { key: "2" }) })
+        expect(screen.getByText("You reviewed 1 card. They'll come back when they're due.")).toBeTruthy()
+    })
+
+    it("lists a deck whose own course was deleted under No class, not as a class you left", () => {
+        fake.data.decks = [deck("d1", { courseId: "gone" }), deck("d2", { courseId: null, classId: "abcdefghij12", title: "Old class deck" })]
+        fake.data.cards = [card("k1")]
+        render(<CardsCard />)
+        expect(screen.getByRole("region", { name: "No class" })).toBeTruthy()
+        expect(screen.getByRole("region", { name: "A class you left" })).toBeTruthy()      /* a class's deck keeps that name */
+    })
+
+    it("opens a deck from its name", () => {
+        fake.data.decks = [deck("d1")]
+        render(<CardsCard />)
+        fireEvent.click(screen.getByRole("button", { name: "Open Beta blockers" }))
+        expect(screen.getByRole("region", { name: "Edit deck" })).toBeTruthy()
+    })
+
+    it("with no decks yet, says how to start", () => {
+        render(<CardsCard />)
+        expect(screen.getByText("No decks yet")).toBeTruthy()
+        expect(screen.getByRole("button", { name: "Add deck" })).toBeTruthy()
+        expect(screen.getByRole("button", { name: "Make cards with AI" })).toBeTruthy()
+    })
 
     it("a class's shared deck shows, reviews, and has no Edit", () => {
         fake.data.shared_decks = [{ ...deck("sd1", { courseId: null }), scope: "c:abcdefghij12" }]

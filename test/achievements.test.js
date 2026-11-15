@@ -23,6 +23,16 @@ describe('achievements', () => {
     expect(by(list, 'days-goal').progress).toBe('Set a daily goal');
   });
 
+  it('never shows a locked medal as full: just short of the hours reads short', () => {
+    const first = by(achievements([at('2026-09-01', 57)], [], prefs(), TODAY), 'hours-1');
+    expect(first).toMatchObject({ earned: false, have: 0.9, progress: '0.9 / 1 h' });
+    expect(first.frac).toBeLessThan(1);
+    const marathon = by(achievements([at('2026-09-01', 239)], [], prefs(), TODAY), 'days-marathon');
+    expect(marathon).toMatchObject({ earned: false, progress: '3.9 / 4 h in one day' });
+    expect(marathon.frac).toBeLessThan(1);
+    expect(by(achievements([at('2026-09-01', 60)], [], prefs(), TODAY), 'hours-1')).toMatchObject({ earned: true, have: 1, progress: '1 / 1 h' });
+  });
+
   it('dates study hours to the day the total crossed the line', () => {
     const list = achievements([at('2026-09-01', 30), at('2026-09-02', 40), at('2026-09-05', 540)], [], prefs(), TODAY);
     expect(by(list, 'hours-1')).toMatchObject({ earned: true, earnedOn: '2026-09-02' });

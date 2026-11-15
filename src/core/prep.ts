@@ -55,7 +55,8 @@ export function fillTopics(exam: Dated & Pick<Item, 'checklist'>, course: Pick<C
 
 /** { done, total, days, pace, hot } for an open exam with steps, else null. Today counts as a day. */
 export function prepPace(exam: Pick<Item, 'date' | 'checklist'>, today: string): Pace | null {
-  const cl = exam.checklist || [];
+  /* a step whose words were cleared is a row, not a topic: the plan (study-plan.ts) leaves it out, so the pace does too */
+  const cl = (exam.checklist || []).filter((s) => typeof s.text !== 'string' || s.text.trim());
   if (!cl.length) return null;
   const done = cl.filter((s) => s.done).length;
   const days = Math.max(1, diffDays(today, exam.date));
@@ -64,5 +65,7 @@ export function prepPace(exam: Pick<Item, 'date' | 'checklist'>, today: string):
 }
 
 export function prepLabel(p: Pace | null): string {
-  return p ? p.done + '/' + p.total + ' topics · ' + p.pace + '/day' : '';
+  if (!p) return '';
+  /* a few topics a long way out round to 0 a day: with any left, that reads as nothing to do */
+  return p.done + '/' + p.total + ' topics · ' + (p.pace === 0 && p.total > p.done ? '<1' : p.pace) + '/day';
 }

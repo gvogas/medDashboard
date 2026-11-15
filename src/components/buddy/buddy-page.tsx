@@ -26,6 +26,7 @@ export function earnedFor(source: string): string {
     if (source.startsWith("session:")) return "Study session"
     if (source.startsWith("item:")) return "Finished item"
     if (source.startsWith("streak:")) return "Streak day"
+    if (source.startsWith("cards:")) return "Card reviews"
     if (source.startsWith("grade80:") || source.startsWith("grade90:")) return "Grade bonus"
     if (source.startsWith("claim:")) return "Rank claimed"
     if (source.startsWith("buy:")) return "Shop"

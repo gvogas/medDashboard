@@ -160,7 +160,17 @@ export const doneAt = (r: Run, now = Date.now()) => (r.paused ? now : r.at) + r.
     on the day it started, so one begun before midnight counts toward that day, not today. */
 export function todaySoFar(sessions: StudySession[], r: Run | null, today: string): number {
     const logged = minutesByDay(sessions).get(today) || 0
-    return logged + (r && iso(new Date(r.startedAt)) === today ? Math.floor(r.studyMs / MINUTE_MS) : 0)
+    if (!r) return logged
+    if (!r.room) return logged + (iso(new Date(r.startedAt)) === today ? Math.floor(r.studyMs / MINUTE_MS) : 0)
+    /* In a room the clock is the room's: its study from before you joined is not yours. Yours is what
+       run.ts logs on Leave (roomStudyMs): earlier stints, and the room's study since you last joined,
+       on the day you first joined. After a rejoin the session already logged holds the earlier stints,
+       and Leave rewrites it with the total, so it is counted once here. */
+    if (iso(new Date(r.room.joinedAt)) !== today) return logged
+    const mine = Math.floor((r.room.earlierMs + Math.max(0, r.studyMs - r.room.joinedStudyMs)) / MINUTE_MS)
+    const kept = sessions.find((s) => s.id === "r-" + r.room!.id)
+    const already = kept && iso(new Date(kept.startedAt)) === today ? kept.studyMinutes : 0
+    return logged - already + Math.max(mine, already)
 }
 
 /** Today's study against the daily goal (0 with none), with this run's study so far. */

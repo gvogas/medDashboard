@@ -58,18 +58,45 @@ export function isPptx(b: Uint8Array): boolean {
     try { return zipEntries(b).some((e) => e.name === "ppt/presentation.xml") } catch { return false }
 }
 
-/** The deck's words, slide by slide in order, each slide's speaker notes after it. */
+/* A .rels file's relationships: [id, type's last word, target] for each. */
+const relationships = (xml: string): [string, string, string][] => [...xml.matchAll(/<Relationship\b[^>]*>/g)].flatMap((m) => {
+    const attr = (name: string) => new RegExp(`\\b${name}="([^"]*)"`).exec(m[0])?.[1] ?? ""
+    const id = attr("Id"), target = attr("Target"), kind = attr("Type").split("/").pop() ?? ""
+    return id && target ? [[id, kind, unescape(target)] as [string, string, string]] : []
+})
+/* the number in a slide's or a notes page's file name, wherever the target points from */
+const fileNumber = (target: string, stem: string) => Number(new RegExp(stem + "(\\d+)\\.xml$").exec(target)?.[1] ?? NaN)
+
+/**
+ * The deck's words, slide by slide in the deck's own order, each slide's speaker notes after it.
+ * The order is the presentation's slide list and each slide's notes are the ones its .rels file
+ * names: file numbers say neither (PowerPoint numbers a notes page as it is made, so the only
+ * notes of a deck are notesSlide1.xml whichever slide they are on, and a moved slide keeps its
+ * file). A file without those parts is read by file number, as before.
+ */
 export async function pptxText(file: Blob): Promise<string> {
     const b = new Uint8Array(await file.arrayBuffer())
-    const entries = zipEntries(b)
+    const entries = zipEntries(b), byName = new Map(entries.map((e) => [e.name, e] as const))
     const numbered = (re: RegExp) => new Map(entries.flatMap((e) => { const m = re.exec(e.name); return m ? [[Number(m[1]), e] as const] : [] }))
     const slides = numbered(/^ppt\/slides\/slide(\d+)\.xml$/), notes = numbered(/^ppt\/notesSlides\/notesSlide(\d+)\.xml$/)
     const xml = new TextDecoder()
+    const textOf = async (name: string) => (byName.has(name) ? xml.decode(await read(b, byName.get(name)!)) : null)
+
+    /* the deck's order: the slide list's r:ids, through the presentation's relationships, to slide files */
+    const rels = new Map(relationships(await textOf("ppt/_rels/presentation.xml.rels") ?? "").filter(([, kind]) => kind === "slide").map(([id, , target]) => [id, fileNumber(target, "slide")] as const))
+    const listed = [...(await textOf("ppt/presentation.xml") ?? "").matchAll(/<p:sldId\b[^>]*\br:id="([^"]*)"/g)].map((m) => rels.get(m[1])).filter((n): n is number => n !== undefined && slides.has(n))
+    const byFile = [...slides.keys()].sort((a, c) => a - c)
+    /* numbered by place in the deck when the deck says its order; a slide file the list leaves out comes after */
+    const order: [number, number][] = listed.length ? [...new Set([...listed, ...byFile])].map((n, i) => [n, i + 1]) : byFile.map((n) => [n, n])
+
     const out: string[] = []
-    for (const n of [...slides.keys()].sort((a, c) => a - c)) {
+    for (const [n, label] of order) {
         const text = slideText(xml.decode(await read(b, slides.get(n)!)))
-        const said = notes.has(n) ? slideText(xml.decode(await read(b, notes.get(n)!))).replace(/^\d+$/m, "").trim() : ""
-        if (text || said) out.push(`### Slide ${n}\n${text}${said ? "\nNotes: " + said : ""}`)
+        /* the slide's own relationships name its notes; with no .rels file, the notes page of the same number */
+        const own = await textOf(`ppt/slides/_rels/slide${n}.xml.rels`)
+        const page = own === null ? n : fileNumber(relationships(own).find(([, kind]) => kind === "notesSlide")?.[2] ?? "", "notesSlide")
+        const said = notes.has(page) ? slideText(xml.decode(await read(b, notes.get(page)!))).replace(/^\d+$/m, "").trim() : ""
+        if (text || said) out.push(`### Slide ${label}\n${text}${said ? "\nNotes: " + said : ""}`)
     }
     return out.join("\n\n")
 }

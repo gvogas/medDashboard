@@ -47,6 +47,9 @@ describe("the tiles", () => {
         const list = [at("2026-09-21", 30), at("2026-09-22", 20)]
         expect(studyTiles(list, prefs(), null, TODAY).streak).toEqual({ days: 2, sub: "Longest 2 · a day counts from 15 min · study today to keep it" })
         expect(studyTiles([...list, at(TODAY, 16)], prefs(), null, TODAY).streak).toEqual({ days: 3, sub: "Longest 3 · a day counts from 15 min" })
+        /* a rest day never breaks the streak, so on one there is nothing to keep */
+        const rest = [new Date(2026, 8, 23).getDay()]
+        expect(studyTiles(list, prefs({ rest }), null, TODAY).streak).toEqual({ days: 2, sub: "Longest 2 · a day counts from 15 min" })
         /* under the day's minimum, today does not count yet; a short day breaks the run */
         expect(studyTiles([...list, at(TODAY, 10)], prefs({ dayMin: 20 }), null, TODAY).streak.sub).toBe("Longest 2 · a day counts from 20 min · study today to keep it")
         expect(studyTiles([...list, at(TODAY, 10)], prefs({ dayMin: 25 }), null, TODAY).streak).toEqual({ days: 0, sub: "Longest 1 · a day counts from 25 min" })

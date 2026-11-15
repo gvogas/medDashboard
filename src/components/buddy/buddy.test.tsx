@@ -88,8 +88,8 @@ describe("the Buddy page", () => {
     })
 
     it("words each kind of earning", () => {
-        expect(["session:a", "item:u:t", "streak:2026-11-02", "claim:egg", "admin:1:x", "grade90:c:s:x", "buy:focus:1"].map(earnedFor))
-            .toEqual(["Study session", "Finished item", "Streak day", "Rank claimed", "Admin grant", "Grade bonus", "Shop"])
+        expect(["session:a", "item:u:t", "streak:2026-11-02", "claim:egg", "admin:1:x", "grade90:c:s:x", "buy:focus:1", "cards:2026-11-02"].map(earnedFor))
+            .toEqual(["Study session", "Finished item", "Streak day", "Rank claimed", "Admin grant", "Grade bonus", "Shop", "Card reviews"])
     })
 })
 

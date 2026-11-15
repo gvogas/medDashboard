@@ -13,7 +13,7 @@ import { isPptx, pptxText } from "@/core/pptxtext"
 import type { StudyAiStatus } from "@/core/types"
 import { cacheKey, cached, remember } from "./ai-cache"
 import { createStore } from "@/lib/store"
-import { saveCard, saveDeck } from "@/core/store"
+import { saveRows, type SaveRow } from "@/core/store"
 import { uid } from "@/core/model"
 
 /* ── files (spec §8) ── */
@@ -61,11 +61,19 @@ export { classContext }
 /** The prompt to copy for Use your own AI: the Worker's own, with room for more material. */
 export const ownPrompt = (r: CardRequest): string => asOneText(cardsPrompt(sources(r), { count: r.count, level: r.level }, OWN_LIMIT))
 
-/** A pasted answer read: the cards and "N of M", or a message when nothing could be read. */
-export function readPasted(text: string, count: number): { cards: CardDraft[]; note: string } {
-    const read = readAnswer("cards", text, count)
+/**
+ * A pasted answer read: the cards and a note, or a message when nothing could be read. A chat
+ * often writes a few more cards than it was asked for: every good one is kept (up to the most a
+ * deck takes at once), since the count only matters to Generate here, and "N of M could be read"
+ * counts only entries that were unreadable or repeats, never good cards past the count.
+ */
+export function readPasted(text: string, _count?: number): { cards: CardDraft[]; note: string } {
+    const read = readAnswer("cards", text)
     if (!read || !read.items.length) return { cards: [], note: "That answer had no cards in it. Copy the prompt again and ask for only the JSON." }
-    return { cards: read.items, note: read.items.length < read.total ? `${read.items.length} of ${read.total} cards could be read.` : `${read.items.length} cards read.` }
+    const kept = read.items.length
+    const note = read.usable < read.total ? `${read.usable} of ${read.total} cards could be read.` + (kept < read.usable ? ` The first ${kept} are kept.` : "")
+        : kept < read.usable ? `${read.usable} cards read; the first ${kept} are kept.` : `${kept} cards read.`
+    return { cards: read.items, note }
 }
 
 /* ── Generate here: uses left today ── */
@@ -113,17 +121,23 @@ export async function generateHere(r: CardRequest): Promise<{ cards: CardDraft[]
     }
 }
 
-/** Save the previewed cards into a deck: a new one titled `title` (filed under `group`), or `deckId`. */
+/**
+ * Save the previewed cards into a deck: a new one titled `title` (filed under `group`), or `deckId`.
+ * The deck and every card go in as one change (one transaction): saved one by one, a failure
+ * part-way left a deck with some of its cards, and Save again made a second deck beside it.
+ */
 export async function saveDrafts(cards: CardDraft[], into: { deckId: string } | { title: string; group: string }, authorId: string, source: "ai" | "paste") {
+    const rows: SaveRow[] = []
     let deckId: string
     if ("deckId" in into) deckId = into.deckId
     else {
         deckId = uid()
         const courseId = into.group.startsWith("course:") ? into.group.slice(7) : null
         const classId = into.group.startsWith("class:") ? into.group.slice(6) : null
-        await saveDeck({ id: deckId, title: into.title.trim().slice(0, 80) || "Generated cards", courseId, classId, authorId })
+        rows.push({ kind: "decks", row: { id: deckId, title: into.title.trim().slice(0, 80) || "Generated cards", courseId, classId, authorId } })
     }
-    for (const c of cards) await saveCard({ id: uid(), deckId, authorId, front: c.front, back: c.back, source })
+    for (const c of cards) rows.push({ kind: "cards", row: { id: uid(), deckId, authorId, front: c.front, back: c.back, source } })
+    await saveRows(rows)
     return deckId
 }
 
