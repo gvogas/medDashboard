@@ -43,6 +43,14 @@ export async function claimLimit(db, key, limit, now = Date.now(), windowMs = WI
   return (await claimWindow(db, key, limit, now, windowMs)).wait;
 }
 
+/** Failed AI runs a person gets back a day, per kind; past that a failure costs its use (audit S2). */
+export const GIVE_BACKS_PER_DAY = 3;
+
+/** Whether another give-back of `kind` is allowed today: claims one of the day's GIVE_BACKS_PER_DAY. */
+export async function mayGiveBack(db, kind, userId, now = Date.now()) {
+  return (await claimLimit(db, `giveback:${kind}:${userId}`, GIVE_BACKS_PER_DAY, now, DAY_MS)) === 0;
+}
+
 /** A hit handed back to the window `resetAt` it was claimed in: never to one that has started since. */
 export function giveBackTo(db, key, resetAt) {
   return db.prepare('UPDATE request_limits SET hits = hits - 1 WHERE key = ? AND hits > 0 AND reset_at = ?').bind(key, resetAt).run();
@@ -140,9 +148,11 @@ export async function limitOutline(env, userId) {
   return resetAt;
 }
 
-/** A read claimed by limitOutline handed back to its window: the model never answered. */
+/** A read claimed by limitOutline handed back to its window (the model never answered), at most 3 a day; true when given. */
 export async function giveBackOutline(env, userId, resetAt) {
+  if (!(await mayGiveBack(env.DB, 'outline', userId))) return false;
   await giveBackTo(env.DB, `outline:${userId}`, resetAt);
+  return true;
 }
 
 /** The AI reads (outlines, calendars, timetables) left in the person's window: { left, limit }. */

@@ -55,6 +55,13 @@ describe('Generate here', () => {
     expect((await studyAiStatus({ DB: env.DB, AI: ai() }, id)).left).toBe(3);
   });
 
+  it('gives back at most 3 failed runs a day; the 4th costs the use (decision Q8a, audit S2)', async () => {
+    await clearMeta();
+    const id = await user(), broken = { DB: env.DB, AI: ai({ error: 'AiError: 3043: Internal server error' }) };
+    for (let i = 0; i < 4; i++) await expect(generateCards(broken, id, body())).rejects.toMatchObject({ status: 503 });
+    expect((await studyAiStatus({ DB: env.DB, AI: ai() }, id)).left).toBe(2);
+  });
+
   it('gives a use back to the window it was claimed in, not one that started since (audit L6)', async () => {
     await clearMeta();
     const id = await user(), key = 'studyai:' + id;

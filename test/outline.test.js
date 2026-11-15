@@ -2,6 +2,8 @@ import { describe, it, expect, vi } from 'vitest';
 import { SELF, env } from 'cloudflare:test';
 import { cleanOutline, cleanTime, cleanKind, dayIndex, readOutline, outlineText, MODEL, MAX_CHARS } from '../worker/outline.js';
 import { signIn, BASE } from './helpers.js';
+import { handleApi } from '../worker/api.js';
+import { TIMEOUT_MS } from '../worker/ai.js';
 import { OUTLINE_DAILY_LIMIT } from '../worker/limits.js';
 
 const OUTLINE = 'PHARM101 Principles of Pharmacology. Dr. Ada Okafor. Lectures Monday and Wednesday 9-10am in LT2. Midterm exam 20 October 2026 (30%). Essay due 1 November (20%). Final exam (50%).';
@@ -227,7 +229,8 @@ describe('POST /api/outline', () => {
     expect(first.status).toBe(503);
     expect(await first.json()).toEqual({ error: 'outline_unavailable' });
     for (let i = 1; i < 12; i++) expect((await post()).status).toBe(503);
-    expect(await (await call('/api/ai/reads')).json()).toEqual({ left: OUTLINE_DAILY_LIMIT, limit: OUTLINE_DAILY_LIMIT });
+    /* three failed reads a day come back (decision Q8a); the other nine count */
+    expect(await (await call('/api/ai/reads')).json()).toEqual({ left: OUTLINE_DAILY_LIMIT - 9, limit: OUTLINE_DAILY_LIMIT });
     await env.DB.prepare('UPDATE request_limits SET hits = ? WHERE key = ?').bind(OUTLINE_DAILY_LIMIT, 'outline:u-outline-down').run();
     const over = await post();
     expect(over.status).toBe(429);
@@ -259,6 +262,23 @@ describe('one deadline for the whole read', () => {
       expect(err).toBeUndefined();
       await vi.advanceTimersByTimeAsync(1);
       expect(err).toMatchObject({ status: 504, body: { error: 'ai_timeout' } });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('starts the deadline once the upload is in, so a slow upload does not time the model out (audit S4)', async () => {
+    const call = await signIn('outline-slow');
+    vi.useFakeTimers({ toFake: ['Date'] });
+    try {
+      const bytes = new TextEncoder().encode(OUTLINE);
+      let sent = false;
+      /* the upload arrives after more than the whole deadline has gone by */
+      const body = new ReadableStream({ pull(c) { if (sent) { c.close(); return; } vi.setSystemTime(Date.now() + TIMEOUT_MS + 1000); c.enqueue(bytes); sent = true; } }, { highWaterMark: 0 });
+      const url = BASE + '/api/outline?name=a.txt';
+      const req = new Request(url, { method: 'POST', headers: { cookie: call.cookie, 'content-type': 'text/plain' }, body, duplex: 'half' });
+      const res = await handleApi(req, { ...env, AI: fakeAi(MODEL_REPLY) }, new URL(url));
+      expect(res.status).toBe(200);
     } finally {
       vi.useRealTimers();
     }

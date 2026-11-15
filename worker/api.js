@@ -215,13 +215,15 @@ export const knownParams = (params) => ({
 const GIVEN_BACK = new Set(['outline_quota', 'outline_unavailable', 'ai_timeout']);
 
 const aiRead = (read, what) => async ({ request, env, url }) => {
-  /* one deadline for the whole read: the upload, the conversion, the model and its retry */
+  /* one deadline for the read once the upload is in: the conversion, the model and its retry (t0 times the log line) */
   const t0 = Date.now();
   const userId = await requireUser(request, env);
   const type = request.headers.get('content-type') || '';
-  let claimed = null, size = 0;
+  let claimed = null, given = false, size = 0;
   try {
     const bytes = await readBytes(request, MAX_BYTES);
+    /* the deadline starts once the upload is in: a slow upload must not time the model out and be given back (audit S4) */
+    const deadline = Date.now() + TIMEOUT_MS;
     size = bytes.byteLength;
     if (!size) throw new HttpError(400, { error: 'invalid', field: 'body' });
     const date = (key) => (DATE.test(url.searchParams.get(key) || '') ? url.searchParams.get(key) : null);
@@ -229,7 +231,7 @@ const aiRead = (read, what) => async ({ request, env, url }) => {
       bytes, type, name: (url.searchParams.get('name') || what).slice(0, 120),
       today: date('today') || new Date().toISOString().slice(0, 10), termStart: date('termStart'),
       claim: async () => { claimed = await limitOutline(env, userId); },
-      deadline: t0 + TIMEOUT_MS,
+      deadline,
       /* a screenshot's grid as the browser found it (schedule.js parseGrid); the other reads ignore it */
       grid: url.searchParams.get('grid') || '',
       ...knownParams(url.searchParams),
@@ -241,9 +243,9 @@ const aiRead = (read, what) => async ({ request, env, url }) => {
     const known = e instanceof HttpError;
     const code = known ? e.body?.error || 'error' : 'outline_unavailable';
     if (!known) console.error(what + ':', e?.message || e);
-    if (claimed && GIVEN_BACK.has(code)) await giveBackOutline(env, userId, claimed).catch(() => {});
+    if (claimed && GIVEN_BACK.has(code)) given = await giveBackOutline(env, userId, claimed).catch(() => false);
     const message = [code, what, (type.split(';')[0] || 'no type') + ' ' + size + ' bytes', (Date.now() - t0) + ' ms',
-      claimed && GIVEN_BACK.has(code) ? 'read given back' : '', known ? e.detail : messageOf(e)].filter(Boolean).join(' · ');
+      given ? 'read given back' : '', known ? e.detail : messageOf(e)].filter(Boolean).join(' · ');
     await logError(env.DB, { method: request.method, route: routeLabel(url.pathname, routes), status: known ? e.status : 503, message, userId });
     if (known) e.logged = true;   /* not again as a refused request */
     throw known ? e : new HttpError(503, { error: 'outline_unavailable' });

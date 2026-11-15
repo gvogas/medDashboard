@@ -8,7 +8,7 @@
 import { json, readJson, HttpError } from './http.js';
 import { requireUser } from './auth.js';
 import { requireAdmin } from './admin.js';
-import { claimWindow, giveBackTo } from './limits.js';
+import { claimWindow, giveBackTo, mayGiveBack } from './limits.js';
 import { askJson, modelAnswer } from './ai.js';
 import { DAY_MS } from './time.js';
 import { cardsPrompt, cutText, HERE_LIMIT, LEVELS, TOPIC_MAX } from '../src/core/study-prompts.ts';
@@ -137,7 +137,8 @@ function cardRequest(body) {
 
 /* failures where the model never gave a usable answer: the use comes back */
 const GIVEN_BACK = new Set(['outline_quota', 'outline_unavailable', 'ai_timeout', 'outline_unreadable']);
-const giveBack = (db, userId, resetAt) => giveBackTo(db, limitKey(userId), resetAt);
+/* at most GIVE_BACKS_PER_DAY a day: past that a failed run costs its use, so failures cannot run the day's ceiling down for everyone */
+const giveBack = async (db, userId, resetAt, now) => { if (await mayGiveBack(db, 'studyai', userId, now)) await giveBackTo(db, limitKey(userId), resetAt); };
 
 /**
  * POST /api/study-ai/cards: flashcards, a preview (nothing is saved). Claims a use, checks the
@@ -167,7 +168,7 @@ export async function generateCards(env, userId, body, now = Date.now(), provide
     }, 'study-ai:cards', spent);
   } catch (e) {
     const code = e instanceof HttpError ? e.body?.error : 'outline_unavailable';
-    if (GIVEN_BACK.has(code)) await giveBack(env.DB, userId, resetAt).catch(() => {});
+    if (GIVEN_BACK.has(code)) await giveBack(env.DB, userId, resetAt, now).catch(() => {});
     /* the person's use comes back, but the neurons were spent: they count toward the day's ceiling,
        or answers with no usable cards could run the model without limit */
     const lost = neuronsOf(spent);
